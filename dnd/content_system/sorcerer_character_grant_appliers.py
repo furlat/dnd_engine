@@ -10,6 +10,10 @@ from collections.abc import Callable
 from dnd.blocks.action_economy import RechargeType, ResourceCapacityPolicy
 from dnd.blocks.equipment import ArmorClassFormulaCandidate
 from dnd.classes import sorcerer
+from dnd.classes.permanent_feature_definitions import (
+    SORCERER_DRACONIC_RESILIENCE_DECLARATION,
+    SORCERER_SORCERY_POINTS_DECLARATION,
+)
 from dnd.classes.sorcerer_progression_definitions import SORCERER_CLASS_REF
 from dnd.classes.sorcerer_structural_feature_definitions import (
     DRACONIC_PRESENCE_DECLARATION,
@@ -28,6 +32,7 @@ from dnd.content_system.character_grant_context import (
     BuiltinCharacterGrantContext,
 )
 from dnd.content_system.character_grant_applier_runtime import (
+    CharacterGrantInstallation,
     character_grant_id,
     grant_receipt,
     is_first_grant_for_ref,
@@ -47,12 +52,8 @@ from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import NumericalModifier
 
 
-SORCERY_POINTS_REF = CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS[
-    sorcerer.SorceryPointsFeature
-].ref
-DRACONIC_RESILIENCE_REF = CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS[
-    sorcerer.DraconicResilience
-].ref
+SORCERY_POINTS_REF = SORCERER_SORCERY_POINTS_DECLARATION.ref
+DRACONIC_RESILIENCE_REF = SORCERER_DRACONIC_RESILIENCE_DECLARATION.ref
 DRACONIC_PRESENCE_AURA_REF = CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS[
     sorcerer.DraconicPresenceAura
 ].ref
@@ -128,16 +129,15 @@ def _apply_sorcery_points(
     if class_level is None or class_level < 2:
         raise ValueError("Sorcery Points require Sorcerer class level 2")
     source_id = character_grant_id(context, entry)
-    economy = context.entity.action_economy
-    economy.add_resource_contribution(
-        "sorcery_points",
-        source_id,
-        maximum=class_level,
-        recharge_type=RechargeType.LONG_REST,
-        capacity_policy=ResourceCapacityPolicy.MAXIMUM,
-    )
     actions: list[BaseAction] = []
-    try:
+    with CharacterGrantInstallation(context, entry) as installation:
+        installation.add_resource(
+            "sorcery_points",
+            source_id,
+            maximum=class_level,
+            recharge_type=RechargeType.LONG_REST,
+            capacity_policy=ResourceCapacityPolicy.MAXIMUM,
+        )
         if is_first_grant_for_ref(context, entry):
             for slot_level, capacity in context.preview.normal_spell_slots:
                 if capacity <= 0 or not 1 <= slot_level <= 5:
@@ -154,22 +154,12 @@ def _apply_sorcery_points(
                         template=True,
                     ),
                 ))
-            for action in actions:
-                register_bound_action(
-                    context,
-                    provider_ref=SORCERY_POINTS_REF,
-                    action=action,
-                )
-    except Exception:
-        for action in reversed(actions):
-            context.entity.unregister_action_by_uuid(action.uuid)
-        economy.remove_resource_contribution("sorcery_points", source_id)
-        raise
+            installation.add_bound_actions(actions)
     return grant_receipt(
         context,
         entry,
-        action_uuids=tuple(action.uuid for action in actions),
-        resource_contribution_ids=(("sorcery_points", source_id),),
+        action_uuids=installation.action_uuids,
+        resource_contribution_ids=installation.resource_contribution_ids,
     )
 
 
@@ -362,23 +352,12 @@ def _apply_dragon_wings(
             template=True,
         ),
     )
-    registered: list[BaseAction] = []
-    try:
-        for action in actions:
-            register_bound_action(
-                context,
-                provider_ref=DRAGON_WINGS_DECLARATION.ref,
-                action=action,
-            )
-            registered.append(action)
-    except Exception:
-        for action in reversed(registered):
-            context.entity.unregister_action_by_uuid(action.uuid)
-        raise
+    with CharacterGrantInstallation(context, entry) as installation:
+        installation.add_bound_actions(actions)
     return grant_receipt(
         context,
         entry,
-        action_uuids=tuple(action.uuid for action in registered),
+        action_uuids=installation.action_uuids,
         transient_condition_refs_to_remove=(DRAGON_WINGS_ACTIVE_REF,),
     )
 
@@ -400,23 +379,12 @@ def _apply_draconic_presence(
             template=True,
         ),
     )
-    registered: list[BaseAction] = []
-    try:
-        for action in actions:
-            register_bound_action(
-                context,
-                provider_ref=DRACONIC_PRESENCE_DECLARATION.ref,
-                action=action,
-            )
-            registered.append(action)
-    except Exception:
-        for action in reversed(registered):
-            context.entity.unregister_action_by_uuid(action.uuid)
-        raise
+    with CharacterGrantInstallation(context, entry) as installation:
+        installation.add_bound_actions(actions)
     return grant_receipt(
         context,
         entry,
-        action_uuids=tuple(action.uuid for action in registered),
+        action_uuids=installation.action_uuids,
         transient_condition_refs_to_remove=(
             DRACONIC_PRESENCE_AURA_REF,
             DRACONIC_PRESENCE_IMMUNITY_REF,

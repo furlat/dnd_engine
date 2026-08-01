@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 from types import ModuleType
 from typing import Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from dnd.core.content.canonical import canonical_content_sha256
 from dnd.core.content.descriptors import ContentDescriptorSpec
 from dnd.core.content.identities import validate_namespaced_id, validate_sha256
 from dnd.core.content.provenance import ContentProvenance
@@ -71,14 +70,7 @@ def compute_recipe_preset_contract_hash(
         "descriptor": descriptor.model_dump(mode="json"),
         "provenance": provenance.model_dump(mode="json"),
     }
-    encoded = json.dumps(
-        payload,
-        allow_nan=False,
-        ensure_ascii=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode("utf-8")
-    return hashlib.sha256(encoded).hexdigest()
+    return canonical_content_sha256(payload)
 
 
 class ContentRecipePreset(BaseModel):

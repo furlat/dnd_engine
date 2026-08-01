@@ -192,7 +192,7 @@ def test_current_profile_preserves_eager_policy_compatibility() -> None:
     assert host.decide_calls == 1
     assert turn.selected_policy is not None
     assert turn.known_objects[0].uuid == "door"
-    assert turn.known_objects[0].state["is_open"] is False
+    assert turn.known_objects[0].state.is_open is False
     oracle_block = next(
         block
         for block in representation.representation.blocks

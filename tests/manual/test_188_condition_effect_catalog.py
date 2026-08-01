@@ -13,6 +13,7 @@ import dnd.monsters.traits as monster_traits
 import dnd.spells.abjuration as abjuration
 import dnd.spells.conjuration as conjuration
 import dnd.spells.enchantment as enchantment
+import dnd.spells.transmutation as transmutation
 from dnd.content_system.bootstrap import bootstrap_content_system
 from dnd.content_system.condition_effect_population import (
     INDIRECT_CONDITION_EFFECT_SPELL_TYPES,
@@ -64,7 +65,7 @@ def test_catalog_condition_effect_coverage_is_closed_and_exact(
 ) -> None:
     """Every public row owns one explicit effect disposition and exact refs."""
     catalog = build_public_content_catalog(loaded_content)
-    assert catalog.schema_version == 6
+    assert catalog.schema_version == 7
     entries_by_ref = {
         entry.ref.identity_key: entry
         for entry in catalog.entries
@@ -196,7 +197,6 @@ def test_spell_condition_disposition_inventory_is_exhaustive(
             is ConditionEffectCoverage.PROFILED
         )
     }
-    assert len(all_spell_types) == 109
     assert (
         profiled_spell_types
         | set(NO_CONDITION_EFFECT_SPELL_TYPES)
@@ -227,7 +227,12 @@ def test_spell_condition_disposition_inventory_is_exhaustive(
         for spell_type, metadata in SPELL_CATALOG_METADATA_BY_CLASS.items()
         if metadata.concentration
     }
-    assert len(concentration_spells) == 46
+    assert {
+        conjuration.Grease,
+        conjuration.Daylight,
+        transmutation.DarkvisionSpell,
+        transmutation.JumpSpell,
+    }.isdisjoint(concentration_spells)
     assert all(
         concentrating_ref in _applied_refs(
             get_content_declaration(spell_type),
@@ -254,12 +259,11 @@ def test_profiles_preserve_direct_source_ownership_and_order() -> None:
     web_zone = get_content_declaration(conjuration.WebZone)
     web_wrapper = get_content_declaration(conjuration.WebRestrained)
     restrained_ref = get_content_declaration(conditions.Restrained).ref
-    assert _applied_refs(web_spell)[:2] == (
-        web_zone.ref,
-        web_wrapper.ref,
-    )
-    assert restrained_ref not in _applied_refs(web_spell)
-    assert _applied_refs(web_zone) == (web_wrapper.ref,)
+    web_applied_refs = _applied_refs(web_spell)
+    assert web_applied_refs[0] == restrained_ref
+    assert web_zone.ref not in web_applied_refs
+    assert web_wrapper.ref not in web_applied_refs
+    assert _applied_refs(web_zone) == (restrained_ref,)
     assert _applied_refs(web_wrapper) == (restrained_ref,)
 
     protection = get_content_declaration(abjuration.ProtectionFromPoison)
@@ -292,22 +296,15 @@ _AUDITED_NON_DECLARATION_MUTATION_OWNERS = frozenset({
     "dnd.classes.barbarian:<module>",
     "dnd.classes.fighter:<module>",
     "dnd.classes.rage:<module>",
-    "dnd.extensions.aegis_spark:<module>",
-    "tests.manual.reactive_fixture_support:<module>",
-    "tests.manual.reactive_fixture_support:PrepareIntercept",
     "dnd.monsters.circus_fighter:<module>",
     "dnd.monsters.traits:<module>",
     "dnd.monsters.traits:BonusDamageFeature",
     "dnd.monsters.traits:HitSaveRiderFeature",
+    "dnd.monsters.traits:LeadershipAura",
     "dnd.spells.abjuration:<module>",
     "dnd.spells.abjuration:AntimagicSuppression",
-    "dnd.spells.conjuration:<module>",
-    "dnd.spells.conjuration:GuardianOfFaithObject",
-    "dnd.spells.conjuration:GuardianWarded",
-    "dnd.spells.conjuration:SpiritGuardiansTriggered",
     "dnd.spells.divination:<module>",
     "dnd.spells.enchantment:CommandNextTurnEffect",
-    "dnd.tile_conditions:ZoneControlCondition",
 })
 
 
@@ -323,7 +320,7 @@ def test_condition_mutation_callsite_inventory_has_no_unclassified_owner(
         Path("dnd/items"),
         Path("dnd/monsters"),
         Path("dnd/spells"),
-        Path("dnd/tile_conditions.py"),
+        Path("dnd/spatial_effect_controllers.py"),
     )
     paths: list[Path] = []
     for root in audited_roots:

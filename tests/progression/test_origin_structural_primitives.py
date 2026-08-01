@@ -36,7 +36,6 @@ def _composition_receipt(
         runtime_entity_uuid=entity.uuid,
         character_id=uuid4(),
         grants=grants,
-        automatic_grant_refs=(),
     )
 
 
@@ -268,7 +267,6 @@ def test_character_origin_identity_is_exact_and_composition_owned() -> None:
             runtime_entity_uuid=entity.uuid,
             character_id=uuid4(),
             grants=(),
-            automatic_grant_refs=(),
             owns_character_origin_identity=True,
         ),
     )

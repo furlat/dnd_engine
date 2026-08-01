@@ -2,11 +2,12 @@
 
 from dataclasses import dataclass
 from typing import Literal
+from uuid import uuid4
 
 from dnd.actions import Attack, Move
 from dnd.actions_functional import setup_standard_actions
 from dnd.blocks.equipment import Shield
-from dnd.classes.fighter import FightingStyleProtection
+from dnd.classes.fighter import create_protection_handler
 from dnd.conditions import InvisibilityEffect
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
@@ -144,8 +145,8 @@ def test_opportunity_attack_toggle_preserves_registration_and_invisibility() -> 
         handler
     ]
     assert attacker.get_event_handlers_by_name("Missing Handler") == []
-    assert attacker.set_handler_enabled("Missing Handler", False) is False
-    assert attacker.set_handler_enabled("Opportunity Attack Handler", False)
+    assert attacker.set_handler_enabled_by_uuid(uuid4(), False) is False
+    assert attacker.set_handler_enabled_by_uuid(handler.uuid, False)
     assert handler.enabled is False
     assert handler.uuid in attacker.event_handlers
     assert handler.uuid in EventQueue._event_handlers
@@ -163,8 +164,8 @@ def test_opportunity_attack_toggle_preserves_registration_and_invisibility() -> 
 
     assert attacker.set_handler_enabled_by_uuid(handler.uuid, True)
     assert handler.enabled is True
-    assert attacker.set_handler_enabled("Opportunity Attack Handler", False)
-    assert attacker.set_handler_enabled("Opportunity Attack Handler", True)
+    assert attacker.set_handler_enabled_by_uuid(handler.uuid, False)
+    assert attacker.set_handler_enabled_by_uuid(handler.uuid, True)
     assert handler.enabled is True
 
 
@@ -185,11 +186,7 @@ def test_protection_reaction_respects_disable_and_reenable() -> None:
         ),
         WeaponSlot.MELEE_OFF,
     )
-    protection = FightingStyleProtection(
-        source_entity_uuid=protector.uuid,
-        target_entity_uuid=protector.uuid,
-    )
-    protector.add_condition(protection)
+    protector.add_event_handler(create_protection_handler(protector.uuid))
     ally = create_goblin(name="Ally", position=(5, 6), faction="heroes")
     enemy = create_skeleton(
         name="Enemy",
@@ -202,7 +199,7 @@ def test_protection_reaction_respects_disable_and_reenable() -> None:
     handler = protector.get_event_handler_by_name("Protection")
     assert handler is not None
     assert handler.player_toggleable is True
-    assert protector.set_handler_enabled("Protection", False)
+    assert protector.set_handler_enabled_by_uuid(handler.uuid, False)
     miss_modifier = force_attack_miss(enemy)
 
     disabled_event = Attack(
@@ -218,7 +215,7 @@ def test_protection_reaction_respects_disable_and_reenable() -> None:
     assert disabled_event.attack_bonus.advantage is AdvantageStatus.NONE
     assert protector.action_economy.reactions.normalized_score == 1
 
-    assert protector.set_handler_enabled("Protection", True)
+    assert protector.set_handler_enabled_by_uuid(handler.uuid, True)
     enabled_event = Attack(
         source_entity_uuid=enemy.uuid,
         target_entity_uuid=ally.uuid,

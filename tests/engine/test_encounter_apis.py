@@ -560,8 +560,8 @@ def test_eb_18_004_execute_action_captures_combat_log_and_listener_payload() -> 
     assert encounter.get_combat_log(since=listener_calls[-1][0])[0] is encounter.combat_log[-1]
 
 
-def test_eb_18_005_check_deaths_marks_dead_and_ends_single_faction_encounter() -> None:
-    """EB-18-005: encounter death checks mark dead combatants and end combat."""
+def test_eb_18_005_lethal_damage_commits_death_and_reconciles_encounter_end() -> None:
+    """EB-18-005: lethal damage commits death before encounter reconciliation."""
     reset_chapter_18_state()
     hero, monster = create_book_pair()
     encounter = start_ordered_encounter(
@@ -573,9 +573,10 @@ def test_eb_18_005_check_deaths_marks_dead_and_ends_single_faction_encounter() -
     )
 
     set_hp(monster, 0)
+    assert monster.health.life_state is LifeState.DEAD
     death_events = encounter.check_deaths()
 
-    assert death_events
+    assert death_events == []
     assert encounter.combatants[monster.uuid].is_dead
     assert monster.health.life_state is LifeState.DEAD
     assert encounter.state == EncounterState.ENDED
@@ -1098,22 +1099,28 @@ def test_eb_18_011_entity_and_handler_errors_report_current_choices() -> None:
         params={"session_id": session_id},
     )
     assert handlers_response.status_code == 200
-    handler_names = {handler["name"] for handler in handlers_response.json()["handlers"]}
+    handler_rows = handlers_response.json()["handlers"]
+    handler_names = {handler["name"] for handler in handler_rows}
     assert "Opportunity Attack Handler" in handler_names
+    opportunity_attack_uuid = next(
+        handler["uuid"]
+        for handler in handler_rows
+        if handler["name"] == "Opportunity Attack Handler"
+    )
 
+    missing_handler_uuid = uuid4()
     missing_handler_response = client.post(
-        f"/entity/{hero.uuid}/handlers/NotAHandler/toggle",
+        f"/entity/{hero.uuid}/handlers/{missing_handler_uuid}/toggle",
         json={"session_id": session_id, "enabled": False},
     )
     assert missing_handler_response.status_code == 404
     missing_handler = missing_handler_response.json()["detail"]
     assert missing_handler["code"] == "handler_not_found"
-    assert missing_handler["handler_name"] == "NotAHandler"
-    assert "Opportunity Attack Handler" in missing_handler["valid_handler_names"]
+    assert missing_handler["handler_uuid"] == str(missing_handler_uuid)
     assert any(handler["enabled"] for handler in missing_handler["handlers"])
 
     unowned_response = client.post(
-        f"/entity/{monster.uuid}/handlers/Opportunity%20Attack%20Handler/toggle",
+        f"/entity/{monster.uuid}/handlers/{opportunity_attack_uuid}/toggle",
         json={"session_id": session_id, "enabled": False},
     )
     assert unowned_response.status_code == 403
@@ -1377,7 +1384,10 @@ def test_eb_18_033_game_join_status_and_session_entities_are_stateful() -> None:
 
     monster_join_response = client.post(
         "/game/join",
-        json={"session_id": monster_session_id, "faction": "monsters"},
+        json={
+            "session_id": monster_session_id,
+            "entity_uuids": [str(monster.uuid)],
+        },
     )
     assert monster_join_response.status_code == 200
     monster_join = monster_join_response.json()
@@ -1937,15 +1947,16 @@ def test_eb_18_035_handler_toggle_round_trip_exposes_only_player_choices() -> No
     ]
     assert handlers[0]["enabled"] is True
     assert handlers[0]["trigger_event"] == EventType.STEP_MOVEMENT.value
+    opportunity_attack_uuid = handlers[0]["uuid"]
 
     disabled_response = client.post(
-        f"/entity/{hero.uuid}/handlers/Opportunity%20Attack%20Handler/toggle",
+        f"/entity/{hero.uuid}/handlers/{opportunity_attack_uuid}/toggle",
         json={"session_id": session_id, "enabled": False},
     )
     assert disabled_response.status_code == 200
     assert disabled_response.json() == {
         "success": True,
-        "handler_name": "Opportunity Attack Handler",
+        "handler_uuid": opportunity_attack_uuid,
         "enabled": False,
     }
 
@@ -1965,22 +1976,64 @@ def test_eb_18_035_handler_toggle_round_trip_exposes_only_player_choices() -> No
         disabled_handlers_response.json()["handlers"]
     )
 
+    internal_handler = hero.get_event_handler_by_name("HasAttacked Tracker")
+    assert internal_handler is not None
     internal_response = client.post(
-        f"/entity/{hero.uuid}/handlers/HasAttacked%20Tracker/toggle",
+        f"/entity/{hero.uuid}/handlers/{internal_handler.uuid}/toggle",
         json={"session_id": session_id, "enabled": False},
     )
     assert internal_response.status_code == 404
     assert internal_response.json()["detail"]["code"] == "handler_not_found"
-    assert internal_response.json()["detail"]["valid_handler_names"] == [
-        "Opportunity Attack Handler"
-    ]
+    assert [
+        handler["uuid"]
+        for handler in internal_response.json()["detail"]["handlers"]
+    ] == [opportunity_attack_uuid]
 
     enabled_response = client.post(
-        f"/entity/{hero.uuid}/handlers/Opportunity%20Attack%20Handler/toggle",
+        f"/entity/{hero.uuid}/handlers/{opportunity_attack_uuid}/toggle",
         json={"session_id": session_id, "enabled": True},
     )
     assert enabled_response.status_code == 200
     assert enabled_response.json()["enabled"] is True
+
+
+def test_handler_toggle_targets_exact_uuid_when_display_names_collide() -> None:
+    """The command mutates one exact handler, never a same-name sibling."""
+    client, session_id, hero, _monster = create_action_api_session()
+    add_opportunity_attack_handler(hero)
+    add_opportunity_attack_handler(hero)
+
+    handlers_response = client.get(
+        f"/entity/{hero.uuid}/handlers",
+        params={"session_id": session_id},
+    )
+    assert handlers_response.status_code == 200
+    handlers = [
+        handler
+        for handler in handlers_response.json()["handlers"]
+        if handler["name"] == "Opportunity Attack Handler"
+    ]
+    assert len(handlers) == 2
+
+    toggled_uuid = handlers[0]["uuid"]
+    sibling_uuid = handlers[1]["uuid"]
+    disabled_response = client.post(
+        f"/entity/{hero.uuid}/handlers/{toggled_uuid}/toggle",
+        json={"session_id": session_id, "enabled": False},
+    )
+    assert disabled_response.status_code == 200
+    assert disabled_response.json()["handler_uuid"] == toggled_uuid
+
+    refreshed_response = client.get(
+        f"/entity/{hero.uuid}/handlers",
+        params={"session_id": session_id},
+    )
+    states = {
+        handler["uuid"]: handler["enabled"]
+        for handler in refreshed_response.json()["handlers"]
+    }
+    assert states[toggled_uuid] is False
+    assert states[sibling_uuid] is True
 
 
 def test_eb_18_036_equipment_mutations_acknowledge_and_replicate_loadout() -> None:
@@ -2164,5 +2217,51 @@ def test_eb_18_037_turn_switch_updates_session_authority() -> None:
         params={"session_id": session_ids[hero.uuid]},
     )
     assert new_actor_actions.status_code == 200
-    assert old_actor_actions.status_code == 403
-    assert old_actor_actions.json()["detail"]["code"] == "not_entity_turn"
+    assert (
+        new_actor_actions.json()["execution_authorization"]
+        == "authorized"
+    )
+    assert old_actor_actions.status_code == 200
+    assert (
+        old_actor_actions.json()["execution_authorization"]
+        == "not_active_turn"
+    )
+
+
+def test_downed_external_combatant_does_not_hold_the_turn() -> None:
+    """A dying party member must not park the encounter on its controller.
+
+    ``is_dead`` and ``is_alive`` both key on ``LifeState.DEAD``, so a downed
+    combatant is neither skipped as dead nor able to act.  Turn advancement
+    must still start its turn so the death save rolls, then end it and reach
+    the next combatant that can actually decide.
+    """
+    reset_chapter_18_state()
+    downed = create_goblin(name="Downed", position=(1, 1), faction="heroes")
+    downed.uses_death_saves = True
+    standing = create_goblin(name="Standing", position=(2, 2), faction="heroes")
+    monster = create_skeleton(name="Monster", position=(9, 6), faction="monsters")
+    Entity.update_all_entities_senses()
+
+    encounter = Encounter(name="Downed Turn", source_entity_uuid=uuid4())
+    encounter.add_combatant(downed, HumanController(source_entity_uuid=downed.uuid))
+    encounter.add_combatant(standing, HumanController(source_entity_uuid=standing.uuid))
+    encounter.add_combatant(monster, PassController(source_entity_uuid=monster.uuid))
+    encounter.roll_initiative()
+    encounter.initiative_order = [downed.uuid, standing.uuid, monster.uuid]
+    encounter.current_turn_index = 0
+    encounter.start_encounter()
+
+    downed.enter_dying_state()
+    downed_state = encounter.combatants[downed.uuid]
+    assert downed_state.is_dead is False
+    assert downed_state.is_alive is True
+    assert downed_state.can_take_controlled_turn is False
+    assert encounter.combatants[standing.uuid].can_take_controlled_turn is True
+
+    result = encounter.advance_until_player()
+
+    assert result.status == "waiting_for_human"
+    current = encounter.get_current_entity()
+    assert current is not None
+    assert current.uuid == standing.uuid

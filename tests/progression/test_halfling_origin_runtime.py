@@ -131,7 +131,6 @@ def test_halfling_lucky_rerolls_natural_one_and_must_use_replacement() -> None:
             runtime_entity_uuid=entity.uuid,
             character_id=context.character_id,
             grants=(receipt,),
-            automatic_grant_refs=(HALFLING_LUCKY_REF,),
         ),
     )
 

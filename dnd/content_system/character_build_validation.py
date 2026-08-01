@@ -9,8 +9,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from hashlib import sha256
-import json
 from typing import TypeVar, cast
 
 from pydantic import BaseModel, ValidationError
@@ -22,6 +20,7 @@ from dnd.content_system.character_appearance import (
 from dnd.content_system.starting_apparel_definitions import (
     STARTING_APPAREL_CHOICE_ID,
 )
+from dnd.core.content.canonical import canonical_content_sha256
 from dnd.core.content.descriptors import ContentVisibility
 from dnd.core.content.durable_characters import (
     AbilityScoreName,
@@ -2397,13 +2396,7 @@ def _grant_schedule_entry(
             else None
         ),
     }
-    digest = sha256(
-        json.dumps(
-            payload,
-            sort_keys=True,
-            separators=(",", ":"),
-        ).encode("utf-8"),
-    ).hexdigest()
+    digest = canonical_content_sha256(payload)
     return CharacterGrantScheduleEntry(
         kind=kind,
         provenance=provenance,

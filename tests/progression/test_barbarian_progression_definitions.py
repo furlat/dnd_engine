@@ -1,6 +1,5 @@
 """Focused authored-definition coverage for Barbarian and Berserker."""
 
-from dnd.classes import barbarian, feats, fighter, rage
 from dnd.classes.barbarian_progression_definitions import (
     BARBARIAN_CLASS_DECLARATION,
     BARBARIAN_CLASS_DEFINITION,
@@ -9,10 +8,13 @@ from dnd.classes.barbarian_progression_definitions import (
     BERSERKER_SUBCLASS_DEFINITION,
     UNARMORED_DEFENSE_DECLARATION,
 )
-from dnd.content_system.condition_definitions import (
-    CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS,
+from dnd.classes.permanent_feature_definitions import (
+    BARBARIAN_BRUTAL_CRITICAL_DECLARATION,
+    BARBARIAN_FRENZY_DECLARATION,
+    BARBARIAN_RAGE_DECLARATION,
+    FIGHTER_EXTRA_ATTACK_DECLARATION,
+    LUCKY_FEAT_DECLARATION,
 )
-from dnd.core.base_conditions import BaseCondition
 from dnd.core.content.dependencies import ContentDependencyRelation
 from dnd.core.content.durable_characters import (
     AbilityScoreName,
@@ -25,10 +27,6 @@ from dnd.core.content.durable_characters import (
 from dnd.core.content.identities import ContentDefinitionKind
 from dnd.core.content.registration import ContentDeclarationMode
 from dnd.core.progression import CasterProgression
-
-
-def _feature_ref(condition_type: type[BaseCondition]):
-    return CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS[condition_type].ref
 
 
 def _level(
@@ -214,12 +212,12 @@ def test_barbarian_has_all_levels_and_exact_threshold_grants() -> None:
         1,
     ).automatic_grant_refs == tuple(sorted(
         (
-            _feature_ref(rage.RageFeature),
+            BARBARIAN_RAGE_DECLARATION.ref,
             UNARMORED_DEFENSE_DECLARATION.ref,
         ),
         key=lambda ref: ref.identity_key,
     ))
-    assert _feature_ref(fighter.ExtraAttackFeature) in _level(
+    assert FIGHTER_EXTRA_ATTACK_DECLARATION.ref in _level(
         BARBARIAN_CLASS_DEFINITION,
         5,
     ).automatic_grant_refs
@@ -228,8 +226,8 @@ def test_barbarian_has_all_levels_and_exact_threshold_grants() -> None:
         9,
     ).automatic_grant_refs == tuple(sorted(
         (
-            _feature_ref(barbarian.BrutalCritical),
-            _feature_ref(rage.RageFeature),
+            BARBARIAN_BRUTAL_CRITICAL_DECLARATION.ref,
+            BARBARIAN_RAGE_DECLARATION.ref,
         ),
         key=lambda ref: ref.identity_key,
     ))
@@ -246,7 +244,7 @@ def test_barbarian_choices_are_subclass_then_exact_asi_or_feat_rows() -> None:
     ).choice_requirements[0]
     assert subclass.allowed_refs == (BERSERKER_SUBCLASS_DECLARATION.ref,)
 
-    lucky_ref = _feature_ref(feats.LuckyFeature)
+    lucky_ref = LUCKY_FEAT_DECLARATION.ref
     for level in (4, 8, 12, 16, 19):
         assert _choice_kinds(BARBARIAN_CLASS_DEFINITION, level) == (
             ChoiceRequirementKind.ABILITY_SCORE_IMPROVEMENT_OR_FEAT,
@@ -278,7 +276,7 @@ def test_berserker_rows_cover_all_exact_subclass_thresholds() -> None:
     assert _level(
         BERSERKER_SUBCLASS_DEFINITION,
         3,
-    ).automatic_grant_refs == (_feature_ref(rage.FrenzyFeature),)
+    ).automatic_grant_refs == (BARBARIAN_FRENZY_DECLARATION.ref,)
 
 
 def test_progressions_close_over_every_offered_and_granted_definition() -> None:

@@ -22,11 +22,13 @@ from dnd.core.condition_types import ConditionTag
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import (
+    DamageRollResultEvent,
     EventPhase,
     EventQueue,
     EventType,
     TakeDamageEvent,
 )
+from dnd.core.combat_log import CombatLogEntryType
 from dnd.core.gridmap import get_map
 from dnd.core.life_types import LifeState
 from dnd.core.creature_types import DamageType
@@ -679,7 +681,7 @@ def test_bestow_curse_inaction_option_spends_and_releases_one_action() -> None:
 
 
 def test_bestow_curse_damage_option_adds_necrotic_damage_child() -> None:
-    """Batch 5 old case 6: option four adds one caster-owned 1d8 hit."""
+    """Batch 5 old case 6: option four appends one audited 1d8 packet."""
     reset_spell_regression_arena(12, 7)
     caster = create_spell_regression_actor("Curse Caster", (1, 3), "heroes")
     target = create_spell_regression_actor("Curse Target", (2, 3), "monsters")
@@ -725,6 +727,36 @@ def test_bestow_curse_damage_option_adds_necrotic_damage_child() -> None:
         DamageType.PIERCING,
         DamageType.NECROTIC,
     }
+    completed_roll_events = [
+        event
+        for event in EventQueue.get_events_by_type(
+            EventType.DAMAGE_ROLL_RESULT,
+        )
+        if (
+            isinstance(event, DamageRollResultEvent)
+            and event.source_entity_uuid == caster.uuid
+            and event.target_entity_uuid == target.uuid
+            and event.phase is EventPhase.COMPLETION
+        )
+    ]
+    assert len(completed_roll_events) == 1
+    damage_roll_event = completed_roll_events[0]
+    assert [
+        packet.damage.damage_type
+        for packet in damage_roll_event.damage_packets
+    ] == [DamageType.PIERCING, DamageType.NECROTIC]
+    assert [
+        modification.handler_name
+        for modification in damage_roll_event.roll_modifications
+    ] == ["Bestow Curse"]
+    assert result.combat_log is not None
+    roll_logs = [
+        entry
+        for entry in result.combat_log.sub_entries
+        if entry.entry_type is CombatLogEntryType.ROLL_MODIFICATION
+    ]
+    assert len(roll_logs) == 1
+    assert roll_logs[0].data["modifications"][0]["handler_name"] == "Bestow Curse"
 
 
 def test_bestow_curse_concentration_and_remove_curse_reverse_cleanup() -> None:

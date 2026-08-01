@@ -5,14 +5,20 @@ action rather than manufacturing an action modifier.  The four test docstrings
 retain the one-for-one legacy coverage map, including the Surge-first order.
 """
 
+from uuid import uuid4
+
 from dnd.actions import Attack
+from dnd.blocks.action_economy import RechargeType, ResourceCapacityPolicy
 from dnd.classes.fighter import (
     ActionSurge,
-    ActionSurgeFeature,
     ExtraAttack,
-    ExtraAttackFeature,
+    create_extra_attack_resource_handler,
+)
+from dnd.content_system.extra_attack_character_grant_appliers import (
+    EXTRA_ATTACK_FEATURE_REF,
 )
 from dnd.core.equipment_types import WeaponSlot
+from dnd.core.feature_grants import AttackMultiplicityGrant
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity
 from dnd.monsters.bestiary import create_goblin, create_skeleton
@@ -30,19 +36,30 @@ def _create_fighter(*, extra_attacks: int) -> Entity:
         position=(5, 5),
         faction="heroes",
     )
-    fighter.add_condition(
-        ExtraAttackFeature(
-            source_entity_uuid=fighter.uuid,
-            target_entity_uuid=fighter.uuid,
-            extra_attacks=extra_attacks,
-        )
+    extra_attack_grant_id = uuid4()
+    fighter.action_economy.add_attack_multiplicity_grant(
+        AttackMultiplicityGrant(
+            grant_id=extra_attack_grant_id,
+            provider_ref=EXTRA_ATTACK_FEATURE_REF,
+            attacks_per_attack_action=extra_attacks + 1,
+            acquisition_ordinal=1,
+        ),
     )
-    fighter.add_condition(
-        ActionSurgeFeature(
-            source_entity_uuid=fighter.uuid,
-            target_entity_uuid=fighter.uuid,
-            num_uses=1,
-        )
+    fighter.action_economy.add_resource_contribution(
+        "extra_attacks",
+        extra_attack_grant_id,
+        maximum=extra_attacks,
+        recharge_type=RechargeType.TURN_START,
+        capacity_policy=ResourceCapacityPolicy.MAXIMUM,
+    )
+    fighter.add_event_handler(
+        create_extra_attack_resource_handler(fighter.uuid),
+    )
+    fighter.action_economy.add_resource_contribution(
+        "action_surge",
+        "fixture.action_surge",
+        maximum=1,
+        recharge_type=RechargeType.SHORT_REST,
     )
     fighter.on_turn_start()
     return fighter

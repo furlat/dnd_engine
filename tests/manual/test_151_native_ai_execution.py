@@ -17,15 +17,17 @@ from dnd.ai.instrumentation import (
     AIInstrumentation,
     BoundedAIInstrumentationSink,
 )
+from dnd.ai.policies.basic import BASIC_POLICY_ID, register_basic_policy
 from dnd.ai.feedback import NativeAIDecisionFeedback, NativeAIDecisionOutcome
 from dnd.ai.policy import PolicyDescriptor
 from dnd.ai.registry import PolicyRegistry
 from dnd.ai.runtime.assignment_lifecycle import AIAssignmentState
+from dnd.ai.runtime import execution as ai_execution
 from dnd.ai.runtime.controller import NativeAIController
 from dnd.ai.runtime.decision_epoch import (
     _build_affordance_set_and_execution_authority_from_actions,
 )
-from dnd.controller import Controller, TurnContext
+from dnd.controller import Controller, ControllerStepResult, TurnContext
 from dnd.core.base_actions import (
     ActionAvailabilityStatus,
     ActionCategory,
@@ -56,6 +58,11 @@ FORGED_DESCRIPTOR = PolicyDescriptor(
     policy_id="test.forged",
     version="1",
     display_name="Forged-row test policy",
+)
+FAILING_DESCRIPTOR = PolicyDescriptor(
+    policy_id="test.failing",
+    version="1",
+    display_name="Failing test policy",
 )
 
 
@@ -109,6 +116,18 @@ class _ForgedRowPolicy:
         return ExecuteIntent(row_id="forged|not-in-current-epoch")
 
 
+class _FailingPolicy:
+    descriptor = FAILING_DESCRIPTOR
+
+    def decide(
+        self,
+        state: SubjectiveWorldState,
+        memory: _StatefulMemory,
+    ) -> PolicyIntent:
+        del state, memory
+        raise LookupError("fixture policy failure")
+
+
 def _reduce_state(
     memory: _StatefulMemory,
     state: SubjectiveWorldState,
@@ -131,7 +150,8 @@ def _registry(
     descriptor: PolicyDescriptor,
     policy_factory: type[_DashThenEndPolicy]
     | type[_EndPolicy]
-    | type[_ForgedRowPolicy],
+    | type[_ForgedRowPolicy]
+    | type[_FailingPolicy],
 ) -> PolicyRegistry[SubjectiveWorldState, PolicyIntent]:
     registry: PolicyRegistry[SubjectiveWorldState, PolicyIntent] = (
         PolicyRegistry()
@@ -169,6 +189,18 @@ def _context(
 def _reset() -> None:
     reset_action_state()
     Controller.clear_registry()
+
+
+def _basic_registry() -> PolicyRegistry[
+    SubjectiveWorldState,
+    PolicyIntent,
+]:
+    """Compose the bundled policy explicitly, like the shipped server."""
+    registry: PolicyRegistry[SubjectiveWorldState, PolicyIntent] = (
+        PolicyRegistry()
+    )
+    register_basic_policy(registry)
+    return registry
 
 
 def test_native_assignment_executes_stateful_custom_policy_without_timing_code() -> None:
@@ -317,6 +349,60 @@ def test_native_policy_cannot_execute_a_forged_epoch_row() -> None:
     )
 
 
+def test_native_policy_failure_isolated_from_the_turn_executor() -> None:
+    _reset()
+    actor = create_tutorial_actor(name="Actor", position=(2, 2))
+    Entity.update_all_entities_senses()
+    controller = NativeAIController.create(
+        source_entity_uuid=actor.uuid,
+        game_id="game",
+        assignment_id="failing-policy",
+        controlled_entity_uuids=(actor.uuid,),
+        policy_id=FAILING_DESCRIPTOR.policy_id,
+        registry=_registry(FAILING_DESCRIPTOR, _FailingPolicy),
+    )
+    controller.start([actor])
+
+    step = controller.execute_next_action(actor, _context(actor))
+
+    assert step == ControllerStepResult(end_turn=True)
+    assert controller.assignment.feedback[-1].outcome is (
+        NativeAIDecisionOutcome.FAILED
+    )
+    assert controller.assignment.feedback[-1].error_type == "LookupError"
+
+
+def test_native_engine_execution_failure_propagates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _reset()
+    actor = create_tutorial_actor(name="Actor", position=(2, 2))
+    Entity.update_all_entities_senses()
+    controller = NativeAIController.create(
+        source_entity_uuid=actor.uuid,
+        game_id="game",
+        assignment_id="engine-failure",
+        controlled_entity_uuids=(actor.uuid,),
+        policy_id=STATEFUL_DESCRIPTOR.policy_id,
+        registry=_registry(STATEFUL_DESCRIPTOR, _DashThenEndPolicy),
+    )
+    controller.start([actor])
+
+    def fail_engine_dispatch(*_: object, **__: object) -> object:
+        raise RuntimeError("fixture engine execution failure")
+
+    monkeypatch.setattr(
+        ai_execution,
+        "dispatch_available_action",
+        fail_engine_dispatch,
+    )
+
+    with pytest.raises(RuntimeError, match="fixture engine execution failure"):
+        controller.execute_next_action(actor, _context(actor))
+
+    assert controller.assignment.feedback == ()
+
+
 def test_shared_dispatcher_rejects_equal_but_non_authoritative_target() -> None:
     """Action dispatch requires the exact target object discovered in one row."""
     _reset()
@@ -348,6 +434,8 @@ def test_bundled_basic_policy_executes_natively_without_transport() -> None:
         game_id="game",
         assignment_id="basic",
         controlled_entity_uuids=(actor.uuid,),
+        policy_id=BASIC_POLICY_ID,
+        registry=_basic_registry(),
     )
     controller.start([actor])
 

@@ -106,7 +106,6 @@ def test_receipt_removes_each_modifier_collection_from_its_exact_channel() -> No
         runtime_entity_uuid=entity.uuid,
         character_id=uuid4(),
         grants=(grant,),
-        automatic_grant_refs=(),
     )
 
     remove_character_composition(entity, receipt)
@@ -153,7 +152,6 @@ def test_receipt_removes_only_its_exact_condition_immunity_sources() -> None:
                 ),
             ),
         ),
-        automatic_grant_refs=(),
     )
 
     remove_character_composition(entity, receipt)
@@ -186,7 +184,6 @@ def test_receipt_removes_dynamic_state_by_exact_condition_ref() -> None:
                 transient_condition_refs_to_remove=(raging_ref,),
             ),
         ),
-        automatic_grant_refs=(),
     )
 
     remove_character_composition(entity, receipt)

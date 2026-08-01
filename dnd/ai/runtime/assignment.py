@@ -215,39 +215,14 @@ class NativeAIAssignment:
                     turn_context=context,
                     instrumentation_context=instrumentation_context,
                 )
-        except Exception as error:
-            outcome = (
-                NativeAIDecisionOutcome.REJECTED
-                if isinstance(error, AIDecisionValidationError)
-                else NativeAIDecisionOutcome.FAILED
+        except AIDecisionValidationError as error:
+            return self._record_decision_error(
+                entity=entity,
+                error=error,
+                outcome=NativeAIDecisionOutcome.REJECTED,
+                instrumentation_context=instrumentation_context,
+                row_id=error.row_id,
             )
-            self._instrumentation.emit_event(
-                context=instrumentation_context,
-                event="native_ai_decision_failed",
-                attributes={"error_type": type(error).__name__},
-            )
-            self._reduce_feedback(
-                NativeAIDecisionFeedback(
-                    decision_id=instrumentation_context.decision_id,
-                    actor_uuid=str(entity.uuid),
-                    epoch_id=(
-                        self._projector.world.current_epoch.epoch_id
-                        if self._projector.world is not None
-                        and self._projector.world.current_epoch is not None
-                        else None
-                    ),
-                    row_id=(
-                        error.row_id
-                        if isinstance(error, AIDecisionValidationError)
-                        else None
-                    ),
-                    outcome=outcome,
-                    error_type=type(error).__name__,
-                    error_message=str(error),
-                ),
-                instrumentation_context,
-            )
-            return ControllerStepResult(end_turn=True)
 
     def _execute_instrumented(
         self,
@@ -275,11 +250,19 @@ class NativeAIAssignment:
         ):
             self._reduce_pre_decision_memory(decision_state)
 
-        decision = self._runner.decide(
-            binding=self._binding,
-            state=decision_state.world,
-            context=instrumentation_context,
-        )
+        try:
+            decision = self._runner.decide(
+                binding=self._binding,
+                state=decision_state.world,
+                context=instrumentation_context,
+            )
+        except Exception as error:
+            return self._record_decision_error(
+                entity=entity,
+                error=error,
+                outcome=NativeAIDecisionOutcome.FAILED,
+                instrumentation_context=instrumentation_context,
+            )
         resolution = resolve_policy_intent(
             entity=entity,
             turn_context=turn_context,
@@ -301,6 +284,40 @@ class NativeAIAssignment:
                 end_turn=True,
             )
         return resolution.step
+
+    def _record_decision_error(
+        self,
+        *,
+        entity: Entity,
+        error: Exception,
+        outcome: NativeAIDecisionOutcome,
+        instrumentation_context: AIInstrumentationContext,
+        row_id: str | None = None,
+    ) -> ControllerStepResult:
+        """Reduce a policy-owned failure without hiding engine execution bugs."""
+        self._instrumentation.emit_event(
+            context=instrumentation_context,
+            event="native_ai_decision_failed",
+            attributes={"error_type": type(error).__name__},
+        )
+        self._reduce_feedback(
+            NativeAIDecisionFeedback(
+                decision_id=instrumentation_context.decision_id,
+                actor_uuid=str(entity.uuid),
+                epoch_id=(
+                    self._projector.world.current_epoch.epoch_id
+                    if self._projector.world is not None
+                    and self._projector.world.current_epoch is not None
+                    else None
+                ),
+                row_id=row_id,
+                outcome=outcome,
+                error_type=type(error).__name__,
+                error_message=str(error),
+            ),
+            instrumentation_context,
+        )
+        return ControllerStepResult(end_turn=True)
 
     def _reduce_pre_decision_memory(
         self,

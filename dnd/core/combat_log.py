@@ -15,6 +15,19 @@ def position_evidence_key(position: Tuple[int, int]) -> str:
     return f"{position[0]},{position[1]}"
 
 
+def damage_total_from_log_data(data: Dict[str, Any]) -> Optional[int]:
+    """Extract the canonical damage total from structured combat-log data."""
+    for key in ("final_damage", "total_damage", "damage"):
+        value = data.get(key)
+        if isinstance(value, bool):
+            continue
+        if isinstance(value, int):
+            return value
+        if isinstance(value, float):
+            return int(value)
+    return None
+
+
 class CombatLogEntryType(str, Enum):
     """Combat-log entry categories emitted by engine events."""
 
@@ -22,11 +35,14 @@ class CombatLogEntryType(str, Enum):
     MOVEMENT = "movement"
     ACTION = "action"
     SAVING_THROW = "saving_throw"
+    DEATH_SAVE = "death_save"
+    ABILITY_CHECK = "ability_check"
     SKILL_CHECK = "skill_check"
     CONDITION_APPLIED = "condition_applied"
     CONDITION_REMOVED = "condition_removed"
     DAMAGE_TAKEN = "damage_taken"
     HEAL = "heal"
+    TEMPORARY_HIT_POINTS = "temporary_hit_points"
     DEATH = "death"
     TURN_START = "turn_start"
     TURN_END = "turn_end"
@@ -37,14 +53,40 @@ class CombatLogEntryType(str, Enum):
     ENTITY_SPOTTED = "entity_spotted"
     HAZARD_DETECTED = "hazard_detected"
     ROLL_MODIFICATION = "roll_modification"
+    SPATIAL_EFFECT = "spatial_effect"
 
 
-class CombatLogVerbosity(str, Enum):
-    """Verbosity levels for combat-log display text."""
+class SpatialEffectLogData(BaseModel):
+    """Typed lifecycle fact for a persistent ground, cloud, or field effect."""
 
-    COMPACT = "compact"
-    VERBOSE = "verbose"
-    DETAILED = "detailed"
+    operation: Literal[
+        "created",
+        "footprint_changed",
+        "removed",
+        "transformed",
+        "revealed",
+    ]
+    content_identity: str = Field(
+        description="Exact contract-independent authored effect identity.",
+    )
+    layer: Literal["ground_surface", "cloud", "field"]
+    affected_positions: Tuple[Tuple[int, int], ...] = ()
+
+
+class SpatialEffectInteractionLogData(BaseModel):
+    """Typed environmental operation applied at exact world positions."""
+
+    operation: Literal[
+        "ignite",
+        "douse",
+        "freeze",
+        "electrify",
+        "vaporize",
+        "disperse",
+    ]
+    intensity: Literal["minor", "moderate", "strong"]
+    affected_positions: Tuple[Tuple[int, int], ...]
+    source_content_identity: Optional[str] = None
 
 
 class ModifierBreakdown(BaseModel):
@@ -272,6 +314,7 @@ class SavingThrowLogData(BaseModel):
     """Structured saving throw data.
 
     Attributes:
+        save_kind: Discriminant for an ordinary ability saving throw.
         entity_name: Display name of the saving entity.
         entity_uuid: UUID string of the saving entity.
         ability: Ability used for the saving throw.
@@ -283,6 +326,10 @@ class SavingThrowLogData(BaseModel):
         source_name: Display name of the effect that requested the save.
     """
 
+    save_kind: Literal["ability"] = Field(
+        default="ability",
+        description="Discriminant for an ordinary ability saving throw.",
+    )
     entity_name: str = Field(description="Display name of the saving entity.")
     entity_uuid: str = Field(description="UUID string of the saving entity.")
     ability: str = Field(description="Ability used for the saving throw.")
@@ -295,6 +342,27 @@ class SavingThrowLogData(BaseModel):
     )
     success: bool = Field(description="Whether the save succeeded.")
     source_name: Optional[str] = Field(default=None, description="Display name of the effect that requested the save.")
+
+
+class DeathSaveLogData(BaseModel):
+    """Structured death-saving-throw result, distinct from ability saves."""
+
+    save_kind: Literal["death"] = Field(
+        default="death",
+        description="Discriminant for a death saving throw.",
+    )
+    entity_name: str = Field(description="Display name of the saving entity.")
+    entity_uuid: str = Field(description="UUID string of the saving entity.")
+    roll: int = Field(description="Effective roll total after result handlers.")
+    natural_roll: int = Field(description="Natural d20 face used by death-save rules.")
+    dc: int = Field(default=10, description="Death saving throw DC.")
+    successes: int = Field(ge=0, description="Accumulated successes after the roll.")
+    failures: int = Field(ge=0, description="Accumulated failures after the roll.")
+    became_stable: bool = Field(description="Whether this roll stabilized the entity.")
+    regained_hit_point: bool = Field(
+        description="Whether a natural 20 restored one hit point.",
+    )
+    died: bool = Field(description="Whether this roll caused death.")
 
 
 class SpellSaveLogData(BaseModel):
@@ -386,6 +454,28 @@ class SkillCheckLogData(BaseModel):
     success: Optional[bool] = Field(default=None, description="Whether the check succeeded, when a DC exists.")
 
 
+class AbilityCheckLogData(BaseModel):
+    """Structured raw ability-check data, distinct from a skill check."""
+
+    entity_name: str = Field(description="Display name of the checking entity.")
+    entity_uuid: str = Field(description="UUID string of the checking entity.")
+    ability: str = Field(description="Ability used for the raw check.")
+    dc: Optional[int] = Field(default=None, description="Difficulty Class, when the check has one.")
+    roll: DiceRollDisplay = Field(description="Ability-check roll display data.")
+    bonus_breakdown: List[ModifierBreakdown] = Field(
+        default_factory=list,
+        description="Modifiers contributing to the ability check.",
+    )
+    advantage_breakdown: List[ModifierBreakdown] = Field(
+        default_factory=list,
+        description="Advantage and disadvantage sources.",
+    )
+    success: Optional[bool] = Field(
+        default=None,
+        description="Whether the check succeeded, when a DC exists.",
+    )
+
+
 class EntitySpottedLogData(BaseModel):
     """Structured data for when an observer spots a hiding entity.
 
@@ -473,6 +563,17 @@ class HealLogData(BaseModel):
     entity_uuid: str = Field(description="UUID string of the healed entity.")
     amount: int = Field(description="Healing amount.")
     source_description: str = Field(description="Description of the healing source.")
+
+
+class TemporaryHitPointsLogData(BaseModel):
+    """Structured result of one temporary-hit-point grant."""
+
+    entity_name: str = Field(description="Display name of the affected entity.")
+    entity_uuid: str = Field(description="UUID string of the affected entity.")
+    requested_amount: int = Field(ge=0, description="Temporary HP offered by the effect.")
+    previous_amount: int = Field(ge=0, description="Temporary HP before the grant.")
+    resulting_amount: int = Field(ge=0, description="Temporary HP after non-stacking replacement.")
+    source_description: str = Field(description="Description of the granting effect.")
 
 
 class ActionLogData(BaseModel):

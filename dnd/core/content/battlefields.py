@@ -7,8 +7,6 @@ live in :mod:`dnd.scenarios.battlefield_catalog`.
 
 from __future__ import annotations
 
-import hashlib
-import json
 import re
 from typing import Literal, Self
 
@@ -20,6 +18,8 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+
+from dnd.core.content.canonical import canonical_content_sha256
 
 
 LightLevelName = Literal["bright", "darkness"]
@@ -45,14 +45,7 @@ _BATTLEFIELD_ID_PATTERN = re.compile(
 
 
 def _canonical_digest(payload: object) -> str:
-    encoded = json.dumps(
-        payload,
-        allow_nan=False,
-        ensure_ascii=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode("utf-8")
-    return hashlib.sha256(encoded).hexdigest()
+    return canonical_content_sha256(payload)
 
 
 class BattlefieldPreviewCell(BaseModel):

@@ -10,8 +10,6 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from dataclasses import dataclass
-from hashlib import sha256
-import json
 from threading import RLock
 from typing import Sequence
 from uuid import UUID
@@ -36,6 +34,7 @@ from dnd.encounter import Encounter
 from dnd.entity import Entity
 from server.objective_replay import ObjectiveReplaySeed
 from server.objective_state import build_current_objective_world
+from server.canonical_json import canonical_json_sha256
 
 
 DEFAULT_WORKER_SUMMARY_CAPACITY = 32
@@ -341,10 +340,10 @@ class WorkerGameSummaryStore:
             WorkerSummaryEvidence(
                 generation_id=EventQueue.generation_id(),
                 summary=summary,
-                source_event_digest=_canonical_digest(
+                source_event_digest=canonical_json_sha256(
                     [retained.model_dump(mode="json") for retained in event_history]
                 ),
-                source_combat_log_digest=_canonical_digest(
+                source_combat_log_digest=canonical_json_sha256(
                     [entry.model_dump(mode="json") for entry in combat_logs]
                 ),
             )
@@ -384,18 +383,6 @@ class WorkerGameSummaryStore:
             while len(self._replay_captures) > self._max_summaries:
                 self._replay_captures.popitem(last=False)
 
-
-def _canonical_digest(value: object) -> str:
-    """Return a deterministic digest without depending on the SQLite package."""
-    payload = json.dumps(
-        value,
-        ensure_ascii=True,
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode("utf-8")
-    return sha256(payload).hexdigest()
-
-
 def _capture_entities(
     entity_uuids: Sequence[UUID],
 ) -> tuple[tuple[EntitySnapshotV1, ...], bool]:
@@ -424,7 +411,7 @@ def _capture_entity(entity: Entity) -> EntitySnapshotV1:
         for name, resource in entity.action_economy.resources.items()
     }
     for level in range(1, 10):
-        spell_slot = getattr(entity.action_economy, f"spell_slot_{level}")
+        spell_slot = entity.action_economy.spell_slot_value(level)
         resources[f"spell_slot_{level}"] = spell_slot.normalized_score
 
     condition_semantic_keys = tuple(

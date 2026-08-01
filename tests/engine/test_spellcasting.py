@@ -3,6 +3,7 @@
 from typing import Optional, cast
 from uuid import uuid4
 
+import pytest
 from pydantic import Field
 
 from dnd.actions import DropConcentration, SpellAction, SpellEvent
@@ -664,9 +665,9 @@ def test_eb_14_012_spell_action_overrides_change_template_costs_not_slot_variant
     Entity.update_all_entities_senses()
     register_spell(caster, MagicMissile, caster_level=5)
 
-    template = caster.get_action_template("Magic Missile")
-    assert isinstance(template, SpellAction)
-    assert template.generate_variants(caster) == []
+    authored_template = caster.get_action_template("Magic Missile")
+    assert isinstance(authored_template, SpellAction)
+    assert authored_template.generate_variants(caster) == []
     assert not any(info.template_name == "Magic Missile" for info in get_available_actions(caster).all_actions)
 
     modified = apply_action_overrides(
@@ -675,10 +676,12 @@ def test_eb_14_012_spell_action_overrides_change_template_costs_not_slot_variant
         {"alt_skip_slot": True, "alt_cost_type": "bonus_actions"},
     )
 
-    template = caster.get_action_template("Magic Missile")
-    assert isinstance(template, SpellAction)
-    assert modified == [template.uuid]
-    assert [(cost.name, cost.cost_type, cost.cost) for cost in template.effective_costs] == [
+    effective_template = caster.get_action_template("Magic Missile")
+    assert isinstance(effective_template, SpellAction)
+    assert tuple(modified) == (authored_template.uuid,)
+    assert authored_template.alt_skip_slot is False
+    assert authored_template.alt_cost_type is None
+    assert [(cost.name, cost.cost_type, cost.cost) for cost in effective_template.effective_costs] == [
         ("Cast Spell", "bonus_actions", 1)
     ]
 
@@ -689,11 +692,14 @@ def test_eb_14_012_spell_action_overrides_change_template_costs_not_slot_variant
     assert overridden[0].cost_type == "bonus_actions"
     assert overridden[0].can_afford
     assert target.uuid in [target_info.target_uuid for target_info in overridden[0].valid_targets]
-    assert template.generate_variants(caster) == []
+    assert effective_template.generate_variants(caster) == []
 
     clear_action_overrides(caster, modified)
 
-    assert [(cost.name, cost.cost_type, cost.cost) for cost in template.effective_costs] == [
+    restored_template = caster.get_action_template("Magic Missile")
+    assert isinstance(restored_template, SpellAction)
+    assert restored_template is authored_template
+    assert [(cost.name, cost.cost_type, cost.cost) for cost in restored_template.effective_costs] == [
         ("Cast Spell", "actions", 1),
         ("Spell Slot L1", "spell_slot_1", 1),
     ]
@@ -716,9 +722,9 @@ def test_eb_14_018_spell_range_overrides_affect_discovery_and_clear_cleanly() ->
             for target_info in info.valid_targets
         )
 
-    template = caster.get_action_template("Fire Bolt")
-    assert isinstance(template, SpellAction)
-    assert template.effective_range == 120
+    authored_template = caster.get_action_template("Fire Bolt")
+    assert isinstance(authored_template, SpellAction)
+    assert authored_template.effective_range == 120
     assert not has_fire_bolt_target()
 
     modified = apply_action_overrides(
@@ -727,16 +733,92 @@ def test_eb_14_018_spell_range_overrides_affect_discovery_and_clear_cleanly() ->
         {"alt_range": 300},
     )
 
-    assert modified == [template.uuid]
-    assert template.effective_range == 300
-    assert template.get_range().normal == 300
+    effective_template = caster.get_action_template("Fire Bolt")
+    assert isinstance(effective_template, SpellAction)
+    assert tuple(modified) == (authored_template.uuid,)
+    assert authored_template.alt_range is None
+    assert authored_template.effective_range == 120
+    assert effective_template.effective_range == 300
+    assert effective_template.get_range().normal == 300
     assert has_fire_bolt_target()
 
     clear_action_overrides(caster, modified)
 
-    assert template.alt_range is None
-    assert template.effective_range == 120
+    restored_template = caster.get_action_template("Fire Bolt")
+    assert restored_template is authored_template
+    assert authored_template.alt_range is None
+    assert authored_template.effective_range == 120
     assert not has_fire_bolt_target()
+
+
+def test_action_override_cleanup_preserves_authored_nondefault_fields() -> None:
+    """Removing one overlay never resets unrelated authored template facts."""
+    reset_spell_state(width=32, height=2)
+    caster = create_spellcaster(position=(0, 0), spell_slots={})
+    register_spell(caster, FireBolt, caster_level=5)
+
+    authored_template = caster.get_action_template("Fire Bolt")
+    assert isinstance(authored_template, SpellAction)
+    authored_template.alt_skip_slot = True
+
+    lease = apply_action_overrides(
+        caster,
+        lambda action: action.name == "Fire Bolt",
+        {"alt_range": 300},
+    )
+
+    effective_template = caster.get_action_template("Fire Bolt")
+    assert isinstance(effective_template, SpellAction)
+    assert effective_template is not authored_template
+    assert effective_template.alt_skip_slot is True
+    assert effective_template.effective_range == 300
+    assert authored_template.alt_skip_slot is True
+    assert authored_template.alt_range is None
+
+    clear_action_overrides(caster, lease)
+
+    restored_template = caster.get_action_template("Fire Bolt")
+    assert restored_template is authored_template
+    assert authored_template.alt_skip_slot is True
+    assert authored_template.alt_range is None
+
+
+def test_action_override_leases_are_independently_removable() -> None:
+    """Removing one temporary rule preserves every other active overlay."""
+    reset_spell_state()
+    caster = create_spellcaster(spell_slots={})
+    register_spell(caster, FireBolt, caster_level=5)
+    authored_template = caster.get_action_template("Fire Bolt")
+    assert isinstance(authored_template, SpellAction)
+
+    range_lease = apply_action_overrides(
+        caster,
+        lambda action: action.name == "Fire Bolt",
+        {"alt_range": 300},
+    )
+    cost_lease = apply_action_overrides(
+        caster,
+        lambda action: action.name == "Fire Bolt",
+        {"alt_cost_type": "bonus_actions"},
+    )
+
+    combined = caster.get_action_template("Fire Bolt")
+    assert isinstance(combined, SpellAction)
+    assert combined.effective_range == 300
+    assert combined.alt_cost_type == "bonus_actions"
+
+    clear_action_overrides(caster, range_lease)
+
+    cost_only = caster.get_action_template("Fire Bolt")
+    assert isinstance(cost_only, SpellAction)
+    assert cost_only.effective_range == 120
+    assert cost_only.alt_cost_type == "bonus_actions"
+
+    clear_action_overrides(caster, cost_lease)
+
+    assert caster.get_action_template("Fire Bolt") is authored_template
+    assert authored_template.alt_range is None
+    assert authored_template.alt_cost_type is None
 
 
 def test_eb_14_013_registered_cantrip_makes_entity_spellcaster() -> None:
@@ -908,6 +990,46 @@ def test_eb_14_016_multi_target_concentration_reuses_one_slot() -> None:
     assert "Concentrating" not in caster.active_conditions
     assert "Book Multi Effect First Target" not in first_target.active_conditions
     assert "Book Multi Effect Second Target" not in second_target.active_conditions
+
+
+def test_multi_target_action_restores_primary_target_after_application_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A failed target application cannot leak its target into the action."""
+    reset_spell_state()
+    caster = create_spellcaster()
+    first_target = create_spell_target(name="First Target", position=(1, 0))
+    second_target = create_spell_target(name="Second Target", position=(2, 0))
+    Entity.update_all_entities_senses()
+    spell = BookMultiTargetConcentrationSpell(
+        source_entity_uuid=caster.uuid,
+        target_entity_uuid=first_target.uuid,
+        extra_target_entity_uuids=[second_target.uuid],
+        template=False,
+    )
+
+    def fail_on_second_target(
+        action: BookMultiTargetConcentrationSpell,
+        execution_event: SpellEvent,
+    ) -> Optional[SpellEvent]:
+        if action.target_entity_uuid == second_target.uuid:
+            raise RuntimeError("deterministic target application failure")
+        effect_event = execution_event.phase_to(EventPhase.EFFECT)
+        return effect_event.phase_to(EventPhase.COMPLETION)
+
+    monkeypatch.setattr(
+        BookMultiTargetConcentrationSpell,
+        "_apply",
+        fail_on_second_target,
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="deterministic target application failure",
+    ):
+        spell.apply()
+
+    assert spell.target_entity_uuid == first_target.uuid
 
 
 def test_eb_14_017_spell_catalog_identity_matches_spell_events() -> None:

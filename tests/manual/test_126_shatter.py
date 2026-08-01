@@ -197,8 +197,7 @@ def test_shatter_los_to_center() -> None:
 
     assert isinstance(result, SpellEvent)
     assert result.canceled
-    assert result.status_message is not None
-    assert "line of sight" in result.status_message.lower()
+    assert result.status_message == "Position (7, 4) not visible"
 
 
 def test_shatter_both_save_outcomes_are_reported() -> None:

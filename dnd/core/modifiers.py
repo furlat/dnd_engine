@@ -7,18 +7,13 @@ from enum import Enum
 
 from dnd.core.base_object import BaseObject
 from dnd.core import creature_types as _creature_types
+from dnd.core.roll_types import AdvantageStatus
 
 logger = logging.getLogger(__name__)
 
 T_co = TypeVar('T_co', covariant=True)
 
 ContextAwareCallable = Callable[[UUID, Optional[UUID], Optional[Dict[str, Any]]], Optional[T_co]]
-
-
-class AdvantageStatus(str, Enum):
-    NONE = "None"
-    ADVANTAGE = "Advantage"
-    DISADVANTAGE = "Disadvantage"
 
 
 class AutoHitStatus(str, Enum):
@@ -70,27 +65,6 @@ class NumericalModifier(BaseObject):
         return self.score_normalizer(self.value)
 
     @classmethod
-    def get(cls, uuid: UUID) -> Optional['NumericalModifier']:
-        """Retrieve a numerical modifier by UUID.
-
-        Args:
-            uuid: UUID of the modifier to retrieve.
-
-        Returns:
-            The registered numerical modifier when found, otherwise `None`.
-
-        Raises:
-            ValueError: If the UUID resolves to another object type.
-        """
-        modifier = cls._registry.get(uuid)
-        if modifier is None:
-            return None
-        elif isinstance(modifier, cls):
-            return modifier
-        else:
-            raise ValueError(f"Modifier with UUID {uuid} is not a {cls.__name__}, but {type(modifier)}")
-
-    @classmethod
     def create(
         cls,
         source_entity_uuid: UUID,
@@ -134,27 +108,6 @@ class AdvantageModifier(BaseObject):
         description="Roll-state contribution applied by this modifier."
     )
 
-    @classmethod
-    def get(cls, uuid: UUID) -> Optional['AdvantageModifier']:
-        """Retrieve an advantage modifier by UUID.
-
-        Args:
-            uuid: UUID of the modifier to retrieve.
-
-        Returns:
-            The registered advantage modifier when found, otherwise `None`.
-
-        Raises:
-            ValueError: If the UUID resolves to another object type.
-        """
-        modifier = cls._registry.get(uuid)
-        if modifier is None:
-            return None
-        elif isinstance(modifier, cls):
-            return modifier
-        else:
-            raise ValueError(f"Modifier with UUID {uuid} is not a {cls.__name__}, but {type(modifier)}")
-
     @computed_field
     @property
     def numerical_value(self) -> int:
@@ -179,28 +132,6 @@ class CriticalModifier(BaseObject):
         description="Critical-hit override contributed by this modifier."
     )
 
-    @classmethod
-    def get(cls, uuid: UUID) -> Optional['CriticalModifier']:
-        """Retrieve a critical modifier by UUID.
-
-        Args:
-            uuid: UUID of the modifier to retrieve.
-
-        Returns:
-            The registered critical modifier when found, otherwise `None`.
-
-        Raises:
-            ValueError: If the UUID resolves to another object type.
-        """
-        modifier = cls._registry.get(uuid)
-        if modifier is None:
-            return None
-        elif isinstance(modifier, cls):
-            return modifier
-        else:
-            raise ValueError(f"Modifier with UUID {uuid} is not a {cls.__name__}, but {type(modifier)}")
-
-
 class AutoHitModifier(BaseObject):
     """Automatic hit or miss override payload."""
 
@@ -208,27 +139,6 @@ class AutoHitModifier(BaseObject):
         ...,
         description="Hit override contributed by this modifier."
     )
-
-    @classmethod
-    def get(cls, uuid: UUID) -> Optional['AutoHitModifier']:
-        """Retrieve an auto-hit modifier by UUID.
-
-        Args:
-            uuid: UUID of the modifier to retrieve.
-
-        Returns:
-            The registered auto-hit modifier when found, otherwise `None`.
-
-        Raises:
-            ValueError: If the UUID resolves to another object type.
-        """
-        modifier = cls._registry.get(uuid)
-        if modifier is None:
-            return None
-        elif isinstance(modifier, cls):
-            return modifier
-        else:
-            raise ValueError(f"Modifier with UUID {uuid} is not a {cls.__name__}, but {type(modifier)}")
 
 ContextAwareCondition = ContextAwareCallable[bool]
 ContextAwareAdvantage = ContextAwareCallable[AdvantageModifier]
@@ -256,27 +166,6 @@ class ContextualModifier(BaseObject):
         default_factory=dict,
         description="Evaluation cache keyed by `source|target|lineage`; values may be `None`."
     )
-
-    @classmethod
-    def get(cls, uuid: UUID) -> Optional['ContextualModifier']:
-        """Retrieve a contextual modifier by UUID.
-
-        Args:
-            uuid: UUID of the modifier to retrieve.
-
-        Returns:
-            The registered contextual modifier when found, otherwise `None`.
-
-        Raises:
-            ValueError: If the UUID resolves to another object type.
-        """
-        modifier = cls._registry.get(uuid)
-        if modifier is None:
-            return None
-        elif isinstance(modifier, cls):
-            return modifier
-        else:
-            raise ValueError(f"Modifier with UUID {uuid} is not a {cls.__name__}, but {type(modifier)}")
 
     @model_validator(mode="after")
     def validate_callable_source_iid(self) -> Self:
@@ -355,7 +244,7 @@ class ContextualModifier(BaseObject):
                 self.name,
                 self.uuid,
             )
-            result = None
+            return None
         key = f"{source_entity_uuid}|{target_entity_uuid or 'none'}|{event_lineage_uuid or 'none'}"
         self.cached_results[key] = result
         return result
@@ -416,27 +305,6 @@ class ContextualAdvantageModifier(ContextualModifier):
         description="Excluded contextual callable that returns an `AdvantageModifier`."
     )
 
-    @classmethod
-    def get(cls, uuid: UUID) -> Optional['ContextualAdvantageModifier']:
-        """Retrieve a contextual advantage modifier by UUID.
-
-        Args:
-            uuid: UUID of the modifier to retrieve.
-
-        Returns:
-            The registered contextual advantage modifier when found, otherwise `None`.
-
-        Raises:
-            ValueError: If the UUID resolves to another object type.
-        """
-        modifier = cls._registry.get(uuid)
-        if modifier is None:
-            return None
-        elif isinstance(modifier, cls):
-            return modifier
-        else:
-            raise ValueError(f"Modifier with UUID {uuid} is not a {cls.__name__}, but {type(modifier)}")
-
 class ContextualCriticalModifier(ContextualModifier):
     """Contextual callable that returns a critical-hit modifier."""
 
@@ -445,27 +313,6 @@ class ContextualCriticalModifier(ContextualModifier):
         exclude=True,
         description="Excluded contextual callable that returns a `CriticalModifier`."
     )
-
-    @classmethod
-    def get(cls, uuid: UUID) -> Optional['ContextualCriticalModifier']:
-        """Retrieve a contextual critical modifier by UUID.
-
-        Args:
-            uuid: UUID of the modifier to retrieve.
-
-        Returns:
-            The registered contextual critical modifier when found, otherwise `None`.
-
-        Raises:
-            ValueError: If the UUID resolves to another object type.
-        """
-        modifier = cls._registry.get(uuid)
-        if modifier is None:
-            return None
-        elif isinstance(modifier, cls):
-            return modifier
-        else:
-            raise ValueError(f"Modifier with UUID {uuid} is not a {cls.__name__}, but {type(modifier)}")
 
 class ContextualAutoHitModifier(ContextualModifier):
     """Contextual callable that returns an automatic hit modifier."""
@@ -476,27 +323,6 @@ class ContextualAutoHitModifier(ContextualModifier):
         description="Excluded contextual callable that returns an `AutoHitModifier`."
     )
 
-    @classmethod
-    def get(cls, uuid: UUID) -> Optional['ContextualAutoHitModifier']:
-        """Retrieve a contextual auto-hit modifier by UUID.
-
-        Args:
-            uuid: UUID of the modifier to retrieve.
-
-        Returns:
-            The registered contextual auto-hit modifier when found, otherwise `None`.
-
-        Raises:
-            ValueError: If the UUID resolves to another object type.
-        """
-        modifier = cls._registry.get(uuid)
-        if modifier is None:
-            return None
-        elif isinstance(modifier, cls):
-            return modifier
-        else:
-            raise ValueError(f"Modifier with UUID {uuid} is not a {cls.__name__}, but {type(modifier)}")
-
 class ContextualNumericalModifier(ContextualModifier):
     """Contextual callable that returns a numerical modifier."""
 
@@ -506,27 +332,6 @@ class ContextualNumericalModifier(ContextualModifier):
         description="Excluded contextual callable that returns a `NumericalModifier`."
     )
 
-    @classmethod
-    def get(cls, uuid: UUID) -> Optional['ContextualNumericalModifier']:
-        """Retrieve a contextual numerical modifier by UUID.
-
-        Args:
-            uuid: UUID of the modifier to retrieve.
-
-        Returns:
-            The registered contextual numerical modifier when found, otherwise `None`.
-
-        Raises:
-            ValueError: If the UUID resolves to another object type.
-        """
-        modifier = cls._registry.get(uuid)
-        if modifier is None:
-            return None
-        elif isinstance(modifier, cls):
-            return modifier
-        else:
-            raise ValueError(f"Modifier with UUID {uuid} is not a {cls.__name__}, but {type(modifier)}")
-
 class SizeModifier(BaseObject):
     """Creature or object size payload."""
 
@@ -535,27 +340,6 @@ class SizeModifier(BaseObject):
         description="Size value contributed by this modifier."
     )
 
-    @classmethod
-    def get(cls, uuid: UUID) -> Optional['SizeModifier']:
-        """Retrieve a size modifier by UUID.
-
-        Args:
-            uuid: UUID of the modifier to retrieve.
-
-        Returns:
-            The registered size modifier when found, otherwise `None`.
-
-        Raises:
-            ValueError: If the UUID resolves to another object type.
-        """
-        modifier = cls._registry.get(uuid)
-        if modifier is None:
-            return None
-        elif isinstance(modifier, cls):
-            return modifier
-        else:
-            raise ValueError(f"Modifier with UUID {uuid} is not a {cls.__name__}, but {type(modifier)}")
-
 class DamageTypeModifier(BaseObject):
     """Damage type payload."""
 
@@ -563,27 +347,6 @@ class DamageTypeModifier(BaseObject):
         ...,
         description="Damage type contributed by this modifier."
     )
-
-    @classmethod
-    def get(cls, uuid: UUID) -> Optional['DamageTypeModifier']:
-        """Retrieve a damage type modifier by UUID.
-
-        Args:
-            uuid: UUID of the modifier to retrieve.
-
-        Returns:
-            The registered damage type modifier when found, otherwise `None`.
-
-        Raises:
-            ValueError: If the UUID resolves to another object type.
-        """
-        modifier = cls._registry.get(uuid)
-        if modifier is None:
-            return None
-        elif isinstance(modifier, cls):
-            return modifier
-        else:
-            raise ValueError(f"Modifier with UUID {uuid} is not a {cls.__name__}, but {type(modifier)}")
 
 ContextAwareSize = ContextAwareCallable[SizeModifier]
 ContextAwareDamageType = ContextAwareCallable[DamageTypeModifier]
@@ -597,27 +360,6 @@ class ContextualSizeModifier(ContextualModifier):
         description="Excluded contextual callable that returns a `SizeModifier`."
     )
 
-    @classmethod
-    def get(cls, uuid: UUID) -> Optional['ContextualSizeModifier']:
-        """Retrieve a contextual size modifier by UUID.
-
-        Args:
-            uuid: UUID of the modifier to retrieve.
-
-        Returns:
-            The registered contextual size modifier when found, otherwise `None`.
-
-        Raises:
-            ValueError: If the UUID resolves to another object type.
-        """
-        modifier = cls._registry.get(uuid)
-        if modifier is None:
-            return None
-        elif isinstance(modifier, cls):
-            return modifier
-        else:
-            raise ValueError(f"Modifier with UUID {uuid} is not a {cls.__name__}, but {type(modifier)}")
-
 class ContextualDamageTypeModifier(ContextualModifier):
     """Contextual callable that returns a damage type modifier."""
 
@@ -626,27 +368,6 @@ class ContextualDamageTypeModifier(ContextualModifier):
         exclude=True,
         description="Excluded contextual callable that returns a `DamageTypeModifier`."
     )
-
-    @classmethod
-    def get(cls, uuid: UUID) -> Optional['ContextualDamageTypeModifier']:
-        """Retrieve a contextual damage type modifier by UUID.
-
-        Args:
-            uuid: UUID of the modifier to retrieve.
-
-        Returns:
-            The registered contextual damage type modifier when found, otherwise `None`.
-
-        Raises:
-            ValueError: If the UUID resolves to another object type.
-        """
-        modifier = cls._registry.get(uuid)
-        if modifier is None:
-            return None
-        elif isinstance(modifier, cls):
-            return modifier
-        else:
-            raise ValueError(f"Modifier with UUID {uuid} is not a {cls.__name__}, but {type(modifier)}")
 
 class ResistanceModifier(BaseObject):
     """Resistance, immunity, or vulnerability payload for one damage type."""
@@ -678,27 +399,6 @@ class ResistanceModifier(BaseObject):
         else:
             return 0
 
-    @classmethod
-    def get(cls, uuid: UUID) -> Optional['ResistanceModifier']:
-        """Retrieve a resistance modifier by UUID.
-
-        Args:
-            uuid: UUID of the modifier to retrieve.
-
-        Returns:
-            The registered resistance modifier when found, otherwise `None`.
-
-        Raises:
-            ValueError: If the UUID resolves to another object type.
-        """
-        modifier = cls._registry.get(uuid)
-        if modifier is None:
-            return None
-        elif isinstance(modifier, cls):
-            return modifier
-        else:
-            raise ValueError(f"Modifier with UUID {uuid} is not a {cls.__name__}, but {type(modifier)}")
-
 ContextAwareResistance = ContextAwareCallable[ResistanceModifier]
 
 class ContextualResistanceModifier(ContextualModifier):
@@ -709,24 +409,3 @@ class ContextualResistanceModifier(ContextualModifier):
         exclude=True,
         description="Excluded contextual callable that returns a `ResistanceModifier`."
     )
-
-    @classmethod
-    def get(cls, uuid: UUID) -> Optional['ContextualResistanceModifier']:
-        """Retrieve a contextual resistance modifier by UUID.
-
-        Args:
-            uuid: UUID of the modifier to retrieve.
-
-        Returns:
-            The registered contextual resistance modifier when found, otherwise `None`.
-
-        Raises:
-            ValueError: If the UUID resolves to another object type.
-        """
-        modifier = cls._registry.get(uuid)
-        if modifier is None:
-            return None
-        elif isinstance(modifier, cls):
-            return modifier
-        else:
-            raise ValueError(f"Modifier with UUID {uuid} is not a {cls.__name__}, but {type(modifier)}")

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
 from typing import NoReturn
 from uuid import UUID
 
@@ -34,13 +33,14 @@ from server.terminal_evidence import (
 )
 
 
-@dataclass(frozen=True, slots=True)
 class GameHistoryQueryError(RuntimeError):
     """Stable cold-history failure shared by both deployment shapes."""
 
-    status_code: int
-    code: str
-    message: str
+    def __init__(self, status_code: int, code: str, message: str) -> None:
+        super().__init__(status_code, code, message)
+        self.status_code = status_code
+        self.code = code
+        self.message = message
 
     def __str__(self) -> str:
         return self.message

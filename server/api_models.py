@@ -7,6 +7,7 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+from enum import Enum
 from typing import Annotated, Any, Dict, List, Literal, Optional, Tuple, Union
 from urllib.parse import urlsplit
 from uuid import UUID
@@ -90,7 +91,7 @@ class ToggleHandlerResponse(BaseModel):
     """Result of changing one player-toggleable handler."""
 
     success: bool = Field(description="Whether the handler state changed.")
-    handler_name: str = Field(description="Handler display name.")
+    handler_uuid: UUID = Field(description="Exact handler identity.")
     enabled: bool = Field(description="Resulting enabled state.")
 
 
@@ -355,8 +356,6 @@ class MapEditorObjectRuntimeState(BaseModel):
         is_open: Current door state after materialization.
         is_lit: Current fixed-light state after materialization.
         charges: Current finite-use budget after materialization.
-        trap_handler_uuid: Runtime-only linked trap handler identity.
-        trap_tile_uuids: Runtime-only linked trap tile identities.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -374,24 +373,6 @@ class MapEditorObjectRuntimeState(BaseModel):
         ge=-1,
         description="Current finite-use budget applied after materialization.",
     )
-    trap_handler_uuid: Optional[str] = Field(
-        default=None,
-        description="Runtime-only linked trap handler UUID.",
-    )
-    trap_tile_uuids: Tuple[str, ...] = Field(
-        default_factory=tuple,
-        description="Runtime-only linked trap tile UUIDs.",
-    )
-
-    @model_validator(mode="after")
-    def _validate_trap_link(self) -> "MapEditorObjectRuntimeState":
-        has_handler = self.trap_handler_uuid is not None
-        has_tiles = bool(self.trap_tile_uuids)
-        if has_handler != has_tiles:
-            raise ValueError(
-                "trap_handler_uuid and trap_tile_uuids are required together",
-            )
-        return self
 
 
 class MapEditorObjectPlaceRequest(BaseModel):
@@ -832,16 +813,14 @@ class JoinGameRequest(BaseModel):
     Attributes:
         session_id: Session joining the game.
         entity_uuids: Optional entity UUIDs to control.
-        entity_uuid: Optional single entity UUID convenience alias.
-        faction: Optional faction whose entities should be controlled.
         observer_entity_uuids: Explicit observer union for a zero-control session.
         active_observer_uuid: Observer selected for focus within that union.
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     session_id: str = Field(description="Session joining the game.")
     entity_uuids: Optional[List[str]] = Field(default=None, description="Optional entity UUIDs to control.")
-    entity_uuid: Optional[str] = Field(default=None, description="Optional single entity UUID to control.")
-    faction: Optional[str] = Field(default=None, description="Optional faction whose entities should be controlled.")
     observer_entity_uuids: Optional[List[str]] = Field(
         default=None,
         description="Explicit subjective observer union for a zero-control observer session.",
@@ -852,26 +831,23 @@ class JoinGameRequest(BaseModel):
     )
 
     def requested_entity_uuids(self) -> List[str]:
-        """Return requested entity UUIDs from list and single-entity inputs.
-
-        Returns:
-            De-duplicated entity UUID strings in request order.
-        """
-        requested: List[str] = []
-        for uuid_str in self.entity_uuids or []:
-            if uuid_str not in requested:
-                requested.append(uuid_str)
-        if self.entity_uuid and self.entity_uuid not in requested:
-            requested.append(self.entity_uuid)
-        return requested
+        """Return the exact requested controlled-entity sequence."""
+        return list(self.entity_uuids or ())
 
     def requested_observer_entity_uuids(self) -> List[str]:
-        """Return the de-duplicated explicit observer UUID strings in request order."""
-        requested: List[str] = []
-        for uuid_str in self.observer_entity_uuids or []:
-            if uuid_str not in requested:
-                requested.append(uuid_str)
-        return requested
+        """Return the exact requested observer sequence."""
+        return list(self.observer_entity_uuids or ())
+
+    @model_validator(mode="after")
+    def validate_exact_entity_sets(self) -> "JoinGameRequest":
+        """Reject ambiguous duplicate membership declarations."""
+        for field_name, values in (
+            ("entity_uuids", self.entity_uuids),
+            ("observer_entity_uuids", self.observer_entity_uuids),
+        ):
+            if values is not None and len(values) != len(set(values)):
+                raise ValueError(f"{field_name} contains duplicate UUIDs")
+        return self
 
 
 class JoinGameResponse(BaseModel):
@@ -1601,9 +1577,24 @@ class APIResourcePool(BaseModel):
     max: int = Field(description="Maximum resource value.")
 
 
+class ActionExecutionAuthorization(str, Enum):
+    """Session/turn authority applied on top of intrinsic action availability."""
+
+    AUTHORIZED = "authorized"
+    NOT_ACTIVE_TURN = "not_active_turn"
+    TURN_NOT_IN_PROGRESS = "turn_not_in_progress"
+    ENCOUNTER_INACTIVE = "encounter_inactive"
+
+
 class APIAvailableActions(AvailableActionsResult):
     """Engine-discovered legal actions plus current resource summaries."""
 
+    execution_authorization: ActionExecutionAuthorization = Field(
+        description=(
+            "Whether this session may currently execute rows for the inspected "
+            "entity. Row availability remains the independent mechanical fact."
+        ),
+    )
     actions_remaining: int = Field(description="Actions currently available.")
     bonus_actions_remaining: int = Field(description="Bonus actions currently available.")
     reactions_remaining: int = Field(description="Reactions currently available.")

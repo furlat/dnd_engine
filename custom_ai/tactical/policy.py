@@ -7,11 +7,15 @@ from dnd.ai.contracts.decision import EndTurnIntent, PolicyIntent
 from dnd.ai.contracts.observation import SubjectiveWorldState
 from dnd.ai.contracts.semantics import ActionTag
 from dnd.ai.policies.basic import (
-    build_basic_candidates,
+    build_policy_candidates,
 )
 from dnd.ai.policy import PolicyDescriptor, StatelessPolicyMemory
 from dnd.ai.registry import PolicyRegistry
-from dnd.ai.specification import PolicyCandidate, PolicyMetric
+from dnd.ai.specification import (
+    PolicyCandidate,
+    PolicyMetric,
+    policy_candidate_rank_key,
+)
 
 from custom_ai.tactical.memory import (
     TacticalPolicyMemory,
@@ -66,7 +70,7 @@ class TacticalPolicy:
         )
         candidates = tuple(
             candidate
-            for candidate in build_basic_candidates(
+            for candidate in build_policy_candidates(
                 state,
                 StatelessPolicyMemory(),
             )
@@ -167,24 +171,13 @@ def _row_affects_target(
 def _select(
     candidates: tuple[PolicyCandidate[PolicyIntent], ...],
 ) -> PolicyCandidate[PolicyIntent]:
-    scored = tuple(
-        (
-            _candidate_score(candidate),
-            candidate.replay_key or (candidate.candidate_id,),
-            candidate.candidate_id,
-            candidate,
-        )
-        for candidate in candidates
-    )
-    best_score = max(entry[0] for entry in scored)
     return min(
-        (
-            entry
-            for entry in scored
-            if entry[0] == best_score
+        candidates,
+        key=lambda candidate: policy_candidate_rank_key(
+            candidate,
+            _candidate_score(candidate),
         ),
-        key=lambda entry: (entry[1], entry[2]),
-    )[3]
+    )
 
 
 def _candidate_score(candidate: PolicyCandidate[PolicyIntent]) -> float:

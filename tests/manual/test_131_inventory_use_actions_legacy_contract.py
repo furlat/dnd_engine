@@ -61,6 +61,8 @@ from dnd.items.spell_items import (
 )
 from dnd.items.environment_interactables import ArcaneDevice
 from dnd.items.weapons import SHORTSWORD_RECIPE
+from dnd.spatial_effect_controllers import AreaSpatialEffectController
+from dnd.spatial_effects import SpatialEffect
 from dnd.spells.evocation import Fireball
 from tests.engine.support import (
     force_attack_hit,
@@ -1086,7 +1088,17 @@ def test_spike_growth_scroll_owns_entry_damage_and_terrain_cleanup() -> None:
 
     assert result is not None and not result.canceled
     assert "Concentrating" in caster.active_conditions
-    assert "Spike Growth Zone" in caster.active_conditions
+    matches = [
+        (effect, effect.active_conditions["Spike Growth Zone"])
+        for effect in SpatialEffect.active_effects()
+        if "Spike Growth Zone" in effect.active_conditions
+    ]
+    assert len(matches) == 1
+    effect, controller = matches[0]
+    assert isinstance(controller, AreaSpatialEffectController)
+    assert (effect.uuid, controller.uuid) in caster.active_conditions[
+        "Concentrating"
+    ].linked_conditions
     tile = grid.get_tile(*preview.position)
     assert tile is not None
     assert tile.walking_cost.normalized_score >= 2
@@ -1100,7 +1112,7 @@ def test_spike_growth_scroll_owns_entry_damage_and_terrain_cleanup() -> None:
     caster.remove_condition("Concentrating")
 
     assert "Concentrating" not in caster.active_conditions
-    assert "Spike Growth Zone" not in caster.active_conditions
+    assert SpatialEffect.get_effect(effect.uuid) is None
     assert tile.walking_cost.normalized_score == 1
 
 

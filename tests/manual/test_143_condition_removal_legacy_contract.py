@@ -4,14 +4,9 @@ import ast
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
-from uuid import uuid4
 
 import dnd.core.base_conditions as base_conditions_module
-from dnd.classes.fighter import SecondWindFeature
-from dnd.classes.rage import RageFeature
 from dnd.core.gridmap import get_map
-from dnd.entity import Entity, EntityConfig
-from dnd.runtime_reset import reset_engine_runtime
 from tests.engine.test_condition_lifecycle import (
     EngineBookMarkerCondition,
     reset_condition_state,
@@ -19,23 +14,6 @@ from tests.engine.test_condition_lifecycle import (
 
 
 CoverageStatus = Literal["active", "strengthened", "stale"]
-
-
-def reset_class_tutorial_state() -> None:
-    """Reset the focused feature-cleanup fixture without a book dependency."""
-    reset_engine_runtime(grid_size=(12, 6))
-
-
-def create_class_actor(
-    name: str,
-    position: tuple[int, int],
-) -> Entity:
-    """Build the minimal actor required by feature-cleanup regressions."""
-    return Entity.create(
-        source_entity_uuid=uuid4(),
-        name=name,
-        config=EntityConfig(position=position, faction="heroes"),
-    )
 
 
 @dataclass(frozen=True)
@@ -67,8 +45,13 @@ UUID_SELECTOR = (
     "tests/engine/test_condition_transform_ownership.py::"
     "test_visual_access_remains_denied_until_every_owner_is_removed"
 )
-FEATURE_SELECTOR = (
-    f"{THIS_FILE}::test_feature_condition_removal_cleans_actions_and_resources"
+BARBARIAN_FEATURE_SELECTOR = (
+    "tests/progression/test_barbarian_berserker_materialization.py::"
+    "test_level_twenty_berserker_materializes_and_reverses_exactly"
+)
+FIGHTER_FEATURE_SELECTOR = (
+    "tests/progression/test_fighter_champion_materialization.py::"
+    "test_fighter_five_champion_materializes_and_reverses_exactly"
 )
 ARCHITECTURE_SELECTOR = (
     f"{THIS_FILE}::test_base_condition_cleanup_contains_no_hidden_late_import"
@@ -105,14 +88,14 @@ CONDITION_REMOVAL_LEGACY_CASES: dict[str, LegacyCoverage] = {
         "Maintained coverage verifies Entity-owned duration progression and exact removal.",
     ),
     "test_custom_remove_hook_rage": LegacyCoverage(
-        "active",
-        FEATURE_SELECTOR,
-        "Rage feature removal unregisters both actions and its resource.",
+        "strengthened",
+        BARBARIAN_FEATURE_SELECTOR,
+        "Canonical character-composition removal reverses the exact Rage action/resource receipt.",
     ),
     "test_custom_remove_hook_second_wind": LegacyCoverage(
-        "active",
-        FEATURE_SELECTOR,
-        "Second Wind feature removal unregisters its action and resource.",
+        "strengthened",
+        FIGHTER_FEATURE_SELECTOR,
+        "Canonical character-composition removal reverses the exact Second Wind action/resource receipt.",
     ),
     "test_no_late_imports_in_base_conditions": LegacyCoverage(
         "active",
@@ -142,44 +125,6 @@ def test_condition_removal_manifest_accounts_for_all_10_cases() -> None:
         and row.rationale
         for case, row in CONDITION_REMOVAL_LEGACY_CASES.items()
     )
-
-
-def test_feature_condition_removal_cleans_actions_and_resources() -> None:
-    """Feature cleanup owns everything the feature registered."""
-    reset_class_tutorial_state()
-    barbarian = create_class_actor("Removal Barbarian", (1, 1))
-    rage = RageFeature(
-        source_entity_uuid=barbarian.uuid,
-        target_entity_uuid=barbarian.uuid,
-        rage_uses=2,
-        rage_damage=2,
-    )
-    barbarian.add_condition(rage)
-    assert barbarian.get_action_template("Rage") is not None
-    assert barbarian.get_action_template("End Rage") is not None
-    assert "rage" in barbarian.action_economy.resources
-
-    barbarian.remove_condition_by_uuid(rage.uuid)
-
-    assert barbarian.get_action_template("Rage") is None
-    assert barbarian.get_action_template("End Rage") is None
-    assert "rage" not in barbarian.action_economy.resources
-
-    reset_class_tutorial_state()
-    fighter = create_class_actor("Removal Fighter", (1, 1))
-    second_wind = SecondWindFeature(
-        source_entity_uuid=fighter.uuid,
-        target_entity_uuid=fighter.uuid,
-        fighter_level=5,
-    )
-    fighter.add_condition(second_wind)
-    assert fighter.get_action_template("Second Wind") is not None
-    assert "second_wind" in fighter.action_economy.resources
-
-    fighter.remove_condition_by_uuid(second_wind.uuid)
-
-    assert fighter.get_action_template("Second Wind") is None
-    assert "second_wind" not in fighter.action_economy.resources
 
 
 def test_base_condition_cleanup_contains_no_hidden_late_import() -> None:

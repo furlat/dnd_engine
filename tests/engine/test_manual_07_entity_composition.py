@@ -124,7 +124,7 @@ def test_entity_methods_compose_abilities_skills_saves_and_passives() -> None:
     assert hero.ability_scores.get_modifier_from_name("constitution") == 2
     assert hero.ability_scores.get_modifier_from_name("charisma") == 4
     assert hero.proficiency_bonus.normalized_score == 3
-    assert hero.initiative.normalized_score == 7
+    assert hero.initiative_bonus == 7
 
     assert hero.skill_bonus(None, "athletics").normalized_score == 10
     assert hero.skill_bonus(None, "perception").normalized_score == 6

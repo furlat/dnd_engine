@@ -28,6 +28,7 @@ from dnd.ai.contracts.observation import (
     SpatialDomainKnowledge,
 )
 from dnd.core.condition_types import ConditionAgencyDenial, ConditionRemovalTrigger
+from dnd.core.item_types import ItemObservationState
 from ai.policy import (
     PolicyContext,
     PolicyHost,
@@ -141,7 +142,13 @@ def test_object_name_alone_does_not_invent_door_state() -> None:
     """Door classification requires an explicit subjective open-state fact."""
     world = _world()
     objects = dict(world.known_objects)
-    objects["door"] = objects["door"].model_copy(update={"state": {}})
+    objects["door"] = objects["door"].model_copy(
+        update={
+            "state": objects["door"].state.model_copy(
+                update={"is_open": None},
+            ),
+        },
+    )
     world = world.model_copy(update={"known_objects": objects})
 
     facts = derive_agent_facts(world).facts
@@ -210,7 +217,14 @@ def test_known_line_of_sight_uses_subjectively_known_object_blockers() -> None:
         name="Opaque Boundary",
         knowledge_state=KnowledgeState.VISIBLE,
         position=(1, 0),
-        state={"blocks_vision_field": True},
+        state=ItemObservationState(
+            blocks_movement=False,
+            blocks_vision=True,
+            is_pickable=False,
+            is_usable=False,
+            stack_count=1,
+            is_hazardous=False,
+        ),
     )
     world = world.model_copy(
         update={"known_tiles": tiles, "known_objects": {blocker.uuid: blocker}}
@@ -5310,7 +5324,15 @@ def _world() -> SubjectiveWorldState:
             name="Oak Door",
             knowledge_state=KnowledgeState.VISIBLE,
             position=(1, 0),
-            state={"is_open": False, "secret_engine_field": "discarded"},
+            state=ItemObservationState(
+                blocks_movement=True,
+                blocks_vision=True,
+                is_pickable=False,
+                is_usable=True,
+                stack_count=1,
+                is_hazardous=False,
+                is_open=False,
+            ),
         )
     }
     tiles = {
@@ -5580,6 +5602,10 @@ def _spacing_choice_world(
             "controlled_entity_uuids": controlled_entity_uuids,
         }),
         "known_entities": entities,
+        # The shared world exercises a closed vision-blocking door at (1, 0).
+        # Spacing policy is about future capability geometry, so keep that
+        # unrelated object out of this focused fixture.
+        "known_objects": {},
         "current_epoch": spent_epoch,
     })
 

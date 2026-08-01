@@ -430,8 +430,8 @@ def test_session_create_join_ping_and_game_status(capsys) -> None:
     assert capsys.readouterr().out == "\n".join(expected_lines) + "\n"
 
 
-def test_game_join_accepts_single_entity_uuid_alias() -> None:
-    """A one-entity join can use the singular convenience field."""
+def test_game_join_rejects_retired_assignment_aliases() -> None:
+    """Joining has one exact controlled-entity list contract."""
     reset_client_api_state()
     hero, _monster = create_api_pair()
     start_api_game(hero, _monster)
@@ -443,20 +443,19 @@ def test_game_join_accepts_single_entity_uuid_alias() -> None:
     )
     session_id = create_response.json()["session_id"]
 
-    join_response = client.post(
+    singular_response = client.post(
         "/game/join",
         json={"session_id": session_id, "entity_uuid": str(hero.uuid)},
     )
-    join_payload = join_response.json()
+    faction_response = client.post(
+        "/game/join",
+        json={"session_id": session_id, "faction": "heroes"},
+    )
 
-    assert join_response.status_code == 200
-    assert join_payload["success"]
-    assert join_payload["controlled_entities"] == [str(hero.uuid)]
-
-    ping_payload = client.post(f"/session/{session_id}/ping").json()
-
-    assert ping_payload["is_my_turn"]
-    assert ping_payload["controlled_entities"] == [str(hero.uuid)]
+    assert singular_response.status_code == 422
+    assert singular_response.json()["detail"][0]["type"] == "extra_forbidden"
+    assert faction_response.status_code == 422
+    assert faction_response.json()["detail"][0]["type"] == "extra_forbidden"
 
 
 def test_subjective_state_and_available_actions_payloads() -> None:
@@ -558,6 +557,58 @@ def test_subjective_state_and_available_actions_payloads() -> None:
         ),
     ]
     print("\n".join(readout_lines))
+
+
+def test_non_active_controlled_entity_affordances_are_readable_but_not_executable() -> None:
+    """A session may inspect every owned actor without gaining turn authority."""
+    reset_client_api_state()
+    hero, second = create_api_pair()
+    start_api_game(hero, second)
+    client = ApiClient()
+    created = client.post(
+        "/session/create",
+        json={"player_type": "human", "name": "Multi-character Player"},
+    )
+    assert created.status_code == 200, created.text
+    session_id = created.json()["session_id"]
+    joined = client.post(
+        "/game/join",
+        json={
+            "session_id": session_id,
+            "entity_uuids": [str(hero.uuid), str(second.uuid)],
+        },
+    )
+    assert joined.status_code == 200, joined.text
+
+    active = client.get(
+        f"/entity/{hero.uuid}/available-actions",
+        params={"session_id": session_id},
+    )
+    assert active.status_code == 200, active.text
+    assert active.json()["execution_authorization"] == "authorized"
+
+    inspected = client.get(
+        f"/entity/{second.uuid}/available-actions",
+        params={"session_id": session_id},
+    )
+    assert inspected.status_code == 200, inspected.text
+    payload = inspected.json()
+    assert payload["execution_authorization"] == "not_active_turn"
+    assert payload["entity_uuid"] == str(second.uuid)
+    assert payload["entity_actions"] or payload["self_actions"]
+
+    rejected = client.post(
+        "/action/execute",
+        json={
+            "session_id": session_id,
+            "entity_uuid": str(second.uuid),
+            "template_name": payload["entity_actions"][0]["template_name"],
+            "target_index": 0,
+            "return_available_actions": False,
+        },
+    )
+    assert rejected.status_code == 403, rejected.text
+    assert rejected.json()["detail"]["code"] == "not_entity_turn"
 
 
 def test_execute_action_by_index_acknowledges_then_journals_state_and_logs(capsys) -> None:

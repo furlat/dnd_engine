@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import ast
 from pathlib import Path
-from types import MappingProxyType
 from uuid import uuid4
 
 import pytest
@@ -45,10 +44,7 @@ _LEGACY_FACTORIES = frozenset(
 def test_neurodragon_weapon_declarations_are_exact_original_content() -> None:
     """All roots own exact stable identity, presentation, and provenance."""
     declarations = weapon_definitions.NEURODRAGON_WEAPON_DECLARATIONS
-    recipes = weapon_definitions.NEURODRAGON_WEAPON_RECIPES_BY_LEGACY_ID
 
-    assert isinstance(recipes, MappingProxyType)
-    assert tuple(recipes) == ("assassin_dagger", "arcane_staff")
     assert declarations == (
         weapon_definitions.DOUBLE_BLADED_SWORD_DECLARATION,
         weapon_definitions.ASSASSIN_DAGGER_DECLARATION,
@@ -92,14 +88,15 @@ def test_neurodragon_weapon_declarations_are_exact_original_content() -> None:
             declaration.item_definition.persistence_policy
             is ItemPersistencePolicy.POSSESSION
         )
-    assert recipes["assassin_dagger"].ref == (
-        weapon_definitions.ASSASSIN_DAGGER_REF
+    recipes = (
+        weapon_definitions.DOUBLE_BLADED_SWORD_RECIPE,
+        weapon_definitions.ASSASSIN_DAGGER_RECIPE,
+        weapon_definitions.ARCANE_STAFF_RECIPE,
     )
-    assert recipes["arcane_staff"].ref == weapon_definitions.ARCANE_STAFF_REF
-    assert all(recipe.parameters == {} for recipe in recipes.values())
-
-    with pytest.raises(TypeError):
-        recipes["arcane_staff"] = recipes["assassin_dagger"]  # type: ignore[index]
+    assert tuple(recipe.ref for recipe in recipes) == tuple(
+        declaration.ref for declaration in declarations
+    )
+    assert all(recipe.parameters == {} for recipe in recipes)
 
 
 @pytest.mark.parametrize(

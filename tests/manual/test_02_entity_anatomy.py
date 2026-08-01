@@ -331,8 +331,9 @@ def test_health_resources_spellcasting_and_appearance_print_actor_regions(capsys
     assert hero.action_economy.spell_slot_1.normalized_score == 2
     assert resource_lines == expected_resource_lines
 
-    hero.action_economy.add_resource(
+    hero.action_economy.add_resource_contribution(
         name="Second Wind",
+        source_id="fixture.second_wind",
         maximum=1,
         recharge_type=RechargeType.SHORT_REST,
     )

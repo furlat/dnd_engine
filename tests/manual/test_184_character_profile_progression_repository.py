@@ -24,7 +24,10 @@ from dnd.core.content.durable_characters import (
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.content.recipes import ContentRecipe
 from dnd.core.progression import character_ruleset_digest
-from server.game_directory.canonical import canonical_digest, canonical_json
+from server.canonical_json import (
+    canonical_json,
+    canonical_json_sha256 as canonical_digest,
+)
 from server.game_directory.contracts import (
     CharacterAdvancementAwardCreate,
     CharacterAdvancementSourceKind,

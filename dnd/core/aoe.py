@@ -57,18 +57,32 @@ class AoEShape(BaseObject):
         """Return the explicit or default origin for this shape."""
         return self.origin_override or self._default_origin(caster_pos)
 
-    def footprint_target_key(self, caster_pos: Tuple[int, int]) -> Tuple[object, ...]:
-        """Return the target coordinate identity that determines this footprint."""
-        return ("target", *self.target)
+    def footprint_target_key(
+        self,
+        caster_pos: Tuple[int, int],
+        *,
+        target_override: Optional[Tuple[int, int]] = None,
+    ) -> Tuple[object, ...]:
+        """Return the target identity that determines one candidate footprint.
+
+        Discovery asks this question for many candidate cells. Accepting an
+        explicit cold target keeps that query pure and avoids cloning a
+        Pydantic shape merely to replace its target field.
+        """
+        target = self.target if target_override is None else target_override
+        return ("target", *target)
 
     def _normalized_direction_key(
         self,
         caster_pos: Tuple[int, int],
+        *,
+        target_override: Optional[Tuple[int, int]] = None,
     ) -> Tuple[object, ...]:
         """Return a canonical integer ray from this shape's current origin."""
         origin_x, origin_y = self.get_origin(caster_pos)
-        delta_x = self.target[0] - origin_x
-        delta_y = self.target[1] - origin_y
+        target = self.target if target_override is None else target_override
+        delta_x = target[0] - origin_x
+        delta_y = target[1] - origin_y
         divisor = gcd(abs(delta_x), abs(delta_y)) or 1
         return ("ray", delta_x // divisor, delta_y // divisor)
 
@@ -261,9 +275,17 @@ class Cone(AoEShape):
     def _get_max_radius_tiles(self) -> int:
         return self.length_feet // 5
 
-    def footprint_target_key(self, caster_pos: Tuple[int, int]) -> Tuple[object, ...]:
+    def footprint_target_key(
+        self,
+        caster_pos: Tuple[int, int],
+        *,
+        target_override: Optional[Tuple[int, int]] = None,
+    ) -> Tuple[object, ...]:
         """Return the canonical cone ray because distance does not alter its area."""
-        return self._normalized_direction_key(caster_pos)
+        return self._normalized_direction_key(
+            caster_pos,
+            target_override=target_override,
+        )
 
     def _get_positions_in_shape(self, origin: Tuple[int, int]) -> Set[Tuple[int, int]]:
         return cone_positions(
@@ -288,9 +310,17 @@ class Line(AoEShape):
     def _get_max_radius_tiles(self) -> int:
         return self.length_feet // 5
 
-    def footprint_target_key(self, caster_pos: Tuple[int, int]) -> Tuple[object, ...]:
+    def footprint_target_key(
+        self,
+        caster_pos: Tuple[int, int],
+        *,
+        target_override: Optional[Tuple[int, int]] = None,
+    ) -> Tuple[object, ...]:
         """Return the canonical line ray because distance does not alter its area."""
-        return self._normalized_direction_key(caster_pos)
+        return self._normalized_direction_key(
+            caster_pos,
+            target_override=target_override,
+        )
 
     def _get_positions_in_shape(self, origin: Tuple[int, int]) -> Set[Tuple[int, int]]:
         width_tiles = max(1, self.width_feet // 5)
@@ -317,13 +347,22 @@ class Cube(AoEShape):
     def _get_max_radius_tiles(self) -> int:
         return self.size_feet // 5
 
-    def footprint_target_key(self, caster_pos: Tuple[int, int]) -> Tuple[object, ...]:
+    def footprint_target_key(
+        self,
+        caster_pos: Tuple[int, int],
+        *,
+        target_override: Optional[Tuple[int, int]] = None,
+    ) -> Tuple[object, ...]:
         """Return the center or cardinal extension that determines this cube."""
+        target = self.target if target_override is None else target_override
         if self.centered:
-            return super().footprint_target_key(caster_pos)
+            return super().footprint_target_key(
+                caster_pos,
+                target_override=target,
+            )
         origin_x, origin_y = self.get_origin(caster_pos)
-        delta_x = self.target[0] - origin_x
-        delta_y = self.target[1] - origin_y
+        delta_x = target[0] - origin_x
+        delta_y = target[1] - origin_y
         if abs(delta_x) >= abs(delta_y):
             return ("axis", "x", 1 if delta_x >= 0 else -1)
         return ("axis", "y", 1 if delta_y >= 0 else -1)

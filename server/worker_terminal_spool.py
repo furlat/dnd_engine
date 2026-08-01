@@ -21,7 +21,10 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from server.canonical_json import canonical_json_bytes
+from server.canonical_json import (
+    canonical_json_bytes,
+    canonical_json_sha256,
+)
 from server.character_settlement import WorkerCharacterHoldingsEvidence
 from server.game_summary_store import WorkerSummaryEvidence
 from server.objective_replay import (
@@ -160,7 +163,7 @@ class WorkerTerminalReadyManifest(BaseModel):
         }
         return cls(
             **payload,
-            manifest_digest=sha256(canonical_json_bytes(payload)).hexdigest(),
+            manifest_digest=canonical_json_sha256(payload),
         )
 
     @model_validator(mode="after")
@@ -204,7 +207,7 @@ class WorkerTerminalReadyManifest(BaseModel):
             "subjective_replay": self.subjective_replay,
             "holdings": self.holdings,
         }
-        expected_digest = sha256(canonical_json_bytes(payload)).hexdigest()
+        expected_digest = canonical_json_sha256(payload)
         if expected_digest != self.manifest_digest:
             raise ValueError("terminal ready manifest digest mismatch")
         return self

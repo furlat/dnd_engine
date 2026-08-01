@@ -81,6 +81,7 @@ EXPECTED_CATALOG_IDS = (
     "shield",
     "guiding_bolt",
     "grease",
+    "entangle",
     "fog_cloud",
     "bane",
     "bless",
@@ -139,6 +140,7 @@ EXPECTED_CATALOG_IDS = (
     "dimension_door",
     "banishment",
     "guardian_of_faith",
+    "evards_black_tentacles",
     "death_ward",
     "freedom_of_movement",
     "hold_monster",
@@ -183,8 +185,8 @@ EXPECTED_NATIVE_CATALOG_IDS = tuple(
 )
 
 
-def test_public_spell_maps_are_projections_of_the_single_authored_inventory() -> None:
-    """The package initializer must not author a second literal spell list."""
+def test_spell_package_initializer_is_a_cold_non_authoring_boundary() -> None:
+    """The package initializer must not author or eagerly import spell maps."""
     source = Path(spells_package.__file__).read_text(encoding="utf-8")
     tree = ast.parse(source)
     public_map_names = {
@@ -192,35 +194,18 @@ def test_public_spell_maps_are_projections_of_the_single_authored_inventory() ->
         *(f"LEVEL_{level}_SPELLS" for level in range(1, 10)),
         "ALL_SPELLS",
     }
-    assignments = {
-        target.id: node.value
+    assigned_names = {
+        target.id
         for node in tree.body
         if isinstance(node, ast.Assign)
         for target in node.targets
         if isinstance(target, ast.Name)
-        and target.id in public_map_names
     }
 
-    assert set(assignments) == public_map_names
-    for value in assignments.values():
-        assert isinstance(value, ast.Call)
-        assert isinstance(value.func, ast.Name)
-        assert value.func.id == "_spell_map_for_level"
-
-    helper = next(
-        node
-        for node in tree.body
-        if isinstance(node, ast.FunctionDef)
-        and node.name == "_spell_map_for_level"
-    )
-    assert any(
-        isinstance(node, ast.Name)
-        and node.id == "SPELL_CONTENT_IDENTITY_SPECS"
-        for node in ast.walk(helper)
-    )
+    assert public_map_names.isdisjoint(assigned_names)
     assert not any(
-        isinstance(value, ast.Dict)
-        for value in assignments.values()
+        isinstance(node, (ast.Import, ast.ImportFrom))
+        for node in tree.body
     )
 
 

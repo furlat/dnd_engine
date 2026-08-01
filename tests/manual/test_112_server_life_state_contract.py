@@ -116,11 +116,8 @@ def test_player_replica_exposes_life_state_and_does_not_treat_zero_hp_as_dead() 
 
     assert hero.get_normal_hp() == 0
     assert summary.life_state is LifeState.DYING
-    assert summary.is_dead is False
     assert encounter_row.life_state is LifeState.DYING
-    assert encounter_row.is_dead is False
     assert replica_row.life_state is LifeState.DYING
-    assert replica_row.is_dead is False
 
 
 def test_subjective_lifecycle_patches_follow_life_state_change_and_revive() -> None:

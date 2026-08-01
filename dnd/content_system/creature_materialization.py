@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import TypeVar, overload
 from uuid import UUID
 
-from dnd.content_system.bootstrap import bootstrap_content_system
 from dnd.content_system.creature_bindings import (
     CREATURE_RUNTIME_BINDINGS,
     CreatureRuntimeBinding,
@@ -15,7 +14,7 @@ from dnd.content_system.runtime import (
     SERVER_CONTENT_SYSTEM_RUNTIME,
     ContentSystemRuntime,
 )
-from dnd.core.content.identities import ContentDefinitionKind
+from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.content.materialization import (
     CreatureBuildContext,
     CreatureDeploymentRole,
@@ -29,19 +28,12 @@ from dnd.entity import Entity
 _EntityT = TypeVar("_EntityT", bound=Entity)
 
 
-def _ensure_content_system(runtime: ContentSystemRuntime) -> None:
-    if runtime.is_installed:
-        return
-    runtime.install(bootstrap_content_system())
-
-
 def resolve_creature_recipe(
     recipe: ContentRecipe,
     *,
     runtime: ContentSystemRuntime = SERVER_CONTENT_SYSTEM_RUNTIME,
 ) -> ContentDeclaration:
     """Resolve one exact creature recipe through the sole process registry."""
-    _ensure_content_system(runtime)
     recipe.verify_integrity()
     if recipe.ref.definition_kind != ContentDefinitionKind.CREATURE:
         raise TypeError(
@@ -62,6 +54,7 @@ def materialize_creature(
     deployment_role: CreatureDeploymentRole,
     possession_mode: CreaturePossessionMode,
     expected_type: type[_EntityT],
+    entity_content_ref: ContentRef | None = None,
     binding_registry: CreatureRuntimeBindingRegistry = CREATURE_RUNTIME_BINDINGS,
     runtime: ContentSystemRuntime = SERVER_CONTENT_SYSTEM_RUNTIME,
 ) -> _EntityT: ...
@@ -78,6 +71,7 @@ def materialize_creature(
     deployment_role: CreatureDeploymentRole,
     possession_mode: CreaturePossessionMode,
     expected_type: None = None,
+    entity_content_ref: ContentRef | None = None,
     binding_registry: CreatureRuntimeBindingRegistry = CREATURE_RUNTIME_BINDINGS,
     runtime: ContentSystemRuntime = SERVER_CONTENT_SYSTEM_RUNTIME,
 ) -> Entity: ...
@@ -93,6 +87,7 @@ def materialize_creature(
     deployment_role: CreatureDeploymentRole,
     possession_mode: CreaturePossessionMode,
     expected_type: type[_EntityT] | None = None,
+    entity_content_ref: ContentRef | None = None,
     binding_registry: CreatureRuntimeBindingRegistry = CREATURE_RUNTIME_BINDINGS,
     runtime: ContentSystemRuntime = SERVER_CONTENT_SYSTEM_RUNTIME,
 ) -> Entity | _EntityT:
@@ -100,7 +95,7 @@ def materialize_creature(
     resolve_creature_recipe(recipe, runtime=runtime)
     context = CreatureBuildContext(
         runtime_entity_uuid=runtime_entity_uuid,
-        requested_ref=recipe.ref,
+        requested_ref=entity_content_ref or recipe.ref,
         display_name=display_name,
         faction=faction,
         position=position,
@@ -121,10 +116,12 @@ def materialize_creature(
             f"Creature factory {recipe.ref.identity_key} did not preserve its "
             "exact runtime entity/source UUID",
         )
-    if result.content_ref != recipe.ref:
+    expected_content_ref = entity_content_ref or recipe.ref
+    if result.content_ref != expected_content_ref:
         raise ValueError(
             f"Creature factory {recipe.ref.identity_key} did not bind its exact "
-            "content reference",
+            "content reference; expected runtime identity "
+            f"{expected_content_ref.identity_key}",
         )
     if expected_type is not None and not isinstance(result, expected_type):
         raise TypeError(

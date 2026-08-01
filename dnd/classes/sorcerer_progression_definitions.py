@@ -6,7 +6,18 @@ entitlement ledger is the exact intersection of installed SRD spell ContentRefs
 and the SRD 5.1 Sorcerer list.
 """
 
-from dnd.classes import feats, sorcerer
+from dnd.classes.permanent_feature_definitions import (
+    LUCKY_FEAT_DECLARATION,
+    SORCERER_DRACONIC_RESILIENCE_DECLARATION,
+    SORCERER_SORCERY_POINTS_DECLARATION,
+)
+from dnd.classes.progression_definition_helpers import (
+    proficiency_subject,
+    progression_dependencies,
+    single_ref_choice,
+    structural_progression_provenance,
+    typed_progression_ref,
+)
 from dnd.classes.sorcerer_structural_feature_definitions import (
     DISTANT_SPELL_DECLARATION,
     DRACONIC_ANCESTRY_DECLARATIONS,
@@ -18,13 +29,9 @@ from dnd.classes.sorcerer_structural_feature_definitions import (
     SORCEROUS_RESTORATION_DECLARATION,
     TWINNED_SPELL_DECLARATION,
 )
-from dnd.content_system.condition_definitions import (
-    CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS,
-)
 from dnd.classes.starting_equipment_refs import (
     STARTING_EQUIPMENT_PACKAGE_REFS_BY_CLASS,
 )
-from dnd.core.base_conditions import BaseCondition
 from dnd.core.content.dependencies import (
     ContentDependency,
     ContentDependencyPhase,
@@ -52,16 +59,8 @@ from dnd.core.content.durable_characters import (
     SubclassDefinition,
 )
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
-from dnd.core.content.provenance import (
-    ContentFidelity,
-    ContentProvenance,
-    ContentProvenanceRelation,
-    ContentReviewStatus,
-)
 from dnd.core.content.registration import (
     ContentDeclaration,
-    ContentDeclarationMode,
-    compute_definition_contract_hash,
     get_content_declaration,
     typed_definition,
 )
@@ -87,44 +86,26 @@ _PACK_ID = "content.srd_5_1_cc"
 _VERSION = 1
 
 
-def _typed_ref(
-    definition_kind: ContentDefinitionKind,
-    content_id: str,
-    definition_model: type[ClassDefinition] | type[SubclassDefinition],
-) -> ContentRef:
-    return ContentRef(
-        pack_id=_PACK_ID,
-        definition_kind=definition_kind,
-        content_id=content_id,
-        content_version=_VERSION,
-        definition_contract_hash=compute_definition_contract_hash(
-            mode=ContentDeclarationMode.TYPED_DEFINITION,
-            definition_kind=definition_kind,
-            definition_model=definition_model,
-        ),
-    )
-
-
-SORCERER_CLASS_REF = _typed_ref(
-    ContentDefinitionKind.CLASS,
-    "class.sorcerer",
-    ClassDefinition,
+SORCERER_CLASS_REF = typed_progression_ref(
+    pack_id=_PACK_ID,
+    version=_VERSION,
+    definition_kind=ContentDefinitionKind.CLASS,
+    content_id="class.sorcerer",
+    definition_model=ClassDefinition,
 )
-DRACONIC_BLOODLINE_SUBCLASS_REF = _typed_ref(
-    ContentDefinitionKind.SUBCLASS,
-    "subclass.sorcerer.draconic_bloodline",
-    SubclassDefinition,
+DRACONIC_BLOODLINE_SUBCLASS_REF = typed_progression_ref(
+    pack_id=_PACK_ID,
+    version=_VERSION,
+    definition_kind=ContentDefinitionKind.SUBCLASS,
+    content_id="subclass.sorcerer.draconic_bloodline",
+    definition_model=SubclassDefinition,
 )
 
 
-def _feature_ref(condition_type: type[BaseCondition]) -> ContentRef:
-    return CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS[condition_type].ref
-
-
-_SORCERY_POINTS_REF = _feature_ref(sorcerer.SorceryPointsFeature)
-_DRACONIC_RESILIENCE_REF = _feature_ref(sorcerer.DraconicResilience)
+_SORCERY_POINTS_REF = SORCERER_SORCERY_POINTS_DECLARATION.ref
+_DRACONIC_RESILIENCE_REF = SORCERER_DRACONIC_RESILIENCE_DECLARATION.ref
 _ELEMENTAL_AFFINITY_REF = ELEMENTAL_AFFINITY_DECLARATION.ref
-_LUCKY_FEAT_REF = _feature_ref(feats.LuckyFeature)
+_LUCKY_FEAT_REF = LUCKY_FEAT_DECLARATION.ref
 
 
 SORCERER_REACTION_ONLY_SPELL_IDENTITY_GAPS: tuple[str, ...] = ()
@@ -260,13 +241,6 @@ _DRACONIC_ANCESTRY_REFS = tuple(
 )
 
 
-def _subject(
-    kind: ProficiencySubjectKind,
-    subject_id: str,
-) -> ProficiencySubject:
-    return ProficiencySubject(subject_kind=kind, subject_id=subject_id)
-
-
 def _weapon_subject(content_ref: ContentRef) -> ProficiencySubject:
     return ProficiencySubject(
         subject_kind=ProficiencySubjectKind.WEAPON,
@@ -275,7 +249,7 @@ def _weapon_subject(content_ref: ContentRef) -> ProficiencySubject:
 
 
 _SORCERER_SKILL_SUBJECTS = tuple(
-    _subject(ProficiencySubjectKind.SKILL, f"skill.{skill}")
+    proficiency_subject(ProficiencySubjectKind.SKILL, f"skill.{skill}")
     for skill in (
         "arcana",
         "deception",
@@ -317,27 +291,8 @@ _SORCERER_FIRST_PROFICIENCIES = ClassProficiencyPackage(
 )
 
 
-def _choice(
-    *,
-    choice_id: str,
-    choice_kind: ChoiceRequirementKind,
-    allowed_refs: tuple[ContentRef, ...],
-    count: int = 1,
-    minimum_selections: int | None = None,
-) -> BuildChoiceRequirement:
-    return BuildChoiceRequirement(
-        choice_id=choice_id,
-        choice_kind=choice_kind,
-        minimum_selections=(
-            count if minimum_selections is None else minimum_selections
-        ),
-        maximum_selections=count,
-        allowed_refs=allowed_refs,
-    )
-
-
 def _asi_or_feat(level: int) -> BuildChoiceRequirement:
-    return _choice(
+    return single_ref_choice(
         choice_id=f"class.sorcerer.level_{level}.asi_or_feat",
         choice_kind=ChoiceRequirementKind.ABILITY_SCORE_IMPROVEMENT_OR_FEAT,
         allowed_refs=(_LUCKY_FEAT_REF,),
@@ -389,14 +344,14 @@ def _sorcerer_level_choices(
 ) -> tuple[BuildChoiceRequirement, ...]:
     rows: list[BuildChoiceRequirement] = []
     if level == 1:
-        rows.append(_choice(
+        rows.append(single_ref_choice(
             choice_id="class.sorcerer.level_1.subclass",
             choice_kind=ChoiceRequirementKind.SUBCLASS,
             allowed_refs=(DRACONIC_BLOODLINE_SUBCLASS_REF,),
         ))
     cantrip_count = _CANTRIP_LEARN_COUNTS.get(level)
     if cantrip_count is not None:
-        rows.append(_choice(
+        rows.append(single_ref_choice(
             choice_id=f"class.sorcerer.level_{level}.cantrips",
             choice_kind=ChoiceRequirementKind.CANTRIP,
             allowed_refs=_SORCERER_CANTRIP_REFS,
@@ -404,14 +359,14 @@ def _sorcerer_level_choices(
         ))
     spell_count = _SPELL_LEARN_COUNTS.get(level)
     if spell_count is not None:
-        rows.append(_choice(
+        rows.append(single_ref_choice(
             choice_id=f"class.sorcerer.level_{level}.spell_known",
             choice_kind=ChoiceRequirementKind.SPELL_KNOWN,
             allowed_refs=_ranked_spell_refs_for_sorcerer_level(level),
             count=spell_count,
         ))
     if level > 1:
-        rows.append(_choice(
+        rows.append(single_ref_choice(
             choice_id=f"class.sorcerer.level_{level}.spell_replacement",
             choice_kind=ChoiceRequirementKind.SPELL_REPLACEMENT,
             allowed_refs=_ranked_spell_refs_for_sorcerer_level(level),
@@ -420,7 +375,7 @@ def _sorcerer_level_choices(
         ))
     metamagic_count = _METAMAGIC_LEARN_COUNTS.get(level)
     if metamagic_count is not None:
-        rows.append(_choice(
+        rows.append(single_ref_choice(
             choice_id=f"class.sorcerer.level_{level}.metamagic",
             choice_kind=ChoiceRequirementKind.METAMAGIC,
             allowed_refs=_METAMAGIC_REFS,
@@ -484,7 +439,7 @@ DRACONIC_BLOODLINE_SUBCLASS_DEFINITION = SubclassDefinition(
             }.get(level, ()),
             choice_requirements=(
                 (
-                    _choice(
+                    single_ref_choice(
                         choice_id=(
                             "subclass.sorcerer.draconic_bloodline."
                             "level_1.ancestry"
@@ -502,39 +457,7 @@ DRACONIC_BLOODLINE_SUBCLASS_DEFINITION = SubclassDefinition(
 )
 
 
-def _provenance(source_anchor: str) -> ContentProvenance:
-    return ContentProvenance(
-        primary_source_id="wotc.srd_5_1_cc",
-        source_anchor=source_anchor,
-        relation=ContentProvenanceRelation.FAITHFUL_IMPLEMENTATION,
-        fidelity=ContentFidelity.COMPLETE,
-        review_status=ContentReviewStatus.REVIEWED,
-        notes=(
-            "Pure additive structural definition; runtime mechanics are "
-            "installed separately through exact source-owned grant bindings."
-        ),
-    )
-
-
-def _dependencies(
-    refs: tuple[ContentRef, ...],
-    *,
-    relation: ContentDependencyRelation,
-    notes: str,
-) -> tuple[ContentDependency, ...]:
-    unique = {ref.identity_key: ref for ref in refs}
-    return tuple(
-        ContentDependency(
-            relation=relation,
-            target_ref=ref,
-            phase=ContentDependencyPhase.RUNTIME_REFERENCE,
-            notes=notes,
-        )
-        for _, ref in sorted(unique.items())
-    )
-
-
-_SORCERER_FEATURE_DEPENDENCIES = _dependencies(
+_SORCERER_FEATURE_DEPENDENCIES = progression_dependencies(
     (
         _SORCERY_POINTS_REF,
         SORCEROUS_RESTORATION_DECLARATION.ref,
@@ -544,7 +467,7 @@ _SORCERER_FEATURE_DEPENDENCIES = _dependencies(
     relation=ContentDependencyRelation.GRANTS_FEATURE,
     notes="Offered or granted by the Sorcerer progression.",
 )
-_SORCERER_SPELL_DEPENDENCIES = _dependencies(
+_SORCERER_SPELL_DEPENDENCIES = progression_dependencies(
     tuple(
         entitlement.spell_ref
         for entitlement in _SORCERER_SPELL_ENTITLEMENTS
@@ -552,7 +475,7 @@ _SORCERER_SPELL_DEPENDENCIES = _dependencies(
     relation=ContentDependencyRelation.GRANTS_SPELL,
     notes="Exact installed SRD Sorcerer spell-list entitlement.",
 )
-_DRACONIC_FEATURE_DEPENDENCIES = _dependencies(
+_DRACONIC_FEATURE_DEPENDENCIES = progression_dependencies(
     (
         _DRACONIC_RESILIENCE_REF,
         _ELEMENTAL_AFFINITY_REF,
@@ -586,7 +509,7 @@ _DRACONIC_FEATURE_DEPENDENCIES = _dependencies(
         ordering=ContentOrdering(sort_group="classes", sort_order=30),
         related_content_refs=(DRACONIC_BLOODLINE_SUBCLASS_REF,),
     ),
-    provenance=_provenance(
+    provenance=structural_progression_provenance(
         "SRD 5.1 Sorcerer class progression and spell list, levels 1–20",
     ),
     definition=SORCERER_CLASS_DEFINITION,
@@ -640,7 +563,7 @@ class SorcererProgressionDefinition:
         ),
         related_content_refs=(SORCERER_CLASS_REF,),
     ),
-    provenance=_provenance(
+    provenance=structural_progression_provenance(
         "SRD 5.1 Sorcerer: Draconic Bloodline, levels 1–18",
     ),
     definition=DRACONIC_BLOODLINE_SUBCLASS_DEFINITION,

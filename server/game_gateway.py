@@ -73,7 +73,7 @@ from server.content_catalog import (
 )
 from server.content_http import serve_content_catalog, serve_content_manifest
 from server.event_contract import EVENT_CONTRACT_HASH
-from server.game_directory.canonical import hash_capability
+from server.game_directory.security import hash_capability
 from server.game_directory.contracts import (
     AccessGrantCreate,
     AttachmentState,
@@ -148,11 +148,11 @@ from server.game_creation_catalog import build_game_creation_catalog
 from server.game_creation_composition import (
     CharacterRulesetMismatchError,
     GameCreationCompositionError,
-    character_ruleset_digest,
     character_source_matches_snapshot,
     normalize_encounter_recipe,
     required_character_ids,
     required_saved_roster_ids,
+    shared_deployment_ruleset_digest,
 )
 from server.game_creation_preview import (
     GameCreationPreviewError,
@@ -393,43 +393,52 @@ class GameGatewayService:
         )
         settlement_bundles = []
         lease_ids = []
-        for holdings_row in holdings_evidence:
-            leases = tuple(
-                lease
-                for lease in (
-                    self.repository.list_character_deployment_leases(
-                        game_id=manifest.game_id,
-                        active_only=True,
-                    )
-                )
-                if lease.character_id == holdings_row.character_id
+        active_leases = (
+            self.repository.list_character_deployment_leases(
+                game_id=manifest.game_id,
+                active_only=True,
             )
-            if len(leases) != 1:
+        )
+        leases_by_character = {
+            lease.character_id: lease
+            for lease in active_leases
+        }
+        if len(leases_by_character) != len(active_leases):
+            raise ConflictError(
+                "Hosted terminal evidence contains duplicate active "
+                "character leases",
+            )
+        deployments = self.repository.list_character_deployments(
+            game_id=manifest.game_id,
+        )
+        deployments_by_lease = {
+            deployment.lease_id: deployment
+            for deployment in deployments
+        }
+        if len(deployments_by_lease) != len(deployments):
+            raise ConflictError(
+                "Hosted terminal evidence contains duplicate pinned "
+                "deployments for one lease",
+            )
+        for holdings_row in holdings_evidence:
+            lease = leases_by_character.get(holdings_row.character_id)
+            if lease is None:
                 raise ConflictError(
                     "Hosted terminal holdings evidence requires exactly one "
                     "matching active character lease",
                 )
-            lease = leases[0]
-            deployments = tuple(
-                deployment
-                for deployment in (
-                    self.repository.list_character_deployments(
-                        holdings_row.character_id,
-                    )
-                )
-                if (
-                    deployment.game_id == manifest.game_id
-                    and deployment.lease_id == lease.lease_id
-                )
-            )
-            if len(deployments) != 1:
+            deployment = deployments_by_lease.get(lease.lease_id)
+            if (
+                deployment is None
+                or deployment.character_id != holdings_row.character_id
+            ):
                 raise ConflictError(
                     "Hosted terminal holdings evidence requires exactly one "
                     "matching pinned deployment",
                 )
             settlement_bundles.append(build_terminal_settlement_bundle(
                 holdings_row,
-                deployments[0],
+                deployment,
                 settlement_namespace=(
                     "dnd-engine:hosted-character-settlement:v1"
                 ),
@@ -610,7 +619,7 @@ class GameGatewayService:
             character_deployments=deployments,
             saved_rosters=saved_rosters,
         )
-        ruleset_digest = character_ruleset_digest(deployments)
+        ruleset_digest = shared_deployment_ruleset_digest(deployments)
         preview = build_game_creation_encounter_visual_preview(
             recipe,
             character_deployments=deployments,
@@ -650,7 +659,7 @@ class GameGatewayService:
                 ),
                 current_content_set_digest=self.content_set_digest,
             )
-        ruleset_digest = character_ruleset_digest(deployments)
+        ruleset_digest = shared_deployment_ruleset_digest(deployments)
         if request.expected_ruleset_digest != ruleset_digest:
             raise GatewayError(
                 409,

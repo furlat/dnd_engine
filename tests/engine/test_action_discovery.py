@@ -23,19 +23,21 @@ from dnd.content_system.item_materialization import materialize_item
 from dnd.core.base_actions import (
     ActionAvailabilityStatus,
     ActionCategory,
+    Cost,
     TargetType,
 )
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.condition_types import HazardFilter
 from dnd.core.base_object import BaseObject
-from dnd.core.events import EventQueue
+from dnd.core.events import EventHandler, EventQueue
 from dnd.core.gridmap import get_map
 from dnd.core.creature_types import DamageType
 from dnd.core.values import BaseValue
 from dnd.entity import Entity, EntityConfig
 from dnd.items.consumables import HEALING_POTION_RECIPE
 from dnd.monsters.bestiary import create_goblin, create_skeleton
+from dnd.spells.transmutation import BonusDash, ExpeditiousRetreatEffect
 from tests.spell_test_exports import Fireball, MagicMissile
 from tests.engine.support import reset_combat_state
 
@@ -335,7 +337,7 @@ def test_eb_09_008_target_filters_and_dead_targets_shape_entity_actions() -> Non
     ally = create_goblin(name="Ally", position=(5, 6), faction="heroes")
     enemy = create_skeleton(name="Enemy", position=(6, 5), faction="monsters")
     dead_enemy = create_skeleton(name="Dead Enemy", position=(6, 6), faction="monsters")
-    dead_enemy.health.take_damage(999, DamageType.BLUDGEONING, hero.uuid)
+    dead_enemy.receive_damage(999, DamageType.BLUDGEONING, hero.uuid)
     Entity.update_all_entities_senses()
 
     default_attack = find_attack_action(hero.get_available_actions())
@@ -350,14 +352,17 @@ def test_eb_09_008_target_filters_and_dead_targets_shape_entity_actions() -> Non
         ally.uuid,
     ]
 
-    all_targets_attack = find_attack_action(
+    all_subjectively_visible_attack = find_attack_action(
         hero.get_available_actions(target_filter="all", include_dead=True)
     )
-    assert [target.target_uuid for target in all_targets_attack.valid_targets] == [
+    assert [
+        target.target_uuid
+        for target in all_subjectively_visible_attack.valid_targets
+    ] == [
         enemy.uuid,
-        dead_enemy.uuid,
         ally.uuid,
     ]
+    assert dead_enemy.uuid not in hero.senses.entities
 
 
 def test_eb_09_009_registered_multi_entity_spell_discovers_and_executes() -> None:
@@ -656,6 +661,103 @@ def test_eb_09_012_attack_object_discovers_and_destroys_breakables() -> None:
     Entity.update_all_entities_senses()
     assert crate.uuid not in entity.senses.objects
     assert entity.action_economy.actions.normalized_score == 0
+
+
+def test_registered_action_replacement_retires_global_action_identities() -> None:
+    """Replacing or unregistering actions cannot leak unreachable objects."""
+    reset_action_state()
+    entity = configured_entity()
+    original_actions = tuple(entity.registered_actions)
+    original_uuids = {action.uuid for action in original_actions}
+
+    setup_standard_actions(entity)
+
+    assert original_uuids.isdisjoint(
+        {action.uuid for action in entity.registered_actions},
+    )
+    assert all(BaseObject.get(action_uuid) is None for action_uuid in original_uuids)
+    assert all(
+        BaseObject.get(action.uuid) is action
+        for action in entity.registered_actions
+    )
+
+    dash = entity.get_action_template("Dash")
+    assert dash is not None
+    entity.unregister_action_by_uuid(dash.uuid)
+
+    assert entity.get_action_template("Dash") is None
+    assert BaseObject.get(dash.uuid) is None
+
+
+def test_condition_granted_action_cleanup_preserves_same_name_sibling() -> None:
+    """Condition cleanup removes only the exact action instance it granted."""
+    reset_action_state()
+    entity = configured_entity()
+    sibling = BonusDash(source_entity_uuid=entity.uuid, template=True)
+    entity.register_action(sibling)
+
+    effect = ExpeditiousRetreatEffect(
+        source_entity_uuid=entity.uuid,
+        target_entity_uuid=entity.uuid,
+    )
+    entity.add_condition(effect)
+
+    matching = [
+        action
+        for action in entity.registered_actions
+        if action.name == sibling.name
+    ]
+    assert len(matching) == 2
+    assert sibling in matching
+
+    assert entity.remove_condition(effect.name)
+    assert entity.get_action_template(sibling.name) is sibling
+    assert BaseObject.get(sibling.uuid) is sibling
+
+
+def test_bonus_dash_declaration_uses_canonical_effective_costs() -> None:
+    """Condition-granted self actions retain action-overlay transforms."""
+
+    reset_action_state()
+    entity = configured_entity()
+    dash = BonusDash(source_entity_uuid=entity.uuid, template=True)
+    entity.register_action(dash)
+    surcharge = Cost(
+        name="Dash test surcharge",
+        cost_type="movement",
+        cost=5,
+    )
+    entity.install_action_template_overrides({
+        dash.uuid: {"alt_extra_costs": [surcharge]},
+    })
+    effective = entity.get_action_template(dash.name)
+    assert effective is not None
+
+    declaration = effective._create_declaration_event(use_register=False)
+
+    assert declaration is not None
+    assert declaration.target_entity_uuid == entity.uuid
+    assert [cost.cost_type for cost in declaration.costs] == [
+        "bonus_actions",
+        "movement",
+    ]
+
+
+def test_standard_action_refresh_preserves_same_name_handler_sibling() -> None:
+    """Refreshing standard actions removes only handlers from the prior setup."""
+    reset_action_state()
+    entity = configured_entity()
+    sibling = EventHandler(
+        name="Prone Auto-Stand",
+        source_entity_uuid=entity.uuid,
+        event_processor=lambda event, _source_uuid: event,
+    )
+    entity.add_event_handler(sibling)
+
+    setup_standard_actions(entity)
+
+    assert sibling.uuid in entity.event_handlers
+    assert sibling.uuid in EventQueue._event_handlers
 
 
 if __name__ == "__main__":

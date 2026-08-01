@@ -3,6 +3,7 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    PrivateAttr,
     SerializerFunctionWrapHandler,
     computed_field,
     field_serializer,
@@ -25,6 +26,8 @@ from dnd.core.content.runtime import (
 from dnd.core.effect_types import EffectOrigin
 from dnd.core.condition_types import (
     ConditionAgencyDenial,
+    ConditionApplicationDisposition,
+    ConditionApplicationPolicy,
     ConditionCategory,
     ConditionRemovalTrigger,
     ConditionTag,
@@ -169,6 +172,10 @@ class ConditionApplicationEvent(Event):
     target_entity_name: Optional[str] = Field(default=None, description="Display name of the target entity.")
     resulting_ac: Optional[int] = Field(default=None, description="Entity AC after condition application for frontend reducers.")
     resulting_max_hp: Optional[int] = Field(default=None, description="Entity max HP after condition application for frontend reducers.")
+    application_disposition: ConditionApplicationDisposition = Field(
+        default=ConditionApplicationDisposition.APPLIED,
+        description="Authoritative result of repeated-condition arbitration.",
+    )
 
     def get_effect_origin(self) -> Optional[EffectOrigin]:
         """Return the immutable origin inherited by the applied condition."""
@@ -184,7 +191,29 @@ class ConditionApplicationEvent(Event):
         target_name = self.target_entity_name or "Unknown"
         source_name = self.source_entity_name or "Unknown"
 
-        compact = cond.format_application_log(target_name)
+        if self.application_disposition is (
+            ConditionApplicationDisposition.RETAINED_STRONGER
+        ):
+            compact = (
+                f"{{cyan:{target_name}}} remains under the stronger "
+                f"**{cond.name or 'Unknown'}** effect"
+            )
+        elif self.application_disposition is (
+            ConditionApplicationDisposition.REJECTED
+        ):
+            compact = (
+                f"{{cyan:{target_name}}} rejects another "
+                f"**{cond.name or 'Unknown'}** effect"
+            )
+        elif self.application_disposition is (
+            ConditionApplicationDisposition.PROMOTED
+        ):
+            compact = (
+                f"{{cyan:{target_name}}} remains under "
+                f"**{cond.name or 'Unknown'}** from another source"
+            )
+        else:
+            compact = cond.format_application_log(target_name)
 
         verbose = compact
         if self.source_entity_uuid != self.target_entity_uuid and source_name != target_name:
@@ -199,7 +228,10 @@ class ConditionApplicationEvent(Event):
             compact=compact,
             verbose=verbose,
             detailed=verbose,
-            success=True,
+            success=self.application_disposition not in {
+                ConditionApplicationDisposition.REJECTED,
+                ConditionApplicationDisposition.RETAINED_STRONGER,
+            },
         )
 
 
@@ -342,6 +374,13 @@ class BaseCondition(BaseObject):
         default=ConditionCategory.CONDITION,
         description="Broad category used by logs and condition consumers."
     )
+    application_policy: ConditionApplicationPolicy = Field(
+        default=ConditionApplicationPolicy.REPLACE_EXISTING,
+        description=(
+            "Authored policy for repeated applications of this exact "
+            "condition family."
+        ),
+    )
     duration: Duration = Field(default_factory=Duration, description="Duration state owned by this condition.")
     application_saving_throw: Optional[SavingThrowEvent] = Field(
         default=None,
@@ -415,6 +454,22 @@ class BaseCondition(BaseObject):
         ge=0,
         description="Objective event cursor of the completed application boundary.",
     )
+    _granted_action_uuids: List[UUID] = PrivateAttr(default_factory=list)
+
+    def own_granted_action(self, action_uuid: UUID) -> None:
+        """Track one exact action template granted by this condition."""
+        if action_uuid not in self._granted_action_uuids:
+            self._granted_action_uuids.append(action_uuid)
+
+    def release_granted_actions(self) -> Tuple[UUID, ...]:
+        """Release and clear the exact action identities owned by this condition."""
+        owned = tuple(self._granted_action_uuids)
+        self._granted_action_uuids.clear()
+        return owned
+
+    def has_granted_actions(self) -> bool:
+        """Return whether this condition currently owns granted actions."""
+        return bool(self._granted_action_uuids)
 
     @model_serializer(mode="wrap", when_used="json")
     def serialize_unordered_wire_fields(
@@ -521,7 +576,14 @@ class BaseCondition(BaseObject):
         self.target_entity_uuid = target_entity_uuid
         self.duration.target_entity_uuid = target_entity_uuid
 
-    def declare_event(self, parent_event: Optional[Event] = None) -> Event:
+    def declare_event(
+        self,
+        parent_event: Optional[Event] = None,
+        *,
+        application_disposition: ConditionApplicationDisposition = (
+            ConditionApplicationDisposition.APPLIED
+        ),
+    ) -> ConditionApplicationEvent:
         """Create the condition application declaration event.
 
         Args:
@@ -545,7 +607,9 @@ class BaseCondition(BaseObject):
             phase=EventPhase.DECLARATION,
             parent_event=parent_event.uuid if parent_event else None,
             source_entity_name=self.source_entity_name,
-            target_entity_name=self.target_entity_name
+            target_entity_name=self.target_entity_name,
+            application_disposition=application_disposition,
+            use_register=False,
         )
 
     def _declare_removal_event(self, expired: bool = False, parent_event: Optional[Event] = None) -> Event:
@@ -567,25 +631,28 @@ class BaseCondition(BaseObject):
             phase=EventPhase.DECLARATION,
             parent_event=parent_event.uuid if parent_event else None,
             source_entity_name=self.source_entity_name,
-            target_entity_name=self.target_entity_name
+            target_entity_name=self.target_entity_name,
+            use_register=False,
         )
 
-    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+    def _apply(self, execution_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         """Apply subclass state and return owned runtime artifacts.
 
         Subclasses override this to add modifiers, handlers, spatial handlers,
         same-block subconditions, or linked conditions. The base implementation
-        creates execution and effect events and returns no owned artifacts.
+        creates the effect event and returns no owned artifacts.
 
         Args:
-            declaration_event: Declaration event created for this application.
+            execution_event: Accepted execution event for this application.
 
         Returns:
             Tuple of modifier pairs, trigger-handler UUIDs, same-block
             subcondition UUIDs, spatial-handler UUIDs, and the effect event.
         """
-        event = declaration_event.phase_to(EventPhase.EXECUTION, update={"condition": self})
-        event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition": self})
+        event = execution_event.phase_to(
+            EventPhase.EFFECT,
+            update={"condition": self},
+        )
         return [], [], [], [], event
 
     def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
@@ -598,9 +665,36 @@ class BaseCondition(BaseObject):
             Last removal event after subclass work, or None if no event was given.
         """
         if event:
-            event = event.phase_to(EventPhase.EXECUTION, update={"condition": self})
             event = event.phase_to(EventPhase.EFFECT, update={"condition": self})
         return event
+
+    def _release_owned_runtime_state(
+        self,
+        *,
+        parent_event: Optional[Event] = None,
+    ) -> None:
+        """Release subclass-owned state not represented by returned UUIDs.
+
+        This hook must be idempotent. It runs for both ordinary removal and
+        rejected/exceptional application rollback, so implementations must not
+        publish a second lifecycle or depend on ``applied`` already being true.
+
+        Args:
+            parent_event: Optional causal event for restoration work.
+        """
+        del parent_event
+
+    def discard_uncommitted_runtime_state(self) -> None:
+        """Release provisional state without publishing a removal lifecycle."""
+        self._release_owned_runtime_state()
+        self.applied = True
+        try:
+            self.remove_condition_modifiers()
+            self.remove_event_handlers()
+            self.remove_spatial_handlers()
+        finally:
+            self.applied = False
+        self.modifers_uuids.clear()
 
     def _post_removal_stats(self) -> Dict[str, Any]:
         """Return resulting stats to inject into the COMPLETION event after modifiers are removed.
@@ -613,20 +707,6 @@ class BaseCondition(BaseObject):
             Field updates for the removal completion event.
         """
         return {}
-
-    def _expire(self, event: Optional[Event] = None) -> Optional[Event]:
-        """Run subclass expiration behavior.
-
-        Args:
-            event: Removal declaration event to phase through expiration work.
-
-        Returns:
-            Last expiration event after subclass work, or None if no event was given.
-        """
-        if event:
-            event = event.phase_to(EventPhase.EXECUTION, update={"condition": self})
-            event = event.phase_to(EventPhase.EFFECT, update={"condition": self})
-        return event
 
     def apply(self, parent_event: Optional[Event] = None, declaration_event: Optional[Event] = None) -> Optional[Event]:
         """Apply condition state and complete the application event.
@@ -653,21 +733,33 @@ class BaseCondition(BaseObject):
         )
         if declaration_event is None:
             declaration_event = self.declare_event(parent_event)
+            declaration_event = EventQueue.publish_declaration(
+                declaration_event
+            )
 
         if declaration_event.canceled:
-            return None
+            return declaration_event
 
-        with runtime_behavior_provider(self):
-            (
-                modifers_uuids,
-                event_handlers_uuids,
-                sub_conditions_uuids,
-                spatial_handler_uuids,
-                effect_event,
-            ) = self._apply(declaration_event)
+        execution_event = declaration_event.phase_to(
+            EventPhase.EXECUTION,
+            update={"condition": self},
+            status_message=f"Applying {self.name}",
+        )
+        if execution_event.canceled:
+            return execution_event
 
-        if not effect_event:
-            return declaration_event.cancel(status_message=f"Condition {self.name} was not applied - _apply() returned no effect event")
+        try:
+            with runtime_behavior_provider(self):
+                (
+                    modifers_uuids,
+                    event_handlers_uuids,
+                    sub_conditions_uuids,
+                    spatial_handler_uuids,
+                    effect_event,
+                ) = self._apply(execution_event)
+        except BaseException:
+            self.discard_uncommitted_runtime_state()
+            raise
 
         for block_uuid, modifiers_uuids in modifers_uuids:
             if block_uuid not in self.modifers_uuids:
@@ -685,9 +777,61 @@ class BaseCondition(BaseObject):
                 self.spatial_handler_uuids.append(spatial_handler_uuid)
 
         self.applied = True
+        if effect_event is None:
+            canceled_event = execution_event.cancel(
+                status_message=(
+                    f"Condition {self.name} was not applied - "
+                    "_apply() returned no effect event"
+                ),
+            )
+            self.discard_uncommitted_runtime_state()
+            return canceled_event
+        if effect_event.canceled:
+            self.discard_uncommitted_runtime_state()
+            return effect_event
+
         completed_event = effect_event.phase_to(EventPhase.COMPLETION)
         self.applied_source_event_cursor = EventQueue.event_cursor()
         return completed_event
+
+    def complete_unmanifested_application(
+        self,
+        declaration_event: Event,
+        *,
+        disposition: ConditionApplicationDisposition,
+        status_message: str,
+    ) -> Event:
+        """Complete an admitted source lease that does not become effective.
+
+        The application remains a causal fact, but `_apply()` is deliberately
+        not called, so it cannot install modifiers, handlers, actions, or
+        direct state before the condition arbiter selects it.
+        """
+        if disposition not in {
+            ConditionApplicationDisposition.REJECTED,
+            ConditionApplicationDisposition.RETAINED_STRONGER,
+        }:
+            raise ValueError(
+                "Unmanifested applications require a non-effective disposition",
+            )
+        execution_event = declaration_event.phase_to(
+            EventPhase.EXECUTION,
+            condition=self,
+            application_disposition=disposition,
+            status_message=status_message,
+        )
+        effect_event = execution_event.phase_to(
+            EventPhase.EFFECT,
+            condition=self,
+            application_disposition=disposition,
+            status_message=status_message,
+        )
+        return effect_event.phase_to(
+            EventPhase.COMPLETION,
+            condition=self,
+            application_disposition=disposition,
+            status_message=status_message,
+        )
 
     def remove_condition_modifiers(self) -> bool:
         """Remove owned modifiers without changing applied state.
@@ -725,27 +869,6 @@ class BaseCondition(BaseObject):
         if child is not None and isinstance(child, BaseCondition) and self.target_entity_uuid is not None:
             child.parent_link = (self.target_entity_uuid, self.uuid)
 
-    def remove_condition_from_parent(self, skip_parent_removal: bool = False) -> bool:
-        """Detach this condition from its same-block parent condition.
-
-        Args:
-            skip_parent_removal: Whether to leave the parent child list intact.
-
-        Returns:
-            True after the parent link is handled.
-
-        Raises:
-            ValueError: If the parent condition UUID is set but cannot be found.
-        """
-        if self.parent_condition and not skip_parent_removal:
-            parent_condition = BaseCondition.get(self.parent_condition)
-            if parent_condition is None:
-                raise ValueError(f"Trying to remove condition with UUID {self.uuid} from parent with UUID {self.parent_condition} not found, parent removal should remove children")
-            elif isinstance(parent_condition, BaseCondition):
-                parent_condition.sub_conditions.remove(self.uuid)
-
-        return True
-
     def remove_event_handlers(self) -> bool:
         """Remove owned trigger-based event handlers from the EventQueue.
 
@@ -782,8 +905,9 @@ class BaseCondition(BaseObject):
         """Clean this condition's own modifiers, handlers, and removal event.
 
         Cross-object cleanup for same-block subconditions and linked conditions
-        is handled by `BaseBlock._remove_condition_tree()`. Subclass `_expire()`
-        and `_remove()` hooks are preserved for custom cleanup behavior.
+        is handled by `BaseBlock._remove_condition_tree()`. Subclass `_remove()`
+        hooks are preserved for custom cleanup behavior; the event's `expired`
+        fact distinguishes expiration from explicit removal.
 
         Args:
             expire: Whether this is an expiration removal.
@@ -797,18 +921,22 @@ class BaseCondition(BaseObject):
             return False
 
         event = self._declare_removal_event(expired=expire, parent_event=parent_event)
+        event = EventQueue.publish_declaration(event)
         if event.canceled:
             return False
 
-        if expire:
-            expired_event = self._expire(event)
-            if expired_event and expired_event.canceled:
-                return False
+        execution_event = event.phase_to(
+            EventPhase.EXECUTION,
+            update={"condition": self},
+        )
+        if execution_event.canceled:
+            return False
 
-        removed_event = self._remove(event)
+        removed_event = self._remove(execution_event)
         if removed_event and removed_event.canceled:
             return False
 
+        self._release_owned_runtime_state(parent_event=parent_event)
         self.remove_condition_modifiers()
         self.remove_event_handlers()
         self.remove_spatial_handlers()
@@ -822,7 +950,10 @@ class BaseCondition(BaseObject):
         self.applied = False
 
         post_stats = self._post_removal_stats()
-        event.phase_to(EventPhase.COMPLETION, **post_stats)
+        (removed_event or execution_event).phase_to(
+            EventPhase.COMPLETION,
+            **post_stats,
+        )
         return True
 
     def progress(self) -> bool:
@@ -839,6 +970,60 @@ class BaseCondition(BaseObject):
     def long_rest(self) -> None:
         """Mark this condition's duration as long-rested."""
         self.duration.long_rest()
+
+
+class MostPotentCondition(BaseCondition):
+    """Pure-artifact condition eligible for most-potent source arbitration.
+
+    Instances of this class may be temporarily dormant while their source
+    effect remains valid. Subclasses must express their manifested mechanics
+    exclusively through the modifier and handler UUIDs returned from `_apply`.
+    They may not own condition trees, cross-block links, granted actions, or
+    direct untracked mutations that require an `_remove` side effect.
+    """
+
+    condition_category: ConditionCategory = Field(
+        default=ConditionCategory.INTERNAL,
+        description=(
+            "The arbitration base is internal; concrete player-facing "
+            "memberships must explicitly declare their public category."
+        ),
+    )
+    application_policy: ConditionApplicationPolicy = Field(
+        default=ConditionApplicationPolicy.MOST_POTENT_ACTIVE,
+        frozen=True,
+        description="Most-potent source arbitration is intrinsic to this base.",
+    )
+    potency_rank: Tuple[int, ...] = Field(
+        min_length=1,
+        description=(
+            "Condition-authored lexicographic strength rank; higher values "
+            "are more potent."
+        ),
+    )
+
+    def suspend_for_arbitration(self) -> None:
+        """Remove manifested artifacts without ending the source lease."""
+        if not self.applied:
+            raise ValueError("Only an applied condition can be suspended")
+        if self.sub_conditions or self.linked_conditions:
+            raise ValueError(
+                "Most-potent conditions cannot own condition trees",
+            )
+        if self.has_granted_actions():
+            raise ValueError(
+                "Most-potent conditions cannot own granted actions",
+            )
+        if type(self)._remove is not BaseCondition._remove:
+            raise ValueError(
+                "Most-potent conditions cannot own custom removal side effects",
+            )
+
+        self.remove_condition_modifiers()
+        self.modifers_uuids.clear()
+        self.remove_event_handlers()
+        self.remove_spatial_handlers()
+        self.applied = False
 
 
 class SpellProtection(BaseModel):

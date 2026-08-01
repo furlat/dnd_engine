@@ -167,10 +167,6 @@ class Inventory(BaseBlock):
         """Check if item is in inventory."""
         return item_uuid in self.items
 
-    def find_items_by_name(self, name: str) -> List[BaseItem]:
-        """Find all items with a given name."""
-        return [item for item in self.items.values() if item.name == name]
-
     def find_items_by_tag(self, tag: str) -> List[BaseItem]:
         """Find all items with a given tag."""
         return [item for item in self.items.values() if tag in item.tags]

@@ -716,7 +716,6 @@ def test_real_socket_native_external_and_external_external_matrix() -> None:
                     first_external_execute_actors,
                 ),
             )
-            _require_success(main.post("/simulation/pause"))
             _replace_and_verify_assignment_close(
                 main,
                 provider,
@@ -891,7 +890,6 @@ def test_real_socket_native_external_and_external_external_matrix() -> None:
                     second_roster_2_execute_actors,
                 ),
             )
-            _require_success(main.post("/simulation/pause"))
             _replace_and_verify_assignment_close(
                 main,
                 provider,
@@ -946,7 +944,6 @@ def test_real_socket_native_external_and_external_external_matrix() -> None:
                 game_id=isolated_game_id,
             )
             _assert_decision_isolation(isolated_rows)
-            _require_success(main.post("/simulation/pause"))
             _replace_and_verify_assignment_close(
                 main,
                 provider,

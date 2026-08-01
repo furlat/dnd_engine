@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import ParamSpec, TypeVar, cast
+from typing import ParamSpec, TypeVar
 
 from pydantic import Field
 
@@ -72,16 +72,3 @@ def contract_for_policy_method(
 def registered_policy_method_contracts() -> tuple[PolicyMethodContract, ...]:
     """Return registered contracts in stable identity order."""
     return tuple(_METHOD_CONTRACTS[key] for key in sorted(_METHOD_CONTRACTS))
-
-
-def clear_policy_method_contract_registry() -> None:
-    """Clear registrations for isolated test worlds."""
-    _METHOD_CONTRACTS.clear()
-
-
-def typed_policy_method(
-    function: Callable[Parameters, ReturnValue],
-) -> Callable[Parameters, ReturnValue]:
-    """Retain a function's precise callable type for annotation helpers."""
-    return cast(Callable[Parameters, ReturnValue], function)
-

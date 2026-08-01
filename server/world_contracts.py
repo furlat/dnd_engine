@@ -39,6 +39,7 @@ class APIContentRefSnapshot(BaseModel):
         "species_variant",
         "background",
         "environment_object",
+        "spatial_effect",
         "rule_primitive",
     ]
     content_id: str = Field(
@@ -78,6 +79,44 @@ class SafeContentPresentationRef(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     presentation_contract_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class APISpatialEffectPresentation(BaseModel):
+    """Mechanics-free renderer facts for one observed spatial phenomenon."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    sprite_key: str | None = None
+    visual_variant_key: str | None = None
+    tint_rgb: int | None = Field(default=None, ge=0, le=0xFFFFFF)
+    vfx_profile: str | None = None
+    audio_key: str | None = None
+
+
+class APISpatialEffectSummary(BaseModel):
+    """Exact observed identity and presentation of one effect on a tile."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    uuid: str = Field(description="Encounter-local effect instance UUID.")
+    content_ref: APIContentRefSnapshot
+    layer: Literal["ground_surface", "cloud", "field"]
+    anchor_kind: Literal[
+        "fixed_position",
+        "entity",
+        "world_object",
+        "independent_movable",
+    ]
+    safe_presentation_ref: SafeContentPresentationRef
+    presentation: APISpatialEffectPresentation
+
+    @model_validator(mode="after")
+    def validate_spatial_identity(self) -> "APISpatialEffectSummary":
+        if self.content_ref.definition_kind != "spatial_effect":
+            raise ValueError(
+                "spatial effect summary requires a spatial_effect content ref",
+            )
+        return self
 
 
 class APIItemSummary(BaseModel):
@@ -321,7 +360,6 @@ class APIEntitySummary(BaseModel):
         description="Active condition names and categories for UI filters.",
     )
     life_state: LifeState = Field(description="Authoritative creature lifecycle state.")
-    is_dead: bool = Field(description="Whether the authoritative lifecycle state is dead.")
     faction: Optional[str] = Field(
         default=None,
         description="Optional faction identifier used for ally/enemy grouping.",
@@ -366,8 +404,6 @@ class APIEntitySummary(BaseModel):
         detail_names = [detail.name for detail in self.condition_details]
         if self.conditions != detail_names:
             raise ValueError("conditions must equal condition detail names in order")
-        if self.is_dead is not (self.life_state is LifeState.DEAD):
-            raise ValueError("is_dead must derive from life_state")
         return self
 
 
@@ -447,6 +483,13 @@ class APITile(BaseModel):
         default_factory=list,
         description="Authoritative public condition details visible on the tile.",
     )
+    spatial_effects: List[APISpatialEffectSummary] = Field(
+        default_factory=list,
+        description=(
+            "Exact independently owned spatial phenomena currently observed "
+            "on this tile."
+        ),
+    )
     light_level: int = Field(default=3, description="Resolved light level enum value.")
     directional_blocks_movement: APIDirectionalBlockMap = Field(
         description="Directional movement blockers keyed by compass direction."
@@ -497,16 +540,6 @@ class APICombatant(BaseModel):
         default=None,
         description="Authoritative lifecycle state when the entity still resolves.",
     )
-    is_dead: bool = Field(description="Whether the authoritative lifecycle state is dead.")
-
-    @model_validator(mode="after")
-    def validate_life_state_projection(self) -> "APICombatant":
-        if (
-            self.life_state is not None
-            and self.is_dead is not (self.life_state is LifeState.DEAD)
-        ):
-            raise ValueError("is_dead must derive from life_state")
-        return self
 
 
 class APIEncounter(BaseModel):

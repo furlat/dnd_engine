@@ -40,7 +40,6 @@ from dnd.actions import (
     Attack,
     AttackEvent,
     entity_action_economy_cost_evaluator,
-    entity_action_economy_cost_applier,
 )
 
 
@@ -413,18 +412,6 @@ class PrepareIntercept(BaseAction):
             new_phase=EventPhase.COMPLETION,
             status_message=f"Prepared Intercept at {self.end_position}",
         )
-
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
-        """Spend the action cost after successful completion.
-
-        Args:
-            completion_event: Completed action event.
-
-        Returns:
-            Completion event after action-economy cost application.
-        """
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
-
 
 def dodge_roll_processor(event: Event, source_entity_uuid: UUID) -> Optional[Event]:
     """Move a defender away from an incoming attack and impose disadvantage.

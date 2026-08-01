@@ -165,6 +165,7 @@ def test_invalid_attack_cancels_before_rolls_damage_or_costs() -> None:
     assert isinstance(event, AttackEvent)
     assert event.canceled
     assert event.phase == EventPhase.CANCEL
+    assert event.status_message is not None
     assert "not in reach" in event.status_message
     assert hero.action_economy.actions.normalized_score == 1
     assert enemy.get_hp() == enemy.get_max_hp()

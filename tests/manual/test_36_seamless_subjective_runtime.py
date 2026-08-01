@@ -42,7 +42,7 @@ from ai.subjective.runtime import (
     SubjectiveRuntime,
     SubjectiveRuntimeClosedError,
 )
-from ai.subjective.runtime_gc import (
+from dnd.ai.runtime_gc import (
     AutomaticGcLease,
     PRESERVE_AUTOMATIC_GC,
     automatic_gc_suspended,
@@ -1312,8 +1312,8 @@ def test_epoch_clear_for_previous_actor_does_not_invalidate_current_server_epoch
     assert frames == []
 
 
-def test_published_epoch_timing_breaks_down_available_action_discovery() -> None:
-    """Decision-epoch timing exposes the action-discovery phases agents wait on."""
+def test_published_epoch_timing_uses_canonical_epoch_boundaries() -> None:
+    """Decision-epoch diagnostics time construction, projection, and append."""
     _client, session_id, _hero, _monster, _encounter = create_observation_game()
     timing = event_server._ServerCommandTiming("epoch", diagnostics_enabled=True)
 
@@ -1325,21 +1325,18 @@ def test_published_epoch_timing_breaks_down_available_action_discovery() -> None
     phases = timing.payload()["phases"]
 
     assert epoch is not None
-    assert "publish.followup_epoch.get_available_actions_ms" in phases
-    assert "publish.followup_epoch.available_actions.potential_targets_ms" in phases
-    assert "publish.followup_epoch.available_actions.collect_entity_actions_ms" in phases
-    assert "publish.followup_epoch.available_actions.entity_actions.target_pool_total_ms" in phases
-    assert "publish.followup_epoch.available_actions.entity_actions.validate_targets_total_ms" in phases
-    assert "publish.followup_epoch.available_actions.entity_actions.make_info_total_ms" in phases
-    assert "publish.followup_epoch.available_actions.collect_path_actions_ms" in phases
-    assert "publish.followup_epoch.build_capabilities.registered_variants_ms" in phases
-    assert "publish.followup_epoch.build_capabilities.inventory_sources_ms" in phases
-    assert "publish.followup_epoch.build_capabilities.metadata_and_models_ms" in phases
-    assert "publish.followup_epoch.build_capabilities.total_ms" in phases
-    assert "publish.followup_epoch.action_economy.actions_normalized_score_ms" in phases
-    assert "publish.followup_epoch.action_economy.meaningful_rows_ms" in phases
-    assert "publish.followup_epoch.action_economy.construct_model_ms" in phases
-    assert "publish.followup_epoch.serialize_available_actions_ms" not in phases
+    assert "publish.followup_epoch.get_observation_cursor_ms" in phases
+    assert "publish.followup_epoch.build_decision_epoch_total_ms" in phases
+    assert "publish.followup_epoch.append_decision_epoch_total_ms" in phases
+    assert "publish.followup_epoch.store_current_epoch_ms" in phases
+    assert any(
+        phase.startswith("publish.followup_epoch.projection.")
+        for phase in phases
+    )
+    assert not any(
+        phase.startswith("publish.followup_epoch.available_actions.")
+        for phase in phases
+    )
 
 
 def test_position_aoe_action_lifecycle_timing_records_convolution_phases() -> None:

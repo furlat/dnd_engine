@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import ast
 from pathlib import Path
-from types import MappingProxyType
 from uuid import uuid4
 
 import pytest
@@ -56,23 +55,20 @@ _LEGACY_SYMBOLS = frozenset({
 })
 
 
-def test_spell_item_declarations_and_recipe_map_are_exact() -> None:
-    """Ten possession roots own reviewed descriptors and exact recipes."""
+def test_spell_item_declarations_and_recipes_are_exact() -> None:
+    """Ten possession roots own reviewed descriptors and canonical recipes."""
     declarations = spell_items.NEURODRAGON_SPELL_ITEM_DECLARATIONS
-    recipes = spell_items.NEURODRAGON_SPELL_ITEM_RECIPES_BY_LEGACY_ID
-
-    assert isinstance(recipes, MappingProxyType)
-    assert tuple(recipes) == (
-        "scroll_of_fireball",
-        "scroll_of_magic_missile",
-        "scroll_of_hold_person",
-        "scroll_of_mage_armor",
-        "scroll_of_spike_growth",
-        "scroll_of_fire_bolt",
-        "wand_of_magic_missiles",
-        "wand_of_fire",
-        "acid_flask",
-        "scroll_of_invisibility",
+    recipes = (
+        spell_items.FIREBALL_SCROLL_RECIPE,
+        spell_items.MAGIC_MISSILE_SCROLL_RECIPE,
+        spell_items.HOLD_PERSON_SCROLL_RECIPE,
+        spell_items.MAGE_ARMOR_SCROLL_RECIPE,
+        spell_items.SPIKE_GROWTH_SCROLL_RECIPE,
+        spell_items.FIRE_BOLT_SCROLL_RECIPE,
+        spell_items.WAND_OF_MAGIC_MISSILES_RECIPE,
+        spell_items.WAND_OF_FIRE_RECIPE,
+        spell_items.ACID_FLASK_RECIPE,
+        spell_items.INVISIBILITY_SCROLL_RECIPE,
     )
     assert tuple(row.ref.content_id for row in declarations) == (
         "spell_item.scroll_fireball",
@@ -86,10 +82,13 @@ def test_spell_item_declarations_and_recipe_map_are_exact() -> None:
         "consumable.acid_flask",
         "spell_item.scroll_invisibility",
     )
+    assert tuple(recipe.ref for recipe in recipes) == tuple(
+        declaration.ref for declaration in declarations
+    )
     assert set(declarations).issubset(
         set(scan_module_content_declarations(spell_items)),
     )
-    for declaration in declarations:
+    for declaration, recipe in zip(declarations, recipes, strict=True):
         assert declaration.ref.pack_id == "content.neurodragon"
         assert declaration.descriptor.visibility.value == "public"
         assert declaration.descriptor.presentation.icon_key is not None
@@ -102,16 +101,7 @@ def test_spell_item_declarations_and_recipe_map_are_exact() -> None:
             declaration.item_definition.persistence_policy
             is ItemPersistencePolicy.POSSESSION
         )
-        assert recipes[
-            next(
-                legacy_id
-                for legacy_id, recipe in recipes.items()
-                if recipe.ref == declaration.ref
-            )
-        ].ref == declaration.ref
-
-    with pytest.raises(TypeError):
-        recipes["acid_flask"] = recipes["wand_of_fire"]  # type: ignore[index]
+        assert recipe.ref == declaration.ref
 
 
 def test_spell_item_dependency_closure_targets_exact_metadata_identities() -> None:
@@ -285,47 +275,42 @@ def test_all_spell_item_templates_are_bound_to_their_exact_item_root() -> None:
     """Every declared granted template remains item-rooted through cloning."""
     reset_engine_runtime(grid_size=(5, 4))
     owner = Entity.create(source_entity_uuid=uuid4(), name="Spell item bearer")
-    expected_templates_by_item = {
-        "scroll_of_fireball": (
+    expected_templates_by_recipe = (
+        (spell_items.FIREBALL_SCROLL_RECIPE, (
             (spell_items.FIREBALL_DECLARATION.ref, 1, 3, 5),
-        ),
-        "scroll_of_magic_missile": (
+        )),
+        (spell_items.MAGIC_MISSILE_SCROLL_RECIPE, (
             (spell_items.MAGIC_MISSILE_DECLARATION.ref, 1, 1, 1),
-        ),
-        "scroll_of_hold_person": (
+        )),
+        (spell_items.HOLD_PERSON_SCROLL_RECIPE, (
             (spell_items.HOLD_PERSON_DECLARATION.ref, 1, 2, 3),
-        ),
-        "scroll_of_mage_armor": (
+        )),
+        (spell_items.MAGE_ARMOR_SCROLL_RECIPE, (
             (spell_items.MAGE_ARMOR_DECLARATION.ref, 1, 1, 1),
-        ),
-        "scroll_of_spike_growth": (
+        )),
+        (spell_items.SPIKE_GROWTH_SCROLL_RECIPE, (
             (spell_items.SPIKE_GROWTH_DECLARATION.ref, 1, 2, 3),
-        ),
-        "scroll_of_fire_bolt": (
+        )),
+        (spell_items.FIRE_BOLT_SCROLL_RECIPE, (
             (spell_items.FIRE_BOLT_DECLARATION.ref, 1, 0, 5),
-        ),
-        "wand_of_magic_missiles": (
+        )),
+        (spell_items.WAND_OF_MAGIC_MISSILES_RECIPE, (
             (spell_items.MAGIC_MISSILE_DECLARATION.ref, 1, 1, 1),
-        ),
-        "wand_of_fire": (
+        )),
+        (spell_items.WAND_OF_FIRE_RECIPE, (
             (spell_items.BURNING_HANDS_DECLARATION.ref, 1, 1, 1),
             (spell_items.FIREBALL_DECLARATION.ref, 3, 3, 5),
             (spell_items.FIREBALL_DECLARATION.ref, 4, 4, 7),
-        ),
-        "acid_flask": (
+        )),
+        (spell_items.ACID_FLASK_RECIPE, (
             (spell_items.ACID_FLASK_SPELL_DECLARATION.ref, 1, 0, 1),
-        ),
-        "scroll_of_invisibility": (
+        )),
+        (spell_items.INVISIBILITY_SCROLL_RECIPE, (
             (spell_items.INVISIBILITY_DECLARATION.ref, 1, 2, 3),
-        ),
-    }
-    assert tuple(
-        spell_items.NEURODRAGON_SPELL_ITEM_RECIPES_BY_LEGACY_ID
-    ) == tuple(expected_templates_by_item)
+        )),
+    )
 
-    for legacy_id, recipe in (
-        spell_items.NEURODRAGON_SPELL_ITEM_RECIPES_BY_LEGACY_ID.items()
-    ):
+    for recipe, expected_templates in expected_templates_by_recipe:
         item = materialize_item(
             recipe,
             owner.uuid,
@@ -333,7 +318,6 @@ def test_all_spell_item_templates_are_bound_to_their_exact_item_root() -> None:
             expected_type=spell_items.SpellGrantingItem,
         )
         assert item.content_ref == recipe.ref
-        expected_templates = expected_templates_by_item[legacy_id]
         actual_templates = tuple(
             (
                 get_content_declaration(type(template)).ref,

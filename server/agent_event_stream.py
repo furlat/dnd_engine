@@ -135,10 +135,6 @@ class AgentEventStream:
         self._publish(session_id, "agent_event", payload)
         return payload
 
-    def publish_many(self, session_id: str, events: list[AgentEvent | dict[str, Any]]) -> list[AgentEventPayload]:
-        """Publish several events."""
-        return [self.publish(session_id, event) for event in events]
-
     def iter_agent_events_since(self, session_id: str, since: int, limit: int = 100) -> list[AgentEventPayload]:
         """Return agent events after a cursor."""
         start = max(0, since)

@@ -8,14 +8,13 @@ the only place where legacy evidence may be consulted.
 
 from __future__ import annotations
 
-import hashlib
-import json
 from enum import Enum
 from pathlib import Path
 from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from dnd.core.content.canonical import canonical_content_sha256
 from dnd.core.content.descriptors import (
     ContentVisibility,
 )
@@ -43,14 +42,7 @@ CONTENT_ICON_BINDING_LEDGER_PATH = (
 
 
 def _canonical_digest(value: object) -> str:
-    encoded = json.dumps(
-        value,
-        allow_nan=False,
-        ensure_ascii=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode("utf-8")
-    return hashlib.sha256(encoded).hexdigest()
+    return canonical_content_sha256(value)
 
 
 class IconBindingDecision(str, Enum):

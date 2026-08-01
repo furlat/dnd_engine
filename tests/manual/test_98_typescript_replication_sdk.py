@@ -327,7 +327,7 @@ def test_sdk_preserves_exact_compound_equipment_presentation_contract() -> None:
     )
     assert models[catalog_path]["fields"]["schema_version"] == {
         "kind": "union",
-        "items": [{"kind": "literal", "value": 6}],
+            "items": [{"kind": "literal", "value": 7}],
     }
 
 
@@ -356,7 +356,7 @@ def test_neuroclient_routes_publish_concrete_backend_response_models() -> None:
         ("/game-creation/start", "POST"): GameCreationStartResponse,
         ("/game-creation/activate", "POST"): GameCreationActivateResponse,
         ("/entity/{entity_uuid}/handlers", "GET"): APIEntityHandlersResponse,
-        ("/entity/{entity_uuid}/handlers/{handler_name}/toggle", "POST"): ToggleHandlerResponse,
+        ("/entity/{entity_uuid}/handlers/{handler_uuid}/toggle", "POST"): ToggleHandlerResponse,
         ("/entity/{entity_uuid}/equippable-items", "GET"): APIEquippableItems,
         ("/entity/{entity_uuid}/equip", "POST"): EquipmentMutationResult,
         ("/entity/{entity_uuid}/unequip", "POST"): EquipmentMutationResult,

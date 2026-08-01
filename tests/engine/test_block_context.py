@@ -6,8 +6,16 @@ from uuid import UUID, uuid4
 from pydantic import Field
 
 from dnd.core.base_block import BaseBlock
-from dnd.core.base_conditions import BaseCondition, Duration
-from dnd.core.condition_types import DurationType
+from dnd.core.base_conditions import (
+    BaseCondition,
+    ConditionApplicationEvent,
+    Duration,
+    MostPotentCondition,
+)
+from dnd.core.condition_types import (
+    ConditionApplicationDisposition,
+    DurationType,
+)
 from dnd.core.base_object import BaseObject
 from dnd.core.events import Event, EventHandler, EventPhase, EventQueue, EventType, Trigger
 from dnd.core.modifiers import NumericalModifier
@@ -65,6 +73,43 @@ class ValueBonusCondition(BaseCondition):
         modifier_uuid = value.self_static.add_value_modifier(modifier)
         event = event.phase_to(EventPhase.EFFECT)
         return [(value.uuid, modifier_uuid)], [], [], [], event
+
+
+class MostPotentValueBonusCondition(MostPotentCondition):
+    """Pure modifier condition used to exercise source-lease arbitration."""
+
+    name: str = "MostPotentValueBonusCondition"
+    target_value_uuid: UUID = Field(description="Value receiving the winner.")
+    bonus: int = Field(description="Bonus and authored potency for this source.")
+
+    def _apply(
+        self,
+        declaration_event: Event,
+    ) -> tuple[
+        list[tuple[UUID, UUID]],
+        list[UUID],
+        list[UUID],
+        list[UUID],
+        Optional[Event],
+    ]:
+        value = ModifiableValue.get(self.target_value_uuid)
+        if value is None:
+            raise AssertionError(f"Missing value {self.target_value_uuid}")
+        modifier_uuid = value.self_static.add_value_modifier(
+            NumericalModifier(
+                name="Most Potent Engine Bonus",
+                value=self.bonus,
+                source_entity_uuid=self.source_entity_uuid,
+                target_entity_uuid=self.target_entity_uuid,
+            ),
+        )
+        return (
+            [(value.uuid, modifier_uuid)],
+            [],
+            [],
+            [],
+            declaration_event.phase_to(EventPhase.EFFECT),
+        )
 
 
 class NoEffectCondition(BaseCondition):
@@ -238,6 +283,7 @@ def test_eb_05_004_conditions_are_gated_by_allow_events_conditions() -> None:
     assert inert_block.add_condition(condition) is None
     assert inert_block.active_conditions == {}
     assert condition.applied is False
+    assert BaseCondition.get(condition.uuid) is None
 
     active_block = make_parent_block(source_uuid)
     active_block.allow_events_conditions = True
@@ -363,6 +409,31 @@ def test_eb_05_007_event_handlers_are_owned_and_removed_by_block() -> None:
     block.remove_event_handler(handler)
     assert handler.uuid not in block.event_handlers
     assert handler.uuid not in EventQueue._event_handlers
+    assert EventHandler.get(handler.uuid) is None
+
+
+def test_inert_block_retires_rejected_handler_identity() -> None:
+    """A handler rejected by an inert block must not remain globally addressable."""
+    reset_block_state()
+    source_uuid = uuid4()
+    block = make_parent_block(source_uuid)
+    handler = EventHandler(
+        source_entity_uuid=source_uuid,
+        name="Rejected handler",
+        trigger_conditions=[
+            Trigger(
+                event_type=EventType.BASE_ACTION,
+                event_phase=EventPhase.EXECUTION,
+            )
+        ],
+        event_processor=lambda event, _: event,
+    )
+
+    block.add_event_handler(handler)
+
+    assert handler.uuid not in block.event_handlers
+    assert handler.uuid not in EventQueue._event_handlers
+    assert EventHandler.get(handler.uuid) is None
 
 
 def test_eb_05_011_handler_toggles_only_affect_player_toggleable_handlers() -> None:
@@ -403,9 +474,12 @@ def test_eb_05_011_handler_toggles_only_affect_player_toggleable_handlers() -> N
     block.add_event_handler(locked_handler)
     block.add_event_handler(toggleable_handler)
 
-    assert block.set_handler_enabled("Locked Handler", False) is False
+    assert block.set_handler_enabled_by_uuid(locked_handler.uuid, False) is False
     assert locked_handler.enabled is True
-    assert block.set_handler_enabled("Toggleable Handler", False) is True
+    assert (
+        block.set_handler_enabled_by_uuid(toggleable_handler.uuid, False)
+        is True
+    )
     assert toggleable_handler.enabled is False
 
     Event(
@@ -585,6 +659,115 @@ def test_eb_05_014_duplicate_name_replacement_updates_source_indexes() -> None:
     assert first_modifier_uuid not in block.direct_value.self_static.value_modifiers
     assert second_modifier_uuid in block.direct_value.self_static.value_modifiers
     assert block.direct_value.normalized_score == base_score + 6
+
+
+def test_most_potent_condition_never_downgrades_and_promotes_fallback() -> None:
+    """A weaker lease stays dormant and returns when the stronger source ends."""
+    reset_block_state()
+    first_source_uuid = uuid4()
+    weaker_source_uuid = uuid4()
+    stronger_source_uuid = uuid4()
+    block = make_parent_block(first_source_uuid)
+    block.allow_events_conditions = True
+    base_score = block.direct_value.normalized_score
+
+    incumbent = MostPotentValueBonusCondition(
+        source_entity_uuid=first_source_uuid,
+        target_entity_uuid=block.uuid,
+        target_value_uuid=block.direct_value.uuid,
+        bonus=3,
+        potency_rank=(3,),
+    )
+    weaker = MostPotentValueBonusCondition(
+        source_entity_uuid=weaker_source_uuid,
+        target_entity_uuid=block.uuid,
+        target_value_uuid=block.direct_value.uuid,
+        bonus=1,
+        potency_rank=(1,),
+    )
+    stronger = MostPotentValueBonusCondition(
+        source_entity_uuid=stronger_source_uuid,
+        target_entity_uuid=block.uuid,
+        target_value_uuid=block.direct_value.uuid,
+        bonus=5,
+        potency_rank=(5,),
+    )
+
+    block.add_condition(incumbent)
+    weaker_event = block.add_condition(weaker)
+
+    assert isinstance(weaker_event, ConditionApplicationEvent)
+    assert (
+        weaker_event.application_disposition
+        is ConditionApplicationDisposition.RETAINED_STRONGER
+    )
+    assert block.direct_value.normalized_score == base_score + 3
+    assert block.active_conditions[incumbent.name] is incumbent
+    assert weaker.applied is False
+
+    block.add_condition(stronger)
+
+    assert block.direct_value.normalized_score == base_score + 5
+    assert block.active_conditions[incumbent.name] is stronger
+    assert incumbent.applied is False
+    assert tuple(
+        lease.uuid
+        for lease in block.get_condition_application_leases(incumbent.name)
+    ) == (incumbent.uuid, weaker.uuid, stronger.uuid)
+
+    assert block.remove_condition_by_uuid(weaker.uuid)
+    assert block.direct_value.normalized_score == base_score + 5
+    assert block.remove_condition_by_uuid(stronger.uuid)
+
+    assert block.direct_value.normalized_score == base_score + 3
+    assert block.active_conditions[incumbent.name] is incumbent
+    assert incumbent.applied is True
+
+
+def test_most_potent_condition_ages_dormant_sources_and_promotes_once() -> None:
+    """All source lifetimes tick once while only the strongest is manifested."""
+    reset_block_state()
+    weaker_source_uuid = uuid4()
+    stronger_source_uuid = uuid4()
+    block = make_parent_block(weaker_source_uuid)
+    block.allow_events_conditions = True
+    base_score = block.direct_value.normalized_score
+
+    weaker = MostPotentValueBonusCondition(
+        source_entity_uuid=weaker_source_uuid,
+        target_entity_uuid=block.uuid,
+        target_value_uuid=block.direct_value.uuid,
+        bonus=3,
+        potency_rank=(3,),
+        duration=Duration(
+            source_entity_uuid=weaker_source_uuid,
+            target_entity_uuid=block.uuid,
+            duration=3,
+            duration_type=DurationType.ROUNDS,
+        ),
+    )
+    stronger = MostPotentValueBonusCondition(
+        source_entity_uuid=stronger_source_uuid,
+        target_entity_uuid=block.uuid,
+        target_value_uuid=block.direct_value.uuid,
+        bonus=5,
+        potency_rank=(5,),
+        duration=Duration(
+            source_entity_uuid=stronger_source_uuid,
+            target_entity_uuid=block.uuid,
+            duration=1,
+            duration_type=DurationType.ROUNDS,
+        ),
+    )
+
+    block.add_condition(weaker)
+    block.add_condition(stronger)
+
+    assert block.advance_duration(stronger.name)
+    assert stronger.duration.duration == 0
+    assert weaker.duration.duration == 2
+    assert block.active_conditions[weaker.name] is weaker
+    assert block.direct_value.normalized_score == base_score + 3
 
 
 def test_eb_05_010_no_effect_condition_returns_cancel_without_indexing() -> None:

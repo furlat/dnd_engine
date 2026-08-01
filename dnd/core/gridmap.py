@@ -2,7 +2,7 @@
 
 import math
 import time
-from typing import Any, Dict, List, Optional, Tuple, Set, DefaultDict, cast
+from typing import Any, Dict, List, Optional, Tuple, Set, DefaultDict
 from uuid import UUID, uuid4
 from collections import OrderedDict, defaultdict
 
@@ -14,6 +14,10 @@ from dnd.core.dijkstra import breadth_first_paths, dijkstra
 from dnd.core.base_block import BaseBlock, MovementMode, LightLevel
 from dnd.core.base_tiles import Tile
 from dnd.core.events import Event, SpatialChangeEvent, SpatialChangeType, EventPhase, EventQueue, EventType, SensesUpdateHint
+from dnd.core.spatial_effect_types import (
+    SpatialEffectLayer,
+    SpatialEffectOccupancyPolicy,
+)
 from dnd.action_timing import action_timing_enabled, record_action_elapsed, record_action_timing
 
 DIRECTIONS: Tuple[str, ...] = ("north", "south", "east", "west")
@@ -57,6 +61,13 @@ class GridMap:
 
         self._object_positions: Dict[UUID, Tuple[int, int]] = {}
         self._objects_by_position: DefaultDict[Tuple[int, int], Set[UUID]] = defaultdict(set)
+
+        self._spatial_effect_positions: Dict[UUID, Set[Tuple[int, int]]] = {}
+        self._spatial_effect_layers: Dict[UUID, SpatialEffectLayer] = {}
+        self._spatial_effects_by_position: DefaultDict[
+            Tuple[SpatialEffectLayer, Tuple[int, int]],
+            Set[UUID],
+        ] = defaultdict(set)
 
         self._cell_subscribers: DefaultDict[Tuple[int, int], Set[UUID]] = defaultdict(set)
         self._entity_subscriptions: DefaultDict[UUID, Set[Tuple[int, int]]] = defaultdict(set)
@@ -148,24 +159,7 @@ class GridMap:
             self._pending_events.append(event)
             return None
 
-        current_event = cast(SpatialChangeEvent, EventQueue.register(event))
-        if current_event.canceled:
-            return None
-
-        current_event = current_event.phase_to(EventPhase.EXECUTION)
-        current_event = cast(SpatialChangeEvent, EventQueue.register(current_event))
-        if current_event.canceled:
-            return None
-
-        current_event = current_event.phase_to(EventPhase.EFFECT)
-        current_event = cast(SpatialChangeEvent, EventQueue.register(current_event))
-        if current_event.canceled:
-            return None
-
-        current_event = current_event.phase_to(EventPhase.COMPLETION)
-        current_event = cast(SpatialChangeEvent, EventQueue.register(current_event))
-
-        return current_event
+        return EventQueue.publish_lifecycle(event)
 
     def enable_events(self) -> None:
         """Enable event firing and flush pending events through full lifecycle."""
@@ -489,6 +483,8 @@ class GridMap:
                     change_type=SpatialChangeType.TILE_REMOVED,
                     position=position,
                     senses_hint=hint,
+                    phase=EventPhase.DECLARATION,
+                    use_register=False,
                 )
                 self._fire_spatial_event(event)
 
@@ -523,7 +519,7 @@ class GridMap:
 
     def is_position_hazardous_for(self, x: int, y: int,
                                   entity_uuid: Optional[UUID] = None) -> bool:
-        """Return whether tile or placed-object hazards affect an entity."""
+        """Return whether tile, object, or spatial-effect hazards affect an entity."""
         tile = self.get_tile(x, y)
         if tile is not None and tile.is_hazardous_for(entity_uuid):
             return True
@@ -533,17 +529,122 @@ class GridMap:
             if obj is not None and obj.is_hazardous_for(entity_uuid):
                 return True
 
+        for effect in self.get_spatial_effect_blocks_at((x, y)):
+            if effect.is_hazardous_for(entity_uuid):
+                return True
+
         return False
 
     def has_any_hazards(self) -> bool:
-        """Return whether any tile or placed object currently declares a hazard."""
+        """Return whether any indexed world block currently declares a hazard."""
         for tile in self.get_tiles_with_conditions():
             if any(condition.hazard_filter is not None for condition in tile.active_conditions.values()):
                 return True
         for obj in self.get_objects_with_conditions():
             if any(condition.hazard_filter is not None for condition in obj.active_conditions.values()):
                 return True
+        for effect in self.get_spatial_effects_with_conditions():
+            if any(
+                condition.hazard_filter is not None
+                for condition in effect.active_conditions.values()
+            ):
+                return True
         return False
+
+    def set_spatial_effect_positions(
+        self,
+        *,
+        effect_uuid: UUID,
+        layer: SpatialEffectLayer,
+        occupancy_policy: SpatialEffectOccupancyPolicy,
+        positions: Set[Tuple[int, int]],
+    ) -> None:
+        """Replace one effect's indexed footprint after validating occupancy."""
+        if any(position not in self._tiles for position in positions):
+            raise ValueError("Spatial effect positions must identify existing tiles")
+
+        if occupancy_policy is SpatialEffectOccupancyPolicy.EXCLUSIVE_TRANSFORMING:
+            for position in positions:
+                occupants = self._spatial_effects_by_position.get(
+                    (layer, position),
+                    set(),
+                ) - {effect_uuid}
+                if occupants:
+                    raise ValueError(
+                        f"{layer.value} cell {position} already has an effect",
+                    )
+
+        previous_layer = self._spatial_effect_layers.get(effect_uuid)
+        previous_positions = self._spatial_effect_positions.get(effect_uuid, set())
+        if previous_layer is not None:
+            for position in previous_positions:
+                key = (previous_layer, position)
+                self._spatial_effects_by_position[key].discard(effect_uuid)
+                if not self._spatial_effects_by_position[key]:
+                    del self._spatial_effects_by_position[key]
+
+        self._spatial_effect_layers[effect_uuid] = layer
+        self._spatial_effect_positions[effect_uuid] = set(positions)
+        for position in positions:
+            self._spatial_effects_by_position[(layer, position)].add(effect_uuid)
+
+    def remove_spatial_effect(self, effect_uuid: UUID) -> None:
+        """Remove one effect from every layer/cell index."""
+        layer = self._spatial_effect_layers.pop(effect_uuid, None)
+        positions = self._spatial_effect_positions.pop(effect_uuid, set())
+        if layer is None:
+            return
+        for position in positions:
+            key = (layer, position)
+            self._spatial_effects_by_position[key].discard(effect_uuid)
+            if not self._spatial_effects_by_position[key]:
+                del self._spatial_effects_by_position[key]
+
+    def get_spatial_effect_uuids_at(
+        self,
+        position: Tuple[int, int],
+        *,
+        layer: Optional[SpatialEffectLayer] = None,
+    ) -> Set[UUID]:
+        """Return indexed effect UUIDs at one position."""
+        if layer is not None:
+            return set(self._spatial_effects_by_position.get((layer, position), set()))
+        effect_uuids: Set[UUID] = set()
+        for candidate_layer in SpatialEffectLayer:
+            effect_uuids.update(
+                self._spatial_effects_by_position.get(
+                    (candidate_layer, position),
+                    set(),
+                )
+            )
+        return effect_uuids
+
+    def get_spatial_effect_blocks_at(
+        self,
+        position: Tuple[int, int],
+        *,
+        layer: Optional[SpatialEffectLayer] = None,
+    ) -> List[BaseBlock]:
+        """Resolve indexed effects without importing concrete runtime classes."""
+        return [
+            block
+            for effect_uuid in sorted(
+                self.get_spatial_effect_uuids_at(position, layer=layer),
+                key=str,
+            )
+            if (block := BaseBlock.get(effect_uuid)) is not None
+        ]
+
+    def get_spatial_effects_with_conditions(self) -> List[BaseBlock]:
+        """Return each indexed effect block once for environment progression."""
+        return [
+            block
+            for effect_uuid in sorted(self._spatial_effect_positions, key=str)
+            if (
+                (block := BaseBlock.get(effect_uuid)) is not None
+                and block.active_conditions
+            )
+        ]
 
     def is_walkable_for(self, x: int, y: int, requesting_entity_uuid: Optional[UUID] = None,
                         mode: MovementMode = MovementMode.WALKING,
@@ -574,6 +675,19 @@ class GridMap:
             block = BaseBlock.get(obj_uuid)
             if block is not None and block.blocks_walking(requesting_entity_uuid, mode):
                 if subjective and not block.is_perceivable_by(requesting_entity_uuid):
+                    continue
+                return False
+
+        for block in self.get_spatial_effect_blocks_at((x, y)):
+            if block.blocks_walking_at(
+                (x, y),
+                requesting_entity_uuid,
+                mode,
+            ):
+                if (
+                    subjective
+                    and not block.is_perceivable_by(requesting_entity_uuid)
+                ):
                     continue
                 return False
 
@@ -1032,6 +1146,14 @@ class GridMap:
             if block is not None and block.blocks_walking(requesting_entity_uuid, mode):
                 return block.name
 
+        for block in self.get_spatial_effect_blocks_at(position):
+            if block.blocks_walking_at(
+                position,
+                requesting_entity_uuid,
+                mode,
+            ):
+                return block.name
+
         return "obstacle"
 
     def _update_bounds(self) -> None:
@@ -1125,6 +1247,20 @@ class GridMap:
                 **new_directional_metadata,
             )
             self._fire_spatial_event(event)
+
+    def unregister_entity(self, entity_uuid: UUID) -> None:
+        """Silently discard one unpublished entity from spatial ownership."""
+        position = self._entity_positions.pop(entity_uuid, None)
+        if position is not None:
+            occupants = self._entities_by_position.get(position)
+            if occupants is not None:
+                occupants.discard(entity_uuid)
+                if not occupants:
+                    self._entities_by_position.pop(position, None)
+            self.recompute_tile_directional_blocking(position)
+        self.unsubscribe_entity(entity_uuid)
+        self._block_light_suppressions.pop(entity_uuid, None)
+        self.invalidate_occupancy_paths()
 
     def move_entity(
         self,

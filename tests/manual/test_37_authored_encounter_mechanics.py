@@ -8,10 +8,11 @@ from dnd.core.base_block import BaseBlock, LightLevel
 from dnd.core.base_actions import ActionAvailabilityStatus, TargetType
 from dnd.core.base_tiles import MovementMode
 from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import EventPhase, EventQueue, EventType
+from dnd.core.events import EventPhase
 from dnd.core.creature_types import DamageType
 from dnd.core.gridmap import get_map
 from dnd.encounter import EncounterState
+from dnd.environmental_effects import SpikeTrapGroundEffect
 from dnd.entity import Entity
 from dnd.items.environment import DirectionalDoor
 from dnd.items.environment_interactables import StorageChest, TrapLever
@@ -32,6 +33,7 @@ from dnd.scenarios.encounter_catalog import (
     AUTHORED_ENCOUNTER_RECIPES,
     encounter_recipe,
 )
+from dnd.spatial_effects import SpatialEffect
 
 
 @dataclass(frozen=True)
@@ -374,7 +376,14 @@ def test_forced_movement_hazard_bridge_places_thunderwave_near_hazards() -> None
     assert water_tile is not None
     assert water_tile.walkable is False
     assert spike_tile is not None
-    assert "Spike Growth" in spike_tile.active_conditions or "Spike Trap" in spike_tile.active_conditions
+    assert spike_tile.active_conditions == {}
+    spike_effect = SpatialEffect.get_effect(
+        arena.environment.spike_effect_uuid,
+    )
+    assert isinstance(spike_effect, SpikeTrapGroundEffect)
+    assert arena.notable_positions["spike_zone_sample"] in (
+        spike_effect.affected_positions
+    )
 
 
 def test_line_aoe_corridor_aligns_multiple_targets_on_spell_lane() -> None:
@@ -581,7 +590,18 @@ def test_trap_lever_killzone_makes_hazard_object_use_available() -> None:
     assert any(isinstance(obj, TrapLever) for obj in lever_objects)
     assert any(name.startswith("Pull Lever") for name in available_action_display_names(lever_guard))
     assert spike_tile is not None
-    assert "Spike Growth" in spike_tile.active_conditions or "Spike Trap" in spike_tile.active_conditions
+    assert spike_tile.active_conditions == {}
+    spike_effect = SpatialEffect.get_effect(
+        arena.environment.spike_effect_uuid,
+    )
+    assert isinstance(spike_effect, SpikeTrapGroundEffect)
+    assert spike_effect.affected_positions == SPIKE_ZONE_POSITIONS
+    assert (
+        get_map().get_spatial_effect_uuids_at(
+            arena.notable_positions["spike_zone_sample"],
+        )
+        == {spike_effect.uuid}
+    )
 
 
 def test_trap_lever_killzone_deactivates_handler_markers_and_hazard_routing() -> None:
@@ -611,17 +631,16 @@ def test_trap_lever_killzone_deactivates_handler_markers_and_hazard_routing() ->
     assert event.phase is EventPhase.COMPLETION
     assert lever.charges == 0
     assert arena.environment is not None
+    assert (
+        SpatialEffect.get_effect(arena.environment.spike_effect_uuid)
+        is None
+    )
     for position in SPIKE_ZONE_POSITIONS:
         tile = get_map().get_tile(*position)
         assert tile is not None
         assert "Spike Trap" not in tile.active_conditions
         assert tile.is_hazardous_for(lever_guard.uuid) is False
-        handlers = EventQueue.get_spatial_handlers_at(
-            position,
-            EventType.SPATIAL_ENTITY_ENTERED,
-            EventPhase.EFFECT,
-        )
-        assert all(handler.uuid != arena.environment.spike_handler_uuid for handler in handlers)
+        assert get_map().get_spatial_effect_uuids_at(position) == set()
 
 
 def test_condition_lock_sanctum_uses_disabling_and_support_spell_surface() -> None:

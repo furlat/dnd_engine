@@ -3,14 +3,23 @@ from uuid import UUID, uuid4
 from enum import Enum
 from pydantic import BaseModel, Field, PrivateAttr, model_validator, computed_field, ConfigDict
 from dnd.core.values import ModifiableValue
-from dnd.core.base_conditions import BaseCondition
-from dnd.core.condition_types import HazardFilter
+from dnd.core.base_conditions import BaseCondition, MostPotentCondition
+from dnd.core.condition_types import (
+    ConditionApplicationDisposition,
+    ConditionApplicationPolicy,
+    HazardFilter,
+)
+from dnd.core.action_types import CostType
 from dnd.core.content.runtime import (
     bind_runtime_behavior,
     bind_runtime_handler_before_admission,
 )
-from dnd.core.events import EventHandler, EventQueue, Trigger, Event, SpatialChangeEvent, EventPhase
-from dnd.core.senses import SenseMode as SenseMode, SensesType as SensesType
+from dnd.core.events import EventHandler, EventQueue, Trigger, Event, SpatialChangeEvent
+from dnd.core.senses import (
+    SenseMode as SenseMode,
+    SensesType as SensesType,
+    SensesView,
+)
 
 from collections import defaultdict
 
@@ -99,6 +108,9 @@ class BaseBlock(BaseModel):
     is_invisible: bool = Field(default=False, exclude=True,
         description="Whether invisible. Set by Invisible condition.")
     _attached_light_sources: Set[UUID] = PrivateAttr(default_factory=set)
+    _condition_leases_by_family: Dict[str, List[BaseCondition]] = PrivateAttr(
+        default_factory=dict,
+    )
 
     active_conditions: Dict[str, BaseCondition] = Field(
         default_factory=dict,
@@ -329,6 +341,21 @@ class BaseBlock(BaseModel):
         Non-spatial blocks (Equipment, Health, etc.) inherit this default."""
         return False
 
+    def blocks_walking_at(
+        self,
+        position: Tuple[int, int],
+        requesting_entity_uuid: Optional[UUID] = None,
+        mode: 'MovementMode' = MovementMode.WALKING,
+    ) -> bool:
+        """Whether this block prevents traversal at one indexed position.
+
+        Ordinary spatial blocks occupy exactly one position and delegate to
+        ``blocks_walking``. Multi-cell world owners override this method
+        without requiring GridMap to know their concrete type.
+        """
+        del position
+        return self.blocks_walking(requesting_entity_uuid, mode)
+
     def blocks_vision(self, requesting_entity_uuid: Optional[UUID] = None) -> bool:
         """Whether this block prevents vision through its position.
         Non-spatial blocks inherit this default."""
@@ -376,19 +403,7 @@ class BaseBlock(BaseModel):
         re-evaluate their senses. Does not trigger SpatialHandlers (zone effects).
         """
         event = SpatialChangeEvent.perceivability_changed(self.position, self.uuid, parent_event=parent_event)
-        current = EventQueue.register(event)
-        if current.canceled:
-            return
-        current = current.phase_to(EventPhase.EXECUTION)
-        current = EventQueue.register(current)
-        if current.canceled:
-            return
-        current = current.phase_to(EventPhase.EFFECT)
-        current = EventQueue.register(current)
-        if current.canceled:
-            return
-        current = current.phase_to(EventPhase.COMPLETION)
-        EventQueue.register(current)
+        EventQueue.publish_lifecycle(event)
 
     def get_passive_perception(self) -> int:
         """Return passive perception for this block as an observer."""
@@ -406,7 +421,7 @@ class BaseBlock(BaseModel):
         """Return sense modes for this block as an observer."""
         return []
 
-    def get_senses(self) -> Optional[Self]:
+    def get_senses(self) -> Optional[SensesView]:
         """Override in Entity to return Senses block for subjective perception."""
         return None
 
@@ -434,6 +449,22 @@ class BaseBlock(BaseModel):
         Only owners with an action economy override this neutral boundary.
         """
         return False
+
+    def consume_prevalidated_action_cost(
+        self,
+        cost_type: CostType,
+        amount: int,
+        cost_name: str,
+    ) -> bool:
+        """Commit one previously admitted action-economy cost.
+
+        Only blocks with an action economy override this capability.
+        """
+        return amount == 0
+
+    def consume_action_resource(self, resource_name: str, amount: int) -> bool:
+        """Consume one named action resource through the owner capability."""
+        return amount == 0
 
     def get_hp(self) -> int:
         """Override in Entity/BaseItem to return current HP. Default: 0 (no health system)."""
@@ -664,17 +695,6 @@ class BaseBlock(BaseModel):
         """
         return {block.name: block.uuid for block in self.get_blocks()}
 
-    def get_value_from_uuid(self, uuid: UUID) -> Optional[ModifiableValue]:
-        """Return a direct value by UUID.
-
-        Args:
-            uuid: UUID of the direct value to retrieve.
-
-        Returns:
-            Matching direct value, or `None`.
-        """
-        return self.values.get(uuid)
-
     def get_value_from_name(self, name: str) -> Optional[ModifiableValue]:
         """Return a direct value by name.
 
@@ -688,17 +708,6 @@ class BaseBlock(BaseModel):
             if value.name == name:
                 return value
         return None
-
-    def get_block_from_uuid(self, uuid: UUID) -> Optional['BaseBlock']:
-        """Return a direct child block by UUID.
-
-        Args:
-            uuid: UUID of the direct child block to retrieve.
-
-        Returns:
-            Matching direct child block, or `None`.
-        """
-        return self.blocks.get(uuid)
 
     def get_block_from_name(self, name: str) -> Optional['BaseBlock']:
         """Return a direct child block by name.
@@ -721,6 +730,7 @@ class BaseBlock(BaseModel):
             event_handler: Handler to add to this block and `EventQueue`.
         """
         if not self.allow_events_conditions:
+            event_handler.remove_from_register()
             return None
         bind_runtime_handler_before_admission(event_handler)
         event_handler.owner_block = self
@@ -784,22 +794,6 @@ class BaseBlock(BaseModel):
         name_lower = name.lower()
         return [h for h in self.event_handlers.values() if h.name.lower() == name_lower]
 
-    def set_handler_enabled(self, name: str, enabled: bool) -> bool:
-        """Set enabled state on the first matching player-toggleable handler.
-
-        Args:
-            name: Handler name to match case-insensitively.
-            enabled: New enabled state.
-
-        Returns:
-            True if a player-toggleable matching handler was updated.
-        """
-        handler = self.get_event_handler_by_name(name)
-        if handler is not None and handler.player_toggleable:
-            handler.enabled = enabled
-            return True
-        return False
-
     def set_handler_enabled_by_uuid(self, handler_uuid: UUID, enabled: bool) -> bool:
         """Set enabled state on a player-toggleable handler by UUID.
 
@@ -816,39 +810,302 @@ class BaseBlock(BaseModel):
             return True
         return False
 
-    def _remove_condition_from_dicts(self, condition: BaseCondition) -> None:
-        """Remove a condition from block-local condition indexes.
+    def _discard_uncommitted_condition_tree(
+        self,
+        condition: BaseCondition,
+    ) -> None:
+        """Rollback state created by a condition application that was rejected.
 
-        Args:
-            condition: Condition to remove from index dictionaries.
+        A canceled application never became an active gameplay fact, so its
+        provisional modifiers, handlers, child conditions, and registry
+        identities are discarded without publishing a removal lifecycle.
         """
-        if not self.allow_events_conditions:
+        for sub_uuid in list(condition.sub_conditions):
+            sub_condition = BaseCondition.get(sub_uuid)
+            if not isinstance(sub_condition, BaseCondition):
+                continue
+            self._discard_condition_indexes(sub_condition)
+            self._discard_uncommitted_condition_tree(sub_condition)
+
+        for target_uuid, child_uuid in list(condition.linked_conditions):
+            target_block = BaseBlock.get(target_uuid)
+            child_condition = BaseCondition.get(child_uuid)
+            if (
+                target_block is None
+                or not isinstance(child_condition, BaseCondition)
+            ):
+                continue
+            target_block._discard_condition_indexes(child_condition)
+            target_block._discard_uncommitted_condition_tree(child_condition)
+
+        condition.discard_uncommitted_runtime_state()
+
+        if condition.parent_condition is not None:
+            parent = BaseCondition.get(condition.parent_condition)
+            if (
+                isinstance(parent, BaseCondition)
+                and condition.uuid in parent.sub_conditions
+            ):
+                parent.sub_conditions.remove(condition.uuid)
+
+        self._remove_condition_owned_actions(condition)
+        condition.remove_from_register()
+
+    def _remove_condition_owned_actions(
+        self,
+        condition: BaseCondition,
+    ) -> None:
+        """Reject action ownership on blocks that do not own action templates."""
+        owned_action_uuids = condition.release_granted_actions()
+        if owned_action_uuids:
+            raise ValueError(
+                f"{type(self).__name__} cannot remove condition-owned actions",
+            )
+
+    def _discard_condition_indexes(self, condition: BaseCondition) -> None:
+        """Remove one exact condition from this block's local indexes."""
+        if (
+            condition.name is not None
+            and self.active_conditions.get(condition.name) is condition
+        ):
+            self.active_conditions.pop(condition.name)
+        self.active_conditions_by_uuid.pop(condition.uuid, None)
+        source_rows = self.active_conditions_by_source.get(
+            condition.source_entity_uuid,
+        )
+        if (
+            source_rows is not None
+            and condition.name is not None
+            and condition.name in source_rows
+        ):
+            source_rows.remove(condition.name)
+
+    def _register_condition_indexes(self, condition: BaseCondition) -> None:
+        """Index one manifested condition as this block's effective fact."""
+        if condition.name is None:
+            raise ValueError("BaseCondition name is not set")
+        self.active_conditions[condition.name] = condition
+        self.active_conditions_by_uuid[condition.uuid] = condition
+        source_rows = self.active_conditions_by_source[
+            condition.source_entity_uuid
+        ]
+        if condition.name not in source_rows:
+            source_rows.append(condition.name)
+
+    @staticmethod
+    def _condition_application_family(condition: BaseCondition) -> str:
+        """Return exact authored identity used for reapplication arbitration."""
+        return condition.get_semantic_key()
+
+    def get_condition_application_leases(
+        self,
+        condition_name: str,
+    ) -> Tuple[BaseCondition, ...]:
+        """Return every live source lease for one manifested condition."""
+        active = self.active_conditions.get(condition_name)
+        if active is None:
+            return ()
+        family = self._condition_application_family(active)
+        return tuple(self._condition_leases_by_family.get(family, ()))
+
+    def _remove_condition_lease_reference(
+        self,
+        family: str,
+        condition: BaseCondition,
+    ) -> None:
+        """Remove one source lease from the private arbitration inventory."""
+        leases = self._condition_leases_by_family.get(family)
+        if leases is None:
+            return
+        self._condition_leases_by_family[family] = [
+            lease for lease in leases if lease is not condition
+        ]
+        if not self._condition_leases_by_family[family]:
+            self._condition_leases_by_family.pop(family)
+
+    def _promote_most_potent_lease(
+        self,
+        family: str,
+        *,
+        parent_event: Optional[Event],
+    ) -> Optional[Event]:
+        """Manifest the strongest still-valid source in one lease family."""
+        candidates = [
+            candidate
+            for candidate in self._condition_leases_by_family.get(family, ())
+            if (
+                isinstance(candidate, MostPotentCondition)
+                and not candidate.duration.is_expired
+            )
+        ]
+        if not candidates:
             return None
-        condition_name = condition.name
-        assert condition.source_entity_uuid is not None and condition_name is not None
-        self.active_conditions_by_source[condition.source_entity_uuid].remove(condition_name)
-        if condition.uuid in self.active_conditions_by_uuid:
-            del self.active_conditions_by_uuid[condition.uuid]
+        winner = max(candidates, key=lambda candidate: candidate.potency_rank)
+        promotion_declaration = EventQueue.publish_declaration(
+            winner.declare_event(
+                parent_event,
+                application_disposition=(
+                    ConditionApplicationDisposition.PROMOTED
+                ),
+            ),
+        )
+        applied_event = winner.apply(
+            declaration_event=promotion_declaration,
+        )
+        if (
+            applied_event is None
+            or applied_event.canceled
+            or not winner.applied
+        ):
+            raise RuntimeError(
+                "A previously admitted most-potent condition lease could not "
+                "be promoted",
+            )
+        self._register_condition_indexes(winner)
+        return applied_event
 
-    def _collect_all_sub_conditions(self, condition: BaseCondition) -> List[BaseCondition]:
-        """Recursively collect same-block descendants for a condition.
+    def _apply_new_condition(
+        self,
+        condition: BaseCondition,
+        *,
+        declaration_event: Optional[Event],
+        parent_event: Optional[Event] = None,
+    ) -> Optional[Event]:
+        """Apply a new candidate with exception-safe provisional cleanup."""
+        try:
+            return condition.apply(
+                parent_event=parent_event,
+                declaration_event=declaration_event,
+            )
+        except BaseException:
+            self._discard_uncommitted_condition_tree(condition)
+            raise
 
-        Args:
-            condition: Root condition whose sub-condition tree should be walked.
+    def _apply_condition_with_policy(
+        self,
+        condition: BaseCondition,
+        *,
+        declaration_event: Optional[Event],
+        parent_event: Optional[Event] = None,
+    ) -> Optional[Event]:
+        """Apply one condition through its exact repeated-application policy."""
+        if condition.application_policy is (
+            ConditionApplicationPolicy.REPLACE_EXISTING
+        ):
+            applied_event = self._apply_new_condition(
+                condition,
+                parent_event=parent_event,
+                declaration_event=declaration_event,
+            )
+            if (
+                applied_event
+                and not applied_event.canceled
+                and condition.applied
+            ):
+                if (
+                    condition.name is not None
+                    and condition.name in self.active_conditions
+                ):
+                    self.remove_condition(condition.name)
+                self._register_condition_indexes(condition)
+            else:
+                self._discard_uncommitted_condition_tree(condition)
+            return applied_event
 
-        Returns:
-            Descendant conditions in traversal order.
-        """
-        all_subs: List[BaseCondition] = []
-        for sub_uuid in condition.sub_conditions:
-            sub = BaseCondition.get(sub_uuid)
-            if sub is not None and isinstance(sub, BaseCondition):
-                all_subs.append(sub)
-                all_subs.extend(self._collect_all_sub_conditions(sub))
-        return all_subs
+        if condition.application_policy is not (
+            ConditionApplicationPolicy.MOST_POTENT_ACTIVE
+        ):
+            raise NotImplementedError(
+                "Condition application policy "
+                f"{condition.application_policy.value} is not implemented",
+            )
+        if not isinstance(condition, MostPotentCondition):
+            raise TypeError(
+                "most_potent_active requires MostPotentCondition",
+            )
+        if condition.name is None:
+            raise ValueError("BaseCondition name is not set")
+
+        family = self._condition_application_family(condition)
+        family_leases = self._condition_leases_by_family.setdefault(
+            family,
+            [],
+        )
+        active = self.active_conditions.get(condition.name)
+        if active is not None:
+            if (
+                not isinstance(active, MostPotentCondition)
+                or self._condition_application_family(active) != family
+            ):
+                raise ValueError(
+                    "A most-potent condition cannot share a display name with "
+                    "a different application family",
+                )
+
+        if declaration_event is None:
+            declaration_event = condition.declare_event(parent_event)
+            declaration_event = EventQueue.publish_declaration(
+                declaration_event,
+            )
+        if declaration_event.canceled:
+            self._discard_uncommitted_condition_tree(condition)
+            return declaration_event
+
+        family_leases.append(condition)
+        if active is None:
+            applied_event = self._apply_new_condition(
+                condition,
+                declaration_event=declaration_event,
+            )
+            if (
+                applied_event is None
+                or applied_event.canceled
+                or not condition.applied
+            ):
+                self._remove_condition_lease_reference(family, condition)
+                self._discard_uncommitted_condition_tree(condition)
+                return applied_event
+            self._register_condition_indexes(condition)
+            return applied_event
+
+        if condition.potency_rank <= active.potency_rank:
+            return condition.complete_unmanifested_application(
+                declaration_event,
+                disposition=(
+                    ConditionApplicationDisposition.RETAINED_STRONGER
+                ),
+                status_message=(
+                    f"{active.name} remains governed by its stronger source"
+                ),
+            )
+
+        active.suspend_for_arbitration()
+        self._discard_condition_indexes(active)
+        applied_event = self._apply_new_condition(
+            condition,
+            declaration_event=declaration_event,
+        )
+        if (
+            applied_event is None
+            or applied_event.canceled
+            or not condition.applied
+        ):
+            self._remove_condition_lease_reference(family, condition)
+            self._discard_uncommitted_condition_tree(condition)
+            restored = active.apply()
+            if restored is None or restored.canceled or not active.applied:
+                raise RuntimeError(
+                    "Failed to restore the incumbent condition after an "
+                    "unsuccessful most-potent application",
+                )
+            self._register_condition_indexes(active)
+            return applied_event
+
+        self._register_condition_indexes(condition)
+        return applied_event
 
     def remove_condition(self, condition_name: str, expire: bool = False,
-                         parent_event: Optional[Event] = None) -> None:
+                         parent_event: Optional[Event] = None) -> bool:
         """Remove a condition with full cross-block tree traversal.
 
         Handles sub-conditions (same block), linked_conditions (other blocks),
@@ -860,28 +1117,38 @@ class BaseBlock(BaseModel):
             parent_event: Parent event for event-chain tracking.
         """
         if not self.allow_events_conditions:
-            return
+            return False
         if condition_name not in self.active_conditions:
-            return
+            return False
+        active = self.active_conditions[condition_name]
+        if active.application_policy is (
+            ConditionApplicationPolicy.MOST_POTENT_ACTIVE
+        ):
+            family = self._condition_application_family(active)
+            leases = tuple(self._condition_leases_by_family.pop(family, ()))
+            removed = self._remove_condition_tree(
+                active,
+                expire=expire,
+                parent_event=parent_event,
+            )
+            if not removed:
+                self._condition_leases_by_family[family] = list(leases)
+                return False
+            for lease in leases:
+                if lease is active:
+                    continue
+                self._discard_uncommitted_condition_tree(lease)
+            return True
 
-        condition = self.active_conditions.pop(condition_name)
-
-        all_sub_conditions = self._collect_all_sub_conditions(condition)
-        for sub_condition in all_sub_conditions:
-            if sub_condition.name is not None and sub_condition.name in self.active_conditions:
-                self.active_conditions.pop(sub_condition.name)
-            if sub_condition.name in self.active_conditions_by_source.get(
-                    sub_condition.source_entity_uuid, []):
-                self._remove_condition_from_dicts(sub_condition)
-
-        if condition.name in self.active_conditions_by_source.get(
-                condition.source_entity_uuid, []):
-            self._remove_condition_from_dicts(condition)
-
-        self._remove_condition_tree(condition, expire=expire, parent_event=parent_event)
+        return self._remove_condition_tree(
+            active,
+            expire=expire,
+            parent_event=parent_event,
+        )
 
     def remove_condition_by_uuid(self, condition_uuid: UUID,
-                                 parent_event: Optional[Event] = None) -> None:
+                                 parent_event: Optional[Event] = None,
+                                 expire: bool = False) -> bool:
         """Remove a condition by UUID.
 
         Args:
@@ -889,15 +1156,61 @@ class BaseBlock(BaseModel):
             parent_event: Optional parent event for cleanup event lineage.
         """
         if not self.allow_events_conditions:
-            return
+            return False
         condition = self.active_conditions_by_uuid.get(condition_uuid)
+        lease_family: Optional[str] = None
         if condition is None:
-            return
-        if condition.name is not None:
-            self.remove_condition(condition.name, parent_event=parent_event)
+            for family, leases in self._condition_leases_by_family.items():
+                condition = next(
+                    (
+                        lease
+                        for lease in leases
+                        if lease.uuid == condition_uuid
+                    ),
+                    None,
+                )
+                if condition is not None:
+                    lease_family = family
+                    break
+        if condition is None:
+            return False
+
+        if condition.application_policy is (
+            ConditionApplicationPolicy.MOST_POTENT_ACTIVE
+        ):
+            family = (
+                lease_family
+                or self._condition_application_family(condition)
+            )
+            was_manifested = condition.applied
+            if was_manifested:
+                removed = self._remove_condition_tree(
+                    condition,
+                    expire=expire,
+                    parent_event=parent_event,
+                )
+                if not removed:
+                    return False
+            else:
+                self._discard_uncommitted_condition_tree(condition)
+            self._remove_condition_lease_reference(family, condition)
+            if was_manifested:
+                self._promote_most_potent_lease(
+                    family,
+                    parent_event=parent_event,
+                )
+            return True
+
+        if condition.name is None:
+            return False
+        return self.remove_condition(
+            condition.name,
+            expire=expire,
+            parent_event=parent_event,
+        )
 
     def _remove_condition_tree(self, condition: BaseCondition, expire: bool = False,
-                               parent_event: Optional[Event] = None) -> None:
+                               parent_event: Optional[Event] = None) -> bool:
         """Recursively remove condition and all cross-block dependencies.
 
         Handles sub-conditions (same block), linked_conditions (other blocks),
@@ -909,17 +1222,31 @@ class BaseBlock(BaseModel):
             expire: Whether this removal is an expiration path.
             parent_event: Optional parent event for cleanup event lineage.
         """
+        if not condition.cleanup_own_state(
+            expire=expire,
+            parent_event=parent_event,
+        ):
+            return False
+
+        self._discard_condition_indexes(condition)
+
         for sub_uuid in list(condition.sub_conditions):
             sub = BaseCondition.get(sub_uuid)
             if sub is not None and isinstance(sub, BaseCondition):
-                self._remove_condition_tree(sub, expire=expire, parent_event=parent_event)
+                if not self.remove_condition_by_uuid(
+                    sub_uuid,
+                    expire=expire,
+                    parent_event=parent_event,
+                ):
+                    raise RuntimeError(
+                        "Condition child cleanup failed for "
+                        f"{type(sub).__name__} {sub_uuid}",
+                    )
 
         for target_uuid, cond_uuid in condition.linked_conditions:
             target_block = BaseBlock.get(target_uuid)
             if target_block is not None:
                 target_block.remove_condition_by_uuid(cond_uuid, parent_event=parent_event)
-
-        condition.cleanup_own_state(expire=expire, parent_event=parent_event)
 
         if condition.parent_link is not None:
             parent_block_uuid, parent_cond_uuid = condition.parent_link
@@ -941,6 +1268,9 @@ class BaseBlock(BaseModel):
                         )
                         if remaining == 0:
                             parent_block.remove_condition(parent_cond.name, parent_event=parent_event)
+        self._remove_condition_owned_actions(condition)
+        condition.remove_from_register()
+        return True
 
     def advance_duration(self, condition_name: str) -> bool:
         """Progress a block-owned condition duration without saving throws.
@@ -956,10 +1286,26 @@ class BaseBlock(BaseModel):
         condition = self.active_conditions.get(condition_name)
         if condition is None:
             return False
+        if condition.application_policy is (
+            ConditionApplicationPolicy.MOST_POTENT_ACTIVE
+        ):
+            expired_any = False
+            for lease in tuple(
+                self.get_condition_application_leases(condition_name),
+            ):
+                if lease.progress():
+                    expired_any = (
+                        self.remove_condition_by_uuid(
+                            lease.uuid,
+                            expire=True,
+                        )
+                        or expired_any
+                    )
+            return expired_any
         expired = condition.progress()
         if expired:
-            self.remove_condition(condition_name, expire=True)
-        return expired
+            return self.remove_condition(condition_name, expire=True)
+        return False
 
     def add_condition(self, condition: BaseCondition, context: Optional[Dict[str, Any]] = None, check_save_throw: bool = True, event: Optional[Event] = None)  -> Optional[Event]:
         """Apply and index a condition when lifecycle is enabled.
@@ -979,6 +1325,7 @@ class BaseBlock(BaseModel):
             ValueError: If the condition has no name.
         """
         if not self.allow_events_conditions:
+            condition.remove_from_register()
             return None
         if condition.name is None:
             raise ValueError("BaseCondition name is not set")
@@ -991,15 +1338,11 @@ class BaseBlock(BaseModel):
         if context is not None:
             condition.set_context(context)
 
-        condition_applied = condition.apply(event)
-        if condition_applied and not condition_applied.canceled and condition.applied:
-            if condition.name in self.active_conditions:
-                self.remove_condition(condition.name)
-            self.active_conditions[condition.name] = condition
-            self.active_conditions_by_uuid[condition.uuid] = condition
-            self.active_conditions_by_source[condition.source_entity_uuid].append(condition.name)
-
-        return condition_applied
+        return self._apply_condition_with_policy(
+            condition,
+            declaration_event=None,
+            parent_event=event,
+        )
 
     def add_static_condition_immunity(self, condition_name: str, immunity_name: Optional[str] = None) -> None:
         """Add a static condition immunity when lifecycle is enabled.

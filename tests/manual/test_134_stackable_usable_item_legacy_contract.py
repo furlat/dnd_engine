@@ -31,9 +31,10 @@ from dnd.core.base_actions import AvailableActionInfo
 from dnd.core.base_block import BaseBlock
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import EventPhase, EventQueue, EventType
+from dnd.core.events import EventPhase
 from dnd.core.gridmap import get_map
 from dnd.core.creature_types import DamageType
+from dnd.environmental_effect_runtime import materialize_spike_trap_effect
 from dnd.entity import Entity, EntityConfig
 from dnd.items.consumables import (
     FIRE_WEAPON_COAT_RECIPE,
@@ -59,7 +60,7 @@ from dnd.items.environment_interactables import (
     TrapLever,
 )
 from dnd.items.weapons import LONGSWORD_RECIPE, SHORTSWORD_RECIPE
-from dnd.tiles import create_spike_zone
+from dnd.spatial_effects import SpatialEffect
 from tests.engine.support import get_hp, reset_combat_state, set_hp
 
 
@@ -539,11 +540,11 @@ def test_override_and_default_door_actions_toggle_spatial_state() -> None:
 
 
 def test_lever_depletion_removes_only_its_linked_trap() -> None:
-    """A lever tears down its own handler and disappears after its finite use."""
+    """A lever retires only its exact linked spatial-effect owner."""
     reset_item_world()
     actor = create_actor((5, 5))
-    _linked_tiles, linked_handler = create_spike_zone({(3, 3)})
-    _other_tiles, other_handler = create_spike_zone({(7, 7)})
+    linked_effect = materialize_spike_trap_effect({(3, 3)})
+    other_effect = materialize_spike_trap_effect({(7, 7)})
     lever = materialize_item(
         trap_lever_recipe(charges=1),
         uuid4(),
@@ -555,7 +556,7 @@ def test_lever_depletion_removes_only_its_linked_trap() -> None:
         lever.bind_dynamic_use_action(
             PullLeverAction(
                 source_entity_uuid=uuid4(),
-                trap_handler_uuid=linked_handler.uuid,
+                trap_effect_uuid=linked_effect.uuid,
                 template=True,
             ),
         ),
@@ -572,18 +573,10 @@ def test_lever_depletion_removes_only_its_linked_trap() -> None:
     assert result is not None and not result.canceled
     assert lever.charges == 0
     assert item_rows(actor, lever.uuid) == []
-    linked = EventQueue.get_spatial_handlers_at(
-        (3, 3),
-        EventType.SPATIAL_ENTITY_ENTERED,
-        EventPhase.EFFECT,
-    )
-    other = EventQueue.get_spatial_handlers_at(
-        (7, 7),
-        EventType.SPATIAL_ENTITY_ENTERED,
-        EventPhase.EFFECT,
-    )
-    assert all(handler.uuid != linked_handler.uuid for handler in linked)
-    assert any(handler.uuid == other_handler.uuid for handler in other)
+    assert SpatialEffect.get_effect(linked_effect.uuid) is None
+    assert SpatialEffect.get_effect(other_effect.uuid) is other_effect
+    assert not get_map().is_position_hazardous_for(3, 3, actor.uuid)
+    assert get_map().is_position_hazardous_for(7, 7, actor.uuid)
 
 
 def test_chest_discovery_loot_and_empty_state_are_one_contract() -> None:

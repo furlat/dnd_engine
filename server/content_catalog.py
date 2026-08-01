@@ -43,6 +43,7 @@ from dnd.core.content.effects import (
     ConditionEffectCoverage,
 )
 from dnd.core.content.item_definitions import ItemDefinition
+from dnd.core.content.spatial_effect_definitions import SpatialEffectDefinition
 from dnd.core.content.provenance import ContentProvenance, ContentSource
 from dnd.core.content.recipe_presets import ContentRecipePresetRef
 from dnd.core.content.recipes import ContentRecipe
@@ -52,7 +53,7 @@ from server.world_contracts import SafeContentPresentationRef
 
 
 CONTENT_MANIFEST_SCHEMA_VERSION = 2
-CONTENT_CATALOG_SCHEMA_VERSION = 6
+CONTENT_CATALOG_SCHEMA_VERSION = 7
 
 
 def safe_content_presentation_ref(
@@ -137,6 +138,7 @@ class ContentCatalogEntry(BaseModel):
     definition_mode: ContentDeclarationMode
     runtime_behavior_kind: RuntimeBehaviorKind | None = None
     item_definition: ItemDefinition | None = None
+    spatial_effect_definition: SpatialEffectDefinition | None = None
     dependencies: tuple[ContentDependency, ...] = ()
     condition_effect_coverage: ConditionEffectCoverage
     condition_effect_profile: AuthoredConditionEffectProfile | None = None
@@ -149,6 +151,9 @@ class ContentCatalogEntry(BaseModel):
             ContentDefinitionKind.ITEM,
             ContentDefinitionKind.ENVIRONMENT_OBJECT,
         }
+        spatial_effect_owned_kind = (
+            self.ref.definition_kind is ContentDefinitionKind.SPATIAL_EFFECT
+        )
         if self.definition_mode == ContentDeclarationMode.FACTORY:
             if self.parameter_schema is None:
                 raise ValueError(
@@ -161,6 +166,22 @@ class ContentCatalogEntry(BaseModel):
             if not item_owned_kind and self.item_definition is not None:
                 raise ValueError(
                     "non-item factory catalog entry cannot own item_definition",
+                )
+            if (
+                spatial_effect_owned_kind
+                and self.spatial_effect_definition is None
+            ):
+                raise ValueError(
+                    "spatial-effect factory catalog entry requires "
+                    "spatial_effect_definition",
+                )
+            if (
+                not spatial_effect_owned_kind
+                and self.spatial_effect_definition is not None
+            ):
+                raise ValueError(
+                    "non-spatial factory catalog entry cannot own "
+                    "spatial_effect_definition",
                 )
         elif self.definition_mode == ContentDeclarationMode.BEHAVIOR_IDENTITY:
             if self.runtime_behavior_kind is None:
@@ -175,6 +196,11 @@ class ContentCatalogEntry(BaseModel):
                 raise ValueError(
                     "behavior catalog entry cannot own item_definition",
                 )
+            if self.spatial_effect_definition is not None:
+                raise ValueError(
+                    "behavior catalog entry cannot own "
+                    "spatial_effect_definition",
+                )
         else:
             if self.runtime_behavior_kind is not None:
                 raise ValueError(
@@ -188,6 +214,11 @@ class ContentCatalogEntry(BaseModel):
             if self.item_definition is not None:
                 raise ValueError(
                     "typed-definition catalog entry cannot own item_definition",
+                )
+            if self.spatial_effect_definition is not None:
+                raise ValueError(
+                    "typed-definition catalog entry cannot own "
+                    "spatial_effect_definition",
                 )
         return self
 
@@ -232,7 +263,7 @@ class ContentCatalogResponse(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    schema_version: Literal[6] = CONTENT_CATALOG_SCHEMA_VERSION
+    schema_version: Literal[7] = CONTENT_CATALOG_SCHEMA_VERSION
     content_set_digest: str
     catalog_digest: str
     entries: tuple[ContentCatalogEntry, ...]
@@ -405,6 +436,9 @@ def build_public_content_catalog(
                 definition_mode=declaration.mode,
                 runtime_behavior_kind=declaration.runtime_behavior_kind,
                 item_definition=declaration.item_definition,
+                spatial_effect_definition=(
+                    declaration.spatial_effect_definition
+                ),
                 dependencies=declaration.dependencies,
                 condition_effect_coverage=(
                     declaration.condition_effect_coverage

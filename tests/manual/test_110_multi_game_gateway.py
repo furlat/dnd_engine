@@ -33,7 +33,7 @@ from server.event_stream import event_stream
 from server.ai_policy_composition import server_native_ai_policy_options
 from server.game_artifact_store import GameArtifactStore
 from server.game_creation_catalog import build_game_creation_catalog
-from server.game_directory.canonical import hash_capability
+from server.game_directory.security import hash_capability
 from server.game_directory.contracts import (
     ArtifactKind,
     GameCreate,

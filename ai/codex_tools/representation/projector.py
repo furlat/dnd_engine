@@ -443,32 +443,6 @@ def _notify_component(
         return
 
 
-def project_codex_representation(
-    manifest: ResolvedRepresentationManifest,
-    inputs: RepresentationProjectionInput,
-    *,
-    exposure: ExposureTiming = ExposureTiming.DECISION_EPOCH,
-    component_observer: Optional[ComponentProjectionObserver] = None,
-) -> CodexTurnRepresentation:
-    """Project one representation with the closed built-in projector.
-
-    Args:
-        manifest: Fully resolved representation manifest.
-        inputs: Aligned local projection inputs.
-        exposure: Lifecycle boundary being rendered.
-        component_observer: Optional observational component lifecycle sink.
-
-    Returns:
-        Typed ordered Codex representation envelope.
-    """
-    return CodexRepresentationProjector().project(
-        manifest,
-        inputs,
-        exposure=exposure,
-        component_observer=component_observer,
-    )
-
-
 def _build_core_revision(
     inputs: RepresentationProjectionInput,
     parameters: Mapping[str, JsonValue],
@@ -571,12 +545,10 @@ def _build_objects(
             observer_uuids=tuple(item.observer_uuids),
             position=item.position,
             map_char=item.map_char,
-            is_open=(
-                item.state.get("is_open")
-                if isinstance(item.state.get("is_open"), bool)
-                else None
-            ),
-            state_keys=tuple(sorted(item.state)),
+            is_open=item.state.is_open,
+            state_keys=tuple(sorted(
+                item.state.model_dump(mode="json", exclude_none=True),
+            )),
         )
         for item in retained
     )

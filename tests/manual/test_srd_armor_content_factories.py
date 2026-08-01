@@ -39,7 +39,6 @@ from dnd.items.armors import (
     SHIELD_RECIPE,
     SPLINT_ARMOR_RECIPE,
     SRD_ARMOR_DECLARATIONS,
-    SRD_ARMOR_RECIPES_BY_LEGACY_ID,
     STUDDED_LEATHER_RECIPE,
 )
 from dnd.monsters.srd_roster import (
@@ -215,8 +214,6 @@ def test_srd_armor_declarations_are_exact_reviewed_possessions() -> None:
         declaration.ref.content_id
         for declaration in SRD_ARMOR_DECLARATIONS
     ) == EXPECTED_CONTENT_IDS
-    assert SRD_ARMOR_RECIPES_BY_LEGACY_ID == EXPECTED_RECIPES
-
     for declaration in SRD_ARMOR_DECLARATIONS:
         assert declaration.ref.pack_id == "content.srd_5_1_cc"
         assert declaration.ref.content_version == 1

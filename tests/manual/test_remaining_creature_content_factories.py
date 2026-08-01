@@ -240,11 +240,8 @@ def test_bootstrap_closes_every_recipe_and_dependency_without_lazy_imports() -> 
         for node in ast.walk(bestiary_tree)
         if isinstance(node, ast.ImportFrom)
     }
-    assert "dnd.content_system.item_materialization" not in imported_modules
-    assert (
-        "dnd.content_system.item_runtime_materialization"
-        in imported_modules
-    )
+    assert "dnd.content_system.item_materialization" in imported_modules
+    assert "dnd.content_system.item_runtime_materialization" not in imported_modules
 
 
 @pytest.mark.parametrize(

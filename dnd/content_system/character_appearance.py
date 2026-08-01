@@ -584,8 +584,7 @@ def apply_player_character_appearance(
         species_ref=species_ref,
         selection=selection,
     )
-    for field_name, value in config.model_dump().items():
-        setattr(appearance, field_name, value)
+    appearance.apply_config(config)
 
 
 __all__ = [

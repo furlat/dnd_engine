@@ -4,19 +4,25 @@ from collections.abc import Iterable
 from uuid import uuid4
 
 from dnd.actions import Attack, AttackEvent
+from dnd.conditions import Incapacitated
 from dnd.content_system.creature_materialization import materialize_creature
 from dnd.core.base_actions import ActionEvent
 from dnd.core.base_block import BaseBlock
-from dnd.core.base_conditions import BaseCondition
+from dnd.core.base_conditions import BaseCondition, ConditionApplicationEvent
 from dnd.core.base_object import BaseObject
-from dnd.core.dice import fixed_dice_faces
+from dnd.core.condition_types import ConditionApplicationDisposition
+from dnd.core.dice import AttackOutcome, fixed_dice_faces
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import (
+    D20RollResultEvent,
     DamageRollResultEvent,
+    Event,
+    EventHandler,
     EventPhase,
     EventQueue,
     EventType,
     RollModificationOperation,
+    Trigger,
 )
 from dnd.core.gridmap import GridMap, get_map
 from dnd.core.creature_types import DamageType
@@ -27,10 +33,12 @@ from dnd.core.content.materialization import (
 )
 from dnd.core.values import BaseValue
 from dnd.entity import Entity
+from dnd.monsters.traits import LeadershipAura, LeadershipMembership
 from dnd.monsters.srd_roster import (
     SRD_CREATURE_DECLARATIONS_BY_ID,
     SRD_CREATURE_RECIPES_BY_ID,
 )
+from dnd.spatial_effects import FieldEffect, SpatialEffect
 
 
 def reset_srd_trait_state(width: int = 12, height: int = 12) -> None:
@@ -43,6 +51,7 @@ def reset_srd_trait_state(width: int = 12, height: int = 12) -> None:
     BaseValue._registry.clear()
     Entity._entity_registry.clear()
     Entity._entity_by_position.clear()
+    SpatialEffect._effect_registry.clear()
     GridMap.reset()
     get_map().create_rectangle(0, 0, width, height)
 
@@ -138,6 +147,67 @@ def test_factory_trait_packages_are_installed() -> None:
         assert action_names <= registered_action_names(monster)
 
 
+def test_parry_does_not_spend_reaction_on_a_missed_attack() -> None:
+    """Parry is a response to a hit, not a pre-roll AC modifier."""
+    reset_srd_trait_state()
+    defender = _materialize_srd_fixture(
+        "bandit_captain",
+        position=(2, 2),
+        faction="monsters",
+    )
+    attacker = _materialize_srd_fixture(
+        "commoner",
+        position=(2, 3),
+        faction="heroes",
+    )
+    Entity.update_all_entities_senses(max_distance=30)
+
+    with fixed_dice_faces(1):
+        event = Attack(
+            source_entity_uuid=attacker.uuid,
+            target_entity_uuid=defender.uuid,
+            weapon_slot=WeaponSlot.MELEE_MAIN,
+        ).apply()
+
+    assert isinstance(event, AttackEvent)
+    assert event.attack_outcome is AttackOutcome.CRIT_MISS
+    assert defender.action_economy.reactions.normalized_score == 1
+
+
+def test_parry_spends_reaction_when_its_ac_bonus_blocks_a_hit() -> None:
+    """A marginal melee hit is converted to a miss by the Parry reaction."""
+    reset_srd_trait_state()
+    defender = _materialize_srd_fixture(
+        "bandit_captain",
+        position=(2, 2),
+        faction="monsters",
+    )
+    attacker = _materialize_srd_fixture(
+        "commoner",
+        position=(2, 3),
+        faction="heroes",
+    )
+    Entity.update_all_entities_senses(max_distance=30)
+    attack_bonus = attacker.attack_bonus(
+        WeaponSlot.MELEE_MAIN,
+        defender.uuid,
+    ).normalized_score
+    armor_class = defender.ac_bonus(attacker.uuid).normalized_score
+    marginal_face = armor_class - attack_bonus
+    assert 2 <= marginal_face <= 19
+
+    with fixed_dice_faces(marginal_face, 1):
+        event = Attack(
+            source_entity_uuid=attacker.uuid,
+            target_entity_uuid=defender.uuid,
+            weapon_slot=WeaponSlot.MELEE_MAIN,
+        ).apply()
+
+    assert isinstance(event, AttackEvent)
+    assert event.attack_outcome is AttackOutcome.MISS
+    assert defender.action_economy.reactions.normalized_score == 0
+
+
 def test_gnoll_keeps_shield_and_gets_natural_bite_action() -> None:
     """Gnoll Bite should be a natural attack, not an off-hand weapon hack."""
     reset_srd_trait_state()
@@ -178,6 +248,69 @@ def test_natural_bite_discloses_natural_attack_outcome_profile() -> None:
     assert profile.damage_rolls[0].die_size == 4
     assert profile.damage_rolls[0].damage_type == DamageType.PIERCING.value
     assert gnoll.equipment._get_weapon_by_slot(WeaponSlot.MELEE_MAIN) is not None
+
+
+def test_natural_bite_never_impersonates_the_equipped_weapon() -> None:
+    """Natural attack handlers must always observe the real equipment state."""
+    reset_srd_trait_state()
+    gnoll = _materialize_srd_fixture(
+        "gnoll",
+        position=(1, 1),
+        faction="monsters",
+    )
+    target = _materialize_srd_fixture(
+        "commoner",
+        position=(2, 1),
+        faction="heroes",
+    )
+    Entity.update_all_entities_senses(max_distance=30)
+    equipped_weapon = gnoll.equipment.weapon_melee_main
+    unarmed_facts = (
+        gnoll.equipment.unarmed_damage_dice,
+        gnoll.equipment.unarmed_dice_numbers,
+        gnoll.equipment.unarmed_damage_type,
+    )
+    observed_states: list[tuple[object, tuple[object, ...]]] = []
+
+    def observe_equipment(event: Event, _source_uuid):
+        observed_states.append(
+            (
+                gnoll.equipment.weapon_melee_main,
+                (
+                    gnoll.equipment.unarmed_damage_dice,
+                    gnoll.equipment.unarmed_dice_numbers,
+                    gnoll.equipment.unarmed_damage_type,
+                ),
+            )
+        )
+        return event
+
+    EventQueue.add_event_handler(
+        EventHandler(
+            name="Observe Natural Attack Equipment",
+            source_entity_uuid=gnoll.uuid,
+            trigger_conditions=[
+                Trigger(
+                    event_type=EventType.ATTACK,
+                    event_phase=EventPhase.EFFECT,
+                    event_source_entity_uuid=gnoll.uuid,
+                ),
+            ],
+            event_processor=observe_equipment,
+        )
+    )
+    bite = gnoll.get_action_template("Bite")
+    assert bite is not None
+    with fixed_dice_faces(15, 1):
+        result = bite.instantiate(target_entity_uuid=target.uuid).apply()
+
+    assert isinstance(result, AttackEvent)
+    assert observed_states
+    assert all(
+        weapon is equipped_weapon and facts == unarmed_facts
+        for weapon, facts in observed_states
+    )
+    assert gnoll.equipment.weapon_melee_main is equipped_weapon
 
 
 def test_pack_tactics_sunlight_and_keen_senses_use_contextual_values() -> None:
@@ -477,6 +610,11 @@ def test_active_monster_actions_apply_their_marker_conditions() -> None:
 
     reset_srd_trait_state()
     knight = _materialize_srd_fixture("knight", position=(1, 1), faction="monsters")
+    ally = _materialize_srd_fixture(
+        "commoner",
+        position=(2, 1),
+        faction="monsters",
+    )
     leadership = knight.get_action_template("Leadership")
     assert leadership is not None
     setup = leadership.get_self_setup_profile(knight)
@@ -487,5 +625,131 @@ def test_active_monster_actions_apply_their_marker_conditions() -> None:
     event = leadership.instantiate().apply()
 
     assert event is not None
-    assert "Leadership Aura" in knight.active_conditions
     assert "Leadership Used" in knight.active_conditions
+    leadership_fields = [
+        effect
+        for effect in SpatialEffect.active_effects()
+        if effect.anchor_uuid == knight.uuid
+        and any(
+            isinstance(condition, LeadershipAura)
+            for condition in effect.active_conditions.values()
+        )
+    ]
+    assert len(leadership_fields) == 1
+    assert isinstance(leadership_fields[0], FieldEffect)
+    assert isinstance(
+        ally.active_conditions.get("Leadership"),
+        LeadershipMembership,
+    )
+    assert "Leadership" not in knight.active_conditions
+
+    knight.add_condition(
+        Incapacitated(
+            source_entity_uuid=ally.uuid,
+            target_entity_uuid=knight.uuid,
+        ),
+    )
+    assert SpatialEffect.get_effect(leadership_fields[0].uuid) is None
+    assert "Leadership" not in ally.active_conditions
+    assert "Leadership Used" in knight.active_conditions
+
+
+def test_overlapping_leadership_fields_keep_one_source_and_promote_fallback() -> None:
+    """Overlapping auras grant once and preserve the remaining source."""
+    reset_srd_trait_state()
+    first_leader = _materialize_srd_fixture(
+        "knight",
+        position=(1, 1),
+        faction="monsters",
+    )
+    second_leader = _materialize_srd_fixture(
+        "knight",
+        position=(10, 1),
+        faction="monsters",
+    )
+    ally = _materialize_srd_fixture(
+        "commoner",
+        position=(5, 1),
+        faction="monsters",
+    )
+    enemy = _materialize_srd_fixture(
+        "commoner",
+        position=(5, 2),
+        faction="heroes",
+    )
+    Entity.update_all_entities_senses(max_distance=60)
+
+    for leader in (first_leader, second_leader):
+        action = leader.get_action_template("Leadership")
+        assert action is not None
+        result = action.instantiate().apply()
+        assert result is not None
+        assert not result.canceled
+
+    memberships = ally.get_condition_application_leases("Leadership")
+    assert len(memberships) == 2
+    assert all(
+        isinstance(condition, LeadershipMembership)
+        for condition in memberships
+    )
+    active = ally.active_conditions["Leadership"]
+    assert active.source_entity_uuid == first_leader.uuid
+    assert sum(condition.applied for condition in memberships) == 1
+
+    with fixed_dice_faces(1, 1):
+        Attack(
+            source_entity_uuid=ally.uuid,
+            target_entity_uuid=enemy.uuid,
+            weapon_slot=WeaponSlot.MELEE_MAIN,
+        ).apply()
+    roll_event = next(
+        event
+        for event in reversed(
+            EventQueue.get_events_by_type(
+                EventType.ATTACK_D20_ROLL_RESULT,
+            ),
+        )
+        if isinstance(event, D20RollResultEvent)
+        and event.phase is EventPhase.COMPLETION
+    )
+    assert [
+        modification.handler_name
+        for modification in roll_event.roll_modifications
+    ].count("Leadership") == 1
+
+    Entity.update_entity_position(first_leader, (0, 11))
+
+    remaining_memberships = ally.get_condition_application_leases(
+        "Leadership",
+    )
+    assert len(remaining_memberships) == 1
+    promoted = ally.active_conditions["Leadership"]
+    assert promoted is remaining_memberships[0]
+    assert promoted.applied
+    assert promoted.source_entity_uuid == second_leader.uuid
+    promotion_event = next(
+        event
+        for event in reversed(
+            EventQueue.get_events_by_type(EventType.CONDITION_APPLICATION),
+        )
+        if isinstance(event, ConditionApplicationEvent)
+        and event.phase is EventPhase.COMPLETION
+        and event.condition.uuid == promoted.uuid
+        and event.application_disposition
+        is ConditionApplicationDisposition.PROMOTED
+    )
+    promotion_log = promotion_event.generate_combat_log()
+    assert promotion_log is not None
+    assert "another source" in promotion_log.compact
+
+    second_field = next(
+        effect
+        for effect in SpatialEffect.active_effects()
+        if effect.anchor_uuid == second_leader.uuid
+    )
+    for _ in range(9):
+        assert not second_field.advance_duration("Leadership Aura")
+    assert second_field.advance_duration("Leadership Aura")
+    assert SpatialEffect.get_effect(second_field.uuid) is None
+    assert "Leadership" not in ally.active_conditions
+    assert ally.get_condition_application_leases("Leadership") == ()

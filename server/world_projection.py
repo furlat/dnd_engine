@@ -18,6 +18,7 @@ from dnd.content_system.item_bindings import (
 from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition
+from dnd.core.base_tiles import Tile
 from dnd.core.condition_types import ConditionCategory, DurationType
 from dnd.core.content.descriptors import (
     ContentPresentation,
@@ -25,9 +26,9 @@ from dnd.core.content.descriptors import (
 )
 from dnd.core.gridmap import GridMap
 from dnd.core.item_types import ItemPresentationKind, ItemPresentationState
-from dnd.core.life_types import LifeState
 from dnd.encounter import Encounter
 from dnd.entity import Entity
+from dnd.spatial_effects import SpatialEffect
 from server.world_contracts import (
     APIAppearance,
     APICombatant,
@@ -43,6 +44,8 @@ from server.world_contracts import (
     APIItemRuntimeRecipeRefSnapshot,
     APIItemSummary,
     APIRecipePresetRefSnapshot,
+    APISpatialEffectPresentation,
+    APISpatialEffectSummary,
     APITile,
     SafeContentPresentationRef,
     StructuralEdgeAppearance,
@@ -263,6 +266,94 @@ def _project_public_condition_details(
     return sorted(details, key=lambda detail: (detail.name, detail.semantic_key))
 
 
+def _spatial_conditions_at(
+    grid: GridMap,
+    position: tuple[int, int],
+) -> list[BaseCondition]:
+    """Return only genuine tile-owned conditions affecting one cell."""
+    tile = grid.get_tile(*position)
+    return list(tile.active_conditions.values()) if tile is not None else []
+
+
+def project_spatial_effect_summary(
+    effect: SpatialEffect,
+) -> APISpatialEffectSummary:
+    """Project one observed effect through its authenticated cold descriptor."""
+    declaration = SERVER_CONTENT_SYSTEM_RUNTIME.require().registry.resolve_definition(
+        effect.content_ref,
+    )
+    definition = declaration.spatial_effect_definition
+    if definition is None:
+        raise ValueError(
+            f"Observed spatial effect {effect.uuid} has no authored definition",
+        )
+    if (
+        effect.layer is not definition.layer
+        or effect.occupancy_policy is not definition.occupancy_policy
+        or effect.anchor_kind is not definition.anchor_kind
+        or effect.blocking_policy is not definition.blocking_policy
+    ):
+        raise ValueError(
+            f"Observed spatial effect {effect.uuid} disagrees with its "
+            "authored layer contract",
+        )
+    presentation = declaration.descriptor.presentation
+    return APISpatialEffectSummary(
+        uuid=str(effect.uuid),
+        content_ref=APIContentRefSnapshot.model_validate(
+            effect.content_ref.model_dump(mode="python"),
+        ),
+        layer=effect.layer.value,
+        anchor_kind=effect.anchor_kind.value,
+        safe_presentation_ref=SafeContentPresentationRef(
+            presentation_contract_hash=compute_safe_content_presentation_hash(
+                presentation,
+            ),
+        ),
+        presentation=APISpatialEffectPresentation(
+            sprite_key=presentation.sprite_key,
+            visual_variant_key=presentation.visual_variant_key,
+            tint_rgb=presentation.tint_rgb,
+            vfx_profile=presentation.vfx_profile,
+            audio_key=presentation.audio_key,
+        ),
+    )
+
+
+def _project_spatial_effects_at(
+    grid: GridMap,
+    position: tuple[int, int],
+    *,
+    observer_perceptions: tuple[int, ...] | None,
+) -> list[APISpatialEffectSummary]:
+    """Project effects disclosed by at least one authorized observer."""
+    visible: list[SpatialEffect] = []
+    for block in grid.get_spatial_effect_blocks_at(position):
+        if not isinstance(block, SpatialEffect):
+            raise TypeError("Grid spatial-effect index contains a non-effect block")
+        if observer_perceptions is not None:
+            controllers = tuple(block.active_conditions.values())
+            if controllers and not any(
+                controller.condition_stealth_dc is None
+                or controller.condition_stealth_dc < perception
+                for controller in controllers
+                for perception in observer_perceptions
+            ):
+                continue
+        visible.append(block)
+    return [
+        project_spatial_effect_summary(effect)
+        for effect in sorted(
+            visible,
+            key=lambda row: (
+                row.layer.value,
+                row.content_ref.identity_key,
+                str(row.uuid),
+            ),
+        )
+    ]
+
+
 def project_entity_summary(entity: Entity) -> APIEntitySummary:
     """Project one renderer-complete entity summary."""
     if entity.content_ref is None:
@@ -319,7 +410,6 @@ def project_entity_summary(entity: Entity) -> APIEntitySummary:
         conditions=[detail.name for detail in condition_details],
         condition_details=condition_details,
         life_state=entity.health.life_state,
-        is_dead=entity.health.life_state is LifeState.DEAD,
         faction=entity.faction,
         creature_type=entity.creature_type.value,
         size=entity.size.value,
@@ -343,11 +433,20 @@ def project_grid(
         walking_cost = int(tile.walking_cost.normalized_score)
         condition_details = _project_public_condition_details(
             condition
-            for condition in tile.active_conditions.values()
+            for condition in _spatial_conditions_at(grid, (x, y))
             if (
                 condition.condition_stealth_dc is None
                 or condition.condition_stealth_dc < observer_perception
             )
+        )
+        spatial_effects = _project_spatial_effects_at(
+            grid,
+            (x, y),
+            observer_perceptions=(
+                (observer_perception,)
+                if requesting_entity_uuid is not None
+                else None
+            ),
         )
         tiles.append(
             APITile(
@@ -365,6 +464,7 @@ def project_grid(
                 ),
                 conditions=[detail.name for detail in condition_details],
                 condition_details=condition_details,
+                spatial_effects=spatial_effects,
                 light_level=tile.resolved_light_level.value,
                 directional_blocks_movement=_project_directional_blocks(
                     tile,
@@ -457,12 +557,17 @@ def project_observed_tile(
 
     condition_details = _project_public_condition_details(
         condition
-        for condition in tile.active_conditions.values()
+        for condition in _spatial_conditions_at(grid, position)
         if any(
             condition.condition_stealth_dc is None
             or condition.condition_stealth_dc < observer_perception
             for observer_perception in observer_perceptions
         )
+    )
+    spatial_effects = _project_spatial_effects_at(
+        grid,
+        position,
+        observer_perceptions=tuple(observer_perceptions),
     )
 
     def merged_directional(channel: str) -> APIDirectionalBlockMap:
@@ -497,6 +602,7 @@ def project_observed_tile(
         ),
         conditions=[detail.name for detail in condition_details],
         condition_details=condition_details,
+        spatial_effects=spatial_effects,
         light_level=tile.resolved_light_level.value,
         directional_blocks_movement=merged_directional("movement"),
         directional_blocks_vision=merged_directional("vision"),
@@ -530,7 +636,6 @@ def project_encounter(
                 name=entity.name if entity is not None else "Unknown",
                 initiative=encounter.combatants[entity_uuid].initiative_total,
                 life_state=life_state,
-                is_dead=life_state is LifeState.DEAD,
             )
         )
     current_entity_uuid: Optional[str] = None
@@ -552,14 +657,13 @@ def project_encounter(
     )
 
 
-def _project_directional_blocks(tile: object, channel: str) -> APIDirectionalBlockMap:
+def _project_directional_blocks(tile: Tile, channel: str) -> APIDirectionalBlockMap:
     """Project one tile's directional allowance function as blocking flags."""
-    allows_direction = getattr(tile, "allows_direction")
     return APIDirectionalBlockMap(
-        north=not allows_direction("north", channel),
-        south=not allows_direction("south", channel),
-        east=not allows_direction("east", channel),
-        west=not allows_direction("west", channel),
+        north=not tile.allows_direction("north", channel),
+        south=not tile.allows_direction("south", channel),
+        east=not tile.allows_direction("east", channel),
+        west=not tile.allows_direction("west", channel),
     )
 
 
@@ -599,14 +703,11 @@ def _project_structural_edges(
             and not block.is_perceivable_by(requesting_entity_uuid)
         ):
             continue
-        directions = cast(
-            tuple[str, ...],
-            tuple(getattr(block, "blocked_directions", ())),
-        )
-        channels = cast(
-            tuple[str, ...],
-            tuple(getattr(block, "blocked_channels", ())),
-        )
+        structure = block.get_directional_structure_state()
+        if structure is None:
+            continue
+        directions = structure.blocked_directions
+        channels = structure.blocked_channels
         if not directions or not channels:
             continue
         is_open = block.get_spatial_open_state()

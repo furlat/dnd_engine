@@ -5,6 +5,7 @@ import random
 from typing import Iterator
 from uuid import UUID, uuid4
 
+import pytest
 from pydantic import Field
 
 from dnd.blocks.base_item import BaseItem
@@ -116,6 +117,29 @@ class EngineBookCanceledEffectCondition(BaseCondition):
     ) -> tuple[list[tuple[UUID, UUID]], list[UUID], list[UUID], list[UUID], Event]:
         event = declaration_event.phase_to(EventPhase.EXECUTION, condition=self)
         return [], [], [], [], event.cancel("canceled during condition application")
+
+
+class EngineBookExceptionalStateCondition(BaseCondition):
+    """Condition that installs direct state and then fails during apply."""
+
+    name: str = "EngineBookExceptionalState"
+    provisional_state_active: bool = Field(default=False, exclude=True)
+
+    def _apply(
+        self,
+        declaration_event: Event,
+    ) -> tuple[list[tuple[UUID, UUID]], list[UUID], list[UUID], list[UUID], Event]:
+        del declaration_event
+        self.provisional_state_active = True
+        raise RuntimeError("condition apply failed after provisional state")
+
+    def _release_owned_runtime_state(
+        self,
+        *,
+        parent_event: Event | None = None,
+    ) -> None:
+        del parent_event
+        self.provisional_state_active = False
 
 
 class EngineBookModifierCondition(BaseCondition):
@@ -298,8 +322,39 @@ def test_eb_07_002_apply_without_effect_event_cancels_and_does_not_index() -> No
     assert condition.uuid not in target.active_conditions_by_uuid
 
 
-def test_eb_07_003_canceled_apply_event_is_not_indexed_but_marks_object_applied() -> None:
-    """EB-07-003: a canceled returned event is not indexed, but still marks applied."""
+def test_spatial_handler_inherits_enabled_and_default_source_execution() -> None:
+    """Spatial discovery adds no second callable contract over BaseHandler."""
+    reset_condition_state()
+    source_uuid = uuid4()
+    calls: list[UUID] = []
+
+    def record_source(event: Event, handler_source_uuid: UUID) -> Event:
+        calls.append(handler_source_uuid)
+        return event
+
+    handler = SpatialHandler(
+        source_entity_uuid=source_uuid,
+        positions={(1, 1)},
+        event_type=EventType.SPATIAL_ENTITY_ENTERED,
+        event_phase=EventPhase.EFFECT,
+        event_processor=record_source,
+    )
+    event = Event(
+        source_entity_uuid=uuid4(),
+        event_type=EventType.SPATIAL_ENTITY_ENTERED,
+        phase=EventPhase.EFFECT,
+    )
+
+    assert handler(event) is event
+    assert calls == [source_uuid]
+
+    handler.enabled = False
+    assert handler(event) is None
+    assert calls == [source_uuid]
+
+
+def test_eb_07_003_canceled_apply_event_discards_uncommitted_condition() -> None:
+    """EB-07-003: a canceled application leaves no active or global identity."""
     reset_condition_state()
     source = configured_entity("Source")
     target = configured_entity("Target", position=(2, 1))
@@ -308,14 +363,125 @@ def test_eb_07_003_canceled_apply_event_is_not_indexed_but_marks_object_applied(
         target_entity_uuid=target.uuid,
     )
 
-    completed = target.add_condition(condition)
+    canceled = target.add_condition(condition)
 
-    assert completed is not None
-    assert completed.phase == EventPhase.COMPLETION
-    assert completed.canceled is True
-    assert condition.applied is True
+    assert canceled is not None
+    assert canceled.phase == EventPhase.CANCEL
+    assert canceled.canceled is True
+    assert condition.applied is False
     assert "EngineBookCanceledEffect" not in target.active_conditions
     assert condition.uuid not in target.active_conditions_by_uuid
+    assert BaseCondition.get(condition.uuid) is None
+    assert not any(
+        event.phase is EventPhase.COMPLETION
+        for event in EventQueue.get_events_by_type(
+            EventType.CONDITION_APPLICATION,
+        )
+        if event.lineage_uuid == canceled.lineage_uuid
+    )
+
+
+def test_exceptional_condition_apply_releases_direct_state_and_identity() -> None:
+    """An exception inside `_apply()` rolls back subclass state and registry."""
+    reset_condition_state()
+    source = configured_entity("Source")
+    target = configured_entity("Target", position=(2, 1))
+    condition = EngineBookExceptionalStateCondition(
+        source_entity_uuid=source.uuid,
+        target_entity_uuid=target.uuid,
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="condition apply failed after provisional state",
+    ):
+        target.add_condition(condition)
+
+    assert condition.provisional_state_active is False
+    assert condition.applied is False
+    assert condition.uuid not in target.active_conditions_by_uuid
+    assert BaseCondition.get(condition.uuid) is None
+
+
+def test_canceled_condition_effect_rolls_back_provisional_modifier() -> None:
+    """A veto at the effect boundary rolls back state created by `_apply()`."""
+    reset_condition_state()
+    source = configured_entity("Source")
+    target = configured_entity("Target", position=(2, 1))
+    original_bonus = target.proficiency_bonus.normalized_score
+
+    def cancel_condition_effect(event: Event, _source_uuid: UUID) -> Event:
+        return event.cancel("condition effect rejected")
+
+    target.add_event_handler(EventHandler(
+        name="Reject condition effect",
+        source_entity_uuid=target.uuid,
+        trigger_conditions=[
+            Trigger(
+                event_type=EventType.CONDITION_APPLICATION,
+                event_phase=EventPhase.EFFECT,
+                event_target_entity_uuid=target.uuid,
+            ),
+        ],
+        event_processor=cancel_condition_effect,
+    ))
+    condition = EngineBookModifierCondition(
+        source_entity_uuid=source.uuid,
+        target_entity_uuid=target.uuid,
+        target_value_uuid=target.proficiency_bonus.uuid,
+        bonus=5,
+    )
+
+    canceled = target.add_condition(condition)
+
+    assert canceled is not None
+    assert canceled.canceled is True
+    assert condition.applied is False
+    assert target.proficiency_bonus.normalized_score == original_bonus
+    assert "EngineBookModifier" not in target.active_conditions
+    assert condition.uuid not in target.active_conditions_by_uuid
+    assert BaseCondition.get(condition.uuid) is None
+
+
+def test_canceled_condition_removal_preserves_active_indexes_and_state() -> None:
+    """A removal veto leaves the condition fully active and addressable."""
+    reset_condition_state()
+    source = configured_entity("Source")
+    target = configured_entity("Target", position=(2, 1))
+    original_bonus = target.proficiency_bonus.normalized_score
+    condition = EngineBookModifierCondition(
+        source_entity_uuid=source.uuid,
+        target_entity_uuid=target.uuid,
+        target_value_uuid=target.proficiency_bonus.uuid,
+        bonus=5,
+    )
+    target.add_condition(condition)
+
+    def cancel_removal(event: Event, _source_uuid: UUID) -> Event:
+        return event.cancel("condition removal rejected")
+
+    target.add_event_handler(EventHandler(
+        name="Reject condition removal",
+        source_entity_uuid=target.uuid,
+        trigger_conditions=[
+            Trigger(
+                event_type=EventType.CONDITION_REMOVAL,
+                event_phase=EventPhase.DECLARATION,
+                event_target_entity_uuid=target.uuid,
+            ),
+        ],
+        event_processor=cancel_removal,
+    ))
+
+    removed = target.remove_condition("EngineBookModifier")
+
+    assert removed is False
+    assert condition.applied is True
+    assert target.proficiency_bonus.normalized_score == original_bonus + 5
+    assert target.active_conditions["EngineBookModifier"] is condition
+    assert target.active_conditions_by_uuid[condition.uuid] is condition
+    assert "EngineBookModifier" in target.active_conditions_by_source[source.uuid]
+    assert BaseCondition.get(condition.uuid) is condition
 
 
 def test_eb_07_004_entity_immunity_and_application_save_cancel_before_apply() -> None:
@@ -493,6 +659,8 @@ def test_eb_07_008_owned_event_and_spatial_handlers_are_removed_on_cleanup() -> 
 
     target.remove_condition("EngineBookHandler")
     assert handler_uuid not in EventQueue._event_handlers
+    assert EventHandler.get(handler_uuid) is None
+    assert BaseCondition.get(handler_condition.uuid) is None
 
     Event(
         source_entity_uuid=target.uuid,
@@ -516,6 +684,8 @@ def test_eb_07_008_owned_event_and_spatial_handlers_are_removed_on_cleanup() -> 
 
     target.remove_condition("EngineBookSpatial")
     assert spatial_uuid not in EventQueue._spatial_handlers
+    assert SpatialHandler.get(spatial_uuid) is None
+    assert BaseCondition.get(spatial_condition.uuid) is None
     assert EventQueue.get_spatial_handlers_at((4, 4)) == []
 
     target.move((5, 4))
@@ -563,6 +733,7 @@ def test_eb_07_010_baseblock_add_condition_skips_canceled_no_effect() -> None:
     assert "EngineBookNoEffect" not in tile.active_conditions
     assert condition.uuid not in tile.active_conditions_by_uuid
     assert tile.active_conditions_by_source[source.uuid] == []
+    assert BaseCondition.get(condition.uuid) is None
 
     tile.remove_condition("EngineBookNoEffect")
 
@@ -767,20 +938,3 @@ def test_eb_07_013_item_conditions_index_expire_and_destroy_cleanly() -> None:
     assert destroy_condition.applied is False
     assert item.active_conditions == {}
     assert item.uuid not in BaseBlock._registry
-
-
-if __name__ == "__main__":
-    test_eb_07_001_entity_condition_application_events_and_indexes()
-    test_eb_07_002_apply_without_effect_event_cancels_and_does_not_index()
-    test_eb_07_003_canceled_apply_event_is_not_indexed_but_marks_object_applied()
-    test_eb_07_004_entity_immunity_and_application_save_cancel_before_apply()
-    test_eb_07_005_same_name_replacement_cleans_old_condition_state()
-    test_eb_07_006_parent_removal_cascades_to_same_block_subconditions()
-    test_eb_07_007_linked_conditions_clean_forward_and_notify_reverse()
-    test_eb_07_008_owned_event_and_spatial_handlers_are_removed_on_cleanup()
-    test_eb_07_009_entity_duration_advancement_expires_and_removes_condition()
-    test_eb_07_010_baseblock_add_condition_skips_canceled_no_effect()
-    test_eb_07_011_child_removal_policies_any_last_and_none()
-    test_eb_07_012_removal_save_succeeds_before_duration_decrements()
-    test_eb_07_013_item_conditions_index_expire_and_destroy_cleanly()
-    print("Chapter 07 engine-book condition lifecycle tests passed.")

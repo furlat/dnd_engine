@@ -47,6 +47,22 @@ class ConditionAgencyDenial(str, Enum):
     FULL_TURN = "full_turn"
 
 
+class ConditionApplicationPolicy(str, Enum):
+    """How one authored condition family admits a repeated application."""
+
+    REPLACE_EXISTING = "replace_existing"
+    MOST_POTENT_ACTIVE = "most_potent_active"
+
+
+class ConditionApplicationDisposition(str, Enum):
+    """Observable result of condition application arbitration."""
+
+    APPLIED = "applied"
+    REJECTED = "rejected"
+    RETAINED_STRONGER = "retained_stronger"
+    PROMOTED = "promoted"
+
+
 class DurationType(str, Enum):
     """Supported duration progression modes for conditions."""
 

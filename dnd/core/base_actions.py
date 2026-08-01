@@ -1,18 +1,28 @@
 """Action templates, cost models, execution events, and discovery DTOs."""
 
 import time
+from contextlib import contextmanager
+from dataclasses import dataclass
 
-from pydantic import BaseModel, Field, ConfigDict, PrivateAttr, computed_field, model_validator
+from pydantic import BaseModel, Field, ConfigDict, PrivateAttr, model_validator
 from dnd.action_timing import action_timing_enabled, record_action_timing
 from dnd.core.action_types import (
     ActionPresentationKind,
+    CostType,
     RestrictedActionGrant,
     RestrictedActionGrantProvider,
     RestrictedActionKind,
 )
-from dnd.core.events import Event, EventType, EventPhase, EventProcessor, Range, EventQueue
+from dnd.core.action_outcomes import (
+    ActionOutcomeProfile as ActionOutcomeProfile,
+    DamageRollProfile as DamageRollProfile,
+    OutcomeApplicationScope as OutcomeApplicationScope,
+    OutcomeResolution as OutcomeResolution,
+)
+from dnd.core.events import Event, EventType, EventPhase, Range, EventQueue
 from dnd.core.base_object import BaseObject
 from dnd.core.base_block import BaseBlock
+from dnd.core.base_tiles import MovementMode
 from dnd.core.combat_log import ActionLogData, CombatLogEntry, CombatLogEntryType, MultiEntityLogData, md_color
 from dnd.core.content.identities import ContentRef
 from dnd.core.content.runtime import (
@@ -23,43 +33,45 @@ from dnd.core.content.runtime import (
 )
 from dnd.core.aoe import AoEShape
 from dnd.core.item_types import ItemPresentationProvider, ItemPresentationState
+from dnd.core.equipment_types import WeaponSlot
+from dnd.core.effect_types import EffectOrigin, EffectOriginKind
 from dnd.core.modifiers import AdvantageStatus
-from dnd.blocks.sensory import Senses
-from typing import Any, Optional, Callable, ClassVar, OrderedDict, List, Dict, Literal, Sequence, Set, Tuple, cast
+from typing import Any, Optional, Callable, ClassVar, Iterator, List, Dict, Literal, Sequence, Set, Tuple, TypeVar, cast
 from uuid import UUID, uuid4, uuid5
 from enum import Enum
 
-CostType = Literal[
-    "actions", "bonus_actions", "reactions", "movement",
-    "spell_slot_1", "spell_slot_2", "spell_slot_3", "spell_slot_4",
-    "spell_slot_5", "spell_slot_6", "spell_slot_7", "spell_slot_8", "spell_slot_9"
-]
-
-SPELL_SLOT_COST_TYPES: Dict[int, CostType] = {
-    1: "spell_slot_1", 2: "spell_slot_2", 3: "spell_slot_3",
-    4: "spell_slot_4", 5: "spell_slot_5", 6: "spell_slot_6",
-    7: "spell_slot_7", 8: "spell_slot_8", 9: "spell_slot_9",
-}
 SPELL_SLOT_TEMPLATE_SEPARATOR = "__slot_"
 RESTRICTED_ACTION_TEMPLATE_SEPARATOR = "__grant_"
 
 
-def spell_slot_cost_type(level: int) -> CostType:
-    """Convert a spell slot level to an action-economy cost type.
+@dataclass(frozen=True)
+class ActionOverrideLease:
+    """Identity of one independently removable action-template overlay."""
 
-    Args:
-        level: Spell slot level from 1 through 9.
+    lease_uuid: UUID
+    template_uuids: Tuple[UUID, ...]
 
-    Returns:
-        Cost type matching the requested spell slot level.
+    def __contains__(self, template_uuid: object) -> bool:
+        """Return whether this lease overlays the supplied template UUID."""
+        return template_uuid in self.template_uuids
 
-    Raises:
-        ValueError: If `level` is outside the implemented spell-slot range.
-    """
-    result = SPELL_SLOT_COST_TYPES.get(level)
-    if result is None:
-        raise ValueError(f"Invalid spell slot level: {level}")
-    return result
+    def __iter__(self) -> Iterator[UUID]:
+        """Iterate the overlaid template UUIDs for diagnostics and tests."""
+        return iter(self.template_uuids)
+
+    def __len__(self) -> int:
+        """Return the number of templates owned by this lease."""
+        return len(self.template_uuids)
+
+
+@dataclass(frozen=True)
+class SpellDiscoveryMetadata:
+    """Spell-only facts exposed through the common action surface."""
+
+    spell_level: int
+    cast_at_level: int
+    is_variant: bool
+    damage_type: Optional[str]
 
 
 def target_resolution_sort_key(target_uuid: UUID) -> tuple[bool, int, int, str, str]:
@@ -72,16 +84,10 @@ def target_resolution_sort_key(target_uuid: UUID) -> tuple[bool, int, int, str, 
         Position and name ordering with UUID only as a final exact-tie fallback.
     """
     target = BaseBlock.get(target_uuid)
-    position = getattr(target, "position", None)
-    has_position = (
-        isinstance(position, tuple)
-        and len(position) == 2
-        and isinstance(position[0], int)
-        and isinstance(position[1], int)
-    )
-    x, y = cast(Tuple[int, int], position) if has_position else (0, 0)
-    target_name = target.name or "" if target is not None else ""
-    return (not has_position, x, y, target_name, str(target_uuid))
+    if target is None:
+        return (True, 0, 0, "", str(target_uuid))
+    x, y = target.position
+    return (False, x, y, target.name or "", str(target_uuid))
 
 
 class ActionCategory(str, Enum):
@@ -101,6 +107,24 @@ class ActionAvailabilityStatus(str, Enum):
     REQUIREMENTS_UNMET = "requirements_unmet"
     NO_VALID_TARGETS = "no_valid_targets"
     TARGET_COST_UNAFFORDABLE = "target_cost_unaffordable"
+
+
+class ActionSelectionParameterKind(str, Enum):
+    """Closed dimension used to select one exact action variant."""
+
+    LEVEL = "level"
+
+
+class ActionSelectionParameter(BaseModel):
+    """One exact, engine-authored selector value for an action variant."""
+
+    kind: ActionSelectionParameterKind = Field(
+        description="Closed selector dimension shared by related action rows.",
+    )
+    value: int = Field(
+        ge=1,
+        description="Exact authored value selected by this executable row.",
+    )
 
 
 class PositionDiscoveryContract(BaseModel):
@@ -167,33 +191,6 @@ class TargetType(str, Enum):
     OBJECT = "object"
 
 
-class OutcomeResolution(str, Enum):
-    """Mechanism that determines whether a modeled damage application occurs."""
-
-    AUTOMATIC = "automatic"
-    ATTACK_ROLL = "attack_roll"
-    SAVING_THROW = "saving_throw"
-    UNKNOWN = "unknown"
-
-
-class OutcomeApplicationScope(str, Enum):
-    """How repeated outcome applications map onto selected or affected entities."""
-
-    ALLOCATED_TARGETS = "allocated_targets"
-    EACH_AFFECTED_ENTITY = "each_affected_entity"
-
-
-class DamageRollProfile(BaseModel):
-    """Actor-known dice formula for one damage component in an action."""
-
-    model_config = ConfigDict(frozen=True)
-
-    dice_count: int = Field(ge=0, description="Number of dice rolled per application.")
-    die_size: int = Field(ge=1, description="Number of faces on each damage die.")
-    flat_bonus: int = Field(default=0, description="Flat bonus added once per application.")
-    damage_type: str = Field(description="Damage type applied to this component.")
-
-
 class AttackRollBaseline(BaseModel):
     """Read-only actor contribution to an attack-roll outcome model."""
 
@@ -201,51 +198,6 @@ class AttackRollBaseline(BaseModel):
     advantage: AdvantageStatus = Field(description="Actor-side advantage state before target modifiers.")
     critical_threshold: int = Field(ge=1, le=20, description="Natural d20 threshold for an actor-side critical hit.")
     critical_extra_dice: int = Field(ge=0, description="Actor-side extra damage dice added on a critical hit.")
-
-
-class ActionOutcomeProfile(BaseModel):
-    """Actor-baseline stochastic model disclosed with an available action.
-
-    The profile describes the action before target-private modifiers, temporary
-    hit points, and undisclosed defenses. Policy consumers must combine it only
-    with facts present in their subjective state and retain that scope in any
-    derived estimate.
-    """
-
-    model_config = ConfigDict(frozen=True)
-
-    effect_id: Optional[str] = Field(
-        default=None,
-        description="Stable identity of the modeled effect for typed interactions.",
-    )
-    resolution: OutcomeResolution = Field(description="Roll mechanism used by each application.")
-    applications: int = Field(default=1, ge=1, description="Independent repeated applications such as rays or darts.")
-    application_scope: OutcomeApplicationScope = Field(
-        default=OutcomeApplicationScope.ALLOCATED_TARGETS,
-        description="Whether applications are allocated among targets or applied to every affected entity.",
-    )
-    damage_rolls: Sequence[DamageRollProfile] = Field(
-        default_factory=tuple,
-        description="Damage components rolled per application.",
-    )
-    attack_bonus: Optional[int] = Field(default=None, description="Actor-baseline d20 attack bonus when applicable.")
-    advantage: AdvantageStatus = Field(
-        default=AdvantageStatus.NONE,
-        description="Actor-baseline attack advantage state.",
-    )
-    critical_threshold: int = Field(default=20, ge=1, le=20, description="Natural d20 threshold for a critical hit.")
-    critical_extra_dice: int = Field(default=0, ge=0, description="Extra critical dice beyond doubling base dice.")
-    save_dc: Optional[int] = Field(default=None, description="Saving throw DC when the action uses a save.")
-    save_ability: Optional[str] = Field(default=None, description="Saving throw ability when known.")
-    half_damage_on_save: bool = Field(default=False, description="Whether a successful save retains half damage.")
-    scope: Literal["actor_baseline"] = Field(
-        default="actor_baseline",
-        description="Explicit boundary of facts represented by this profile.",
-    )
-
-    def model_post_init(self, __context: Any) -> None:
-        """Freeze the disclosed damage-component sequence."""
-        object.__setattr__(self, "damage_rolls", tuple(self.damage_rolls))
 
 
 class ActionSetupDuration(str, Enum):
@@ -632,14 +584,18 @@ class ActionEvent(Event):
             self.behavior_binding = active_runtime_behavior_binding()
         super().model_post_init(__context)
 
-    def add_cost(self, cost: Cost) -> None:
-        """Append a serializable copy of a runtime action cost.
-
-        Args:
-            cost: Runtime cost to store without executable callbacks.
-        """
-        base_cost = BaseCost.model_validate(cost)
-        self.costs.append(base_cost)
+    def get_effect_origin(self) -> EffectOrigin:
+        """Expose exact action provenance to persistent child effects."""
+        binding = self.behavior_binding
+        return EffectOrigin(
+            kind=EffectOriginKind.ACTION,
+            source_id=(
+                binding.definition_ref.identity_key
+                if binding is not None
+                else None
+            ),
+            source_event_lineage_uuid=str(self.lineage_uuid),
+        )
 
     @classmethod
     def from_costs(
@@ -809,6 +765,9 @@ class ActionEvent(Event):
         )
 
 
+ActionEventT = TypeVar("ActionEventT", bound=ActionEvent)
+
+
 class BaseAction(BaseObject):
     """Base class for executable action templates and instances.
 
@@ -839,6 +798,13 @@ class BaseAction(BaseObject):
             "behavior. When present, this is the catalog identity of the "
             "configured affordance; behavior_binding remains the engine "
             "implementation identity."
+        ),
+    )
+    selection_parameter: Optional[ActionSelectionParameter] = Field(
+        default=None,
+        description=(
+            "Exact engine-authored selector value distinguishing this action "
+            "variant without parsing its command token, label, or costs."
         ),
     )
     parent_event: Optional[Event] = Field(
@@ -895,6 +861,20 @@ class BaseAction(BaseObject):
     def is_movement(self) -> bool:
         """Whether this action is categorized as movement."""
         return self.action_category == ActionCategory.MOVEMENT
+
+    def get_discovery_weapon_slot(self) -> Optional[WeaponSlot]:
+        """Return the exact equipped-weapon slot used by this action."""
+        return None
+
+    def get_discovery_movement_mode(self) -> MovementMode:
+        """Return the traversal mode used for position discovery."""
+        return MovementMode.WALKING
+
+    def get_spell_discovery_metadata(
+        self,
+    ) -> Optional[SpellDiscoveryMetadata]:
+        """Return spell-only discovery facts without owned-model probing."""
+        return None
 
     def get_semantic_key(self) -> str:
         """Return the rules-family key used by mechanics and policy.
@@ -1178,7 +1158,7 @@ class BaseAction(BaseObject):
             return []
 
         senses_block = entity.get_senses()
-        if not isinstance(senses_block, Senses):
+        if senses_block is None:
             return []
 
         action_range = self.get_range()
@@ -1275,6 +1255,19 @@ class BaseAction(BaseObject):
         targets.extend(self.extra_target_entity_uuids)
         return targets
 
+    @contextmanager
+    def _target_application(
+        self,
+        target_uuid: UUID,
+    ) -> Iterator[None]:
+        """Bind one convolution target and restore the transaction afterward."""
+        previous_target_uuid = self.target_entity_uuid
+        self.target_entity_uuid = target_uuid
+        try:
+            yield
+        finally:
+            self.target_entity_uuid = previous_target_uuid
+
     def _filter_targets_by_faction(self, source_block: BaseBlock, targets: List[UUID]) -> List[UUID]:
         """Filter targets based on valid_target_filter for AoE spells.
 
@@ -1333,15 +1326,16 @@ class BaseAction(BaseObject):
         if source_block is None:
             return "Source entity not found"
 
-        senses: Optional[Senses] = getattr(source_block, 'senses', None)
-        if senses is not None:
-            for target_uuid in all_targets:
-                if target_uuid == self.source_entity_uuid:
-                    continue
-                if target_uuid not in senses.entities:
-                    target = BaseBlock.get(target_uuid)
-                    target_name = target.name if target else str(target_uuid)
-                    return f"{target_name} is not visible"
+        senses = source_block.get_senses()
+        for target_uuid in all_targets:
+            if target_uuid == self.source_entity_uuid:
+                continue
+            if senses is None:
+                return "Source cannot perceive external targets"
+            if target_uuid not in senses.entities:
+                target = BaseBlock.get(target_uuid)
+                target_name = target.name if target else str(target_uuid)
+                return f"{target_name} is not visible"
 
         source_faction = source_block.faction
 
@@ -1523,10 +1517,17 @@ class BaseAction(BaseObject):
         Returns:
             Declaration event, or `None` if a subclass declines creation.
         """
+        target_entity_uuid = self.target_entity_uuid
+        if (
+            target_entity_uuid is None
+            and self.effective_target_type == TargetType.SELF
+        ):
+            target_entity_uuid = self.source_entity_uuid
+
         event = ActionEvent.from_costs(
             self.effective_costs,
             self.source_entity_uuid,
-            self.target_entity_uuid,
+            target_entity_uuid,
             parent_event,
             use_register=use_register,
             source_item_uuid=self.source_item_uuid,
@@ -1540,6 +1541,10 @@ class BaseAction(BaseObject):
         source_block = BaseBlock.get(self.source_entity_uuid)
         if source_block is not None:
             event.source_entity_name = source_block.name
+        if target_entity_uuid is not None:
+            target_block = BaseBlock.get(target_entity_uuid)
+            if target_block is not None:
+                event.target_entity_name = target_block.name
         return event
 
     def _declared_target_entity_uuids(self) -> List[UUID]:
@@ -1553,6 +1558,8 @@ class BaseAction(BaseObject):
             TargetType.POSITION_AOE,
         ):
             return self.get_all_targets()
+        if self.effective_target_type == TargetType.SELF:
+            return [self.source_entity_uuid]
         return [self.target_entity_uuid] if self.target_entity_uuid is not None else []
 
     def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
@@ -1569,6 +1576,11 @@ class BaseAction(BaseObject):
             Execution event on success, canceled event on validation failure, or
             `None` if a subclass declines validation.
         """
+        if BaseBlock.get(self.source_entity_uuid) is None:
+            return declaration_event.cancel(
+                status_message="Source entity not found",
+            )
+
         effective_tt = self.effective_target_type
         if effective_tt in (TargetType.MULTI_ENTITY, TargetType.POSITION_AOE):
             all_targets = self.get_all_targets()
@@ -1658,14 +1670,52 @@ class BaseAction(BaseObject):
         pass
 
     def _apply_costs(self, completion_event: ActionEvent) -> Optional[ActionEvent]:
-        """Apply action costs after successful completion.
+        """Commit the action's serialized costs through its owning block."""
+        return self._consume_costs(completion_event)
 
-        Subclasses that consume action economy override this method.
-        """
-        return completion_event.phase_to(
-            EventPhase.COMPLETION,
-            status_message=f"Succesfully applied costs for {self.name} for {completion_event.source_entity_uuid}"
-        )
+    def _consume_costs(
+        self,
+        completion_event: ActionEventT,
+        *,
+        excluded_cost_types: frozenset[CostType] = frozenset(),
+    ) -> ActionEventT:
+        """Commit admitted turn and named-resource costs exactly once."""
+        owner = BaseBlock.get(self.source_entity_uuid)
+        if owner is None:
+            return completion_event.cancel(
+                status_message=f"Action owner not found for {completion_event.name}"
+            )
+        for cost in completion_event.costs:
+            if (
+                cost.cost_type not in excluded_cost_types
+                and cost.cost > 0
+                and not owner.consume_prevalidated_action_cost(
+                    cost.cost_type,
+                    cost.cost,
+                    cost.name,
+                )
+            ):
+                return completion_event.cancel(
+                    status_message=(
+                        f"Action owner cannot consume {cost.cost_type} "
+                        f"for {completion_event.name}"
+                    )
+                )
+            if (
+                cost.resource_cost > 0
+                and cost.resource_name is not None
+                and not owner.consume_action_resource(
+                    cost.resource_name,
+                    cost.resource_cost,
+                )
+            ):
+                return completion_event.cancel(
+                    status_message=(
+                        f"Failed to consume resource {cost.resource_name} "
+                        f"for {completion_event.name}"
+                    )
+                )
+        return completion_event
 
     def _apply_execution_cancellation_costs(
         self,
@@ -1741,8 +1791,8 @@ class BaseAction(BaseObject):
         if declaration_event is None:
             record_total()
             return None
-        published_declaration = EventQueue.register(
-            declaration_event.model_copy(update={"use_register": True}),
+        published_declaration = EventQueue.publish_declaration(
+            declaration_event
         )
         if not isinstance(published_declaration, ActionEvent):
             raise TypeError(
@@ -1776,13 +1826,11 @@ class BaseAction(BaseObject):
             started = start_phase()
             all_target_uuids = self.get_all_targets()
             record_phase("resolve_convolution_targets", started)
-            original_target = self.target_entity_uuid
             total_damage = 0
 
             targets_started = start_phase()
             for application_index, target_uuid in enumerate(all_target_uuids):
                 target_started = start_phase()
-                self.target_entity_uuid = target_uuid
 
                 target_block = BaseBlock.get(target_uuid)
                 target_entity_name = target_block.name if target_block else None
@@ -1807,14 +1855,13 @@ class BaseAction(BaseObject):
                     record_phase("convolution_target_canceled", target_started)
                     continue
 
-                result_event = self._apply(per_target_event)
+                with self._target_application(target_uuid):
+                    result_event = self._apply(per_target_event)
                 if result_event:
                     damage = result_event.total_damage or 0
                     total_damage += damage
                 record_phase("convolution_target_apply", target_started)
             record_phase("convolution_apply_targets", targets_started)
-
-            self.target_entity_uuid = original_target
 
             started = start_phase()
             effect_event = execution_event.phase_to(
@@ -1861,103 +1908,6 @@ class BaseAction(BaseObject):
             raise ValueError(f"Action {self.name} can only be completed in the completion phase")
         record_total()
         return cost_event
-
-
-class StructuredAction(BaseAction):
-    """Action implementation backed by prerequisite and consequence processors."""
-
-    prerequisites: OrderedDict[str,EventProcessor] = Field(
-        default_factory=OrderedDict,
-        exclude=True,
-        description="Ordered prerequisite processors keyed by prerequisite name.",
-    )
-    consequences: OrderedDict[str,EventProcessor] = Field(
-        default_factory=OrderedDict,
-        exclude=True,
-        description="Ordered consequence processors keyed by consequence name.",
-    )
-    revalidate_prerequisites: bool = Field(
-        default=True,
-        description="Whether prerequisites are revalidated after each consequence.",
-    )
-    cost_applier: Optional[EventProcessor] = Field(
-        default=None,
-        exclude=True,
-        description="Optional processor used to apply action costs.",
-    )
-
-    @computed_field
-    @property
-    def prerequisite_names(self) -> List[str]:
-        """Serializable list of prerequisite names."""
-        return list(self.prerequisites.keys())
-
-    @computed_field
-    @property
-    def consequence_names(self) -> List[str]:
-        """Serializable list of consequence names."""
-        return list(self.consequences.keys())
-
-    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
-        """Run the prerequisite checking pipeline."""
-        if declaration_event.phase != EventPhase.DECLARATION:
-            raise ValueError(f"Action {self.name} prerequisites can only be checked in declaration phase")
-
-        current_event = declaration_event
-        for prerequisite_name, prerequisite_function in self.prerequisites.items():
-            prerequisite_event = prerequisite_function(current_event, current_event.source_entity_uuid)
-            if prerequisite_event is None:
-                return current_event.cancel(status_message=f"Prerequisite {prerequisite_name} failed for {self.name}")
-            if prerequisite_event.canceled:
-                return prerequisite_event
-            current_event = prerequisite_event
-
-        return current_event.phase_to(
-            EventPhase.EXECUTION,
-            status_message=f"Successfully validated structured action {self.name} for {current_event.source_entity_uuid}"
-        )
-
-    def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
-        """Run the consequence application pipeline."""
-        if execution_event.phase != EventPhase.EXECUTION:
-            raise ValueError(f"Action {self.name} consequences can only be applied in execution phase")
-
-        current_event = execution_event
-        effect_event = current_event.phase_to(
-            EventPhase.EFFECT,
-            status_message=f"Applying consequences for {self.name}"
-        )
-        if effect_event.canceled:
-            return effect_event
-
-        current_event = effect_event
-        for consequence_name, consequence_function in self.consequences.items():
-            consequence_event = consequence_function(current_event, current_event.source_entity_uuid)
-            if consequence_event is None:
-                return current_event.cancel(status_message=f"Consequence {consequence_name} failed for {self.name}")
-            elif consequence_event.canceled:
-                return consequence_event
-
-            if self.revalidate_prerequisites:
-                if consequence_event.phase not in [EventPhase.EXECUTION, EventPhase.EFFECT]:
-                    raise ValueError(f"Consequence {consequence_name} returned event in invalid phase {consequence_event.phase}")
-                validated_event = self._validate(consequence_event)
-                if validated_event is None or validated_event.canceled:
-                    return validated_event
-                current_event = validated_event
-            else:
-                current_event = consequence_event
-
-        return current_event.phase_to(
-            EventPhase.COMPLETION,
-            status_message=f"Successfully completed structured action {self.name} for {current_event.source_entity_uuid}"
-        )
-
-    def _apply_costs(self, completion_event: ActionEvent) -> Optional[ActionEvent]:
-        """Apply costs through the configured processor when present."""
-        if self.cost_applier is not None:
-            return self.cost_applier(completion_event, self.source_entity_uuid)
-        return completion_event
 
 
 class OpportunityAttackExposure(BaseModel):
@@ -2034,6 +1984,13 @@ class AvailableActionInfo(BaseModel):
             "Exact authored configuration for a parameterized action. "
             "Clients resolve this catalog row instead of inferring a variant "
             "from execution tokens, display names, or outcome identifiers."
+        ),
+    )
+    selection_parameter: Optional[ActionSelectionParameter] = Field(
+        default=None,
+        description=(
+            "Exact selector value for this executable variant; rows sharing "
+            "one authored action identity can be grouped by kind."
         ),
     )
     target_type: TargetType = Field(description="What kind of target this action needs")

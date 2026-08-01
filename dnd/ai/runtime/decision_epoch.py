@@ -4,12 +4,11 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from dataclasses import dataclass
-import time
+from enum import Enum
 from types import MappingProxyType
-from typing import Any, Callable, Mapping, Optional
+from typing import Any, Mapping, Optional
 
 from dnd.actions_functional import get_available_actions
-from dnd.action_timing import reset_action_timing_recorder, set_action_timing_recorder
 from dnd.blocks.base_item import UsableItem
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_actions import (
@@ -126,45 +125,24 @@ def build_decision_epoch(
     turn_index: int,
     observation_cursor: int,
     reason: DecisionEpochReason = DecisionEpochReason.SNAPSHOT,
-    record_timing: Optional[Callable[[str, float], None]] = None,
 ) -> Optional[DecisionEpochBuild]:
     """Build public rows and private authority for one authorized live actor."""
-    started = time.perf_counter()
     if not actor.has_hp:
-        _record_timing(record_timing, "resolve_actor_entity_ms", started)
         return None
-    _record_timing(record_timing, "resolve_actor_entity_ms", started)
 
-    started = time.perf_counter()
-    if record_timing is None:
-        available = get_available_actions(actor, legal_only=True)
-    else:
-        token = set_action_timing_recorder(record_timing)
-        try:
-            available = get_available_actions(actor, legal_only=True)
-        finally:
-            reset_action_timing_recorder(token)
-    _record_timing(record_timing, "get_available_actions_ms", started)
+    available = get_available_actions(actor, legal_only=True)
 
-    started = time.perf_counter()
     affordances, execution_authority = _build_affordance_set_and_execution_authority_from_actions(
         actor,
         available,
         observation_cursor,
-        record_timing=record_timing,
     )
-    _record_timing(record_timing, "build_affordance_set_ms", started)
 
-    started = time.perf_counter()
-    economy = _build_action_economy_state_from_actor(actor, available, affordances, record_timing)
-    _record_timing(record_timing, "build_action_economy_ms", started)
-    started = time.perf_counter()
+    economy = _build_action_economy_state_from_actor(actor, available, affordances)
     epoch_id = (
         f"{epoch_namespace}:actor={actor.uuid}:round={round_number}:"
         f"turn={turn_index}:obs={observation_cursor}:reason={reason.value}"
     )
-    _record_timing(record_timing, "build_epoch_id_ms", started)
-    started = time.perf_counter()
     epoch = DecisionEpoch.model_construct(
         epoch_id=epoch_id,
         epoch_index=observation_cursor,
@@ -176,23 +154,11 @@ def build_decision_epoch(
         economy=economy,
         affordances=affordances,
     )
-    _record_timing(record_timing, "construct_epoch_model_ms", started)
     return DecisionEpochBuild(
         epoch=epoch,
         available_actions=available,
         execution_authority=execution_authority,
     )
-
-
-def _record_timing(
-    record_timing: Optional[Callable[[str, float], None]],
-    phase: str,
-    started_at: float,
-) -> None:
-    """Record an optional epoch-building timing phase."""
-    if record_timing is not None:
-        record_timing(phase, started_at)
-
 
 def _register_semantic_contract(
     semantics: ActionSemantics,
@@ -210,27 +176,10 @@ def _register_semantic_contract(
     return semantics_ref
 
 
-def _build_affordance_set_from_actions(
-    actor: Entity,
-    actions: AvailableActionsResult,
-    observation_cursor: int,
-    record_timing: Optional[Callable[[str, float], None]] = None,
-) -> AffordanceSet:
-    """Flatten engine action objects directly into decision-epoch rows."""
-    affordances, _authority = _build_affordance_set_and_execution_authority_from_actions(
-        actor,
-        actions,
-        observation_cursor,
-        record_timing=record_timing,
-    )
-    return affordances
-
-
 def _build_affordance_set_and_execution_authority_from_actions(
     actor: Entity,
     actions: AvailableActionsResult,
     observation_cursor: int,
-    record_timing: Optional[Callable[[str, float], None]] = None,
 ) -> tuple[AffordanceSet, DecisionEpochExecutionAuthority]:
     """Build public affordances and private exact execution authority together."""
     gc_lease = AutomaticGcLease.acquire()
@@ -241,13 +190,11 @@ def _build_affordance_set_and_execution_authority_from_actions(
         action_info_by_source_id: dict[str, AvailableActionInfo] = {}
         target_by_row_id: dict[str, Optional[AvailableTarget]] = {}
         used_row_ids: set[str] = set()
-        started = time.perf_counter()
         row_descriptors = _build_action_row_descriptors(
             actions.all_actions,
             semantic_catalog,
             semantic_references,
         )
-        _record_timing(record_timing, "build_row_descriptors_ms", started)
         capabilities = _build_action_capabilities(
             actor,
             semantic_catalog,
@@ -259,7 +206,6 @@ def _build_affordance_set_and_execution_authority_from_actions(
                 _capability_row_lookup_key(row): row_descriptors[id(row)]
                 for row in actions.all_actions
             },
-            record_timing=record_timing,
         )
         affordances = _affordance_set_from_buckets(
             actor_uuid=str(actor.uuid),
@@ -440,7 +386,6 @@ def _build_action_capabilities(
     available_row_descriptors: Optional[
         dict[tuple[str, str, Optional[str]], _ActionRowDescriptor]
     ] = None,
-    record_timing: Optional[Callable[[str, float], None]] = None,
 ) -> list[ActionCapability]:
     """Describe actor-owned action configurations independently of legal rows.
 
@@ -451,21 +396,17 @@ def _build_action_capabilities(
     Returns:
         Deterministically ordered capabilities containing no targets or row IDs.
     """
-    total_started = time.perf_counter()
-    started = time.perf_counter()
     registered_variants = (
         registered_actions
         if registered_actions is not None
         else tuple(
             variant
-            for template in actor.registered_actions
+            for template in actor.get_effective_action_templates()
             for variant in template.get_discovery_variants(actor)
         )
     )
     registered_sources = [(variant, None) for variant in registered_variants]
-    _record_timing(record_timing, "build_capabilities.registered_variants_ms", started)
 
-    started = time.perf_counter()
     item_actions = (
         inventory_use_actions
         if inventory_use_actions is not None
@@ -478,9 +419,7 @@ def _build_action_capabilities(
         )
         for template in item_actions
     ]
-    _record_timing(record_timing, "build_capabilities.inventory_sources_ms", started)
 
-    started = time.perf_counter()
     environment_sources = [
         (template, str(object_uuid))
         for object_uuid in sorted(actor.senses.objects, key=str)
@@ -489,7 +428,6 @@ def _build_action_capabilities(
         and obj.should_include_in_available_object_actions()
         for template in obj.get_use_actions(actor.uuid)
     ]
-    _record_timing(record_timing, "build_capabilities.environment_sources_ms", started)
 
     capabilities: dict[str, ActionCapability] = {}
     references = semantic_references if semantic_references is not None else {}
@@ -498,7 +436,6 @@ def _build_action_capabilities(
         for row in available_action_rows or ()
     }
     descriptors_by_source = available_row_descriptors or {}
-    started = time.perf_counter()
     for template, source_item_uuid in (
         *registered_sources,
         *item_sources,
@@ -515,10 +452,7 @@ def _build_action_capabilities(
             available_row_descriptor=descriptors_by_source.get(source_key),
         )
         capabilities[capability.capability_id] = capability
-    _record_timing(record_timing, "build_capabilities.metadata_and_models_ms", started)
-    result = [capabilities[key] for key in sorted(capabilities)]
-    _record_timing(record_timing, "build_capabilities.total_ms", total_started)
-    return result
+    return [capabilities[key] for key in sorted(capabilities)]
 
 
 def _capability_template_lookup_key(
@@ -555,7 +489,7 @@ def _action_capability_from_template(
     available_row_descriptor: Optional[_ActionRowDescriptor] = None,
 ) -> ActionCapability:
     """Build one non-executable capability from an actor-owned template."""
-    weapon_slot_value = getattr(template, "weapon_slot", None)
+    weapon_slot_value = template.get_discovery_weapon_slot()
     weapon_slot = _enum_value(weapon_slot_value) if weapon_slot_value is not None else None
     row = available_row
     if row is None:
@@ -587,8 +521,13 @@ def _action_capability_from_template(
     if action_range is None and weapon_slot_value is not None:
         action_range = actor.get_weapon_range(weapon_slot_value)
     target_type = template.effective_target_type
-    base_spell_level = getattr(template, "spell_level", None) if template.is_spell else None
-    cast_at_level = getattr(template, "cast_at_level", None) if template.is_spell else None
+    spell_metadata = template.get_spell_discovery_metadata()
+    base_spell_level = (
+        spell_metadata.spell_level if spell_metadata is not None else None
+    )
+    cast_at_level = (
+        spell_metadata.cast_at_level if spell_metadata is not None else None
+    )
     capability_id = "|".join(
         (
             row.semantic_key,
@@ -725,11 +664,7 @@ def _describe_action_row(
         semantics=semantics,
         semantics_ref=semantics_ref,
         cost=_action_cost_profile_from_action(row),
-        outcome_profile=(
-            ActionOutcomeProfile.model_validate(row.outcome_profile.model_dump(mode="json"))
-            if row.outcome_profile is not None
-            else None
-        ),
+        outcome_profile=row.outcome_profile,
         capability_tags=tuple(sorted(tag.value for tag in semantics.tags)),
         affordance_tags=tuple(_affordance_tags_from_action(row, semantics)),
     )
@@ -848,11 +783,7 @@ def _build_affordance_rows_from_actions(
                     semantics=semantics,
                     semantics_ref=action_semantics_ref(semantics),
                     cost=_action_cost_profile_from_action(row),
-                    outcome_profile=(
-                        ActionOutcomeProfile.model_validate(row.outcome_profile.model_dump(mode="json"))
-                        if row.outcome_profile is not None
-                        else None
-                    ),
+                    outcome_profile=row.outcome_profile,
                     capability_tags=tuple(sorted(tag.value for tag in semantics.tags)),
                     affordance_tags=tuple(_affordance_tags_from_action(row, semantics)),
                 )
@@ -1097,19 +1028,7 @@ def _action_cost_profile_from_values(
     can_afford: bool,
 ) -> ActionCostProfile:
     """Build a normalized cost profile from primitive values."""
-    affordability = "affordable" if can_afford else "unaffordable"
-    kwargs: dict[str, Any] = {
-        "action_cost": 0,
-        "bonus_action_cost": 0,
-        "reaction_cost": 0,
-        "movement_cost": 0,
-        "consumes_attack_slot": False,
-        "spell_slot_cost": None,
-        "resource_costs": {},
-        "item_charge_costs": {},
-        "affordability": affordability,
-        "affordability_reasons": [] if affordability == "affordable" else ["engine reported the row as unaffordable"],
-    }
+    kwargs = _empty_action_cost_profile_payload(can_afford)
     if cost_type == "actions":
         kwargs["action_cost"] = cost_amount
     elif cost_type == "bonus_actions":
@@ -1129,8 +1048,22 @@ def _action_cost_profile_from_cost_rows(
     can_afford: bool,
 ) -> ActionCostProfile:
     """Build a normalized cost profile from full engine cost rows."""
+    kwargs = _empty_action_cost_profile_payload(can_afford)
+    for cost in costs:
+        _merge_cost_profile_kwargs(
+            kwargs,
+            _enum_value(cost.cost_type),
+            cost.cost,
+            cost.resource_name,
+            cost.resource_cost,
+        )
+    return ActionCostProfile.model_construct(**kwargs)
+
+
+def _empty_action_cost_profile_payload(can_afford: bool) -> dict[str, Any]:
+    """Return the single neutral payload used by every engine cost encoding."""
     affordability = "affordable" if can_afford else "unaffordable"
-    kwargs: dict[str, Any] = {
+    return {
         "action_cost": 0,
         "bonus_action_cost": 0,
         "reaction_cost": 0,
@@ -1142,13 +1075,6 @@ def _action_cost_profile_from_cost_rows(
         "affordability": affordability,
         "affordability_reasons": [] if affordability == "affordable" else ["engine reported the row as unaffordable"],
     }
-    for cost in costs:
-        cost_type = _enum_value(cost.cost_type)
-        amount = cost.cost
-        resource_name = cost.resource_name
-        resource_cost = cost.resource_cost
-        _merge_cost_profile_kwargs(kwargs, cost_type, amount, resource_name, resource_cost)
-    return ActionCostProfile.model_construct(**kwargs)
 
 
 def _merge_cost_profile_kwargs(
@@ -1236,45 +1162,29 @@ def _build_action_economy_state_from_actor(
     actor: Entity,
     actions: AvailableActionsResult,
     affordances: AffordanceSet,
-    record_timing: Optional[Callable[[str, float], None]] = None,
 ) -> ActionEconomyState:
     """Build action-economy state directly from the actor and action result."""
-    started = time.perf_counter()
     ae = actor.action_economy
-    _record_timing(record_timing, "action_economy.resolve_block_ms", started)
 
-    started = time.perf_counter()
     spell_slots = {}
     installed_capacities = ae.get_normal_spell_slot_capacities()
     for level in range(1, 10):
-        slot_started = time.perf_counter()
-        slot_attr = getattr(ae, f"spell_slot_{level}", None)
-        _record_timing(record_timing, f"action_economy.spell_slot_{level}.resolve_ms", slot_started)
-        if slot_attr is None:
-            continue
-        slot_started = time.perf_counter()
+        slot_attr = ae.spell_slot_value(level)
         base_mod = slot_attr.get_base_modifier()
-        _record_timing(record_timing, f"action_economy.spell_slot_{level}.base_modifier_ms", slot_started)
         max_val = installed_capacities.get(
             level,
             base_mod.value if base_mod else 0,
         )
         if max_val > 0:
-            slot_started = time.perf_counter()
             current = slot_attr.normalized_score
-            _record_timing(record_timing, f"action_economy.spell_slot_{level}.normalized_score_ms", slot_started)
             spell_slots[level] = ResourcePool.model_construct(current=current, max=max_val)
-    _record_timing(record_timing, "action_economy.spell_slots_total_ms", started)
 
-    started = time.perf_counter()
     resources = {}
     for name, resource in ae.resources.items():
         if name == "extra_attacks":
             continue
         resources[str(name)] = ResourcePool.model_construct(current=int(resource.current), max=int(resource.maximum))
-    _record_timing(record_timing, "action_economy.resources_ms", started)
 
-    started = time.perf_counter()
     item_charges = {
         str(item_uuid): ResourcePool.model_construct(
             current=current,
@@ -1282,16 +1192,12 @@ def _build_action_economy_state_from_actor(
         )
         for item_uuid, (current, maximum) in actions.item_charge_pools.items()
     }
-    _record_timing(record_timing, "action_economy.item_charges_ms", started)
 
-    started = time.perf_counter()
     meaningful_rows = any(
         source.bucket != "special_commands" and source.can_afford
         for source in affordances.action_sources
     )
-    _record_timing(record_timing, "action_economy.meaningful_rows_ms", started)
 
-    started = time.perf_counter()
     gates = []
     if not meaningful_rows:
         gates.append(EconomyGate.model_construct(
@@ -1299,26 +1205,16 @@ def _build_action_economy_state_from_actor(
             reason="No affordable non-end-turn command is currently exposed by the engine.",
             active=True,
         ))
-    _record_timing(record_timing, "action_economy.gates_ms", started)
 
-    started = time.perf_counter()
     actions_remaining = int(ae.actions.normalized_score)
-    _record_timing(record_timing, "action_economy.actions_normalized_score_ms", started)
 
-    started = time.perf_counter()
     bonus_actions_remaining = int(ae.bonus_actions.normalized_score)
-    _record_timing(record_timing, "action_economy.bonus_actions_normalized_score_ms", started)
 
-    started = time.perf_counter()
     reactions_remaining = int(ae.reactions.normalized_score)
-    _record_timing(record_timing, "action_economy.reactions_normalized_score_ms", started)
 
-    started = time.perf_counter()
     extra_attacks_remaining = int(ae.get_resource_current("extra_attacks"))
-    _record_timing(record_timing, "action_economy.extra_attacks_resource_ms", started)
 
-    started = time.perf_counter()
-    result = ActionEconomyState.model_construct(
+    return ActionEconomyState.model_construct(
         actor_uuid=str(actor.uuid),
         actions=actions_remaining,
         bonus_actions=bonus_actions_remaining,
@@ -1331,11 +1227,10 @@ def _build_action_economy_state_from_actor(
         gates=gates,
         meaningful_commands_remaining=meaningful_rows,
     )
-    _record_timing(record_timing, "action_economy.construct_model_ms", started)
-    return result
 
 
 def _enum_value(value: Any) -> str:
     """Return enum `.value` when present, otherwise a string value."""
-    raw_value = getattr(value, "value", value)
-    return str(raw_value)
+    if isinstance(value, Enum):
+        return str(value.value)
+    return str(value)

@@ -13,11 +13,11 @@ Level 15: Champion - Superior Critical
 Level 18: Champion - Survivor (DEFERRED)
 """
 
-from typing import Any, Dict
+from typing import Any
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.condition_types import ConditionCategory, DurationType
 from dnd.core.base_actions import (
-    ActionOutcomeProfile, BaseAction, ActionEvent, Cost, TargetType, BaseCost, ActionCategory
+    ActionOutcomeProfile, BaseAction, ActionEvent, Cost, TargetType, ActionCategory
 )
 from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.core.events import (
@@ -26,14 +26,12 @@ from dnd.core.events import (
 )
 from dnd.core.equipment_types import ArmorType, WeaponProperty, WeaponSlot
 from dnd.core.dice import DiceRoll, Dice, RollType, AttackOutcome
-from dnd.core.modifiers import NumericalModifier, AdvantageModifier, AdvantageStatus, ContextualNumericalModifier
+from dnd.core.modifiers import NumericalModifier, AdvantageModifier, AdvantageStatus
 from dnd.core.values import ModifiableValue
 from dnd.blocks.equipment import Weapon, Shield
-from dnd.blocks.action_economy import RechargeType
 from dnd.entity import Entity, determine_attack_outcome
 from dnd.actions import (
     entity_action_economy_cost_evaluator,
-    entity_action_economy_cost_applier,
     entity_resource_cost_evaluator,
     AttackEvent,
     Attack,
@@ -71,56 +69,6 @@ def create_modified_dice_roll(original: DiceRoll, new_results: List[int]) -> Dic
     )
 
 
-class FightingStyleArchery(BaseCondition):
-    """Fighter fighting style that improves ranged weapon attacks.
-
-    Attributes:
-        name: Condition name used for Archery fighting style lookup and cleanup.
-        description: Short rules-facing summary of the Archery fighting style hook.
-    """
-    name: str = Field(
-        default="Fighting Style: Archery",
-        description="Condition name used for Archery fighting style lookup and cleanup.",
-    )
-    description: str = Field(
-        default="+2 bonus to attack rolls with ranged weapons",
-        description="Short rules-facing summary of the Archery fighting style hook.",
-    )
-
-    def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]],
-        List[UUID],
-        List[UUID],
-        List[UUID],
-        Optional[Event]
-    ]:
-        if not self.target_entity_uuid:
-            return [], [], [], [], declaration_event.cancel(
-                status_message="Target entity UUID is not set"
-            )
-
-        target = Entity.get(self.target_entity_uuid)
-        if not target:
-            return [], [], [], [], declaration_event.cancel(
-                status_message=f"Target entity {self.target_entity_uuid} not found"
-            )
-
-        outs: List[Tuple[UUID, UUID]] = []
-
-        archery_mod = NumericalModifier.create(
-            source_entity_uuid=self.target_entity_uuid,
-            name="Archery",
-            value=2
-        )
-        mod_uuid = target.equipment.ranged_attack_bonus.self_static.add_value_modifier(archery_mod)
-        outs.append((target.equipment.ranged_attack_bonus.uuid, mod_uuid))
-
-        effect_event = declaration_event.phase_to(
-            EventPhase.EFFECT,
-            status_message=f"Applied Archery fighting style to {target.name}"
-        )
-
-        return outs, [], [], [], effect_event
 
 
 def defense_ac_check(
@@ -150,64 +98,6 @@ def defense_ac_check(
     return None
 
 
-class FightingStyleDefense(BaseCondition):
-    """Fighter fighting style that improves AC while armored.
-
-    Attributes:
-        name: Condition name used for Defense fighting style lookup and cleanup.
-        description: Short rules-facing summary of the Defense fighting style hook.
-    """
-    name: str = Field(
-        default="Fighting Style: Defense",
-        description="Condition name used for Defense fighting style lookup and cleanup.",
-    )
-    description: str = Field(
-        default="+1 AC while wearing armor",
-        description="Short rules-facing summary of the Defense fighting style hook.",
-    )
-
-    def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]],
-        List[UUID],
-        List[UUID],
-        List[UUID],
-        Optional[Event]
-    ]:
-        if not self.target_entity_uuid:
-            return [], [], [], [], declaration_event.cancel(
-                status_message="Target entity UUID is not set"
-            )
-
-        target = Entity.get(self.target_entity_uuid)
-        if not target:
-            return [], [], [], [], declaration_event.cancel(
-                status_message=f"Target entity {self.target_entity_uuid} not found"
-            )
-
-        outs: List[Tuple[UUID, UUID]] = []
-
-        defense_mod = ContextualNumericalModifier(
-            name="Defense",
-            source_entity_uuid=self.target_entity_uuid,
-            target_entity_uuid=self.target_entity_uuid,
-            callable=defense_ac_check
-        )
-        mod_uuid = target.equipment.ac_bonus.self_contextual.add_value_modifier(defense_mod)
-        outs.append((target.equipment.ac_bonus.uuid, mod_uuid))
-
-        effect_event = declaration_event.phase_to(
-            EventPhase.EFFECT,
-            status_message=f"Applied Defense fighting style to {target.name}",
-            resulting_ac=target.ac_bonus().normalized_score
-        )
-
-        return outs, [], [], [], effect_event
-
-    def _post_removal_stats(self) -> Dict[str, Any]:
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if target and isinstance(target, Entity):
-            return {"resulting_ac": target.ac_bonus().normalized_score}
-        return {}
 
 
 def dueling_damage_check(
@@ -245,57 +135,6 @@ def dueling_damage_check(
     )
 
 
-class FightingStyleDueling(BaseCondition):
-    """Fighter fighting style that improves one-handed melee damage.
-
-    Attributes:
-        name: Condition name used for Dueling fighting style lookup and cleanup.
-        description: Short rules-facing summary of the Dueling fighting style hook.
-    """
-    name: str = Field(
-        default="Fighting Style: Dueling",
-        description="Condition name used for Dueling fighting style lookup and cleanup.",
-    )
-    description: str = Field(
-        default="+2 damage when wielding a melee weapon in one hand",
-        description="Short rules-facing summary of the Dueling fighting style hook.",
-    )
-
-    def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]],
-        List[UUID],
-        List[UUID],
-        List[UUID],
-        Optional[Event]
-    ]:
-        if not self.target_entity_uuid:
-            return [], [], [], [], declaration_event.cancel(
-                status_message="Target entity UUID is not set"
-            )
-
-        target = Entity.get(self.target_entity_uuid)
-        if not target:
-            return [], [], [], [], declaration_event.cancel(
-                status_message=f"Target entity {self.target_entity_uuid} not found"
-            )
-
-        outs: List[Tuple[UUID, UUID]] = []
-
-        dueling_mod = ContextualNumericalModifier(
-            name="Dueling",
-            source_entity_uuid=self.target_entity_uuid,
-            target_entity_uuid=self.target_entity_uuid,
-            callable=dueling_damage_check
-        )
-        mod_uuid = target.equipment.melee_damage_bonus.self_contextual.add_value_modifier(dueling_mod)
-        outs.append((target.equipment.melee_damage_bonus.uuid, mod_uuid))
-
-        effect_event = declaration_event.phase_to(
-            EventPhase.EFFECT,
-            status_message=f"Applied Dueling fighting style to {target.name}"
-        )
-
-        return outs, [], [], [], effect_event
 
 
 def great_weapon_fighting_processor(
@@ -369,64 +208,6 @@ def great_weapon_fighting_processor(
     return modified_event if modified_event is not event else None
 
 
-class GreatWeaponFighting(BaseCondition):
-    """Fighter fighting style that rerolls low two-handed weapon damage dice.
-
-    Attributes:
-        name: Condition name used for Great Weapon Fighting handler lookup and cleanup.
-        description: Short rules-facing summary of the Great Weapon Fighting handler.
-    """
-    name: str = Field(
-        default="Fighting Style: Great Weapon Fighting",
-        description="Condition name used for Great Weapon Fighting handler lookup and cleanup.",
-    )
-    description: str = Field(
-        default=(
-            "When you roll a 1 or 2 on a damage die for an attack with a two-handed "
-            "melee weapon, you can reroll the die and must use the new roll."
-        ),
-        description="Short rules-facing summary of the Great Weapon Fighting handler.",
-    )
-
-    def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]],
-        List[UUID],
-        List[UUID],
-        List[UUID],
-        Optional[Event]
-    ]:
-        if not self.target_entity_uuid:
-            return [], [], [], [], declaration_event.cancel(
-                status_message="Target entity UUID is not set"
-            )
-
-        target = Entity.get(self.target_entity_uuid)
-        if not target:
-            return [], [], [], [], declaration_event.cancel(
-                status_message=f"Target entity {self.target_entity_uuid} not found"
-            )
-
-        handler = EventHandler(
-            name="Great Weapon Fighting",
-            source_entity_uuid=target.uuid,
-            trigger_conditions=[
-                Trigger(
-                    event_type=EventType.DAMAGE_ROLL_RESULT,
-                    event_phase=EventPhase.EFFECT
-                )
-            ],
-            event_processor=great_weapon_fighting_processor,
-            player_toggleable=True
-        )
-
-        target.add_event_handler(handler)
-
-        effect_event = declaration_event.phase_to(
-            EventPhase.EFFECT,
-            status_message=f"Applied Great Weapon Fighting to {target.name}"
-        )
-
-        return [], [handler.uuid], [], [], effect_event
 
 
 def protection_processor(
@@ -517,49 +298,6 @@ def create_protection_handler(source_entity_uuid: UUID) -> ProtectionReactionHan
     )
 
 
-class FightingStyleProtection(BaseCondition):
-    """Fighter fighting style that protects nearby allies with a reaction.
-
-    Attributes:
-        name: Condition name used for Protection fighting style lookup and cleanup.
-        description: Short rules-facing summary of the Protection reaction handler.
-    """
-    name: str = Field(
-        default="Fighting Style: Protection",
-        description="Condition name used for Protection fighting style lookup and cleanup.",
-    )
-    description: str = Field(
-        default="Use reaction to impose disadvantage on attacks against nearby allies",
-        description="Short rules-facing summary of the Protection reaction handler.",
-    )
-
-    def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]],
-        List[UUID],
-        List[UUID],
-        List[UUID],
-        Optional[Event]
-    ]:
-        if not self.target_entity_uuid:
-            return [], [], [], [], declaration_event.cancel(
-                status_message="Target entity UUID is not set"
-            )
-
-        target = Entity.get(self.target_entity_uuid)
-        if not target:
-            return [], [], [], [], declaration_event.cancel(
-                status_message=f"Target entity {self.target_entity_uuid} not found"
-            )
-
-        handler = create_protection_handler(target.uuid)
-        target.add_event_handler(handler)
-
-        effect_event = declaration_event.phase_to(
-            EventPhase.EFFECT,
-            status_message=f"Applied Protection fighting style to {target.name}"
-        )
-
-        return [], [handler.uuid], [], [], effect_event
 
 
 def twf_off_hand_melee_ability_bonus(
@@ -618,66 +356,6 @@ def twf_off_hand_ranged_ability_bonus(
     )
 
 
-class FightingStyleTwoWeaponFighting(BaseCondition):
-    """Fighter fighting style that adds ability modifiers to off-hand damage.
-
-    Attributes:
-        name: Condition name used for Two-Weapon Fighting lookup and cleanup.
-        description: Short rules-facing summary of the Two-Weapon Fighting modifier hook.
-    """
-    name: str = Field(
-        default="Fighting Style: Two-Weapon Fighting",
-        description="Condition name used for Two-Weapon Fighting lookup and cleanup.",
-    )
-    description: str = Field(
-        default="Add ability modifier to off-hand attack damage",
-        description="Short rules-facing summary of the Two-Weapon Fighting modifier hook.",
-    )
-
-    def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]],
-        List[UUID],
-        List[UUID],
-        List[UUID],
-        Optional[Event]
-    ]:
-        if not self.target_entity_uuid:
-            return [], [], [], [], declaration_event.cancel(
-                status_message="Target entity UUID is not set"
-            )
-
-        target = Entity.get(self.target_entity_uuid)
-        if not target:
-            return [], [], [], [], declaration_event.cancel(
-                status_message=f"Target entity {self.target_entity_uuid} not found"
-            )
-
-        outs: List[Tuple[UUID, UUID]] = []
-
-        melee_mod = ContextualNumericalModifier(
-            name="Two-Weapon Fighting",
-            source_entity_uuid=self.target_entity_uuid,
-            target_entity_uuid=self.target_entity_uuid,
-            callable=twf_off_hand_melee_ability_bonus
-        )
-        mod_uuid = target.equipment.off_hand_melee_ability_bonus.self_contextual.add_value_modifier(melee_mod)
-        outs.append((target.equipment.off_hand_melee_ability_bonus.uuid, mod_uuid))
-
-        ranged_mod = ContextualNumericalModifier(
-            name="Two-Weapon Fighting",
-            source_entity_uuid=self.target_entity_uuid,
-            target_entity_uuid=self.target_entity_uuid,
-            callable=twf_off_hand_ranged_ability_bonus
-        )
-        mod_uuid = target.equipment.off_hand_ranged_ability_bonus.self_contextual.add_value_modifier(ranged_mod)
-        outs.append((target.equipment.off_hand_ranged_ability_bonus.uuid, mod_uuid))
-
-        effect_event = declaration_event.phase_to(
-            EventPhase.EFFECT,
-            status_message=f"Applied Two-Weapon Fighting to {target.name}"
-        )
-
-        return outs, [], [], [], effect_event
 
 
 class SecondWind(BaseAction):
@@ -722,20 +400,6 @@ class SecondWind(BaseAction):
                 resource_evaluator=entity_resource_cost_evaluator
             )
         ]
-
-    def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[ActionEvent]:
-        entity = Entity.get(self.source_entity_uuid)
-        source_name = entity.name if entity else None
-
-        return ActionEvent(
-            name=self.name,
-            source_entity_uuid=self.source_entity_uuid,
-            target_entity_uuid=self.source_entity_uuid,
-            costs=[BaseCost.model_validate(c) for c in self.costs],
-            parent_event=parent_event.uuid if parent_event else None,
-            use_register=use_register,
-            source_entity_name=source_name
-        )
 
     def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
         entity = Entity.get(self.source_entity_uuid)
@@ -787,77 +451,6 @@ class SecondWind(BaseAction):
             status_message=f"Second Wind complete - healed {actual_healing} HP"
         )
 
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
-
-
-class SecondWindFeature(BaseCondition):
-    """Fighter feature that grants the Second Wind resource and action.
-
-    Attributes:
-        name: Feature condition name for Second Wind lookup and cleanup.
-        description: Short rules-facing summary of the Second Wind feature.
-        fighter_level: Fighter level passed into the registered Second Wind action.
-    """
-    name: str = Field(
-        default="Second Wind Feature",
-        description="Feature condition name for Second Wind lookup and cleanup.",
-    )
-    description: str = Field(
-        default="Heal 1d10 + fighter level as a bonus action (1/short rest)",
-        description="Short rules-facing summary of the Second Wind feature.",
-    )
-    fighter_level: int = Field(
-        default=1,
-        description="Fighter level passed into the registered Second Wind action.",
-    )
-
-    def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]],
-        List[UUID],
-        List[UUID],
-        List[UUID],
-        Optional[Event]
-    ]:
-        if not self.target_entity_uuid:
-            return [], [], [], [], declaration_event.cancel(
-                status_message="Target entity UUID is not set"
-            )
-
-        target = Entity.get(self.target_entity_uuid)
-        if not target:
-            return [], [], [], [], declaration_event.cancel(
-                status_message=f"Target entity {self.target_entity_uuid} not found"
-            )
-
-        target.action_economy.add_resource(
-            name="second_wind",
-            maximum=1,
-            recharge_type=RechargeType.SHORT_REST
-        )
-
-        second_wind = SecondWind(
-            source_entity_uuid=target.uuid,
-            fighter_level=self.fighter_level,
-            template=True
-        )
-        target.register_action(second_wind)
-
-        effect_event = declaration_event.phase_to(
-            EventPhase.EFFECT,
-            status_message=f"Granted Second Wind to {target.name}"
-        )
-
-        return [], [], [], [], effect_event
-
-    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
-        """Clean up resource and action on removal."""
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if target:
-            target.action_economy.remove_resource("second_wind")
-            target.unregister_action("Second Wind")
-
-        return super()._remove(event)
 
 
 class ActionSurging(BaseCondition):
@@ -950,22 +543,6 @@ class ActionSurge(BaseAction):
             )
         ]
 
-    def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[ActionEvent]:
-        """Create the declaration event for Action Surge."""
-        entity = Entity.get(self.source_entity_uuid)
-        source_name = entity.name if entity else None
-
-        return ActionEvent(
-            name=self.name,
-            parent_event=parent_event.uuid if parent_event else None,
-            phase=EventPhase.DECLARATION,
-            source_entity_uuid=self.source_entity_uuid,
-            target_entity_uuid=self.source_entity_uuid,
-            costs=[BaseCost.model_validate(cost) for cost in self.costs],
-            use_register=use_register,
-            source_entity_name=source_name
-        )
-
     def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
         """Validate Action Surge can be used."""
         entity = Entity.get(self.source_entity_uuid)
@@ -997,129 +574,8 @@ class ActionSurge(BaseAction):
             status_message=f"{entity.name} uses Action Surge!"
         )
 
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
-        """Apply the costs (consume action_surge resource)."""
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
 
 
-class ActionSurgeFeature(BaseCondition):
-    """Fighter feature that grants Action Surge uses and action access.
-
-    Attributes:
-        name: Feature condition name for Action Surge lookup and cleanup.
-        description: Short rules-facing summary of the Action Surge feature.
-        num_uses: Maximum Action Surge resource uses granted by this feature.
-    """
-    name: str = Field(
-        default="Action Surge Feature",
-        description="Feature condition name for Action Surge lookup and cleanup.",
-    )
-    description: str = Field(
-        default="Take one additional action on your turn",
-        description="Short rules-facing summary of the Action Surge feature.",
-    )
-    num_uses: int = Field(
-        default=1,
-        description="Maximum Action Surge resource uses granted by this feature.",
-    )
-
-    def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]],
-        List[UUID],
-        List[UUID],
-        List[UUID],
-        Optional[Event]
-    ]:
-        if not self.target_entity_uuid:
-            return [], [], [], [], declaration_event.cancel(
-                status_message="Target entity UUID is not set"
-            )
-
-        target = Entity.get(self.target_entity_uuid)
-        if not target:
-            return [], [], [], [], declaration_event.cancel(
-                status_message=f"Target entity {self.target_entity_uuid} not found"
-            )
-
-        target.action_economy.add_resource(
-            name="action_surge",
-            maximum=self.num_uses,
-            recharge_type=RechargeType.SHORT_REST
-        )
-
-        action_surge = ActionSurge(
-            source_entity_uuid=target.uuid,
-            template=True
-        )
-        target.register_action(action_surge)
-
-        effect_event = declaration_event.phase_to(
-            EventPhase.EFFECT,
-            status_message=f"Applied Action Surge feature ({self.num_uses} uses) to {target.name}"
-        )
-
-        return [], [], [], [], effect_event
-
-    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
-        """Clean up resource and action on removal."""
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if target:
-            target.action_economy.remove_resource("action_surge")
-            target.unregister_action("Action Surge")
-
-        return super()._remove(event)
-
-
-class ImprovedCritical(BaseCondition):
-    """Champion feature that expands weapon critical hits to 19-20.
-
-    Attributes:
-        name: Condition name used for Champion Improved Critical lookup and cleanup.
-        description: Short rules-facing summary of the Improved Critical feature.
-    """
-    name: str = Field(
-        default="Improved Critical",
-        description="Condition name used for Champion Improved Critical lookup and cleanup.",
-    )
-    description: str = Field(
-        default="Your weapon attacks score a critical hit on a roll of 19 or 20.",
-        description="Short rules-facing summary of the Improved Critical feature.",
-    )
-
-    def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]],
-        List[UUID],
-        List[UUID],
-        List[UUID],
-        Optional[Event]
-    ]:
-        if not self.target_entity_uuid:
-            return [], [], [], [], declaration_event.cancel(
-                status_message="Target entity UUID is not set"
-            )
-
-        target = Entity.get(self.target_entity_uuid)
-        if not target:
-            return [], [], [], [], declaration_event.cancel(
-                status_message=f"Target entity {self.target_entity_uuid} not found"
-            )
-
-        outs: List[Tuple[UUID, UUID]] = []
-
-        crit_mod = NumericalModifier.create(
-            source_entity_uuid=self.target_entity_uuid,
-            name="Improved Critical",
-            value=1
-        )
-        mod_uuid = target.equipment.crit_threshold.self_static.add_value_modifier(crit_mod)
-        outs.append((target.equipment.crit_threshold.uuid, mod_uuid))
-
-        effect_event = declaration_event.phase_to(
-            EventPhase.EFFECT,
-            status_message=f"Applied Improved Critical to {target.name} - crits on 19-20"
-        )
-
-        return outs, [], [], [], effect_event
 
 
 class ExtraAttacksGranted(BaseCondition):
@@ -1204,10 +660,7 @@ def extra_attack_resource_processor(
     if attacks_per_action > 1:
         num_extra = attacks_per_action - 1
     else:
-        extra_attack_feature = entity.active_conditions.get("Extra Attack")
-        if not isinstance(extra_attack_feature, ExtraAttackFeature):
-            return None
-        num_extra = extra_attack_feature.extra_attacks
+        return None
 
     if not extra_attack_resource:
         return None
@@ -1285,6 +738,10 @@ class ExtraAttack(BaseAction):
             "equipped-weapon discovery variants."
         ),
     )
+
+    def get_discovery_weapon_slot(self) -> Optional[WeaponSlot]:
+        """Return the equipped slot used by this extra attack."""
+        return self.weapon_slot
 
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
@@ -1395,93 +852,6 @@ class ExtraAttack(BaseAction):
         attack_event = cast(AttackEvent, execution_event)
         return Attack.attack_consequences(attack_event, self.source_entity_uuid)
 
-    def _apply_costs(self, completion_event) -> Optional[Event]:
-        """Apply the costs (consume extra_attacks resource)."""
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
-
-
-class ExtraAttackFeature(BaseCondition):
-    """Fighter feature that grants extra attacks after action-cost attacks.
-
-    Attributes:
-        name: Feature condition name for Fighter Extra Attack.
-        description: Short rules-facing summary of the Extra Attack feature.
-        extra_attacks: Number of extra attacks granted after each action-cost Attack action.
-    """
-    name: str = Field(default="Extra Attack", description="Feature condition name for Fighter Extra Attack.")
-    description: str = Field(
-        default="Can make additional attacks when taking the Attack action",
-        description="Short rules-facing summary of the Extra Attack feature.",
-    )
-
-    extra_attacks: int = Field(
-        default=1,
-        description="Number of extra attacks granted after each action-cost Attack action.",
-    )
-
-    def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]],
-        List[UUID],
-        List[UUID],
-        List[UUID],
-        Optional[Event]
-    ]:
-        if not self.target_entity_uuid:
-            return [], [], [], [], declaration_event.cancel(
-                status_message="Target entity UUID is not set"
-            )
-
-        target = Entity.get(self.target_entity_uuid)
-        if not target:
-            return [], [], [], [], declaration_event.cancel(
-                status_message=f"Target entity {self.target_entity_uuid} not found"
-            )
-
-        handler_uuids: List[UUID] = []
-
-        target.action_economy.add_resource(
-            name="extra_attacks",
-            maximum=self.extra_attacks,
-            recharge_type=RechargeType.TURN_START
-        )
-
-        for slot in [WeaponSlot.MELEE_MAIN, WeaponSlot.MELEE_OFF,
-                     WeaponSlot.RANGED_MAIN, WeaponSlot.RANGED_OFF]:
-            weapon = target.equipment._get_weapon_by_slot(slot)
-            if weapon and not isinstance(weapon, Shield):
-                extra_attack = ExtraAttack(
-                    source_entity_uuid=target.uuid,
-                    weapon_slot=slot,
-                    name=f"Extra Attack_{slot.value}",
-                    template=True
-                )
-                target.register_action(extra_attack)
-
-        handler = create_extra_attack_resource_handler(target.uuid)
-        target.add_event_handler(handler)
-        handler_uuids.append(handler.uuid)
-
-        effect_event = declaration_event.phase_to(
-            EventPhase.EFFECT,
-            status_message=f"Granted Extra Attack ({self.extra_attacks} extra) to {target.name}"
-        )
-
-        return [], handler_uuids, [], [], effect_event
-
-    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
-        """
-        Custom removal: clean up resources and action templates.
-        """
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if target:
-            target.action_economy.remove_resource("extra_attacks")
-
-            for slot in [WeaponSlot.MELEE_MAIN, WeaponSlot.MELEE_OFF,
-                         WeaponSlot.RANGED_MAIN, WeaponSlot.RANGED_OFF]:
-                template_name = f"Extra Attack_{slot.value}"
-                target.unregister_action(template_name)
-
-        return super()._remove(event)
 
 
 def indomitable_processor(
@@ -1555,117 +925,8 @@ def create_indomitable_handler(source_entity_uuid: UUID) -> EventHandler:
     )
 
 
-class Indomitable(BaseCondition):
-    """Fighter feature that grants failed saving throw rerolls.
-
-    Attributes:
-        name: Feature condition name for Indomitable.
-        description: Short rules-facing summary of the Indomitable feature.
-        num_uses: Maximum Indomitable resource uses granted by this feature.
-    """
-    name: str = Field(default="Indomitable", description="Feature condition name for Indomitable.")
-    description: str = Field(
-        default="Reroll a failed saving throw (must use new roll)",
-        description="Short rules-facing summary of the Indomitable feature.",
-    )
-    num_uses: int = Field(
-        default=1,
-        description="Maximum Indomitable resource uses granted by this feature.",
-    )
-
-    def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]],
-        List[UUID],
-        List[UUID],
-        List[UUID],
-        Optional[Event]
-    ]:
-        if not self.target_entity_uuid:
-            return [], [], [], [], declaration_event.cancel(
-                status_message="Target entity UUID is not set"
-            )
-
-        target = Entity.get(self.target_entity_uuid)
-        if not target:
-            return [], [], [], [], declaration_event.cancel(
-                status_message=f"Target entity {self.target_entity_uuid} not found"
-            )
-
-        target.action_economy.add_resource(
-            name="indomitable",
-            maximum=self.num_uses,
-            recharge_type=RechargeType.LONG_REST
-        )
-
-        handler = create_indomitable_handler(target.uuid)
-        target.add_event_handler(handler)
-
-        effect_event = declaration_event.phase_to(
-            EventPhase.EFFECT,
-            status_message=f"Applied Indomitable ({self.num_uses} uses) to {target.name}"
-        )
-
-        return [], [handler.uuid], [], [], effect_event
-
-    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
-        """Custom removal: clean up resource."""
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if target:
-            target.action_economy.remove_resource("indomitable")
-
-        return super()._remove(event)
 
 
-class SuperiorCritical(BaseCondition):
-    """Champion feature that expands weapon critical hits to 18-20.
-
-    Attributes:
-        name: Condition name used for Champion Superior Critical lookup and cleanup.
-        description: Short rules-facing summary of the Superior Critical feature.
-    """
-    name: str = Field(
-        default="Superior Critical",
-        description="Condition name used for Champion Superior Critical lookup and cleanup.",
-    )
-    description: str = Field(
-        default="Your weapon attacks score a critical hit on a roll of 18, 19, or 20.",
-        description="Short rules-facing summary of the Superior Critical feature.",
-    )
-
-    def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]],
-        List[UUID],
-        List[UUID],
-        List[UUID],
-        Optional[Event]
-    ]:
-        if not self.target_entity_uuid:
-            return [], [], [], [], declaration_event.cancel(
-                status_message="Target entity UUID is not set"
-            )
-
-        target = Entity.get(self.target_entity_uuid)
-        if not target:
-            return [], [], [], [], declaration_event.cancel(
-                status_message=f"Target entity {self.target_entity_uuid} not found"
-            )
-
-        outs: List[Tuple[UUID, UUID]] = []
-
-        crit_mod = NumericalModifier.create(
-            source_entity_uuid=self.target_entity_uuid,
-            name="Superior Critical",
-            value=2
-        )
-        mod_uuid = target.equipment.crit_threshold.self_static.add_value_modifier(crit_mod)
-        outs.append((target.equipment.crit_threshold.uuid, mod_uuid))
-
-        effect_event = declaration_event.phase_to(
-            EventPhase.EFFECT,
-            status_message=f"Applied Superior Critical to {target.name} - crits on 18-20"
-        )
-
-        return outs, [], [], [], effect_event
 
 
 def survivor_processor(
@@ -1724,45 +985,3 @@ def create_survivor_handler(source_entity_uuid: UUID) -> EventHandler:
         ],
         event_processor=survivor_processor
     )
-
-
-class Survivor(BaseCondition):
-    """Champion feature that heals the fighter at turn start when wounded.
-
-    Attributes:
-        name: Feature condition name for Champion Survivor.
-        description: Short rules-facing summary of the Survivor turn-start healing feature.
-    """
-    name: str = Field(default="Survivor", description="Feature condition name for Champion Survivor.")
-    description: str = Field(
-        default="Heal 5 + CON mod at turn start when HP <= 50% max",
-        description="Short rules-facing summary of the Survivor turn-start healing feature.",
-    )
-
-    def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]],
-        List[UUID],
-        List[UUID],
-        List[UUID],
-        Optional[Event]
-    ]:
-        if not self.target_entity_uuid:
-            return [], [], [], [], declaration_event.cancel(
-                status_message="Target entity UUID is not set"
-            )
-
-        target = Entity.get(self.target_entity_uuid)
-        if not target:
-            return [], [], [], [], declaration_event.cancel(
-                status_message=f"Target entity {self.target_entity_uuid} not found"
-            )
-
-        handler = create_survivor_handler(target.uuid)
-        target.add_event_handler(handler)
-
-        effect_event = declaration_event.phase_to(
-            EventPhase.EFFECT,
-            status_message=f"Granted Survivor to {target.name}"
-        )
-
-        return [], [handler.uuid], [], [], effect_event

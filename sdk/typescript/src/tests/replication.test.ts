@@ -730,6 +730,9 @@ test("the subjective wire gate accepts every canonical presentation and area kin
   const validGraphs = [
     [movementCue()],
     movementReactionGraph(),
+    movementReactionGraph({
+      movement: { endpoint_outcome: "not_committed" },
+    }),
     [actionCue()],
     actionConditionGraph(),
     reactiveActionTriggerGraph(),
@@ -742,6 +745,7 @@ test("the subjective wire gate accepts every canonical presentation and area kin
     [conditionCue("condition", 1, null)],
     [doorCue()],
     [lightCue()],
+    [spatialEffectCue()],
     [equipmentCue()],
     [encounterCue()],
     forcedMovementGraph(),
@@ -784,6 +788,14 @@ test("local presentation semantics reject malformed renderer transactions", () =
   };
   const cases: ReadonlyArray<readonly [string, ReadonlyArray<Record<string, unknown>>]> = [
     ["movement path overflow", [{ ...movementCue(), path_start_index: 2, path_total_steps: 2 }]],
+    ["uncommitted movement without reaction", [{ ...movementCue(), endpoint_outcome: "not_committed" }]],
+    ["uncommitted multi-edge movement", movementReactionGraph({
+      movement: {
+        endpoint_outcome: "not_committed",
+        trajectory: [[0, 0], [1, 0], [2, 0]],
+        path_total_steps: 2,
+      },
+    })],
     ["duplicate action target", [{ ...actionCue(), target_uuids: ["hero", "hero"] }]],
     ["action child mismatch", [{ ...actionCue(), effect_presentation_ids: ["missing"] }]],
     ["action self trigger", [{ ...actionCue(), trigger_presentation_id: "action" }]],
@@ -829,6 +841,9 @@ test("local presentation semantics reject malformed renderer transactions", () =
     ["life state without transition", lifecycleGraph({}, { previous: "dead", current: "dead" })],
     ["stable without stabilization", lifecycleGraph({}, { previous: "dying", current: "stable", reason: "direct_state_check" })],
     ["duplicate light cells", [{ ...lightCue(), cells: [{ position: [0, 0], light_level: 1 }, { position: [0, 0], light_level: 2 }] }]],
+    ["spatial effect without geometry", [{ ...spatialEffectCue(), affected_positions: [] }]],
+    ["spatial effect unsorted geometry", [{ ...spatialEffectCue(), affected_positions: [[1, 0], [0, 0]] }]],
+    ["spatial effect anchor outside geometry", [{ ...spatialEffectCue(), anchor_position: [9, 9] }]],
     ["equipment owner mismatch", [{ ...equipmentCue(), visual_loadout: { entity_uuid: "monster", active_weapon_set: "none", layers: [] } }]],
     ["end without barrier", [{ ...encounterCue(), terminal_barrier: false }]],
     ["non-end terminal metadata", [{ ...encounterCue(), transition: "start", terminal_barrier: true }]],
@@ -918,9 +933,11 @@ function movementCue(overrides: CueOverrides = {}): Record<string, unknown> {
     ...cueBase("movement", "movement"),
     entity_uuid: "hero",
     movement_kind: "walk",
+    movement_sequence_id: "movement-sequence-a",
     trajectory: [[0, 0], [1, 0]],
     path_start_index: 0,
     path_total_steps: 1,
+    endpoint_outcome: "committed",
     perception_commit: "observation_frame",
     ...overrides,
   };
@@ -1037,9 +1054,26 @@ function counterspellAttributions(): ReadonlyArray<Record<string, unknown>> {
   ];
 }
 
+function spatialEffectCue(overrides: CueOverrides = {}): Record<string, unknown> {
+  return {
+    ...cueBase("spatial_effect", "spatial-effect"),
+    effect_uuid: "effect",
+    content_ref: contentRef(
+      "spatial_effect.spell.entangle",
+      "spatial_effect",
+    ),
+    operation: "created",
+    layer: "field",
+    anchor_position: [0, 0],
+    affected_positions: [[0, 0], [0, 1]],
+    previous_positions: [],
+    ...overrides,
+  };
+}
+
 function contentRef(
   contentId: string,
-  definitionKind: "action" | "reaction" | "spell",
+  definitionKind: "action" | "reaction" | "spell" | "spatial_effect",
 ): Record<string, unknown> {
   return {
     pack_id: "content.srd_5_1_cc",
@@ -1204,6 +1238,7 @@ function movementReactionGraph(
   options: {
     readonly child?: Record<string, unknown>;
     readonly childSourceEventCursor?: number;
+    readonly movement?: Record<string, unknown>;
   } = {},
 ): Array<Record<string, unknown>> {
   const child = options.child ?? attackCue({
@@ -1214,6 +1249,7 @@ function movementReactionGraph(
     movementCue({
       ...cueBase("movement", "movement", 1, null, ["reaction"]),
       source_event_cursor: 2,
+      ...options.movement,
     }),
     child,
   ];

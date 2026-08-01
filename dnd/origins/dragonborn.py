@@ -8,7 +8,6 @@ from uuid import UUID
 from pydantic import Field
 
 from dnd.actions import (
-    entity_action_economy_cost_applier,
     entity_action_economy_cost_evaluator,
     entity_resource_cost_evaluator,
 )
@@ -351,15 +350,6 @@ class DragonbornBreathWeapon(BaseAction):
                 f"Breath Weapon deals {final_damage} "
                 f"{self.damage_type.value.lower()} damage to {target.name}"
             ),
-        )
-
-    def _apply_costs(
-        self,
-        completion_event: DragonbornBreathWeaponEvent,
-    ) -> DragonbornBreathWeaponEvent:
-        return entity_action_economy_cost_applier(
-            completion_event,
-            self.source_entity_uuid,
         )
 
 

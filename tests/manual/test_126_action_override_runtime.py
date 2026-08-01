@@ -43,6 +43,7 @@ from dnd.blocks.action_economy import (
 )
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
+from dnd.classes.sorcerer import MetamagicActive
 from dnd.core.aoe import Sphere
 from dnd.core.base_actions import (
     AvailableActionInfo,
@@ -50,7 +51,15 @@ from dnd.core.base_actions import (
     TargetType,
 )
 from dnd.core.dice import fixed_dice_faces
-from dnd.core.events import AbilityName, EventPhase, EventQueue
+from dnd.core.events import (
+    AbilityName,
+    Event,
+    EventHandler,
+    EventPhase,
+    EventQueue,
+    EventType,
+    Trigger,
+)
 from dnd.core.gridmap import get_map
 from dnd.core.creature_types import CreatureType
 from dnd.core.modifiers import NumericalModifier
@@ -65,6 +74,8 @@ from dnd.spells.evocation import (
     IceStorm,
     MagicMissile,
 )
+from dnd.spatial_effect_content import ICE_STORM_SURFACE_RECIPE
+from dnd.spatial_effects import SpatialEffect
 from tests.engine.support import (
     deal_damage_to,
     force_spell_attack_hit,
@@ -266,9 +277,11 @@ def test_range_override_controls_discovery_execution_scaling_and_clear() -> None
         lambda action: action.name == "Fire Bolt",
         {"alt_range": 300},
     )
-    assert modified == [template.uuid]
-    assert template.effective_range == 300
-    assert template.get_range().normal == 300
+    effective_template = find_spell_template(caster, "Fire Bolt")
+    assert tuple(modified) == (template.uuid,)
+    assert template.alt_range is None
+    assert effective_template.effective_range == 300
+    assert effective_template.get_range().normal == 300
     assert is_far_target_disclosed()
 
     available = get_available_actions(caster)
@@ -315,8 +328,10 @@ def test_cost_override_executes_then_clears_within_the_same_turn() -> None:
         {"alt_cost_type": "bonus_actions"},
     )
 
-    assert modified == [fire_bolt.uuid]
-    assert fire_bolt.alt_cost_type == "bonus_actions"
+    effective_fire_bolt = find_spell_template(caster, "Fire Bolt")
+    assert tuple(modified) == (fire_bolt.uuid,)
+    assert fire_bolt.alt_cost_type is None
+    assert effective_fire_bolt.alt_cost_type == "bonus_actions"
     assert hold_person.alt_cost_type is None
 
     hp_first = first_target.get_hp()
@@ -364,6 +379,42 @@ def test_cost_override_executes_then_clears_within_the_same_turn() -> None:
     assert caster.action_economy.actions.normalized_score == 0
     assert first_target.get_hp() < hp_first
     assert second_target.get_hp() < hp_second
+
+
+def test_rejected_metamagic_application_releases_override_lease() -> None:
+    """A condition veto cannot leave a permanent spell-template overlay."""
+    reset_override_state()
+    caster = create_caster()
+    register_spell(caster, FireBolt, caster_level=5)
+
+    def reject_effect(event: Event, _source_uuid: UUID) -> Event:
+        return event.cancel("metamagic application rejected")
+
+    caster.add_event_handler(EventHandler(
+        name="Reject metamagic effect",
+        source_entity_uuid=caster.uuid,
+        trigger_conditions=[
+            Trigger(
+                event_type=EventType.CONDITION_APPLICATION,
+                event_phase=EventPhase.EFFECT,
+                event_target_entity_uuid=caster.uuid,
+            ),
+        ],
+        event_processor=reject_effect,
+    ))
+    condition = MetamagicActive(
+        source_entity_uuid=caster.uuid,
+        target_entity_uuid=caster.uuid,
+        metamagic_type="quickened",
+    )
+
+    canceled = caster.add_condition(condition)
+
+    assert canceled is not None
+    assert canceled.phase is EventPhase.CANCEL
+    assert condition.applied is False
+    assert "MetamagicActive" not in caster.active_conditions
+    assert find_spell_template(caster, "Fire Bolt").alt_cost_type is None
 
 
 def test_effective_cost_overrides_compose_without_rewriting_non_action_costs() -> None:
@@ -433,7 +484,9 @@ def test_target_count_routing_and_cleanup_follow_effective_target_type() -> None
         },
     )
 
-    assert template.get_multi_target_count() == 3
+    effective_template = find_spell_template(caster, "Fire Bolt")
+    assert template.get_multi_target_count() is None
+    assert effective_template.get_multi_target_count() == 3
     multi = find_action(caster, "Fire Bolt")
     assert multi.target_type is TargetType.MULTI_ENTITY
     assert multi in get_available_actions(caster).entity_actions
@@ -456,8 +509,14 @@ def test_target_count_routing_and_cleanup_follow_effective_target_type() -> None
     )
     aoe_actions = get_available_actions(caster)
 
-    assert template in caster.position_actions
-    assert template not in caster.entity_actions
+    assert any(
+        action.name == "Fire Bolt"
+        for action in caster.position_actions
+    )
+    assert not any(
+        action.name == "Fire Bolt"
+        for action in caster.entity_actions
+    )
     assert not any(
         info.template_name == "Fire Bolt"
         for info in aoe_actions.entity_actions
@@ -487,11 +546,13 @@ def test_extra_resource_cost_gates_discovery_execution_and_is_consumed() -> None
         {"alt_extra_costs": [extra_cost]},
     )
 
-    assert not template.check_costs()
-    assert len(template.generate_variants(caster)) == 1
+    effective_template = find_spell_template(caster, "Fire Bolt")
+    assert template.alt_extra_costs == []
+    assert not effective_template.check_costs()
+    assert len(effective_template.generate_variants(caster)) == 1
     assert [
         cost.name
-        for cost in template.generate_variants(caster)[0].effective_costs
+        for cost in effective_template.generate_variants(caster)[0].effective_costs
         if cost.resource_name == "sorcery_points"
     ] == ["Sorcery Points"]
     unaffordable = find_action(caster, "Fire Bolt")
@@ -503,23 +564,26 @@ def test_extra_resource_cost_gates_discovery_execution_and_is_consumed() -> None
     )
 
     hp_before = target.get_hp()
-    unavailable_result = template.instantiate(
+    unavailable_result = effective_template.instantiate(
         target_entity_uuid=target.uuid
     ).apply()
     assert unavailable_result is None
     assert target.get_hp() == hp_before
 
-    caster.action_economy.add_resource(
+    caster.action_economy.add_resource_contribution(
         "sorcery_points",
+        "fixture.sorcery_points",
         maximum=2,
         recharge_type=RechargeType.LONG_REST,
     )
-    assert template.check_costs()
+    assert effective_template.check_costs()
     assert find_action(caster, "Fire Bolt").can_afford
 
     hit_modifier = force_spell_attack_hit(caster)
     with fixed_dice_faces(*([2] * 20)):
-        result = template.instantiate(target_entity_uuid=target.uuid).apply()
+        result = effective_template.instantiate(
+            target_entity_uuid=target.uuid,
+        ).apply()
     remove_spell_attack_modifier(caster, hit_modifier)
 
     assert_completed(result)
@@ -545,13 +609,16 @@ def test_generated_upcast_variant_checks_and_consumes_extra_resource_once() -> N
         lambda action: action.name == "Magic Missile",
         {"alt_extra_costs": [sorcery_point_cost()]},
     )
-    caster.action_economy.add_resource(
+    caster.action_economy.add_resource_contribution(
         "sorcery_points",
+        "fixture.sorcery_points",
         maximum=1,
         recharge_type=RechargeType.LONG_REST,
     )
 
-    unaffordable_variant = template.generate_variants(caster)[0]
+    effective_template = find_spell_template(caster, "Magic Missile")
+    assert template.alt_extra_costs == []
+    unaffordable_variant = effective_template.generate_variants(caster)[0]
     assert not unaffordable_variant.check_costs()
     assert len(
         [
@@ -568,8 +635,9 @@ def test_generated_upcast_variant_checks_and_consumes_extra_resource_once() -> N
         for info in get_available_actions(caster, legal_only=True).all_actions
     )
 
-    caster.action_economy.add_resource(
+    caster.action_economy.add_resource_contribution(
         "sorcery_points",
+        "fixture.sorcery_points",
         maximum=2,
         recharge_type=RechargeType.LONG_REST,
     )
@@ -1093,7 +1161,10 @@ def test_ice_storm_finalization_follows_effective_target_type(
     assert_completed(result)
     assert target.get_hp() < hp_before
     assert (
-        "Ice Storm Terrain" in caster.active_conditions
+        any(
+            effect.content_ref == ICE_STORM_SURFACE_RECIPE.ref
+            for effect in SpatialEffect.active_effects()
+        )
     ) is (not override_to_entity)
 
 

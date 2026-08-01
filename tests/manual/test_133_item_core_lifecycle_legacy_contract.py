@@ -18,8 +18,8 @@ from dnd.blocks.base_item import BaseItem, EquippableItem, UsableItem
 from dnd.blocks.equipment import EquipmentConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.core.base_block import BaseBlock
-from dnd.core.base_conditions import BaseCondition, Duration
-from dnd.core.condition_types import DurationType
+from dnd.core.base_conditions import BaseCondition
+from dnd.core.events import Event
 from dnd.core.gridmap import get_map
 from dnd.core.item_types import ItemRarity
 from dnd.core.creature_types import DamageType
@@ -64,7 +64,8 @@ HOOK_CONTEXT_SELECTOR = (
     f"{THIS_FILE}::test_lifecycle_hooks_receive_authoritative_context_in_order"
 )
 DESTROY_EFFECT_SELECTOR = (
-    f"{THIS_FILE}::test_destroy_hook_can_use_floor_context_before_cleanup"
+    "tests/engine/test_spatial_effects.py::"
+    "test_oil_barrel_destruction_uses_material_transition_table"
 )
 LOOT_EFFECT_SELECTOR = (
     f"{THIS_FILE}::test_loot_hook_can_apply_condition_and_bounded_healing"
@@ -230,35 +231,11 @@ class LifecycleProbeItem(BaseItem):
             ("drop", entity_uuid, self.stored_in_uuid, self.tile_uuid, self.get_position())
         )
 
-    def _on_destroy(self) -> None:
+    def _on_destroy(self, parent_event: Event | None) -> None:
+        del parent_event
         self.hook_calls.append(
             ("destroy", self.owner_uuid, self.stored_in_uuid, self.tile_uuid, self.get_position())
         )
-
-
-class TileSpillProbeItem(BaseItem):
-    """Destruction extension that marks its tile and orthogonal neighbours."""
-
-    def _on_destroy(self) -> None:
-        position = self.get_position()
-        if position is None:
-            return
-        grid = get_map()
-        for dx, dy in ((0, 0), (1, 0), (-1, 0), (0, 1), (0, -1)):
-            tile = grid.get_tile(position[0] + dx, position[1] + dy)
-            if tile is None:
-                continue
-            tile.add_condition(
-                BaseCondition(
-                    name="Lifecycle Spill",
-                    source_entity_uuid=self.source_entity_uuid,
-                    target_entity_uuid=tile.uuid,
-                    duration=Duration(
-                        duration=3,
-                        duration_type=DurationType.ROUNDS,
-                    ),
-                )
-            )
 
 
 class LootEffectProbeItem(BaseItem):
@@ -513,30 +490,6 @@ def test_lifecycle_hooks_receive_authoritative_context_in_order() -> None:
     assert dropped_tile_uuid is not None
     assert item.tile_uuid is None
     assert item.get_position() is None
-
-
-def test_destroy_hook_can_use_floor_context_before_cleanup() -> None:
-    """A destroy extension can safely derive tile effects before location teardown."""
-    reset_item_world()
-    source_uuid = uuid4()
-    item = TileSpillProbeItem(
-        source_entity_uuid=source_uuid,
-        name="Spill Vessel",
-        is_targetable=True,
-        health=BaseItem.create_item_health(source_uuid, hp=8),
-    )
-    item.place_on_grid((5, 5))
-
-    item.receive_damage(100, DamageType.BLUDGEONING, uuid4())
-
-    for position in ((5, 5), (6, 5), (4, 5), (5, 6), (5, 4)):
-        tile = get_map().get_tile(*position)
-        assert tile is not None
-        marker = tile.active_conditions["Lifecycle Spill"]
-        assert marker.duration.duration_type is DurationType.ROUNDS
-        assert marker.duration.duration == 3
-    assert BaseBlock.get(item.uuid) is None
-    assert get_map().get_object_position(item.uuid) is None
 
 
 def test_loot_hook_can_apply_condition_and_bounded_healing() -> None:

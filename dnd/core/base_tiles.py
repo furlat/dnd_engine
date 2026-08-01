@@ -6,7 +6,7 @@ from pydantic import Field, PrivateAttr
 from dnd.core.base_block import BaseBlock, MovementMode, LightLevel, SensesType
 from dnd.core.values import ModifiableValue
 from dnd.core.modifiers import NumericalModifier
-from dnd.core.events import SpatialChangeEvent, EventQueue, EventPhase
+from dnd.core.events import SpatialChangeEvent, EventQueue
 from dnd.core.geometry import grid_distance_feet
 
 _DARKVISION_SHIFT: Dict[LightLevel, LightLevel] = {
@@ -234,19 +234,7 @@ class Tile(BaseBlock):
         """Fire a full SPATIAL_LIGHT_CHANGED lifecycle at this tile."""
         event = SpatialChangeEvent.light_changed(self.position, self.uuid, parent_event=parent_event,
                                                        new_light_level=self.resolved_light_level.value)
-        current = EventQueue.register(event)
-        if current.canceled:
-            return
-        current = current.phase_to(EventPhase.EXECUTION)
-        current = EventQueue.register(current)
-        if current.canceled:
-            return
-        current = current.phase_to(EventPhase.EFFECT)
-        current = EventQueue.register(current)
-        if current.canceled:
-            return
-        current = current.phase_to(EventPhase.COMPLETION)
-        EventQueue.register(current)
+        EventQueue.publish_lifecycle(event)
 
     def directions_toward(self, other_position: Tuple[int, int]) -> Tuple[str, ...]:
         """Return tile-relative cardinal directions touched by a transition."""

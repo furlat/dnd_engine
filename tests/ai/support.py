@@ -14,7 +14,10 @@ from dnd.ai.instrumentation import (
     AIInstrumentation,
     BoundedAIInstrumentationSink,
 )
-from dnd.ai.policies.basic import BASIC_POLICY_ID
+from dnd.ai.contracts.decision import PolicyIntent
+from dnd.ai.contracts.observation import SubjectiveWorldState
+from dnd.ai.policies.basic import BASIC_POLICY_ID, register_basic_policy
+from dnd.ai.registry import PolicyRegistry
 from dnd.ai.runtime.controller import NativeAIController
 from dnd.encounter import EncounterState
 from dnd.scenarios.encounter_assembler import (
@@ -48,6 +51,10 @@ def build_native_ai_test_game(
     maximum_decisions_per_turn: int = 32,
 ) -> NativeAITestGame:
     """Assemble one authored recipe and assign native AI per roster."""
+    registry: PolicyRegistry[SubjectiveWorldState, PolicyIntent] = (
+        PolicyRegistry()
+    )
+    register_basic_policy(registry)
     assembled = assemble_encounter_recipe(
         encounter_recipe(encounter_id),
         start_encounter=False,
@@ -68,6 +75,7 @@ def build_native_ai_test_game(
             game_id=assembled.recipe.encounter_id,
             assignment_id=f"test:{roster_slot.roster_slot_id}",
             controlled_entity_uuids=controlled,
+            registry=registry,
             policy_id=BASIC_POLICY_ID,
             instrumentation=AIInstrumentation(sink=sink),
             maximum_decisions_per_turn=maximum_decisions_per_turn,

@@ -9,7 +9,14 @@ from pydantic import BaseModel, Field, model_validator
 
 from dnd.ai.contracts.control import CommandResult, DecisionEpoch
 from dnd.core.condition_types import ConditionAgencyDenial, ConditionRemovalTrigger
+from dnd.core.content.identities import ContentRef
+from dnd.core.item_types import ItemObservationState
 from dnd.core.life_types import LifeState
+from dnd.core.spatial_effect_types import (
+    SpatialEffectAnchorKind,
+    SpatialEffectLayer,
+    SpatialEffectTriggerKind,
+)
 
 
 class KnowledgeState(str, Enum):
@@ -255,7 +262,30 @@ class ObservationObjectFact(BaseModel):
     observer_uuids: List[str] = Field(default_factory=list, description="Controlled observers that currently see or remember this object.")
     position: Optional[Tuple[int, int]] = Field(default=None, description="Known or last-known grid position.")
     map_char: Optional[str] = Field(default=None, description="Map glyph used by object renderers when known.")
-    state: Dict[str, Any] = Field(default_factory=dict, description="Known object state fields.")
+    state: ItemObservationState = Field(
+        description="Closed observer-relative runtime state owned by the item.",
+    )
+
+
+class ObservationSpatialEffectFact(BaseModel):
+    """Exact observer-authorized identity of one effect occupying a known cell."""
+
+    runtime_uuid: str = Field(
+        description="Encounter-local spatial-effect instance UUID.",
+    )
+    content_ref: ContentRef = Field(
+        description="Exact authenticated spatial-effect definition identity.",
+    )
+    layer: SpatialEffectLayer = Field(
+        description="Independent world layer occupied by this effect.",
+    )
+    anchor_kind: SpatialEffectAnchorKind = Field(
+        description="Exact public footprint anchoring policy.",
+    )
+    trigger_kinds: List[SpatialEffectTriggerKind] = Field(
+        default_factory=list,
+        description="Ordered public mechanical moments authored for the effect.",
+    )
 
 
 class ObservationTileFact(BaseModel):
@@ -270,6 +300,13 @@ class ObservationTileFact(BaseModel):
     walking_cost: Optional[int] = Field(default=None, description="Movement cost when currently visible.")
     is_hazardous: Optional[bool] = Field(default=None, description="Hazard state when currently visible.")
     conditions: List[str] = Field(default_factory=list, description="Known visible tile condition names.")
+    spatial_effects: List[ObservationSpatialEffectFact] = Field(
+        default_factory=list,
+        description=(
+            "Exact visible spatial effects occupying this tile; remembered "
+            "rows retain the last observer-authorized snapshot."
+        ),
+    )
     light_level: Optional[int] = Field(default=None, description="Resolved light level when currently visible.")
     directional_blocks_movement: Dict[str, bool] = Field(default_factory=dict, description="Visible directional movement blockers.")
     directional_blocks_vision: Dict[str, bool] = Field(default_factory=dict, description="Visible directional vision blockers.")

@@ -15,6 +15,8 @@ from dnd.core.content.registration import (
 from dnd.core.content.registry import FrozenContentRegistry
 from dnd.core.content.runtime import (
     BehaviorBinding,
+    RuntimeBehaviorOwner,
+    RuntimeBehaviorProvider,
     RuntimeBehaviorKind,
     has_direct_behavior_declaration,
 )
@@ -48,7 +50,7 @@ class BehaviorBinder:
 
     def bind_independent(
         self,
-        behavior: object,
+        behavior: RuntimeBehaviorOwner,
         *,
         runtime_owner_uuid: UUID,
     ) -> BehaviorBinding:
@@ -76,7 +78,7 @@ class BehaviorBinder:
 
     def bind_root_owned(
         self,
-        behavior: object,
+        behavior: RuntimeBehaviorOwner,
         *,
         origin_root_ref: ContentRef,
         runtime_owner_uuid: UUID,
@@ -108,9 +110,9 @@ class BehaviorBinder:
 
     def bind_child(
         self,
-        behavior: object,
+        behavior: RuntimeBehaviorOwner,
         *,
-        provider: object,
+        provider: RuntimeBehaviorProvider,
         runtime_owner_uuid: UUID,
     ) -> BehaviorBinding:
         """Bind one declared behavior or handler through its exact provider.
@@ -249,7 +251,7 @@ class BehaviorBinder:
         self,
         behavior: BaseHandler,
         *,
-        provider: object,
+        provider: RuntimeBehaviorProvider,
         runtime_owner_uuid: UUID,
     ) -> BehaviorBinding:
         """Bind one public reaction through the definition that installs it."""
@@ -278,7 +280,7 @@ class BehaviorBinder:
         self,
         behavior: BaseHandler,
         *,
-        provider: object,
+        provider: RuntimeBehaviorProvider,
         runtime_owner_uuid: UUID,
     ) -> BehaviorBinding:
         """Preserve provider-derived identity for private runtime handlers."""
@@ -355,7 +357,7 @@ class BehaviorBinder:
 
     def _resolve_behavior_provider(
         self,
-        provider: object,
+        provider: RuntimeBehaviorProvider,
         *,
         runtime_owner_uuid: UUID,
     ) -> tuple[ContentRef, ContentRef | None]:

@@ -1,4 +1,4 @@
-"""Compatibility migrations for retained subjective observation payloads."""
+"""Closed migrations for retained direct-Codex artifact payloads."""
 
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ _LEGACY_TOPOLOGY_EFFECT_TYPES: dict[tuple[str, str], tuple[str, str, str]] = {
 
 
 def migrate_legacy_epoch_semantics(value: object) -> object:
-    """Reconstruct typed locations for known pre-location semantic contracts."""
+    """Reconstruct typed locations for known pre-location artifact semantics."""
     if not isinstance(value, dict):
         return value
     affordances = value.get("affordances")
@@ -113,11 +113,8 @@ def migrate_legacy_epoch_semantics(value: object) -> object:
                     "topology_effects": migrated_topology_effects,
                 }
 
-        if migrated_semantics is not raw_semantics:
-            migrated_catalog[reference] = migrated_semantics
-            catalog_changed = True
-        else:
-            migrated_catalog[reference] = raw_semantics
+        migrated_catalog[reference] = migrated_semantics
+        catalog_changed = catalog_changed or migrated_semantics is not raw_semantics
 
     if not catalog_changed:
         return value
@@ -131,7 +128,7 @@ def migrate_legacy_epoch_semantics(value: object) -> object:
 
 
 def migrate_legacy_snapshot_semantics(value: object) -> object:
-    """Migrate serialized snapshot semantics without mutating caller data."""
+    """Migrate a retained snapshot without mutating caller data."""
     if not isinstance(value, dict):
         return value
     current_epoch = value.get("current_epoch")
@@ -142,7 +139,7 @@ def migrate_legacy_snapshot_semantics(value: object) -> object:
 
 
 def migrate_legacy_frame_semantics(value: object) -> object:
-    """Migrate serialized frame epochs at ordinary and replacement boundaries."""
+    """Migrate frame epochs at ordinary and replacement artifact boundaries."""
     if not isinstance(value, dict):
         return value
     migrated = value

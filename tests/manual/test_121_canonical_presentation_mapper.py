@@ -53,6 +53,7 @@ from dnd.core.events import (
     SensoryUpdateEvent,
     SpatialChangeEvent,
     SpatialChangeType,
+    SpatialEffectChangeEvent,
     StepMovementEvent,
 )
 from dnd.core.gridmap import get_map
@@ -74,6 +75,10 @@ from dnd.core.presentation_geometry import (
     ConePresentationGeometry,
     CubePresentationGeometry,
 )
+from dnd.core.spatial_effect_types import (
+    SpatialEffectChangeOperation,
+    SpatialEffectLayer,
+)
 from dnd.entity import Entity, EntityConfig
 from dnd.monsters.bestiary import create_goblin, create_skeleton
 from dnd.monsters.traits import ParryFeature
@@ -84,7 +89,12 @@ from dnd.spells.abjuration import (
 )
 from dnd.spells.evocation import GustOfWind, Thunderwave
 from dnd.spells.transmutation import TelekinesisMove
-from tests.engine.support import force_attack_miss, reset_combat_state
+from tests.engine.support import (
+    force_attack_crit,
+    force_attack_hit,
+    force_attack_miss,
+    reset_combat_state,
+)
 from server.player_replication.journal import SubjectiveFrameProjectionContext
 from server.player_replication.mapper import (
     CanonicalSubjectivePresentationMapper,
@@ -126,8 +136,11 @@ from server.player_replication_contract import (
     ShovePresentationCue,
     RootedBehaviorPresentationAttribution,
     SourceItemPresentationAttribution,
+    SpellApplicationOutcome,
     SpellDelivery,
     SpellPresentationCue,
+    SpellTargetPresentation,
+    SpatialEffectPresentationCue,
     SubjectivePerspective,
     SubjectiveReplicationFrame,
     VisualLoadoutReplacePatch,
@@ -831,6 +844,119 @@ def test_duplicate_spell_targets_keep_distinct_projection_applications() -> None
     _assert_closed_graph(frame)
 
 
+def test_spell_created_spatial_effect_is_an_exact_position_application() -> None:
+    """A visible world-effect lifecycle stays causally owned by its spell."""
+    observer = uuid4()
+    caster = uuid4()
+    effect_uuid = uuid4()
+    position = (7, 9)
+    spell_ref = _content_ref(
+        kind=ContentDefinitionKind.SPELL,
+        content_id="spell.grease",
+        digest_char="e",
+    )
+    effect_ref = _content_ref(
+        kind=ContentDefinitionKind.SPATIAL_EFFECT,
+        content_id="spatial_effect.grease",
+        digest_char="f",
+    )
+    spell = SpellEvent(
+        name="Grease",
+        spell_id="grease",
+        source_entity_uuid=caster,
+        spell_school="conjuration",
+        spell_level=1,
+        cast_at_level=1,
+        range_type="ranged",
+        behavior_binding=_binding(
+            definition_ref=spell_ref,
+            owner_uuid=caster,
+        ),
+        phase=EventPhase.COMPLETION,
+        use_register=False,
+    )
+    spell = _visible(spell, observer, identified=(caster,), located=(caster,))
+    lifecycle = SpatialEffectChangeEvent(
+        source_entity_uuid=caster,
+        parent_event=spell.uuid,
+        operation=SpatialEffectChangeOperation.CREATED,
+        spatial_effect_uuid=effect_uuid,
+        spatial_effect_content_ref=effect_ref,
+        spatial_effect_name="Grease",
+        layer=SpatialEffectLayer.GROUND_SURFACE,
+        anchor_position=position,
+        affected_positions=(position, (8, 9)),
+        phase=EventPhase.COMPLETION,
+        use_register=False,
+    ).model_copy(
+        update={
+            "located_position_observer_uuids": {
+                position_evidence_key(position): {str(observer)},
+                position_evidence_key((8, 9)): {str(observer)},
+            },
+        },
+    )
+
+    frame = MAPPER.project_frame(
+        _batch(spell, lifecycle),
+        _context(_perspective(observer, controlled=False)),
+    )
+
+    assert len(frame.presentation) == 2
+    spell_cue, effect_cue = frame.presentation
+    assert isinstance(spell_cue, SpellPresentationCue)
+    assert isinstance(effect_cue, SpatialEffectPresentationCue)
+    assert spell_cue.child_presentation_ids == (effect_cue.presentation_id,)
+    assert effect_cue.parent_presentation_id == spell_cue.presentation_id
+    assert effect_cue.effect_uuid == str(effect_uuid)
+    assert effect_cue.content_ref == effect_ref
+    assert effect_cue.operation is SpatialEffectChangeOperation.CREATED
+    assert effect_cue.affected_positions == (position, (8, 9))
+    assert spell_cue.targets == (
+        SpellTargetPresentation(
+            application_index=0,
+            application_id=f"{spell_cue.presentation_id}:application:0",
+            outcome=SpellApplicationOutcome.AUTOMATIC,
+            position=position,
+            effect_presentation_ids=(effect_cue.presentation_id,),
+        ),
+    )
+    _assert_closed_graph(frame)
+
+
+def test_spatial_effect_lifecycle_does_not_disclose_unobserved_geometry() -> None:
+    """Exact content and coordinates are omitted without event-time cell grants."""
+    observer = uuid4()
+    caster = uuid4()
+    position = (70, 90)
+    effect_ref = _content_ref(
+        kind=ContentDefinitionKind.SPATIAL_EFFECT,
+        content_id="spatial_effect.hidden",
+        digest_char="9",
+    )
+    lifecycle = SpatialEffectChangeEvent(
+        source_entity_uuid=caster,
+        operation=SpatialEffectChangeOperation.CREATED,
+        spatial_effect_uuid=uuid4(),
+        spatial_effect_content_ref=effect_ref,
+        spatial_effect_name="Hidden Effect",
+        layer=SpatialEffectLayer.FIELD,
+        anchor_position=position,
+        affected_positions=(position,),
+        phase=EventPhase.COMPLETION,
+        use_register=False,
+    )
+
+    frame = MAPPER.project_frame(
+        _batch(lifecycle),
+        _context(_perspective(observer, controlled=False)),
+    )
+
+    assert frame.presentation == ()
+    assert effect_ref.identity_key not in frame.model_dump_json()
+    assert frame.watermarks.source_event_cursor == 1
+
+
 def test_drink_uses_frozen_item_state_after_registry_loss() -> None:
     """No item or action registry lookup is needed after a consumable disappears."""
     actor = uuid4()
@@ -1356,9 +1482,17 @@ def test_real_parry_handler_uses_public_reaction_identity_for_action_root() -> N
             definition_ref=get_content_declaration(Attack).ref,
             owner_uuid=attacker.uuid,
         )
-        with fixed_dice_faces(10):
+        attack_bonus = attacker.attack_bonus(
+            WeaponSlot.MELEE_MAIN,
+            defender.uuid,
+        ).normalized_score
+        armor_class = defender.ac_bonus(attacker.uuid).normalized_score
+        marginal_face = armor_class - attack_bonus
+        assert 2 <= marginal_face <= 19
+        with fixed_dice_faces(marginal_face):
             result = attack_action.apply()
         assert isinstance(result, AttackEvent)
+        assert result.attack_outcome is AttackOutcome.MISS
 
         source_events = tuple(
             event
@@ -2397,6 +2531,153 @@ def test_real_jump_starts_segments_at_multiple_opportunity_attack_edges() -> Non
             (2, ((3, 2), (4, 2))),
         ),
     )
+
+
+def test_lethal_opportunity_attack_keeps_exact_uncommitted_provoking_edge() -> None:
+    """A killed mover exposes intent without claiming destination occupancy."""
+    mover = uuid4()
+    reactor = uuid4()
+    perspective = _perspective(mover)
+    movement_lineage = uuid4()
+    step = StepMovementEvent(
+        source_entity_uuid=mover,
+        from_position=(5, 6),
+        to_position=(5, 7),
+        path_index=1,
+        total_path_length=5,
+        committed=False,
+        parent_lineage=movement_lineage,
+        phase=EventPhase.COMPLETION,
+        use_register=False,
+    )
+    reaction = AttackEvent(
+        name="Opportunity Attack",
+        source_entity_uuid=reactor,
+        target_entity_uuid=mover,
+        weapon_slot=WeaponSlot.MELEE_MAIN,
+        attack_outcome=AttackOutcome.MISS,
+        damage_types=[DamageType.SLASHING],
+        parent_lineage=step.lineage_uuid,
+        phase=EventPhase.COMPLETION,
+        use_register=False,
+    )
+    reaction = _visible(
+        reaction,
+        mover,
+        identified=(reactor, mover),
+    )
+
+    frame = MAPPER.project_frame(
+        _batch(reaction, step),
+        _context(perspective),
+    )
+
+    attempted = next(
+        cue for cue in frame.presentation
+        if isinstance(cue, MovementPresentationCue)
+    )
+    attack = next(
+        cue for cue in frame.presentation
+        if isinstance(cue, AttackPresentationCue)
+    )
+    assert attempted.trajectory == ((5, 6), (5, 7))
+    assert attempted.path_start_index == 0
+    assert attempted.path_total_steps == 4
+    assert attempted.model_dump()["endpoint_outcome"] == "not_committed"
+    assert attempted.child_presentation_ids == (attack.presentation_id,)
+    assert attack.parent_presentation_id == attempted.presentation_id
+    assert attack.source_event_cursor < attempted.source_event_cursor
+    _assert_closed_graph(frame)
+
+
+def test_real_lethal_opportunity_attack_projects_attempt_before_death() -> None:
+    """The real interrupted Step owns OA, damage, and death without teleporting."""
+    reset_combat_state()
+    get_map().create_rectangle(0, 0, 12, 12)
+    try:
+        watcher = create_skeleton(
+            name="Lethal Reaction Watcher",
+            position=(5, 5),
+            faction="monsters",
+        )
+        mover = create_goblin(
+            name="Fragile Observable Mover",
+            position=(5, 6),
+            faction="heroes",
+        )
+        add_opportunity_attack_handler(watcher)
+        force_attack_hit(watcher)
+        force_attack_crit(watcher)
+        Entity.update_all_entities_senses(max_distance=20)
+        observer_key = str(mover.uuid)
+        EventQueue.set_identified_entity_observer_computer(
+            lambda event: {
+                str(participant_uuid): {observer_key}
+                for participant_uuid in event.get_participant_entity_uuids()
+            },
+        )
+        source_cursor = EventQueue.event_cursor()
+
+        with fixed_dice_faces(10, 6, 6):
+            result = Move(
+                source_entity_uuid=mover.uuid,
+                end_position=(5, 10),
+            ).apply()
+        assert isinstance(result, MovementEvent)
+        assert result.phase is EventPhase.COMPLETION
+        assert mover.health.life_state is LifeState.DEAD
+        assert mover.position == (5, 6)
+
+        frame, slots = _project_event_queue_since(
+            source_cursor,
+            _perspective(mover.uuid, controlled=False),
+        )
+        completed_step = next(
+            slot.event
+            for slot in slots
+            if isinstance(slot.event, StepMovementEvent)
+            and slot.event.phase is EventPhase.COMPLETION
+        )
+        assert completed_step.committed is False
+        assert completed_step.from_position == (5, 6)
+        assert completed_step.to_position == (5, 7)
+        origin_grants = completed_step.located_position_observer_uuids[
+            position_evidence_key((5, 6))
+        ]
+        destination_grants = completed_step.located_position_observer_uuids[
+            position_evidence_key((5, 7))
+        ]
+        assert observer_key in origin_grants & destination_grants
+
+        attempted = next(
+            cue
+            for cue in frame.presentation
+            if isinstance(cue, MovementPresentationCue)
+        )
+        attack = next(
+            cue
+            for cue in frame.presentation
+            if isinstance(cue, AttackPresentationCue)
+        )
+        damage = next(
+            cue
+            for cue in frame.presentation
+            if isinstance(cue, DamagePresentationCue)
+        )
+        life = next(
+            cue
+            for cue in frame.presentation
+            if isinstance(cue, LifeStatePresentationCue)
+        )
+        assert attempted.trajectory == ((5, 6), (5, 7))
+        assert attempted.endpoint_outcome.value == "not_committed"
+        assert attempted.child_presentation_ids == (attack.presentation_id,)
+        assert attack.child_presentation_ids == (damage.presentation_id,)
+        assert damage.child_presentation_ids == (life.presentation_id,)
+        assert life.current is LifeState.DEAD
+        _assert_closed_graph(frame)
+    finally:
+        reset_combat_state()
 
 
 def test_visible_pre_step_spell_reaction_owns_exact_movement_segment() -> None:

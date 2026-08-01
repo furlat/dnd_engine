@@ -7,7 +7,7 @@ servers, and replay tooling can depend on it without reversing ownership.
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Protocol, runtime_checkable
+from typing import Literal, Protocol, runtime_checkable
 from uuid import UUID
 
 
@@ -42,6 +42,43 @@ class HasteActionPolicy(str, Enum):
 
     BG3_HONOUR = "bg3_honour"
     SRD_5_1 = "srd_5_1"
+
+
+CostType = Literal[
+    "actions",
+    "bonus_actions",
+    "reactions",
+    "movement",
+    "spell_slot_1",
+    "spell_slot_2",
+    "spell_slot_3",
+    "spell_slot_4",
+    "spell_slot_5",
+    "spell_slot_6",
+    "spell_slot_7",
+    "spell_slot_8",
+    "spell_slot_9",
+]
+
+SPELL_SLOT_COST_TYPES: dict[int, CostType] = {
+    1: "spell_slot_1",
+    2: "spell_slot_2",
+    3: "spell_slot_3",
+    4: "spell_slot_4",
+    5: "spell_slot_5",
+    6: "spell_slot_6",
+    7: "spell_slot_7",
+    8: "spell_slot_8",
+    9: "spell_slot_9",
+}
+
+
+def spell_slot_cost_type(level: int) -> CostType:
+    """Convert a spell-slot rank into its action-economy channel."""
+    result = SPELL_SLOT_COST_TYPES.get(level)
+    if result is None:
+        raise ValueError(f"Invalid spell slot level: {level}")
+    return result
 
 
 @dataclass(frozen=True)
@@ -90,8 +127,11 @@ class RestrictedActionGrantProvider(Protocol):
 __all__ = [
     "ActionEconomyCostType",
     "ActionPresentationKind",
+    "CostType",
     "HasteActionPolicy",
     "RestrictedActionGrant",
     "RestrictedActionGrantProvider",
     "RestrictedActionKind",
+    "SPELL_SLOT_COST_TYPES",
+    "spell_slot_cost_type",
 ]

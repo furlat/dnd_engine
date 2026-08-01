@@ -7,13 +7,21 @@ from dnd.classes.progression_definitions import (
     FIGHTER_CLASS_DEFINITION,
     FIGHTER_PROGRESSION_DECLARATIONS,
 )
+from dnd.classes.permanent_feature_definitions import (
+    FIGHTER_ACTION_SURGE_DECLARATION,
+    FIGHTER_ARCHERY_DECLARATION,
+    FIGHTER_DEFENSE_DECLARATION,
+    FIGHTER_DUELING_DECLARATION,
+    FIGHTER_EXTRA_ATTACK_DECLARATION,
+    FIGHTER_GREAT_WEAPON_FIGHTING_DECLARATION,
+    FIGHTER_INDOMITABLE_DECLARATION,
+    FIGHTER_PROTECTION_DECLARATION,
+    FIGHTER_SECOND_WIND_DECLARATION,
+    FIGHTER_TWO_WEAPON_FIGHTING_DECLARATION,
+)
 from dnd.classes.structural_feature_definitions import (
     REMARKABLE_ATHLETE_DECLARATION,
 )
-from dnd.content_system.condition_definitions import (
-    CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS,
-)
-from dnd.core.base_conditions import BaseCondition
 from dnd.core.content.durable_characters import (
     AbilityScoreName,
     AbilityScorePrerequisite,
@@ -26,13 +34,6 @@ from dnd.core.content.durable_characters import (
 from dnd.core.content.identities import ContentDefinitionKind
 from dnd.core.content.registration import ContentDeclarationMode
 from dnd.core.progression import CasterProgression
-import dnd.classes.fighter as fighter
-
-
-def _feature_ref(condition_type: type[BaseCondition]):
-    return CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS[condition_type].ref
-
-
 def _level(definition: ClassDefinition | SubclassDefinition, level: int):
     return next(
         row for row in definition.level_definitions if row.class_level == level
@@ -186,16 +187,16 @@ def test_fighter_has_every_level_and_exact_threshold_grants() -> None:
         if (grants := _grant_ids(FIGHTER_CLASS_DEFINITION, level))
     } == expected
 
-    assert _feature_ref(fighter.SecondWindFeature) in (
+    assert FIGHTER_SECOND_WIND_DECLARATION.ref in (
         _level(FIGHTER_CLASS_DEFINITION, 1).automatic_grant_refs
     )
-    assert _feature_ref(fighter.ActionSurgeFeature) in (
+    assert FIGHTER_ACTION_SURGE_DECLARATION.ref in (
         _level(FIGHTER_CLASS_DEFINITION, 2).automatic_grant_refs
     )
-    assert _feature_ref(fighter.ExtraAttackFeature) in (
+    assert FIGHTER_EXTRA_ATTACK_DECLARATION.ref in (
         _level(FIGHTER_CLASS_DEFINITION, 5).automatic_grant_refs
     )
-    assert _feature_ref(fighter.Indomitable) in (
+    assert FIGHTER_INDOMITABLE_DECLARATION.ref in (
         _level(FIGHTER_CLASS_DEFINITION, 9).automatic_grant_refs
     )
 
@@ -219,12 +220,12 @@ def test_fighter_level_choices_are_complete_and_exact() -> None:
     ).choice_requirements[0]
     expected_styles = tuple(sorted(
         (
-            _feature_ref(fighter.FightingStyleArchery),
-            _feature_ref(fighter.FightingStyleDefense),
-            _feature_ref(fighter.FightingStyleDueling),
-            _feature_ref(fighter.GreatWeaponFighting),
-            _feature_ref(fighter.FightingStyleProtection),
-            _feature_ref(fighter.FightingStyleTwoWeaponFighting),
+            FIGHTER_ARCHERY_DECLARATION.ref,
+            FIGHTER_DEFENSE_DECLARATION.ref,
+            FIGHTER_DUELING_DECLARATION.ref,
+            FIGHTER_GREAT_WEAPON_FIGHTING_DECLARATION.ref,
+            FIGHTER_PROTECTION_DECLARATION.ref,
+            FIGHTER_TWO_WEAPON_FIGHTING_DECLARATION.ref,
         ),
         key=lambda ref: ref.identity_key,
     ))

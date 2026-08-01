@@ -71,6 +71,10 @@ class CreatureRuntimeBindingRegistry:
             )
         return binding
 
+    def discard(self, runtime_entity_uuid: UUID) -> None:
+        """Discard one provisional or retired creature binding if present."""
+        self._bindings.pop(runtime_entity_uuid, None)
+
     @property
     def bindings(self):
         """Return an immutable snapshot of this generation's bindings."""

@@ -374,8 +374,8 @@ def test_eb_02_006_contextual_target_channels_copy_into_from_target() -> None:
     assert attacker_attack.score == 13
 
 
-def test_eb_02_007_contextual_exceptions_cache_none_but_strict_execution_raises() -> None:
-    """EB-02-007: normal contextual aggregation is forgiving; strict calls are not."""
+def test_eb_02_007_contextual_exceptions_are_not_cached_and_strict_calls_raise() -> None:
+    """EB-02-007: fail-soft aggregation never memoizes evaluator failures."""
     reset_value_state()
     source_uuid = uuid4()
     target_uuid = uuid4()
@@ -408,11 +408,11 @@ def test_eb_02_007_contextual_exceptions_cache_none_but_strict_execution_raises(
 
     assert value.score == 3
     cache_key = f"{source_uuid}|{target_uuid}|{lineage_uuid}"
-    assert broken_modifier.cached_results[cache_key] is None
+    assert cache_key not in broken_modifier.cached_results
     assert calls == 1
 
     assert value.score == 3
-    assert broken_modifier.cached_results[cache_key] is None
+    assert cache_key not in broken_modifier.cached_results
     assert calls == 2
 
     try:
@@ -685,16 +685,56 @@ def test_eb_02_011_inactive_contextual_damage_types_are_empty() -> None:
     assert value.damage_type == DamageType.FIRE
 
 
-if __name__ == "__main__":
-    test_eb_02_001_static_numerical_modifiers_and_constraints()
-    test_eb_02_002_advantage_critical_and_auto_hit_precedence()
-    test_eb_02_003_contextual_modifiers_are_evaluated_from_context()
-    test_eb_02_004_to_target_channels_require_explicit_propagation()
-    test_eb_02_005_resistance_vulnerability_and_immunity_aggregate()
-    test_eb_02_006_contextual_target_channels_copy_into_from_target()
-    test_eb_02_007_contextual_exceptions_cache_none_but_strict_execution_raises()
-    test_eb_02_008_multiple_constraints_are_permissive()
-    test_eb_02_009_contextual_resistance_aggregates_and_executes_strictly()
-    test_eb_02_010_imported_target_channels_share_live_modifier_buckets()
-    test_eb_02_011_inactive_contextual_damage_types_are_empty()
-    print("PASS: engine book modifiable value tests")
+def test_damage_type_ties_are_deterministic_across_insertion_order() -> None:
+    """Computed value reads must never choose a random tied damage type."""
+    reset_value_state()
+    source_uuid = uuid4()
+    first = ModifiableValue.create(source_entity_uuid=source_uuid)
+    second = ModifiableValue.create(source_entity_uuid=source_uuid)
+
+    for value, damage_types in (
+        (first, (DamageType.FIRE, DamageType.COLD)),
+        (second, (DamageType.COLD, DamageType.FIRE)),
+    ):
+        for damage_type in damage_types:
+            value.self_static.add_damage_type_modifier(
+                DamageTypeModifier(
+                    source_entity_uuid=source_uuid,
+                    target_entity_uuid=source_uuid,
+                    name=f"{damage_type.value} Type",
+                    value=damage_type,
+                )
+            )
+
+    assert first.damage_types == [DamageType.COLD, DamageType.FIRE]
+    assert second.damage_types == [DamageType.COLD, DamageType.FIRE]
+    assert [first.damage_type for _ in range(20)] == [DamageType.COLD] * 20
+    assert [second.damage_type for _ in range(20)] == [DamageType.COLD] * 20
+
+
+def test_modifier_lookup_inherits_the_single_base_object_registry_contract() -> None:
+    """Modifier subclasses use BaseObject.get without private duplicate lookups."""
+    reset_value_state()
+    source_uuid = uuid4()
+    numerical = NumericalModifier(
+        source_entity_uuid=source_uuid,
+        target_entity_uuid=source_uuid,
+        name="Typed Lookup",
+        value=2,
+    )
+    advantage = AdvantageModifier(
+        source_entity_uuid=source_uuid,
+        target_entity_uuid=source_uuid,
+        name="Other Modifier Type",
+        value=AdvantageStatus.ADVANTAGE,
+    )
+
+    assert NumericalModifier.get(numerical.uuid) is numerical
+    assert NumericalModifier.get(uuid4()) is None
+
+    try:
+        NumericalModifier.get(advantage.uuid)
+    except ValueError as exc:
+        assert "is not a NumericalModifier" in str(exc)
+    else:
+        raise AssertionError("typed modifier lookup must reject another modifier type")

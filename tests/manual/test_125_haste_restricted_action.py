@@ -23,9 +23,7 @@ from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
 from dnd.classes.fighter import (
     ActionSurge,
-    ActionSurgeFeature,
     ExtraAttack,
-    ExtraAttackFeature,
     create_extra_attack_resource_handler,
 )
 from dnd.classes.rage import FrenziedStrike
@@ -117,20 +115,39 @@ def _create_hasted_fighter(
     fighter = _create_creature("Hasted Fighter", (3, 3), "heroes")
     fighter.action_economy.haste_action_policy = haste_action_policy
     target = _create_creature("Target", (4, 3), "monsters")
-    fighter.add_condition(
-        ExtraAttackFeature(
+    grant_id = uuid4()
+    fighter.action_economy.add_attack_multiplicity_grant(
+        AttackMultiplicityGrant(
+            grant_id=grant_id,
+            provider_ref=EXTRA_ATTACK_FEATURE_REF,
+            attacks_per_attack_action=extra_attacks + 1,
+            acquisition_ordinal=5,
+        ),
+    )
+    fighter.action_economy.add_resource_contribution(
+        "extra_attacks",
+        grant_id,
+        maximum=extra_attacks,
+        recharge_type=RechargeType.TURN_START,
+        capacity_policy=ResourceCapacityPolicy.MAXIMUM,
+    )
+    fighter.register_action(
+        ExtraAttack(
             source_entity_uuid=fighter.uuid,
-            target_entity_uuid=fighter.uuid,
-            extra_attacks=extra_attacks,
-        )
+            name="Extra Attack",
+            template=True,
+            discover_equipped_weapon_slots=True,
+        ),
+    )
+    fighter.add_event_handler(
+        create_extra_attack_resource_handler(fighter.uuid),
     )
     if action_surge:
-        fighter.add_condition(
-            ActionSurgeFeature(
-                source_entity_uuid=fighter.uuid,
-                target_entity_uuid=fighter.uuid,
-                num_uses=1,
-            )
+        fighter.action_economy.add_resource_contribution(
+            "action_surge",
+            "fixture.action_surge",
+            maximum=1,
+            recharge_type=RechargeType.SHORT_REST,
         )
     fighter.add_condition(
         HasteEffect(
@@ -147,45 +164,7 @@ def _create_hasted_fighter(
 
 def _create_hasted_structural_fighter() -> tuple[Entity, Entity]:
     """Create the same matchup through the source-owned Extra Attack family."""
-    fighter = _create_creature("Structural Hasted Fighter", (3, 3), "heroes")
-    target = _create_creature("Target", (4, 3), "monsters")
-    grant_id = uuid4()
-    fighter.action_economy.add_attack_multiplicity_grant(
-        AttackMultiplicityGrant(
-            grant_id=grant_id,
-            provider_ref=EXTRA_ATTACK_FEATURE_REF,
-            attacks_per_attack_action=2,
-            acquisition_ordinal=5,
-        ),
-    )
-    fighter.action_economy.add_resource_contribution(
-        "extra_attacks",
-        grant_id,
-        maximum=1,
-        recharge_type=RechargeType.TURN_START,
-        capacity_policy=ResourceCapacityPolicy.MAXIMUM,
-    )
-    fighter.register_action(
-        ExtraAttack(
-            source_entity_uuid=fighter.uuid,
-            name="Extra Attack",
-            template=True,
-            discover_equipped_weapon_slots=True,
-        ),
-    )
-    EventQueue.add_event_handler(
-        create_extra_attack_resource_handler(fighter.uuid),
-    )
-    fighter.add_condition(
-        HasteEffect(
-            source_entity_uuid=fighter.uuid,
-            target_entity_uuid=fighter.uuid,
-            caster_uuid=fighter.uuid,
-        ),
-    )
-    fighter.action_economy.resources["extra_attacks"].current = 0
-    Entity.update_all_entities_senses()
-    return fighter, target
+    return _create_hasted_fighter(extra_attacks=1)
 
 
 def _find_row(

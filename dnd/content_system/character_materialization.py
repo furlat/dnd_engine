@@ -22,16 +22,17 @@ from dnd.content_system.builtin_character_grant_appliers import (
 from dnd.content_system.character_grant_context import (
     BuiltinCharacterGrantContext,
 )
+from dnd.content_system.character_grant_receipt_cleanup import (
+    remove_character_grant_receipts,
+)
 from dnd.content_system.character_grant_types import (
     CharacterGrantReceipt,
     LearnedReactionSpellHandle,
     ModifierHandle,
-    ModifierHandleChannel,
-    ModifierHandleKind,
     ProficiencyHandle,
 )
-from dnd.content_system.installed_creature_materialization import (
-    materialize_installed_creature,
+from dnd.content_system.creature_materialization import (
+    materialize_creature,
 )
 from dnd.content_system.creature_bindings import (
     CREATURE_RUNTIME_BINDINGS,
@@ -45,9 +46,7 @@ from dnd.content_system.item_bindings import (
     ItemRuntimeBindingRegistry,
     ItemRuntimeOrigin,
 )
-from dnd.content_system.item_runtime_materialization import (
-    materialize_item_from_installed_runtime,
-)
+from dnd.content_system.item_materialization import materialize_item
 from dnd.content_system.origin_character_grant_appliers import (
     install_origin_structural_feature,
 )
@@ -73,7 +72,6 @@ from dnd.core.content.durable_characters import (
 )
 from dnd.core.content.identities import ContentRef
 from dnd.core.content.origin_features import OriginStructuralFeatureDefinition
-from dnd.core.base_block import BaseBlock
 from dnd.core.content.materialization import (
     CreatureDeploymentRole,
     CreaturePossessionMode,
@@ -104,7 +102,6 @@ class CharacterCompositionReceipt:
     runtime_entity_uuid: UUID
     character_id: UUID
     grants: tuple[CharacterGrantReceipt, ...]
-    automatic_grant_refs: tuple[ContentRef, ...]
     owns_character_origin_identity: bool = False
 
 
@@ -282,46 +279,6 @@ def _install_proficiency(
     )
 
 
-def _remove_proficiency_handle(
-    entity: Entity,
-    handle: ProficiencyHandle,
-) -> None:
-    subject = handle.subject
-    subject_id = subject.subject_id
-    if subject.subject_kind == ProficiencySubjectKind.ABILITY_CHECK:
-        if subject_id is None or not subject_id.startswith("ability_check."):
-            raise RuntimeError(
-                "ability-check receipt has an invalid subject identity",
-            )
-        entity.ability_scores.get_ability(
-            cast(
-                AbilityName,
-                subject_id.removeprefix("ability_check."),
-            ),
-        ).remove_check_proficiency_source(handle.source_id)
-        return
-    if subject.subject_kind == ProficiencySubjectKind.SKILL:
-        if subject_id is None or not subject_id.startswith("skill."):
-            raise RuntimeError("skill receipt has an invalid subject identity")
-        entity.skill_set.get_skill(
-            cast(SkillName, subject_id.removeprefix("skill.")),
-        ).remove_proficiency_source(handle.source_id)
-        return
-    if subject.subject_kind == ProficiencySubjectKind.SAVING_THROW:
-        if subject_id is None or not subject_id.startswith("saving_throw."):
-            raise RuntimeError(
-                "saving-throw receipt has an invalid subject identity",
-            )
-        entity.saving_throws.get_saving_throw(
-            cast(
-                AbilityName,
-                subject_id.removeprefix("saving_throw."),
-            ),
-        ).remove_proficiency_source(handle.source_id)
-        return
-    entity.creature_proficiencies.remove_source(handle.source_id)
-
-
 def remove_character_composition(
     entity: Entity,
     receipt: CharacterCompositionReceipt,
@@ -332,133 +289,7 @@ def remove_character_composition(
             "character composition receipt belongs to a different runtime "
             "entity",
         )
-    for grant in reversed(receipt.grants):
-        cleanup_ref_keys = {
-            ref.identity_key
-            for ref in grant.transient_condition_refs_to_remove
-        }
-        if cleanup_ref_keys:
-            for condition_owner in Entity.get_all_entities():
-                for condition in tuple(
-                    condition_owner.active_conditions_by_uuid.values()
-                ):
-                    binding = condition.behavior_binding
-                    if (
-                        binding is not None
-                        and binding.definition_ref.identity_key
-                        in cleanup_ref_keys
-                        and condition.source_entity_uuid == entity.uuid
-                    ):
-                        condition_owner.remove_condition_by_uuid(
-                            condition.uuid,
-                        )
-        for action_uuid in reversed(grant.action_uuids):
-            entity.unregister_action_by_uuid(action_uuid)
-        for handler_uuid in reversed(grant.handler_uuids):
-            handler = entity.event_handlers.get(handler_uuid)
-            if handler is not None:
-                entity.remove_event_handler(handler)
-        for handle in reversed(grant.learned_reaction_spell_handles):
-            remove_handler = (
-                entity.spellcasting.remove_learned_reaction_spell_source(
-                    spell_ref=handle.spell_ref,
-                    source_id=handle.spellcasting_source_id,
-                    handler_uuid=handle.handler_uuid,
-                )
-            )
-            if remove_handler:
-                handler = entity.event_handlers.get(handle.handler_uuid)
-                if handler is None:
-                    raise RuntimeError(
-                        "learned reaction spell handler "
-                        f"{handle.handler_uuid} is missing",
-                    )
-                entity.remove_event_handler(handler)
-        for handle in reversed(grant.condition_immunity_handles):
-            block = BaseBlock.get(handle.block_uuid)
-            if block is None:
-                raise RuntimeError(
-                    f"composition immunity block {handle.block_uuid} is "
-                    "missing",
-                )
-            block.remove_condition_immunity_source(
-                handle.condition_name,
-                handle.source_id,
-            )
-        for source_id in reversed(grant.sense_mode_source_ids):
-            entity.senses.remove_sense_mode_source(source_id)
-        for source_id in reversed(grant.structural_size_source_ids):
-            entity.remove_structural_size_source(source_id)
-        for capability, source_id in reversed(
-            grant.origin_capability_source_ids,
-        ):
-            entity.remove_origin_capability_source(capability, source_id)
-        for resource_name, source_id in reversed(
-            grant.resource_recovery_contribution_ids,
-        ):
-            entity.action_economy.remove_resource_recovery_contribution(
-                resource_name,
-                source_id,
-            )
-        for resource_name, source_id in reversed(
-            grant.resource_contribution_ids,
-        ):
-            entity.action_economy.remove_resource_contribution(
-                resource_name,
-                source_id,
-            )
-        for formula_id in reversed(grant.armor_class_formula_ids):
-            entity.equipment.remove_armor_class_formula_candidate(formula_id)
-        for source_id in reversed(grant.attack_multiplicity_grant_ids):
-            entity.action_economy.remove_attack_multiplicity_grant(source_id)
-        for source_id in reversed(grant.normal_spell_slot_capacity_source_ids):
-            entity.action_economy.remove_normal_spell_slot_capacity(source_id)
-        for source_id in reversed(
-            grant.spell_damage_affinity_contribution_ids,
-        ):
-            entity.spellcasting.remove_spell_damage_affinity_contribution(
-                source_id,
-            )
-        for source_id in reversed(grant.spellcasting_source_ids):
-            entity.spellcasting.remove_source(source_id)
-        for hit_die_uuid in reversed(grant.hit_die_uuids):
-            entity.health.remove_hit_dice_by_uuid(hit_die_uuid)
-        for handle in reversed(grant.proficiency_handles):
-            _remove_proficiency_handle(entity, handle)
-        for handle in reversed(grant.modifier_handles):
-            value = ModifiableValue.get(handle.value_uuid)
-            if value is None:
-                raise RuntimeError(
-                    f"composition value {handle.value_uuid} is missing",
-                )
-            if handle.channel == ModifierHandleChannel.SELF_STATIC:
-                channel = value.self_static
-            elif handle.channel == ModifierHandleChannel.SELF_CONTEXTUAL:
-                channel = value.self_contextual
-            else:
-                raise RuntimeError(
-                    f"unsupported composition modifier channel "
-                    f"{handle.channel.value}",
-                )
-            if handle.kind == ModifierHandleKind.VALUE:
-                channel.remove_value_modifier(handle.modifier_uuid)
-            elif handle.kind == ModifierHandleKind.MIN_CONSTRAINT:
-                channel.remove_min_constraint(handle.modifier_uuid)
-            elif handle.kind == ModifierHandleKind.MAX_CONSTRAINT:
-                channel.remove_max_constraint(handle.modifier_uuid)
-            elif handle.kind == ModifierHandleKind.ADVANTAGE:
-                channel.remove_advantage_modifier(handle.modifier_uuid)
-            elif handle.kind == ModifierHandleKind.CRITICAL:
-                channel.remove_critical_modifier(handle.modifier_uuid)
-            elif handle.kind == ModifierHandleKind.AUTO_HIT:
-                channel.remove_auto_hit_modifier(handle.modifier_uuid)
-            elif handle.kind == ModifierHandleKind.RESISTANCE:
-                channel.remove_resistance_modifier(handle.modifier_uuid)
-            else:
-                raise RuntimeError(
-                    f"unsupported composition modifier kind "
-                    f"{handle.kind.value}",
-                )
+    remove_character_grant_receipts(entity, receipt.grants)
     if receipt.owns_character_origin_identity:
         entity.clear_character_origin_identity()
 
@@ -475,7 +306,6 @@ def apply_character_composition(
     registry = runtime.require().registry
     receipts: list[CharacterGrantReceipt] = []
     character_id = definition.character_id
-    initial_dexterity_modifier = entity.ability_scores.dexterity.modifier
     entity.set_character_origin_identity(
         species_ref=definition.species_ref,
         species_variant_ref=definition.species_variant_ref,
@@ -484,7 +314,7 @@ def apply_character_composition(
     try:
         for ability in AbilityScoreName:
             ability_name = cast(AbilityName, ability.value)
-            score = getattr(definition.base_ability_scores, ability.value)
+            score = definition.base_ability_scores.score(ability)
             receipts.append(
                 _add_numerical_grant(
                     entity=entity,
@@ -657,21 +487,6 @@ def apply_character_composition(
                     ),
                     definition_ref=level.class_ref,
                     hit_die_uuids=(hit_die.uuid,),
-                ),
-            )
-
-        final_dexterity_modifier = entity.ability_scores.dexterity.modifier
-        initiative_delta = (
-            final_dexterity_modifier - initial_dexterity_modifier
-        )
-        if initiative_delta:
-            receipts.append(
-                _add_numerical_grant(
-                    entity=entity,
-                    character_id=character_id,
-                    token="initiative_from_dexterity",
-                    value=entity.initiative,
-                    amount=initiative_delta,
                 ),
             )
 
@@ -861,7 +676,6 @@ def apply_character_composition(
             runtime_entity_uuid=entity.uuid,
             character_id=character_id,
             grants=tuple(receipts),
-            automatic_grant_refs=preview.automatic_grant_refs,
             owns_character_origin_identity=True,
         )
         remove_character_composition(entity, partial)
@@ -871,7 +685,6 @@ def apply_character_composition(
         runtime_entity_uuid=entity.uuid,
         character_id=character_id,
         grants=tuple(receipts),
-        automatic_grant_refs=preview.automatic_grant_refs,
         owns_character_origin_identity=True,
     )
 
@@ -1028,7 +841,7 @@ def materialize_character(
         raise ValueError(f"invalid character build: {details}")
     creature_recipe = definition.body_recipe
 
-    entity = materialize_installed_creature(
+    entity = materialize_creature(
         creature_recipe,
         runtime_entity_uuid=runtime_entity_uuid or uuid4(),
         display_name=display_name,
@@ -1042,27 +855,25 @@ def materialize_character(
         entity_content_ref=runtime_content_ref,
         runtime=runtime,
     )
-    apply_player_character_appearance(
-        entity.appearance,
-        body_ref=definition.body_recipe.ref,
-        species_ref=definition.species_ref,
-        selection=definition.appearance,
-    )
-
-    composition_receipt = apply_character_composition(
-        entity=entity,
-        definition=definition,
-        loadout=loadout,
-        preview=validation.preview,
-        runtime=runtime,
-    )
-
     lineage: list[tuple[UUID, UUID]] = []
     starting_torches: list[Torch] = []
     provisional_items: list[BaseItem] = []
     try:
+        apply_player_character_appearance(
+            entity.appearance,
+            body_ref=definition.body_recipe.ref,
+            species_ref=definition.species_ref,
+            selection=definition.appearance,
+        )
+        composition_receipt = apply_character_composition(
+            entity=entity,
+            definition=definition,
+            loadout=loadout,
+            preview=validation.preview,
+            runtime=runtime,
+        )
         for durable_item in holdings.items:
-            item = materialize_item_from_installed_runtime(
+            item = materialize_item(
                 durable_item.recipe,
                 entity.uuid,
                 origin=ItemRuntimeOrigin.PERSISTED,
@@ -1101,6 +912,8 @@ def materialize_character(
         )
         if composition_receipt is not None:
             remove_character_composition(entity, composition_receipt)
+        creature_binding_registry.discard(entity.uuid)
+        entity.discard_unpublished_runtime()
         raise
 
     return MaterializedCharacter(

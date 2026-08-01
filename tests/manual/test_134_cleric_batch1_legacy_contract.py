@@ -21,13 +21,14 @@ from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
 from dnd.conditions import Hidden
 from dnd.core.base_actions import BaseAction, Cost
-from dnd.core.base_block import BaseBlock, LightLevel
+from dnd.core.base_block import LightLevel
 from dnd.core.base_tiles import dark_floor_factory
-from dnd.core.condition_types import ConditionAgencyDenial
+from dnd.core.condition_types import ConditionAgencyDenial, DurationType
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import EventPhase, EventQueue, EventType, TakeDamageEvent
+from dnd.core.events import Event, EventPhase, EventQueue, EventType, TakeDamageEvent
 from dnd.core.gridmap import get_map
+from dnd.core.spatial_effect_types import SpatialEffectAnchorKind
 from dnd.core.creature_types import CreatureType, DamageType
 from dnd.core.modifiers import (
     ResistanceModifier,
@@ -35,20 +36,25 @@ from dnd.core.modifiers import (
 )
 from dnd.entity import Entity
 from dnd.items.weapons import DAGGER_RECIPE
+from dnd.items.environment_content import OIL_BARREL_RECIPE, OilBarrel
 from dnd.reactions import add_opportunity_attack_handler
 from dnd.spells.conjuration import (
     GuardianOfFaith,
-    GuardianOfFaithObject,
+    GuardianOfFaithController,
 )
 from dnd.spells.divination import Guidance
 from dnd.spells.enchantment import Command
 from dnd.spells.evocation import (
     ContinualFlame,
-    ContinualFlameObject,
     FireBolt,
     FlameStrike,
     Light,
 )
+from dnd.spatial_effect_content import (
+    CONTINUAL_FLAME_FIELD_RECIPE,
+    GUARDIAN_OF_FAITH_FIELD_RECIPE,
+)
+from dnd.spatial_effects import FieldEffect, SpatialEffect
 from dnd.spells.illusion import Silence
 from dnd.spells.transmutation import HasteEffect
 from tests.engine.support import (
@@ -240,6 +246,10 @@ def test_light_geometry_follows_movement_and_cleans_up() -> None:
 
     assert isinstance(result, SpellEvent)
     assert not result.canceled
+    assert not has_condition(caster, "Concentrating")
+    light_effect = caster.active_conditions["Light"]
+    assert light_effect.duration.duration_type is DurationType.ROUNDS
+    assert light_effect.duration.duration == 600
     assert _tile((5, 7)).resolved_light_level is LightLevel.BRIGHT_LIGHT
     assert _tile((7, 7)).resolved_light_level is LightLevel.BRIGHT_LIGHT
     assert _tile((11, 7)).resolved_light_level is LightLevel.DIM_LIGHT
@@ -256,7 +266,7 @@ def test_light_geometry_follows_movement_and_cleans_up() -> None:
     assert _tile((8, 7)).resolved_light_level is LightLevel.BRIGHT_LIGHT
     assert _tile((18, 7)).resolved_light_level is LightLevel.DARKNESS
 
-    caster.remove_condition("Concentrating")
+    caster.remove_condition("Light")
     assert not has_condition(caster, "Light")
     assert _tile((8, 7)).resolved_light_level is LightLevel.DARKNESS
 
@@ -300,7 +310,7 @@ def test_light_on_ally_moves_with_the_ally() -> None:
 
     assert isinstance(result, SpellEvent)
     assert has_condition(ally, "Light")
-    assert has_condition(caster, "Concentrating")
+    assert not has_condition(caster, "Concentrating")
     ally.update_entity_senses(max_distance=100)
     moved = Move(
         source_entity_uuid=ally.uuid,
@@ -312,8 +322,8 @@ def test_light_on_ally_moves_with_the_ally() -> None:
     assert _tile(ally.position).resolved_light_level is LightLevel.BRIGHT_LIGHT
 
 
-def test_continual_flame_object_owns_light_lifecycle() -> None:
-    """Old cases 12-13: the permanent object emits and removes its own light."""
+def test_continual_flame_effect_owns_light_lifecycle() -> None:
+    """Old cases 12-13: the permanent field emits and removes its own light."""
     _dark_arena()
     caster = create_spell_regression_actor(
         "Flame Cleric",
@@ -322,31 +332,50 @@ def test_continual_flame_object_owns_light_lifecycle() -> None:
         spell_slots={2: 1},
     )
     Entity.update_all_entities_senses(max_distance=100)
+    focus = materialize_item(
+        OIL_BARREL_RECIPE,
+        caster.uuid,
+        origin=ItemRuntimeOrigin.ENVIRONMENT,
+        expected_type=OilBarrel,
+    )
+    focus.place_on_grid((3, 7))
+    Entity.update_all_entities_senses(max_distance=100)
 
     result = ContinualFlame(
         source_entity_uuid=caster.uuid,
-        end_position=(3, 7),
+        target_entity_uuid=focus.uuid,
         cast_at_level=2,
     ).apply()
 
     assert isinstance(result, SpellEvent)
     assert not result.canceled
     assert not has_condition(caster, "Concentrating")
-    objects = get_map().get_objects_at((3, 7))
     flame = next(
-        obj for obj in (BaseBlock.get(object_uuid) for object_uuid in objects)
-        if isinstance(obj, ContinualFlameObject)
+        effect
+        for effect in SpatialEffect.active_effects()
+        if effect.content_ref == CONTINUAL_FLAME_FIELD_RECIPE.ref
     )
+    assert isinstance(flame, FieldEffect)
+    assert flame.anchor_kind is SpatialEffectAnchorKind.WORLD_OBJECT
+    assert flame.anchor_uuid == focus.uuid
+    assert flame.affected_positions == {(3, 7)}
+    assert get_map().get_objects_at((3, 7)) == {focus.uuid}
     assert _tile((3, 7)).resolved_light_level is LightLevel.BRIGHT_LIGHT
     assert _tile((5, 7)).resolved_light_level in {
         LightLevel.BRIGHT_LIGHT,
         LightLevel.DIM_LIGHT,
     }
 
-    flame.destroy()
+    focus.place_on_grid((12, 7))
 
-    assert not get_map().get_objects_at((3, 7))
+    assert flame.affected_positions == {(12, 7)}
+    assert _tile((12, 7)).resolved_light_level is LightLevel.BRIGHT_LIGHT
     assert _tile((3, 7)).resolved_light_level is LightLevel.DARKNESS
+
+    get_map().remove_object(focus.uuid)
+
+    assert SpatialEffect.get_effect(flame.uuid) is None
+    assert _tile((12, 7)).resolved_light_level is LightLevel.DARKNESS
 
 
 def _command_reaction_probe(target: Entity) -> BaseAction:
@@ -739,27 +768,42 @@ def test_guardian_placement_ward_and_damage_budget() -> None:
     assert not result.canceled
     assert not has_condition(caster, "Concentrating")
     guardian = next(
-        obj
-        for obj in (
-            BaseBlock.get(object_uuid)
-            for object_uuid in grid.get_objects_at((10, 7))
-        )
-        if isinstance(obj, GuardianOfFaithObject)
+        effect
+        for effect in SpatialEffect.active_effects()
+        if effect.content_ref == GUARDIAN_OF_FAITH_FIELD_RECIPE.ref
     )
-    assert guardian.blocks_movement
     assert not grid.is_walkable_for(10, 7, caster.uuid)
-    assert guardian.damage_budget == 60
-    assert guardian.damage_dealt == 0
+    controller = guardian.active_conditions.get("Guardian of Faith")
+    assert isinstance(controller, GuardianOfFaithController)
+    assert controller.damage_budget == 60
+    assert controller.damage_dealt == 0
+
+    turn_execution_id = uuid4()
+    turn_event = EventQueue.publish_lifecycle(Event(
+        source_entity_uuid=caster.uuid,
+        event_type=EventType.TURN_START,
+        phase=EventPhase.DECLARATION,
+        use_register=False,
+        turn_execution_id=turn_execution_id,
+    ))
+    assert turn_event is not None
 
     first = create_spell_regression_actor("First Fodder", (18, 7), "monsters")
     force_save_result(first, "dexterity", succeeds=False)
     first_hp = get_hp(first)
     with fixed_dice_faces(10):
-        Entity.update_entity_position(first, (12, 7))
+        Entity.update_entity_position(
+            first,
+            (12, 7),
+            parent_event=turn_event.uuid,
+        )
     assert get_hp(first) == first_hp - 20
-    assert has_condition(first, "Guardian Warded")
     hp_after_first = get_hp(first)
-    Entity.update_entity_position(first, (11, 7))
+    Entity.update_entity_position(
+        first,
+        (11, 7),
+        parent_event=turn_event.uuid,
+    )
     assert get_hp(first) == hp_after_first
 
     for index, destination in enumerate(((10, 5), (10, 9)), start=2):
@@ -770,7 +814,12 @@ def test_guardian_placement_ward_and_damage_budget() -> None:
         )
         force_save_result(fodder, "dexterity", succeeds=False)
         with fixed_dice_faces(10):
-            Entity.update_entity_position(fodder, destination)
+            Entity.update_entity_position(
+                fodder,
+                destination,
+                parent_event=turn_event.uuid,
+            )
 
-    assert guardian.damage_dealt == 60
-    assert guardian.uuid not in grid.get_objects_at((10, 7))
+    assert controller.damage_dealt == 60
+    assert SpatialEffect.get_effect(guardian.uuid) is None
+    assert grid.is_walkable_for(10, 7, caster.uuid)

@@ -7,7 +7,6 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, ConfigDict, Field
 
 from dnd.actions import (
-    entity_action_economy_cost_applier,
     entity_action_economy_cost_evaluator,
 )
 from dnd.blocks.base_item import UsableItem
@@ -304,16 +303,6 @@ class _PotionDrinkAction(BaseAction):
         default=ActionPresentationKind.DRINK,
         description="Tells presentation clients to render a potion-drinking action.",
     )
-
-    def _apply_costs(
-        self,
-        completion_event: ActionEvent,
-    ) -> Optional[ActionEvent]:
-        """Consume the potion's bonus-action cost after successful resolution."""
-        return entity_action_economy_cost_applier(
-            completion_event,
-            self.source_entity_uuid,
-        )
 
 
 @_consumable_action_identity(

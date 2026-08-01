@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 from pathlib import Path
 from types import MappingProxyType
 from typing import Literal, Self
@@ -16,6 +14,7 @@ from pydantic import (
     model_validator,
 )
 
+from dnd.core.content.canonical import canonical_content_sha256
 from dnd.core.equipment_types import EquipmentRenderLayer, VisualLoadoutSlot
 
 
@@ -29,14 +28,7 @@ AUTHORED_ITEM_VISUAL_LEDGER_PATH = (
 
 
 def _canonical_digest(value: object) -> str:
-    encoded = json.dumps(
-        value,
-        allow_nan=False,
-        ensure_ascii=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode("utf-8")
-    return hashlib.sha256(encoded).hexdigest()
+    return canonical_content_sha256(value)
 
 
 class AuthoredItemEquipmentLayer(BaseModel):

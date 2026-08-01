@@ -623,12 +623,30 @@ def test_jump_executes_through_canonical_action_and_replication_routes() -> None
         if frame["entry"] is not None
     ]
     assert replicated_hero["position"] == target["position"]
-    assert any(
-        cue["kind"] == "movement"
-        and cue["entity_uuid"] == hero_uuid
-        and cue["trajectory"][0] == list(initial_position)
-        and cue["trajectory"][-1] == target["position"]
+    movement_cues = [
+        cue
         for cue in presentation
+        if cue["kind"] == "movement"
+        and cue["entity_uuid"] == hero_uuid
+    ]
+    assert [
+        cue["path_start_index"]
+        for cue in movement_cues
+    ] == list(range(len(movement_cues)))
+    assert all(
+        cue["path_total_steps"] == len(movement_cues)
+        and len(cue["trajectory"]) == 2
+        for cue in movement_cues
+    )
+    assert movement_cues[0]["trajectory"][0] == list(initial_position)
+    assert movement_cues[-1]["trajectory"][-1] == target["position"]
+    assert all(
+        previous["trajectory"][-1] == current["trajectory"][0]
+        for previous, current in zip(
+            movement_cues,
+            movement_cues[1:],
+            strict=False,
+        )
     )
     assert len(logs) == 1
     assert logs[0]["entry_type"] == "movement"

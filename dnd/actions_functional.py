@@ -5,11 +5,11 @@ The functional layer keeps action construction and execution routes out of
 with registered templates manually.
 """
 
-from typing import Any, Callable, Dict, Optional, List, Tuple, cast
+from typing import Any, Callable, Dict, Optional, List, Tuple
 from uuid import UUID, uuid4
 
 from dnd.core.base_actions import (
-    BaseAction, TargetType, AvailableTarget, AvailableActionInfo,
+    ActionOverrideLease, BaseAction, TargetType, AvailableTarget, AvailableActionInfo,
     AvailableActionsResult, SPELL_SLOT_TEMPLATE_SEPARATOR,
 )
 from dnd.core.events import (
@@ -31,41 +31,6 @@ from dnd.conditions import (
 from dnd.blocks.base_item import UsableItem, consume_item_charge_before_action_completion
 from dnd.core.base_block import BaseBlock
 
-STANDARD_ENTITY_HANDLER_NAMES = {
-    "HasAttacked Tracker",
-    "HasTakenDamage Tracker",
-    "Prone Auto-Stand",
-}
-
-
-def _standard_weapon_handler_names(entity_uuid: UUID) -> set[str]:
-    """Return direct weapon-template handler names for an entity."""
-    return {
-        f"WeaponEquipHandler_{entity_uuid}",
-        f"WeaponUnequipHandler_{entity_uuid}",
-    }
-
-
-def _remove_standard_action_handlers(entity: Entity) -> None:
-    """Remove handlers installed by prior standard-action setup runs.
-
-    Args:
-        entity: Entity whose standard handlers should be replaced.
-    """
-    for handler_name in STANDARD_ENTITY_HANDLER_NAMES:
-        for handler in list(entity.get_event_handlers_by_name(handler_name)):
-            entity.remove_event_handler(handler)
-
-    weapon_handler_names = _standard_weapon_handler_names(entity.uuid)
-    source_handlers = EventQueue.get_handlers_by_source_entity(entity.uuid)
-    for handler in source_handlers:
-        if handler.name in weapon_handler_names:
-            if handler.uuid in entity.event_handlers:
-                entity.remove_event_handler(handler)
-            else:
-                EventQueue.remove_event_handler(handler)
-
-
 def setup_standard_actions(entity: Entity) -> None:
     """Register standard D&D 5e actions for an entity.
 
@@ -77,8 +42,7 @@ def setup_standard_actions(entity: Entity) -> None:
     Args:
         entity: Entity that receives standard action templates and handlers.
     """
-    entity.registered_actions = []
-    _remove_standard_action_handlers(entity)
+    entity.clear_registered_actions()
 
     entity.register_action(Move(source_entity_uuid=entity.uuid, template=True))
     entity.register_action(Swim(source_entity_uuid=entity.uuid, template=True))
@@ -95,11 +59,12 @@ def setup_standard_actions(entity: Entity) -> None:
 
     update_weapon_templates(entity)
 
-    _setup_weapon_event_handlers(entity)
-
-    entity.add_event_handler(create_has_attacked_handler(entity.uuid))
-    entity.add_event_handler(create_has_taken_damage_handler(entity.uuid))
-    entity.add_event_handler(_create_prone_auto_stand_handler(entity.uuid))
+    entity.replace_standard_action_handlers((
+        *_create_weapon_event_handlers(entity),
+        create_has_attacked_handler(entity.uuid),
+        create_has_taken_damage_handler(entity.uuid),
+        _create_prone_auto_stand_handler(entity.uuid),
+    ))
 
 
 def _create_prone_auto_stand_handler(entity_uuid: UUID) -> EventHandler:
@@ -146,8 +111,10 @@ def _create_prone_auto_stand_handler(entity_uuid: UUID) -> EventHandler:
     )
 
 
-def _setup_weapon_event_handlers(entity: Entity) -> None:
-    """Set up event handlers to auto-update attack templates on weapon changes.
+def _create_weapon_event_handlers(
+    entity: Entity,
+) -> Tuple[EventHandler, EventHandler]:
+    """Create handlers that update attack templates on weapon changes.
 
     Args:
         entity: Entity whose equipped weapons drive attack templates.
@@ -184,8 +151,7 @@ def _setup_weapon_event_handlers(entity: Entity) -> None:
         trigger_conditions=[Trigger(event_type=EventType.WEAPON_UNEQUIP, event_phase=EventPhase.EFFECT)],
         event_processor=_on_weapon_unequip
     )
-    EventQueue.add_event_handler(equip_handler)
-    EventQueue.add_event_handler(unequip_handler)
+    return equip_handler, unequip_handler
 
 
 def update_weapon_template(entity: Entity, slot: WeaponSlot) -> None:
@@ -196,7 +162,13 @@ def update_weapon_template(entity: Entity, slot: WeaponSlot) -> None:
         slot: Weapon slot to inspect.
     """
     template_name = f"Attack_{slot.value}"
-    entity.unregister_action(template_name)
+    for action in tuple(entity.registered_actions):
+        if (
+            isinstance(action, Attack)
+            and action.weapon_slot == slot
+            and action.name == template_name
+        ):
+            entity.unregister_action_by_uuid(action.uuid)
 
     weapon = entity.equipment._get_weapon_by_slot(slot)
     if weapon is not None and isinstance(weapon, Weapon):
@@ -279,13 +251,11 @@ def _resolve_executable_template(entity: Entity, template_name: str) -> BaseActi
     if template is not None:
         if cast_at_level is None:
             return template
-        create_variant = getattr(template, "_create_variant", None)
-        if not template.is_spell or not callable(create_variant):
+        if not isinstance(template, SpellAction):
             raise ValueError(f"Action {template_name} is not a spell variant")
-        variant_factory = cast(Callable[..., BaseAction], create_variant)
-        return variant_factory(cast_at_level=cast_at_level)
+        return template._create_variant(cast_at_level=cast_at_level)
 
-    for registered_template in entity.registered_actions:
+    for registered_template in entity.get_effective_action_templates():
         for variant in registered_template.get_discovery_variants(entity):
             if variant.get_discovery_template_name() == template_name:
                 return variant
@@ -692,49 +662,32 @@ def apply_action_overrides(
     entity: Entity,
     filter_fn: Callable[[BaseAction], bool],
     overrides: Dict[str, Any],
-) -> List[UUID]:
-    """Set temporary override fields on matching action templates.
+) -> ActionOverrideLease:
+    """Install one immutable override lease on matching action templates.
 
     Args:
         entity: Entity whose registered templates are inspected.
-        filter_fn: Predicate selecting templates to mutate.
-        overrides: Field/value pairs to assign on selected templates.
+        filter_fn: Predicate selecting effective templates to overlay.
+        overrides: Field/value pairs supplied by this temporary rule.
 
     Returns:
-        UUIDs of modified templates for later cleanup.
+        Independently removable lease containing the affected template UUIDs.
     """
-    modified: List[UUID] = []
-    for template in entity.registered_actions:
-        if filter_fn(template):
-            for key, value in overrides.items():
-                setattr(template, key, value)
-            modified.append(template.uuid)
-    return modified
+    return entity.install_action_template_overrides({
+        template.uuid: overrides
+        for template in entity.get_effective_action_templates()
+        if filter_fn(template)
+    })
 
 
-def clear_action_overrides(entity: Entity, template_uuids: List[UUID]) -> None:
-    """Clear temporary override fields from selected templates.
+def clear_action_overrides(
+    entity: Entity,
+    lease: ActionOverrideLease,
+) -> None:
+    """Remove exactly one temporary action override lease.
 
     Args:
         entity: Entity whose registered templates are inspected.
-        template_uuids: Template UUIDs returned by `apply_action_overrides()`.
+        lease: Lease returned by `apply_action_overrides()`.
     """
-    defaults: Dict[str, Any] = {
-        "alt_cost_type": None,
-        "alt_extra_costs": [],
-        "alt_target_type": None,
-        "alt_target_count": None,
-        "alt_range": None,
-        "alt_skip_slot": False,
-    }
-    for uid in template_uuids:
-        for template in entity.registered_actions:
-            if template.uuid == uid:
-                for field, default in defaults.items():
-                    if field not in template.__class__.model_fields:
-                        continue
-                    if isinstance(default, list):
-                        setattr(template, field, list(default))
-                    else:
-                        setattr(template, field, default)
-                break
+    entity.remove_action_template_overrides(lease)

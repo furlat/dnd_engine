@@ -2,18 +2,25 @@
 
 from dnd.core.base_actions import AvailableActionsResult
 from dnd.entity import Entity
-from server.api_models import APIAvailableActions, APIResourcePool
+from server.api_models import (
+    APIAvailableActions,
+    APIResourcePool,
+    ActionExecutionAuthorization,
+)
 
 
 def serialize_available_actions(
     entity: Entity,
     actions: AvailableActionsResult,
+    *,
+    execution_authorization: ActionExecutionAuthorization,
 ) -> APIAvailableActions:
     """Attach current resources to the engine's typed action-discovery result.
 
     Args:
         entity: Entity whose resources are summarized.
         actions: Canonical engine-discovered legal actions.
+        execution_authorization: Independent session/turn command authority.
 
     Returns:
         Typed action response preserving every engine action and target field.
@@ -22,9 +29,7 @@ def serialize_available_actions(
     spell_slots: dict[str, APIResourcePool] = {}
     if entity.is_spellcaster:
         for level in range(1, 10):
-            slot = getattr(action_economy, f"spell_slot_{level}", None)
-            if slot is None:
-                continue
+            slot = action_economy.spell_slot_value(level)
             base_modifier = slot.get_base_modifier()
             maximum = base_modifier.value if base_modifier else 0
             if maximum > 0:
@@ -44,6 +49,7 @@ def serialize_available_actions(
     }
     return APIAvailableActions.model_construct(
         **action_fields,
+        execution_authorization=execution_authorization,
         actions_remaining=action_economy.actions.normalized_score,
         bonus_actions_remaining=action_economy.bonus_actions.normalized_score,
         reactions_remaining=action_economy.reactions.normalized_score,

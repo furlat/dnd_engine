@@ -14,7 +14,7 @@ from dnd.core.events import (
 )
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus
 from dnd.entity import Entity
-from dnd.actions import entity_action_economy_cost_evaluator, entity_action_economy_cost_applier
+from dnd.actions import entity_action_economy_cost_evaluator
 from dnd.conditions import Concentrating
 
 
@@ -93,22 +93,18 @@ class Marked(BaseCondition):
 
         return outs, [], [], [], effect_event
 
-    def cleanup_own_state(self, expire: bool = False, parent_event: Optional[Event] = None) -> bool:
-        """Remove marker immunities before standard condition cleanup.
-
-        Args:
-            expire: Whether cleanup is caused by duration expiry.
-            parent_event: Optional parent event for cleanup events.
-
-        Returns:
-            True when cleanup completes.
-        """
+    def _release_owned_runtime_state(
+        self,
+        *,
+        parent_event: Optional[Event] = None,
+    ) -> None:
+        """Release marker immunities on removal or failed application."""
+        del parent_event
         if self.target_entity_uuid:
             target = Entity.get(self.target_entity_uuid)
             if target and isinstance(target, Entity):
                 target._remove_static_condition_immunity("Invisible", "Marked")
                 target._remove_static_condition_immunity("Hidden", "Marked")
-        return super().cleanup_own_state(expire=expire, parent_event=parent_event)
 
 
 class MarkCooldown(BaseCondition):
@@ -280,14 +276,3 @@ class MarkTargetAction(BaseAction):
             new_phase=EventPhase.COMPLETION,
             status_message=f"{caster.name} marks {target.name} (concentration)",
         )
-
-    def _apply_costs(self, completion_event: ActionEvent) -> Optional[ActionEvent]:
-        """Apply Mark Target's bonus-action cost.
-
-        Args:
-            completion_event: Completed action event.
-
-        Returns:
-            Completion event after action-economy cost application.
-        """
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)

@@ -578,29 +578,6 @@ class Health(BaseBlock):
             normal_hit_points_available=normal_hit_points_available,
         )
 
-    def take_damage(
-        self,
-        damage: int,
-        damage_type: DamageType,
-        source_entity_uuid: UUID,
-        normal_hit_point_damage_cap: Optional[int] = None,
-    ) -> int:
-        """
-        Apply damage to the entity, considering resistances and temporary hit points.
-
-        Args:
-            damage (int): The amount of damage to apply.
-            damage_type (damage_types): The type of damage being dealt.
-            source_entity_uuid (UUID): The UUID of the entity dealing the damage.
-            normal_hit_point_damage_cap: Optional maximum normal hit points
-                this packet may remove after mitigation.
-
-        Raises:
-            ValueError: If damage is less than 0 or if the damage type is invalid.
-        """
-        preview = self.preview_damage(damage, damage_type, normal_hit_point_damage_cap)
-        return self.apply_damage_preview(preview, source_entity_uuid)
-
     def is_healing_blocked(self) -> bool:
         """Check if healing is blocked by a condition (e.g., Chill Touch).
 
@@ -651,19 +628,25 @@ class Health(BaseBlock):
         self.damage_taken = 0
         return healed
 
-    def add_temporary_hit_points(self, temporary_hit_points: int, source_entity_uuid: UUID) -> None:
-        """
-        Add temporary hit points to the entity.
-
-        Args:
-            temporary_hit_points (int): The amount of temporary hit points to add.
-            source_entity_uuid (UUID): The UUID of the entity granting the temporary hit points.
-        """
-        modifier = NumericalModifier(source_entity_uuid=source_entity_uuid, target_entity_uuid=self.source_entity_uuid, name=f"Temporary Hit Points from {source_entity_uuid}", value=temporary_hit_points)
-        if modifier.value > 0 and modifier.value > self.temporary_hit_points.score:
-
-            self.temporary_hit_points.remove_all_modifiers()
-            self.temporary_hit_points.self_static.add_value_modifier(modifier)
+    def _grant_temporary_hit_points(
+        self,
+        temporary_hit_points: int,
+        source_entity_uuid: UUID,
+    ) -> None:
+        """Commit a validated non-stacking temporary-HP grant."""
+        if (
+            temporary_hit_points <= 0
+            or temporary_hit_points <= self.temporary_hit_points.score
+        ):
+            return
+        modifier = NumericalModifier(
+            source_entity_uuid=source_entity_uuid,
+            target_entity_uuid=self.source_entity_uuid,
+            name=f"Temporary Hit Points from {source_entity_uuid}",
+            value=temporary_hit_points,
+        )
+        self.temporary_hit_points.remove_all_modifiers()
+        self.temporary_hit_points.self_static.add_value_modifier(modifier)
 
     def remove_temporary_hit_points(self, temporary_hit_points: int, source_entity_uuid: UUID) -> None:
         """

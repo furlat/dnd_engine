@@ -45,9 +45,7 @@ from ai.policy.memory import (
     PolicyMemoryStore,
     RoutineProgress,
     SemanticActionGoal,
-    policy_memory_trace,
     reconcile_policy_memory,
-    suppressed_remembered_enemy_uuids,
 )
 from ai.policy.routines import (
     APPROACH_OPEN_REASSESS,
@@ -140,10 +138,8 @@ __all__ = [
     "revalidate_enable_then_act",
     "revalidate_pursue_capability",
     "revalidate_transform_then_act",
-    "policy_memory_trace",
     "reconcile_policy_memory",
     "routine_trace_name",
-    "suppressed_remembered_enemy_uuids",
     "UtilityArbiter",
     "UtilitySelectorNode",
     "UtilityComponent",

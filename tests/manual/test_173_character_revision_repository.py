@@ -25,7 +25,10 @@ from dnd.core.content.durable_characters import (
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.content.recipes import ContentRecipe
 from dnd.core.equipment_types import WeaponSlot
-from server.game_directory.canonical import canonical_digest, canonical_json
+from server.canonical_json import (
+    canonical_json,
+    canonical_json_sha256 as canonical_digest,
+)
 from server.game_directory.contracts import (
     CharacterAdvancementAwardCreate,
     CharacterAdvancementSourceKind,
@@ -624,6 +627,18 @@ def test_exclusive_lease_release_reacquire_and_pinned_deployment(
         expected_character_row_version=advanced.row_version,
         expected_heads=_heads(advanced),
     )
+    assert repository.list_character_deployment_leases(
+        game_id=second_game.game_id,
+        character_id=CHARACTER_ID,
+        active_only=True,
+    ) == (second_lease,)
+    assert repository.list_character_deployments(
+        game_id=second_game.game_id,
+        lease_id=second_lease.lease_id,
+    ) == (deployment,)
+    assert repository.list_character_deployments(
+        game_id=first_game.game_id,
+    ) == ()
     repository.close()
 
     assert released.released_at == NOW

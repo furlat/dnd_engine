@@ -20,6 +20,7 @@ from ai.policy.candidates import (
     PolicyCandidateSet,
     build_policy_candidate_set,
     direct_damage_candidates,
+    self_setup_effect_may_already_be_active,
 )
 from ai.policy.contracts import (
     PolicyContext,
@@ -1830,7 +1831,7 @@ def _plan_outcome_augmentation(
             or setup is None
             or setup.duration is SelfSetupDuration.UNTIL_REMOVED
             or not setup.outcome_adjustments
-            or _setup_may_already_be_active(context, semantics)
+            or self_setup_effect_may_already_be_active(context, semantics)
             or not row.can_afford
             or row.cost.affordability == "unaffordable"
             or not context.execution_constraints.allows(row)
@@ -2113,20 +2114,6 @@ def _project_augmentation_context(
         "world": projected_world,
         "facts": projected_facts,
     })
-
-
-def _setup_may_already_be_active(
-    context: PolicyContext,
-    semantics: ActionSemantics,
-) -> bool:
-    """Conservatively reject nonstacking setup when active truth is unknown."""
-    setup = semantics.self_setup
-    if setup is None or not setup.active_condition_semantic_keys:
-        return False
-    observed = context.facts.actor.condition_semantic_keys
-    if observed is None:
-        return True
-    return setup.active_condition_semantic_keys.issubset(observed)
 
 
 def _expected_surviving_visible_hostile_agency(

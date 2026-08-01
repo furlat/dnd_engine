@@ -19,13 +19,13 @@ from ai.codex_tools.direct_game import (
     DirectCodexGameClient,
     DirectCodexGameStart,
 )
+from ai.codex_tools.artifact_migrations import (
+    migrate_legacy_frame_semantics as _migrate_legacy_frame_semantics,
+    migrate_legacy_snapshot_semantics as _migrate_legacy_snapshot_semantics,
+)
 from dnd.ai.contracts.observation import (
     ObservationFramesResponse,
     ObservationSnapshot,
-)
-from server.agent_protocol.observation_legacy import (
-    migrate_legacy_frame_semantics as _migrate_legacy_frame_semantics,
-    migrate_legacy_snapshot_semantics as _migrate_legacy_snapshot_semantics,
 )
 from server.agent_protocol.telemetry import AgentEventHistoryResponse
 

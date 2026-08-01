@@ -1,13 +1,17 @@
 """Action economy resources, turn costs, and spell slot values."""
 
 from typing import Optional, List, Tuple, Dict, Union
-from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
+from uuid import UUID, uuid4
 from enum import Enum
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 from dnd.core.values import ModifiableValue
 from dnd.core.modifiers import NumericalModifier
-from dnd.core.base_actions import CostType, spell_slot_cost_type
-from dnd.core.action_types import HasteActionPolicy, RestrictedActionGrant
+from dnd.core.action_types import (
+    CostType,
+    HasteActionPolicy,
+    RestrictedActionGrant,
+    spell_slot_cost_type,
+)
 from dnd.core.feature_grants import AttackMultiplicityGrant
 
 from dnd.core.base_block import BaseBlock
@@ -449,25 +453,6 @@ class ActionEconomy(BaseBlock):
                 ),
             ),
         )
-
-    def add_resource(self, name: str, maximum: int, recharge_type: RechargeType) -> None:
-        """Add a named resource at full uses."""
-        legacy_source_id = uuid5(
-            NAMESPACE_URL,
-            f"dnd_engine:action_economy:legacy_resource:{name}",
-        )
-        self.resources[name] = Resource(
-            name=name,
-            current=maximum,
-            maximum=maximum,
-            recharge_type=recharge_type,
-            capacity_policy=ResourceCapacityPolicy.MAXIMUM,
-            capacity_contributions={str(legacy_source_id): maximum},
-        )
-
-    def remove_resource(self, name: str) -> None:
-        """Remove a resource by name."""
-        self.resources.pop(name, None)
 
     def add_resource_contribution(
         self,

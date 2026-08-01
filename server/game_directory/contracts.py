@@ -23,7 +23,7 @@ from dnd.core.progression import (
     MulticlassSlotRoundingPolicy,
     character_ruleset_digest,
 )
-from server.game_directory.canonical import canonical_digest
+from server.canonical_json import canonical_json_sha256 as canonical_digest
 
 JsonObject = dict[str, JsonValue]
 
@@ -890,6 +890,13 @@ class GameCreate(DirectoryModel):
 class GameRecord(GameCreate):
     """Persisted game-directory record."""
 
+    encounter_recipe: EncounterRecipe | None = Field(
+        default=None,
+        description=(
+            "Exact normalized encounter recipe recovered from the immutable "
+            "creation manifest when that game used the canonical recipe path."
+        ),
+    )
     creation_manifest_digest: str = Field(description="SHA-256 digest of the canonical creation manifest.")
     created_at: datetime = Field(description="UTC reservation time.")
     started_at: datetime | None = Field(default=None, description="UTC time when the game became active.")

@@ -7,7 +7,7 @@ import pytest
 from dnd.actions import Attack, AttackEvent
 from dnd.actions_functional import setup_standard_actions
 from dnd.blocks.equipment import Shield
-from dnd.classes.fighter import FightingStyleProtection
+from dnd.classes.fighter import create_protection_handler
 from dnd.conditions import Invisible
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
@@ -45,12 +45,7 @@ def _protection_scene(*, shield: bool = True) -> ProtectionScene:
             ),
             WeaponSlot.MELEE_OFF,
         )
-    protector.add_condition(
-        FightingStyleProtection(
-            source_entity_uuid=protector.uuid,
-            target_entity_uuid=protector.uuid,
-        )
-    )
+    protector.add_event_handler(create_protection_handler(protector.uuid))
     ally = create_goblin(
         name="Protection Ally",
         position=(4, 5),

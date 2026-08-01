@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 from typing import Self
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 
+from dnd.core.content.canonical import canonical_content_sha256
 from dnd.core.content.identities import ContentRef
 
 
@@ -20,14 +19,7 @@ def compute_recipe_digest(
         "ref": ref.model_dump(mode="json"),
         "parameters": parameters,
     }
-    encoded = json.dumps(
-        payload,
-        allow_nan=False,
-        ensure_ascii=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode("utf-8")
-    return hashlib.sha256(encoded).hexdigest()
+    return canonical_content_sha256(payload)
 
 
 class ContentRecipe(BaseModel):

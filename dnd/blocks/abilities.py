@@ -223,10 +223,6 @@ class AbilityScores(BaseBlock):
     Inherits all attributes and methods from BaseBlock.
 
     Additional Methods:
-        get_modifier(ability_uuid: UUID) -> int:
-            Get the modifier for a specific ability by its UUID.
-        get_modifier_from_uuid(ability_uuid: UUID) -> int:
-            Get the modifier for a specific ability by its UUID.
         get_modifier_from_name(ability_name: abilities) -> int:
             Get the modifier for a specific ability by its name.
         get_values() -> List[ModifiableValue]: (Inherited from BaseBlock)
@@ -299,37 +295,6 @@ class AbilityScores(BaseBlock):
             Dict[UUID, abilities]: A dictionary mapping ability UUIDs to their names.
         """
         return{ability.uuid:ability.name for ability in self.abilities_list}
-
-    def get_modifier(self, ability_uuid: UUID) -> int:
-        """
-        Get the modifier for a specific ability by its UUID.
-
-        Args:
-            ability_uuid (UUID): The UUID of the ability.
-
-        Returns:
-            int: The modifier for the specified ability.
-        """
-        ability_object: Ability = getattr(self, self.ability_blocks_names_by_uuid[ability_uuid])
-        return ability_object.modifier
-
-    def get_modifier_from_uuid(self, ability_uuid: UUID) -> int:
-        """
-        Get the modifier for a specific ability by its UUID.
-
-        Args:
-            ability_uuid (UUID): The UUID of the ability.
-
-        Returns:
-            int: The modifier for the specified ability.
-
-        Raises:
-            ValueError: If no Ability is found with the given UUID.
-        """
-        ability_object = self.get_block_from_uuid(ability_uuid)
-        if ability_object and isinstance(ability_object, Ability):
-            return ability_object.modifier
-        raise ValueError(f"No Ability found with UUID {ability_uuid}")
 
     def get_modifier_from_name(self, ability_name: abilities) -> int:
         """

@@ -21,7 +21,8 @@ from dnd.core.events import Event, EventHandler, EventPhase, EventQueue, EventTy
 from dnd.core.gridmap import get_map
 from dnd.core.values import BaseValue
 from dnd.conditions import Invisible
-from dnd.classes.sorcerer import QuickenedSpell, SorceryPointsFeature
+from dnd.classes.sorcerer import QuickenedSpell
+from dnd.blocks.action_economy import RechargeType
 from dnd.controller import PassController
 from dnd.entity import Entity, EntityConfig
 from dnd.encounter import Encounter
@@ -132,6 +133,66 @@ def test_counterspell_spends_both_casters_resources_and_records_one_cancel() -> 
     assert interruption_logs[0].data["succeeded"] is True
 
 
+def test_counterspell_declaration_veto_preserves_reaction_and_slot() -> None:
+    """A canceled reaction declaration cannot spend resources or interrupt."""
+    reset_counterspell_state()
+    caster = create_counterspell_caster("Caster", (2, 2), "heroes", {1: 1})
+    counterspeller = create_counterspell_caster(
+        "Abjurer",
+        (6, 2),
+        "monsters",
+        {3: 1},
+    )
+    register_counterspell_reaction(counterspeller)
+    Entity.update_all_entities_senses()
+
+    def veto_counterspell(
+        event: Event,
+        _handler_source_uuid,
+    ) -> Event | None:
+        if isinstance(event, CounterspellReactionEvent):
+            return event.cancel(status_message="Counterspell vetoed")
+        return None
+
+    EventQueue.add_event_handler(
+        EventHandler(
+            name="Veto Counterspell",
+            source_entity_uuid=caster.uuid,
+            trigger_conditions=[
+                Trigger(
+                    event_type=EventType.TRIGGER_EVENT,
+                    event_phase=EventPhase.DECLARATION,
+                    event_source_entity_uuid=counterspeller.uuid,
+                )
+            ],
+            event_processor=veto_counterspell,
+        )
+    )
+
+    event = FireBolt(
+        source_entity_uuid=caster.uuid,
+        target_entity_uuid=counterspeller.uuid,
+        template=False,
+    ).apply()
+
+    assert isinstance(event, SpellEvent)
+    assert event.phase is EventPhase.COMPLETION
+    assert not event.canceled
+    assert counterspeller.action_economy.reactions.normalized_score == 1
+    assert counterspeller.action_economy.spell_slot_3.normalized_score == 1
+    reaction_lineages = {
+        row.lineage_uuid
+        for row in EventQueue._all_events
+        if isinstance(row, CounterspellReactionEvent)
+    }
+    assert len(reaction_lineages) == 1
+    assert all(
+        row.phase in {EventPhase.DECLARATION, EventPhase.CANCEL}
+        for row in EventQueue._all_events
+        if row.lineage_uuid in reaction_lineages
+    )
+
+
 def test_registered_counterspell_freezes_both_reaction_and_spell_bindings() -> None:
     """Live handler/action scopes survive every event phase but no raw dump."""
     reset_counterspell_state()
@@ -222,12 +283,12 @@ def test_counterspell_consumes_quickened_override_after_committed_cast() -> None
         {3: 1},
     )
     register_spell(caster, Fireball, caster_level=5)
-    caster.add_condition(SorceryPointsFeature(
-        source_entity_uuid=caster.uuid,
-        target_entity_uuid=caster.uuid,
-        sorcery_points=2,
-        metamagic_choices=["quickened"],
-    ))
+    caster.action_economy.add_resource_contribution(
+        "sorcery_points",
+        "fixture.quickened_spell",
+        maximum=2,
+        recharge_type=RechargeType.LONG_REST,
+    )
     register_counterspell_reaction(counterspeller)
     Entity.update_all_entities_senses()
 
@@ -237,17 +298,21 @@ def test_counterspell_consumes_quickened_override_after_committed_cast() -> None
     quickened = QuickenedSpell(source_entity_uuid=caster.uuid).apply()
     assert quickened is not None and not quickened.canceled
     assert "MetamagicActive" in caster.active_conditions
-    assert fireball_template.effective_costs[0].cost_type == "bonus_actions"
+    quickened_template = caster.get_action_template("Fireball")
+    assert isinstance(quickened_template, SpellAction)
+    assert quickened_template.effective_costs[0].cost_type == "bonus_actions"
 
-    invalid = fireball_template.instantiate(end_position=(39, 7)).apply()
+    invalid = quickened_template.instantiate(end_position=(39, 7)).apply()
 
     assert isinstance(invalid, SpellEvent)
     assert invalid.canceled
     assert invalid.canceled_from_phase is EventPhase.DECLARATION
     assert "MetamagicActive" in caster.active_conditions
-    assert fireball_template.effective_costs[0].cost_type == "bonus_actions"
+    quickened_template = caster.get_action_template("Fireball")
+    assert isinstance(quickened_template, SpellAction)
+    assert quickened_template.effective_costs[0].cost_type == "bonus_actions"
 
-    interrupted = fireball_template.instantiate(
+    interrupted = quickened_template.instantiate(
         end_position=counterspeller.position,
     ).apply()
 
@@ -258,9 +323,11 @@ def test_counterspell_consumes_quickened_override_after_committed_cast() -> None
     assert caster.action_economy.actions.normalized_score == 1
     assert caster.action_economy.bonus_actions.normalized_score == 0
     assert "MetamagicActive" not in caster.active_conditions
-    assert fireball_template.alt_cost_type is None
-    assert fireball_template.effective_costs[0].cost_type == "actions"
-    assert fireball_template.instantiate(
+    restored_template = caster.get_action_template("Fireball")
+    assert isinstance(restored_template, SpellAction)
+    assert restored_template.alt_cost_type is None
+    assert restored_template.effective_costs[0].cost_type == "actions"
+    assert restored_template.instantiate(
         end_position=counterspeller.position,
     ).pre_validate()
 

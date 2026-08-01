@@ -214,11 +214,25 @@ class CombatantState(BaseObject):
 
     @property
     def is_alive(self) -> bool:
-        """Check if combatant is alive (not dead and has HP > 0)."""
+        """Return whether the entity participates under its canonical life state."""
         entity = self.entity
         if entity is None:
             return False
         return entity.is_encounter_alive
+
+    @property
+    def can_take_controlled_turn(self) -> bool:
+        """Return whether a controller can still decide this combatant's turn.
+
+        Only ``ALIVE`` combatants own a decidable turn.  ``DYING`` and
+        ``STABLE`` combatants still reach :meth:`Encounter.start_turn` so their
+        death save rolls, but they carry the unconscious transform and hold no
+        action economy, so no controller may be asked to decide for them.
+        """
+        entity = self.entity
+        if entity is None:
+            return False
+        return entity.health.life_state is LifeState.ALIVE
 
 
 class Encounter(BaseObject):
@@ -342,7 +356,7 @@ class Encounter(BaseObject):
         if entity.uuid in self.combatants:
             raise ValueError(f"Entity {entity.uuid} already in encounter")
 
-        init_bonus = entity.initiative.normalized_score
+        init_bonus = entity.initiative_bonus
 
         combatant = CombatantState(
             source_entity_uuid=entity.uuid,
@@ -392,7 +406,14 @@ class Encounter(BaseObject):
             entity = combatant.entity
             if not entity:
                 continue
-            dice = Dice(count=1, value=20, bonus=entity.initiative, roll_type=RollType.CHECK)
+            initiative_bonus = entity.initiative_roll_bonus()
+            combatant.initiative_bonus = initiative_bonus.normalized_score
+            dice = Dice(
+                count=1,
+                value=20,
+                bonus=initiative_bonus,
+                roll_type=RollType.CHECK,
+            )
             roll = dice.roll
             roll_result = roll.results if isinstance(roll.results, int) else roll.results[0]
             combatant.initiative_roll = roll_result
@@ -528,7 +549,7 @@ class Encounter(BaseObject):
         return event
 
     def _environment_step(self) -> None:
-        """Advance tile and floor-item condition durations. Called at end of each round."""
+        """Advance world-owned condition durations once at each round end."""
         grid = get_map()
         for tile in grid.get_tiles_with_conditions():
             for cond_name in list(tile.active_conditions.keys()):
@@ -536,6 +557,9 @@ class Encounter(BaseObject):
         for item_block in grid.get_objects_with_conditions():
             for cond_name in list(item_block.active_conditions.keys()):
                 item_block.advance_duration(cond_name)
+        for effect_block in grid.get_spatial_effects_with_conditions():
+            for cond_name in list(effect_block.active_conditions.keys()):
+                effect_block.advance_duration(cond_name)
 
     def _advance_round(self) -> None:
         """Advance to the next round."""
@@ -643,7 +667,7 @@ class Encounter(BaseObject):
         if combatant.surprised and self.round_number == 1:
             return self._skip_surprised_turn(entity, combatant, controller)
 
-        if combatant.is_dead or not combatant.is_alive:
+        if combatant.is_dead:
             combatant.has_acted_this_round = True
             return self._skip_to_next_turn()
 
@@ -1116,7 +1140,7 @@ class Encounter(BaseObject):
                 log_start_index=log_start,
             )
 
-        if combatant.is_dead or not combatant.is_alive:
+        if combatant.is_dead:
             combatant.has_acted_this_round = True
             self._advance_turn_slot()
             return AdvanceResult(
@@ -1135,6 +1159,7 @@ class Encounter(BaseObject):
             if self.turn_state is not TurnState.IN_PROGRESS:
                 self.start_turn()
             current_entity = self.get_current_entity()
+            current_combatant = self.get_current_combatant()
             if self.state is EncounterState.ENDED:
                 status = "encounter_ended"
             elif (
@@ -1142,6 +1167,20 @@ class Encounter(BaseObject):
                 or current_entity.uuid != actor_uuid
             ):
                 status = "advanced_autonomous"
+            elif (
+                current_combatant is not None
+                and not current_combatant.can_take_controlled_turn
+            ):
+                # The turn-start death save has already resolved above.  A
+                # combatant left dying, stable, or dead owns no decidable turn,
+                # so end it here instead of parking the encounter on an
+                # external controller that can never answer.
+                self.complete_current_turn()
+                status = (
+                    "encounter_ended"
+                    if self.state is EncounterState.ENDED
+                    else "advanced_autonomous"
+                )
             else:
                 status = controller.external_boundary_status or "waiting_for_external"
             current = self.get_current_entity()

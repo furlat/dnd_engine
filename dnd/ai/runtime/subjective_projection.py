@@ -9,8 +9,7 @@ frames.
 
 from __future__ import annotations
 
-from enum import Enum
-from typing import Any, Iterable, Mapping
+from typing import Any, Iterable
 from uuid import UUID
 
 from dnd.ai.contracts.control import DecisionEpoch
@@ -24,18 +23,23 @@ from dnd.ai.contracts.observation import (
     ObservationObjectFact,
     ObservationObserverState,
     ObservationSessionState,
+    ObservationSpatialEffectFact,
     ObservationTileFact,
     SpatialDomainKnowledge,
     SubjectiveWorldState,
 )
+from dnd.blocks.base_item import BaseItem
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition
+from dnd.core.base_tiles import Tile
 from dnd.core.condition_types import ConditionTag
 from dnd.core.creature_types import DamageType
 from dnd.core.gridmap import get_map
+from dnd.core.item_types import ItemObservationState
 from dnd.core.life_types import LifeState
 from dnd.core.modifiers import ResistanceStatus
 from dnd.entity import Entity
+from dnd.spatial_effects import SpatialEffect
 
 
 _adjacent_domain_cache_revision: int | None = None
@@ -434,16 +438,17 @@ def project_object_fact(
 ) -> ObservationObjectFact | None:
     """Project one currently visible engine object."""
     obj = BaseBlock.get(object_uuid)
-    if obj is None:
+    if not isinstance(obj, BaseItem):
         return None
+    observer_ids = tuple(sorted(observer_uuids))
     return ObservationObjectFact(
         uuid=str(object_uuid),
         name=obj.name or "Object",
         knowledge_state=KnowledgeState.VISIBLE,
-        observer_uuids=sorted(observer_uuids),
+        observer_uuids=list(observer_ids),
         position=position or obj.position,
-        map_char=getattr(obj, "map_char", None),
-        state=project_object_state(obj),
+        map_char=obj.get_map_char(),
+        state=project_object_state(obj, observer_ids),
     )
 
 
@@ -524,6 +529,45 @@ def project_visible_tile_fact(
             adjacent_domain=adjacent_domain_knowledge(position),
         )
     first_observer = observer_ids[0] if observer_ids else None
+    observers = [
+        observer
+        for observer_id in observer_ids
+        if (observer := BaseBlock.get(UUID(observer_id))) is not None
+    ]
+    visible_conditions = list(tile.active_conditions.values())
+    visible_effects: list[SpatialEffect] = []
+    for block in grid.get_spatial_effect_blocks_at(position):
+        if not isinstance(block, SpatialEffect):
+            raise TypeError(
+                "Grid spatial-effect index contains a non-effect block",
+            )
+        effect = block
+        controllers = tuple(effect.active_conditions.values())
+        if controllers and not any(
+            controller.condition_stealth_dc is None
+            or controller.condition_stealth_dc
+            < observer.get_passive_perception()
+            for controller in controllers
+            for observer in observers
+        ):
+            continue
+        visible_effects.append(effect)
+        visible_conditions.extend(effect.active_conditions.values())
+    visible_condition_names = sorted(
+        condition.name
+        for condition in visible_conditions
+        if (
+            condition.name is not None
+            and (
+                condition.condition_stealth_dc is None
+                or any(
+                    condition.condition_stealth_dc
+                    < observer.get_passive_perception()
+                    for observer in observers
+                )
+            )
+        )
+    )
     is_hazardous = (
         grid.is_position_hazardous_for(
             position[0],
@@ -542,7 +586,27 @@ def project_visible_tile_fact(
         walkable=tile.walkable,
         walking_cost=int(tile.walking_cost.normalized_score),
         is_hazardous=is_hazardous,
-        conditions=list(tile.active_conditions),
+        conditions=visible_condition_names,
+        spatial_effects=[
+            ObservationSpatialEffectFact(
+                runtime_uuid=str(effect.uuid),
+                content_ref=effect.content_ref,
+                layer=effect.layer,
+                anchor_kind=effect.anchor_kind,
+                trigger_kinds=sorted(
+                    effect.trigger_kinds,
+                    key=lambda trigger: trigger.value,
+                ),
+            )
+            for effect in sorted(
+                visible_effects,
+                key=lambda row: (
+                    row.layer.value,
+                    row.content_ref.identity_key,
+                    str(row.uuid),
+                ),
+            )
+        ],
         light_level=tile.resolved_light_level.value,
         directional_blocks_movement=directional_blocks(tile, "movement"),
         directional_blocks_vision=directional_blocks(tile, "vision"),
@@ -581,7 +645,7 @@ def adjacent_domain_knowledge(
     return dict(result)
 
 
-def directional_blocks(tile: Any, channel: str) -> dict[str, bool]:
+def directional_blocks(tile: Tile, channel: str) -> dict[str, bool]:
     """Return visible directional blockers for one tile channel."""
     return {
         direction: not tile.allows_direction(direction, channel)
@@ -589,55 +653,21 @@ def directional_blocks(tile: Any, channel: str) -> dict[str, bool]:
     }
 
 
-def project_object_state(obj: BaseBlock) -> dict[str, Any]:
-    """Return stable public object state fields when present."""
-    state: dict[str, Any] = {}
-    for field_name in (
-        "is_open",
-        "blocked_directions",
-        "blocked_channels",
-        "blocks_movement",
-        "blocks_vision",
-        "blocks_vision_field",
-        "is_pickable",
-        "is_usable",
-        "charges",
-        "stack_count",
-        "is_hazardous",
-        "hazardous",
-    ):
-        if not hasattr(obj, field_name):
-            continue
-        safe = json_safe_state_value(getattr(obj, field_name))
-        if safe is not None:
-            state[field_name] = safe
+def project_object_state(
+    obj: BaseItem,
+    observer_uuids: Iterable[str],
+) -> ItemObservationState:
+    """Return the item's closed state under the authorized observer union."""
+    observer_ids = tuple(observer_uuids)
+    requesting_entity_uuid = (
+        UUID(observer_ids[0])
+        if observer_ids
+        else None
+    )
+    state = obj.to_item_observation_state(requesting_entity_uuid)
+    if any(obj.is_hazardous_for(UUID(observer_uuid)) for observer_uuid in observer_ids):
+        return state.model_copy(update={"is_hazardous": True})
     return state
-
-
-def json_safe_state_value(value: Any) -> Any:
-    """Return a JSON-safe public state value or None when unsupported."""
-    if callable(value):
-        return None
-    if isinstance(value, (str, int, float, bool)):
-        return value
-    if isinstance(value, UUID):
-        return str(value)
-    if isinstance(value, Enum):
-        return value.value
-    if isinstance(value, (tuple, list, set)):
-        values = sorted(value, key=str) if isinstance(value, set) else value
-        return [
-            safe
-            for item in values
-            if (safe := json_safe_state_value(item)) is not None
-        ]
-    if isinstance(value, Mapping):
-        return {
-            str(key): safe
-            for key, item in value.items()
-            if (safe := json_safe_state_value(item)) is not None
-        }
-    return None
 
 
 def subjective_tile_key(position: tuple[int, int]) -> str:
@@ -652,7 +682,6 @@ __all__ = [
     "damage_affinities",
     "directional_blocks",
     "entity_health_details",
-    "json_safe_state_value",
     "observers_that_see",
     "observers_that_see_position",
     "project_condition_fact",

@@ -1,4 +1,4 @@
-"""Aegis Spark spell and feature extension content."""
+"""Aegis Spark spell and condition extension content."""
 
 from typing import Optional
 
@@ -130,62 +130,3 @@ class AegisSpark(SpellAction):
             EventPhase.COMPLETION,
             status_message=f"{target.name} is protected by Aegis Spark",
         )
-
-
-class AegisTrainingFeature(BaseCondition):
-    """Feature-like condition that grants and cleans up Aegis Spark."""
-
-    name: str = Field(default="Aegis Training", description="Feature condition registry key.")
-    description: str = Field(
-        default="Training that grants the Aegis Spark cantrip.",
-        description="Feature summary.",
-    )
-    condition_category: ConditionCategory = Field(
-        default=ConditionCategory.STATUS,
-        description="Feature-like training is stored as status state.",
-    )
-    caster_level: int = Field(default=1, description="Caster level used by the registered spell template.")
-
-    def _apply(self, declaration_event: Event):
-        """Register Aegis Spark on the trained actor.
-
-        Args:
-            declaration_event: Feature application event.
-
-        Returns:
-            Condition application tuple with the feature effect event.
-        """
-        if self.target_entity_uuid is None:
-            return [], [], [], [], declaration_event.cancel(status_message="Aegis Training target missing")
-        target = Entity.get(self.target_entity_uuid)
-        if target is None:
-            return [], [], [], [], declaration_event.cancel(status_message="Aegis Training target not found")
-
-        target.unregister_action("Aegis Spark")
-        target.register_action(
-            AegisSpark(
-                source_entity_uuid=target.uuid,
-                caster_level=self.caster_level,
-                template=True,
-            )
-        )
-        effect_event = declaration_event.phase_to(
-            EventPhase.EFFECT,
-            update={"condition": self},
-            status_message=f"{target.name} learns Aegis Spark",
-        )
-        return [], [], [], [], effect_event
-
-    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
-        """Remove the spell template granted by the feature.
-
-        Args:
-            event: Optional removal event.
-
-        Returns:
-            Removal event produced by the base condition cleanup.
-        """
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if target is not None:
-            target.unregister_action("Aegis Spark")
-        return super()._remove(event)

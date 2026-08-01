@@ -565,10 +565,10 @@ def test_death_checks_end_encounter_by_faction_survival(capsys) -> None:
     )
 
     hp_before = monster.get_hp()
-    monster.health.take_damage(monster.get_hp(), DamageType.FORCE, hero.uuid)
+    monster.receive_damage(monster.get_hp(), DamageType.FORCE, hero.uuid)
     death_events = encounter.check_deaths()
 
-    assert death_events
+    assert death_events == []
     assert encounter.combatants[monster.uuid].is_dead
     assert monster.health.life_state is LifeState.DEAD
     assert encounter.state == EncounterState.ENDED
@@ -599,7 +599,7 @@ def test_death_checks_end_encounter_by_faction_survival(capsys) -> None:
     print("\n".join(readout_lines))
 
     expected_lines = [
-        "death check: hp=17->0, events=1, monster_dead=yes, life_state=dead",
+        "death check: hp=17->0, events=0, monster_dead=yes, life_state=dead",
         "encounter end: state=ended, active=no, alive=['Manual Hero'], dead=['Manual Skeleton']",
     ]
     assert readout_lines == expected_lines

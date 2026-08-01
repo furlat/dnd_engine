@@ -13,7 +13,6 @@ from dnd.entity import Entity
 from dnd.extensions.aegis_spark import (
     AegisSpark,
     AegisSparkEffect,
-    AegisTrainingFeature,
 )
 from tests.manual.extension_scenario_support import (
     create_aegis_scene,
@@ -39,13 +38,12 @@ def reset_spell_feature_state(width: int = 8, height: int = 6) -> None:
     get_map().create_rectangle(0, 0, width, height)
 
 
-def test_aegis_module_exposes_spell_feature_and_factories(capsys) -> None:
-    """The extension module exposes the spell, feature, effect, and factories."""
+def test_aegis_module_exposes_spell_effect_and_factories(capsys) -> None:
+    """The extension module exposes the spell, effect, and scene factory."""
     reset_spell_feature_state()
     caster = create_spell_feature_actor("Aegis Student", (1, 1), "heroes")
     spark = AegisSpark(source_entity_uuid=caster.uuid, caster_level=5, template=True)
     effect = AegisSparkEffect(source_entity_uuid=caster.uuid, target_entity_uuid=caster.uuid)
-    feature = AegisTrainingFeature(source_entity_uuid=caster.uuid, target_entity_uuid=caster.uuid)
 
     assert spark.name == "Aegis Spark"
     assert spark.spell_level == 0
@@ -55,8 +53,6 @@ def test_aegis_module_exposes_spell_feature_and_factories(capsys) -> None:
     assert spark.valid_target_filter == "self_or_allies"
     assert spark.effective_range == 30
     assert effect.armor_bonus == 2
-    assert feature.name == "Aegis Training"
-    assert feature.caster_level == 1
     assert callable(create_aegis_scene)
 
     readout_lines = [
@@ -76,73 +72,13 @@ def test_aegis_module_exposes_spell_feature_and_factories(capsys) -> None:
         (
             "owners: "
             f"effect_ac=+{effect.armor_bonus}, "
-            f"feature={feature.name}, "
-            f"caster_level={feature.caster_level}, "
             f"scene_factory={'yes' if callable(create_aegis_scene) else 'no'}"
         ),
     ]
     expected_lines = [
         "module surfaces: spell=Aegis Spark, level=0, school=abjuration, target=entity",
         "target policy: include_self=yes, filter=self_or_allies, range=30",
-        "owners: effect_ac=+2, feature=Aegis Training, caster_level=1, scene_factory=yes",
-    ]
-
-    print("\n".join(readout_lines))
-
-    assert readout_lines == expected_lines
-    assert capsys.readouterr().out == "\n".join(expected_lines) + "\n"
-
-
-def test_feature_condition_registers_and_removes_spell_template(capsys) -> None:
-    """Feature-like conditions can grant and clean up spell templates."""
-    reset_spell_feature_state()
-    caster = create_spell_feature_actor("Aegis Student", (1, 1), "heroes")
-
-    feature_event = caster.add_condition(
-        AegisTrainingFeature(
-            source_entity_uuid=caster.uuid,
-            target_entity_uuid=caster.uuid,
-            caster_level=5,
-        )
-    )
-
-    assert feature_event is not None
-    assert feature_event.phase == EventPhase.COMPLETION
-    assert "Aegis Training" in caster.active_conditions
-    assert caster.get_action_template("Aegis Spark") is not None
-    assert caster.get_action_template("Aegis Spark").is_spell
-    assert caster.get_action_template("Aegis Spark").template
-    template = caster.get_action_template("Aegis Spark")
-    active_before_cleanup = "Aegis Training" in caster.active_conditions
-
-    caster.remove_condition("Aegis Training")
-
-    assert "Aegis Training" not in caster.active_conditions
-    assert caster.get_action_template("Aegis Spark") is None
-
-    readout_lines = [
-        (
-            "feature applied: "
-            f"phase={feature_event.phase.value if feature_event else 'none'}, "
-            f"active={active_before_cleanup}, "
-            f"template={'yes' if template is not None else 'no'}"
-        ),
-        (
-            "registered spell: "
-            f"is_spell={'yes' if template and template.is_spell else 'no'}, "
-            f"template={'yes' if template and template.template else 'no'}, "
-            f"caster_level={template.caster_level if template else 'none'}"
-        ),
-        (
-            "feature removed: "
-            f"active={'Aegis Training' in caster.active_conditions}, "
-            f"template={'yes' if caster.get_action_template('Aegis Spark') is not None else 'no'}"
-        ),
-    ]
-    expected_lines = [
-        "feature applied: phase=completion, active=True, template=yes",
-        "registered spell: is_spell=yes, template=yes, caster_level=5",
-        "feature removed: active=False, template=no",
+        "owners: effect_ac=+2, scene_factory=yes",
     ]
 
     print("\n".join(readout_lines))
@@ -273,8 +209,8 @@ def test_spell_extension_executes_event_condition_cost_and_cleanup(capsys) -> No
     assert capsys.readouterr().out == "\n".join(expected_lines) + "\n"
 
 
-def test_feature_factory_scene_composes_actor_ally_enemy_and_template(capsys) -> None:
-    """Scene factories can compose actors and feature-granted custom spells."""
+def test_extension_scene_composes_actor_ally_enemy_and_template(capsys) -> None:
+    """The test scene explicitly installs the authored extension spell."""
     reset_spell_feature_state()
     caster, ally, enemy = create_aegis_scene()
     actions = get_available_actions(caster)
@@ -283,41 +219,26 @@ def test_feature_factory_scene_composes_actor_ally_enemy_and_template(capsys) ->
     assert caster.name == "Aegis Warden"
     assert ally.name == "Shield Ally"
     assert enemy.name == "Training Dummy"
-    assert "Aegis Training" in caster.active_conditions
     assert caster.get_action_template("Aegis Spark") is not None
     assert [target.target_name for target in aegis.valid_targets] == [
         "Shield Ally",
         "Aegis Warden",
     ]
     target_names = [target.target_name for target in aegis.valid_targets]
-    feature_active = "Aegis Training" in caster.active_conditions
     template_present = caster.get_action_template("Aegis Spark") is not None
-
-    caster.remove_condition("Aegis Training")
-    refreshed = get_available_actions(caster)
-
-    assert caster.get_action_template("Aegis Spark") is None
-    assert all(info.template_name != "Aegis Spark" for info in refreshed.all_actions)
 
     readout_lines = [
         f"scene actors: caster={caster.name}, ally={ally.name}, enemy={enemy.name}",
         (
-            "feature state: "
-            f"active={feature_active}, "
+            "extension state: "
             f"template={'yes' if template_present else 'no'}"
         ),
         f"spell targets: {target_names}",
-        (
-            "after feature cleanup: "
-            f"template={'yes' if caster.get_action_template('Aegis Spark') is not None else 'no'}, "
-            f"action_available={any(info.template_name == 'Aegis Spark' for info in refreshed.all_actions)}"
-        ),
     ]
     expected_lines = [
         "scene actors: caster=Aegis Warden, ally=Shield Ally, enemy=Training Dummy",
-        "feature state: active=True, template=yes",
+        "extension state: template=yes",
         "spell targets: ['Shield Ally', 'Aegis Warden']",
-        "after feature cleanup: template=no, action_available=False",
     ]
 
     print("\n".join(readout_lines))

@@ -12,9 +12,7 @@ import pytest
 from dnd.content_system.creature_bindings import CREATURE_RUNTIME_BINDINGS
 from dnd.content_system.creature_materialization import materialize_creature
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
-from dnd.content_system.item_runtime_materialization import (
-    materialize_item_from_installed_runtime,
-)
+from dnd.content_system.item_materialization import materialize_item
 from dnd.content_system.runtime import ContentSystemRuntime
 from dnd.core.content.identities import ContentDefinitionKind
 from dnd.core.content.materialization import (
@@ -120,13 +118,28 @@ def test_builtin_and_roster_import_cold_without_bootstrap_cycle() -> None:
 
 
 def test_installed_runtime_item_leaf_fails_clearly_without_startup() -> None:
-    """The cycle-free leaf never invents or lazily installs a registry."""
+    """Canonical materializers never invent or lazily install a registry."""
     runtime = ContentSystemRuntime()
     with pytest.raises(RuntimeError, match="Content system is not installed"):
-        materialize_item_from_installed_runtime(
+        materialize_item(
             CLUB_RECIPE,
             uuid4(),
             origin=ItemRuntimeOrigin.STARTER,
+            runtime=runtime,
+        )
+    with pytest.raises(RuntimeError, match="Content system is not installed"):
+        materialize_creature(
+            SRD_CREATURE_RECIPES_BY_ID["commoner"],
+            runtime_entity_uuid=uuid4(),
+            display_name="Uninstalled Commoner",
+            faction="monsters",
+            position=(2, 2),
+            deployment_role=CreatureDeploymentRole(
+                role_id="encounter.uninstalled.commoner",
+            ),
+            possession_mode=(
+                CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS
+            ),
             runtime=runtime,
         )
     assert runtime.is_installed is False

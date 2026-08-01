@@ -262,6 +262,9 @@ ACTION_BEHAVIOR_IDENTITY_SPECS: tuple[ActionBehaviorIdentitySpec, ...] = (
     _srd(abjuration.FreedomOfMovementEscape, "action.spell.freedom_of_movement.escape", "Freedom of Movement Escape", "Spend movement to escape an eligible nonmagical restraint."),
     _srd(conjuration.CallLightningStrike, "action.spell.call_lightning.strike", "Call Lightning Strike", "Call another bolt from an active Call Lightning spell."),
     _srd(conjuration.EatFromFeast, "action.environment.heroes_feast.eat", "Eat from Feast", "Consume one serving from a Heroes' Feast."),
+    _srd(conjuration.EscapeEntangleAction, "action.spell.entangle.escape", "Escape Entangle", "Attempt a Strength check to escape one Entangle source."),
+    _srd(conjuration.EscapeBlackTentaclesStrengthAction, "action.spell.evards_black_tentacles.escape_strength", "Escape Black Tentacles (Strength)", "Attempt a Strength check to escape one Black Tentacles source."),
+    _srd(conjuration.EscapeBlackTentaclesDexterityAction, "action.spell.evards_black_tentacles.escape_dexterity", "Escape Black Tentacles (Dexterity)", "Attempt a Dexterity check to escape one Black Tentacles source."),
     _srd(conjuration.EscapeWebAction, "action.spell.web.escape", "Escape Web", "Attempt to escape the restraint imposed by Web."),
     _original(
         enchantment.TestBless,

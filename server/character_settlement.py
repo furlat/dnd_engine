@@ -29,7 +29,7 @@ from dnd.core.equipment_types import (
     RingSlot,
     WeaponSlot,
 )
-from server.game_directory.canonical import canonical_digest
+from server.canonical_json import canonical_json_sha256 as canonical_digest
 from server.game_directory.contracts import (
     CharacterRevisionBundleCommit,
     CharacterRevisionHeads,
@@ -86,12 +86,20 @@ def project_terminal_character_holdings(
     opening_by_id = {
         item.character_item_id: item for item in snapshot.holdings.items
     }
-    persisted_binding_ids = {
-        binding.character_item_id
-        for binding in ITEM_RUNTIME_BINDINGS.bindings.values()
-        if binding.origin is ItemRuntimeOrigin.PERSISTED
+    persisted_binding_counts = {
+        character_item_id: 0 for character_item_id in opening_by_id
     }
-    if persisted_binding_ids != set(opening_by_id):
+    for binding in ITEM_RUNTIME_BINDINGS.bindings.values():
+        if binding.origin is not ItemRuntimeOrigin.PERSISTED:
+            continue
+        character_item_id = binding.character_item_id
+        if character_item_id is None:
+            raise RuntimeError(
+                "persisted runtime item binding has no character item identity",
+            )
+        if character_item_id in persisted_binding_counts:
+            persisted_binding_counts[character_item_id] += 1
+    if any(count != 1 for count in persisted_binding_counts.values()):
         raise RuntimeError(
             "runtime item bindings do not exactly cover the pinned character "
             "holdings",

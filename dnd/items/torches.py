@@ -41,8 +41,17 @@ from dnd.core.content.registration import (
     item_factory,
 )
 from dnd.core.content.runtime import RuntimeBehaviorKind
-from dnd.core.events import EventPhase, ExposedFlameEvent
+from dnd.core.events import (
+    Event,
+    EventPhase,
+    EventQueue,
+    SpatialEffectInteractionEvent,
+)
+from dnd.core.spatial_effect_types import (
+    SpatialEffectInteractionOperation,
+)
 from dnd.core.gridmap import get_map
+from dnd.core.item_types import ItemLightSourceState
 from dnd.entity import Entity
 
 
@@ -298,6 +307,15 @@ class Torch(UsableItem):
             )
         ]
 
+    def get_light_source_state(self) -> ItemLightSourceState:
+        """Return the torch's exact visible emitter state."""
+        return ItemLightSourceState(
+            is_lit=self.is_lit,
+            very_bright_radius_feet=self.very_bright_radius_feet,
+            bright_radius_feet=self.bright_radius_feet,
+            dim_radius_feet=self.dim_radius_feet,
+        )
+
     def ignite(
         self,
         carrier_entity_uuid: UUID,
@@ -306,11 +324,11 @@ class Torch(UsableItem):
         """Create the temporary carrier-anchored light for this torch."""
         if self.is_lit:
             return
-        self.is_lit = True
-        grid = get_map()
         entity = Entity.get(carrier_entity_uuid)
         if entity is None:
             return
+        self.is_lit = True
+        grid = get_map()
         self._light_source_uuid = grid.add_light_source(
             position=entity.position,
             very_bright_radius_feet=self.very_bright_radius_feet,
@@ -319,17 +337,18 @@ class Torch(UsableItem):
             anchor_uuid=carrier_entity_uuid,
             parent_event=parent_event,
         )
-        flame_event = ExposedFlameEvent(
+        flame_event = SpatialEffectInteractionEvent(
             source_entity_uuid=carrier_entity_uuid,
             target_entity_uuid=self.uuid,
-            item_uuid=self.uuid,
-            position=entity.position,
+            operation=SpatialEffectInteractionOperation.IGNITE,
+            positions=(entity.position,),
+            source_object_uuid=self.uuid,
+            source_content_ref=self.content_ref,
             parent_event=parent_event,
             phase=EventPhase.DECLARATION,
+            use_register=False,
         )
-        flame_event.phase_to(EventPhase.EFFECT).phase_to(
-            EventPhase.COMPLETION,
-        )
+        EventQueue.publish_lifecycle(flame_event)
 
     def extinguish(self, parent_event: Optional[UUID] = None) -> None:
         """Remove this torch's temporary light."""
@@ -343,10 +362,6 @@ class Torch(UsableItem):
             )
             self._light_source_uuid = None
 
-    def is_exposed_flame(self) -> bool:
-        """Return whether the torch is currently burning."""
-        return self.is_lit
-
     def douse_exposed_flame(
         self,
         parent_event: Optional[UUID] = None,
@@ -357,9 +372,11 @@ class Torch(UsableItem):
         self.extinguish(parent_event=parent_event)
         return True
 
-    def _on_destroy(self) -> None:
+    def _on_destroy(self, parent_event: Optional[Event]) -> None:
         """Extinguish before destruction."""
-        self.extinguish()
+        self.extinguish(
+            parent_event=parent_event.uuid if parent_event is not None else None,
+        )
 
     def _on_drop(
         self,
@@ -634,13 +651,22 @@ class WallTorch(UsableItem):
             )
         ]
 
+    def get_light_source_state(self) -> ItemLightSourceState:
+        """Return the wall torch's exact visible emitter state."""
+        return ItemLightSourceState(
+            is_lit=self.is_lit,
+            very_bright_radius_feet=self.very_bright_radius_feet,
+            bright_radius_feet=self.bright_radius_feet,
+            dim_radius_feet=self.dim_radius_feet,
+        )
+
     def light(self, parent_event: Optional[UUID] = None) -> None:
         """Create this fixture's fixed light source."""
         if self.is_lit:
             return
-        self.is_lit = True
         if self._wall_torch_position is None:
             return
+        self.is_lit = True
         self._light_source_uuid = get_map().add_light_source(
             position=self._wall_torch_position,
             very_bright_radius_feet=self.very_bright_radius_feet,
@@ -648,17 +674,18 @@ class WallTorch(UsableItem):
             dim_radius_feet=self.dim_radius_feet,
             parent_event=parent_event,
         )
-        flame_event = ExposedFlameEvent(
+        flame_event = SpatialEffectInteractionEvent(
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.uuid,
-            item_uuid=self.uuid,
-            position=self._wall_torch_position,
+            operation=SpatialEffectInteractionOperation.IGNITE,
+            positions=(self._wall_torch_position,),
+            source_object_uuid=self.uuid,
+            source_content_ref=self.content_ref,
             parent_event=parent_event,
             phase=EventPhase.DECLARATION,
+            use_register=False,
         )
-        flame_event.phase_to(EventPhase.EFFECT).phase_to(
-            EventPhase.COMPLETION,
-        )
+        EventQueue.publish_lifecycle(flame_event)
 
     def put_out(self, parent_event: Optional[UUID] = None) -> None:
         """Remove this fixture's fixed light source."""
@@ -671,10 +698,6 @@ class WallTorch(UsableItem):
                 parent_event=parent_event,
             )
             self._light_source_uuid = None
-
-    def is_exposed_flame(self) -> bool:
-        """Return whether the wall torch is currently burning."""
-        return self.is_lit
 
     def douse_exposed_flame(
         self,

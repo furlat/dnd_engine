@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-import time
 from typing import Any, Dict, Final, Iterator, Literal, Mapping, Optional, Self, Sequence, Tuple, overload
 from uuid import uuid4
 
@@ -16,6 +15,12 @@ from dnd.ai.contracts.semantics import (
     unknown_action_semantics,
 )
 from dnd.ai.contracts.immutable import FrozenDict
+from dnd.core.action_outcomes import (
+    ActionOutcomeProfile as ActionOutcomeProfile,
+    DamageRollProfile as DamageRollProfile,
+    OutcomeApplicationScope as OutcomeApplicationScope,
+    OutcomeResolution as OutcomeResolution,
+)
 
 
 ActionBucket = Literal[
@@ -65,70 +70,6 @@ class EconomyGate(ControlModel):
     name: str = Field(description="Machine-readable gate name.")
     reason: str = Field(description="Human-readable explanation.")
     active: bool = Field(default=True, description="Whether the gate currently applies.")
-
-
-class OutcomeResolution(str, Enum):
-    """Controller-visible mechanism resolving one outcome application."""
-
-    AUTOMATIC = "automatic"
-    ATTACK_ROLL = "attack_roll"
-    SAVING_THROW = "saving_throw"
-    UNKNOWN = "unknown"
-
-
-class OutcomeApplicationScope(str, Enum):
-    """How outcome applications map onto selected or affected entities."""
-
-    ALLOCATED_TARGETS = "allocated_targets"
-    EACH_AFFECTED_ENTITY = "each_affected_entity"
-
-
-class OutcomeAdvantage(str, Enum):
-    """Actor-baseline d20 advantage disclosed by an outcome profile."""
-
-    NONE = "None"
-    ADVANTAGE = "Advantage"
-    DISADVANTAGE = "Disadvantage"
-
-
-class DamageRollProfile(ControlModel):
-    """Controller-visible dice formula for one damage component."""
-
-    dice_count: int = Field(ge=0, description="Number of dice rolled per application.")
-    die_size: int = Field(ge=1, description="Number of faces on each damage die.")
-    flat_bonus: int = Field(default=0, description="Flat bonus added once per application.")
-    damage_type: str = Field(description="Damage type applied to this component.")
-
-
-class ActionOutcomeProfile(ControlModel):
-    """Actor-baseline stochastic rule carried by a decision epoch."""
-
-    effect_id: Optional[str] = Field(
-        default=None,
-        description="Stable identity of the modeled effect for typed interactions.",
-    )
-    resolution: OutcomeResolution = Field(description="Roll mechanism used by each application.")
-    applications: int = Field(default=1, ge=1, description="Independent repeated applications.")
-    application_scope: OutcomeApplicationScope = Field(
-        default=OutcomeApplicationScope.ALLOCATED_TARGETS,
-        description="Whether applications are allocated or apply to every affected entity.",
-    )
-    damage_rolls: Sequence[DamageRollProfile] = Field(
-        default_factory=tuple,
-        description="Damage components rolled per application.",
-    )
-    attack_bonus: Optional[int] = Field(default=None, description="Actor-baseline attack bonus.")
-    advantage: OutcomeAdvantage = Field(default=OutcomeAdvantage.NONE, description="Actor-baseline advantage state.")
-    critical_threshold: int = Field(default=20, ge=1, le=20, description="Natural d20 critical threshold.")
-    critical_extra_dice: int = Field(default=0, ge=0, description="Extra critical dice beyond base doubling.")
-    save_dc: Optional[int] = Field(default=None, description="Saving throw DC when disclosed.")
-    save_ability: Optional[str] = Field(default=None, description="Saving throw ability when disclosed.")
-    half_damage_on_save: bool = Field(default=False, description="Whether a successful save retains half damage.")
-    scope: Literal["actor_baseline"] = Field(default="actor_baseline", description="Explicit information boundary.")
-
-    def _freeze_collections(self) -> None:
-        """Freeze damage components after validation."""
-        object.__setattr__(self, "damage_rolls", tuple(self.damage_rolls))
 
 
 class ActionCostProfile(ControlModel):
@@ -1080,7 +1021,6 @@ class DecisionEpoch(ControlModel):
     turn_index: int = Field(description="Encounter turn index.")
     economy: ActionEconomyState = Field(description="Current actor action economy.")
     affordances: AffordanceSet = Field(description="Legal command rows.")
-    created_at: float = Field(default_factory=time.time, description="Unix timestamp when the epoch was created.")
 
 
 class CommandResultStatus(str, Enum):

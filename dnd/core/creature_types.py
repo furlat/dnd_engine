@@ -1,6 +1,10 @@
 """Dependency-neutral creature classification and damage facts."""
 
 from enum import Enum
+from typing import Literal
+
+
+DamageDieValue = Literal[4, 6, 8, 10, 12, 20]
 
 
 class Size(str, Enum):
@@ -53,6 +57,7 @@ class DamageType(str, Enum):
 
 __all__ = [
     "CreatureType",
+    "DamageDieValue",
     "DamageType",
     "Size",
 ]

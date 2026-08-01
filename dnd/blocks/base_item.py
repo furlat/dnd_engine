@@ -13,16 +13,23 @@ from dnd.core.base_block import BaseBlock, MovementMode
 from dnd.core.creature_types import DamageType
 from dnd.core.gridmap import get_map
 from dnd.core.events import (
+    Damage,
     Event,
     EventPhase,
+    EventQueue,
     EventType,
     SpatialChangeEvent,
+    TakeDamageEvent,
 )
 from dnd.core.equipment_types import EquipmentSlot
 from dnd.core.item_types import (
     EquippedVisualPolicy,
+    ItemChargeState,
     ItemContentRefSnapshot,
+    ItemDirectionalStructureState,
+    ItemLightSourceState,
     ItemLocation,
+    ItemObservationState,
     ItemPresentationKind,
     ItemPresentationState,
     ItemRarity,
@@ -284,9 +291,37 @@ class BaseItem(BaseBlock):
         """Return this item's canonical contained-item storage, when present."""
         return None
 
-    def is_exposed_flame(self) -> bool:
-        """Return whether this item currently presents an exposed flame."""
-        return False
+    def get_directional_structure_state(
+        self,
+    ) -> Optional[ItemDirectionalStructureState]:
+        """Return this item's authored directional topology, when present."""
+        return None
+
+    def get_light_source_state(self) -> Optional[ItemLightSourceState]:
+        """Return this item's visible light-emitter state, when present."""
+        return None
+
+    def get_charge_state(self) -> Optional[ItemChargeState]:
+        """Return this item's finite-use state, when present."""
+        return None
+
+    def to_item_observation_state(
+        self,
+        requesting_entity_uuid: Optional[UUID] = None,
+    ) -> ItemObservationState:
+        """Return one closed observer-relative spatial item snapshot."""
+        return ItemObservationState(
+            blocks_movement=self.blocks_walking(requesting_entity_uuid),
+            blocks_vision=self.blocks_vision(requesting_entity_uuid),
+            is_pickable=self.is_pickable,
+            is_usable=self.is_usable,
+            stack_count=self.stack_count,
+            is_hazardous=self.is_hazardous_for(requesting_entity_uuid),
+            is_open=self.get_spatial_open_state(),
+            directional_structure=self.get_directional_structure_state(),
+            light_source=self.get_light_source_state(),
+            charge_state=self.get_charge_state(),
+        )
 
     def douse_exposed_flame(self, parent_event: Optional[UUID] = None) -> bool:
         """Douse this item's exposed flame, if any.
@@ -558,7 +593,7 @@ class BaseItem(BaseBlock):
             if previous_owner_uuid is not None
             else None
         )
-        self._on_destroy()
+        self._on_destroy(parent_event)
         gridmap = get_map()
         gridmap.cleanup_block_light_sources(self.uuid)
         for cond_name in list(self.active_conditions.keys()):
@@ -589,8 +624,8 @@ class BaseItem(BaseBlock):
             )
         BaseBlock._registry.pop(self.uuid, None)
 
-    def _on_destroy(self) -> None:
-        """Subclass override hook for destruction behavior."""
+    def _on_destroy(self, parent_event: Optional[Event]) -> None:
+        """Run one typed causal destruction hook before location cleanup."""
         pass
 
     def is_breakable(self) -> bool:
@@ -621,16 +656,66 @@ class BaseItem(BaseBlock):
             return 0
         return self.health.get_max_hit_dices_points(0)
 
-    def receive_damage(self, amount: int, damage_type: DamageType, source_uuid: UUID) -> int:
-        """Apply damage to this item. Health block handles resistances/immunities.
+    def receive_damage(
+        self,
+        amount: int,
+        damage_type: DamageType,
+        source_uuid: UUID,
+        parent_event: Optional[Event] = None,
+    ) -> int:
+        """Apply item damage through the same interruptible event boundary.
 
-        Returns actual damage dealt. Destroys item if HP reaches 0.
+        Returns actual normal hit-point damage and destroys the item when the
+        accepted packet reduces it to zero hit points.
         """
         if self.health is None:
             return 0
-        actual = self.health.take_damage(amount, damage_type, source_uuid)
+        source = BaseBlock.get(source_uuid)
+        event = TakeDamageEvent(
+            source_entity_uuid=source_uuid,
+            target_entity_uuid=self.uuid,
+            source_entity_name=source.name if source is not None else None,
+            target_entity_name=self.name,
+            total_damage=amount,
+            damages=[
+                Damage(
+                    damage_type=damage_type,
+                    dice_numbers=1,
+                    damage_dice=4,
+                    source_entity_uuid=source_uuid,
+                    target_entity_uuid=self.uuid,
+                ),
+            ],
+            parent_event=parent_event.uuid if parent_event is not None else None,
+            phase=EventPhase.DECLARATION,
+            use_register=False,
+        )
+        event = EventQueue.publish_declaration(event)
+        if event.canceled:
+            return 0
+        event = event.phase_to(EventPhase.EXECUTION)
+        if event.canceled:
+            return 0
+        event = event.phase_to(EventPhase.EFFECT)
+        if event.canceled:
+            return 0
+
+        resolved_damage_type = event.damages[0].damage_type
+        preview = self.health.preview_damage(
+            event.get_effective_damage(),
+            resolved_damage_type,
+            event.normal_hit_point_damage_cap,
+            declared_damage=event.total_damage,
+            normal_hit_points_available=max(0, self.get_hp()),
+        )
+        actual = self.health.apply_damage_preview(preview, source_uuid)
         if not self.has_hp:
-            self.destroy()
+            self.destroy(parent_event=event)
+        event.phase_to(
+            EventPhase.COMPLETION,
+            resulting_hp=max(0, self.get_hp()),
+            resolution=preview,
+        )
         return actual
 
     @staticmethod
@@ -806,6 +891,13 @@ class UsableItem(BaseItem):
             "charges": self.charges,
             "max_charges": self.max_charges,
         })
+
+    def get_charge_state(self) -> ItemChargeState:
+        """Return exact finite-use state for observation consumers."""
+        return ItemChargeState(
+            charges=self.charges,
+            max_charges=self.max_charges,
+        )
 
     def remaining_finite_uses(self) -> Optional[int]:
         """Return total currently available uses represented by this stack.

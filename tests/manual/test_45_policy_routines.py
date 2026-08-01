@@ -65,6 +65,7 @@ from dnd.ai.contracts.semantics import (
     TargetingSemantics,
     action_semantics_ref,
 )
+from dnd.core.item_types import ItemObservationState
 from dnd.ai.runtime.action_semantics import action_semantics_for_available_action
 from dnd.core.base_actions import (
     ActionAvailabilityStatus,
@@ -321,6 +322,7 @@ def test_transform_planner_uses_shared_outcome_cache_for_projected_damage(monkey
     })
     context = _context(
         [(transform_row, transform_semantics)],
+        door_open=True,
         visible_hostile=True,
         capabilities=[capability],
         extra_semantics=[spell_semantics],
@@ -527,7 +529,15 @@ def test_door_routine_binds_open_affordance_to_exact_target_object() -> None:
         name="Other Boundary",
         knowledge_state=KnowledgeState.VISIBLE,
         position=(2, 0),
-        state={"is_open": False},
+        state=ItemObservationState(
+            blocks_movement=True,
+            blocks_vision=True,
+            is_pickable=False,
+            is_usable=True,
+            stack_count=1,
+            is_hazardous=False,
+            is_open=False,
+        ),
     )
     world = context.world.model_copy(update={"known_objects": objects})
     context = PolicyContext(world=world, facts=derive_agent_facts(world).facts)
@@ -942,7 +952,15 @@ def _context(
                 name="Boundary",
                 knowledge_state=KnowledgeState.VISIBLE,
                 position=door_position,
-                state={"is_open": door_open},
+                state=ItemObservationState(
+                    blocks_movement=not door_open,
+                    blocks_vision=not door_open,
+                    is_pickable=False,
+                    is_usable=True,
+                    stack_count=1,
+                    is_hazardous=False,
+                    is_open=door_open,
+                ),
             ),
         },
         known_tiles=tiles,

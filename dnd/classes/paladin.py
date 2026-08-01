@@ -2,10 +2,10 @@
 
 Contains: Divine Smite (per-level handlers that add radiant damage on melee hit).
 """
-from typing import Optional, List
+from typing import Optional
 from uuid import UUID
 
-from dnd.core.base_actions import spell_slot_cost_type
+from dnd.core.action_types import spell_slot_cost_type
 from dnd.core.events import (
     Event, EventPhase, EventType, EventHandler, Trigger,
     Damage, DamageRollResultEvent,
@@ -155,25 +155,3 @@ def create_divine_smite_handler(
         event_processor=create_divine_smite_processor(slot_level),
         player_toggleable=True
     )
-
-
-def register_divine_smite(entity: Entity, max_slot_level: int = 5) -> List[EventHandler]:
-    """Register Divine Smite handlers on an entity.
-
-    Registers one handler per spell slot level from max_slot_level down to 1.
-    Highest-level handler fires first (registered first → earlier in iteration order).
-    Lower-level handlers skip due to the smite flag on the event context.
-
-    Args:
-        entity: The paladin entity.
-        max_slot_level: Maximum spell slot level to register handlers for (default 5).
-
-    Returns:
-        List of registered EventHandler objects.
-    """
-    handlers: List[EventHandler] = []
-    for level in range(max_slot_level, 0, -1):
-        handler = create_divine_smite_handler(entity.uuid, level)
-        entity.add_event_handler(handler)
-        handlers.append(handler)
-    return handlers

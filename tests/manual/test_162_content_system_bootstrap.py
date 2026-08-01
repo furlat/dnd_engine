@@ -140,7 +140,7 @@ def test_builtin_artifact_digest_is_required_and_stable() -> None:
         "dnd/content_system/builtin_character_builds.py",
         "dnd/content_system/character_build_validation.py",
         "dnd/content_system/character_materialization.py",
-        "dnd/content_system/installed_creature_materialization.py",
+        "dnd/content_system/creature_materialization.py",
         "dnd/monsters/bestiary.py",
         "dnd/monsters/bestiary_content.py",
         "dnd/monsters/bestiary_items.py",

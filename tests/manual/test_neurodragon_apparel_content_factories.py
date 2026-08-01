@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import ast
 from pathlib import Path
-from types import MappingProxyType
 from uuid import uuid4
 
 import pytest
@@ -58,24 +57,6 @@ _EXPECTED_CONTENT_IDS = (
     "apparel.monster_hands",
     "shield.wooden",
 )
-
-_EXPECTED_RECIPES = {
-    "armored_boots": armor_definitions.ARMORED_BOOTS_RECIPE,
-    "cloth_armor": armor_definitions.CLOTH_ARMOR_RECIPE,
-    "cloth_shoes": armor_definitions.CLOTH_SHOES_RECIPE,
-    "common_clothes": armor_definitions.COMMON_CLOTHES_RECIPE,
-    "costume": armor_definitions.COSTUME_RECIPE,
-    "crown": armor_definitions.CROWN_RECIPE,
-    "spellblade_crown": armor_definitions.SPELLBLADE_CROWN_RECIPE,
-    "iron_helmet": armor_definitions.IRON_HELMET_RECIPE,
-    "leather_boots": armor_definitions.LEATHER_BOOTS_RECIPE,
-    "leather_shoes": armor_definitions.LEATHER_SHOES_RECIPE,
-    "robes": armor_definitions.ROBES_RECIPE,
-    "sandals": armor_definitions.SANDALS_RECIPE,
-    "travelers_clothes": armor_definitions.TRAVELERS_CLOTHES_RECIPE,
-    "wizard_hat": armor_definitions.WIZARD_HAT_RECIPE,
-    "wooden_shield": armor_definitions.WOODEN_SHIELD_RECIPE,
-}
 
 _EXPECTED_ARMOR = (
     (
@@ -453,10 +434,7 @@ _LEGACY_FACTORIES = frozenset(
 def test_neurodragon_apparel_declarations_are_exact_original_possessions() -> None:
     """All twenty-six roots own stable public identity and reviewed provenance."""
     declarations = armor_definitions.NEURODRAGON_ARMOR_DECLARATIONS
-    recipes = armor_definitions.NEURODRAGON_ARMOR_RECIPES_BY_LEGACY_ID
 
-    assert isinstance(recipes, MappingProxyType)
-    assert recipes == _EXPECTED_RECIPES
     assert tuple(
         declaration.ref.content_id for declaration in declarations
     ) == _EXPECTED_CONTENT_IDS
@@ -490,10 +468,6 @@ def test_neurodragon_apparel_declarations_are_exact_original_possessions() -> No
             declaration.item_definition.persistence_policy
             is ItemPersistencePolicy.POSSESSION
         )
-
-    with pytest.raises(TypeError):
-        recipes["robes"] = recipes["costume"]  # type: ignore[index]
-
 
 @pytest.mark.parametrize(
     (

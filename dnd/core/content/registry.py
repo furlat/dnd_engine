@@ -28,6 +28,7 @@ from dnd.core.content.registration import (
     ContentDeclarationMode,
 )
 from dnd.core.content.runtime import RuntimeBehaviorKind
+from dnd.core.spatial_effect_types import SpatialEffectTransitionAction
 
 
 class NonConstructibleContentError(TypeError):
@@ -100,6 +101,7 @@ class ContentRegistryBuilder:
         _validate_sources(self._declarations, self._sources)
         _validate_recipe_preset_sources(self._recipe_presets, self._sources)
         _validate_dependencies(self._declarations, pack_dependencies)
+        _validate_spatial_effects(self._declarations)
         _validate_condition_effects(self._declarations, pack_dependencies)
         _validate_related_content(self._declarations, pack_dependencies)
         _validate_construction_cycles(self._declarations)
@@ -334,6 +336,76 @@ def _validate_dependencies(
                 )
 
 
+def _validate_spatial_effects(
+    declarations: Mapping[str, ContentDeclaration],
+) -> None:
+    """Validate exact replacement closure for every authored effect transition."""
+    for key, declaration in declarations.items():
+        definition = declaration.spatial_effect_definition
+        transition_dependencies = {
+            dependency.target_ref.identity_key: dependency.target_ref
+            for dependency in declaration.dependencies
+            if dependency.relation
+            is ContentDependencyRelation.TRANSFORMS_TO_SPATIAL_EFFECT
+        }
+        if definition is None:
+            if transition_dependencies:
+                raise ValueError(
+                    f"Content {key} declares a spatial transformation without "
+                    "a spatial-effect definition",
+                )
+            continue
+        replacement_refs: dict[str, ContentRef] = {}
+        for transition in definition.transitions:
+            recipe = transition.replacement_recipe
+            if recipe is None:
+                continue
+            target = declarations.get(recipe.ref.identity_key)
+            if target is None:
+                raise ValueError(
+                    f"Spatial transition from {key} targets missing "
+                    f"{recipe.ref.identity_key}",
+                )
+            if target.ref != recipe.ref:
+                raise ValueError(
+                    f"Spatial transition from {key} has a target contract "
+                    f"mismatch for {recipe.ref.identity_key}",
+                )
+            target_definition = target.spatial_effect_definition
+            if target_definition is None:
+                raise ValueError(
+                    f"Spatial transition from {key} targets a non-effect",
+                )
+            same_layer = target_definition.layer is definition.layer
+            if (
+                transition.action
+                is SpatialEffectTransitionAction.REPLACE_AFFECTED
+                and not same_layer
+            ):
+                raise ValueError(
+                    f"Replacement transition from {key} changes layers; "
+                    "secondary-layer creation requires a separate operation",
+                )
+            if (
+                transition.action
+                is (
+                    SpatialEffectTransitionAction
+                    .REMOVE_AFFECTED_AND_CREATE_SECONDARY
+                )
+                and same_layer
+            ):
+                raise ValueError(
+                    f"Secondary-layer transition from {key} stays on "
+                    f"{definition.layer.value}",
+                )
+            replacement_refs[recipe.ref.identity_key] = recipe.ref
+        if replacement_refs != transition_dependencies:
+            raise ValueError(
+                f"Content {key} transformation dependencies do not exactly "
+                "match its authored replacement transitions",
+            )
+
+
 def _validate_condition_effects(
     declarations: Mapping[str, ContentDeclaration],
     pack_dependencies: Mapping[str, frozenset[str]],
@@ -384,6 +456,8 @@ def _validate_condition_effects(
         if coverage is ConditionEffectCoverage.INDIRECT:
             indirect_relations = {
                 ContentDependencyRelation.CREATES_OBJECT,
+                ContentDependencyRelation.CREATES_SPATIAL_EFFECT,
+                ContentDependencyRelation.TRANSFORMS_TO_SPATIAL_EFFECT,
                 ContentDependencyRelation.GRANTS_ACTION,
                 ContentDependencyRelation.GRANTS_FEATURE,
                 ContentDependencyRelation.CREATES_ITEM,

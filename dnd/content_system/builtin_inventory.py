@@ -10,6 +10,9 @@ from dnd.classes.content_factories import PLAYER_CLASS_CREATURE_DECLARATIONS
 from dnd.classes.progression_definitions import (
     FIGHTER_PROGRESSION_DECLARATIONS,
 )
+from dnd.classes.permanent_feature_definitions import (
+    PERMANENT_CLASS_FEATURE_DECLARATIONS,
+)
 from dnd.classes.sorcerer_progression_definitions import (
     SORCERER_PROGRESSION_DECLARATIONS,
 )
@@ -45,6 +48,9 @@ from dnd.content_system.starting_equipment_definitions import (
 )
 from dnd.content_system.starting_apparel_definitions import (
     STARTING_APPAREL_PACKAGE_DECLARATIONS,
+)
+from dnd.content_system.spatial_effect_population import (
+    populate_builtin_spatial_effect_dependencies,
 )
 from dnd.content_system.acolyte_starting_holdings import (
     ACOLYTE_STARTING_HOLDINGS_DECLARATION,
@@ -112,6 +118,7 @@ from dnd.spells.conjuration import (
 from dnd.spells.reaction_spell_content import (
     LEARNED_REACTION_SPELL_DECLARATIONS,
 )
+from dnd.spatial_effect_content import BUILT_IN_SPATIAL_EFFECT_DECLARATIONS
 from dnd.spells.infernal import (
     HELLISH_REBUKE_REACTION_DECLARATION,
     HELLISH_REBUKE_SPELL_DECLARATION,
@@ -129,6 +136,7 @@ _UNPOPULATED_BUILT_IN_DECLARATION_INVENTORY: tuple[
     *CONDITION_BEHAVIOR_DECLARATIONS,
     *REACTION_BEHAVIOR_DECLARATIONS,
     *STRUCTURAL_CLASS_FEATURE_DECLARATIONS,
+    *PERMANENT_CLASS_FEATURE_DECLARATIONS,
     *SORCERER_STRUCTURAL_FEATURE_DECLARATIONS,
     *SRD_CHARACTER_ORIGIN_DECLARATIONS,
     *NEURODRAGON_CHARACTER_ORIGIN_DECLARATIONS,
@@ -165,6 +173,7 @@ _UNPOPULATED_BUILT_IN_DECLARATION_INVENTORY: tuple[
     *PLAYER_CLASS_CREATURE_DECLARATIONS,
     ACID_FLASK_SPELL_DECLARATION,
     *SPELL_CONTENT_DECLARATIONS,
+    *BUILT_IN_SPATIAL_EFFECT_DECLARATIONS,
     *SRD_SPELL_ENVIRONMENT_OBJECT_DECLARATIONS,
     *SRD_ARMOR_DECLARATIONS,
     *SRD_ACOLYTE_GEAR_DECLARATIONS,
@@ -173,8 +182,12 @@ _UNPOPULATED_BUILT_IN_DECLARATION_INVENTORY: tuple[
     *SRD_CREATURE_DECLARATIONS,
     *SRD_WEAPON_DECLARATIONS,
 )
-BUILT_IN_DECLARATION_INVENTORY = populate_builtin_condition_effects(
-    _UNPOPULATED_BUILT_IN_DECLARATION_INVENTORY,
+BUILT_IN_DECLARATION_INVENTORY = (
+    populate_builtin_spatial_effect_dependencies(
+        populate_builtin_condition_effects(
+            _UNPOPULATED_BUILT_IN_DECLARATION_INVENTORY,
+        ),
+    )
 )
 BUILT_IN_RECIPE_PRESET_INVENTORY: tuple[ContentRecipePreset, ...] = (
     *NEURODRAGON_AUTHORED_ITEM_RECIPE_PRESETS,

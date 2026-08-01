@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 from enum import Enum
 from typing import Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from dnd.core.content.canonical import canonical_content_sha256
 from dnd.core.content.identities import (
     ContentRef,
 )
@@ -89,17 +88,12 @@ def compute_safe_content_presentation_hash(
     presentation: ContentPresentation,
 ) -> str:
     """Hash exactly the presentation-only payload disclosed to players."""
-    encoded = json.dumps(
+    return canonical_content_sha256(
         {
             "contract_version": 1,
             "presentation": presentation.model_dump(mode="json"),
-        },
-        allow_nan=False,
-        ensure_ascii=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode("utf-8")
-    return hashlib.sha256(encoded).hexdigest()
+        }
+    )
 
 
 class ContentOrdering(BaseModel):
@@ -173,15 +167,5 @@ def resolve_content_icon_key(
     icon_binding = BUILT_IN_CONTENT_ICON_BINDINGS.get(exact_icon_identity)
     if icon_binding is None:
         return authored_icon_key, False
-    (
-        expected_contract_hash,
-        _,
-        icon_key,
-        _,
-    ) = icon_binding
-    if expected_contract_hash != ref.definition_contract_hash:
-        raise ValueError(
-            "built-in icon binding targets a stale definition contract: "
-            f"{ref.identity_key}",
-        )
+    icon_key, _asset_sha256 = icon_binding
     return icon_key, True

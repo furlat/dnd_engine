@@ -9,6 +9,7 @@ from uuid import uuid4
 
 import pytest
 
+from dnd.scenarios.encounter_catalog import AUTHORED_ENCOUNTER_RECIPES_BY_ID
 from server.game_directory.contracts import (
     AccessGrantCreate,
     ArtifactCreate,
@@ -307,6 +308,42 @@ def test_local_game_execution_kind_round_trips_through_repository(tmp_path: Path
     assert created.execution_kind is ExecutionKind.LOCAL
     assert loaded == created
     assert loaded.execution_kind is ExecutionKind.LOCAL
+
+
+def test_historical_launch_manifest_exposes_its_exact_encounter_recipe(
+    tmp_path: Path,
+) -> None:
+    """History does not decode an old launch envelope as today's request DTO."""
+    repository = _open(tmp_path / "historical-recipe.sqlite3")
+    principal = repository.create_principal(
+        PrincipalCreate(
+            principal_kind=PrincipalKind.HUMAN,
+            display_name="Historical Player",
+        ),
+    )
+    recipe = AUTHORED_ENCOUNTER_RECIPES_BY_ID[
+        "encounter.standard_skeleton_doors"
+    ]
+    created = repository.create_game(
+        GameCreate(
+            created_by_principal_id=principal.principal_id,
+            execution_kind=ExecutionKind.LOCAL,
+            scenario_kind="encounter_recipe",
+            scenario_id=recipe.encounter_id,
+            display_name=recipe.title,
+            creation_manifest={
+                "recipe": recipe.model_dump(mode="json"),
+                "expected_ruleset_digest": "1" * 64,
+            },
+            ruleset_version="one-ruleset",
+            engine_version="test",
+            content_digest="0" * 64,
+        ),
+    )
+    repository.close()
+
+    assert created.encounter_recipe == recipe
+    assert "expected_content_set_digest" not in created.creation_manifest
 
 
 def test_cross_game_entity_assignment_is_rejected(tmp_path: Path) -> None:

@@ -455,7 +455,6 @@ def test_ancestry_receipt_removes_resistance_action_resource_and_reapplies_once(
             runtime_entity_uuid=entity.uuid,
             character_id=character_id,
             grants=(receipt,),
-            automatic_grant_refs=(),
         ),
     )
 

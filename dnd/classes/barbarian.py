@@ -1,13 +1,13 @@
 """
-Barbarian Class Features
+Barbarian runtime actions, states, and event processors.
 
-Implements Barbarian-specific features as conditions that can be applied to entities.
-Organized by D&D 5e level progression.
+Permanent level structure is installed by the character composer.  This
+module owns only behavior executed by those grants or by transient conditions.
 
 Level 1: Rage (Unarmored Defense handled via EquipmentConfig)
 Level 2: Reckless Attack, Danger Sense
 Level 3: Berserker Path - Frenzy (BG3 version - no exhaustion)
-Level 5: Extra Attack (reuses Fighter's ExtraAttackFeature), Fast Movement
+Level 5: Extra Attack and Fast Movement
 Level 6: Mindless Rage
 Level 7: Feral Instinct
 Level 9/13/17: Brutal Critical
@@ -24,7 +24,7 @@ from dnd.core.condition_types import DurationType
 from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_actions import (
-    BaseAction, ActionEvent, Cost, TargetType, BaseCost
+    BaseAction, ActionEvent, Cost, TargetType
 )
 from dnd.core.events import (
     Event, EventPhase, EventType,
@@ -34,14 +34,12 @@ from dnd.core.events import (
 from dnd.core.equipment_types import ArmorType, WeaponSlot
 from dnd.core.modifiers import (
     NumericalModifier, AdvantageModifier, AdvantageStatus,
-    ContextualNumericalModifier, ContextualAdvantageModifier,
+    ContextualAdvantageModifier,
 )
-from dnd.blocks.action_economy import RechargeType
 from dnd.core.dice import RollType
 from dnd.entity import Entity
 from dnd.actions import (
     entity_action_economy_cost_evaluator,
-    entity_action_economy_cost_applier,
     Attack,
 )
 from dnd.conditions import Frightened
@@ -61,11 +59,9 @@ from dnd.classes.rage import (
     Raging,
     Rage,
     EndRage,
-    RageFeature,
     Frenzied,
     FrenziedStrike,
     Frenzy,
-    FrenzyFeature,
 )
 
 __all__ = [
@@ -79,39 +75,25 @@ __all__ = [
     "Raging",
     "Rage",
     "EndRage",
-    "RageFeature",
     "Frenzied",
     "FrenziedStrike",
     "Frenzy",
-    "FrenzyFeature",
     "RecklessAttacking",
     "RecklessAttack",
-    "RecklessAttackFeature",
     "danger_sense_check",
-    "DangerSense",
     "fast_movement_check",
-    "FastMovement",
     "mindless_rage_immunity_check",
-    "MindlessRage",
-    "FeralInstinct",
-    "BrutalCritical",
     "IntimidatingPresenceImmunity",
     "intimidating_presence_end_check_processor",
     "create_intimidating_presence_end_handler",
     "IntimidatingPresence",
     "ExtendIntimidatingPresence",
-    "IntimidatingPresenceFeature",
     "relentless_rage_processor",
-    "RelentlessRage",
     "retaliation_processor",
     "RetaliationReactionHandler",
     "create_retaliation_handler",
-    "Retaliation",
-    "PersistentRage",
     "indomitable_might_processor",
     "create_indomitable_might_handler",
-    "IndomitableMight",
-    "PrimalChampion",
 ]
 
 
@@ -227,20 +209,6 @@ class RecklessAttack(BaseAction):
         description="Reckless Attack has no action or resource costs.",
     )
 
-    def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[ActionEvent]:
-        entity = Entity.get(self.source_entity_uuid)
-        source_name = entity.name if entity else None
-
-        return ActionEvent(
-            name=self.name,
-            source_entity_uuid=self.source_entity_uuid,
-            target_entity_uuid=self.source_entity_uuid,
-            costs=[],
-            parent_event=parent_event.uuid if parent_event else None,
-            use_register=use_register,
-            source_entity_name=source_name
-        )
-
     def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
         entity = Entity.get(self.source_entity_uuid)
         if entity is None:
@@ -270,64 +238,6 @@ class RecklessAttack(BaseAction):
             status_message=f"{entity.name} attacks recklessly!"
         )
 
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
-        return completion_event
-
-
-class RecklessAttackFeature(BaseCondition):
-    """Barbarian feature that grants the Reckless Attack action.
-
-    Attributes:
-        name: Feature condition name for Reckless Attack lookup and cleanup.
-        description: Short rules-facing summary of the Reckless Attack feature.
-    """
-    name: str = Field(
-        default="Reckless Attack Feature",
-        description="Feature condition name for Reckless Attack lookup and cleanup.",
-    )
-    description: str = Field(
-        default="Can attack recklessly for advantage at cost of being easier to hit",
-        description="Short rules-facing summary of the Reckless Attack feature.",
-    )
-
-    def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]],
-        List[UUID],
-        List[UUID],
-        List[UUID],
-        Optional[Event]
-    ]:
-        if not self.target_entity_uuid:
-            return [], [], [], [], declaration_event.cancel(
-                status_message="Target entity UUID is not set"
-            )
-
-        target = Entity.get(self.target_entity_uuid)
-        if not target:
-            return [], [], [], [], declaration_event.cancel(
-                status_message=f"Target entity {self.target_entity_uuid} not found"
-            )
-
-        reckless_action = RecklessAttack(
-            source_entity_uuid=target.uuid,
-            template=True
-        )
-        target.register_action(reckless_action)
-
-        effect_event = declaration_event.phase_to(
-            EventPhase.EFFECT,
-            status_message=f"Granted Reckless Attack to {target.name}"
-        )
-
-        return [], [], [], [], effect_event
-
-    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
-        """Clean up action on removal."""
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if target:
-            target.unregister_action("Reckless Attack")
-
-        return super()._remove(event)
 
 
 def danger_sense_check(
@@ -364,55 +274,6 @@ def danger_sense_check(
     )
 
 
-class DangerSense(BaseCondition):
-    """Barbarian feature that grants conditional Dexterity save advantage.
-
-    Attributes:
-        name: Feature condition name for Danger Sense.
-        description: Short rules-facing summary of the Danger Sense feature.
-    """
-    name: str = Field(default="Danger Sense", description="Feature condition name for Danger Sense.")
-    description: str = Field(
-        default="Advantage on DEX saves vs effects you can see",
-        description="Short rules-facing summary of the Danger Sense feature.",
-    )
-
-    def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]],
-        List[UUID],
-        List[UUID],
-        List[UUID],
-        Optional[Event]
-    ]:
-        if not self.target_entity_uuid:
-            return [], [], [], [], declaration_event.cancel(
-                status_message="Target entity UUID is not set"
-            )
-
-        target = Entity.get(self.target_entity_uuid)
-        if not target:
-            return [], [], [], [], declaration_event.cancel(
-                status_message=f"Target entity {self.target_entity_uuid} not found"
-            )
-
-        outs: List[Tuple[UUID, UUID]] = []
-
-        dex_save = target.saving_throws.get_saving_throw("dexterity")
-        danger_mod = ContextualAdvantageModifier(
-            name="Danger Sense",
-            source_entity_uuid=self.target_entity_uuid,
-            target_entity_uuid=self.target_entity_uuid,
-            callable=danger_sense_check
-        )
-        mod_uuid = dex_save.bonus.self_contextual.add_advantage_modifier(danger_mod)
-        outs.append((dex_save.bonus.uuid, mod_uuid))
-
-        effect_event = declaration_event.phase_to(
-            EventPhase.EFFECT,
-            status_message=f"Applied Danger Sense to {target.name}"
-        )
-
-        return outs, [], [], [], effect_event
 
 
 def fast_movement_check(
@@ -442,54 +303,6 @@ def fast_movement_check(
     )
 
 
-class FastMovement(BaseCondition):
-    """Barbarian feature that increases movement outside heavy armor.
-
-    Attributes:
-        name: Feature condition name for Fast Movement.
-        description: Short rules-facing summary of the Fast Movement feature.
-    """
-    name: str = Field(default="Fast Movement", description="Feature condition name for Fast Movement.")
-    description: str = Field(
-        default="+10 ft speed when not in heavy armor",
-        description="Short rules-facing summary of the Fast Movement feature.",
-    )
-
-    def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]],
-        List[UUID],
-        List[UUID],
-        List[UUID],
-        Optional[Event]
-    ]:
-        if not self.target_entity_uuid:
-            return [], [], [], [], declaration_event.cancel(
-                status_message="Target entity UUID is not set"
-            )
-
-        target = Entity.get(self.target_entity_uuid)
-        if not target:
-            return [], [], [], [], declaration_event.cancel(
-                status_message=f"Target entity {self.target_entity_uuid} not found"
-            )
-
-        outs: List[Tuple[UUID, UUID]] = []
-
-        speed_mod = ContextualNumericalModifier(
-            name="Fast Movement",
-            source_entity_uuid=self.target_entity_uuid,
-            target_entity_uuid=self.target_entity_uuid,
-            callable=fast_movement_check
-        )
-        mod_uuid = target.action_economy.movement.self_contextual.add_value_modifier(speed_mod)
-        outs.append((target.action_economy.movement.uuid, mod_uuid))
-
-        effect_event = declaration_event.phase_to(
-            EventPhase.EFFECT,
-            status_message=f"Applied Fast Movement to {target.name}"
-        )
-
-        return outs, [], [], [], effect_event
 
 
 def mindless_rage_immunity_check(
@@ -510,167 +323,10 @@ def mindless_rage_immunity_check(
     return False
 
 
-class MindlessRage(BaseCondition):
-    """Berserker feature that grants charm and fear immunity while raging.
-
-    Attributes:
-        name: Feature condition name for Mindless Rage.
-        description: Short rules-facing summary of the Mindless Rage immunity feature.
-    """
-    name: str = Field(default="Mindless Rage", description="Feature condition name for Mindless Rage.")
-    description: str = Field(
-        default="Cannot be charmed or frightened while raging",
-        description="Short rules-facing summary of the Mindless Rage immunity feature.",
-    )
-
-    def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]],
-        List[UUID],
-        List[UUID],
-        List[UUID],
-        Optional[Event]
-    ]:
-        if not self.target_entity_uuid:
-            return [], [], [], [], declaration_event.cancel(
-                status_message="Target entity UUID is not set"
-            )
-
-        target = Entity.get(self.target_entity_uuid)
-        if not target:
-            return [], [], [], [], declaration_event.cancel(
-                status_message=f"Target entity {self.target_entity_uuid} not found"
-            )
-
-        target.add_condition_immunity(
-            "Charmed",
-            immunity_name="Mindless Rage",
-            immunity_check=mindless_rage_immunity_check
-        )
-        target.add_condition_immunity(
-            "Frightened",
-            immunity_name="Mindless Rage",
-            immunity_check=mindless_rage_immunity_check
-        )
-
-        effect_event = declaration_event.phase_to(
-            EventPhase.EFFECT,
-            status_message=f"Applied Mindless Rage to {target.name}"
-        )
-
-        return [], [], [], [], effect_event
-
-    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
-        """Clean up condition immunities on removal."""
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if target:
-            target._remove_contextual_condition_immunity("Charmed", "Mindless Rage")
-            target._remove_contextual_condition_immunity("Frightened", "Mindless Rage")
-        return super()._remove(event)
 
 
-class FeralInstinct(BaseCondition):
-    """Barbarian feature that grants initiative advantage.
-
-    Attributes:
-        name: Feature condition name for Feral Instinct.
-        description: Short rules-facing summary of the Feral Instinct feature.
-    """
-    name: str = Field(default="Feral Instinct", description="Feature condition name for Feral Instinct.")
-    description: str = Field(
-        default="Advantage on initiative rolls",
-        description="Short rules-facing summary of the Feral Instinct feature.",
-    )
-
-    def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]],
-        List[UUID],
-        List[UUID],
-        List[UUID],
-        Optional[Event]
-    ]:
-        if not self.target_entity_uuid:
-            return [], [], [], [], declaration_event.cancel(
-                status_message="Target entity UUID is not set"
-            )
-
-        target = Entity.get(self.target_entity_uuid)
-        if not target:
-            return [], [], [], [], declaration_event.cancel(
-                status_message=f"Target entity {self.target_entity_uuid} not found"
-            )
-
-        outs: List[Tuple[UUID, UUID]] = []
-
-        init_adv = AdvantageModifier(
-            name="Feral Instinct",
-            value=AdvantageStatus.ADVANTAGE,
-            source_entity_uuid=self.target_entity_uuid,
-            target_entity_uuid=self.target_entity_uuid
-        )
-
-        mod_uuid = target.initiative.self_static.add_advantage_modifier(init_adv)
-        outs.append((target.initiative.uuid, mod_uuid))
-
-        effect_event = declaration_event.phase_to(
-            EventPhase.EFFECT,
-            status_message=f"Applied Feral Instinct to {target.name}"
-        )
-
-        return outs, [], [], [], effect_event
 
 
-class BrutalCritical(BaseCondition):
-    """Barbarian feature that adds melee critical-hit damage dice.
-
-    Attributes:
-        name: Feature condition name for Brutal Critical.
-        description: Short rules-facing summary of the Brutal Critical feature.
-        extra_dice: Additional melee critical-hit damage dice granted by Brutal Critical.
-    """
-    name: str = Field(default="Brutal Critical", description="Feature condition name for Brutal Critical.")
-    description: str = Field(
-        default="Extra damage dice on critical melee hits",
-        description="Short rules-facing summary of the Brutal Critical feature.",
-    )
-    extra_dice: int = Field(
-        default=1,
-        description="Additional melee critical-hit damage dice granted by Brutal Critical.",
-    )
-
-    def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]],
-        List[UUID],
-        List[UUID],
-        List[UUID],
-        Optional[Event]
-    ]:
-        if not self.target_entity_uuid:
-            return [], [], [], [], declaration_event.cancel(
-                status_message="Target entity UUID is not set"
-            )
-
-        target = Entity.get(self.target_entity_uuid)
-        if not target:
-            return [], [], [], [], declaration_event.cancel(
-                status_message=f"Target entity {self.target_entity_uuid} not found"
-            )
-
-        outs: List[Tuple[UUID, UUID]] = []
-
-        brutal_mod = NumericalModifier.create(
-            source_entity_uuid=self.target_entity_uuid,
-            name="Brutal Critical",
-            value=self.extra_dice
-        )
-        mod_uuid = target.equipment.crit_extra_dice_melee.self_static.add_value_modifier(brutal_mod)
-        outs.append((target.equipment.crit_extra_dice_melee.uuid, mod_uuid))
-
-        effect_event = declaration_event.phase_to(
-            EventPhase.EFFECT,
-            status_message=f"Applied Brutal Critical ({self.extra_dice} dice) to {target.name}"
-        )
-
-        return outs, [], [], [], effect_event
 
 
 def relentless_rage_processor(event: Event, source_entity_uuid: UUID) -> Optional[Event]:
@@ -738,101 +394,8 @@ def relentless_rage_processor(event: Event, source_entity_uuid: UUID) -> Optiona
         )
 
 
-class RelentlessRage(BaseCondition):
-    """Barbarian feature that can keep a raging barbarian at 1 hit point.
-
-    Attributes:
-        name: Feature condition name for Relentless Rage.
-        description: Short rules-facing summary of the Relentless Rage feature.
-    """
-    name: str = Field(default="Relentless Rage", description="Feature condition name for Relentless Rage.")
-    description: str = Field(
-        default="CON save to drop to 1 HP instead of 0 while raging",
-        description="Short rules-facing summary of the Relentless Rage feature.",
-    )
-
-    def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]],
-        List[UUID],
-        List[UUID],
-        List[UUID],
-        Optional[Event]
-    ]:
-        if not self.target_entity_uuid:
-            return [], [], [], [], declaration_event.cancel(
-                status_message="Target entity UUID is not set"
-            )
-
-        target = Entity.get(self.target_entity_uuid)
-        if not target:
-            return [], [], [], [], declaration_event.cancel(
-                status_message=f"Target entity {self.target_entity_uuid} not found"
-            )
-
-        handler_uuids: List[UUID] = []
-
-        target.action_economy.add_resource(
-            name="relentless_rage",
-            maximum=5,
-            recharge_type=RechargeType.SHORT_REST
-        )
-
-        handler = EventHandler(
-            name="Relentless Rage",
-            source_entity_uuid=target.uuid,
-            trigger_conditions=[
-                Trigger(
-                    event_type=EventType.TAKE_DAMAGE,
-                    event_phase=EventPhase.EFFECT
-                )
-            ],
-            event_processor=relentless_rage_processor
-        )
-        target.add_event_handler(handler)
-        handler_uuids.append(handler.uuid)
-
-        effect_event = declaration_event.phase_to(
-            EventPhase.EFFECT,
-            status_message=f"Applied Relentless Rage to {target.name}"
-        )
-
-        return [], handler_uuids, [], [], effect_event
-
-    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
-        """Clean up resource on removal."""
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if target:
-            target.action_economy.remove_resource("relentless_rage")
-        return super()._remove(event)
 
 
-class PersistentRage(BaseCondition):
-    """Barbarian marker that prevents ordinary rage maintenance expiry.
-
-    Attributes:
-        name: Feature condition name for Persistent Rage.
-        description: Short rules-facing summary of the Persistent Rage marker.
-    """
-    name: str = Field(default="PersistentRage", description="Feature condition name for Persistent Rage.")
-    description: str = Field(
-        default="Rage only ends if unconscious or chosen",
-        description="Short rules-facing summary of the Persistent Rage marker.",
-    )
-
-    def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]],
-        List[UUID],
-        List[UUID],
-        List[UUID],
-        Optional[Event]
-    ]:
-
-        effect_event = declaration_event.phase_to(
-            EventPhase.EFFECT,
-            status_message="Persistent Rage active"
-        )
-
-        return [], [], [], [], effect_event
 
 
 def indomitable_might_processor(event: Event, source_entity_uuid: UUID) -> Optional[Event]:
@@ -890,106 +453,8 @@ def create_indomitable_might_handler(source_entity_uuid: UUID) -> EventHandler:
     )
 
 
-class IndomitableMight(BaseCondition):
-    """Barbarian feature that floors Strength checks at the Strength score.
-
-    Attributes:
-        name: Feature condition name for Indomitable Might.
-        description: Short rules-facing summary of the Indomitable Might feature.
-    """
-    name: str = Field(default="Indomitable Might", description="Feature condition name for Indomitable Might.")
-    description: str = Field(
-        default="STR checks can't be lower than STR score",
-        description="Short rules-facing summary of the Indomitable Might feature.",
-    )
-
-    def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]],
-        List[UUID],
-        List[UUID],
-        List[UUID],
-        Optional[Event]
-    ]:
-        if not self.target_entity_uuid:
-            return [], [], [], [], declaration_event.cancel(
-                status_message="Target entity UUID is not set"
-            )
-
-        target = Entity.get(self.target_entity_uuid)
-        if not target:
-            return [], [], [], [], declaration_event.cancel(
-                status_message=f"Target entity {self.target_entity_uuid} not found"
-            )
-
-        handler_uuids: List[UUID] = []
-
-        handler = create_indomitable_might_handler(target.uuid)
-        target.add_event_handler(handler)
-        handler_uuids.append(handler.uuid)
-
-        effect_event = declaration_event.phase_to(
-            EventPhase.EFFECT,
-            status_message=f"Applied Indomitable Might to {target.name}"
-        )
-
-        return [], handler_uuids, [], [], effect_event
 
 
-class PrimalChampion(BaseCondition):
-    """Barbarian capstone that boosts Strength and Constitution.
-
-    Attributes:
-        name: Feature condition name for Primal Champion.
-        description: Short rules-facing summary of the Primal Champion feature.
-    """
-    name: str = Field(default="Primal Champion", description="Feature condition name for Primal Champion.")
-    description: str = Field(
-        default="+4 STR and CON (max 24)",
-        description="Short rules-facing summary of the Primal Champion feature.",
-    )
-
-    def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]],
-        List[UUID],
-        List[UUID],
-        List[UUID],
-        Optional[Event]
-    ]:
-        if not self.target_entity_uuid:
-            return [], [], [], [], declaration_event.cancel(
-                status_message="Target entity UUID is not set"
-            )
-
-        target = Entity.get(self.target_entity_uuid)
-        if not target:
-            return [], [], [], [], declaration_event.cancel(
-                status_message=f"Target entity {self.target_entity_uuid} not found"
-            )
-
-        outs: List[Tuple[UUID, UUID]] = []
-
-        str_mod = NumericalModifier.create(
-            source_entity_uuid=self.target_entity_uuid,
-            name="Primal Champion (STR)",
-            value=4
-        )
-        mod_uuid = target.ability_scores.strength.ability_score.self_static.add_value_modifier(str_mod)
-        outs.append((target.ability_scores.strength.ability_score.uuid, mod_uuid))
-
-        con_mod = NumericalModifier.create(
-            source_entity_uuid=self.target_entity_uuid,
-            name="Primal Champion (CON)",
-            value=4
-        )
-        mod_uuid = target.ability_scores.constitution.ability_score.self_static.add_value_modifier(con_mod)
-        outs.append((target.ability_scores.constitution.ability_score.uuid, mod_uuid))
-
-        effect_event = declaration_event.phase_to(
-            EventPhase.EFFECT,
-            status_message=f"Applied Primal Champion to {target.name}: +4 STR, +4 CON"
-        )
-
-        return outs, [], [], [], effect_event
 
 
 def retaliation_processor(event: Event, source_entity_uuid: UUID) -> Optional[Event]:
@@ -1064,49 +529,6 @@ def create_retaliation_handler(
     )
 
 
-class Retaliation(BaseCondition):
-    """Berserker feature that reacts to nearby damage with a melee attack.
-
-    Attributes:
-        name: Feature condition name for Retaliation.
-        description: Short rules-facing summary of the Retaliation feature.
-    """
-    name: str = Field(default="Retaliation", description="Feature condition name for Retaliation.")
-    description: str = Field(
-        default="Reaction melee attack when hit by adjacent creature",
-        description="Short rules-facing summary of the Retaliation feature.",
-    )
-
-    def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]],
-        List[UUID],
-        List[UUID],
-        List[UUID],
-        Optional[Event]
-    ]:
-        if not self.target_entity_uuid:
-            return [], [], [], [], declaration_event.cancel(
-                status_message="Target entity UUID is not set"
-            )
-
-        target = Entity.get(self.target_entity_uuid)
-        if not target:
-            return [], [], [], [], declaration_event.cancel(
-                status_message=f"Target entity {self.target_entity_uuid} not found"
-            )
-
-        handler_uuids: List[UUID] = []
-
-        handler = create_retaliation_handler(target.uuid)
-        target.add_event_handler(handler)
-        handler_uuids.append(handler.uuid)
-
-        effect_event = declaration_event.phase_to(
-            EventPhase.EFFECT,
-            status_message=f"Applied Retaliation to {target.name}"
-        )
-
-        return [], handler_uuids, [], [], effect_event
 
 
 class IntimidatingPresenceImmunity(BaseCondition):
@@ -1248,24 +670,6 @@ class IntimidatingPresence(BaseAction):
             )
         ]
 
-    def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[ActionEvent]:
-        entity = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-
-        source_name = entity.name if entity else None
-        target_name = target.name if target else None
-
-        return ActionEvent(
-            name=self.name,
-            source_entity_uuid=self.source_entity_uuid,
-            target_entity_uuid=self.target_entity_uuid,
-            costs=[BaseCost.model_validate(c) for c in self.costs],
-            parent_event=parent_event.uuid if parent_event else None,
-            use_register=use_register,
-            source_entity_name=source_name,
-            target_entity_name=target_name
-        )
-
     def _is_target_immune(self, target: Entity) -> bool:
         """Check if target has immunity to this barbarian's Intimidating Presence."""
         for condition in target.active_conditions.values():
@@ -1349,10 +753,6 @@ class IntimidatingPresence(BaseAction):
                 status_message=f"{target.name} is frightened by {entity.name}! (WIS save {dice_roll.total} vs DC {dc})"
             )
 
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
-
-
 class ExtendIntimidatingPresence(BaseAction):
     """Berserker action that extends an existing Intimidating Presence fear.
 
@@ -1390,24 +790,6 @@ class ExtendIntimidatingPresence(BaseAction):
                 evaluator=entity_action_economy_cost_evaluator
             )
         ]
-
-    def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[ActionEvent]:
-        entity = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-
-        source_name = entity.name if entity else None
-        target_name = target.name if target else None
-
-        return ActionEvent(
-            name=self.name,
-            source_entity_uuid=self.source_entity_uuid,
-            target_entity_uuid=self.target_entity_uuid,
-            costs=[BaseCost.model_validate(c) for c in self.costs],
-            parent_event=parent_event.uuid if parent_event else None,
-            use_register=use_register,
-            source_entity_name=source_name,
-            target_entity_name=target_name
-        )
 
     def _is_frightened_by_me(self, target: Entity) -> bool:
         """Check if target is Frightened by this barbarian."""
@@ -1455,69 +837,3 @@ class ExtendIntimidatingPresence(BaseAction):
             EventPhase.COMPLETION,
             status_message=f"{entity.name} extends Intimidating Presence on {target.name}"
         )
-
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
-
-
-class IntimidatingPresenceFeature(BaseCondition):
-    """Berserker feature that grants Intimidating Presence actions.
-
-    Attributes:
-        name: Feature condition name for Intimidating Presence action registration.
-        description: Short rules-facing summary of the Intimidating Presence feature.
-    """
-    name: str = Field(
-        default="Intimidating Presence Feature",
-        description="Feature condition name for Intimidating Presence action registration.",
-    )
-    description: str = Field(
-        default="Can use action to frighten creatures within 30ft",
-        description="Short rules-facing summary of the Intimidating Presence feature.",
-    )
-
-    def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]],
-        List[UUID],
-        List[UUID],
-        List[UUID],
-        Optional[Event]
-    ]:
-        if not self.target_entity_uuid:
-            return [], [], [], [], declaration_event.cancel(
-                status_message="Target entity UUID is not set"
-            )
-
-        target = Entity.get(self.target_entity_uuid)
-        if not target:
-            return [], [], [], [], declaration_event.cancel(
-                status_message=f"Target entity {self.target_entity_uuid} not found"
-            )
-
-        intimidate_action = IntimidatingPresence(
-            source_entity_uuid=target.uuid,
-            template=True
-        )
-        target.register_action(intimidate_action)
-
-        extend_action = ExtendIntimidatingPresence(
-            source_entity_uuid=target.uuid,
-            template=True
-        )
-        target.register_action(extend_action)
-
-        effect_event = declaration_event.phase_to(
-            EventPhase.EFFECT,
-            status_message=f"Granted Intimidating Presence to {target.name}"
-        )
-
-        return [], [], [], [], effect_event
-
-    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
-        """Clean up actions on removal."""
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if target:
-            target.unregister_action("Intimidating Presence")
-            target.unregister_action("Extend Intimidating Presence")
-
-        return super()._remove(event)

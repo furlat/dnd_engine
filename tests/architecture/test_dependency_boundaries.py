@@ -53,7 +53,7 @@ CONCRETE_ENTITY_DEPENDENCY_PREFIXES = (
     "dnd.reactions",
     "dnd.scenarios",
     "dnd.spells",
-    "dnd.tile_conditions",
+    "dnd.spatial_effect_controllers",
 )
 
 SAFE_LEAF_MODULES = frozenset({
@@ -66,11 +66,17 @@ SAFE_LEAF_MODULES = frozenset({
     "dnd.core.item_types",
     "dnd.core.life_types",
     "dnd.core.presentation_geometry",
+    "dnd.core.roll_types",
     "dnd.core.senses",
 })
 
 CANONICAL_NEUTRAL_SYMBOL_OWNERS = {
+    "ActionOutcomeProfile": "dnd.core.action_outcomes",
+    "DamageRollProfile": "dnd.core.action_outcomes",
+    "OutcomeApplicationScope": "dnd.core.action_outcomes",
+    "OutcomeResolution": "dnd.core.action_outcomes",
     "ActionPresentationKind": "dnd.core.action_types",
+    "AdvantageStatus": "dnd.core.roll_types",
     "ContentDefinitionKind": "dnd.core.content.identities",
     "ContentRef": "dnd.core.content.identities",
     "BehaviorBinding": "dnd.core.content.runtime",
@@ -117,6 +123,7 @@ CONTENT_CONTRACT_ALLOWED_NEUTRAL_DEPENDENCIES = frozenset({
     "dnd.core.progression",
     "dnd.core.saving_throw_types",
     "dnd.core.senses",
+    "dnd.core.spatial_effect_types",
 })
 CONTENT_PACK_LOADER_MODULE = "dnd.content_system.pack_loader"
 CONTENT_PACK_IMPORT_BOUNDARY_MODULE = "dnd.content_system.import_boundary"
@@ -1229,7 +1236,7 @@ def test_world_contracts_are_a_cold_transport_leaf() -> None:
 
 
 def test_persistent_spell_zones_receive_explicit_effect_provenance() -> None:
-    """Every concrete ZoneControlCondition creation carries EffectOrigin."""
+    """Every concrete area-effect controller creation carries EffectOrigin."""
     zone_class_names: set[str] = set()
     for source_module in _source_modules().values():
         if not source_module.name.startswith("dnd."):
@@ -1238,10 +1245,13 @@ def test_persistent_spell_zones_receive_explicit_effect_provenance() -> None:
             if not isinstance(node, ast.ClassDef):
                 continue
             if any(
-                (isinstance(base, ast.Name) and base.id == "ZoneControlCondition")
+                (
+                    isinstance(base, ast.Name)
+                    and base.id == "AreaSpatialEffectController"
+                )
                 or (
                     isinstance(base, ast.Attribute)
-                    and base.attr == "ZoneControlCondition"
+                    and base.attr == "AreaSpatialEffectController"
                 )
                 for base in node.bases
             ):
@@ -1266,7 +1276,9 @@ def test_persistent_spell_zones_receive_explicit_effect_provenance() -> None:
                     f"- {source_module.display_path}:{node.lineno}: {called_name}"
                 )
 
-    assert zone_class_names, "No concrete ZoneControlCondition subclasses were found"
+    assert zone_class_names, (
+        "No concrete AreaSpatialEffectController subclasses were found"
+    )
     assert not missing_provenance, (
         "Persistent spell zones must receive explicit EffectOrigin provenance:\n"
         + "\n".join(sorted(missing_provenance))
@@ -1367,11 +1379,6 @@ def test_floor_items_use_the_canonical_placement_boundary() -> None:
             "BaseItem",
             "place_on_grid",
         ),
-        (
-            "dnd.spells.evocation",
-            "ContinualFlameObject",
-            "setup_light",
-        ),
     }
     found: set[tuple[str, str | None, str | None]] = set()
     details: list[str] = []
@@ -1386,8 +1393,7 @@ def test_floor_items_use_the_canonical_placement_boundary() -> None:
             )
 
     assert found == allowed, (
-        "Only BaseItem.place_on_grid and the deliberate non-item "
-        "ContinualFlameObject may call GridMap.place_object directly.\n"
+        "Only BaseItem.place_on_grid may call GridMap.place_object directly.\n"
         + "\n".join(details)
     )
 

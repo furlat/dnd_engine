@@ -12,11 +12,15 @@ from dnd.actions import Attack
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.equipment import Weapon
 from dnd.blocks.health import HealthConfig, HitDiceConfig
-from dnd.classes.fighter import FightingStyleTwoWeaponFighting
+from dnd.classes.fighter import (
+    twf_off_hand_melee_ability_bonus,
+    twf_off_hand_ranged_ability_bonus,
+)
 from dnd.core.equipment_types import WeaponProperty, WeaponSlot
 from dnd.core.events import Range, RangeType
 from dnd.core.gridmap import get_map
 from dnd.core.creature_types import DamageType
+from dnd.core.modifiers import ContextualNumericalModifier
 from dnd.core.values import ModifiableValue
 from dnd.entity import Entity, EntityConfig
 from dnd.monsters.bestiary import create_goblin
@@ -79,13 +83,29 @@ def _damage_bonus(
     return damages[0].damage_bonus.normalized_score
 
 
-def _apply_two_weapon_style(entity: Entity) -> None:
-    entity.add_condition(
-        FightingStyleTwoWeaponFighting(
+def _apply_two_weapon_style(
+    entity: Entity,
+) -> tuple[tuple[ModifiableValue, UUID], ...]:
+    handles: list[tuple[ModifiableValue, UUID]] = []
+    for value, callable_ in (
+        (
+            entity.equipment.off_hand_melee_ability_bonus,
+            twf_off_hand_melee_ability_bonus,
+        ),
+        (
+            entity.equipment.off_hand_ranged_ability_bonus,
+            twf_off_hand_ranged_ability_bonus,
+        ),
+    ):
+        modifier = ContextualNumericalModifier(
+            name="Two-Weapon Fighting fixture",
+            callable=callable_,
             source_entity_uuid=entity.uuid,
             target_entity_uuid=entity.uuid,
         )
-    )
+        value.self_contextual.add_value_modifier(modifier)
+        handles.append((value, modifier.uuid))
+    return tuple(handles)
 
 
 def _create_finesse_actor(
@@ -275,10 +295,11 @@ def test_removing_two_weapon_style_restores_off_hand_damage() -> None:
     _equip_off_hand_dagger(attacker)
     Entity.update_all_entities_senses()
     before = _damage_bonus(attacker, target, WeaponSlot.MELEE_OFF)
-    _apply_two_weapon_style(attacker)
+    handles = _apply_two_weapon_style(attacker)
     during = _damage_bonus(attacker, target, WeaponSlot.MELEE_OFF)
 
-    attacker.remove_condition("Fighting Style: Two-Weapon Fighting")
+    for value, modifier_uuid in handles:
+        value.self_contextual.remove_value_modifier(modifier_uuid)
 
     after = _damage_bonus(attacker, target, WeaponSlot.MELEE_OFF)
     assert during > before

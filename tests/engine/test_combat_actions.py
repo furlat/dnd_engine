@@ -3,11 +3,9 @@
 from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import cast
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
-
-from dnd import tiles as dnd_tiles
 from dnd.actions import (
     Attack,
     AttackEvent,
@@ -16,6 +14,7 @@ from dnd.actions import (
     Jump,
     JumpEvent,
     Move,
+    MovementEvent,
     Shove,
     ShoveEvent,
 )
@@ -25,13 +24,17 @@ from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.equipment import EquipmentConfig, Weapon
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.core import dice as dice_module
-from dnd.core.dice import AttackOutcome
+from dnd.core.dice import AttackOutcome, fixed_dice_faces
+from dnd.core.combat_log import CombatLogEntryType
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_object import BaseObject
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import (
+    AbilityName,
     DeathSaveEvent,
     DeathEvent,
+    Event,
+    EventHandler,
     EventPhase,
     EventQueue,
     EventType,
@@ -41,8 +44,10 @@ from dnd.core.events import (
     SpatialChangeEvent,
     StepMovementEvent,
     TakeDamageEvent,
+    Trigger,
 )
 from dnd.core.gridmap import get_map
+from dnd.environmental_effect_runtime import materialize_spike_trap_effect
 from dnd.core.life_types import LifeState
 from dnd.core.creature_types import DamageType, Size
 from dnd.core.modifiers import NumericalModifier
@@ -50,7 +55,6 @@ from dnd.core.values import AdvantageStatus, BaseValue, ModifiableValue
 from dnd.entity import Entity, EntityConfig
 from dnd.monsters.bestiary import create_goblin, create_goblin_archer, create_skeleton
 from dnd.reactions import add_opportunity_attack_handler
-from dnd.tiles import create_spike_zone
 from tests.engine.support import (
     force_attack_crit,
     force_attack_hit,
@@ -94,32 +98,6 @@ def fixed_dice(*values: int) -> Iterator[None]:
         yield
     finally:
         dice_module.random.randint = original_randint
-
-
-@contextmanager
-def fixed_terrain_damage(*values: int) -> Iterator[None]:
-    """Replace terrain random damage with a deterministic sequence.
-
-    Args:
-        *values: Values returned by successive calls to ``random.randint``. The
-            final value repeats if more rolls occur than values were provided.
-    """
-    if not values:
-        raise ValueError("fixed_terrain_damage requires at least one value")
-
-    original_randint = dnd_tiles.random.randint
-    remaining = list(values)
-
-    def fake_randint(_: int, __: int) -> int:
-        if len(remaining) > 1:
-            return remaining.pop(0)
-        return remaining[0]
-
-    dnd_tiles.random.randint = fake_randint
-    try:
-        yield
-    finally:
-        dnd_tiles.random.randint = original_randint
 
 
 def validate_attack_declaration(attack: Attack) -> AttackEvent | None:
@@ -306,6 +284,154 @@ def test_eb_10_002_attack_hit_rolls_damage_and_consumes_action() -> None:
     assert EventQueue.get_events_by_type(EventType.TAKE_DAMAGE)
 
 
+def test_attack_declaration_handlers_dispatch_once_per_attack() -> None:
+    """Validation updates must not republish the attack declaration phase."""
+    reset_core_action_state()
+    attacker = create_goblin(name="Attacker", position=(5, 5), faction="heroes")
+    target = create_skeleton(name="Target", position=(6, 5), faction="monsters")
+    Entity.update_all_entities_senses(max_distance=20)
+    declaration_calls = 0
+
+    def count_declaration(event: Event, _: UUID) -> Event:
+        nonlocal declaration_calls
+        declaration_calls += 1
+        return event
+
+    attacker.add_event_handler(
+        EventHandler(
+            source_entity_uuid=attacker.uuid,
+            name="Count attack declarations",
+            trigger_conditions=[
+                Trigger(
+                    event_type=EventType.ATTACK,
+                    event_phase=EventPhase.DECLARATION,
+                    event_source_entity_uuid=attacker.uuid,
+                )
+            ],
+            event_processor=count_declaration,
+        )
+    )
+    miss_modifier = force_attack_miss(attacker)
+
+    with fixed_dice(10):
+        event = Attack(
+            source_entity_uuid=attacker.uuid,
+            target_entity_uuid=target.uuid,
+            weapon_slot=WeaponSlot.MELEE_MAIN,
+        ).apply()
+
+    remove_attack_modifier(attacker, miss_modifier)
+
+    assert event is not None
+    assert event.phase == EventPhase.COMPLETION
+    assert declaration_calls == 1
+
+
+def test_damage_declaration_cancellation_prevents_application() -> None:
+    """A declaration veto must stop the authoritative damage operation."""
+    reset_core_action_state()
+    source = create_goblin(
+        name="Damage Source",
+        position=(5, 5),
+        faction="heroes",
+    )
+    target = create_skeleton(
+        name="Damage Target",
+        position=(6, 5),
+        faction="monsters",
+    )
+    hp_before = target.get_hp()
+
+    def cancel_damage(event: Event, _: UUID) -> Event:
+        return event.cancel(status_message="Damage vetoed at declaration")
+
+    target.add_event_handler(
+        EventHandler(
+            source_entity_uuid=target.uuid,
+            name="Veto damage declaration",
+            trigger_conditions=[
+                Trigger(
+                    event_type=EventType.TAKE_DAMAGE,
+                    event_phase=EventPhase.DECLARATION,
+                    event_target_entity_uuid=target.uuid,
+                )
+            ],
+            event_processor=cancel_damage,
+        )
+    )
+
+    applied = target.receive_damage(
+        5,
+        DamageType.SLASHING,
+        source.uuid,
+    )
+
+    assert applied == 0
+    assert target.get_hp() == hp_before
+
+
+def test_movement_declaration_handlers_dispatch_once_per_move() -> None:
+    """Path validation must not republish the movement declaration phase."""
+    reset_core_action_state()
+    mover = strong_entity(
+        name="Mover",
+        position=(5, 5),
+        faction="heroes",
+    )
+    Entity.update_all_entities_senses(max_distance=20)
+    declaration_calls = 0
+    execution_calls = 0
+
+    def count_declaration(event: Event, _: UUID) -> Event:
+        nonlocal declaration_calls
+        declaration_calls += 1
+        return event
+
+    def count_execution(event: Event, _: UUID) -> Event:
+        nonlocal execution_calls
+        execution_calls += 1
+        return event
+
+    mover.add_event_handler(
+        EventHandler(
+            source_entity_uuid=mover.uuid,
+            name="Count movement declarations",
+            trigger_conditions=[
+                Trigger(
+                    event_type=EventType.MOVEMENT,
+                    event_phase=EventPhase.DECLARATION,
+                    event_source_entity_uuid=mover.uuid,
+                )
+            ],
+            event_processor=count_declaration,
+        )
+    )
+    mover.add_event_handler(
+        EventHandler(
+            source_entity_uuid=mover.uuid,
+            name="Count movement executions",
+            trigger_conditions=[
+                Trigger(
+                    event_type=EventType.MOVEMENT,
+                    event_phase=EventPhase.EXECUTION,
+                    event_source_entity_uuid=mover.uuid,
+                )
+            ],
+            event_processor=count_execution,
+        )
+    )
+
+    event = Move(
+        source_entity_uuid=mover.uuid,
+        end_position=(6, 5),
+    ).apply()
+
+    assert event is not None
+    assert event.phase is EventPhase.COMPLETION
+    assert declaration_calls == 1
+    assert execution_calls == 1
+
+
 def test_eb_10_003_critical_hit_doubles_weapon_damage_dice() -> None:
     """EB-10-003: critical weapon hits roll the weapon damage dice twice."""
     reset_core_action_state()
@@ -342,14 +468,18 @@ def test_eb_10_004_move_consumes_movement_per_step_and_records_step_events() -> 
     movement_before = mover.action_economy.movement.normalized_score
     event = Move(source_entity_uuid=mover.uuid, end_position=(5, 8)).apply()
 
-    assert event is not None
+    assert isinstance(event, MovementEvent)
     assert event.phase == EventPhase.COMPLETION
     assert mover.position == (5, 8)
     assert mover.action_economy.movement.normalized_score == movement_before - 15
     completed_steps = [
         step
         for step in EventQueue.get_events_by_type(EventType.STEP_MOVEMENT)
-        if step.source_entity_uuid == mover.uuid and step.phase == EventPhase.COMPLETION
+        if (
+            isinstance(step, StepMovementEvent)
+            and step.source_entity_uuid == mover.uuid
+            and step.phase == EventPhase.COMPLETION
+        )
     ]
     assert len(completed_steps) == 3
     assert event.trajectory is MovementTrajectory.PATH
@@ -527,6 +657,53 @@ def test_eb_10_007_shove_forced_movement_does_not_trigger_opportunity_attack() -
     assert f"→ {target.position}" in forced_log.verbose
 
 
+def test_forced_movement_declaration_cancellation_prevents_displacement() -> None:
+    """A declaration veto must stop the authoritative forced movement."""
+    reset_core_action_state()
+    shover = strong_entity(
+        name="Shove Source",
+        position=(5, 5),
+        faction="heroes",
+        strength=18,
+    )
+    target = strong_entity(
+        name="Shove Target",
+        position=(6, 5),
+        faction="heroes",
+        strength=10,
+        weight=100,
+    )
+    Entity.update_all_entities_senses(max_distance=20)
+    start_position = target.position
+
+    def cancel_forced_movement(event: Event, _: UUID) -> Event:
+        return event.cancel(status_message="Forced movement vetoed at declaration")
+
+    target.add_event_handler(
+        EventHandler(
+            source_entity_uuid=target.uuid,
+            name="Veto forced movement declaration",
+            trigger_conditions=[
+                Trigger(
+                    event_type=EventType.FORCED_MOVEMENT,
+                    event_phase=EventPhase.DECLARATION,
+                    event_target_entity_uuid=target.uuid,
+                )
+            ],
+            event_processor=cancel_forced_movement,
+        )
+    )
+
+    shove_event = Shove(
+        source_entity_uuid=shover.uuid,
+        target_entity_uuid=target.uuid,
+    ).apply()
+
+    assert isinstance(shove_event, ShoveEvent)
+    assert shove_event.contest_success is True
+    assert target.position == start_position
+
+
 def test_eb_10_021_forced_movement_traverses_terrain_without_step_costs() -> None:
     """EB-10-021: forced movement traverses terrain without voluntary steps."""
     reset_core_action_state()
@@ -534,12 +711,12 @@ def test_eb_10_021_forced_movement_traverses_terrain_without_step_costs() -> Non
     target = strong_entity(name="Pushed Ally", position=(6, 5), faction="heroes", strength=10)
     Entity.update_all_entities_senses(max_distance=20)
 
-    create_spike_zone({(7, 5), (8, 5)})
+    materialize_spike_trap_effect({(7, 5), (8, 5)})
     cursor = EventQueue.event_cursor()
     hp_before = target.get_hp()
     target_movement_before = target.action_economy.movement.normalized_score
 
-    with fixed_terrain_damage(2):
+    with fixed_dice_faces(2, 2, 2, 2):
         shove_event = Shove(source_entity_uuid=shover.uuid, target_entity_uuid=target.uuid).apply()
 
     indexed_events = list(EventQueue.iter_events_since(cursor))
@@ -550,14 +727,15 @@ def test_eb_10_021_forced_movement_traverses_terrain_without_step_costs() -> Non
         if isinstance(event, ForcedMovementEvent)
         and event.phase == EventPhase.COMPLETION
     ]
-    entered_effect_positions = [
-        event.position
+    entered_effects = [
+        event
         for event in new_events
         if isinstance(event, SpatialChangeEvent)
         and event.event_type == EventType.SPATIAL_ENTITY_ENTERED
         and event.phase == EventPhase.EFFECT
         and event.entity_uuid == target.uuid
     ]
+    entered_effect_positions = [event.position for event in entered_effects]
     damage_completions = [
         event
         for event in new_events
@@ -593,10 +771,24 @@ def test_eb_10_021_forced_movement_traverses_terrain_without_step_costs() -> Non
 
     assert [damage_event.total_damage for damage_event in damage_completions] == [4, 4]
     assert [damage_event.final_damage for damage_event in damage_completions] == [4, 4]
+    entered_parents = [
+        EventQueue.get_event_by_uuid(entered_event.parent_event)
+        if entered_event.parent_event is not None
+        else None
+        for entered_event in entered_effects
+    ]
     assert all(
-        damage_event.parent_lineage == forced_event.lineage_uuid
-        for damage_event in damage_completions
+        parent is not None
+        and parent.lineage_uuid == forced_event.lineage_uuid
+        for parent in entered_parents
     )
+    assert {
+        damage_event.parent_lineage
+        for damage_event in damage_completions
+    } == {
+        entered_event.lineage_uuid
+        for entered_event in entered_effects
+    }
     assert forced_event.combat_log is not None
     assert len(forced_event.combat_log.sub_entries) == 2
     assert target.get_hp() == hp_before - 8
@@ -801,6 +993,12 @@ def test_eb_10_025_player_style_death_saves_roll_at_turn_start() -> None:
     assert death_save_events[-1].natural_roll == 1
     assert death_save_events[-1].failures == 3
     assert death_save_events[-1].died
+    assert death_save_events[-1].combat_log is not None
+    assert (
+        death_save_events[-1].combat_log.entry_type
+        is CombatLogEntryType.DEATH_SAVE
+    )
+    assert death_save_events[-1].combat_log.data["save_kind"] == "death"
     assert hero.health.life_state is LifeState.DEAD
     assert "Unconscious" not in hero.active_conditions
 
@@ -1086,6 +1284,31 @@ def test_attack_restores_preexisting_cross_target_context() -> None:
     assert target.target_entity_uuid == prior_target_target.uuid
 
 
+def test_get_damages_restores_preexisting_target_context() -> None:
+    """Direct damage construction must not erase an outer target binding."""
+    reset_core_action_state()
+    attacker = create_goblin(name="Attacker", position=(5, 5), faction="heroes")
+    requested_target = create_skeleton(
+        name="Requested target",
+        position=(6, 5),
+        faction="monsters",
+    )
+    prior_target = create_skeleton(
+        name="Prior target",
+        position=(7, 5),
+        faction="monsters",
+    )
+    attacker.set_target_entity(prior_target.uuid)
+
+    damages = attacker.get_damages(
+        WeaponSlot.MELEE_MAIN,
+        requested_target.uuid,
+    )
+
+    assert damages
+    assert attacker.target_entity_uuid == prior_target.uuid
+
+
 def test_attack_restores_preexisting_context_when_resolution_raises(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1111,12 +1334,18 @@ def test_attack_restores_preexisting_context_when_resolution_raises(
 
     def fail_attack_bonus(
         entity: Entity,
-        *args: object,
-        **kwargs: object,
+        weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN,
+        target_entity_uuid: UUID | None = None,
+        override_ability: AbilityName | None = None,
     ) -> ModifiableValue:
         if entity.uuid == attacker.uuid:
             raise RuntimeError("deterministic target-context failure")
-        return original_attack_bonus(entity, *args, **kwargs)
+        return original_attack_bonus(
+            entity,
+            weapon_slot,
+            target_entity_uuid,
+            override_ability,
+        )
 
     monkeypatch.setattr(Entity, "attack_bonus", fail_attack_bonus)
 
@@ -1308,7 +1537,7 @@ def test_eb_10_012_jump_uses_step_events_and_opportunity_attacks() -> None:
 
     remove_attack_modifier(watcher, hit_modifier)
 
-    assert jump_event is not None
+    assert isinstance(jump_event, JumpEvent)
     assert jump_event.phase == EventPhase.COMPLETION
     assert jumper.position == (5, 8)
     assert jumper.get_hp() < hp_before
@@ -1316,7 +1545,11 @@ def test_eb_10_012_jump_uses_step_events_and_opportunity_attacks() -> None:
     completed_steps = [
         step
         for step in EventQueue.get_events_by_type(EventType.STEP_MOVEMENT)
-        if step.source_entity_uuid == jumper.uuid and step.phase == EventPhase.COMPLETION
+        if (
+            isinstance(step, StepMovementEvent)
+            and step.source_entity_uuid == jumper.uuid
+            and step.phase == EventPhase.COMPLETION
+        )
     ]
     assert len(completed_steps) == 3
     assert jump_event.trajectory is MovementTrajectory.DIRECT_ARC

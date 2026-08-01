@@ -12,6 +12,7 @@ from typing import Any, Dict, FrozenSet, Iterable, List, Optional, Set, Tuple
 from dnd.core.combat_log import (
     CombatLogEntry,
     CombatLogEntryType,
+    damage_total_from_log_data,
     position_evidence_key,
 )
 
@@ -21,11 +22,14 @@ SUBJECTIVE_COMBAT_LOG_ENTRY_TYPES = frozenset({
     CombatLogEntryType.MOVEMENT,
     CombatLogEntryType.ACTION,
     CombatLogEntryType.SAVING_THROW,
+    CombatLogEntryType.DEATH_SAVE,
+    CombatLogEntryType.ABILITY_CHECK,
     CombatLogEntryType.SKILL_CHECK,
     CombatLogEntryType.CONDITION_APPLIED,
     CombatLogEntryType.CONDITION_REMOVED,
     CombatLogEntryType.DAMAGE_TAKEN,
     CombatLogEntryType.HEAL,
+    CombatLogEntryType.TEMPORARY_HIT_POINTS,
     CombatLogEntryType.DEATH,
     CombatLogEntryType.TURN_START,
     CombatLogEntryType.TURN_END,
@@ -36,6 +40,7 @@ SUBJECTIVE_COMBAT_LOG_ENTRY_TYPES = frozenset({
     CombatLogEntryType.ENTITY_SPOTTED,
     CombatLogEntryType.HAZARD_DETECTED,
     CombatLogEntryType.ROLL_MODIFICATION,
+    CombatLogEntryType.SPATIAL_EFFECT,
 })
 """Entry types whose subjective projection policy has been reviewed."""
 
@@ -605,7 +610,7 @@ def _sanitize_multi_entity_log_summary(
     for child in filtered_children:
         child_data = dict(child.data)
         per_target_logs.append(child_data if child_data else None)
-        damage = _damage_from_log_data(child_data)
+        damage = damage_total_from_log_data(child_data)
         if damage is not None:
             per_target_damage.append(damage)
         if child.entry_type is CombatLogEntryType.SPELL_SAVE:
@@ -638,16 +643,3 @@ def _visible_target_names(logs: List[CombatLogEntry]) -> List[str]:
         names.append(name)
         seen.add(name)
     return names
-
-
-def _damage_from_log_data(data: Dict[str, Any]) -> Optional[int]:
-    """Extract a damage total from visible structured log data."""
-    for key in ("final_damage", "total_damage", "damage"):
-        value = data.get(key)
-        if isinstance(value, bool):
-            continue
-        if isinstance(value, int):
-            return value
-        if isinstance(value, float):
-            return int(value)
-    return None

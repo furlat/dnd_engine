@@ -5,17 +5,35 @@ does not install runtime conditions, mutate entities, or call the legacy
 one-shot class factories.
 """
 
-from dnd.classes import feats, fighter
+from dnd.classes.permanent_feature_definitions import (
+    FIGHTER_ACTION_SURGE_DECLARATION,
+    FIGHTER_ARCHERY_DECLARATION,
+    FIGHTER_DEFENSE_DECLARATION,
+    FIGHTER_DUELING_DECLARATION,
+    FIGHTER_EXTRA_ATTACK_DECLARATION,
+    FIGHTER_GREAT_WEAPON_FIGHTING_DECLARATION,
+    FIGHTER_IMPROVED_CRITICAL_DECLARATION,
+    FIGHTER_INDOMITABLE_DECLARATION,
+    FIGHTER_PROTECTION_DECLARATION,
+    FIGHTER_SECOND_WIND_DECLARATION,
+    FIGHTER_SUPERIOR_CRITICAL_DECLARATION,
+    FIGHTER_SURVIVOR_DECLARATION,
+    FIGHTER_TWO_WEAPON_FIGHTING_DECLARATION,
+    LUCKY_FEAT_DECLARATION,
+)
+from dnd.classes.progression_definition_helpers import (
+    proficiency_subject,
+    progression_dependencies,
+    single_ref_choice,
+    structural_progression_provenance,
+    typed_progression_ref,
+)
 from dnd.classes.structural_feature_definitions import (
     REMARKABLE_ATHLETE_DECLARATION,
-)
-from dnd.content_system.condition_definitions import (
-    CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS,
 )
 from dnd.classes.starting_equipment_refs import (
     STARTING_EQUIPMENT_PACKAGE_REFS_BY_CLASS,
 )
-from dnd.core.base_conditions import BaseCondition
 from dnd.core.content.dependencies import (
     ContentDependency,
     ContentDependencyPhase,
@@ -36,21 +54,12 @@ from dnd.core.content.durable_characters import (
     ClassDefinition,
     ClassLevelDefinition,
     ClassProficiencyPackage,
-    ProficiencySubject,
     ProficiencySubjectKind,
     SubclassDefinition,
 )
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
-from dnd.core.content.provenance import (
-    ContentFidelity,
-    ContentProvenance,
-    ContentProvenanceRelation,
-    ContentReviewStatus,
-)
 from dnd.core.content.registration import (
     ContentDeclaration,
-    ContentDeclarationMode,
-    compute_definition_contract_hash,
     get_content_declaration,
     typed_definition,
 )
@@ -61,73 +70,46 @@ _PACK_ID = "content.srd_5_1_cc"
 _VERSION = 1
 
 
-def _typed_ref(
-    definition_kind: ContentDefinitionKind,
-    content_id: str,
-    definition_model: type[ClassDefinition] | type[SubclassDefinition],
-) -> ContentRef:
-    """Build the exact ref used by a typed-definition declaration."""
-    return ContentRef(
-        pack_id=_PACK_ID,
-        definition_kind=definition_kind,
-        content_id=content_id,
-        content_version=_VERSION,
-        definition_contract_hash=compute_definition_contract_hash(
-            mode=ContentDeclarationMode.TYPED_DEFINITION,
-            definition_kind=definition_kind,
-            definition_model=definition_model,
-        ),
-    )
-
-
-FIGHTER_CLASS_REF = _typed_ref(
-    ContentDefinitionKind.CLASS,
-    "class.fighter",
-    ClassDefinition,
+FIGHTER_CLASS_REF = typed_progression_ref(
+    pack_id=_PACK_ID,
+    version=_VERSION,
+    definition_kind=ContentDefinitionKind.CLASS,
+    content_id="class.fighter",
+    definition_model=ClassDefinition,
 )
-CHAMPION_SUBCLASS_REF = _typed_ref(
-    ContentDefinitionKind.SUBCLASS,
-    "subclass.fighter.champion",
-    SubclassDefinition,
+CHAMPION_SUBCLASS_REF = typed_progression_ref(
+    pack_id=_PACK_ID,
+    version=_VERSION,
+    definition_kind=ContentDefinitionKind.SUBCLASS,
+    content_id="subclass.fighter.champion",
+    definition_model=SubclassDefinition,
 )
 
 
-def _feature_ref(condition_type: type[BaseCondition]) -> ContentRef:
-    """Resolve one existing condition-backed feature to its exact ref."""
-    return CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS[condition_type].ref
-
-
-_SECOND_WIND_REF = _feature_ref(fighter.SecondWindFeature)
-_ACTION_SURGE_REF = _feature_ref(fighter.ActionSurgeFeature)
-_EXTRA_ATTACK_REF = _feature_ref(fighter.ExtraAttackFeature)
-_INDOMITABLE_REF = _feature_ref(fighter.Indomitable)
-_IMPROVED_CRITICAL_REF = _feature_ref(fighter.ImprovedCritical)
-_SUPERIOR_CRITICAL_REF = _feature_ref(fighter.SuperiorCritical)
-_SURVIVOR_REF = _feature_ref(fighter.Survivor)
-_LUCKY_FEAT_REF = _feature_ref(feats.LuckyFeature)
+_SECOND_WIND_REF = FIGHTER_SECOND_WIND_DECLARATION.ref
+_ACTION_SURGE_REF = FIGHTER_ACTION_SURGE_DECLARATION.ref
+_EXTRA_ATTACK_REF = FIGHTER_EXTRA_ATTACK_DECLARATION.ref
+_INDOMITABLE_REF = FIGHTER_INDOMITABLE_DECLARATION.ref
+_IMPROVED_CRITICAL_REF = FIGHTER_IMPROVED_CRITICAL_DECLARATION.ref
+_SUPERIOR_CRITICAL_REF = FIGHTER_SUPERIOR_CRITICAL_DECLARATION.ref
+_SURVIVOR_REF = FIGHTER_SURVIVOR_DECLARATION.ref
+_LUCKY_FEAT_REF = LUCKY_FEAT_DECLARATION.ref
 
 _FIGHTING_STYLE_REFS = tuple(sorted(
     (
-        _feature_ref(fighter.FightingStyleArchery),
-        _feature_ref(fighter.FightingStyleDefense),
-        _feature_ref(fighter.FightingStyleDueling),
-        _feature_ref(fighter.GreatWeaponFighting),
-        _feature_ref(fighter.FightingStyleProtection),
-        _feature_ref(fighter.FightingStyleTwoWeaponFighting),
+        FIGHTER_ARCHERY_DECLARATION.ref,
+        FIGHTER_DEFENSE_DECLARATION.ref,
+        FIGHTER_DUELING_DECLARATION.ref,
+        FIGHTER_GREAT_WEAPON_FIGHTING_DECLARATION.ref,
+        FIGHTER_PROTECTION_DECLARATION.ref,
+        FIGHTER_TWO_WEAPON_FIGHTING_DECLARATION.ref,
     ),
     key=lambda ref: ref.identity_key,
 ))
 
 
-def _subject(
-    kind: ProficiencySubjectKind,
-    subject_id: str,
-) -> ProficiencySubject:
-    return ProficiencySubject(subject_kind=kind, subject_id=subject_id)
-
-
 _FIGHTER_SKILL_SUBJECTS = tuple(
-    _subject(ProficiencySubjectKind.SKILL, f"skill.{skill}")
+    proficiency_subject(ProficiencySubjectKind.SKILL, f"skill.{skill}")
     for skill in (
         "acrobatics",
         "animal_handling",
@@ -142,12 +124,12 @@ _FIGHTER_SKILL_SUBJECTS = tuple(
 
 _FIGHTER_FIRST_PROFICIENCIES = ClassProficiencyPackage(
     automatic=(
-        _subject(ProficiencySubjectKind.ARMOR, "armor.heavy"),
-        _subject(ProficiencySubjectKind.ARMOR, "armor.light"),
-        _subject(ProficiencySubjectKind.ARMOR, "armor.medium"),
-        _subject(ProficiencySubjectKind.SHIELD, "shield.shield"),
-        _subject(ProficiencySubjectKind.WEAPON, "weapon.martial"),
-        _subject(ProficiencySubjectKind.WEAPON, "weapon.simple"),
+        proficiency_subject(ProficiencySubjectKind.ARMOR, "armor.heavy"),
+        proficiency_subject(ProficiencySubjectKind.ARMOR, "armor.light"),
+        proficiency_subject(ProficiencySubjectKind.ARMOR, "armor.medium"),
+        proficiency_subject(ProficiencySubjectKind.SHIELD, "shield.shield"),
+        proficiency_subject(ProficiencySubjectKind.WEAPON, "weapon.martial"),
+        proficiency_subject(ProficiencySubjectKind.WEAPON, "weapon.simple"),
     ),
     choices=(
         BuildChoiceRequirement(
@@ -169,32 +151,17 @@ _FIGHTER_FIRST_PROFICIENCIES = ClassProficiencyPackage(
 
 _FIGHTER_MULTICLASS_PROFICIENCIES = ClassProficiencyPackage(
     automatic=(
-        _subject(ProficiencySubjectKind.ARMOR, "armor.light"),
-        _subject(ProficiencySubjectKind.ARMOR, "armor.medium"),
-        _subject(ProficiencySubjectKind.SHIELD, "shield.shield"),
-        _subject(ProficiencySubjectKind.WEAPON, "weapon.martial"),
-        _subject(ProficiencySubjectKind.WEAPON, "weapon.simple"),
+        proficiency_subject(ProficiencySubjectKind.ARMOR, "armor.light"),
+        proficiency_subject(ProficiencySubjectKind.ARMOR, "armor.medium"),
+        proficiency_subject(ProficiencySubjectKind.SHIELD, "shield.shield"),
+        proficiency_subject(ProficiencySubjectKind.WEAPON, "weapon.martial"),
+        proficiency_subject(ProficiencySubjectKind.WEAPON, "weapon.simple"),
     ),
 )
 
 
-def _choice(
-    *,
-    choice_id: str,
-    choice_kind: ChoiceRequirementKind,
-    allowed_refs: tuple[ContentRef, ...] = (),
-) -> BuildChoiceRequirement:
-    return BuildChoiceRequirement(
-        choice_id=choice_id,
-        choice_kind=choice_kind,
-        minimum_selections=1,
-        maximum_selections=1,
-        allowed_refs=allowed_refs,
-    )
-
-
 def _asi_or_feat(level: int) -> BuildChoiceRequirement:
-    return _choice(
+    return single_ref_choice(
         choice_id=f"class.fighter.level_{level}.asi_or_feat",
         choice_kind=ChoiceRequirementKind.ABILITY_SCORE_IMPROVEMENT_OR_FEAT,
         allowed_refs=(_LUCKY_FEAT_REF,),
@@ -216,14 +183,14 @@ _FIGHTER_LEVEL_GRANTS: dict[int, tuple[ContentRef, ...]] = {
 }
 _FIGHTER_LEVEL_CHOICES: dict[int, tuple[BuildChoiceRequirement, ...]] = {
     1: (
-        _choice(
+        single_ref_choice(
             choice_id="class.fighter.level_1.fighting_style",
             choice_kind=ChoiceRequirementKind.FIGHTING_STYLE,
             allowed_refs=_FIGHTING_STYLE_REFS,
         ),
     ),
     3: (
-        _choice(
+        single_ref_choice(
             choice_id="class.fighter.level_3.subclass",
             choice_kind=ChoiceRequirementKind.SUBCLASS,
             allowed_refs=(CHAMPION_SUBCLASS_REF,),
@@ -274,7 +241,7 @@ _CHAMPION_LEVEL_GRANTS: dict[int, tuple[ContentRef, ...]] = {
 }
 _CHAMPION_LEVEL_CHOICES: dict[int, tuple[BuildChoiceRequirement, ...]] = {
     10: (
-        _choice(
+        single_ref_choice(
             choice_id="subclass.fighter.champion.level_10.fighting_style",
             choice_kind=ChoiceRequirementKind.FIGHTING_STYLE,
             allowed_refs=_FIGHTING_STYLE_REFS,
@@ -295,53 +262,29 @@ CHAMPION_SUBCLASS_DEFINITION = SubclassDefinition(
 )
 
 
-def _provenance(source_anchor: str) -> ContentProvenance:
-    return ContentProvenance(
-        primary_source_id="wotc.srd_5_1_cc",
-        source_anchor=source_anchor,
-        relation=ContentProvenanceRelation.FAITHFUL_IMPLEMENTATION,
-        fidelity=ContentFidelity.COMPLETE,
-        review_status=ContentReviewStatus.REVIEWED,
-        notes=(
-            "Pure additive structural definition; runtime mechanics are "
-            "installed separately through exact source-owned grant bindings."
-        ),
-    )
-
-
-def _feature_dependencies(
-    refs: tuple[ContentRef, ...],
-) -> tuple[ContentDependency, ...]:
-    unique = {
-        ref.identity_key: ref
-        for ref in refs
-    }
-    return tuple(
-        ContentDependency(
-            relation=ContentDependencyRelation.GRANTS_FEATURE,
-            target_ref=ref,
-            phase=ContentDependencyPhase.RUNTIME_REFERENCE,
-            notes="Offered or granted by this structural progression.",
-        )
-        for _, ref in sorted(unique.items())
-    )
-
-
-_FIGHTER_FEATURE_DEPENDENCIES = _feature_dependencies((
-    _SECOND_WIND_REF,
-    _ACTION_SURGE_REF,
-    _EXTRA_ATTACK_REF,
-    _INDOMITABLE_REF,
-    _LUCKY_FEAT_REF,
-    *_FIGHTING_STYLE_REFS,
-))
-_CHAMPION_FEATURE_DEPENDENCIES = _feature_dependencies((
-    _IMPROVED_CRITICAL_REF,
-    REMARKABLE_ATHLETE_DECLARATION.ref,
-    _SUPERIOR_CRITICAL_REF,
-    _SURVIVOR_REF,
-    *_FIGHTING_STYLE_REFS,
-))
+_FIGHTER_FEATURE_DEPENDENCIES = progression_dependencies(
+    (
+        _SECOND_WIND_REF,
+        _ACTION_SURGE_REF,
+        _EXTRA_ATTACK_REF,
+        _INDOMITABLE_REF,
+        _LUCKY_FEAT_REF,
+        *_FIGHTING_STYLE_REFS,
+    ),
+    relation=ContentDependencyRelation.GRANTS_FEATURE,
+    notes="Offered or granted by this structural progression.",
+)
+_CHAMPION_FEATURE_DEPENDENCIES = progression_dependencies(
+    (
+        _IMPROVED_CRITICAL_REF,
+        REMARKABLE_ATHLETE_DECLARATION.ref,
+        _SUPERIOR_CRITICAL_REF,
+        _SURVIVOR_REF,
+        *_FIGHTING_STYLE_REFS,
+    ),
+    relation=ContentDependencyRelation.GRANTS_FEATURE,
+    notes="Offered or granted by this structural progression.",
+)
 
 
 @typed_definition(
@@ -365,7 +308,9 @@ _CHAMPION_FEATURE_DEPENDENCIES = _feature_dependencies((
         ordering=ContentOrdering(sort_group="classes", sort_order=20),
         related_content_refs=(CHAMPION_SUBCLASS_REF,),
     ),
-    provenance=_provenance("SRD 5.1 Fighter class progression, levels 1–20"),
+    provenance=structural_progression_provenance(
+        "SRD 5.1 Fighter class progression, levels 1–20",
+    ),
     definition=FIGHTER_CLASS_DEFINITION,
     dependencies=(
         *_FIGHTER_FEATURE_DEPENDENCIES,
@@ -416,7 +361,7 @@ class FighterProgressionDefinition:
         ),
         related_content_refs=(FIGHTER_CLASS_REF,),
     ),
-    provenance=_provenance(
+    provenance=structural_progression_provenance(
         "SRD 5.1 Fighter: Champion martial archetype, levels 3–18",
     ),
     definition=CHAMPION_SUBCLASS_DEFINITION,

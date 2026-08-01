@@ -1,13 +1,14 @@
 """Concrete action implementations for combat, movement, spells, and objects."""
 
 import time
+from dataclasses import dataclass
 
 from dnd.core.base_actions import (
     ActionCategory, ActionEvent, ActionOutcomeProfile, BaseAction, BaseCost,
-    Cost, CostType, DamageRollProfile, OutcomeApplicationScope, OutcomeResolution,
+    Cost, DamageRollProfile, OutcomeApplicationScope, OutcomeResolution,
     PositionDiscoveryContract, RESTRICTED_ACTION_TEMPLATE_SEPARATOR,
-    SPELL_SLOT_TEMPLATE_SEPARATOR, TargetType, ActionTargetEffectProfile,
-    spell_slot_cost_type,
+    SPELL_SLOT_TEMPLATE_SEPARATOR, SpellDiscoveryMetadata, TargetType,
+    ActionTargetEffectProfile,
 )
 from dnd.core.values import ModifiableValue
 from dnd.core.condition_types import ConditionRemovalTrigger, DurationType
@@ -17,7 +18,7 @@ from dnd.core.dice import  DiceRoll, AttackOutcome, RollType
 from dnd.core.events import RangeType, Event, EventQueue, EventType, Range, Damage, EventPhase, DamageRollPacket, DamageRollResultEvent, StepMovementEvent, ForcedMovementEvent, SkillCheckEvent, SpatialChangeEvent, AbilityName, SensoryUpdateReason, MovementTrajectory
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.effect_types import EffectOrigin
-from dnd.core.action_types import RestrictedActionKind
+from dnd.core.action_types import CostType, RestrictedActionKind, spell_slot_cost_type
 from dnd.core.content.descriptors import (
     ContentDescriptorSpec,
     ContentOrdering,
@@ -50,8 +51,8 @@ from dnd.core.action_execution import (
     MovementTerminationReason,
     revalidate_after_committed_movement_step,
 )
-from dnd.core.creature_types import DamageType
-from dnd.core.gridmap import get_map
+from dnd.core.creature_types import DamageDieValue, DamageType
+from dnd.core.gridmap import GridMap, get_map
 from dnd.core.base_tiles import Tile
 from dnd.core.aoe import (
     Sphere,
@@ -70,10 +71,10 @@ from dnd.core.combat_log import (
     CombatLogEntry, CombatLogEntryType, ModifierBreakdown, DiceRollDisplay,
     DamageRollDisplay, AttackLogData, MovementLogData, SpellSaveLogData,
     format_attack_compact, format_attack_verbose, format_attack_detailed,
-    md_color
+    md_color, position_evidence_key
 )
 from pydantic import BaseModel, Field, model_validator
-from typing import AbstractSet, Any, Callable, ClassVar, Dict, Iterable, Optional, List, Set, TypeVar, Tuple, Self, cast
+from typing import Any, Callable, ClassVar, Dict, Iterable, Optional, List, Set, TypeVar, Tuple, Self, cast
 from uuid import UUID, uuid4
 from dnd.entity import Entity, determine_attack_outcome
 from dnd.blocks.base_item import BaseItem
@@ -82,6 +83,47 @@ from dnd.conditions import Dashing, Dodging, Disengaging, Prone, Hidden, Concent
 
 
 _CoreActionDefinition = TypeVar("_CoreActionDefinition")
+
+
+@dataclass(frozen=True, slots=True)
+class IntrinsicAttackSource:
+    """Cold damage facts for an attack supplied by the creature itself.
+
+    Intrinsic attacks use the ordinary attack resolver and all of its event,
+    modifier, reaction, and combat-log machinery.  They differ only in where
+    the primary damage formula comes from: authored creature data rather than
+    a temporarily impersonated equipment slot.
+    """
+
+    damage_die: DamageDieValue
+    dice_count: int
+    damage_type: DamageType
+
+
+def _step_intent_position_evidence(
+    grid: GridMap,
+    from_position: tuple[int, int],
+    to_position: tuple[int, int],
+) -> dict[str, set[str]]:
+    """Freeze which observers perceived both endpoints when a step began."""
+    return {
+        position_evidence_key(position): {
+            str(observer_uuid)
+            for observer_uuid in grid.get_subscribers_at(position)
+        }
+        for position in (from_position, to_position)
+    }
+
+
+@dataclass(frozen=True, slots=True)
+class AttackDamageContribution:
+    """Immutable action-owned damage added to an ordinary weapon attack."""
+
+    dice_count: int
+    damage_die: DamageDieValue
+    damage_type: DamageType
+    flat_bonus: int = 0
+    label: str = "Additional Attack Damage"
 
 
 def _core_action_identity(
@@ -230,54 +272,6 @@ def validate_line_of_sight(declaration_event: PolymorphicActionEvent, source_ent
         status_message=f"Validated line of sight for {declaration_event.name}"
     )
 
-def _consume_entity_action_economy_costs(
-    completion_event: PolymorphicActionEvent,
-    source_entity_uuid: UUID,
-    *,
-    excluded_cost_types: AbstractSet[CostType] = frozenset(),
-) -> PolymorphicActionEvent:
-    """Consume serialized costs without advancing the event lifecycle."""
-    entity = Entity.get(source_entity_uuid)
-    if entity is None or not isinstance(entity, Entity):
-        return completion_event.cancel(status_message=f"Entity not found for {completion_event.name}")
-    for cost in completion_event.costs:
-        if cost.cost_type not in excluded_cost_types and cost.cost > 0:
-            entity.action_economy.consume_prevalidated(
-                cost.cost_type,
-                cost.cost,
-                cost.name,
-            )
-        if cost.resource_cost > 0 and cost.resource_name:
-            if not entity.action_economy.consume_resource(cost.resource_name, cost.resource_cost):
-                return completion_event.cancel(
-                    status_message=f"Failed to consume resource {cost.resource_name} for {completion_event.name}"
-                )
-    return completion_event
-
-
-def entity_action_economy_cost_applier(completion_event: PolymorphicActionEvent, source_entity_uuid: UUID) -> PolymorphicActionEvent:
-    """Consume turn-based and named-resource costs after action completion.
-
-    Args:
-        completion_event: Completion event carrying serialized costs.
-        source_entity_uuid: Entity that pays the costs.
-
-    Returns:
-        Completion event advanced after costs, or canceled on failed resource
-        consumption.
-    """
-    cost_event = _consume_entity_action_economy_costs(
-        completion_event,
-        source_entity_uuid,
-    )
-    if cost_event.canceled:
-        return cost_event
-    return completion_event.phase_to(
-        new_phase=EventPhase.COMPLETION,
-        status_message=f"Successfully applied costs for {completion_event.name} for {completion_event.source_entity_uuid}"
-    )
-
-
 class MovementEvent(ActionEvent):
     """Event payload for path-based movement actions."""
 
@@ -394,6 +388,10 @@ class Move(BaseAction):
     use_movement_cost: bool = Field(default=True, description="Whether movement costs are generated from the path.")
     prefer_safe: bool = Field(default=True, description="Whether a safe path is preferred when available.")
     movement_mode: MovementMode = Field(default=MovementMode.WALKING, description="Movement mode used for terrain costs and transitions.")
+
+    def get_discovery_movement_mode(self) -> MovementMode:
+        """Return the traversal mode owned by this movement action."""
+        return self.movement_mode
 
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
@@ -527,7 +525,7 @@ class Move(BaseAction):
             movement_mode: Movement mode required for each transition.
 
         Returns:
-            Posted declaration event or canceled event.
+            Updated declaration event or canceled event.
         """
         source_entity = Entity.get(source_entity_uuid)
         if not source_entity or not isinstance(source_entity, Entity):
@@ -537,7 +535,7 @@ class Move(BaseAction):
 
         else:
             if movement_mode == MovementMode.WALKING and declaration_event.path == source_entity.senses.paths[declaration_event.end_position]:
-                return declaration_event.post(
+                return declaration_event.with_updates(
                     status_message=f"Validated path for {declaration_event.name}"
                 )
             elif movement_mode == MovementMode.WALKING:
@@ -545,7 +543,7 @@ class Move(BaseAction):
                     if path_position not in source_entity.senses.paths:
                         return declaration_event.cancel(status_message=f"Invalid path for {declaration_event.name} at position {path_position}")
 
-                return declaration_event.post(
+                return declaration_event.with_updates(
                     status_message=f"Validated path for {declaration_event.name}"
                 )
             else:
@@ -557,7 +555,7 @@ class Move(BaseAction):
                 for from_pos, to_pos in zip(declaration_event.path, declaration_event.path[1:]):
                     if not grid.can_transition(from_pos, to_pos, source_entity.uuid, movement_mode, subjective=True):
                         return declaration_event.cancel(status_message=f"Invalid {movement_mode.value} transition for {declaration_event.name} at position {to_pos}")
-                return declaration_event.post(
+                return declaration_event.with_updates(
                     status_message=f"Validated path for {declaration_event.name}"
                 )
 
@@ -644,7 +642,7 @@ class Move(BaseAction):
             self.path = execution_event.path
             if self.use_movement_cost:
                 self._setup_costs_from_path()
-            execution_event = execution_event.post(
+            execution_event = execution_event.with_updates(
                 path=self.path,
                 status_message=f"Added paths to {execution_event.uuid}"
             )
@@ -733,6 +731,9 @@ class Move(BaseAction):
                     total_path_length=total_path_length,
                     movement_cost=step_cost_feet,
                     trajectory=execution_event.trajectory,
+                    located_position_observer_uuids=(
+                        _step_intent_position_evidence(grid, from_pos, to_pos)
+                    ),
                     phase=EventPhase.EFFECT,
                     parent_event=effect_event.uuid,
                     use_register=False
@@ -912,18 +913,14 @@ class Move(BaseAction):
         Skip movement cost here since cell-by-cell movement already deducts
         movement per step. Only apply non-movement costs (if any).
         """
-        cost_event = _consume_entity_action_economy_costs(
+        cost_event = self._consume_costs(
             completion_event,
-            self.source_entity_uuid,
             excluded_cost_types=frozenset({"movement"}),
         )
         if cost_event.canceled:
             return cost_event
 
-        return completion_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
-            status_message=f"Successfully applied costs for {completion_event.name}"
-        )
+        return completion_event
 
     def apply(self, parent_event: Optional[Event] = None) -> Optional[MovementEvent]:
         """Override to provide specific return type."""
@@ -1180,6 +1177,7 @@ def create_weapon_attack_declaration_event(
     use_register: bool = True,
     override_ability: Optional[AbilityName] = None,
     append_weapon_to_name: bool = False,
+    additional_damage_types: Iterable[DamageType] = (),
 ) -> AttackEvent:
     """Snapshot one equipped or unarmed attack into a cold declaration.
 
@@ -1209,6 +1207,10 @@ def create_weapon_attack_declaration_event(
             source_item_uuid = weapon.uuid
             source_item_presentation = weapon.to_item_presentation_state()
 
+    damage_types = list(dict.fromkeys((
+        *damage_types,
+        *additional_damage_types,
+    )))
     event_name = (
         f"{action_name} ({weapon_name})"
         if append_weapon_to_name and weapon_name is not None
@@ -1275,6 +1277,17 @@ class Attack(BaseAction):
         default=None,
         description="Ability override for attack and damage rolls.",
     )
+    additional_damage_contributions: Tuple[AttackDamageContribution, ...] = Field(
+        default=(),
+        description=(
+            "Immutable action-owned damage resolved with this weapon attack "
+            "without mutating the attacker's shared equipment state."
+        ),
+    )
+
+    def get_discovery_weapon_slot(self) -> Optional[WeaponSlot]:
+        """Return the equipped slot whose metadata describes this attack."""
+        return self.weapon_slot
 
     @model_validator(mode="after")
     def adjust_cost_for_off_hand(self) -> Self:
@@ -1301,7 +1314,15 @@ class Attack(BaseAction):
         )
         if profile is None or not isinstance(actor, Entity):
             return profile
-        extra_damage_rolls: list[DamageRollProfile] = []
+        extra_damage_rolls = [
+            DamageRollProfile(
+                dice_count=contribution.dice_count,
+                die_size=contribution.damage_die,
+                flat_bonus=contribution.flat_bonus,
+                damage_type=contribution.damage_type.value,
+            )
+            for contribution in self.additional_damage_contributions
+        ]
         for condition in actor.active_conditions.values():
             for damage_profile in condition.get_action_damage_roll_profiles(self, actor):
                 if isinstance(damage_profile, DamageRollProfile):
@@ -1418,7 +1439,16 @@ class Attack(BaseAction):
         )
 
     @staticmethod
-    def attack_consequences(execution_event: AttackEvent, source_entity_uuid: UUID) -> Optional[AttackEvent]:
+    def attack_consequences(
+        execution_event: AttackEvent,
+        source_entity_uuid: UUID,
+        *,
+        intrinsic_source: Optional[IntrinsicAttackSource] = None,
+        additional_damage_contributions: Tuple[
+            AttackDamageContribution,
+            ...,
+        ] = (),
+    ) -> Optional[AttackEvent]:
             """
             Resolve an attack roll, damage rolls, and damage application.
 
@@ -1458,6 +1488,10 @@ class Attack(BaseAction):
                     target_entity=target_entity,
                     target_entity_uuid=target_entity_uuid,
                     weapon_slot=weapon_slot,
+                    intrinsic_source=intrinsic_source,
+                    additional_damage_contributions=(
+                        additional_damage_contributions
+                    ),
                 )
 
     @staticmethod
@@ -1468,12 +1502,32 @@ class Attack(BaseAction):
         target_entity: Entity,
         target_entity_uuid: UUID,
         weapon_slot: WeaponSlot,
+        intrinsic_source: Optional[IntrinsicAttackSource],
+        additional_damage_contributions: Tuple[
+            AttackDamageContribution,
+            ...,
+        ],
     ) -> AttackEvent:
             """Resolve one attack while both contextual targets are bound."""
             source_entity_uuid = source_entity.uuid
             started = time.perf_counter()
             override_ability = execution_event.override_ability
-            attack_bonus = source_entity.attack_bonus(weapon_slot=weapon_slot, target_entity_uuid=target_entity_uuid, override_ability=override_ability)
+            if intrinsic_source is None:
+                attack_bonus = source_entity.attack_bonus(
+                    weapon_slot=weapon_slot,
+                    target_entity_uuid=target_entity_uuid,
+                    override_ability=override_ability,
+                )
+            else:
+                attack_bonus = source_entity.intrinsic_attack_bonus(
+                    range_type=(
+                        execution_event.range.type
+                        if execution_event.range is not None
+                        else RangeType.REACH
+                    ),
+                    target_entity_uuid=target_entity_uuid,
+                    override_ability=override_ability,
+                )
             ac = target_entity.ac_bonus(source_entity.uuid)
             ac.set_from_target(attack_bonus)
             attack_bonus.set_from_target(ac)
@@ -1482,7 +1536,11 @@ class Attack(BaseAction):
             weapon = source_entity.equipment._get_weapon_by_slot(weapon_slot)
             attack_context: Dict[str, Any] = {
                 "weapon_slot": weapon_slot.value,
-                "weapon_name": weapon.name if weapon else "Unarmed",
+                "weapon_name": (
+                    execution_event.weapon_name
+                    if intrinsic_source is not None
+                    else weapon.name if weapon else "Unarmed"
+                ),
                 "range_type": execution_event.range.type.value if execution_event.range else None,
                 "is_long_range": execution_event.is_long_range,
             }
@@ -1569,7 +1627,8 @@ class Attack(BaseAction):
                     status_message=f"Attack missed"
                 )
                 if not attack_event.canceled:
-                    source_entity.equipment.activate_weapon_slot(weapon_slot)
+                    if intrinsic_source is None:
+                        source_entity.equipment.activate_weapon_slot(weapon_slot)
                 completion_event = attack_event.phase_to(
                     new_phase=EventPhase.COMPLETION,
                     status_message=f"Attack missed"
@@ -1578,7 +1637,41 @@ class Attack(BaseAction):
                 return completion_event
 
             started = time.perf_counter()
-            damages = source_entity.get_damages(weapon_slot, target_entity_uuid, override_ability=override_ability)
+            if intrinsic_source is None:
+                damages = source_entity.get_damages(
+                    weapon_slot,
+                    target_entity_uuid,
+                    override_ability=override_ability,
+                )
+            else:
+                damages = source_entity.get_intrinsic_attack_damages(
+                    damage_die=intrinsic_source.damage_die,
+                    dice_count=intrinsic_source.dice_count,
+                    damage_type=intrinsic_source.damage_type,
+                    range_type=(
+                        execution_event.range.type
+                        if execution_event.range is not None
+                        else RangeType.REACH
+                    ),
+                    target_entity_uuid=target_entity_uuid,
+                    override_ability=override_ability,
+                )
+            damages.extend(
+                Damage(
+                    name=contribution.label,
+                    source_entity_uuid=source_entity_uuid,
+                    target_entity_uuid=target_entity_uuid,
+                    damage_dice=contribution.damage_die,
+                    dice_numbers=contribution.dice_count,
+                    damage_bonus=ModifiableValue.create(
+                        source_entity_uuid=source_entity_uuid,
+                        base_value=contribution.flat_bonus,
+                        value_name=f"{contribution.label} Bonus",
+                    ),
+                    damage_type=contribution.damage_type,
+                )
+                for contribution in additional_damage_contributions
+            )
             record_action_timing("attack.get_damages_ms", started)
             started = time.perf_counter()
             attack_event = attack_event.phase_to(
@@ -1591,7 +1684,8 @@ class Attack(BaseAction):
 
             if attack_event.canceled:
                 return attack_event
-            source_entity.equipment.activate_weapon_slot(weapon_slot)
+            if intrinsic_source is None:
+                source_entity.equipment.activate_weapon_slot(weapon_slot)
 
             if attack_event.attack_outcome is not None and attack_event.attack_outcome not in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]:
                 started = time.perf_counter()
@@ -1690,6 +1784,10 @@ class Attack(BaseAction):
             parent_event=parent_event,
             use_register=use_register,
             override_ability=self.override_ability,
+            additional_damage_types=(
+                contribution.damage_type
+                for contribution in self.additional_damage_contributions
+            ),
         )
 
     def _validate(self, declaration_event: AttackEvent) -> Optional[AttackEvent]:
@@ -1719,11 +1817,11 @@ class Attack(BaseAction):
 
     def _apply(self, execution_event: AttackEvent) -> Optional[AttackEvent]:
         """Apply the attack action."""
-        return Attack.attack_consequences(execution_event, self.source_entity_uuid)
-
-    def _apply_costs(self, completion_event: AttackEvent) -> Optional[AttackEvent]:
-        """Apply attack costs after completion."""
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
+        return Attack.attack_consequences(
+            execution_event,
+            self.source_entity_uuid,
+            additional_damage_contributions=self.additional_damage_contributions,
+        )
 
     def apply(self, parent_event: Optional[Event] = None) -> Optional[AttackEvent]:
         """Override to provide specific return type."""
@@ -1755,34 +1853,6 @@ class Dash(BaseAction):
         Cost(name="Dash Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
     ], description="Action economy costs required by Dash.")
 
-    def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
-        """Create the declaration event for Dash."""
-        source_entity = Entity.get(self.source_entity_uuid)
-        source_name = source_entity.name if source_entity else None
-
-        return ActionEvent(
-            name=self.name or "Dash",
-            description=self.description,
-            parent_event=parent_event.uuid if parent_event else None,
-            phase=EventPhase.DECLARATION,
-            source_entity_uuid=self.source_entity_uuid,
-            target_entity_uuid=self.source_entity_uuid,
-            costs=[BaseCost.model_validate(cost) for cost in self.effective_costs],
-            use_register=use_register,
-            source_entity_name=source_name,
-        )
-
-    def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
-        """Validate that the acting entity exists."""
-        entity = Entity.get(self.source_entity_uuid)
-        if not entity:
-            return declaration_event.cancel(status_message="Entity not found")
-
-        return declaration_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
-        )
-
     def _apply(self, execution_event: ActionEvent) -> ActionEvent:
         """Apply Dashing for one round."""
         entity = Entity.get(self.source_entity_uuid)
@@ -1803,11 +1873,6 @@ class Dash(BaseAction):
             new_phase=EventPhase.COMPLETION,
             status_message=f"Applied Dashing - gained {current_speed}ft extra movement"
         )
-
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
-        """Apply Dash action costs."""
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
-
 
 @_core_action_identity(
     content_id="action.dodge",
@@ -1832,34 +1897,6 @@ class Dodge(BaseAction):
     costs: List[Cost] = Field(default_factory=lambda: [
         Cost(name="Dodge Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
     ], description="Action economy costs required by Dodge.")
-
-    def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
-        """Create the declaration event for Dodge."""
-        source_entity = Entity.get(self.source_entity_uuid)
-        source_name = source_entity.name if source_entity else None
-
-        return ActionEvent(
-            name=self.name or "Dodge",
-            description=self.description,
-            parent_event=parent_event.uuid if parent_event else None,
-            phase=EventPhase.DECLARATION,
-            source_entity_uuid=self.source_entity_uuid,
-            target_entity_uuid=self.source_entity_uuid,
-            costs=[BaseCost.model_validate(cost) for cost in self.effective_costs],
-            use_register=use_register,
-            source_entity_name=source_name,
-        )
-
-    def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
-        """Validate that the acting entity exists."""
-        entity = Entity.get(self.source_entity_uuid)
-        if not entity:
-            return declaration_event.cancel(status_message="Entity not found")
-
-        return declaration_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
-        )
 
     def _apply(self, execution_event: ActionEvent) -> ActionEvent:
         """Apply Dodging for one round."""
@@ -1886,11 +1923,6 @@ class Dodge(BaseAction):
             status_message="Applied Dodging - attackers have disadvantage"
         )
 
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
-        """Apply Dodge action costs."""
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
-
-
 @_core_action_identity(
     content_id="action.disengage",
     display_name="Disengage",
@@ -1915,34 +1947,6 @@ class Disengage(BaseAction):
         Cost(name="Disengage Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
     ], description="Action economy costs required by Disengage.")
 
-    def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
-        """Create the declaration event for Disengage."""
-        source_entity = Entity.get(self.source_entity_uuid)
-        source_name = source_entity.name if source_entity else None
-
-        return ActionEvent(
-            name=self.name or "Disengage",
-            description=self.description,
-            parent_event=parent_event.uuid if parent_event else None,
-            phase=EventPhase.DECLARATION,
-            source_entity_uuid=self.source_entity_uuid,
-            target_entity_uuid=self.source_entity_uuid,
-            costs=[BaseCost.model_validate(cost) for cost in self.effective_costs],
-            use_register=use_register,
-            source_entity_name=source_name,
-        )
-
-    def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
-        """Validate that the acting entity exists."""
-        entity = Entity.get(self.source_entity_uuid)
-        if not entity:
-            return declaration_event.cancel(status_message="Entity not found")
-
-        return declaration_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
-        )
-
     def _apply(self, execution_event: ActionEvent) -> ActionEvent:
         """Apply Disengaging for one round."""
         entity = Entity.get(self.source_entity_uuid)
@@ -1962,11 +1966,6 @@ class Disengage(BaseAction):
             new_phase=EventPhase.COMPLETION,
             status_message="Applied Disengaging - movement won't provoke OAs"
         )
-
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
-        """Apply Disengage action costs."""
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
-
 
 @_core_action_identity(
     content_id="action.drop_concentration",
@@ -2002,23 +2001,6 @@ class DropConcentration(BaseAction):
     )
     target_spell: Optional[str] = Field(default=None, description="Specific spell to drop (multi-slot). None = drop all.")
 
-    def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
-        """Create the action declaration event for voluntary concentration drop."""
-        source_entity = Entity.get(self.source_entity_uuid)
-        source_name = source_entity.name if source_entity else None
-
-        return ActionEvent(
-            name=self.name or "Drop Concentration",
-            description=self.description,
-            parent_event=parent_event.uuid if parent_event else None,
-            phase=EventPhase.DECLARATION,
-            source_entity_uuid=self.source_entity_uuid,
-            target_entity_uuid=self.source_entity_uuid,
-            costs=[BaseCost.model_validate(cost) for cost in self.effective_costs],
-            use_register=use_register,
-            source_entity_name=source_name
-        )
-
     def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
         entity = Entity.get(self.source_entity_uuid)
         if not entity:
@@ -2051,11 +2033,6 @@ class DropConcentration(BaseAction):
             new_phase=EventPhase.COMPLETION,
             status_message=f"Dropped concentration{' on ' + self.target_spell if self.target_spell else ''}"
         )
-
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
-        """Return completion unchanged because dropping concentration is free."""
-        return completion_event
-
 
 @_core_action_identity(
     content_id="action.shake_awake",
@@ -2136,11 +2113,6 @@ class ShakeAwake(BaseAction):
             status_message=f"{target.name} wakes up"
         )
 
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
-        """Apply the action cost for waking the sleeper."""
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
-
-
 @_core_action_identity(
     content_id="action.hide",
     display_name="Hide",
@@ -2167,22 +2139,6 @@ class Hide(BaseAction):
     costs: List[Cost] = Field(default_factory=lambda: [
         Cost(name="Hide Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
     ], description="Action economy costs paid when taking the Hide action.")
-
-    def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
-        source_entity = Entity.get(self.source_entity_uuid)
-        source_name = source_entity.name if source_entity else None
-
-        return ActionEvent(
-            name=self.name or "Hide",
-            description=self.description,
-            parent_event=parent_event.uuid if parent_event else None,
-            phase=EventPhase.DECLARATION,
-            source_entity_uuid=self.source_entity_uuid,
-            target_entity_uuid=self.source_entity_uuid,
-            costs=[BaseCost.model_validate(cost) for cost in self.effective_costs],
-            use_register=use_register,
-            source_entity_name=source_name
-        )
 
     def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
         entity = Entity.get(self.source_entity_uuid)
@@ -2259,9 +2215,6 @@ class Hide(BaseAction):
             status_message=f"Applied Hidden (Stealth DC {stealth_result})"
         )
 
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
-
 class StandUp(BaseAction):
     """
     Stand up from prone - costs half your movement speed.
@@ -2294,23 +2247,6 @@ class StandUp(BaseAction):
                 evaluator=entity_action_economy_cost_evaluator
             )]
 
-    def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
-        """Create the stand-up declaration event."""
-        source_entity = Entity.get(self.source_entity_uuid)
-        source_name = source_entity.name if source_entity else None
-
-        return ActionEvent(
-            name=self.name or "Stand Up",
-            description=self.description,
-            parent_event=parent_event.uuid if parent_event else None,
-            phase=EventPhase.DECLARATION,
-            source_entity_uuid=self.source_entity_uuid,
-            target_entity_uuid=self.source_entity_uuid,
-            costs=[BaseCost.model_validate(cost) for cost in self.effective_costs],
-            use_register=use_register,
-            source_entity_name=source_name
-        )
-
     def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
         entity = Entity.get(self.source_entity_uuid)
         if not entity:
@@ -2336,10 +2272,6 @@ class StandUp(BaseAction):
             status_message="Stood up from prone"
         )
 
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
-
-
 class DropProne(BaseAction):
     """
     Drop prone - free action (no cost).
@@ -2350,23 +2282,6 @@ class DropProne(BaseAction):
     description: str = Field(default="Drop to the ground", description="Player-facing drop-prone action summary.")
     target_type: TargetType = Field(default=TargetType.SELF, description="Drop Prone targets self")
     costs: List[Cost] = Field(default_factory=list, description="Drop Prone has no action economy cost.")
-
-    def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
-        """Create the drop-prone declaration event."""
-        source_entity = Entity.get(self.source_entity_uuid)
-        source_name = source_entity.name if source_entity else None
-
-        return ActionEvent(
-            name=self.name or "Drop Prone",
-            description=self.description,
-            parent_event=parent_event.uuid if parent_event else None,
-            phase=EventPhase.DECLARATION,
-            source_entity_uuid=self.source_entity_uuid,
-            target_entity_uuid=self.source_entity_uuid,
-            costs=[BaseCost.model_validate(cost) for cost in self.effective_costs],
-            use_register=use_register,
-            source_entity_name=source_name
-        )
 
     def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
         entity = Entity.get(self.source_entity_uuid)
@@ -2396,14 +2311,6 @@ class DropProne(BaseAction):
             new_phase=EventPhase.COMPLETION,
             status_message="Dropped prone"
         )
-
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
-        """Return a completed no-cost action event."""
-        return completion_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
-            status_message="No costs for Drop Prone"
-        )
-
 
 class JumpEvent(ActionEvent):
     """Event payload for a jump movement."""
@@ -2700,6 +2607,7 @@ class Jump(BaseAction):
         interrupted_by_condition = False
 
         source_entity.senses.clear_visibility_cache()
+        grid = get_map()
         try:
             effect_event = execution_event.phase_to(
                 new_phase=EventPhase.EFFECT,
@@ -2726,6 +2634,9 @@ class Jump(BaseAction):
                     total_path_length=total_path_length,
                     movement_cost=step_cost_feet,
                     trajectory=execution_event.trajectory,
+                    located_position_observer_uuids=(
+                        _step_intent_position_evidence(grid, from_pos, to_pos)
+                    ),
                     phase=EventPhase.EFFECT,
                     parent_event=effect_event.uuid,
                     use_register=False
@@ -2785,9 +2696,8 @@ class Jump(BaseAction):
 
     def _apply_costs(self, completion_event: JumpEvent) -> JumpEvent:
         """Apply the costs of the jump (bonus action). Movement consumed per-step in _apply()."""
-        return _consume_entity_action_economy_costs(
+        return self._consume_costs(
             completion_event,
-            self.source_entity_uuid,
             excluded_cost_types=frozenset({"movement"}),
         )
 
@@ -3204,18 +3114,25 @@ class Shove(BaseAction):
                 blocked_by=blocked_by,
                 cause="shove",
                 phase=EventPhase.DECLARATION,
-                parent_event=execution_event.uuid
+                parent_event=execution_event.uuid,
+                use_register=False,
             )
-
-            forced_event = forced_event.phase_to(EventPhase.EXECUTION)
-            forced_event = forced_event.phase_to(EventPhase.EFFECT)
 
             moved_cells = 0
             interrupted_by_condition = False
 
+            forced_event = EventQueue.publish_declaration(forced_event)
+            if not forced_event.canceled:
+                forced_event = forced_event.phase_to(EventPhase.EXECUTION)
+            if not forced_event.canceled:
+                forced_event = forced_event.phase_to(EventPhase.EFFECT)
             if not forced_event.canceled:
                 for next_pos in movement_path:
-                    Entity.update_entity_position(target, next_pos, parent_event=forced_event.uuid)
+                    Entity.update_entity_position(
+                        target,
+                        next_pos,
+                        parent_event=forced_event.uuid,
+                    )
                     moved_cells += 1
 
                     if not target.can_take_actions():
@@ -3229,18 +3146,19 @@ class Shove(BaseAction):
                 blocked = False
                 blocked_by = None
 
-            forced_event.phase_to(
-                EventPhase.COMPLETION,
-                end_position=final_pos,
-                actual_distance=push_distance,
-                blocked_by_obstacle=blocked,
-                blocked_by=blocked_by,
-                status_message=(
-                    f"Forced movement interrupted at {final_pos}"
-                    if interrupted_by_condition
-                    else f"Forced movement completed at {final_pos}"
+            if not forced_event.canceled:
+                forced_event.phase_to(
+                    EventPhase.COMPLETION,
+                    end_position=final_pos,
+                    actual_distance=push_distance,
+                    blocked_by_obstacle=blocked,
+                    blocked_by=blocked_by,
+                    status_message=(
+                        f"Forced movement interrupted at {final_pos}"
+                        if interrupted_by_condition
+                        else f"Forced movement completed at {final_pos}"
+                    )
                 )
-            )
 
         return execution_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -3250,10 +3168,6 @@ class Shove(BaseAction):
             blocked_by=blocked_by,
             status_message=f"Shoved {target.name} {push_distance}ft" + (f" (blocked by {blocked_by})" if blocked and blocked_by else " (blocked)" if blocked else "")
         )
-
-    def _apply_costs(self, completion_event: ShoveEvent) -> ShoveEvent:
-        """Apply shove costs (bonus action)."""
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
 
 class SpellEvent(ActionEvent):
     """Event payload for spell casting and spell effect logs."""
@@ -3741,6 +3655,21 @@ class SpellAction(BaseAction):
         description="Action cost for casting"
     )
 
+    def get_spell_discovery_metadata(
+        self,
+    ) -> Optional[SpellDiscoveryMetadata]:
+        """Return exact spell fields through the common action contract."""
+        return SpellDiscoveryMetadata(
+            spell_level=self.spell_level,
+            cast_at_level=self.cast_at_level,
+            is_variant=self.is_variant,
+            damage_type=(
+                self.spell_damage_type.value
+                if self.spell_damage_type is not None
+                else None
+            ),
+        )
+
     def spell_execution_scope(self):
         """Open the cast-local context used by low-level damage contributors."""
 
@@ -3816,6 +3745,136 @@ class SpellAction(BaseAction):
     def get_range(self) -> Range:
         """Return spell range with alt_range override for position filtering."""
         return Range(type=self.spell_range.type, normal=self.effective_range, long=self.spell_range.long)
+
+    def _validate_entity_target_in_range_and_sight(
+        self,
+        declaration_event: SpellEvent,
+    ) -> Optional[SpellEvent]:
+        """Validate the shared entity-target spell geometry and lifecycle."""
+        if self.target_entity_uuid is None:
+            return declaration_event.cancel(
+                status_message="Source or target entity not found",
+            )
+        return self._validate_entity_targets_in_range_and_sight(
+            declaration_event,
+            (self.target_entity_uuid,),
+        )
+
+    def _validate_entity_target_or_self_in_range_and_sight(
+        self,
+        declaration_event: SpellEvent,
+    ) -> Optional[SpellEvent]:
+        """Validate an optional entity target, defaulting omission to the caster."""
+        target_entity_uuid = self.target_entity_uuid or self.source_entity_uuid
+        return self._validate_entity_targets_in_range_and_sight(
+            declaration_event,
+            (target_entity_uuid,),
+        )
+
+    def _validate_entity_targets_in_range_and_sight(
+        self,
+        declaration_event: SpellEvent,
+        target_entity_uuids: Iterable[UUID],
+    ) -> Optional[SpellEvent]:
+        """Validate common geometry for one or more selected spell targets."""
+        source_entity = Entity.get(self.source_entity_uuid)
+        if not isinstance(source_entity, Entity):
+            return declaration_event.cancel(
+                status_message="Source entity not found",
+            )
+
+        for target_uuid in dict.fromkeys(target_entity_uuids):
+            target_entity = Entity.get(target_uuid)
+            if not isinstance(target_entity, Entity):
+                return declaration_event.cancel(
+                    status_message="Target entity not found",
+                )
+            if (
+                target_uuid != source_entity.uuid
+                and target_uuid not in source_entity.senses.entities
+            ):
+                return declaration_event.cancel(
+                    status_message=(
+                        f"{target_entity.name} not in line of sight"
+                    ),
+                )
+
+            distance = source_entity.senses.get_feet_distance(
+                target_entity.position,
+            )
+            if distance > self.effective_range:
+                return declaration_event.cancel(
+                    status_message=(
+                        f"{target_entity.name} out of range "
+                        f"({distance}ft > {self.effective_range}ft)"
+                    ),
+                )
+
+        return cast(
+            Optional[SpellEvent],
+            super()._validate(declaration_event),
+        )
+
+    def _validate_visible_position_in_range(
+        self,
+        declaration_event: SpellEvent,
+    ) -> Optional[SpellEvent]:
+        """Validate the shared position-target spell geometry and lifecycle."""
+        caster = Entity.get(self.source_entity_uuid)
+        if not isinstance(caster, Entity):
+            return declaration_event.cancel(status_message="Caster not found")
+
+        target_position = self.end_position
+        if target_position is None:
+            return declaration_event.cancel(
+                status_message="No target position specified",
+            )
+        if not caster.senses.visible.get(target_position, False):
+            return declaration_event.cancel(
+                status_message=f"Position {target_position} not visible",
+            )
+
+        distance = caster.senses.get_feet_distance(target_position)
+        if distance > self.effective_range:
+            return declaration_event.cancel(
+                status_message=(
+                    f"Position out of range "
+                    f"({distance}ft > {self.effective_range}ft)"
+                ),
+            )
+
+        return cast(
+            Optional[SpellEvent],
+            super()._validate(declaration_event),
+        )
+
+    def _validate_self_cast(
+        self,
+        declaration_event: SpellEvent,
+    ) -> Optional[SpellEvent]:
+        """Validate the shared self-targeted spell lifecycle."""
+        if Entity.get(self.source_entity_uuid) is None:
+            return declaration_event.cancel(status_message="Caster not found")
+        return declaration_event.phase_to(
+            EventPhase.EXECUTION,
+            status_message=f"Validated {self.name}",
+        )
+
+    def _validate_directional_self_cast(
+        self,
+        declaration_event: SpellEvent,
+    ) -> Optional[SpellEvent]:
+        """Validate a self-originating area spell with a chosen direction."""
+        if Entity.get(self.source_entity_uuid) is None:
+            return declaration_event.cancel(status_message="Caster not found")
+        if self.end_position is None:
+            return declaration_event.cancel(
+                status_message="No direction specified for cone",
+            )
+        return cast(
+            Optional[SpellEvent],
+            super()._validate(declaration_event),
+        )
 
     def get_upcast_bonus(self) -> int:
         """Get levels above base spell level (for upcast scaling)."""
@@ -3997,7 +4056,7 @@ class SpellAction(BaseAction):
             parent_event=effect_event.uuid,
         )
         _, save_roll, success = target.saving_throw(save_request)
-        synced_event = effect_event.post(
+        synced_event = effect_event.with_updates(
             save_success=success,
             save_roll=save_roll,
             save_bonus=save_roll.bonus,
@@ -4263,16 +4322,12 @@ class SpellAction(BaseAction):
             self.bind_spell_execution_lineage(event.lineage_uuid)
         return event
 
-    def _apply_costs(self, completion_event: ActionEvent) -> Optional[ActionEvent]:
-        """Apply the costs of the spell."""
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
-
     def _apply_execution_cancellation_costs(
         self,
         canceled_event: ActionEvent,
     ) -> Optional[ActionEvent]:
         """Spend a committed cast when a reaction interrupts its execution."""
-        return entity_action_economy_cost_applier(canceled_event, self.source_entity_uuid)
+        return self._consume_costs(canceled_event)
 
     def _get_cantrip_dice_count(self, caster_level: int) -> int:
         """Get number of damage dice for cantrips based on caster level.
@@ -4416,16 +4471,16 @@ class AttackObject(BaseAction):
             total_damage += dice.roll.total
         main_type = entity.equipment.get_main_damage_type(weapon_slot)
 
-        actual = item.receive_damage(total_damage, main_type, entity.uuid)
+        actual = item.receive_damage(
+            total_damage,
+            main_type,
+            entity.uuid,
+            parent_event=execution_event,
+        )
         return execution_event.phase_to(
             new_phase=EventPhase.COMPLETION,
             status_message=f"Dealt {actual} {main_type.value} damage to {item.name}"
         )
-
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
-        """Apply Attack Object action costs after successful object damage."""
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
-
 
 class Drop(BaseAction):
     """Drop an item from inventory onto the ground at a position.

@@ -11,11 +11,12 @@ from dnd.ai.runtime.decision_epoch import (
     _build_action_economy_state_from_actor,
     _build_action_capabilities,
     _build_affordance_set_and_execution_authority_from_actions,
-    _build_affordance_set_from_actions,
 )
+from tests.manual.decision_epoch_support import build_affordance_set_from_actions
 from dnd.ai.contracts.semantics import ActionTag, MovementKind, OutcomeKind, TopologyOperation, TruthValue, evaluate_fact_expression
 from dnd.ai.contracts.control import AffordanceSet
 from server.action_serialization import serialize_available_actions
+from server.api_models import ActionExecutionAuthorization
 from dnd.actions_functional import execute_by_index, register_spell
 from dnd.core.base_object import BaseObject
 from dnd.core.base_actions import ActionAvailabilityStatus
@@ -23,6 +24,7 @@ from dnd.core.base_actions import ActionCategory
 from dnd.core.base_actions import AvailableActionInfo
 from dnd.core.base_actions import AvailableActionsResult
 from dnd.core.base_actions import AvailableTarget
+from dnd.core.base_actions import BaseCost
 from dnd.core.base_actions import OutcomeResolution
 from dnd.core.base_actions import TargetType
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
@@ -375,7 +377,7 @@ def test_epoch_carries_finite_item_cost_and_remaining_stack_uses() -> None:
     assert hero.loot_item(potion)
 
     actions = hero.get_available_actions()
-    affordances = _build_affordance_set_from_actions(hero, actions, 42)
+    affordances = build_affordance_set_from_actions(hero, actions, 42)
     economy = _build_action_economy_state_from_actor(hero, actions, affordances)
     potion_row = next(
         row
@@ -468,7 +470,7 @@ def test_simple_entity_epoch_rows_are_lean_but_multi_entity_rows_keep_options() 
     arena = assemble_authored_encounter("line_aoe_corridor")
     mage = next(monster for monster in arena.monsters if "Mage" in monster.name)
     actions = mage.get_available_actions()
-    direct_affordances = _build_affordance_set_from_actions(mage, actions, 42)
+    direct_affordances = build_affordance_set_from_actions(mage, actions, 42)
 
     simple_direct_rows = [
         row for row in direct_affordances.entity_actions
@@ -510,7 +512,7 @@ def test_spell_outcome_profiles_reach_epoch_without_registry_growth() -> None:
     assert missile_profile.applications == 3
 
     actions = mage.get_available_actions()
-    direct = _build_affordance_set_from_actions(mage, actions, 42)
+    direct = build_affordance_set_from_actions(mage, actions, 42)
     direct_fire = next(row for row in direct.entity_actions if row.template_name == "Fire Bolt")
     direct_missile = next(
         row for row in direct.entity_actions if row.template_name == "Magic Missile__slot_1"
@@ -542,7 +544,7 @@ def test_weapon_attack_outcome_profiles_reach_epochs_without_registry_growth() -
     assert profile.attack_bonus is not None
     assert profile.damage_rolls
     actions = hero.get_available_actions()
-    direct = _build_affordance_set_from_actions(hero, actions, 42)
+    direct = build_affordance_set_from_actions(hero, actions, 42)
     direct_attack = next(
         row for row in direct.entity_actions
         if row.template_name == "Attack_MELEE_MAIN"
@@ -577,7 +579,7 @@ def test_eldritch_blast_outcome_profile_reaches_actor_capabilities() -> None:
     assert result.canceled is False
     assert warlock.action_economy.actions.normalized_score == 0
     after = warlock.get_available_actions()
-    affordances = _build_affordance_set_from_actions(warlock, after, 42)
+    affordances = build_affordance_set_from_actions(warlock, after, 42)
 
     eldritch_blast = next(
         capability
@@ -634,7 +636,7 @@ def test_srd_inflict_wounds_epoch_exposes_melee_spell_attack_profile() -> None:
     _target = _materialize_srd_fixture("commoner", position=(2, 1), faction="heroes")
     Entity.update_all_entities_senses(max_distance=30)
 
-    affordances = _build_affordance_set_from_actions(
+    affordances = build_affordance_set_from_actions(
         fanatic,
         fanatic.get_available_actions(),
         42,
@@ -655,7 +657,7 @@ def test_srd_command_epoch_exposes_save_control_target_effect() -> None:
     _target = _materialize_srd_fixture("commoner", position=(4, 1), faction="heroes")
     Entity.update_all_entities_senses(max_distance=60)
 
-    affordances = _build_affordance_set_from_actions(
+    affordances = build_affordance_set_from_actions(
         fanatic,
         fanatic.get_available_actions(),
         42,
@@ -679,7 +681,7 @@ def test_condition_lock_control_spells_expose_target_effects() -> None:
     controller = next(monster for monster in arena.monsters if "Controller" in monster.name)
     controller.update_entity_senses(max_distance=60)
 
-    affordances = _build_affordance_set_from_actions(
+    affordances = build_affordance_set_from_actions(
         controller,
         controller.get_available_actions(),
         42,
@@ -737,7 +739,7 @@ def test_sleep_epoch_exposes_hp_pool_agency_denial() -> None:
     register_spell(support, Sleep, caster_level=5)
     support.update_entity_senses(max_distance=60)
 
-    affordances = _build_affordance_set_from_actions(
+    affordances = build_affordance_set_from_actions(
         support,
         support.get_available_actions(),
         42,
@@ -769,7 +771,7 @@ def test_condition_lock_support_spells_expose_target_buffs() -> None:
     support = next(monster for monster in arena.monsters if "Support" in monster.name)
     support.update_entity_senses(max_distance=60)
 
-    affordances = _build_affordance_set_from_actions(
+    affordances = build_affordance_set_from_actions(
         support,
         support.get_available_actions(),
         42,
@@ -828,7 +830,7 @@ def test_zone_and_removal_control_spells_expose_profiles() -> None:
     arena = assemble_authored_encounter("condition_lock_sanctum")
     controller = next(monster for monster in arena.monsters if "Controller" in monster.name)
     controller.update_entity_senses(max_distance=80)
-    controller_affordances = _build_affordance_set_from_actions(
+    controller_affordances = build_affordance_set_from_actions(
         controller,
         controller.get_available_actions(),
         42,
@@ -864,7 +866,7 @@ def test_zone_and_removal_control_spells_expose_profiles() -> None:
     zone_arena = assemble_authored_encounter("zone_control_web_gauntlet")
     mage = next(monster for monster in zone_arena.monsters if "Web Mage" in monster.name)
     mage.update_entity_senses(max_distance=80)
-    zone_affordances = _build_affordance_set_from_actions(
+    zone_affordances = build_affordance_set_from_actions(
         mage,
         mage.get_available_actions(),
         42,
@@ -952,7 +954,7 @@ def test_blindness_deafness_epoch_exposes_save_control_target_effect() -> None:
     )
     necromancer.update_entity_senses(max_distance=30)
 
-    affordances = _build_affordance_set_from_actions(
+    affordances = build_affordance_set_from_actions(
         necromancer,
         necromancer.get_available_actions(),
         42,
@@ -988,7 +990,7 @@ def test_bestow_curse_and_eyebite_strike_expose_selected_condition_branches() ->
     ))
     Entity.update_all_entities_senses(max_distance=30)
 
-    affordances = _build_affordance_set_from_actions(
+    affordances = build_affordance_set_from_actions(
         caster,
         caster.get_available_actions(),
         42,
@@ -1021,12 +1023,12 @@ def test_extra_attack_resource_is_normalized_as_attack_economy() -> None:
     """Granted extra attacks are typed economy, not generic limited resources."""
     profile = _action_cost_profile_from_cost_rows(
         [
-            {
-                "cost_type": None,
-                "cost": 0,
-                "resource_name": "extra_attacks",
-                "resource_cost": 1,
-            }
+            BaseCost(
+                cost_type="actions",
+                cost=0,
+                resource_name="extra_attacks",
+                resource_cost=1,
+            )
         ],
         can_afford=True,
     )
@@ -1129,7 +1131,7 @@ def test_visible_environment_interaction_is_a_capability_before_it_is_legal() ->
     hero = arena.hero
     hero.update_entity_senses(max_distance=20)
 
-    distant = _build_affordance_set_from_actions(
+    distant = build_affordance_set_from_actions(
         hero,
         hero.get_available_actions(),
         42,
@@ -1151,7 +1153,7 @@ def test_visible_environment_interaction_is_a_capability_before_it_is_legal() ->
         if monster.name == "Validation Lever Guard"
     )
     lever_guard.update_entity_senses(max_distance=20)
-    adjacent = _build_affordance_set_from_actions(
+    adjacent = build_affordance_set_from_actions(
         lever_guard,
         lever_guard.get_available_actions(),
         43,
@@ -1172,7 +1174,7 @@ def test_sorcerer_epoch_carries_metamagic_transforms_and_base_spell_levels() -> 
     sorcerer = arena.hero
     sorcerer.update_entity_senses(max_distance=20)
 
-    affordances = _build_affordance_set_from_actions(
+    affordances = build_affordance_set_from_actions(
         sorcerer,
         sorcerer.get_available_actions(),
         42,
@@ -1224,7 +1226,7 @@ def test_epoch_reuses_one_inventory_discovery_for_rows_and_capabilities(monkeypa
     monkeypatch.setattr(inventory_type, "get_all_use_actions", counted)
 
     actions = hero.get_available_actions()
-    affordances = _build_affordance_set_from_actions(hero, actions, 42)
+    affordances = build_affordance_set_from_actions(hero, actions, 42)
 
     assert calls == 1
     assert any(row.source_item_uuid is not None for row in affordances.all_rows)
@@ -1242,7 +1244,7 @@ def test_slotless_actor_keeps_fixed_spell_scroll_capability() -> None:
     hero.loot_item(scroll)
 
     actions = hero.get_available_actions()
-    affordances = _build_affordance_set_from_actions(hero, actions, 42)
+    affordances = build_affordance_set_from_actions(hero, actions, 42)
     scroll_uuid = str(scroll.uuid)
     legal_rows = [
         row for row in affordances.all_rows
@@ -1266,8 +1268,12 @@ def test_spell_epoch_rows_expose_full_spell_slot_costs() -> None:
     support.update_entity_senses(max_distance=20)
 
     actions = support.get_available_actions()
-    serialized = serialize_available_actions(support, actions)
-    direct_affordances = _build_affordance_set_from_actions(support, actions, 42)
+    serialized = serialize_available_actions(
+        support,
+        actions,
+        execution_authorization=ActionExecutionAuthorization.AUTHORIZED,
+    )
+    direct_affordances = build_affordance_set_from_actions(support, actions, 42)
     direct_bless = next(row for row in direct_affordances.entity_actions if row.template_name == "Bless__slot_1")
     serialized_bless = next(
         row
@@ -1290,8 +1296,12 @@ def test_concentration_requirement_reaches_typed_epoch_and_human_api() -> None:
     support.update_entity_senses(max_distance=20)
 
     actions = support.get_available_actions()
-    serialized = serialize_available_actions(support, actions)
-    direct_affordances = _build_affordance_set_from_actions(support, actions, 42)
+    serialized = serialize_available_actions(
+        support,
+        actions,
+        execution_authorization=ActionExecutionAuthorization.AUTHORIZED,
+    )
+    direct_affordances = build_affordance_set_from_actions(support, actions, 42)
     direct_bless = next(row for row in direct_affordances.entity_actions if row.template_name == "Bless__slot_1")
     serialized_bless = next(
         row
@@ -1313,7 +1323,7 @@ def test_srd_natural_attack_epoch_uses_natural_damage_profile() -> None:
     target = _materialize_srd_fixture("commoner", position=(2, 1), faction="heroes")
     Entity.update_all_entities_senses(max_distance=30)
 
-    affordances = _build_affordance_set_from_actions(
+    affordances = build_affordance_set_from_actions(
         gnoll,
         gnoll.get_available_actions(),
         42,
@@ -1337,7 +1347,7 @@ def test_srd_attack_riders_compose_damage_and_control_semantics() -> None:
     _target = _materialize_srd_fixture("commoner", position=(2, 1), faction="heroes")
     Entity.update_all_entities_senses(max_distance=30)
 
-    affordances = _build_affordance_set_from_actions(
+    affordances = build_affordance_set_from_actions(
         wolf,
         wolf.get_available_actions(),
         42,
@@ -1362,7 +1372,7 @@ def test_srd_uniform_multiattack_epoch_exposes_repeated_profile() -> None:
     _target = _materialize_srd_fixture("commoner", position=(6, 1), faction="heroes")
     Entity.update_all_entities_senses(max_distance=60)
 
-    affordances = _build_affordance_set_from_actions(
+    affordances = build_affordance_set_from_actions(
         scout,
         scout.get_available_actions(),
         42,
@@ -1385,7 +1395,7 @@ def test_srd_actor_known_bonus_damage_reaches_epoch_profiles() -> None:
     _target = _materialize_srd_fixture("commoner", position=(2, 1), faction="heroes")
     Entity.update_all_entities_senses(max_distance=30)
 
-    affordances = _build_affordance_set_from_actions(
+    affordances = build_affordance_set_from_actions(
         bugbear,
         bugbear.get_available_actions(),
         42,
@@ -1404,7 +1414,7 @@ def test_srd_active_monster_actions_reach_setup_semantics() -> None:
     reset_srd_trait_state()
     priest = _materialize_srd_fixture("priest", position=(1, 1), faction="monsters")
     Entity.update_all_entities_senses(max_distance=30)
-    priest_affordances = _build_affordance_set_from_actions(
+    priest_affordances = build_affordance_set_from_actions(
         priest,
         priest.get_available_actions(),
         42,
@@ -1421,7 +1431,7 @@ def test_srd_active_monster_actions_reach_setup_semantics() -> None:
     reset_srd_trait_state()
     knight = _materialize_srd_fixture("knight", position=(1, 1), faction="monsters")
     Entity.update_all_entities_senses(max_distance=30)
-    knight_affordances = _build_affordance_set_from_actions(
+    knight_affordances = build_affordance_set_from_actions(
         knight,
         knight.get_available_actions(),
         42,
@@ -1489,7 +1499,7 @@ def test_epoch_reuses_immutable_targets_shared_by_spell_variants() -> None:
     arena = assemble_authored_encounter("high_level_spell_resource_duel")
     archmage = next(monster for monster in arena.monsters if "Archmage" in monster.name)
     archmage.update_entity_senses(max_distance=20)
-    affordances = _build_affordance_set_from_actions(
+    affordances = build_affordance_set_from_actions(
         archmage,
         archmage.get_available_actions(),
         42,
@@ -1519,7 +1529,7 @@ def test_multi_target_wire_round_trip_reuses_canonical_target_pool() -> None:
     arena = assemble_authored_encounter("high_level_spell_resource_duel")
     archmage = next(monster for monster in arena.monsters if "Archmage" in monster.name)
     archmage.update_entity_senses(max_distance=20)
-    affordances = _build_affordance_set_from_actions(
+    affordances = build_affordance_set_from_actions(
         archmage,
         archmage.get_available_actions(),
         42,
@@ -1877,7 +1887,7 @@ def test_position_spell_rows_preserve_variants_costs_and_semantics() -> None:
     assert any(cost.cost_type == "spell_slot_5" for cost in cloudkill_rows[0].costs)
     assert any(cost.cost_type == "spell_slot_4" for cost in dimension_door_rows[0].costs)
 
-    affordances = _build_affordance_set_from_actions(archmage, actions, 42)
+    affordances = build_affordance_set_from_actions(archmage, actions, 42)
     dimension_door = next(
         row
         for row in affordances.position_actions
@@ -1897,7 +1907,7 @@ def test_teleport_escape_rows_expose_mobility_semantics() -> None:
     mage = next(monster for monster in arena.monsters if "Escape Mage" in monster.name)
     mage.update_entity_senses(max_distance=80)
 
-    affordances = _build_affordance_set_from_actions(
+    affordances = build_affordance_set_from_actions(
         mage,
         mage.get_available_actions(),
         42,

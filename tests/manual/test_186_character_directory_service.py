@@ -64,7 +64,7 @@ from server.game_directory.contracts import (
 )
 from server.game_directory.repository import GameDirectoryRepository
 from server.game_directory.errors import ConflictError, StaleVersionError
-from server.game_directory.canonical import canonical_digest
+from server.canonical_json import canonical_json_sha256 as canonical_digest
 from server.game_gateway import create_gateway_app
 from server.event_server import app as standalone_app
 

@@ -4,7 +4,7 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from dnd.actions import entity_action_economy_cost_applier, entity_action_economy_cost_evaluator
+from dnd.actions import entity_action_economy_cost_evaluator
 from dnd.blocks.base_item import UsableItem
 from dnd.core.base_actions import ActionEvent, BaseAction, Cost, TargetType
 from dnd.core.base_conditions import BaseCondition
@@ -200,16 +200,6 @@ class DeployFieldFocus(BaseAction):
             status_message=f"{actor.name} is field-focused",
         )
 
-    def _apply_costs(self, completion_event: ActionEvent) -> Optional[ActionEvent]:
-        """Spend the action's bonus-action cost.
-
-        Args:
-            completion_event: Completed action event.
-
-        Returns:
-            Event returned by the action economy cost applier.
-        """
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
 class FieldKitParameters(BaseModel):
     """Durable authored parameters for a finite-use Field Kit."""
 

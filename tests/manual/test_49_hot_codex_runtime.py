@@ -44,6 +44,7 @@ from dnd.ai.contracts.observation import (
     SubjectiveWorldState,
 )
 from dnd.ai.contracts.semantics import ActionSemantics, ActionTag, action_semantics_ref
+from dnd.core.item_types import ItemObservationState
 from ai.policy import PolicyDecisionCorrelation, PolicyDecisionTelemetry, PolicyHost
 from ai.policy.telemetry import QueuedPolicyTelemetrySink
 from server.agent_protocol.telemetry import AgentEvent
@@ -465,7 +466,15 @@ def test_balanced_brief_retains_typed_object_summary_without_full_object_dump() 
     assert len(brief.known_objects) == 1
     assert brief.known_objects[0].uuid == "door"
     assert brief.known_objects[0].is_open is False
-    assert brief.known_objects[0].state_keys == ("is_open",)
+    assert brief.known_objects[0].state_keys == (
+        "blocks_movement",
+        "blocks_vision",
+        "is_hazardous",
+        "is_open",
+        "is_pickable",
+        "is_usable",
+        "stack_count",
+    )
 
 
 def test_command_follow_up_is_an_explicit_manifest_setting() -> None:
@@ -686,7 +695,6 @@ def test_hot_codex_view_and_command_share_the_typed_policy_host_lifecycle() -> N
     assert view.selected_policy.intent.row_id == "move-row"  # type: ignore[union-attr]
     assert len(runtime.policy_events) == 1
     assert runtime.policy_events[0].decision.selected == view.selected_policy
-    assert runtime.flush_agent_event_calls == 1
 
     result = session.execute(HotCodexExecuteRequest(
         revision=view.revision,
@@ -972,7 +980,6 @@ class _FakeRuntime:
         self.end_turn_calls = 0
         self.wait_world: SubjectiveWorldState | None = None
         self.policy_events: list[PolicyDecisionTelemetry] = []
-        self.flush_agent_event_calls = 0
 
     def bootstrap(self) -> None:
         self.bootstrap_calls += 1
@@ -1025,10 +1032,6 @@ class _FakeRuntime:
 
     def emit_policy_decision(self, event: PolicyDecisionTelemetry) -> None:
         self.policy_events.append(event)
-
-    def flush_agent_events(self) -> None:
-        self.flush_agent_event_calls += 1
-
 
 def _policy_telemetry(decision_id: str) -> PolicyDecisionTelemetry:
     """Build one valid canonical policy event for queue-order tests."""
@@ -1327,7 +1330,15 @@ def _door_policy_world() -> SubjectiveWorldState:
                 name="Boundary",
                 knowledge_state=KnowledgeState.VISIBLE,
                 position=(3, 0),
-                state={"is_open": False},
+                state=ItemObservationState(
+                    blocks_movement=True,
+                    blocks_vision=True,
+                    is_pickable=False,
+                    is_usable=True,
+                    stack_count=1,
+                    is_hazardous=False,
+                    is_open=False,
+                ),
             )
         },
         "known_tiles": {

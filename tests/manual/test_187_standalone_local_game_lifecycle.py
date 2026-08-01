@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable
 from pathlib import Path
+import random
 import time
 from types import SimpleNamespace
 from typing import Any
@@ -38,7 +39,12 @@ from server.game_directory.contracts import (
 )
 from server.game_directory.errors import ConflictError
 from server.game_directory.local_profiles import LocalProfileManager
-from server.local_game_lifecycle import StandaloneLocalGameCoordinator
+from server.local_game_lifecycle import (
+    LocalTerminalCommitEnvelope,
+    StandaloneLocalGameCoordinator,
+)
+from server.objective_replay import ObjectiveReplayBundle
+from server.player_replay import SubjectivePlayerReplayArchive
 from server import event_server
 
 
@@ -293,17 +299,15 @@ def test_local_lifecycle_notifies_after_each_durable_boundary(
 
 
 def _drive_ai_game_to_terminal_boundary(
-    client: TestClient,
     coordinator: StandaloneLocalGameCoordinator,
     game_id: UUID,
     *,
     expect_staged_intent: bool,
 ) -> None:
-    """Run AI turns serially through the public simulation control surface."""
+    """Wait for the canonical automatic AI executor to reach persistence."""
 
-    paused = client.post("/simulation/pause")
-    assert paused.status_code == 200, paused.text
-    for _turn in range(500):
+    deadline = time.monotonic() + 60.0
+    while time.monotonic() < deadline:
         game = coordinator.repository.get_game(game_id)
         pending = coordinator.repository.get_pending_local_terminal_commit(
             game_id,
@@ -315,11 +319,10 @@ def _drive_ai_game_to_terminal_boundary(
             and game.lifecycle_state is GameLifecycleState.ENDED
         ):
             return
-        stepped = client.post("/simulation/step")
-        assert stepped.status_code == 200, stepped.text
+        time.sleep(0.05)
     pytest.fail(
         "AI game did not reach its terminal persistence boundary within "
-        "500 serial turns",
+        "60 seconds",
     )
 
 
@@ -1175,6 +1178,11 @@ def test_ai_match_publishes_local_terminal_replays_and_game_history(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # This test owns terminal persistence and replay publication, not the
+    # statistical duration of an arbitrary AI matchup.  Freeze its dice stream
+    # so the canonical autonomous match reaches the same terminal boundary on
+    # every run.
+    random.seed(20260730)
     monkeypatch.setenv(
         "DND_LOCAL_PROFILE_RUNTIME_ROOT",
         str(tmp_path / "runtime"),
@@ -1224,6 +1232,7 @@ def test_ai_match_publishes_local_terminal_replays_and_game_history(
                 character_ids=(character_id,),
                 player_controller="ai",
                 opponent_controller="ai",
+                opponent_roster_id="monsters.berserker_duelist",
             ),
         )
         assert started.status_code == 200, started.text
@@ -1288,7 +1297,6 @@ def test_ai_match_publishes_local_terminal_replays_and_game_history(
         membership_id = current.membership.membership_id
         deployment_id = current.characters[0].deployment_id
         _drive_ai_game_to_terminal_boundary(
-            client,
             coordinator,
             game_id,
             expect_staged_intent=False,
@@ -1413,8 +1421,8 @@ def test_staged_character_terminal_recovers_after_finalize_failure_and_restart(
                 json=_compose_start_payload(
                     client,
                     character_ids=(character_id,),
-                    player_controller="ai",
-                    opponent_controller="ai",
+                    player_controller="human",
+                    opponent_controller="human",
                 ),
             )
             assert started.status_code == 200, started.text
@@ -1478,8 +1486,21 @@ def test_staged_character_terminal_recovers_after_finalize_failure_and_restart(
                 },
             )
             assert activated.status_code == 200, activated.text
+
+            async def finish_activated_encounter() -> None:
+                """Serialize the fixture mutation behind activation startup."""
+                combat_task = event_server.sim.combat_task
+                if combat_task is not None:
+                    await combat_task
+                encounter = event_server.sim.encounter
+                assert encounter is not None
+                encounter.end_encounter(
+                    "deterministic staged-terminal recovery fixture",
+                )
+
+            assert client.portal is not None
+            client.portal.call(finish_activated_encounter)
             _drive_ai_game_to_terminal_boundary(
-                client,
                 coordinator,
                 game_id,
                 expect_staged_intent=True,
@@ -1504,6 +1525,7 @@ def test_staged_character_terminal_recovers_after_finalize_failure_and_restart(
             assert "subjective_replay" not in staged_payload
             assert "events" not in str(staged_payload)
             assert "frames" not in str(staged_payload)
+            stored_artifacts: dict[str, bytes] = {}
             for key in (
                 "objective_replay_artifact",
                 "subjective_replay_artifact",
@@ -1515,6 +1537,30 @@ def test_staged_character_terminal_recovers_after_finalize_failure_and_restart(
                     descriptor.content_digest,
                 )
                 assert len(stored) == descriptor.byte_size
+                stored_artifacts[key] = stored
+            envelope = LocalTerminalCommitEnvelope.model_validate(
+                staged_payload,
+            )
+            objective_replay = ObjectiveReplayBundle.model_validate_json(
+                stored_artifacts["objective_replay_artifact"],
+            )
+            subjective_replay = (
+                SubjectivePlayerReplayArchive.model_validate_json(
+                    stored_artifacts["subjective_replay_artifact"],
+                )
+            )
+            conflicting_evidence = envelope.evidence.model_copy(
+                update={"source_event_digest": "0" * 64},
+            )
+            with pytest.raises(
+                ConflictError,
+                match="differs from the staged terminal commit",
+            ):
+                coordinator.complete_terminal(
+                    evidence=conflicting_evidence,
+                    objective_replay=objective_replay,
+                    subjective_replay=subjective_replay,
+                )
             assert (
                 coordinator.repository.get_game(game_id).lifecycle_state
                 is GameLifecycleState.ACTIVE
@@ -1531,6 +1577,11 @@ def test_staged_character_terminal_recovers_after_finalize_failure_and_restart(
                     character_id,
                 )
                 is not None
+            )
+            coordinator.complete_terminal(
+                evidence=envelope.evidence,
+                objective_replay=objective_replay,
+                subjective_replay=subjective_replay,
             )
 
     with TestClient(event_server.app) as recovered_client:

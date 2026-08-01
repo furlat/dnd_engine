@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from threading import RLock
 from typing import Optional, Protocol
 
-from dnd.core.events import Event, EventQueue
+from dnd.core.events import Event, EventPhase, EventQueue, EventType, StepMovementEvent
 from dnd.core.gridmap import GridMap, get_map
 from dnd.encounter import Encounter
 from dnd.entity import Entity
@@ -531,6 +531,7 @@ class CanonicalSubjectiveReplicationRuntime:
             # A source stream may have been stopped and reattached independently.
             # Remove our callback first so idempotent recovery always restores the
             # required source-finalization-before-subjective-projection order.
+            EventQueue.remove_on_event_callback(self._on_movement_step_completion)
             EventQueue.remove_on_event_batch_callback(self._on_event_batch)
             self._source_journal.ensure_attached()
             current_generation = str(EventQueue.generation_id())
@@ -539,6 +540,11 @@ class CanonicalSubjectiveReplicationRuntime:
                     if key.generation_id != current_generation:
                         self.retire(key, reason="event_queue_generation_retired")
                 self._generation_id = current_generation
+            EventQueue.add_on_event_callback(
+                self._on_movement_step_completion,
+                event_types={EventType.STEP_MOVEMENT},
+                phases={EventPhase.COMPLETION},
+            )
             EventQueue.add_on_event_batch_callback(self._on_event_batch)
             self._source_journal.add_finalized_combat_log_source_listener(
                 self._on_finalized_combat_log_source
@@ -548,6 +554,7 @@ class CanonicalSubjectiveReplicationRuntime:
     def stop(self) -> None:
         """Detach runtime callbacks without stopping the objective source journal."""
         with self._lock:
+            EventQueue.remove_on_event_callback(self._on_movement_step_completion)
             EventQueue.remove_on_event_batch_callback(self._on_event_batch)
             self._source_journal.remove_finalized_combat_log_source_listener(
                 self._on_finalized_combat_log_source
@@ -758,6 +765,55 @@ class CanonicalSubjectiveReplicationRuntime:
             for key in tuple(self._contexts):
                 self.retire(key, reason="subjective_runtime_cleared")
             self._store.clear_all()
+
+    def _on_movement_step_completion(self, event: Event) -> None:
+        """Project each committed movement step at its authoritative world state.
+
+        Actions retain one outer causal batch for objective storage, combat-log
+        finalization, and non-movement state changes.  A committed movement step
+        is also an independently observable reducer boundary: position and every
+        causally produced sensory update have already committed, while the next
+        path step has not begun.  Consuming the exact source prefix here preserves
+        that engine-owned timing without asking clients to reconstruct FOV or
+        light from a final action snapshot.
+        """
+        if not isinstance(event, StepMovementEvent) or not event.committed:
+            return
+        with self._lock:
+            if not self._contexts:
+                return
+            current_generation = str(EventQueue.generation_id())
+            if current_generation != self._generation_id:
+                self.ensure_attached()
+                return
+            through_cursor = EventQueue.event_cursor()
+            current_contexts = tuple(
+                context
+                for context in self._contexts.values()
+                if context.protocol.generation_id == current_generation
+            )
+            if not current_contexts:
+                return
+            earliest_cursor = min(
+                context.journal.watermarks.source_event_cursor
+                for context in current_contexts
+            )
+            stored = tuple(EventQueue.iter_events_since(earliest_cursor))
+            if not stored or stored[-1][0] + 1 != through_cursor:
+                self._fail_generation("movement step source prefix is unavailable")
+                return
+            for context in current_contexts:
+                previous_cursor = context.journal.watermarks.source_event_cursor
+                pending = tuple(
+                    ProjectedEventSlot(
+                        source_event_cursor=event_index + 1,
+                        event=stored_event,
+                    )
+                    for event_index, stored_event in stored
+                    if previous_cursor < event_index + 1 <= through_cursor
+                )
+                if pending:
+                    context._consume_batch(pending)
 
     def _on_event_batch(self, events: Sequence[Event]) -> None:
         """Project one exact causal batch after objective log finalization."""

@@ -11,17 +11,19 @@ __all__ = [
     "AbilityName", "SkillName",
     "Event", "Trigger", "BaseHandler", "EventHandler", "SpatialHandler", "EventQueue",
     "SensoryUpdateReason", "SensoryUpdateEvent",
-    "D20Event", "SavingThrowEvent", "SkillCheckEvent",
+    "D20Event", "SavingThrowEvent", "AbilityCheckEvent", "SkillCheckEvent",
     "RollModificationOperation", "RollModification", "DiceRollResultEvent",
     "DamageRollPacket",
     "D20RollResultEvent",
     "AttackD20RollResultEvent",
     "SavingThrowD20RollResultEvent",
+    "AbilityCheckD20RollResultEvent",
     "SkillCheckD20RollResultEvent",
     "DamageRollResultEvent",
-    "SensesUpdateHint", "SpatialChangeEvent", "FireExposureEvent", "ExposedFlameEvent",
-    "WindExposureEvent", "ForcedMovementEvent",
-    "TakeDamageEvent", "DamageAppliedEvent",
+    "SensesUpdateHint", "SpatiallyIndexedEvent", "SpatialChangeEvent",
+    "SpatialEffectChangeEvent", "SpatialEffectInteractionEvent",
+    "ForcedMovementEvent",
+    "TakeDamageEvent", "DamageAppliedEvent", "TemporaryHitPointsEvent",
     "Range", "Damage",
     "EncounterEvent", "EncounterStartEvent", "EncounterEndEvent",
     "RoundEvent", "RoundStartEvent", "RoundEndEvent",
@@ -39,9 +41,13 @@ from dnd.core.values import ModifiableValue
 
 from dnd.core.combat_log import (
     CombatLogEntry,
-    CombatLogEntryType, ModifierBreakdown, DiceRollDisplay,
-    SavingThrowLogData, SkillCheckLogData, DamageTakenLogData, HealLogData,
-    RollModificationLogData, RollModificationLogFact,
+    AbilityCheckLogData, CombatLogEntryType, ModifierBreakdown, DiceRollDisplay,
+    SavingThrowLogData, DeathSaveLogData, SkillCheckLogData, DamageTakenLogData, HealLogData,
+    TemporaryHitPointsLogData,
+    TurnLogData,
+    RollModificationLogData, RollModificationLogFact, SpatialEffectLogData,
+    SpatialEffectInteractionLogData,
+    damage_total_from_log_data,
     md_color, md_d20_roll, md_breakdown, position_evidence_key
 )
 from dnd.core.content.runtime import (
@@ -53,6 +59,7 @@ from dnd.core.content.runtime import (
     bind_runtime_handler_before_admission,
     runtime_behavior_provider,
 )
+from dnd.core.content.identities import ContentRef
 from dnd.core.damage import DamageResolution
 from dnd.core.effect_types import EffectOrigin
 from dnd.core.life_types import LifeState, LifeStateChangeReason
@@ -60,6 +67,12 @@ from dnd.core.creature_types import DamageType
 from dnd.core.saving_throw_types import SavingThrowContext
 from dnd.core.senses import SenseMode
 from dnd.core.equipment_types import WeaponSlot
+from dnd.core.spatial_effect_types import (
+    SpatialEffectChangeOperation,
+    SpatialEffectInteractionIntensity,
+    SpatialEffectInteractionOperation,
+    SpatialEffectLayer,
+)
 from uuid import UUID, uuid4
 from dnd.core.dice import Dice, DiceRoll, AttackOutcome, RollType
 from datetime import UTC, datetime
@@ -143,6 +156,7 @@ class EventType(str, Enum):
     TAKE_DAMAGE = "take_damage"
     DAMAGE_APPLIED = "damage_applied"
     HEAL = "heal"
+    TEMPORARY_HIT_POINTS = "temporary_hit_points"
     CAST_SPELL = "cast_spell"
     ATTACK_MISS = "attack_miss"
     ATTACK_HIT = "attack_hit"
@@ -179,11 +193,10 @@ class EventType(str, Enum):
     SPATIAL_PERCEIVABILITY_CHANGED = "spatial_perceivability_changed"
     SPATIAL_LIGHT_CHANGED = "spatial_light_changed"
     SPATIAL_OBJECT_CHANGED = "spatial_object_changed"
+    SPATIAL_EFFECT_CHANGED = "spatial_effect_changed"
     MOVEMENT_COLLISION = "movement_collision"
     SENSORY_UPDATE = "sensory_update"
-    FIRE_EXPOSURE = "fire_exposure"
-    EXPOSED_FLAME_IGNITED = "exposed_flame_ignited"
-    WIND_EXPOSURE = "wind_exposure"
+    SPATIAL_EFFECT_INTERACTION = "spatial_effect_interaction"
 
     ENCOUNTER_START = "encounter_start"
     ENCOUNTER_END = "encounter_end"
@@ -727,6 +740,14 @@ class Event(BaseObject):
         return self.model_copy(update=updates)
 
 
+class SpatiallyIndexedEvent(Event):
+    """Explicit base for events dispatched through one or more grid cells."""
+
+    def spatial_dispatch_positions(self) -> tuple[Tuple[int, int], ...]:
+        """Return canonical positions used by the spatial-handler index."""
+        raise NotImplementedError
+
+
 def _enrich_multi_entity_log_from_children(
     combat_log: CombatLogEntry,
     child_logs: List[CombatLogEntry],
@@ -752,7 +773,7 @@ def _enrich_multi_entity_log_from_children(
     for child in target_logs:
         child_data = dict(child.data)
         per_target_logs.append(child_data if child_data else None)
-        damage = _damage_from_log_data(child_data)
+        damage = damage_total_from_log_data(child_data)
         if damage is not None:
             per_target_damage.append(damage)
         if child.entry_type == CombatLogEntryType.SPELL_SAVE:
@@ -816,19 +837,6 @@ def _unique_nonempty(values: Sequence[Optional[str]]) -> List[str]:
         out.append(value)
         seen.add(value)
     return out
-
-
-def _damage_from_log_data(data: Dict[str, Any]) -> Optional[int]:
-    """Extract the main damage total from a child combat-log payload."""
-    for key in ("final_damage", "total_damage", "damage"):
-        value = data.get(key)
-        if isinstance(value, bool):
-            continue
-        if isinstance(value, int):
-            return value
-        if isinstance(value, float):
-            return int(value)
-    return None
 
 
 class Trigger(BaseModel):
@@ -1045,23 +1053,6 @@ class SpatialHandler(BaseHandler):
         default=EventPhase.EFFECT,
         description="Spatial event phase this handler receives.",
     )
-
-    def __call__(self, event: Event, source_entity_uuid: Optional[UUID] = None) -> Optional[Event]:
-        """Execute the processor after position-index lookup has matched.
-
-        Args:
-            event: Spatial event version being dispatched.
-            source_entity_uuid: Source UUID supplied by the queue. Defaults to
-                the handler's own source.
-
-        Returns:
-            A modified/canceled event, the same event, or None for no change.
-        """
-        if not self.enabled:
-            return None
-        if source_entity_uuid is None:
-            source_entity_uuid = self.source_entity_uuid
-        return self.event_processor(event, source_entity_uuid)
 
     def remove(self) -> bool:
         """Remove this handler from all spatial queue indexes."""
@@ -1664,6 +1655,64 @@ class EventQueue:
         return current_event
 
     @classmethod
+    def publish_declaration(cls, event: EventT) -> EventT:
+        """Publish an unregistered declaration and retain handler output.
+
+        Args:
+            event: Declaration event constructed with ``use_register=False``.
+
+        Returns:
+            The exact accepted, modified, or canceled declaration value.
+
+        Raises:
+            ValueError: If the event auto-registers or is not a declaration.
+        """
+        if event.use_register:
+            raise ValueError(
+                "Explicit declaration publication requires use_register=False"
+            )
+        if event.phase is not EventPhase.DECLARATION:
+            raise ValueError(
+                "Explicit declaration publication requires a declaration event"
+            )
+        published = cast(EventT, cls.register(event))
+        return cast(
+            EventT,
+            published.model_copy(update={"use_register": True}),
+        )
+
+    @classmethod
+    def publish_lifecycle(cls, event: EventT) -> Optional[EventT]:
+        """Publish one unregistered event through the canonical lifecycle.
+
+        The constructor must not auto-register because callers need the exact
+        functional result returned by declaration handlers. Each accepted
+        phase result is then the sole input to the next phase.
+
+        Args:
+            event: Unregistered declaration event to publish.
+
+        Returns:
+            Completed event, or ``None`` when a handler cancels a phase.
+
+        Raises:
+            ValueError: If the event auto-registers or does not begin at
+                declaration.
+        """
+        current = cls.publish_declaration(event)
+        if current.canceled:
+            return None
+        for phase in (
+            EventPhase.EXECUTION,
+            EventPhase.EFFECT,
+            EventPhase.COMPLETION,
+        ):
+            current = current.phase_to(phase)
+            if current.canceled:
+                return None
+        return current
+
+    @classmethod
     def preflight(cls, event: EventT) -> EventT:
         """Evaluate pure validation handlers without publishing an event.
 
@@ -1927,17 +1976,13 @@ class EventQueue:
     def _get_handlers_for_event(cls, event: Event) -> List['BaseHandler']:
         """Return queue-discovered handlers for an event.
 
-        Spatial entity/tile events with a position use the position index first.
+        Explicit spatial-event values use every declared dispatch position.
         Other events use trigger indexes and trigger predicates.
         """
-        spatial_event_types = (
-            EventType.SPATIAL_ENTITY_ENTERED,
-            EventType.SPATIAL_ENTITY_LEFT,
-            EventType.SPATIAL_TILE_CHANGED
-        )
-        if event.event_type in spatial_event_types:
-            if isinstance(event, SpatialChangeEvent) and event.position is not None:
-                return cls._get_handlers_for_spatial_event(event, event.position)
+        if isinstance(event, SpatiallyIndexedEvent):
+            positions = event.spatial_dispatch_positions()
+            if positions:
+                return cls._get_handlers_for_spatial_event(event, positions)
 
         return cls._get_handlers_for_non_spatial_event(event)
 
@@ -1945,17 +1990,18 @@ class EventQueue:
     def _get_handlers_for_spatial_event(
         cls,
         event: Event,
-        position: Tuple[int, int]
+        positions: tuple[Tuple[int, int], ...],
     ) -> List['BaseHandler']:
-        """Return handlers for one spatial event at one grid position.
+        """Return handlers for one spatial event across exact grid positions.
 
         Position-indexed spatial handlers are discovered in O(1). Trigger-based
         event handlers are still included for global spatial reactions such as
-        opportunity attacks.
+        opportunity attacks. A handler covering several affected cells runs
+        exactly once.
 
         Args:
             event: Spatial event version being dispatched.
-            position: Grid position used for the spatial lookup.
+            positions: Canonically ordered grid positions used for lookup.
 
         Returns:
             De-duplicated handlers in queue dispatch order.
@@ -1964,11 +2010,15 @@ class EventQueue:
         handlers: List['BaseHandler'] = []
         seen: Set[UUID] = set()
 
-        pos_handlers = cls._spatial_handlers_by_position[event_key].get(position, [])
-        for h in pos_handlers:
-            if h.uuid not in seen:
-                handlers.append(h)
-                seen.add(h.uuid)
+        for position in positions:
+            pos_handlers = cls._spatial_handlers_by_position[event_key].get(
+                position,
+                [],
+            )
+            for handler in pos_handlers:
+                if handler.uuid not in seen:
+                    handlers.append(handler)
+                    seen.add(handler.uuid)
 
         simple_trigger = Trigger(event_type=event.event_type, event_phase=event.phase)
         for h in cls._event_handlers_by_simple_trigger.get(simple_trigger, []):
@@ -2042,21 +2092,7 @@ class EventQueue:
             source_handlers.remove(event_handler)
 
         cls._remove_from_spatial_indices(event_handler.uuid)
-
-    @classmethod
-    def get_handlers_by_source_entity(
-        cls,
-        source_entity_uuid: UUID,
-    ) -> tuple["EventHandler", ...]:
-        """Return source-owned non-spatial event handlers."""
-        return tuple(
-            handler
-            for handler in cls._event_handlers_by_source_entity_uuid.get(
-                source_entity_uuid,
-                (),
-            )
-            if isinstance(handler, EventHandler)
-        )
+        event_handler.remove_from_register()
 
     @classmethod
     def get_spatial_handler_registration(
@@ -2232,6 +2268,7 @@ class EventQueue:
             if handler in source_handlers:
                 source_handlers.remove(handler)
 
+        handler.remove_from_register()
         return True
 
     @classmethod
@@ -2554,7 +2591,7 @@ class SavingThrowEvent(D20Event):
 
 
 class SkillCheckEvent(D20Event):
-    """Legacy event payload for a resolved skill check."""
+    """Typed request and resolved outcome for one skill check."""
 
     name: str = Field(default="Skill Check", description="Human-readable skill check label.")
     skill_name: SkillName = Field(description="Skill used for the check.")
@@ -2675,6 +2712,144 @@ class SkillCheckEvent(D20Event):
             detailed=detailed_text,
             data=data.model_dump(),
             success=success
+        )
+
+
+class AbilityCheckEvent(D20Event):
+    """Typed request and resolved outcome for one raw ability check."""
+
+    name: str = Field(default="Ability Check", description="Human-readable ability check label.")
+    ability_name: AbilityName = Field(description="Ability used for the raw check.")
+    event_type: EventType = Field(
+        default=EventType.ABILITY_CHECK,
+        description="Event category for raw ability-check events.",
+    )
+
+    def generate_combat_log(self) -> CombatLogEntry:
+        """Generate one exact raw ability-check combat-log entry."""
+        source_name = self.source_entity_name or "Unknown"
+        dc = self.get_dc()
+        roll = DiceRollDisplay(dice_str="d20", results=[], bonus=0, total=0)
+        if self.dice_roll:
+            results = self.dice_roll.results
+            if isinstance(results, list):
+                roll.results = list(results)
+                roll.all_d20_rolls = list(results)
+                roll.d20_used = results[0] if results else 0
+                advantage = self.dice_roll.advantage_status
+                if advantage:
+                    advantage_value = advantage.value.lower()
+                    roll.advantage_status = advantage_value
+                    if len(results) >= 2:
+                        roll.d20_used = (
+                            max(results)
+                            if advantage_value == "advantage"
+                            else min(results)
+                            if advantage_value == "disadvantage"
+                            else roll.d20_used
+                        )
+            elif isinstance(results, int):
+                roll.results = [results]
+                roll.d20_used = results
+            roll.bonus = self.dice_roll.bonus
+            roll.total = self.dice_roll.total
+
+        bonus_breakdown: List[ModifierBreakdown] = []
+        advantage_breakdown: List[ModifierBreakdown] = []
+        if self.bonus and isinstance(self.bonus, ModifiableValue):
+            bonus_breakdown = [
+                ModifierBreakdown(
+                    name=modifier.get("name", "Unknown"),
+                    value=modifier.get("value", 0),
+                    source=modifier.get("source", "self"),
+                )
+                for modifier in self.bonus.get_breakdown()
+            ]
+            for modifier in self.bonus.get_full_advantage_breakdown():
+                value = modifier.get("value", "inactive")
+                if value in {"advantage", "disadvantage"}:
+                    advantage_breakdown.append(
+                        ModifierBreakdown(
+                            name=modifier.get("name", "Unknown"),
+                            value=1 if value == "advantage" else -1,
+                            source=modifier.get("source", "self"),
+                        ),
+                    )
+
+        success = (
+            self.result
+            if self.result is not None
+            else roll.total >= dc
+            if dc is not None
+            else None
+        )
+        ability_display = self.ability_name.title()
+        d20_display = md_d20_roll(roll)
+        bonus_display = f"+{roll.bonus}" if roll.bonus >= 0 else str(roll.bonus)
+        breakdown_display = md_breakdown(bonus_breakdown)
+        if dc is None:
+            compact = (
+                f"{md_color(source_name, 'cyan')} rolls "
+                f"{md_color(ability_display, 'yellow')}: "
+                f"{md_color(str(roll.total), 'cyan')}"
+            )
+            verbose = (
+                f"{md_color(source_name, 'cyan')} "
+                f"{md_color(ability_display, 'yellow')} check"
+                f"\n  {ability_display}: {d20_display} {bonus_display} = {roll.total}"
+            )
+            detailed = verbose
+            if breakdown_display:
+                detailed = (
+                    f"{md_color(source_name, 'cyan')} "
+                    f"{md_color(ability_display, 'yellow')} check"
+                    f"\n  {ability_display}: {d20_display} {bonus_display} "
+                    f"{breakdown_display} = {roll.total}"
+                )
+        else:
+            success_display = (
+                md_color("succeeds", "green")
+                if success
+                else md_color("fails", "red")
+            )
+            compact = (
+                f"{md_color(source_name, 'cyan')} {success_display} "
+                f"{md_color(ability_display, 'yellow')} check (DC {dc})"
+            )
+            verbose = (
+                f"{md_color(source_name, 'cyan')} "
+                f"{md_color(ability_display, 'yellow')} check vs DC {dc}"
+                f"\n  {ability_display}: {d20_display} {bonus_display} = "
+                f"{roll.total} → {success_display}"
+            )
+            detailed = (
+                f"{md_color(source_name, 'cyan')} "
+                f"{md_color(ability_display, 'yellow')} check vs DC {dc}"
+                f"\n  {ability_display}: {d20_display} {bonus_display}"
+            )
+            if breakdown_display:
+                detailed += f" {breakdown_display}"
+            detailed += f" = {roll.total} → {success_display}"
+
+        data = AbilityCheckLogData(
+            entity_name=source_name,
+            entity_uuid=str(self.source_entity_uuid),
+            ability=self.ability_name,
+            dc=dc,
+            roll=roll,
+            bonus_breakdown=bonus_breakdown,
+            advantage_breakdown=advantage_breakdown,
+            success=success,
+        )
+        return CombatLogEntry(
+            entry_type=CombatLogEntryType.ABILITY_CHECK,
+            source_name=source_name,
+            source_uuid=str(self.source_entity_uuid),
+            compact=compact,
+            verbose=verbose,
+            detailed=detailed,
+            data=data.model_dump(),
+            success=success,
         )
 
 
@@ -2907,7 +3082,169 @@ def _directional_neighbors(position: Tuple[int, int], directions: Optional[List[
     return neighbors
 
 
-class SpatialChangeEvent(Event):
+class SpatialEffectChangeEvent(SpatiallyIndexedEvent):
+    """Observable lifecycle fact for one independent spatial phenomenon."""
+
+    name: str = Field(
+        default="Spatial Effect Change",
+        description="Spatial-effect lifecycle event name.",
+    )
+    event_type: EventType = Field(
+        default=EventType.SPATIAL_EFFECT_CHANGED,
+        frozen=True,
+        description="Dedicated spatial-effect lifecycle event category.",
+    )
+    operation: SpatialEffectChangeOperation
+    spatial_effect_uuid: UUID
+    spatial_effect_content_ref: ContentRef
+    spatial_effect_name: str = Field(min_length=1)
+    layer: SpatialEffectLayer
+    anchor_position: Tuple[int, int] = Field(
+        description="Authoritative effect anchor at this lifecycle boundary.",
+    )
+    affected_positions: Tuple[Tuple[int, int], ...] = ()
+    previous_positions: Tuple[Tuple[int, int], ...] = ()
+
+    @model_validator(mode="after")
+    def validate_positions(self) -> "SpatialEffectChangeEvent":
+        """Keep lifecycle geometry unique and canonically ordered."""
+        if self.affected_positions != tuple(sorted(set(self.affected_positions))):
+            raise ValueError(
+                "spatial-effect affected positions must be unique and sorted",
+            )
+        if self.previous_positions != tuple(sorted(set(self.previous_positions))):
+            raise ValueError(
+                "spatial-effect previous positions must be unique and sorted",
+            )
+        return self
+
+    def generate_combat_log(self) -> CombatLogEntry:
+        """Describe effect creation, movement, transformation, or removal."""
+        source_name = self.source_entity_name or "Unknown"
+        if self.operation is SpatialEffectChangeOperation.CREATED:
+            verb = "creates"
+        elif self.operation is SpatialEffectChangeOperation.REVEALED:
+            verb = "reveals"
+        elif self.operation is SpatialEffectChangeOperation.REMOVED:
+            verb = "removes"
+        elif self.operation is SpatialEffectChangeOperation.TRANSFORMED:
+            verb = "transforms"
+        else:
+            verb = "changes"
+        reported_positions = (
+            self.previous_positions
+            if self.operation is SpatialEffectChangeOperation.REMOVED
+            else self.affected_positions
+        )
+        cell_count = len(reported_positions)
+        compact = (
+            f"{{cyan:{source_name}}} {verb} "
+            f"{{yellow:{self.spatial_effect_name}}}"
+        )
+        verbose = (
+            f"{compact} on {cell_count} "
+            f"{'cell' if cell_count == 1 else 'cells'}"
+        )
+        return CombatLogEntry(
+            entry_type=CombatLogEntryType.SPATIAL_EFFECT,
+            source_name=source_name,
+            source_uuid=str(self.source_entity_uuid),
+            compact=compact,
+            verbose=verbose,
+            detailed=verbose,
+            data=SpatialEffectLogData(
+                operation=self.operation.value,
+                content_identity=self.spatial_effect_content_ref.identity_key,
+                layer=self.layer.value,
+                affected_positions=reported_positions,
+            ).model_dump(mode="json"),
+        )
+
+    def get_affected_positions(self) -> Set[Tuple[int, int]]:
+        """Expose former and resulting cells to projection and perception."""
+        return set(self.affected_positions) | set(self.previous_positions)
+
+    def spatial_dispatch_positions(self) -> tuple[Tuple[int, int], ...]:
+        """Dispatch over both the former and resulting effect footprint."""
+        return tuple(sorted(
+            set(self.affected_positions) | set(self.previous_positions),
+        ))
+
+
+class SpatialEffectInteractionEvent(SpatiallyIndexedEvent):
+    """One typed environmental operation applied across exact world cells."""
+
+    name: str = Field(
+        default="Spatial Effect Interaction",
+        description="Environmental interaction event name.",
+    )
+    event_type: EventType = Field(
+        default=EventType.SPATIAL_EFFECT_INTERACTION,
+        frozen=True,
+        description="Dedicated environmental interaction event category.",
+    )
+    operation: SpatialEffectInteractionOperation
+    positions: Tuple[Tuple[int, int], ...]
+    intensity: SpatialEffectInteractionIntensity = (
+        SpatialEffectInteractionIntensity.MINOR
+    )
+    duration_rounds: Optional[int] = Field(default=None, ge=1)
+    damage_type: Optional[DamageType] = None
+    source_object_uuid: Optional[UUID] = None
+    source_content_ref: Optional[ContentRef] = None
+
+    @model_validator(mode="after")
+    def validate_positions(self) -> "SpatialEffectInteractionEvent":
+        """Require a nonempty unique canonical interaction footprint."""
+        if not self.positions:
+            raise ValueError("spatial-effect interaction requires positions")
+        if self.positions != tuple(sorted(set(self.positions))):
+            raise ValueError(
+                "spatial-effect interaction positions must be unique and sorted",
+            )
+        return self
+
+    def spatial_dispatch_positions(self) -> tuple[Tuple[int, int], ...]:
+        """Return exact positions consumed by the spatial-handler index."""
+        return self.positions
+
+    def get_affected_positions(self) -> Set[Tuple[int, int]]:
+        """Expose exact interaction cells to projection and perception."""
+        return set(self.positions)
+
+    def generate_combat_log(self) -> CombatLogEntry:
+        """Describe the environmental operation without inferring outcomes."""
+        source_name = self.source_entity_name or "Environment"
+        operation_label = self.operation.value.replace("_", " ")
+        compact = (
+            f"{{cyan:{source_name}}} causes "
+            f"{{yellow:{operation_label}}}"
+        )
+        verbose = (
+            f"{compact} across {len(self.positions)} "
+            f"{'cell' if len(self.positions) == 1 else 'cells'}"
+        )
+        return CombatLogEntry(
+            entry_type=CombatLogEntryType.SPATIAL_EFFECT,
+            source_name=source_name,
+            source_uuid=str(self.source_entity_uuid),
+            compact=compact,
+            verbose=verbose,
+            detailed=verbose,
+            data=SpatialEffectInteractionLogData(
+                operation=self.operation.value,
+                intensity=self.intensity.value,
+                affected_positions=self.positions,
+                source_content_identity=(
+                    self.source_content_ref.identity_key
+                    if self.source_content_ref is not None
+                    else None
+                ),
+            ).model_dump(mode="json"),
+        )
+
+
+class SpatialChangeEvent(SpatiallyIndexedEvent):
     """Event fired when grid occupancy, tile state, light, or blocking changes.
 
     GridMap creates these as declaration events and controls registration as it
@@ -3387,92 +3724,15 @@ class SpatialChangeEvent(Event):
                 positions.update(self.senses_hint.directional_neighbors)
         return positions
 
+    def spatial_dispatch_positions(self) -> tuple[Tuple[int, int], ...]:
+        """Dispatch the spatial transition at its committed event position.
 
-class FireExposureEvent(Event):
-    """Position-level event for environmental fire exposure."""
-
-    name: str = Field(default="Fire Exposure", description="Human-readable fire exposure event label.")
-    event_type: EventType = Field(default=EventType.FIRE_EXPOSURE, description="Event category for fire exposure.")
-    position: Tuple[int, int] = Field(description="Grid position exposed to fire.")
-    duration_rounds: int = Field(
-        default=1,
-        ge=1,
-        description="Number of rounds the exposure's lingering fire should last.",
-    )
-    damage_dice: str = Field(
-        default="2d4",
-        description="Rules-facing lingering fire damage expression for consumers that apply damage.",
-    )
-
-    def get_affected_positions(self) -> Set[Tuple[int, int]]:
-        """Return the exposed grid position."""
-        return {self.position}
-
-
-class ExposedFlameEvent(Event):
-    """Event emitted after an item creates an exposed flame."""
-
-    name: str = Field(default="Exposed Flame Ignited", description="Human-readable exposed-flame event label.")
-    event_type: EventType = Field(
-        default=EventType.EXPOSED_FLAME_IGNITED,
-        description="Event category for a newly ignited exposed flame.",
-    )
-    item_uuid: UUID = Field(description="Item that owns the exposed flame.")
-    position: Tuple[int, int] = Field(description="Grid position where the flame is exposed.")
-
-    def get_affected_positions(self) -> Set[Tuple[int, int]]:
-        """Return the exposed flame position."""
-        return {self.position}
-
-
-class WindExposureEvent(Event):
-    """Area-level event for environmental wind exposure."""
-
-    name: str = Field(default="Wind Exposure", description="Human-readable wind exposure event label.")
-    event_type: EventType = Field(
-        default=EventType.WIND_EXPOSURE,
-        description="Event category for wind exposure.",
-    )
-    positions: Set[Tuple[int, int]] = Field(
-        default_factory=set,
-        description="Grid positions exposed to the wind.",
-        json_schema_extra={"uniqueItems": True},
-    )
-    wind_speed_mph: int = Field(
-        default=0,
-        ge=0,
-        description="Wind speed in miles per hour.",
-    )
-    source_description: str = Field(
-        default="wind",
-        description="Rules-facing description of the wind source.",
-    )
-
-    @field_serializer("positions", when_used="json")
-    def serialize_positions(
-        self,
-        value: Set[Tuple[int, int]],
-    ) -> List[Tuple[int, int]]:
-        """Emit wind-exposed cells in canonical wire order."""
-        return sorted(value)
-
-    def gas_dispersal_rounds(self) -> Optional[int]:
-        """Return SRD gas dispersal rounds for this wind speed.
-
-        Returns:
-            One round for strong wind, four rounds for moderate wind, or
-            ``None`` when the wind is too weak to disperse gas.
+        ``get_affected_positions`` is deliberately broader: it is sensory and
+        evidence metadata and may include the former cell, directional
+        neighbours, or both transition endpoints.  Zone-entry/leave handlers
+        must only receive the cell where this event actually occurred.
         """
-        if self.wind_speed_mph >= 20:
-            return 1
-        if self.wind_speed_mph >= 10:
-            return 4
-        return None
-
-    def get_affected_positions(self) -> Set[Tuple[int, int]]:
-        """Return positions exposed to wind."""
-        return set(self.positions)
-
+        return (self.position,)
 
 class ForcedMovementEvent(Event):
     """Forced movement event for pushes, pulls, and similar displacement.
@@ -3610,16 +3870,24 @@ class StepMovementEvent(Event):
         self,
         completion_locations: Dict[str, Set[str]],
     ) -> Dict[str, Set[str]]:
-        """Freeze independent pre-step and post-step coordinate grants."""
+        """Freeze committed occupancy or the exact perceived attempted edge."""
         entity_key = str(self.source_entity_uuid)
         evidence = super().completion_position_observer_evidence(
             completion_locations
         )
         evidence[position_evidence_key(self.from_position)] = set(
-            self.located_entity_observer_uuids.get(entity_key, set())
+            self.located_position_observer_uuids.get(
+                position_evidence_key(self.from_position),
+                self.located_entity_observer_uuids.get(entity_key, set()),
+            )
         )
         evidence[position_evidence_key(self.to_position)] = set(
             completion_locations.get(entity_key, set())
+            if self.committed
+            else self.located_position_observer_uuids.get(
+                position_evidence_key(self.to_position),
+                set(),
+            )
         )
         return evidence
 
@@ -3988,6 +4256,17 @@ class SavingThrowD20RollResultEvent(D20RollResultEvent):
         default=None,
         description="Ability used for the saving throw; absent for ability-neutral death saves.",
     )
+
+
+class AbilityCheckD20RollResultEvent(D20RollResultEvent):
+    """D20 result event for a generic ability check."""
+
+    event_type: EventType = Field(
+        default=EventType.CHECK_D20_ROLL_RESULT,
+        description="Event category for ability-check d20 result interception.",
+    )
+    roll_type: RollType = Field(default=RollType.CHECK, description="Roll category for ability-check d20 results.")
+    ability_name: AbilityName = Field(description="Ability used for the raw check.")
 
 
 class SkillCheckD20RollResultEvent(D20RollResultEvent):
@@ -4438,6 +4717,80 @@ class HealEvent(Event):
         )
 
 
+class TemporaryHitPointsEvent(Event):
+    """Interruptible grant of a non-stacking temporary-hit-point pool."""
+
+    name: str = Field(default="Temporary Hit Points", description="Human-readable event label.")
+    event_type: EventType = Field(
+        default=EventType.TEMPORARY_HIT_POINTS,
+        description="Event category for temporary-hit-point grants.",
+    )
+    requested_amount: int = Field(
+        ge=0,
+        description="Temporary hit points offered before the non-stacking rule.",
+    )
+    previous_amount: int = Field(
+        default=0,
+        ge=0,
+        description="Temporary hit points immediately before the grant.",
+    )
+    resulting_amount: int = Field(
+        default=0,
+        ge=0,
+        description="Temporary hit points immediately after the grant.",
+    )
+    source_description: str = Field(
+        default="",
+        description="Rules-facing description of the granting effect.",
+    )
+
+    def generate_combat_log(self) -> CombatLogEntry:
+        """Describe whether the grant replaced the current temporary HP."""
+        target_name = self.target_entity_name or "Unknown"
+        if self.resulting_amount > self.previous_amount:
+            compact = (
+                f"{md_color(target_name, 'cyan')} gains "
+                f"{md_color(str(self.resulting_amount), 'green')} temporary HP"
+            )
+        else:
+            compact = (
+                f"{md_color(target_name, 'cyan')} retains "
+                f"{md_color(str(self.resulting_amount), 'green')} temporary HP"
+            )
+        verbose = (
+            f"{compact} ({self.source_description})"
+            if self.source_description
+            else compact
+        )
+        return CombatLogEntry(
+            entry_type=CombatLogEntryType.TEMPORARY_HIT_POINTS,
+            source_name=self.source_entity_name or "",
+            source_uuid=str(self.source_entity_uuid),
+            target_name=target_name,
+            target_uuid=(
+                str(self.target_entity_uuid)
+                if self.target_entity_uuid is not None
+                else ""
+            ),
+            compact=compact,
+            verbose=verbose,
+            detailed=verbose,
+            data=TemporaryHitPointsLogData(
+                entity_name=target_name,
+                entity_uuid=(
+                    str(self.target_entity_uuid)
+                    if self.target_entity_uuid is not None
+                    else ""
+                ),
+                requested_amount=self.requested_amount,
+                previous_amount=self.previous_amount,
+                resulting_amount=self.resulting_amount,
+                source_description=self.source_description,
+            ).model_dump(),
+            success=self.resulting_amount > self.previous_amount,
+        )
+
+
 class EncounterEvent(Event):
     """Base event for encounter lifecycle."""
 
@@ -4523,12 +4876,12 @@ class TurnStartEvent(TurnEvent):
             compact=text,
             verbose=text,
             detailed=text,
-            data={
-                "entity_name": entity_name,
-                "entity_uuid": str(self.entity_uuid),
-                "round_number": self.round_number,
-                "turn_index": self.turn_index,
-            }
+            data=TurnLogData(
+                entity_name=entity_name,
+                entity_uuid=str(self.entity_uuid),
+                round_number=self.round_number,
+                turn_index=self.turn_index,
+            ).model_dump()
         )
 
 
@@ -4554,12 +4907,12 @@ class TurnEndEvent(TurnEvent):
             compact=text,
             verbose=text,
             detailed=text,
-            data={
-                "entity_name": entity_name,
-                "entity_uuid": str(self.entity_uuid),
-                "round_number": self.round_number,
-                "turn_index": self.turn_index,
-            }
+            data=TurnLogData(
+                entity_name=entity_name,
+                entity_uuid=str(self.entity_uuid),
+                round_number=self.round_number,
+                turn_index=self.turn_index,
+            ).model_dump()
         )
 
 
@@ -4631,8 +4984,20 @@ class DeathSaveEvent(Event):
             f"{md_color(str(natural), 'cyan')} vs DC {self.dc}: {outcome} "
             f"({self.successes} successes, {self.failures} failures)"
         )
+        data = DeathSaveLogData(
+            entity_name=entity_name,
+            entity_uuid=str(self.entity_uuid),
+            roll=roll_total,
+            natural_roll=natural,
+            dc=self.dc,
+            successes=self.successes,
+            failures=self.failures,
+            became_stable=self.became_stable,
+            regained_hit_point=self.regained_hit_point,
+            died=self.died,
+        )
         return CombatLogEntry(
-            entry_type=CombatLogEntryType.SAVING_THROW,
+            entry_type=CombatLogEntryType.DEATH_SAVE,
             source_name=entity_name,
             source_uuid=str(self.entity_uuid),
             target_name=entity_name,
@@ -4640,18 +5005,7 @@ class DeathSaveEvent(Event):
             compact=text,
             verbose=text,
             detailed=text,
-            data={
-                "entity_name": entity_name,
-                "entity_uuid": str(self.entity_uuid),
-                "roll": roll_total,
-                "natural_roll": natural,
-                "dc": self.dc,
-                "successes": self.successes,
-                "failures": self.failures,
-                "became_stable": self.became_stable,
-                "regained_hit_point": self.regained_hit_point,
-                "died": self.died,
-            },
+            data=data.model_dump(),
             success=self.succeeded or self.regained_hit_point or self.became_stable,
         )
 

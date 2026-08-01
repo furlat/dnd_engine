@@ -147,7 +147,6 @@ def _remove(
             runtime_entity_uuid=context.entity.uuid,
             character_id=context.character_id,
             grants=receipts,
-            automatic_grant_refs=(),
         ),
     )
 

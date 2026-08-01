@@ -10,7 +10,9 @@ from dnd.content_system.character_grant_types import (
     ModifierHandleChannel,
     ModifierHandleKind,
 )
-from dnd.core.base_block import BaseBlock
+from dnd.content_system.character_grant_applier_runtime import (
+    remove_modifier_handle,
+)
 from dnd.core.content.durable_characters import AbilityScoreName
 from dnd.core.content.identities import ContentRef
 from dnd.core.content.origin_features import (
@@ -30,7 +32,6 @@ from dnd.core.saving_throw_types import (
     SAVING_THROW_CONTEXT_KEY,
     SavingThrowContext,
 )
-from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
 
 
@@ -221,15 +222,13 @@ def install_origin_structural_feature(
                 ),
             )
 
-        typed_capability_sources = []
         for capability in definition.capabilities:
             source_id = _child_source_id(
                 grant_id,
                 f"capability:{capability.value}",
             )
             entity.add_origin_capability_source(capability, source_id)
-            typed_capability_sources.append((capability, source_id))
-        capability_sources = list(typed_capability_sources)
+            capability_sources.append((capability, source_id))
     except Exception:
         for capability, source_id in reversed(capability_sources):
             entity.remove_origin_capability_source(capability, source_id)
@@ -238,18 +237,7 @@ def install_origin_structural_feature(
         for source_id in reversed(sense_sources):
             entity.senses.remove_sense_mode_source(source_id)
         for handle in reversed(modifier_handles):
-            value = BaseBlock.get(handle.value_uuid)
-            if not isinstance(value, ModifiableValue):
-                continue
-            channel = (
-                value.self_contextual
-                if handle.channel is ModifierHandleChannel.SELF_CONTEXTUAL
-                else value.self_static
-            )
-            if handle.kind is ModifierHandleKind.RESISTANCE:
-                channel.remove_resistance_modifier(handle.modifier_uuid)
-            else:
-                channel.remove_value_modifier(handle.modifier_uuid)
+            remove_modifier_handle(handle)
         raise
 
     return CharacterGrantReceipt(
@@ -259,7 +247,7 @@ def install_origin_structural_feature(
         modifier_handles=tuple(modifier_handles),
         sense_mode_source_ids=tuple(sense_sources),
         structural_size_source_ids=tuple(size_sources),
-        origin_capability_source_ids=tuple(typed_capability_sources),
+        origin_capability_source_ids=tuple(capability_sources),
     )
 
 

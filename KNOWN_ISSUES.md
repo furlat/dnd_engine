@@ -737,11 +737,15 @@ not override a status recorded here.
 
 ### Static typing debt
 
-- Production/config timing baseline: `19` Pyright errors.
-- Test-only focused baselines: `test_09` (`9`), `test_10` (`8`), `test_13`
-  (`6`), `test_14` (`11`), `test_36` (`10`), and `test_48` (`177`).
-  Historical counts of `22`, `5`, or the earlier seamless-runtime total are
-  obsolete.
+- The complete maintained production scope (`dnd`, `server`, `ai`,
+  `custom_ai`, and `services`) plus AI, architecture, engine, and progression
+  tests now passes Pyright with zero errors and zero warnings.
+- The final close-out removed stale executable book wrappers, narrowed
+  materialized item/event test fixtures to their declared types, and corrected
+  directional environment recipes to use the same closed direction/channel
+  literals as their runtime objects.
+- Historical nonzero counts are retained only as discovery evidence.
+  **Status: RESOLVED 2026-07-30.**
 
 ### Historical reports requiring fresh durable reproduction
 

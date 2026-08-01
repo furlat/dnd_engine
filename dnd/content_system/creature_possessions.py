@@ -12,9 +12,7 @@ from dnd.content_system.item_bindings import (
     ItemRuntimeBindingRegistry,
     ItemRuntimeOrigin,
 )
-from dnd.content_system.item_runtime_materialization import (
-    materialize_item_from_installed_runtime,
-)
+from dnd.content_system.item_materialization import materialize_item
 from dnd.content_system.runtime import (
     SERVER_CONTENT_SYSTEM_RUNTIME,
     ContentSystemRuntime,
@@ -182,7 +180,7 @@ def apply_creature_possessions(
         for grant in selected:
             rows.append((
                 grant,
-                materialize_item_from_installed_runtime(
+                materialize_item(
                     grant.recipe,
                     entity.uuid,
                     origin=grant.origin,
