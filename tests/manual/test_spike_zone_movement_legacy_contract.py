@@ -169,6 +169,7 @@ def test_hidden_spike_trap_reveals_its_exact_effect_once_when_triggered() -> Non
     controller = effect.active_conditions["Spike Trap"]
     assert isinstance(controller, SpikeTrapController)
     assert controller.condition_stealth_dc is None
+    assert effect.stealth_dc is None
     reveal_events = [
         event
         for _, event in EventQueue.iter_events_since(cursor)

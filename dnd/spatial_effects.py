@@ -199,6 +199,7 @@ class SpatialEffect(BaseBlock):
     _primary_controller_uuid: Optional[UUID] = PrivateAttr(default=None)
     _retiring: bool = PrivateAttr(default=False)
     _created_event_published: bool = PrivateAttr(default=False)
+    _reveal_in_progress: bool = PrivateAttr(default=False)
     _interaction_handler_uuid: Optional[UUID] = PrivateAttr(default=None)
     _anchor_handler_uuid: Optional[UUID] = PrivateAttr(default=None)
     _retirement_countdown_uuid: Optional[UUID] = PrivateAttr(default=None)
@@ -562,15 +563,15 @@ class SpatialEffect(BaseBlock):
             )
         return None
 
-    def _publish_change(
+    def _build_change_declaration(
         self,
         operation: SpatialEffectChangeOperation,
         *,
         previous_positions: Set[Tuple[int, int]] | Tuple[Tuple[int, int], ...],
         parent_event: Optional[Event],
-    ) -> Optional[SpatialEffectChangeEvent]:
-        """Publish one exact child lifecycle fact after a committed change."""
-        event = SpatialEffectChangeEvent(
+    ) -> SpatialEffectChangeEvent:
+        """Build one exact unregistered spatial-effect change declaration."""
+        return SpatialEffectChangeEvent(
             source_entity_uuid=self.source_entity_uuid,
             source_entity_name=self.source_entity_name,
             phase=EventPhase.DECLARATION,
@@ -585,7 +586,22 @@ class SpatialEffect(BaseBlock):
             affected_positions=tuple(sorted(self.affected_positions)),
             previous_positions=tuple(sorted(previous_positions)),
         )
-        return EventQueue.publish_lifecycle(event)
+
+    def _publish_change(
+        self,
+        operation: SpatialEffectChangeOperation,
+        *,
+        previous_positions: Set[Tuple[int, int]] | Tuple[Tuple[int, int], ...],
+        parent_event: Optional[Event],
+    ) -> Optional[SpatialEffectChangeEvent]:
+        """Publish one exact child lifecycle fact after a committed change."""
+        return EventQueue.publish_lifecycle(
+            self._build_change_declaration(
+                operation,
+                previous_positions=previous_positions,
+                parent_event=parent_event,
+            ),
+        )
 
     def publish_revealed(
         self,
@@ -595,11 +611,31 @@ class SpatialEffect(BaseBlock):
         """Publish the one-way transition from hidden to globally revealed."""
         if not self._created_event_published:
             raise RuntimeError("Cannot reveal an uninstalled spatial effect")
-        return self._publish_change(
-            SpatialEffectChangeOperation.REVEALED,
-            previous_positions=set(self.affected_positions),
-            parent_event=parent_event,
-        )
+        if self.stealth_dc is None:
+            return None
+        if self._reveal_in_progress:
+            return None
+        self._reveal_in_progress = True
+        try:
+            current = EventQueue.publish_declaration(
+                self._build_change_declaration(
+                    SpatialEffectChangeOperation.REVEALED,
+                    previous_positions=set(self.affected_positions),
+                    parent_event=parent_event,
+                ),
+            )
+            if current.canceled:
+                return None
+            current = current.phase_to(EventPhase.EXECUTION)
+            if current.canceled:
+                return None
+            current = current.phase_to(EventPhase.EFFECT)
+            if current.canceled:
+                return None
+            self.stealth_dc = None
+            return current.phase_to(EventPhase.COMPLETION)
+        finally:
+            self._reveal_in_progress = False
 
     def transition_footprint(
         self,
