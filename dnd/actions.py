@@ -1,6 +1,7 @@
 """Concrete action implementations for combat, movement, spells, and objects."""
 
 import time
+from copy import deepcopy
 from dataclasses import dataclass
 
 from dnd.core.base_actions import (
@@ -66,15 +67,15 @@ from dnd.core.presentation_geometry import AoEPresentationGeometry
 from dnd.core.naming import normalize_spell_id
 from dnd.core.base_block import BaseBlock, MovementMode
 from dnd.core.base_block import LightLevel
-from dnd.action_timing import record_action_elapsed, record_action_timing
+from dnd.action_timing import record_action_timing
 from dnd.core.combat_log import (
     CombatLogEntry, CombatLogEntryType, ModifierBreakdown, DiceRollDisplay,
     DamageRollDisplay, AttackLogData, MovementLogData, SpellSaveLogData,
     format_attack_compact, format_attack_verbose, format_attack_detailed,
     md_color, position_evidence_key
 )
-from pydantic import BaseModel, Field, model_validator
-from typing import Any, Callable, ClassVar, Dict, Iterable, Optional, List, Set, TypeVar, Tuple, Self, cast
+from pydantic import BaseModel, Field, StrictInt, TypeAdapter, model_validator
+from typing import Any, Callable, ClassVar, Dict, Iterable, Mapping, Optional, List, Set, TypeVar, Tuple, Self, cast
 from uuid import UUID, uuid4
 from dnd.entity import Entity, determine_attack_outcome
 from dnd.blocks.base_item import BaseItem
@@ -272,19 +273,73 @@ def validate_line_of_sight(declaration_event: PolymorphicActionEvent, source_ent
         status_message=f"Validated line of sight for {declaration_event.name}"
     )
 
+
+MovePosition = Tuple[StrictInt, StrictInt]
+MovePath = Tuple[MovePosition, ...]
+_MOVE_POSITION_ADAPTER = TypeAdapter(MovePosition)
+_MOVE_PATH_ADAPTER = TypeAdapter(MovePath)
+
+
+def _normalize_move_position(position: object) -> MovePosition:
+    """Normalize one JSON-compatible coordinate to an exact integer tuple."""
+    return _MOVE_POSITION_ADAPTER.validate_python(position)
+
+
+def _normalize_move_path(path: object) -> MovePath:
+    """Normalize one JSON-compatible route to immutable exact coordinates."""
+    return _MOVE_PATH_ADAPTER.validate_python(path)
+
+
+def _copy_observer_map(
+    observer_map: Mapping[str, Set[str]],
+) -> Dict[str, Set[str]]:
+    """Detach one event-time observer map from a handler proposal."""
+    return {
+        key: set(observer_uuids)
+        for key, observer_uuids in observer_map.items()
+    }
+
+
+def _unsettled_move_cancel_updates(
+    event: "MovementEvent",
+    source: Optional[Entity],
+    reason: MovementTerminationReason,
+) -> Dict[str, object]:
+    """Return truthful zero-settlement facts for a pre-EFFECT rejection."""
+    return {
+        "end_position": event.start_position,
+        "objective_end_position": (
+            source.position if source is not None else event.start_position
+        ),
+        "path": (event.start_position,),
+        "costs": [],
+        "termination_reason": reason,
+        "controller_revalidation": False,
+        "controller_revalidation_reason": None,
+        "outcome_code": f"movement.{reason.value}",
+    }
+
 class MovementEvent(ActionEvent):
     """Event payload for path-based movement actions."""
 
     name: str = Field(default="Movement", description="Human-readable movement event label.")
     event_type: EventType = Field(default=EventType.MOVEMENT, description="Movement event category.")
     costs: List[BaseCost] = Field(default_factory=list, description="Serialized movement costs.")
-    start_position: Tuple[int, int] = Field(description="Position occupied before movement starts.")
-    end_position: Tuple[int, int] = Field(description="Intended or actual final movement position.")
-    requested_end_position: Optional[Tuple[int, int]] = Field(
+    start_position: MovePosition = Field(description="Position occupied before movement starts.")
+    end_position: MovePosition = Field(description="Accepted or settled voluntary endpoint.")
+    requested_end_position: Optional[MovePosition] = Field(
         default=None,
         description="Destination requested before any partial-path termination.",
     )
-    path: Optional[List[Tuple[int, int]]] = Field(default=None, description="Grid path used by the movement.")
+    objective_end_position: Optional[MovePosition] = Field(
+        default=None,
+        description="Actual actor position after synchronous child displacement.",
+    )
+    path: Optional[MovePath] = Field(default=None, description="Grid path used by the movement.")
+    movement_mode: MovementMode = Field(
+        default=MovementMode.WALKING,
+        description="Accepted transition and terrain-cost mode for this lineage.",
+    )
     trajectory: MovementTrajectory = Field(
         default=MovementTrajectory.PATH,
         description="Typed trajectory used for each committed movement step.",
@@ -302,12 +357,187 @@ class MovementEvent(ActionEvent):
         description="Typed subjective change that required controller revalidation.",
     )
 
+    def model_copy(
+        self,
+        *,
+        update: Optional[Mapping[str, Any]] = None,
+        deep: bool = False,
+    ) -> Self:
+        """Copy one small movement proposal without aliasing causal evidence."""
+        del deep
+        copied = super().model_copy(update=update, deep=True)
+        if type(copied.costs) is list:
+            copied.costs = [
+                BaseCost.model_validate(cost.model_dump())
+                if isinstance(cost, BaseCost)
+                else deepcopy(cost)
+                for cost in copied.costs
+            ]
+        if copied.context is not None:
+            copied.context = deepcopy(copied.context)
+        return copied
+
+    def validate_handler_result(self, result: Event) -> Event:
+        """Freeze Move-family mechanics before a handler version is stored."""
+        active_proposal = EventQueue.is_active_handler_proposal(result)
+        safe_status = (
+            result.status_message
+            if isinstance(result.status_message, str) or result.status_message is None
+            else self.status_message
+        )
+
+        def queue_owned_updates() -> Dict[str, object]:
+            return {
+                "children_events": list(self.children_events),
+                "lineage_children_events": list(self.lineage_children_events),
+                "children_lineages": list(self.children_lineages),
+                "identified_entity_observer_uuids": _copy_observer_map(
+                    self.identified_entity_observer_uuids
+                ),
+                "located_entity_observer_uuids": _copy_observer_map(
+                    self.located_entity_observer_uuids
+                ),
+                "located_position_observer_uuids": _copy_observer_map(
+                    self.located_position_observer_uuids
+                ),
+            }
+
+        def normalized_cancellation(status_message: str) -> MovementEvent:
+            cancellation = self.invalid_handler_result_cancellation(
+                result,
+                status_message=status_message,
+            )
+            updates = {
+                **_unsettled_move_cancel_updates(
+                    self,
+                    Entity.get(self.source_entity_uuid),
+                    MovementTerminationReason.CANCELED,
+                ),
+                **queue_owned_updates(),
+                "use_register": False if active_proposal else self.use_register,
+            }
+            return cast(MovementEvent, cancellation.model_copy(update=updates))
+
+        def normalized_effect_stop(status_message: str) -> MovementEvent:
+            candidate = self.invalid_handler_result_cancellation(
+                result,
+                status_message=status_message,
+            )
+            return cast(MovementEvent, candidate.model_copy(update={
+                **queue_owned_updates(),
+                "phase": EventPhase.EFFECT,
+                "canceled": False,
+                "canceled_from_phase": self.canceled_from_phase,
+                "termination_reason": MovementTerminationReason.CANCELED,
+                "outcome_code": "movement.canceled",
+                "use_register": False if active_proposal else self.use_register,
+            }))
+
+        def reject(status_message: str) -> MovementEvent:
+            if self.phase is EventPhase.EFFECT:
+                return normalized_effect_stop(status_message)
+            return normalized_cancellation(status_message)
+
+        if type(result) is not MovementEvent:
+            return reject("Movement handler returned an incompatible event type")
+
+        lifecycle_candidate = result
+        if (
+            not active_proposal
+            and result.use_register is False
+            and self.use_register is True
+        ):
+            lifecycle_candidate = result.model_copy(update={"use_register": True})
+        if not self.handler_result_preserves_lifecycle(lifecycle_candidate):
+            return reject("Movement handler changed lifecycle evidence")
+
+        if result.canceled:
+            return reject(safe_status or "Movement canceled by handler")
+
+        if (
+            type(result.costs) is not list
+            or any(
+                type(cost) is not BaseCost
+                or type(cost.cost) is not int
+                or type(cost.resource_cost) is not int
+                or cost.cost < 0
+                or cost.resource_cost < 0
+                for cost in result.costs
+            )
+            or result.path is not None
+            and (
+                type(result.path) is not tuple
+                or any(
+                    type(position) is not tuple
+                    or len(position) != 2
+                    or any(type(coordinate) is not int for coordinate in position)
+                    for position in result.path
+                )
+            )
+        ):
+            return reject("Movement handler returned invalid path or cost shapes")
+
+        allowed_fields = {
+            "uuid",
+            "timestamp",
+            "modified",
+            "status_message",
+            "children_events",
+            "lineage_children_events",
+            "children_lineages",
+            "identified_entity_observer_uuids",
+            "located_entity_observer_uuids",
+            "located_position_observer_uuids",
+        }
+        if any(
+            getattr(result, field_name) != getattr(self, field_name)
+            for field_name in type(self).model_fields
+            if field_name not in allowed_fields
+            and field_name != "use_register"
+        ):
+            return reject("Movement handler changed immutable causal evidence")
+
+        if (
+            not active_proposal
+            and result.uuid == self.uuid
+            and result.timestamp == self.timestamp
+            and result.modified == self.modified
+            and safe_status == self.status_message
+        ):
+            return self
+
+        result_uuid = result.uuid
+        result_changed = (
+            safe_status != self.status_message
+            or result.timestamp != self.timestamp
+        )
+        if result_uuid == self.uuid and result_changed:
+            result_uuid = uuid4()
+        accepted = self.model_copy(update={
+            **queue_owned_updates(),
+            "uuid": result_uuid,
+            "timestamp": result.timestamp,
+            "modified": result.modified or result_changed,
+            "status_message": safe_status,
+            "use_register": False if active_proposal else self.use_register,
+        })
+        return cast(MovementEvent, accepted)
+
     def get_affected_positions(self) -> Set[Tuple[int, int]]:
         """Return movement positions relevant to spatial handlers."""
-        positions = {self.start_position, self.end_position}
-        if self.path:
+        positions = {self.start_position}
+        if self.phase is EventPhase.COMPLETION and self.path:
             positions.update(self.path)
         return positions
+
+    def handler_result_stops_dispatch(self, result: Event) -> bool:
+        """Keep an EFFECT stop marker monotonic within one handler dispatch."""
+        return (
+            super().handler_result_stops_dispatch(result)
+            or isinstance(result, MovementEvent)
+            and result.phase is EventPhase.EFFECT
+            and result.termination_reason is MovementTerminationReason.CANCELED
+        )
 
     def generate_combat_log(self) -> CombatLogEntry:
         """Generate a combat log entry for this movement event.
@@ -317,7 +547,7 @@ class MovementEvent(ActionEvent):
         """
         source_name = self.source_entity_name or "Unknown"
 
-        path = self.path or []
+        path = list(self.path or ())
         distance_feet = (len(path) - 1) * 5 if len(path) > 1 else 0
 
         movement_cost = 0
@@ -348,6 +578,7 @@ class MovementEvent(ActionEvent):
             distance_feet=distance_feet,
             movement_cost=movement_cost,
             requested_end_position=self.requested_end_position,
+            objective_end_position=self.objective_end_position,
             termination_reason=self.termination_reason.value,
             controller_revalidation=self.controller_revalidation,
             controller_revalidation_reason=self.controller_revalidation_reason,
@@ -363,6 +594,19 @@ class MovementEvent(ActionEvent):
             data=data.model_dump(),
             success=True
         )
+
+
+@dataclass(frozen=True, slots=True)
+class _MoveStepSettlement:
+    """One voluntary edge's authoritative settlement result."""
+
+    committed: bool
+    path: Tuple[Tuple[int, int], ...]
+    movement_spent: int
+    objective_position: Tuple[int, int]
+    termination_reason: Optional[MovementTerminationReason]
+    continuation_decision: MovementContinuationDecision
+    continuation_reason: Optional[str]
 
 
 @_core_action_identity(
@@ -383,8 +627,8 @@ class Move(BaseAction):
     description: str = Field(default="Move to a position", description="Movement action description.")
     target_type: TargetType = Field(default=TargetType.POSITION_PATH, description="Move targets a path-reachable position.")
     action_category: ActionCategory = Field(default=ActionCategory.MOVEMENT, description="Movement action category.")
-    end_position: Optional[Tuple[int, int]] = Field(default=None, description="Requested movement destination.")
-    path: Optional[List[Tuple[int, int]]] = Field(default=None, description="Resolved path from source to destination.")
+    end_position: Optional[MovePosition] = Field(default=None, description="Requested movement destination.")
+    path: Optional[MovePath] = Field(default=None, description="Resolved path from source to destination.")
     use_movement_cost: bool = Field(default=True, description="Whether movement costs are generated from the path.")
     prefer_safe: bool = Field(default=True, description="Whether a safe path is preferred when available.")
     movement_mode: MovementMode = Field(default=MovementMode.WALKING, description="Movement mode used for terrain costs and transitions.")
@@ -401,29 +645,43 @@ class Move(BaseAction):
 
     def _setup_costs_from_path(self) -> None:
         """Rebuild the movement cost from the resolved path and terrain."""
-        if self.path is not None and self.use_movement_cost:
-            grid = get_map()
-            total_cost = 0
-
-            source_entity = Entity.get(self.source_entity_uuid)
-            ign_terrain = source_entity.ignore_difficult_terrain if source_entity else False
-
-            for i in range(1, len(self.path)):
-                tile = grid.get_tile(*self.path[i])
-                total_cost += self._get_step_cost_units(tile, source_entity, ign_terrain)
-
-            feet_cost = int(total_cost * 5)
-            self.costs.append(
-                Cost(
-                    name="Movement Cost",
-                    cost_type="movement",
-                    cost=feet_cost,
-                    evaluator=entity_action_economy_cost_evaluator,
-                )
+        self.costs = [
+            cost for cost in self.costs if cost.cost_type != "movement"
+        ]
+        if self.path is None or not self.use_movement_cost:
+            return
+        grid = get_map()
+        total_cost = 0
+        source_entity = Entity.get(self.source_entity_uuid)
+        ignore_terrain = (
+            source_entity.ignore_difficult_terrain
+            if isinstance(source_entity, Entity)
+            else False
+        )
+        for position in self.path[1:]:
+            tile = grid.get_tile(*position)
+            total_cost += self._get_step_cost_units(
+                tile,
+                source_entity if isinstance(source_entity, Entity) else None,
+                ignore_terrain,
+                self.movement_mode,
             )
+        feet_cost = int(total_cost * 5)
+        self.costs.append(Cost(
+            name="Movement Cost",
+            cost_type="movement",
+            cost=feet_cost,
+            evaluator=entity_action_economy_cost_evaluator,
+        ))
 
-    def _get_step_cost_units(self, tile: Optional[Tile], source_entity: Optional[Entity], ignore_difficult_terrain: bool = False) -> float:
-        """Return movement-cost units for one step in this action's mode.
+    @staticmethod
+    def _get_step_cost_units(
+        tile: Optional[Tile],
+        source_entity: Optional[Entity],
+        ignore_difficult_terrain: bool,
+        movement_mode: MovementMode,
+    ) -> float:
+        """Return movement-cost units for one step in the accepted mode.
 
         Args:
             tile: Destination tile or block-like terrain object.
@@ -434,15 +692,15 @@ class Move(BaseAction):
             Movement cost in grid cost units before conversion to feet.
         """
         if tile:
-            cost = tile.get_movement_cost(self.movement_mode)
+            cost = tile.get_movement_cost(movement_mode)
         else:
             cost = 1.0
 
-        if self.movement_mode == MovementMode.WALKING and ignore_difficult_terrain:
+        if movement_mode == MovementMode.WALKING and ignore_difficult_terrain:
             cost = min(cost, 1.0)
 
         if (
-            self.movement_mode == MovementMode.SWIMMING
+            movement_mode == MovementMode.SWIMMING
             and source_entity is not None
             and source_entity.swimming_speed <= 0
             and not source_entity.ignore_underwater_penalties
@@ -458,9 +716,13 @@ class Move(BaseAction):
             if source_entity is None or not isinstance(source_entity, Entity):
                 return None
             if self.movement_mode == MovementMode.WALKING and self.prefer_safe and self.end_position in source_entity.senses.safe_paths:
-                self.path = source_entity.senses.safe_paths[self.end_position]
+                self.path = _normalize_move_path(
+                    source_entity.senses.safe_paths[self.end_position]
+                )
             elif self.movement_mode == MovementMode.WALKING and self.end_position in source_entity.senses.paths:
-                self.path = source_entity.senses.paths[self.end_position]
+                self.path = _normalize_move_path(
+                    source_entity.senses.paths[self.end_position]
+                )
             elif self.movement_mode != MovementMode.WALKING:
                 grid = get_map()
                 _, paths = grid.compute_paths(
@@ -468,8 +730,17 @@ class Move(BaseAction):
                     requesting_entity_uuid=source_entity.uuid,
                     movement_mode=self.movement_mode,
                     subjective=True,
+                    collision_blocked=source_entity.senses.collision_blocked,
+                    directional_collision_blocked=(
+                        source_entity.senses.directional_collision_blocked
+                    ),
                 )
-                self.path = paths.get(self.end_position)
+                discovered = paths.get(self.end_position)
+                self.path = (
+                    _normalize_move_path(discovered)
+                    if discovered is not None
+                    else None
+                )
 
     def set_target_position(self, position: Tuple[int, int]) -> None:
         """Set target position and compute path/costs for validation.
@@ -477,10 +748,13 @@ class Move(BaseAction):
         Overrides base implementation to also compute path and costs,
         so that pre_validate() can properly check movement affordability.
         """
+        normalized_position = _normalize_move_position(position)
         self.path = None
-        self.costs = []
+        self.costs = [
+            cost for cost in self.costs if cost.cost_type != "movement"
+        ]
 
-        super().set_target_position(position)
+        super().set_target_position(normalized_position)
 
         self._setup_path()
         self._setup_costs_from_path()
@@ -494,70 +768,127 @@ class Move(BaseAction):
         if not self.template:
             raise ValueError("Can only instantiate from a template")
 
-        update_dict: dict = {
+        if "movement_mode" in overrides:
+            raise ValueError("Move-family templates own their movement mode")
+        if "end_position" in overrides and overrides["end_position"] is not None:
+            overrides["end_position"] = _normalize_move_position(
+                overrides["end_position"]
+            )
+        explicit_path = overrides.pop("path", None)
+        explicit_costs = overrides.pop("costs", self.costs)
+        fixed_costs = [
+            cost.model_copy(deep=True)
+            for cost in explicit_costs
+            if isinstance(cost, Cost) and cost.cost_type != "movement"
+        ]
+        update_dict: Dict[str, object] = {
             "uuid": uuid4(),
             "template": False,
             "use_register": False,
-            "path": None,
-            "costs": [],
+            "path": (
+                _normalize_move_path(explicit_path)
+                if explicit_path is not None
+                else None
+            ),
+            "costs": fixed_costs,
         }
         update_dict.update(overrides)
 
         instance = self.model_copy(deep=True, update=update_dict)
 
-        if instance.end_position is not None:
+        if instance.end_position is not None and instance.path is None:
             instance._setup_path()
+        if instance.path is not None:
             instance._setup_costs_from_path()
 
         return instance
 
     @staticmethod
-    def validate_path(
-        declaration_event: MovementEvent,
-        source_entity_uuid: UUID,
-        movement_mode: MovementMode = MovementMode.WALKING,
-    ) -> MovementEvent:
-        """Validate that a movement event carries a usable path.
-
-        Args:
-            declaration_event: Movement declaration event to validate.
-            source_entity_uuid: Moving entity UUID.
-            movement_mode: Movement mode required for each transition.
-
-        Returns:
-            Updated declaration event or canceled event.
-        """
-        source_entity = Entity.get(source_entity_uuid)
-        if not source_entity or not isinstance(source_entity, Entity):
-            return declaration_event.cancel(status_message=f"Source entity not found for {declaration_event.name}")
-        if declaration_event.path is None or len(declaration_event.path) == 0:
-            return declaration_event.cancel(status_message=f"No valid path found for {declaration_event.name}")
-
-        else:
-            if movement_mode == MovementMode.WALKING and declaration_event.path == source_entity.senses.paths[declaration_event.end_position]:
-                return declaration_event.with_updates(
-                    status_message=f"Validated path for {declaration_event.name}"
+    def _validate_admitted_costs(event: MovementEvent) -> bool:
+        """Return whether Move-family cost evidence has one closed shape."""
+        movement_cost_count = 0
+        for cost in event.costs:
+            if (
+                type(cost) is not BaseCost
+                or type(cost.cost) is not int
+                or type(cost.resource_cost) is not int
+                or cost.cost < 0
+                or cost.resource_cost < 0
+                or (
+                    cost.resource_name is None
+                    and cost.resource_cost != 0
                 )
-            elif movement_mode == MovementMode.WALKING:
-                for path_position in declaration_event.path:
-                    if path_position not in source_entity.senses.paths:
-                        return declaration_event.cancel(status_message=f"Invalid path for {declaration_event.name} at position {path_position}")
+                or (
+                    cost.resource_name is not None
+                    and (
+                        type(cost.resource_name) is not str
+                        or not cost.resource_name.strip()
+                        or cost.resource_cost <= 0
+                    )
+                )
+            ):
+                return False
+            if cost.cost_type == "movement":
+                movement_cost_count += 1
+                if cost.resource_name is not None or cost.resource_cost != 0:
+                    return False
+        return movement_cost_count <= 1
 
-                return declaration_event.with_updates(
-                    status_message=f"Validated path for {declaration_event.name}"
-                )
-            else:
-                grid = get_map()
-                if declaration_event.path[0] != source_entity.position:
-                    return declaration_event.cancel(status_message=f"Invalid path start for {declaration_event.name}")
-                if declaration_event.path[-1] != declaration_event.end_position:
-                    return declaration_event.cancel(status_message=f"Invalid path end for {declaration_event.name}")
-                for from_pos, to_pos in zip(declaration_event.path, declaration_event.path[1:]):
-                    if not grid.can_transition(from_pos, to_pos, source_entity.uuid, movement_mode, subjective=True):
-                        return declaration_event.cancel(status_message=f"Invalid {movement_mode.value} transition for {declaration_event.name} at position {to_pos}")
-                return declaration_event.with_updates(
-                    status_message=f"Validated path for {declaration_event.name}"
-                )
+    @staticmethod
+    def _validate_route(
+        event: MovementEvent,
+        source: Entity,
+    ) -> bool:
+        """Validate the exact disclosed, bounded route accepted for execution."""
+        path = event.path
+        if path is None or len(path) < 2:
+            return False
+        if (
+            path[0] != source.position
+            or path[0] != event.start_position
+            or path[-1] != event.end_position
+            or len(set(path)) != len(path)
+            or len(path) - 1
+            > source.action_economy.movement.normalized_score // 5
+        ):
+            return False
+        disclosed_positions = set(source.senses.visible) | set(source.senses.seen)
+        if any(position not in disclosed_positions for position in path):
+            return False
+        if (
+            event.movement_mode is MovementMode.WALKING
+            and event.end_position not in source.senses.paths
+        ):
+            return False
+        if (
+            event.movement_mode is not MovementMode.WALKING
+            and event.end_position not in source.senses.visible
+        ):
+            return False
+        grid = get_map()
+        return all(
+            grid.can_transition(
+                from_position,
+                to_position,
+                source.uuid,
+                event.movement_mode,
+                subjective=True,
+                collision_blocked=source.senses.collision_blocked,
+                directional_collision_blocked=(
+                    source.senses.directional_collision_blocked
+                ),
+            )
+            for from_position, to_position in zip(path, path[1:])
+        )
+
+    def _validate_move_prerequisites(
+        self,
+        event: MovementEvent,
+        source: Entity,
+    ) -> Optional[MovementTerminationReason]:
+        """Return a current Move-family content failure, if any."""
+        del event, source
+        return None
 
     def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
         """Create the declaration event for the movement action.
@@ -572,11 +903,11 @@ class Move(BaseAction):
         if self.end_position is None:
             return None
 
-        end_position: Tuple[int, int] = self.end_position
+        end_position = _normalize_move_position(self.end_position)
 
         path = self.path
         if path is None and self.movement_mode == MovementMode.WALKING and end_position in source_entity.senses.paths:
-            path = source_entity.senses.paths[end_position]
+            path = _normalize_move_path(source_entity.senses.paths[end_position])
         elif path is None and self.movement_mode != MovementMode.WALKING:
             grid = get_map()
             _, paths = grid.compute_paths(
@@ -584,22 +915,27 @@ class Move(BaseAction):
                 requesting_entity_uuid=source_entity.uuid,
                 movement_mode=self.movement_mode,
                 subjective=True,
+                collision_blocked=source_entity.senses.collision_blocked,
+                directional_collision_blocked=(
+                    source_entity.senses.directional_collision_blocked
+                ),
             )
-            path = paths.get(end_position)
+            discovered = paths.get(end_position)
+            path = (
+                _normalize_move_path(discovered)
+                if discovered is not None
+                else None
+            )
 
-        costs = list(self.costs)
-        if path is not None and self.use_movement_cost:
-            has_movement_cost = any(c.cost_type == "movement" for c in costs)
-            if not has_movement_cost:
-                grid = get_map()
-                total_cost = 0
+        if path is not None:
+            self.path = _normalize_move_path(path)
+            self._setup_costs_from_path()
+            path = self.path
 
-                for i in range(1, len(path)):
-                    tile = grid.get_tile(*path[i])
-                    total_cost += self._get_step_cost_units(tile, source_entity, source_entity.ignore_difficult_terrain)
-
-                feet_cost = int(total_cost * 5)
-                costs.append(Cost(name="Movement Cost", cost_type="movement", cost=feet_cost, evaluator=entity_action_economy_cost_evaluator))
+        costs = [
+            BaseCost.model_validate(cost.model_dump())
+            for cost in self.effective_costs
+        ]
 
         return MovementEvent(
             name=f"{self.name}",
@@ -609,319 +945,678 @@ class Move(BaseAction):
             start_position=source_entity.position,
             end_position=end_position,
             requested_end_position=end_position,
+            objective_end_position=None,
             path=path,
-            costs=[BaseCost.model_validate(cost) for cost in costs],
+            movement_mode=self.movement_mode,
+            costs=costs,
             use_register=use_register,
             source_entity_name=source_entity.name,
         )
 
     def _validate(self, declaration_event: MovementEvent) -> MovementEvent:
         """Validate the movement action."""
-        validated_event = Move.validate_path(declaration_event, self.source_entity_uuid, self.movement_mode)
-        if not validated_event.canceled:
-            return validated_event.phase_to(
-                new_phase=EventPhase.EXECUTION,
-                status_message=f"Validated  {declaration_event.name}"
+        source = Entity.get(declaration_event.source_entity_uuid)
+        if not isinstance(source, Entity):
+            return declaration_event.cancel(
+                status_message=f"Source entity not found for {declaration_event.name}",
+                **_unsettled_move_cancel_updates(
+                    declaration_event,
+                    None,
+                    MovementTerminationReason.ACTION_DENIED,
+                ),
             )
+        if not self._validate_admitted_costs(declaration_event):
+            return declaration_event.cancel(
+                status_message=f"Invalid costs for {declaration_event.name}",
+                **_unsettled_move_cancel_updates(
+                    declaration_event,
+                    source,
+                    MovementTerminationReason.INVALID_COST,
+                ),
+            )
+        if not self._validate_route(declaration_event, source):
+            return declaration_event.cancel(
+                status_message=f"Invalid path for {declaration_event.name}",
+                **_unsettled_move_cancel_updates(
+                    declaration_event,
+                    source,
+                    MovementTerminationReason.INVALID_PATH,
+                ),
+            )
+        prerequisite_failure = self._validate_move_prerequisites(
+            declaration_event,
+            source,
+        )
+        if prerequisite_failure is not None:
+            return declaration_event.cancel(
+                status_message=f"Movement prerequisites failed for {declaration_event.name}",
+                **_unsettled_move_cancel_updates(
+                    declaration_event,
+                    source,
+                    prerequisite_failure,
+                ),
+            )
+        return declaration_event.phase_to(
+            new_phase=EventPhase.EXECUTION,
+            status_message=f"Validated {declaration_event.name}",
+        )
+
+    @staticmethod
+    def _objective_move_failure(
+        source: Entity,
+        expected_position: Tuple[int, int],
+        *,
+        after_committed_arrival: bool = False,
+    ) -> Optional[MovementTerminationReason]:
+        """Return the highest-priority current objective movement failure."""
+        if not after_committed_arrival and source.position != expected_position:
+            return MovementTerminationReason.POSITION_DIVERGED
+        if source.health.life_state is LifeState.DEAD:
+            return MovementTerminationReason.DEAD
+        if not source.can_take_actions():
+            return MovementTerminationReason.ACTION_DENIED
+        if source.position != expected_position:
+            return MovementTerminationReason.POSITION_DIVERGED
+        return None
+
+    @staticmethod
+    def _publish_hidden_movement_collision(
+        grid: GridMap,
+        source: Entity,
+        root_event: MovementEvent,
+        from_position: Tuple[int, int],
+        to_position: Tuple[int, int],
+        movement_mode: MovementMode,
+    ) -> None:
+        """Retain collision memory and its existing spatial reveal fact."""
+        if not grid.can_transition(
+            from_position,
+            to_position,
+            source.uuid,
+            movement_mode,
+            subjective=True,
+            collision_blocked=source.senses.collision_blocked,
+            directional_collision_blocked=(
+                source.senses.directional_collision_blocked
+            ),
+        ):
+            return
+        cell_blocked = not grid.is_walkable_for(
+            to_position[0],
+            to_position[1],
+            source.uuid,
+            movement_mode,
+        )
+        directions: List[str] = []
+        from_tile = grid.get_tile(*from_position)
+        if from_tile is not None:
+            directions = list(from_tile.directions_toward(to_position))
+        if cell_blocked:
+            source.senses.collision_blocked.add(to_position)
         else:
-            return validated_event
+            for direction in directions:
+                source.senses.directional_collision_blocked.add(
+                    (from_position, direction)
+                )
+        collision_event = SpatialChangeEvent.movement_collision(
+            position=to_position,
+            mover_uuid=source.uuid,
+            parent_event=root_event.uuid,
+            transition_from=from_position,
+            transition_to=to_position,
+            directional_position=from_position if directions else None,
+            directional_directions=directions or None,
+            directional_channels=(
+                ["movement"]
+                if directions and not cell_blocked
+                else None
+            ),
+        )
+        grid._fire_spatial_event(collision_event)
+
+    @staticmethod
+    def _accepted_step_cost_feet(
+        tile: Optional[Tile],
+        source: Entity,
+        movement_mode: MovementMode,
+    ) -> Optional[int]:
+        """Return one exact positive edge debit, or None for invalid evidence."""
+        units = Move._get_step_cost_units(
+            tile,
+            source,
+            source.ignore_difficult_terrain,
+            movement_mode,
+        )
+        if isinstance(units, bool) or not isinstance(units, (int, float)):
+            return None
+        feet = units * 5
+        if feet <= 0 or int(feet) != feet:
+            return None
+        return int(feet)
+
+    @staticmethod
+    def _settle_fixed_move_costs(
+        source: Entity,
+        admitted_costs: Tuple[BaseCost, ...],
+    ) -> Optional[Tuple[BaseCost, ...]]:
+        """Atomically re-admit and consume fixed Move-family costs."""
+        fixed_costs = tuple(
+            BaseCost.model_validate(cost.model_dump())
+            for cost in admitted_costs
+            if cost.cost_type != "movement"
+        )
+        economy_totals: Dict[CostType, int] = {}
+        resource_totals: Dict[str, int] = {}
+        for cost in fixed_costs:
+            if cost.cost > 0:
+                economy_totals[cost.cost_type] = (
+                    economy_totals.get(cost.cost_type, 0) + cost.cost
+                )
+            if cost.resource_name is not None and cost.resource_cost > 0:
+                resource_totals[cost.resource_name] = (
+                    resource_totals.get(cost.resource_name, 0)
+                    + cost.resource_cost
+                )
+        if any(
+            not source.action_economy.can_afford(cost_type, amount)
+            for cost_type, amount in economy_totals.items()
+        ):
+            return None
+        if any(
+            not source.action_economy.can_afford_resource(resource_name, amount)
+            for resource_name, amount in resource_totals.items()
+        ):
+            return None
+
+        for cost_type, amount in economy_totals.items():
+            source.action_economy.consume_prevalidated(
+                cost_type,
+                amount,
+                "Movement fixed costs",
+            )
+        for resource_name, amount in resource_totals.items():
+            if not source.action_economy.consume_resource(resource_name, amount):
+                raise RuntimeError(
+                    "Prevalidated movement resource became unavailable "
+                    "inside a synchronous commit"
+                )
+        return fixed_costs
+
+    @staticmethod
+    def _complete_accepted_move_effect(
+        effect_event: MovementEvent,
+        source: Entity,
+        voluntary_path: Tuple[Tuple[int, int], ...],
+        movement_spent: int,
+        settled_fixed_costs: Tuple[BaseCost, ...],
+        termination_reason: MovementTerminationReason,
+        continuation_decision: MovementContinuationDecision = (
+            MovementContinuationDecision.CONTINUE
+        ),
+        continuation_reason: Optional[str] = None,
+    ) -> MovementEvent:
+        """Publish one truthful terminal fact for an accepted EFFECT."""
+        actual_costs = [
+            *(
+                BaseCost.model_validate(cost.model_dump())
+                for cost in settled_fixed_costs
+            ),
+            BaseCost(
+                name="Movement Cost",
+                cost_type="movement",
+                cost=movement_spent,
+            ),
+        ]
+        return effect_event.phase_to(
+            EventPhase.COMPLETION,
+            end_position=voluntary_path[-1],
+            objective_end_position=_normalize_move_position(source.position),
+            path=_normalize_move_path(voluntary_path),
+            costs=actual_costs,
+            termination_reason=termination_reason,
+            controller_revalidation=(
+                continuation_decision is MovementContinuationDecision.INTERRUPT
+            ),
+            controller_revalidation_reason=continuation_reason,
+            outcome_code=f"movement.{termination_reason.value}",
+            status_message=(
+                f"Applied movement at {voluntary_path[-1]}"
+                if termination_reason is MovementTerminationReason.COMPLETED
+                else (
+                    f"Partial movement for {effect_event.name}, stopped at "
+                    f"{voluntary_path[-1]}"
+                )
+            ),
+        )
+
+    def _commit_move_step(
+        self,
+        *,
+        root_event: MovementEvent,
+        source: Entity,
+        grid: GridMap,
+        step_event: StepMovementEvent,
+        voluntary_path: Tuple[Tuple[int, int], ...],
+        movement_spent: int,
+        source_event_cursor_start: int,
+    ) -> _MoveStepSettlement:
+        """Settle one accepted voluntary edge in its exact causal order."""
+        from_position = step_event.from_position
+        to_position = step_event.to_position
+        failure = self._objective_move_failure(source, from_position)
+        if failure is not None:
+            step_event.phase_to(
+                EventPhase.COMPLETION,
+                committed=False,
+                status_message=f"Movement step rejected before {to_position}",
+            )
+            return _MoveStepSettlement(
+                committed=False,
+                path=voluntary_path,
+                movement_spent=movement_spent,
+                objective_position=source.position,
+                termination_reason=failure,
+                continuation_decision=MovementContinuationDecision.CONTINUE,
+                continuation_reason=None,
+            )
+
+        if not grid.can_transition(
+            from_position,
+            to_position,
+            source.uuid,
+            root_event.movement_mode,
+        ):
+            self._publish_hidden_movement_collision(
+                grid,
+                source,
+                root_event,
+                from_position,
+                to_position,
+                root_event.movement_mode,
+            )
+            step_event.phase_to(
+                EventPhase.COMPLETION,
+                committed=False,
+                status_message=f"Movement step blocked before {to_position}",
+            )
+            return _MoveStepSettlement(
+                committed=False,
+                path=voluntary_path,
+                movement_spent=movement_spent,
+                objective_position=source.position,
+                termination_reason=MovementTerminationReason.COLLISION,
+                continuation_decision=MovementContinuationDecision.CONTINUE,
+                continuation_reason=None,
+            )
+
+        step_cost_feet = self._accepted_step_cost_feet(
+            grid.get_tile(*to_position),
+            source,
+            root_event.movement_mode,
+        )
+        if step_cost_feet is None:
+            step_event.phase_to(
+                EventPhase.COMPLETION,
+                committed=False,
+                status_message=f"Invalid movement cost before {to_position}",
+            )
+            return _MoveStepSettlement(
+                committed=False,
+                path=voluntary_path,
+                movement_spent=movement_spent,
+                objective_position=source.position,
+                termination_reason=MovementTerminationReason.INVALID_COST,
+                continuation_decision=MovementContinuationDecision.CONTINUE,
+                continuation_reason=None,
+            )
+        if source.action_economy.movement.normalized_score < step_cost_feet:
+            step_event.phase_to(
+                EventPhase.COMPLETION,
+                committed=False,
+                movement_cost=step_cost_feet,
+                status_message=f"Insufficient movement before {to_position}",
+            )
+            return _MoveStepSettlement(
+                committed=False,
+                path=voluntary_path,
+                movement_spent=movement_spent,
+                objective_position=source.position,
+                termination_reason=MovementTerminationReason.INSUFFICIENT_MOVEMENT,
+                continuation_decision=MovementContinuationDecision.CONTINUE,
+                continuation_reason=None,
+            )
+
+        voluntary_observer_evidence = _step_intent_position_evidence(
+            grid,
+            from_position,
+            to_position,
+        )
+        source.action_economy.consume("movement", step_cost_feet)
+        Entity.update_entity_position(
+            source,
+            to_position,
+            parent_event=step_event.uuid,
+        )
+        committed_path = (*voluntary_path, to_position)
+        committed_spent = movement_spent + step_cost_feet
+
+        authoritative_step = EventQueue.get_event_by_uuid(step_event.uuid)
+        if (
+            type(authoritative_step) is not StepMovementEvent
+            or authoritative_step.lineage_uuid != step_event.lineage_uuid
+            or authoritative_step.phase is not EventPhase.EFFECT
+        ):
+            raise RuntimeError("Stored movement Step changed before arrival settlement")
+        completion_source = authoritative_step.model_copy(update={
+            "located_position_observer_uuids": voluntary_observer_evidence,
+        })
+        completed_step = completion_source.phase_to(
+            EventPhase.COMPLETION,
+            committed=True,
+            movement_cost=step_cost_feet,
+            status_message=f"Committed movement step to {to_position}",
+        )
+        stored_completion = EventQueue.get_event_by_uuid(completed_step.uuid)
+        if (
+            stored_completion is not completed_step
+            or type(completed_step) is not StepMovementEvent
+            or completed_step.phase is not EventPhase.COMPLETION
+            or not completed_step.committed
+        ):
+            raise RuntimeError("Committed movement Step completion was not stored")
+
+        objective_position = source.position
+        continuation = revalidate_after_committed_movement_step(
+            MovementStepBoundary(
+                actor_uuid=source.uuid,
+                movement_event_uuid=root_event.uuid,
+                movement_lineage_uuid=root_event.lineage_uuid,
+                step_event_uuid=completed_step.uuid,
+                from_position=from_position,
+                to_position=to_position,
+                objective_position=objective_position,
+                step_movement_cost=step_cost_feet,
+                traversed_path=committed_path,
+                movement_spent=committed_spent,
+                movement_remaining=(
+                    source.action_economy.movement.normalized_score
+                ),
+                source_event_cursor_start=source_event_cursor_start,
+                source_event_cursor_end=EventQueue.event_cursor(),
+            )
+        )
+        return _MoveStepSettlement(
+            committed=True,
+            path=committed_path,
+            movement_spent=committed_spent,
+            objective_position=objective_position,
+            termination_reason=self._objective_move_failure(
+                source,
+                to_position,
+                after_committed_arrival=True,
+            ),
+            continuation_decision=continuation.decision,
+            continuation_reason=continuation.reason,
+        )
 
     def _apply(self, execution_event: MovementEvent) -> MovementEvent:
-        """Apply the movement action using cell-by-cell movement.
-
-        Iterates through path, firing StepMovementEvent for each cell transition.
-        This allows OA handlers and terrain effects to interrupt movement.
-        """
-        source_entity = Entity.get(self.source_entity_uuid)
-        if not source_entity or not isinstance(source_entity, Entity):
-            return execution_event.cancel(status_message=f"Source entity not found for {execution_event.name}")
-
-        if self.path is None and execution_event.path is None:
-            return execution_event.cancel(status_message=f"No path found for {execution_event.name}")
-        elif self.path is None and execution_event.path is not None:
-            self.path = execution_event.path
-            if self.use_movement_cost:
-                self._setup_costs_from_path()
-            execution_event = execution_event.with_updates(
-                path=self.path,
-                status_message=f"Added paths to {execution_event.uuid}"
+        """Apply the accepted Move-family transaction one voluntary edge at a time."""
+        source = Entity.get(execution_event.source_entity_uuid)
+        if not isinstance(source, Entity):
+            return execution_event.cancel(
+                status_message=f"Source entity not found for {execution_event.name}",
+                **_unsettled_move_cancel_updates(
+                    execution_event,
+                    None,
+                    MovementTerminationReason.ACTION_DENIED,
+                ),
             )
 
-        started = time.perf_counter()
-        costs = [BaseCost.model_validate(cost) for cost in self.costs]
-        record_action_timing("movement.validate_cost_models_ms", started)
-        started = time.perf_counter()
+        phase_started = time.perf_counter()
         effect_event = execution_event.phase_to(
-            new_phase=EventPhase.EFFECT,
-            costs=costs,
-            status_message=f"Added costs to {execution_event.uuid}"
+            EventPhase.EFFECT,
+            status_message=f"Applying movement for {execution_event.name}",
         )
-        record_action_timing("movement.phase_to_effect_ms", started)
-        if effect_event.canceled:
-            return effect_event
+        record_action_timing("movement.phase_to_effect_ms", phase_started)
 
-        grid = get_map()
-        path = self.path or []
-        total_path_length = len(path)
-        actual_end_position = source_entity.position
-        traversed_path = [source_entity.position]
-        traversed_movement_cost = 0
-        interrupted_by_condition = False
-        termination_reason = MovementTerminationReason.COMPLETED
-        controller_revalidation_reason: Optional[str] = None
-        transition_check_seconds = 0.0
-        step_post_seconds = 0.0
-        update_position_seconds = 0.0
-        step_completion_seconds = 0.0
-        consume_movement_seconds = 0.0
-        step_cost_seconds = 0.0
-
-        source_entity.senses.clear_visibility_cache()
+        source.senses.clear_visibility_cache()
         try:
-            for i in range(1, total_path_length):
-                from_pos = path[i - 1]
-                to_pos = path[i]
-                step_source_cursor_start = EventQueue.event_cursor()
+            objective_failure = self._objective_move_failure(
+                source,
+                effect_event.start_position,
+            )
+            if objective_failure is not None:
+                return self._complete_accepted_move_effect(
+                    effect_event,
+                    source,
+                    (effect_event.start_position,),
+                    0,
+                    (),
+                    objective_failure,
+                )
+            if (
+                effect_event.termination_reason
+                is MovementTerminationReason.CANCELED
+            ):
+                return self._complete_accepted_move_effect(
+                    effect_event,
+                    source,
+                    (effect_event.start_position,),
+                    0,
+                    (),
+                    MovementTerminationReason.CANCELED,
+                )
 
-                phase_started = time.perf_counter()
-                if not grid.can_transition(from_pos, to_pos, source_entity.uuid, self.movement_mode):
-                    transition_check_seconds += time.perf_counter() - phase_started
-                    if grid.can_transition(from_pos, to_pos, source_entity.uuid, self.movement_mode, subjective=True):
-                        cell_blocked = not grid.is_walkable_for(to_pos[0], to_pos[1], source_entity.uuid, self.movement_mode)
-                        directions = []
-                        from_tile = grid.get_tile(*from_pos)
-                        if from_tile:
-                            directions = list(from_tile.directions_toward(to_pos))
-                        if cell_blocked:
-                            source_entity.senses.collision_blocked.add(to_pos)
-                        else:
-                            for direction in directions:
-                                source_entity.senses.directional_collision_blocked.add((from_pos, direction))
-                        collision_event = SpatialChangeEvent.movement_collision(
-                            position=to_pos, mover_uuid=source_entity.uuid,
-                            parent_event=effect_event.uuid,
-                            transition_from=from_pos,
-                            transition_to=to_pos,
-                            directional_position=from_pos if directions else None,
-                            directional_directions=directions or None,
-                            directional_channels=["movement"] if directions and not cell_blocked else None,
-                            )
-                        grid._fire_spatial_event(collision_event)
+            prerequisite_failure = self._validate_move_prerequisites(
+                effect_event,
+                source,
+            )
+            if prerequisite_failure is not None:
+                return self._complete_accepted_move_effect(
+                    effect_event,
+                    source,
+                    (effect_event.start_position,),
+                    0,
+                    (),
+                    prerequisite_failure,
+                )
+
+            execution_path = tuple(effect_event.path or ())
+            admitted_costs = tuple(effect_event.costs)
+            if len(execution_path) < 2:
+                return self._complete_accepted_move_effect(
+                    effect_event,
+                    source,
+                    (effect_event.start_position,),
+                    0,
+                    (),
+                    MovementTerminationReason.INVALID_PATH,
+                )
+            settled_fixed_costs = self._settle_fixed_move_costs(
+                source,
+                admitted_costs,
+            )
+            if settled_fixed_costs is None:
+                return self._complete_accepted_move_effect(
+                    effect_event,
+                    source,
+                    (effect_event.start_position,),
+                    0,
+                    (),
+                    MovementTerminationReason.INVALID_COST,
+                )
+
+            grid = get_map()
+            voluntary_path: Tuple[Tuple[int, int], ...] = (
+                effect_event.start_position,
+            )
+            movement_spent = 0
+            termination_reason = MovementTerminationReason.COMPLETED
+            continuation_decision = MovementContinuationDecision.CONTINUE
+            continuation_reason: Optional[str] = None
+
+            for path_index, (from_position, to_position) in enumerate(
+                zip(execution_path, execution_path[1:]),
+                start=1,
+            ):
+                objective_failure = self._objective_move_failure(
+                    source,
+                    from_position,
+                )
+                if objective_failure is not None:
+                    termination_reason = objective_failure
+                    break
+                if not grid.can_transition(
+                    from_position,
+                    to_position,
+                    source.uuid,
+                    effect_event.movement_mode,
+                ):
+                    self._publish_hidden_movement_collision(
+                        grid,
+                        source,
+                        effect_event,
+                        from_position,
+                        to_position,
+                        effect_event.movement_mode,
+                    )
                     termination_reason = MovementTerminationReason.COLLISION
                     break
-                transition_check_seconds += time.perf_counter() - phase_started
 
-                tile = grid.get_tile(*to_pos)
-                phase_started = time.perf_counter()
-                step_cost_units = self._get_step_cost_units(tile, source_entity, source_entity.ignore_difficult_terrain)
-                step_cost_feet = int(step_cost_units * 5)
-                step_cost_seconds += time.perf_counter() - phase_started
-
-                remaining_movement = source_entity.action_economy.movement.normalized_score
-                if remaining_movement < step_cost_feet:
-                    termination_reason = MovementTerminationReason.INSUFFICIENT_MOVEMENT
+                provisional_cost = self._accepted_step_cost_feet(
+                    grid.get_tile(*to_position),
+                    source,
+                    effect_event.movement_mode,
+                )
+                if provisional_cost is None:
+                    termination_reason = MovementTerminationReason.INVALID_COST
                     break
 
-                step_event = StepMovementEvent(
-                    source_entity_uuid=self.source_entity_uuid,
-                    source_entity_name=source_entity.name,
-                    from_position=from_pos,
-                    to_position=to_pos,
-                    path_index=i,
-                    total_path_length=total_path_length,
-                    movement_cost=step_cost_feet,
-                    trajectory=execution_event.trajectory,
+                step_source_cursor_start = EventQueue.event_cursor()
+                provisional_step = StepMovementEvent(
+                    source_entity_uuid=source.uuid,
+                    source_entity_name=source.name,
+                    from_position=from_position,
+                    to_position=to_position,
+                    path_index=path_index,
+                    total_path_length=len(execution_path),
+                    movement_cost=provisional_cost,
+                    trajectory=effect_event.trajectory,
+                    committed=False,
                     located_position_observer_uuids=(
-                        _step_intent_position_evidence(grid, from_pos, to_pos)
+                        _step_intent_position_evidence(
+                            grid,
+                            from_position,
+                            to_position,
+                        )
                     ),
                     phase=EventPhase.EFFECT,
                     parent_event=effect_event.uuid,
-                    use_register=False
+                    use_register=False,
                 )
-                phase_started = time.perf_counter()
-                processed_step = step_event.post(use_register=True)
-                step_post_seconds += time.perf_counter() - phase_started
+                expected_lineage = provisional_step.lineage_uuid
+                processed_step = provisional_step.post(use_register=True)
+                stored_step = EventQueue.get_event_by_uuid(processed_step.uuid)
+                if (
+                    stored_step is not processed_step
+                    or type(processed_step) is not StepMovementEvent
+                    or processed_step.lineage_uuid != expected_lineage
+                    or processed_step.event_type is not EventType.STEP_MOVEMENT
+                    or processed_step.use_register is not True
+                    or processed_step.parent_event != effect_event.uuid
+                    or processed_step.source_entity_uuid != source.uuid
+                    or processed_step.from_position != from_position
+                    or processed_step.to_position != to_position
+                    or processed_step.path_index != path_index
+                    or processed_step.total_path_length != len(execution_path)
+                    or processed_step.trajectory is not effect_event.trajectory
+                    or processed_step.movement_cost != provisional_cost
+                    or processed_step.committed
+                    or processed_step.phase
+                    not in (EventPhase.EFFECT, EventPhase.CANCEL)
+                ):
+                    raise RuntimeError("Movement Step handler result escaped validation")
 
                 if processed_step.canceled:
-                    termination_reason = MovementTerminationReason.STEP_CANCELED
-                    break
-
-                if not source_entity.can_take_actions():
-                    interrupted_by_condition = True
                     termination_reason = (
-                        MovementTerminationReason.DEAD
-                        if source_entity.health.life_state is LifeState.DEAD
-                        else MovementTerminationReason.INCAPACITATED
-                    )
-                    processed_step.phase_to(
-                        EventPhase.COMPLETION,
-                        committed=False,
-                        status_message=f"Movement step interrupted before entering {to_pos}",
+                        self._objective_move_failure(source, from_position)
+                        or MovementTerminationReason.STEP_CANCELED
                     )
                     break
 
-                phase_started = time.perf_counter()
-                if not grid.can_transition(from_pos, to_pos, source_entity.uuid, self.movement_mode):
-                    transition_check_seconds += time.perf_counter() - phase_started
-                    termination_reason = MovementTerminationReason.COLLISION
-                    processed_step.phase_to(
-                        EventPhase.COMPLETION,
-                        committed=False,
-                        status_message=f"Movement step blocked before entering {to_pos}",
-                    )
-                    break
-                transition_check_seconds += time.perf_counter() - phase_started
-
-                phase_started = time.perf_counter()
-                source_entity.action_economy.consume("movement", step_cost_feet)
-                consume_movement_seconds += time.perf_counter() - phase_started
-
-                phase_started = time.perf_counter()
-                Entity.update_entity_position(source_entity, to_pos, parent_event=processed_step.uuid)
-                actual_end_position = to_pos
-                traversed_path.append(to_pos)
-                traversed_movement_cost += step_cost_feet
-                update_position_seconds += time.perf_counter() - phase_started
-
-                phase_started = time.perf_counter()
-                processed_step.phase_to(EventPhase.COMPLETION, committed=True)
-                step_completion_seconds += time.perf_counter() - phase_started
-
-                if not source_entity.can_take_actions():
-                    termination_reason = (
-                        MovementTerminationReason.DEAD
-                        if source_entity.health.life_state is LifeState.DEAD
-                        else MovementTerminationReason.INCAPACITATED
-                    )
-                    break
-
-                continuation = revalidate_after_committed_movement_step(
-                    MovementStepBoundary(
-                        actor_uuid=source_entity.uuid,
-                        movement_event_uuid=effect_event.uuid,
-                        movement_lineage_uuid=effect_event.lineage_uuid,
-                        step_event_uuid=processed_step.uuid,
-                        from_position=from_pos,
-                        to_position=to_pos,
-                        traversed_path=tuple(traversed_path),
-                        movement_spent=traversed_movement_cost,
-                        movement_remaining=(
-                            source_entity.action_economy.movement.normalized_score
-                        ),
-                        source_event_cursor_start=step_source_cursor_start,
-                        source_event_cursor_end=EventQueue.event_cursor(),
-                    )
+                settlement = self._commit_move_step(
+                    root_event=effect_event,
+                    source=source,
+                    grid=grid,
+                    step_event=processed_step,
+                    voluntary_path=voluntary_path,
+                    movement_spent=movement_spent,
+                    source_event_cursor_start=step_source_cursor_start,
                 )
-                if continuation.decision is MovementContinuationDecision.INTERRUPT:
-                    controller_revalidation_reason = continuation.reason
-                    if to_pos != execution_event.end_position:
-                        termination_reason = (
-                            MovementTerminationReason.SUBJECTIVE_REVALIDATION
+                voluntary_path = settlement.path
+                movement_spent = settlement.movement_spent
+                continuation_decision = settlement.continuation_decision
+                continuation_reason = settlement.continuation_reason
+
+                if settlement.termination_reason is not None:
+                    termination_reason = settlement.termination_reason
+                    break
+                if (
+                    continuation_decision
+                    is MovementContinuationDecision.INTERRUPT
+                ):
+                    termination_reason = (
+                        MovementTerminationReason.COMPLETED
+                        if (
+                            to_position == effect_event.end_position
+                            and to_position == execution_path[-1]
                         )
+                        else MovementTerminationReason.SUBJECTIVE_REVALIDATION
+                    )
                     break
 
+            return self._complete_accepted_move_effect(
+                effect_event,
+                source,
+                voluntary_path,
+                movement_spent,
+                settled_fixed_costs,
+                termination_reason,
+                continuation_decision,
+                continuation_reason,
+            )
         finally:
-            record_action_elapsed("movement.transition_checks_ms", transition_check_seconds)
-            record_action_elapsed("movement.step_costs_ms", step_cost_seconds)
-            record_action_elapsed("movement.step_event_post_ms", step_post_seconds)
-            record_action_elapsed("movement.update_position_ms", update_position_seconds)
-            record_action_elapsed("movement.step_completion_ms", step_completion_seconds)
-            record_action_elapsed("movement.consume_movement_ms", consume_movement_seconds)
-            started = time.perf_counter()
-            senses_before_refresh = capture_senses_snapshot(source_entity.senses)
+            refresh_started = time.perf_counter()
+            senses_before_refresh = capture_senses_snapshot(source.senses)
             remaining_path_distance = max(
                 0,
-                (source_entity.action_economy.movement.normalized_score + 4) // 5,
+                (source.action_economy.movement.normalized_score + 4) // 5,
             )
-            source_entity.update_entity_senses(
+            source.update_entity_senses(
                 max_distance=20,
                 reuse_visibility_cache=True,
                 path_max_distance=remaining_path_distance,
             )
-            senses_after_refresh = capture_senses_snapshot(source_entity.senses)
-            record_action_timing("movement.final_update_senses_ms", started)
+            senses_after_refresh = capture_senses_snapshot(source.senses)
+            record_action_timing(
+                "movement.final_update_senses_ms",
+                refresh_started,
+            )
             emit_sensory_update_delta(
-                source_entity.senses,
-                source_entity.uuid,
+                source.senses,
+                source.uuid,
                 effect_event,
                 senses_before_refresh,
                 senses_after_refresh,
                 SensoryUpdateReason.SELF_MOVEMENT,
             )
 
-        completion_costs = [
-            cost for cost in effect_event.costs
-            if cost.cost_type != "movement"
-        ]
-        if self.use_movement_cost:
-            completion_costs.append(BaseCost(
-                name="Movement Cost",
-                cost_type="movement",
-                cost=traversed_movement_cost,
-            ))
-        completion_updates = {
-            "end_position": actual_end_position,
-            "requested_end_position": execution_event.requested_end_position,
-            "path": traversed_path,
-            "costs": completion_costs,
-            "termination_reason": termination_reason,
-            "controller_revalidation": controller_revalidation_reason is not None,
-            "controller_revalidation_reason": controller_revalidation_reason,
-            "outcome_code": (
-                "movement.subjective_revalidation"
-                if controller_revalidation_reason is not None
-                else effect_event.outcome_code
-            ),
-        }
-
-        if source_entity.position == execution_event.start_position:
-            if interrupted_by_condition:
-                started = time.perf_counter()
-                result = effect_event.phase_to(
-                    new_phase=EventPhase.COMPLETION,
-                    status_message=f"Partial movement for {execution_event.name}, stopped at {source_entity.position}",
-                    **completion_updates,
-                )
-                record_action_timing("movement.phase_to_completion_ms", started)
-                return result
-            started = time.perf_counter()
-            result = effect_event.cancel(status_message=f"Failed to move for {execution_event.name}")
-            record_action_timing("movement.cancel_failed_move_ms", started)
-            return result
-        elif source_entity.position != execution_event.end_position:
-            started = time.perf_counter()
-            result = effect_event.phase_to(
-                new_phase=EventPhase.COMPLETION,
-                status_message=f"Partial movement for {execution_event.name}, stopped at {source_entity.position}",
-                **completion_updates,
-            )
-            record_action_timing("movement.phase_to_completion_ms", started)
-            return result
-
-        started = time.perf_counter()
-        result = effect_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
-            status_message=f"Applied movement for {execution_event.name}",
-            **completion_updates,
-        )
-        record_action_timing("movement.phase_to_completion_ms", started)
-        return result
-
-    def _apply_costs(self, completion_event: MovementEvent) -> Optional[MovementEvent]:
-        """Apply costs - movement is already consumed per-step in _apply().
-
-        Skip movement cost here since cell-by-cell movement already deducts
-        movement per step. Only apply non-movement costs (if any).
-        """
-        cost_event = self._consume_costs(
-            completion_event,
-            excluded_cost_types=frozenset({"movement"}),
-        )
-        if cost_event.canceled:
-            return cost_event
-
+    def _apply_costs(
+        self,
+        completion_event: MovementEvent,
+    ) -> Optional[MovementEvent]:
+        """Return the already-settled terminal event without double payment."""
         return completion_event
-
     def apply(self, parent_event: Optional[Event] = None) -> Optional[MovementEvent]:
         """Override to provide specific return type."""
         result = super().apply(parent_event)

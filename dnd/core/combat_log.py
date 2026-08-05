@@ -7,7 +7,9 @@ display payloads near the event data that produced them.
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional, Set, Tuple
 
-from pydantic import BaseModel, Field, field_serializer
+from pydantic import BaseModel, Field, field_serializer, model_validator
+
+from dnd.core.condition_types import ConditionApplicationDisposition
 
 
 def position_evidence_key(position: Tuple[int, int]) -> str:
@@ -87,6 +89,35 @@ class SpatialEffectInteractionLogData(BaseModel):
     intensity: Literal["minor", "moderate", "strong"]
     affected_positions: Tuple[Tuple[int, int], ...]
     source_content_identity: Optional[str] = None
+
+
+class ConditionLogData(BaseModel):
+    """Typed authored identity and outcome for one condition transition."""
+
+    condition_name: str = Field(
+        min_length=1,
+        description="Human-readable condition name captured for display.",
+    )
+    condition_content_identity: Optional[str] = Field(
+        default=None,
+        min_length=1,
+        description=(
+            "Exact bound authored condition identity; absent only for "
+            "legacy or custom unbound diagnostics."
+        ),
+    )
+    reveals_target: bool = Field(
+        default=False,
+        description="Whether removal can reveal the affected target.",
+    )
+    application_disposition: Optional[
+        ConditionApplicationDisposition
+    ] = Field(
+        default=None,
+        description=(
+            "Closed application outcome; absent on removal transitions."
+        ),
+    )
 
 
 class ModifierBreakdown(BaseModel):
@@ -280,6 +311,7 @@ class MovementLogData(BaseModel):
         distance_feet: Movement distance in feet.
         movement_cost: Action-economy movement cost in feet.
         requested_end_position: Destination requested before partial termination.
+        objective_end_position: Actual position after synchronous child displacement.
         termination_reason: Machine-readable reason movement ended.
         controller_revalidation: Whether a committed step required a new decision.
         controller_revalidation_reason: Subjective change requiring that decision.
@@ -295,6 +327,10 @@ class MovementLogData(BaseModel):
     requested_end_position: Optional[Tuple[int, int]] = Field(
         default=None,
         description="Originally requested destination before partial termination.",
+    )
+    objective_end_position: Optional[Tuple[int, int]] = Field(
+        default=None,
+        description="Actual position after synchronous child displacement.",
     )
     termination_reason: str = Field(
         default="completed",
@@ -413,18 +449,97 @@ class SpellSaveLogData(BaseModel):
 class SpellInterruptionLogData(BaseModel):
     """Structured result of one Counterspell reaction."""
 
-    outcome_code: str = Field(description="Stable reaction outcome identity.")
-    counterspeller_name: str = Field(description="Display name of the reacting caster.")
-    counterspeller_uuid: str = Field(description="UUID of the reacting caster.")
-    original_caster_name: str = Field(description="Display name of the interrupted caster.")
-    original_caster_uuid: str = Field(description="UUID of the interrupted caster.")
-    spell_name: str = Field(description="Display name of the incoming spell.")
-    incoming_spell_level: int = Field(ge=0, description="Level of the incoming cast.")
-    counterspell_slot_level: int = Field(ge=3, description="Slot level spent on Counterspell.")
-    automatic: bool = Field(description="Whether slot level made the result automatic.")
-    check_total: Optional[int] = Field(default=None, description="Spellcasting check total when rolled.")
-    check_dc: Optional[int] = Field(default=None, description="Spellcasting check DC when rolled.")
-    succeeded: bool = Field(description="Whether the reaction interrupted the incoming spell.")
+    outcome_code: str = Field(
+        min_length=1,
+        description="Stable reaction outcome identity.",
+    )
+    counterspeller_name: str = Field(
+        description="Display name of the reacting caster.",
+    )
+    counterspeller_uuid: str = Field(
+        description="UUID of the reacting caster.",
+    )
+    original_caster_name: str = Field(
+        description="Display name of the interrupted caster.",
+    )
+    original_caster_uuid: str = Field(
+        description="UUID of the interrupted caster.",
+    )
+    spell_name: str = Field(
+        description="Display name of the incoming spell.",
+    )
+    incoming_spell_level: int = Field(
+        ge=0,
+        le=9,
+        description="Level of the incoming cast.",
+    )
+    counterspell_slot_level: int = Field(
+        ge=3,
+        le=9,
+        description="Slot level spent on Counterspell.",
+    )
+    automatic: bool = Field(
+        description="Whether slot level made the result automatic.",
+    )
+    check_total: Optional[int] = Field(
+        default=None,
+        description="Spellcasting check total when rolled.",
+    )
+    check_dc: Optional[int] = Field(
+        default=None,
+        description="Spellcasting check DC when rolled.",
+    )
+    succeeded: bool = Field(
+        description="Whether the reaction interrupted the incoming spell.",
+    )
+    reaction_content_identity: Optional[str] = Field(
+        default=None,
+        min_length=1,
+        description=(
+            "Exact authenticated authored reaction identity; absent only "
+            "from legacy diagnostic events."
+        ),
+    )
+    incoming_spell_content_identity: Optional[str] = Field(
+        default=None,
+        min_length=1,
+        description=(
+            "Exact authenticated authored identity of the incoming spell; "
+            "absent only from legacy diagnostic events."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def validate_resolution(self) -> "SpellInterruptionLogData":
+        """Reject contradictory automatic or checked resolution evidence."""
+        if self.automatic:
+            if self.counterspell_slot_level < self.incoming_spell_level:
+                raise ValueError(
+                    "automatic Counterspell requires a sufficient slot",
+                )
+            if not self.succeeded:
+                raise ValueError("automatic Counterspell must succeed")
+            if self.check_total is not None or self.check_dc is not None:
+                raise ValueError(
+                    "automatic Counterspell forbids check evidence",
+                )
+            return self
+
+        if self.counterspell_slot_level >= self.incoming_spell_level:
+            raise ValueError(
+                "checked Counterspell requires a lower-level slot",
+            )
+        if self.check_total is None or self.check_dc is None:
+            raise ValueError(
+                "checked Counterspell requires total and DC",
+            )
+        if self.check_dc != 10 + self.incoming_spell_level:
+            raise ValueError(
+                "Counterspell check DC must equal 10 plus spell level",
+            )
+        if self.succeeded != (self.check_total >= self.check_dc):
+            raise ValueError("Counterspell success contradicts its check")
+        return self
 
 
 class SkillCheckLogData(BaseModel):

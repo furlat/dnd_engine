@@ -347,9 +347,12 @@ def _representative_evidence() -> tuple[list[Event], list[CombatLogEntry]]:
         prone,
         runtime_owner_uuid=GOBLIN_UUID,
     ) is not None
+    condition_content_identity = prone.authored_content_identity()
+    assert condition_content_identity is not None
     condition = ConditionApplicationEvent(
         target_entity_uuid=GOBLIN_UUID,
         condition=prone,
+        condition_content_identity=condition_content_identity,
         source_entity_name="Aria",
         target_entity_name="Goblin Captain",
         **_completed_event_kwargs(source_uuid=HERO_UUID, seconds=9),

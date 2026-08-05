@@ -87,7 +87,7 @@ def test_voluntary_move_interrupts_only_after_one_committed_paid_step() -> None:
     assert not movement.canceled
     assert movement.requested_end_position == (3, 5)
     assert movement.end_position == requested_path[1]
-    assert movement.path == requested_path[:2]
+    assert movement.path == tuple(requested_path[:2])
     assert movement.termination_reason is MovementTerminationReason.SUBJECTIVE_REVALIDATION
     assert movement.controller_revalidation is True
     assert movement.controller_revalidation_reason == "newly_visible_hostile"
@@ -139,7 +139,7 @@ def test_voluntary_move_reaches_destination_before_controller_revalidation() -> 
     assert movement.termination_reason is MovementTerminationReason.COMPLETED
     assert movement.controller_revalidation is True
     assert movement.controller_revalidation_reason == "newly_visible_hostile"
-    assert movement.outcome_code == "movement.subjective_revalidation"
+    assert movement.outcome_code == "movement.completed"
 
 
 def test_subjective_revalidator_interrupts_for_new_hostile_but_not_new_ally() -> None:

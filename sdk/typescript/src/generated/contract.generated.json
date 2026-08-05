@@ -157,7 +157,7 @@
       "kind": "union"
     }
   },
-  "contract_hash": "74586e961b961435f7a860f64894dbb05cf3ce6420cab29724a3dc819d1802d2",
+  "contract_hash": "874717f5cd6181da07ddf9679ef7c8147ec5d367eda4b7fa78fc0a39a2956d70",
   "contract_version": 1,
   "enums": {
     "dnd.analytics.models.GameOutcomeResolution": {
@@ -263,8 +263,13 @@
         "insufficient_movement",
         "step_canceled",
         "incapacitated",
+        "action_denied",
         "dead",
-        "subjective_revalidation"
+        "subjective_revalidation",
+        "position_diverged",
+        "invalid_path",
+        "invalid_cost",
+        "canceled"
       ]
     },
     "dnd.core.action_outcomes.OutcomeApplicationScope": {
@@ -421,6 +426,16 @@
         "object"
       ]
     },
+    "dnd.core.base_block.MovementMode": {
+      "python": "dnd.core.base_block.MovementMode",
+      "typescript": "MovementMode",
+      "values": [
+        "walking",
+        "flying",
+        "swimming",
+        "burrowing"
+      ]
+    },
     "dnd.core.combat_log.CombatLogEntryType": {
       "python": "dnd.core.combat_log.CombatLogEntryType",
       "typescript": "CombatLogEntryType",
@@ -465,7 +480,8 @@
         "applied",
         "rejected",
         "retained_stronger",
-        "promoted"
+        "promoted",
+        "immune"
       ]
     },
     "dnd.core.condition_types.ConditionApplicationPolicy": {
@@ -2303,7 +2319,7 @@
       "typescript": "CounterspellReactionEvent"
     }
   },
-  "event_contract_hash": "98708547e749ea40be7b564e212be64a515a5ab30c74130f8fa9b61e50aa01f5",
+  "event_contract_hash": "1b52c3021e7106c3a91f523d470ee6da0051c3b042b82288a6c146a387e0c33c",
   "event_contract_version": 1,
   "models": {
     "dnd.actions.AttackEvent": {
@@ -3263,8 +3279,31 @@
         "modified": {
           "kind": "boolean"
         },
+        "movement_mode": {
+          "kind": "enum",
+          "ref": "dnd.core.base_block.MovementMode"
+        },
         "name": {
           "kind": "string"
+        },
+        "objective_end_position": {
+          "items": [
+            {
+              "items": [
+                {
+                  "kind": "integer"
+                },
+                {
+                  "kind": "integer"
+                }
+              ],
+              "kind": "tuple"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
         },
         "outcome_code": {
           "items": [
@@ -9283,6 +9322,18 @@
           "kind": "model",
           "ref": "dnd.core.base_conditions.BaseCondition"
         },
+        "condition_content_identity": {
+          "items": [
+            {
+              "kind": "string",
+              "min_length": 1
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
         "context": {
           "items": [
             {
@@ -9496,6 +9547,18 @@
         "condition": {
           "kind": "model",
           "ref": "dnd.core.base_conditions.BaseCondition"
+        },
+        "condition_content_identity": {
+          "items": [
+            {
+              "kind": "string",
+              "min_length": 1
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
         },
         "context": {
           "items": [
@@ -10080,6 +10143,44 @@
       "root_model": false,
       "typescript": "CombatLogEntry"
     },
+    "dnd.core.combat_log.ConditionLogData": {
+      "fields": {
+        "application_disposition": {
+          "items": [
+            {
+              "kind": "enum",
+              "ref": "dnd.core.condition_types.ConditionApplicationDisposition"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "condition_content_identity": {
+          "items": [
+            {
+              "kind": "string",
+              "min_length": 1
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "condition_name": {
+          "kind": "string",
+          "min_length": 1
+        },
+        "reveals_target": {
+          "kind": "boolean"
+        }
+      },
+      "python": "dnd.core.combat_log.ConditionLogData",
+      "root_model": false,
+      "typescript": "ConditionLogData"
+    },
     "dnd.core.combat_log.DamageRollDisplay": {
       "fields": {
         "bonus": {
@@ -10412,6 +10513,25 @@
         },
         "movement_cost": {
           "kind": "integer"
+        },
+        "objective_end_position": {
+          "items": [
+            {
+              "items": [
+                {
+                  "kind": "integer"
+                },
+                {
+                  "kind": "integer"
+                }
+              ],
+              "kind": "tuple"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
         },
         "path": {
           "items": {
@@ -10933,6 +11053,7 @@
         },
         "counterspell_slot_level": {
           "kind": "integer",
+          "maximum": 9,
           "minimum": 3
         },
         "counterspeller_name": {
@@ -10941,8 +11062,21 @@
         "counterspeller_uuid": {
           "kind": "string"
         },
+        "incoming_spell_content_identity": {
+          "items": [
+            {
+              "kind": "string",
+              "min_length": 1
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
         "incoming_spell_level": {
           "kind": "integer",
+          "maximum": 9,
           "minimum": 0
         },
         "original_caster_name": {
@@ -10952,7 +11086,20 @@
           "kind": "string"
         },
         "outcome_code": {
-          "kind": "string"
+          "kind": "string",
+          "min_length": 1
+        },
+        "reaction_content_identity": {
+          "items": [
+            {
+              "kind": "string",
+              "min_length": 1
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
         },
         "spell_name": {
           "kind": "string"
@@ -26975,6 +27122,7 @@
         },
         "counterspell_slot_level": {
           "kind": "integer",
+          "maximum": 9,
           "minimum": 3
         },
         "declared_target_entity_uuids": {
@@ -26990,8 +27138,21 @@
           "kind": "enum",
           "ref": "dnd.core.events.EventType"
         },
+        "incoming_spell_content_identity": {
+          "items": [
+            {
+              "kind": "string",
+              "min_length": 1
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
         "incoming_spell_level": {
           "kind": "integer",
+          "maximum": 9,
           "minimum": 0
         },
         "incoming_spell_name": {
@@ -27034,15 +27195,8 @@
           "kind": "string"
         },
         "outcome_code": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
+          "kind": "string",
+          "min_length": 1
         },
         "outcome_source_entity_uuid": {
           "items": [
@@ -27084,6 +27238,18 @@
         "presentation_kind": {
           "kind": "enum",
           "ref": "dnd.core.action_types.ActionPresentationKind"
+        },
+        "reaction_content_identity": {
+          "items": [
+            {
+              "kind": "string",
+              "min_length": 1
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
         },
         "source_entity_name": {
           "items": [
@@ -39640,7 +39806,7 @@
       "typescript": "StructuralEdgeAppearance"
     }
   },
-  "objective_replay_contract_hash": "47bab53221c410127ea5566302adf9c9c11a10f1fbdf15695e7e23379011ea51",
+  "objective_replay_contract_hash": "98ec599113a592e4b781faccab134069675d00bc052ae3a1e97e74838e35069e",
   "objective_replay_contract_version": 1,
   "player_replay_contract_hash": "67d55e0fa03dc9a440a78a3660d60096d245598c2e2a755125849dd328d80624",
   "player_replay_contract_version": 1,
@@ -39821,6 +39987,7 @@
     "dnd.core.combat_log.ActionLogData",
     "dnd.core.combat_log.AttackLogData",
     "dnd.core.combat_log.CombatLogEntry",
+    "dnd.core.combat_log.ConditionLogData",
     "dnd.core.combat_log.DamageRollDisplay",
     "dnd.core.combat_log.DamageTakenLogData",
     "dnd.core.combat_log.DeathSaveLogData",

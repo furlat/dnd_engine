@@ -665,7 +665,8 @@ def test_eb_12_015_hidden_cell_blocker_reveals_on_movement_collision() -> None:
 
     result = Move(source_entity_uuid=mover.uuid, end_position=(1, 0), use_movement_cost=False).apply()
 
-    assert result is not None and result.canceled
+    assert result is not None and not result.canceled
+    assert result.phase is EventPhase.COMPLETION
     assert mover.position == (0, 0)
     assert mover.senses.collision_blocked == {(1, 0)}
     assert "Hidden" not in hidden_blocker.active_conditions
