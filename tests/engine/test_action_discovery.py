@@ -602,7 +602,7 @@ def test_eb_09_011_move_discovery_marks_hazardous_and_safe_paths() -> None:
     assert result is not None
     assert not result.canceled
     movement_result = cast(MovementEvent, result)
-    assert movement_result.path == hazard_target.safe_path
+    assert movement_result.path == tuple(hazard_target.safe_path)
     assert scout.position == hazard_target.position
     assert scout.action_economy.movement.normalized_score == (
         movement_before - hazard_target.safe_path_cost

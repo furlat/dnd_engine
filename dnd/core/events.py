@@ -36,7 +36,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from enum import Enum
 from pydantic import BaseModel, Field, ConfigDict, PrivateAttr, field_serializer, model_validator
-from typing import Literal as TypeLiteral, Union, List, Optional, Dict, Self, Literal, TypeVar, Protocol, runtime_checkable, Tuple, Any, Set, Iterator, Sequence, cast
+from typing import Literal as TypeLiteral, Union, List, Optional, Dict, Self, Literal, TypeVar, Protocol, runtime_checkable, Tuple, Any, Set, Iterator, Mapping, Sequence, cast
 from dnd.core.values import ModifiableValue
 
 from dnd.core.combat_log import (
@@ -362,6 +362,7 @@ class Event(BaseObject):
         EffectiveHandlerPresentation,
         ...,
     ] = PrivateAttr(default=())
+    _handler_validation_token: Optional[UUID] = PrivateAttr(default=None)
     identified_entity_observer_uuids: Dict[str, Set[str]] = Field(
         default_factory=dict,
         exclude=True,
@@ -480,6 +481,13 @@ class Event(BaseObject):
 
         if new_phase is None:
             new_phase = ordered_event_phases[ordered_event_phases.index(self.phase) + 1]
+
+        if EventQueue.is_active_handler_proposal(self):
+            handler_updates: Dict[str, Any] = {"phase": new_phase}
+            if status_message is not None:
+                handler_updates["status_message"] = status_message
+            handler_updates.update(updates)
+            return self.post(**handler_updates)
 
         phase_updates = {}
         phase_updates['phase'] = new_phase
@@ -710,6 +718,10 @@ class Event(BaseObject):
             updates['lineage_uuid'] = self.lineage_uuid
 
         updated_event = self.model_copy(update=updates)
+        updated_event = EventQueue.validate_active_handler_post(
+            self,
+            updated_event,
+        )
 
         if updated_event.use_register:
             result = EventQueue.register(updated_event)
@@ -720,6 +732,86 @@ class Event(BaseObject):
             raise TypeError(f"Expected {self.__class__.__name__} but got {result.__class__.__name__}")
 
         return result
+
+    def validate_handler_result(self, result: "Event") -> "Event":
+        """Validate one handler-produced version before it is observable.
+
+        Event families with immutable causal evidence may override this hook
+        to convert an attempted rewrite into a valid cancellation. The default
+        preserves the existing handler-mutation contract.
+        """
+        return result
+
+    def guards_handler_result(self) -> bool:
+        """Return whether handler proposals use the family validation guard.
+
+        The default preserves the existing opt-in rule: an event family is
+        guarded when it overrides :meth:`validate_handler_result`. Families
+        with a narrower discriminant may override this selector.
+        """
+        return (
+            type(self).validate_handler_result
+            is not Event.validate_handler_result
+        )
+
+    def handler_result_stops_dispatch(self, result: "Event") -> bool:
+        """Return whether a validated publication must remain terminal."""
+        return result.canceled
+
+    def handler_result_preserves_lifecycle(self, result: "Event") -> bool:
+        """Return whether a handler preserved this dispatch boundary.
+
+        A handler may return the same phase with modified domain fields or may
+        cancel exactly the phase it received.  It may not advance, rewind, or
+        disguise the lifecycle, change the lineage/event family, or alter the
+        registration mode selected by the publisher.
+        """
+        if (
+            type(result.event_type) is not type(self.event_type)
+            or result.event_type is not self.event_type
+            or type(result.lineage_uuid) is not type(self.lineage_uuid)
+            or result.lineage_uuid != self.lineage_uuid
+            or type(result.use_register) is not bool
+            or result.use_register is not self.use_register
+            or type(result.canceled) is not bool
+        ):
+            return False
+        if result.canceled:
+            return (
+                result.phase is EventPhase.CANCEL
+                and result.canceled_from_phase is self.phase
+            )
+        return (
+            result.phase is self.phase
+            and result.canceled_from_phase is self.canceled_from_phase
+        )
+
+    def invalid_handler_result_cancellation(
+        self,
+        result: "Event",
+        *,
+        status_message: str,
+    ) -> "Event":
+        """Build one exact cancellation for a rejected handler proposal."""
+        result_uuid = result.uuid
+        if type(result_uuid) is not UUID or result_uuid == self.uuid:
+            result_uuid = uuid4()
+        result_timestamp = result.timestamp
+        if type(result_timestamp) is not datetime:
+            result_timestamp = datetime.now(UTC)
+        return self.model_copy(
+            update={
+                "uuid": result_uuid,
+                "timestamp": result_timestamp,
+                "lineage_uuid": self.lineage_uuid,
+                "use_register": self.use_register,
+                "modified": True,
+                "canceled": True,
+                "phase": EventPhase.CANCEL,
+                "canceled_from_phase": self.phase,
+                "status_message": status_message,
+            },
+        )
 
     def with_updates(
         self,
@@ -1118,6 +1210,24 @@ class EventQueue:
         "event_queue_preflight_depth",
         default=0,
     )
+    _active_handler_input: ContextVar[Optional['Event']] = ContextVar(
+        "event_queue_active_handler_input",
+        default=None,
+    )
+    _active_handler_proposal: ContextVar[Optional['Event']] = ContextVar(
+        "event_queue_active_handler_proposal",
+        default=None,
+    )
+    _active_handler_validation_token: ContextVar[Optional[UUID]] = ContextVar(
+        "event_queue_active_handler_validation_token",
+        default=None,
+    )
+    _active_handler_storage_result: ContextVar[
+        Optional[Tuple['Event', bool]]
+    ] = ContextVar(
+        "event_queue_active_handler_storage_result",
+        default=None,
+    )
     _pre_completion_callbacks: List[Callable[['Event'], None]] = []
     _pre_completion_systems: Dict[str, PreCompletionSystem] = {}
     _pre_completion_systems_by_event_type: Dict[
@@ -1278,8 +1388,36 @@ class EventQueue:
         """Invoke one matched handler and publish passive effect evidence."""
         before_cursor = cls.event_cursor()
         before_event_index = len(cls._all_events)
-        with runtime_behavior_provider(handler):
-            result = handler(event)
+        guards_handler_result = event.guards_handler_result()
+        handler_input = event.model_copy() if guards_handler_result else event
+        validation_token = uuid4() if guards_handler_result else None
+        handler_input._handler_validation_token = validation_token
+        handler_token = cls._active_handler_input.set(
+            event if guards_handler_result else None,
+        )
+        proposal_token = cls._active_handler_proposal.set(
+            handler_input if guards_handler_result else None,
+        )
+        validation_token_context = (
+            cls._active_handler_validation_token.set(validation_token)
+        )
+        storage_result_context = cls._active_handler_storage_result.set(None)
+        detached_storage_result: Optional[Tuple[Event, bool]] = None
+        try:
+            with runtime_behavior_provider(handler):
+                result = handler(handler_input)
+        finally:
+            detached_storage_result = cls._active_handler_storage_result.get()
+            cls._active_handler_storage_result.reset(storage_result_context)
+            cls._active_handler_validation_token.reset(
+                validation_token_context,
+            )
+            cls._active_handler_proposal.reset(proposal_token)
+            cls._active_handler_input.reset(handler_token)
+        if detached_storage_result is not None:
+            result = detached_storage_result[0]
+        if result is not None and guards_handler_result:
+            result = event.validate_handler_result(result)
         emitted_event_count = cls.event_cursor() - before_cursor
         result_changed = result is not None and result != event
         if result_changed and result is not None and result.canceled:
@@ -1628,6 +1766,9 @@ class EventQueue:
         Returns:
             The final event version after handler processing.
         """
+        detached_proposal = cls._detach_active_handler_storage(event)
+        if detached_proposal is not None:
+            return detached_proposal
         stored_event = cls._events_by_uuid.get(event.uuid)
         if stored_event is event:
             return event
@@ -1653,6 +1794,58 @@ class EventQueue:
                 current_event = cls._record_handler_result(result)
 
         return current_event
+
+    @classmethod
+    def validate_active_handler_post(
+        cls,
+        source: Event,
+        candidate: Event,
+    ) -> Event:
+        """Validate a guarded handler's post before it can self-register.
+
+        The proposal identity check distinguishes a same-family event version
+        from ordinary child events emitted while the handler is running.  UUID
+        and lineage fallbacks also cover a shallow copy of that proposal.
+        """
+        active_input = cls._active_handler_input.get()
+        if active_input is None or not cls.is_active_handler_proposal(source):
+            return candidate
+        return active_input.validate_handler_result(candidate)
+
+    @classmethod
+    def _detach_active_handler_storage(
+        cls,
+        event: Event,
+    ) -> Optional[Event]:
+        """Validate and detach a guarded proposal before any storage path."""
+        active_input = cls._active_handler_input.get()
+        if active_input is None or not cls.is_active_handler_proposal(event):
+            return None
+        validated = active_input.validate_handler_result(event)
+        terminal = active_input.handler_result_stops_dispatch(validated)
+        retained = cls._active_handler_storage_result.get()
+        if retained is None or not retained[1]:
+            cls._active_handler_storage_result.set((validated, terminal))
+        return validated
+
+    @classmethod
+    def is_active_handler_proposal(cls, source: Event) -> bool:
+        """Return whether an event value derives from the guarded proposal."""
+        active_input = cls._active_handler_input.get()
+        active_proposal = cls._active_handler_proposal.get()
+        active_token = cls._active_handler_validation_token.get()
+        if (
+            active_input is None
+            or active_proposal is None
+            or active_token is None
+        ):
+            return False
+        return (
+            source._handler_validation_token == active_token
+            or source is active_proposal
+            or source.uuid == active_input.uuid
+            or source.lineage_uuid == active_input.lineage_uuid
+        )
 
     @classmethod
     def publish_declaration(cls, event: EventT) -> EventT:
@@ -1753,7 +1946,13 @@ class EventQueue:
             before_cursor = cls.event_cursor()
             depth_token = cls._preflight_depth.set(cls._preflight_depth.get() + 1)
             try:
-                result = handler(current_event)
+                guards_handler_result = current_event.guards_handler_result()
+                handler_input = (
+                    current_event.model_copy()
+                    if guards_handler_result
+                    else current_event
+                )
+                result = handler(handler_input)
             finally:
                 cls._preflight_depth.reset(depth_token)
             if cls.event_cursor() != before_cursor:
@@ -1762,6 +1961,8 @@ class EventQueue:
                 )
             if result is None:
                 continue
+            if guards_handler_result:
+                result = current_event.validate_handler_result(result)
             if not isinstance(result, event.__class__):
                 raise TypeError(
                     f"Expected {event.__class__.__name__} but got {result.__class__.__name__}"
@@ -1792,6 +1993,9 @@ class EventQueue:
             raise ValueError("Preflighted events must still use use_register=False")
         if event.canceled:
             raise ValueError("Canceled preflight events cannot be published")
+        detached_proposal = cls._detach_active_handler_storage(event)
+        if detached_proposal is not None:
+            return cast(EventT, detached_proposal)
         event.use_register = True
         event.timestamp = datetime.now(UTC)
         cls._store_event(event)
@@ -1818,10 +2022,15 @@ class EventQueue:
         Raises:
             ValueError: If any event is not a completion or reuses a UUID.
         """
+        results: List[Event] = []
         stored: List[Event] = []
         for event in events:
             if event.phase != EventPhase.COMPLETION:
                 raise ValueError("Completion sequences may only store completion events")
+            detached_proposal = cls._detach_active_handler_storage(event)
+            if detached_proposal is not None:
+                results.append(detached_proposal)
+                continue
             existing = cls._events_by_uuid.get(event.uuid)
             if existing is not None:
                 raise ValueError(f"Event UUID collision for {event.uuid}")
@@ -1831,11 +2040,12 @@ class EventQueue:
                 notify_batch_callbacks=False,
             )
             stored.append(event)
+            results.append(event)
         if stored:
             cls._dispatch_event_sequence(stored)
             if cls._pending_event_batch.get() is None:
                 cls._dispatch_event_batch(stored)
-        return tuple(stored)
+        return tuple(results)
 
     @classmethod
     def _record_handler_result(cls, result: Event) -> Event:
@@ -1867,6 +2077,10 @@ class EventQueue:
         """Store an event in all queue indexes and notify passive observers."""
         if cls._preflight_depth.get() > 0:
             raise RuntimeError("Validation-only handlers cannot publish events during preflight")
+        if cls._detach_active_handler_storage(event) is not None:
+            raise RuntimeError(
+                "Guarded handler proposals must return through dispatch before storage"
+            )
         if event.uuid in cls._events_by_uuid:
             raise ValueError(f"Event UUID collision for {event.uuid}")
         timing = action_timing_enabled()
@@ -2343,6 +2557,10 @@ class EventQueue:
         cls._event_batch_depth.set(0)
         cls._pending_event_batch.set(None)
         cls._preflight_depth.set(0)
+        cls._active_handler_input.set(None)
+        cls._active_handler_proposal.set(None)
+        cls._active_handler_validation_token.set(None)
+        cls._active_handler_storage_result.set(None)
         cls._pre_completion_callbacks.clear()
         for system in tuple(cls._pre_completion_systems.values()):
             system.reset()
@@ -3866,11 +4084,174 @@ class StepMovementEvent(Event):
         description="Whether the entity position was committed to the destination cell.",
     )
 
+    def guards_handler_result(self) -> bool:
+        """Guard voluntary path steps without changing Jump's direct arcs."""
+        return self.trajectory is MovementTrajectory.PATH
+
+    def model_copy(
+        self,
+        *,
+        update: Optional[Mapping[str, Any]] = None,
+        deep: bool = False,
+    ) -> Self:
+        """Copy PATH proposals without aliasing queue-maintained containers."""
+        copied = super().model_copy(
+            update=update,
+            deep=(
+                True
+                if self.trajectory is MovementTrajectory.PATH
+                else deep
+            ),
+        )
+        if (
+            self.trajectory is not MovementTrajectory.PATH
+            and copied.trajectory is not MovementTrajectory.PATH
+        ):
+            return copied
+        return copied
+
+    def validate_handler_result(self, result: Event) -> Event:
+        """Reject PATH handlers that rewrite the pending edge contract."""
+        if EventQueue.get_event_by_uuid(result.uuid) is result:
+            return result
+        active_proposal = EventQueue.is_active_handler_proposal(result)
+        safe_status = (
+            result.status_message
+            if isinstance(result.status_message, str)
+            or result.status_message is None
+            else self.status_message
+        )
+        queue_updates: Dict[str, Any] = {
+            "lineage_children_events": list(self.lineage_children_events),
+            "children_events": list(self.children_events),
+            "children_lineages": list(self.children_lineages),
+            "identified_entity_observer_uuids": {
+                key: set(observer_uuids)
+                for key, observer_uuids in (
+                    self.identified_entity_observer_uuids.items()
+                )
+            },
+            "located_entity_observer_uuids": {
+                key: set(observer_uuids)
+                for key, observer_uuids in (
+                    self.located_entity_observer_uuids.items()
+                )
+            },
+            "located_position_observer_uuids": {
+                key: set(observer_uuids)
+                for key, observer_uuids in (
+                    self.located_position_observer_uuids.items()
+                )
+            },
+        }
+
+        def cancellation(status_message: str) -> StepMovementEvent:
+            canceled = self.invalid_handler_result_cancellation(
+                result,
+                status_message=status_message,
+            )
+            return cast(StepMovementEvent, canceled.model_copy(update={
+                **queue_updates,
+                "use_register": (
+                    False if active_proposal else self.use_register
+                ),
+            }))
+
+        if type(result) is not StepMovementEvent:
+            return cancellation(
+                "Movement step handler returned an incompatible event type."
+            )
+        lifecycle_candidate = result
+        if (
+            not active_proposal
+            and result.use_register is False
+            and self.use_register is True
+        ):
+            lifecycle_candidate = result.model_copy(
+                update={"use_register": True}
+            )
+        if not self.handler_result_preserves_lifecycle(lifecycle_candidate):
+            return cancellation(
+                "Movement step handler changed lifecycle evidence."
+            )
+        if result.canceled:
+            return cancellation(
+                safe_status or "Movement step canceled by handler."
+            )
+
+        allowed_fields = {
+            "uuid",
+            "timestamp",
+            "modified",
+            "status_message",
+            "use_register",
+            *queue_updates,
+        }
+        if (
+            self.committed is not False
+            or type(result.committed) is not bool
+            or result.committed is not False
+            or any(
+                getattr(result, field_name) != getattr(self, field_name)
+                for field_name in type(self).model_fields
+                if field_name not in allowed_fields
+            )
+        ):
+            return cancellation(
+                "Movement step evidence changed before settlement."
+            )
+
+        if (
+            not active_proposal
+            and result.uuid == self.uuid
+            and result.timestamp == self.timestamp
+            and result.modified == self.modified
+            and safe_status == self.status_message
+        ):
+            return self
+
+        result_uuid = result.uuid
+        result_changed = (
+            safe_status != self.status_message
+            or result.timestamp != self.timestamp
+        )
+        if result_uuid == self.uuid and result_changed:
+            result_uuid = uuid4()
+        return self.model_copy(update={
+            **queue_updates,
+            "uuid": result_uuid,
+            "timestamp": result.timestamp,
+            "modified": result.modified or result_changed,
+            "status_message": safe_status,
+            "use_register": False if active_proposal else self.use_register,
+        })
+
     def completion_position_observer_evidence(
         self,
         completion_locations: Dict[str, Set[str]],
     ) -> Dict[str, Set[str]]:
         """Freeze committed occupancy or the exact perceived attempted edge."""
+        if self.trajectory is MovementTrajectory.DIRECT_ARC:
+            entity_key = str(self.source_entity_uuid)
+            evidence = super().completion_position_observer_evidence(
+                completion_locations
+            )
+            evidence[position_evidence_key(self.from_position)] = set(
+                self.located_position_observer_uuids.get(
+                    position_evidence_key(self.from_position),
+                    self.located_entity_observer_uuids.get(entity_key, set()),
+                )
+            )
+            evidence[position_evidence_key(self.to_position)] = set(
+                completion_locations.get(entity_key, set())
+                if self.committed
+                else self.located_position_observer_uuids.get(
+                    position_evidence_key(self.to_position),
+                    set(),
+                )
+            )
+            return evidence
+
         entity_key = str(self.source_entity_uuid)
         evidence = super().completion_position_observer_evidence(
             completion_locations
@@ -3882,17 +4263,16 @@ class StepMovementEvent(Event):
             )
         )
         evidence[position_evidence_key(self.to_position)] = set(
-            completion_locations.get(entity_key, set())
-            if self.committed
-            else self.located_position_observer_uuids.get(
-                position_evidence_key(self.to_position),
-                set(),
+            self.located_position_observer_uuids.get(
+                position_evidence_key(self.to_position), set()
             )
         )
         return evidence
 
-    def generate_combat_log(self) -> CombatLogEntry:
+    def generate_combat_log(self) -> Optional[CombatLogEntry]:
         """Generate combat log for a movement step (usually not logged individually)."""
+        if not self.committed:
+            return None
         source_name = self.source_entity_name or "Unknown"
 
         compact_text = f"{md_color(source_name, 'cyan')} steps to {self.to_position}"

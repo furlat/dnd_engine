@@ -39,6 +39,7 @@ from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import BaseValue
 from dnd.entity import Entity, EntityConfig
+from dnd.conditions import Invisible
 from dnd.items.consumables import HEALING_POTION_RECIPE
 from dnd.items.spell_items import fireball_scroll_recipe, fire_bolt_scroll_recipe
 from tests.manual.reactive_fixture_support import PrepareIntercept
@@ -1230,7 +1231,7 @@ def test_safe_movement_metadata_shapes_path_choice(capsys) -> None:
     assert result is not None
     assert not result.canceled
     movement_result = cast(MovementEvent, result)
-    assert movement_result.path == hazard_target.safe_path
+    assert movement_result.path == tuple(hazard_target.safe_path)
     assert scout.position == hazard_target.position
     assert scout.action_economy.movement.normalized_score == (
         movement_before - hazard_target.safe_path_cost
@@ -1244,7 +1245,7 @@ def test_safe_movement_metadata_shapes_path_choice(capsys) -> None:
         f"hazard in unsafe path: {hazard_position in hazard_target.path[1:]}",
         f"hazard in safe path: {hazard_position in hazard_target.safe_path[1:]}",
         f"safe path cost: {hazard_target.safe_path_cost}",
-        f"executed path is safe path: {movement_result.path == hazard_target.safe_path}",
+        f"executed path is safe path: {movement_result.path == tuple(hazard_target.safe_path)}",
         f"movement after safe move: {scout.action_economy.movement.normalized_score}",
     ]
 
@@ -1308,7 +1309,7 @@ def test_move_executes_affordable_disclosed_path_when_safe_alternative_is_too_co
     assert result is not None
     assert not result.canceled
     movement_result = cast(MovementEvent, result)
-    assert movement_result.path == target.path
+    assert movement_result.path == tuple(target.path)
     assert scout.position == target.position
 
 
@@ -1336,12 +1337,16 @@ def test_partial_move_completion_reports_only_traversed_path_and_cost() -> None:
     target.path = disclosed_path
     target.path_cost = 30
 
-    create_tutorial_actor(
+    blocker = create_tutorial_actor(
         name="Unknown Blocker",
         position=(4, 7),
         faction="monsters",
         standard_actions=False,
     )
+    blocker.add_condition(Invisible(
+        source_entity_uuid=blocker.uuid,
+        target_entity_uuid=blocker.uuid,
+    ))
 
     result = execute_by_index(
         scout,
@@ -1363,7 +1368,7 @@ def test_partial_move_completion_reports_only_traversed_path_and_cost() -> None:
     assert scout.position == (3, 6)
     assert scout.action_economy.movement.normalized_score == 15
     assert movement_result.end_position == (3, 6)
-    assert movement_result.path == traversed_path
+    assert movement_result.path == tuple(traversed_path)
     assert movement_result.get_affected_positions() == set(traversed_path)
     assert (4, 7) not in movement_result.get_affected_positions()
     assert movement_cost == 15

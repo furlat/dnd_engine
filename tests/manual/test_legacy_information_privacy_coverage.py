@@ -172,5 +172,7 @@ def test_condition_removal_log_carries_typed_identity_and_reveal_fact() -> None:
     assert log.target_uuid == str(target_uuid)
     assert log.data == {
         "condition_name": "Hidden",
+        "condition_content_identity": None,
         "reveals_target": True,
+        "application_disposition": None,
     }

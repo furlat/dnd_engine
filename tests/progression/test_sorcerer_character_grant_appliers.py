@@ -485,6 +485,7 @@ def test_dragon_wings_materializes_a_reversible_flying_action(
     assert fly.movement_mode.value == "flying"
     start_x, start_y = context.entity.position
     destination = (start_x + 1, start_y)
+    Entity.update_all_entities_senses(max_distance=20)
     assert (
         fly.instantiate(
             end_position=destination,

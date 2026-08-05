@@ -7,7 +7,7 @@ from uuid import UUID
 
 from pydantic import Field, PrivateAttr
 
-from dnd.actions import Attack, AttackEvent, Dash, Disengage, Hide, IntrinsicAttackSource, Move, build_weapon_attack_outcome_profile, entity_action_economy_cost_evaluator, validate_line_of_sight
+from dnd.actions import Attack, AttackEvent, Dash, Disengage, Hide, IntrinsicAttackSource, Move, MovementEvent, build_weapon_attack_outcome_profile, entity_action_economy_cost_evaluator, validate_line_of_sight
 from dnd.blocks.equipment import Damage
 from dnd.conditions import Paralyzed, Prone
 from dnd.core.base_actions import (
@@ -27,6 +27,8 @@ from dnd.core.base_actions import (
     TargetType,
 )
 from dnd.core.action_types import spell_slot_cost_type
+from dnd.core.action_execution import MovementTerminationReason
+from dnd.core.base_block import MovementMode
 from dnd.core.base_conditions import (
     BaseCondition,
     ConditionApplicationEvent,
@@ -511,22 +513,40 @@ class AggressiveMoveAction(Move):
     description: str = Field(default="Move up to speed toward a visible hostile as a bonus action.", description="Rules summary.")
     costs: List[Cost] = Field(default_factory=lambda: [Cost(name="Aggressive Cost", cost_type="bonus_actions", cost=1, evaluator=entity_action_economy_cost_evaluator)], description="Bonus action cost.")
 
-    def _validate(self, declaration_event):
-        actor = Entity.get(self.source_entity_uuid)
-        if actor is None or self.end_position is None:
-            return declaration_event.cancel(status_message="Aggressive requires actor and destination")
+    def _validate_move_prerequisites(
+        self,
+        event: MovementEvent,
+        source: Entity,
+    ) -> Optional[MovementTerminationReason]:
+        """Require the accepted walking route to approach a visible enemy."""
+        base_failure = super()._validate_move_prerequisites(event, source)
+        if base_failure is not None:
+            return base_failure
+        if event.movement_mode is not MovementMode.WALKING:
+            return MovementTerminationReason.INVALID_PATH
         enemies = [
             entity
-            for entity_uuid in actor.senses.entities
-            if (entity := Entity.get(entity_uuid)) is not None and actor.is_enemy(entity)
+            for entity_uuid in source.senses.entities
+            if (entity := Entity.get(entity_uuid)) is not None
+            and source.is_enemy(entity)
         ]
         if not enemies:
-            return declaration_event.cancel(status_message="No visible enemy for Aggressive")
-        before = min(actor.senses.get_feet_distance(enemy.position) for enemy in enemies)
-        after = min((abs(self.end_position[0] - enemy.position[0]) + abs(self.end_position[1] - enemy.position[1])) * 5 for enemy in enemies)
+            return MovementTerminationReason.INVALID_PATH
+        before = min(
+            source.senses.get_feet_distance(enemy.position)
+            for enemy in enemies
+        )
+        after = min(
+            (
+                abs(event.end_position[0] - enemy.position[0])
+                + abs(event.end_position[1] - enemy.position[1])
+            )
+            * 5
+            for enemy in enemies
+        )
         if after >= before:
-            return declaration_event.cancel(status_message="Aggressive destination must move closer to a visible enemy")
-        return super()._validate(declaration_event)
+            return MovementTerminationReason.INVALID_PATH
+        return None
 
 
 class MultiattackAction(BaseAction):

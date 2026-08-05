@@ -87,6 +87,10 @@ from dnd.spells.abjuration import (
     CounterspellReactionEvent,
     create_shield_reaction_handler,
 )
+from dnd.spells.effect_ids import (
+    COUNTERSPELL_FAILURE_OUTCOME_CODE,
+    COUNTERSPELL_INTERRUPTION_OUTCOME_CODE,
+)
 from dnd.spells.evocation import GustOfWind, Thunderwave
 from dnd.spells.transmutation import TelekinesisMove
 from tests.engine.support import (
@@ -409,7 +413,7 @@ def _project_real_multi_reaction_movement(
             Move(
                 source_entity_uuid=mover.uuid,
                 end_position=path[-1],
-                path=list(path),
+                path=tuple(path),
             ).apply()
             if movement_kind is MovementKind.WALK
             else Jump(
@@ -1061,6 +1065,7 @@ def test_condition_cue_projects_exact_bound_definition_without_name_inference() 
         source_entity_uuid=actor,
         target_entity_uuid=target,
         condition=condition,
+        condition_content_identity=condition_ref.identity_key,
         phase=EventPhase.COMPLETION,
         use_register=False,
     )
@@ -1128,6 +1133,7 @@ def test_generic_action_preserves_existing_condition_causality(
             ),
             use_register=False,
         ),
+        condition_content_identity=condition_ref.identity_key,
         parent_lineage=action.lineage_uuid,
         phase=EventPhase.COMPLETION,
         use_register=False,
@@ -1267,6 +1273,7 @@ def test_handler_only_shield_reaction_owns_its_emitted_condition() -> None:
             ),
             use_register=False,
         ),
+        condition_content_identity=condition_ref.identity_key,
         parent_lineage=incoming.lineage_uuid,
         phase=EventPhase.COMPLETION,
         use_register=False,
@@ -1810,6 +1817,13 @@ def test_counterspell_maps_closed_reaction_and_trigger_identity(
         check_total=total,
         check_dc=dc,
         succeeded=succeeded,
+        outcome_code=(
+            COUNTERSPELL_INTERRUPTION_OUTCOME_CODE
+            if succeeded
+            else COUNTERSPELL_FAILURE_OUTCOME_CODE
+        ),
+        reaction_content_identity=reaction_ref.identity_key,
+        incoming_spell_content_identity=spell_ref.identity_key,
         behavior_binding=_binding(
             definition_ref=reaction_ref,
             owner_uuid=reactor,
@@ -1904,6 +1918,9 @@ def test_counterspell_with_hidden_reactor_fails_closed() -> None:
         counterspell_slot_level=3,
         automatic=True,
         succeeded=True,
+        outcome_code=COUNTERSPELL_INTERRUPTION_OUTCOME_CODE,
+        reaction_content_identity=reaction_ref.identity_key,
+        incoming_spell_content_identity=spell_ref.identity_key,
         behavior_binding=_binding(
             definition_ref=reaction_ref,
             owner_uuid=reactor,
@@ -2467,7 +2484,7 @@ def test_committed_step_events_form_one_ordered_movement_segment() -> None:
         source_entity_uuid=actor,
         start_position=(1, 1),
         end_position=(3, 1),
-        path=[(1, 1), (2, 1), (3, 1)],
+        path=((1, 1), (2, 1), (3, 1)),
         phase=EventPhase.COMPLETION,
         use_register=False,
     )
@@ -2689,7 +2706,7 @@ def test_visible_pre_step_spell_reaction_owns_exact_movement_segment() -> None:
         source_entity_uuid=mover,
         start_position=(1, 1),
         end_position=(2, 1),
-        path=[(1, 1), (2, 1)],
+        path=((1, 1), (2, 1)),
         phase=EventPhase.COMPLETION,
         use_register=False,
     )
@@ -2755,7 +2772,7 @@ def test_visible_pre_step_shove_reaction_owns_exact_movement_segment() -> None:
         source_entity_uuid=mover,
         start_position=(1, 1),
         end_position=(2, 1),
-        path=[(1, 1), (2, 1)],
+        path=((1, 1), (2, 1)),
         phase=EventPhase.COMPLETION,
         use_register=False,
     )
@@ -2817,7 +2834,7 @@ def test_hidden_step_reaction_does_not_leak_through_movement_segmentation() -> N
         source_entity_uuid=mover,
         start_position=(1, 1),
         end_position=(4, 1),
-        path=[(1, 1), (2, 1), (3, 1), (4, 1)],
+        path=((1, 1), (2, 1), (3, 1), (4, 1)),
         phase=EventPhase.COMPLETION,
         use_register=False,
     )
@@ -2870,7 +2887,7 @@ def test_visible_reaction_stays_root_when_its_exact_step_is_not_disclosed() -> N
         source_entity_uuid=mover,
         start_position=(1, 1),
         end_position=(3, 1),
-        path=[(1, 1), (2, 1), (3, 1)],
+        path=((1, 1), (2, 1), (3, 1)),
         phase=EventPhase.COMPLETION,
         use_register=False,
     )
@@ -2953,7 +2970,7 @@ def test_post_step_descendant_stays_root_without_splitting_movement() -> None:
         source_entity_uuid=mover,
         start_position=(1, 1),
         end_position=(4, 1),
-        path=[(1, 1), (2, 1), (3, 1), (4, 1)],
+        path=((1, 1), (2, 1), (3, 1), (4, 1)),
         phase=EventPhase.COMPLETION,
         use_register=False,
     )
@@ -3023,7 +3040,7 @@ def test_spectator_keeps_enemy_step_seen_at_both_endpoints() -> None:
         source_entity_uuid=mover,
         start_position=(4, 4),
         end_position=(5, 4),
-        path=[(4, 4), (5, 4)],
+        path=((4, 4), (5, 4)),
         phase=EventPhase.COMPLETION,
         use_register=False,
     )
@@ -3073,6 +3090,10 @@ def test_step_completion_freezes_pre_and_post_position_evidence_for_logs() -> No
         committed=True,
         phase=EventPhase.EFFECT,
         located_entity_observer_uuids={entity_key: {observer_key}},
+        located_position_observer_uuids={
+            position_evidence_key((7, 7)): {observer_key},
+            position_evidence_key((8, 7)): {observer_key},
+        },
         use_register=False,
     )
 
@@ -3240,6 +3261,7 @@ def test_patch_backed_equipment_door_light_condition_and_terminal_cues() -> None
             ),
             use_register=False,
         ),
+        condition_content_identity=prone_ref.identity_key,
         phase=EventPhase.COMPLETION,
         use_register=False,
     )
@@ -3321,7 +3343,7 @@ def test_boundary_location_grant_does_not_disclose_movement_origin() -> None:
         source_entity_uuid=mover,
         start_position=(50, 50),
         end_position=(51, 50),
-        path=[(50, 50), (51, 50)],
+        path=((50, 50), (51, 50)),
         phase=EventPhase.COMPLETION,
         use_register=False,
     )

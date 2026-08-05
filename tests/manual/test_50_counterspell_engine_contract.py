@@ -4,6 +4,8 @@ import json
 from unittest.mock import patch
 from uuid import uuid4
 
+import pytest
+
 from server.agent_runtime.observation_journal import (
     build_observation_snapshot,
     iter_observation_frames,
@@ -16,7 +18,11 @@ from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_object import BaseObject
-from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
+from dnd.core.combat_log import (
+    CombatLogEntry,
+    CombatLogEntryType,
+    SpellInterruptionLogData,
+)
 from dnd.core.events import Event, EventHandler, EventPhase, EventQueue, EventType, Trigger
 from dnd.core.gridmap import get_map
 from dnd.core.values import BaseValue
@@ -31,7 +37,10 @@ from dnd.spells.abjuration import (
     CounterspellReactionEvent,
     register_counterspell_reaction,
 )
-from dnd.spells.effect_ids import COUNTERSPELL_INTERRUPTION_OUTCOME_CODE
+from dnd.spells.effect_ids import (
+    COUNTERSPELL_FAILURE_OUTCOME_CODE,
+    COUNTERSPELL_INTERRUPTION_OUTCOME_CODE,
+)
 from tests.engine.support import reset_combat_state
 from server.event_server import sim
 from server.session import PlayerType
@@ -131,6 +140,7 @@ def test_counterspell_spends_both_casters_resources_and_records_one_cancel() -> 
     assert interruption_logs[0].data["outcome_code"] == COUNTERSPELL_INTERRUPTION_OUTCOME_CODE
     assert interruption_logs[0].data["counterspell_slot_level"] == 3
     assert interruption_logs[0].data["succeeded"] is True
+    assert interruption_logs[0].data["reaction_content_identity"] is not None
 
 
 def test_counterspell_declaration_veto_preserves_reaction_and_slot() -> None:
@@ -193,6 +203,265 @@ def test_counterspell_declaration_veto_preserves_reaction_and_slot() -> None:
     )
 
 
+@pytest.mark.parametrize(
+    ("phase", "updates"),
+    (
+        (
+            EventPhase.DECLARATION,
+            {
+                "succeeded": False,
+                "outcome_code": COUNTERSPELL_FAILURE_OUTCOME_CODE,
+            },
+        ),
+        (
+            EventPhase.EXECUTION,
+            {"counterspell_slot_level": 4},
+        ),
+        (
+            EventPhase.EFFECT,
+            {
+                "reaction_content_identity": (
+                    "fixture.counterspell:reaction:reaction.forged@1"
+                ),
+                "incoming_spell_content_identity": (
+                    "fixture.counterspell:spell:spell.forged@1"
+                ),
+            },
+        ),
+        (
+            EventPhase.EFFECT,
+            {"__replace_event_type__": True},
+        ),
+        (
+            EventPhase.EXECUTION,
+            {"__post_cancel__": True},
+        ),
+        (
+            EventPhase.EFFECT,
+            {"__post_completion__": True},
+        ),
+        (
+            EventPhase.EFFECT,
+            {"__phase_to_completion__": True},
+        ),
+        (
+            EventPhase.DECLARATION,
+            {"phase": EventPhase.COMPLETION},
+        ),
+        (
+            EventPhase.DECLARATION,
+            {"phase": EventPhase.COMPLETION, "canceled": True},
+        ),
+        (
+            EventPhase.EFFECT,
+            {"__mutate_in_place__": True},
+        ),
+    ),
+)
+def test_counterspell_evidence_mutation_fails_closed_before_resource_commit(
+    phase: EventPhase,
+    updates: dict[str, object],
+) -> None:
+    """Handlers cannot rewrite resolved reaction facts before commit."""
+    reset_counterspell_state()
+    caster = create_counterspell_caster(
+        "Caster",
+        (2, 2),
+        "heroes",
+        {1: 1},
+    )
+    counterspeller = create_counterspell_caster(
+        "Abjurer",
+        (6, 2),
+        "monsters",
+        {3: 1},
+    )
+    register_counterspell_reaction(counterspeller)
+    Entity.update_all_entities_senses()
+    combat_logs: list[CombatLogEntry] = []
+    observed_reactions: list[
+        tuple[
+            type[CounterspellReactionEvent],
+            EventPhase,
+            bool,
+            EventPhase | None,
+            int,
+            str | None,
+        ]
+    ] = []
+
+    def capture_reaction(event: Event) -> None:
+        if isinstance(event, CounterspellReactionEvent):
+            observed_reactions.append(
+                (
+                    type(event),
+                    event.phase,
+                    event.canceled,
+                    event.canceled_from_phase,
+                    event.counterspell_slot_level,
+                    event.reaction_content_identity,
+                ),
+            )
+
+    EventQueue.add_on_event_callback(capture_reaction)
+    EventQueue.set_combat_log_callback(
+        lambda event: combat_logs.append(event.combat_log)
+        if event.combat_log is not None
+        else None
+    )
+
+    def rewrite_evidence(
+        event: Event,
+        _handler_source_uuid,
+    ) -> Event | None:
+        if isinstance(event, CounterspellReactionEvent):
+            if updates.get("__mutate_in_place__"):
+                event.counterspell_slot_level = 4
+                event.modified = True
+                return event
+            if updates.get("__post_cancel__"):
+                return event.cancel(
+                    status_message="forged Counterspell cancel",
+                    counterspell_slot_level=4,
+                    reaction_content_identity=(
+                        "fixture.counterspell:reaction:reaction.forged@1"
+                    ),
+                )
+            if updates.get("__post_completion__"):
+                return event.post(phase=EventPhase.COMPLETION)
+            if updates.get("__phase_to_completion__"):
+                return event.phase_to(
+                    EventPhase.COMPLETION,
+                    lineage_uuid=uuid4(),
+                    reaction_content_identity=(
+                        "fixture.counterspell:reaction:reaction.forged@1"
+                    ),
+                )
+            if updates.get("__replace_event_type__"):
+                class CounterspellSubtype(CounterspellReactionEvent):
+                    pass
+
+                payload = event.model_dump()
+                payload["behavior_binding"] = event.behavior_binding
+                payload["use_register"] = False
+                replacement = CounterspellSubtype(**payload)
+                return replacement.model_copy(
+                    update={"modified": True, "use_register": True},
+                )
+            return event.model_copy(
+                update={**updates, "modified": True},
+            )
+        return None
+
+    EventQueue.add_event_handler(
+        EventHandler(
+            name=f"Rewrite Counterspell {phase.value}",
+            source_entity_uuid=caster.uuid,
+            trigger_conditions=[
+                Trigger(
+                    event_type=EventType.TRIGGER_EVENT,
+                    event_phase=phase,
+                    event_source_entity_uuid=counterspeller.uuid,
+                )
+            ],
+            event_processor=rewrite_evidence,
+        )
+    )
+
+    try:
+        event = FireBolt(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=counterspeller.uuid,
+            template=False,
+        ).apply()
+    finally:
+        EventQueue.set_combat_log_callback(None)
+        EventQueue.remove_on_event_callback(capture_reaction)
+
+    assert isinstance(event, SpellEvent)
+    assert event.phase is EventPhase.COMPLETION
+    assert not event.canceled
+    assert counterspeller.action_economy.reactions.normalized_score == 1
+    assert counterspeller.action_economy.spell_slot_3.normalized_score == 1
+    reaction_versions = [
+        row
+        for row in EventQueue._all_events
+        if isinstance(row, CounterspellReactionEvent)
+    ]
+    declaration = next(
+        row
+        for row in reaction_versions
+        if row.phase is EventPhase.DECLARATION and not row.modified
+    )
+    terminal = reaction_versions[-1]
+    assert terminal.phase is EventPhase.CANCEL
+    assert terminal.canceled
+    assert terminal.canceled_from_phase is phase
+    assert all(
+        type(row) is CounterspellReactionEvent
+        for row in reaction_versions
+    )
+    assert not any(
+        row.phase is EventPhase.COMPLETION
+        for row in reaction_versions
+    )
+    for row in reaction_versions:
+        for field_name in (
+            "triggered_event_uuid",
+            "triggered_lineage_uuid",
+            "incoming_spell_name",
+            "incoming_spell_level",
+            "counterspell_slot_level",
+            "automatic",
+            "check_total",
+            "check_dc",
+            "succeeded",
+            "outcome_code",
+            "reaction_content_identity",
+            "incoming_spell_content_identity",
+            "behavior_binding",
+        ):
+            assert getattr(row, field_name) == getattr(
+                declaration,
+                field_name,
+            )
+    assert observed_reactions
+    assert all(
+        row_type is CounterspellReactionEvent
+        and slot_level == declaration.counterspell_slot_level
+        and reaction_identity == declaration.reaction_content_identity
+        and (
+            (
+                not canceled
+                and observed_phase
+                in {
+                    EventPhase.DECLARATION,
+                    EventPhase.EXECUTION,
+                    EventPhase.EFFECT,
+                }
+                and canceled_from_phase is None
+            )
+            or (
+                canceled
+                and observed_phase is EventPhase.CANCEL
+                and canceled_from_phase is phase
+            )
+        )
+        for (
+            row_type,
+            observed_phase,
+            canceled,
+            canceled_from_phase,
+            slot_level,
+            reaction_identity,
+        ) in observed_reactions
+    )
+    assert not any(
+        log.entry_type is CombatLogEntryType.SPELL_INTERRUPTION
+        for log in combat_logs
+    )
+
+
 def test_registered_counterspell_freezes_both_reaction_and_spell_bindings() -> None:
     """Live handler/action scopes survive every event phase but no raw dump."""
     reset_counterspell_state()
@@ -241,6 +510,23 @@ def test_registered_counterspell_freezes_both_reaction_and_spell_bindings() -> N
     assert isinstance(trigger, SpellEvent)
     assert reaction.behavior_binding == handler.behavior_binding
     assert trigger.behavior_binding == template.behavior_binding
+    assert reaction.reaction_content_identity == (
+        handler.behavior_binding.definition_ref.identity_key
+    )
+    assert reaction.incoming_spell_content_identity == (
+        template.behavior_binding.definition_ref.identity_key
+    )
+    assert reaction.outcome_code == COUNTERSPELL_INTERRUPTION_OUTCOME_CODE
+    assert reaction.combat_log is not None
+    typed_log = SpellInterruptionLogData.model_validate(
+        reaction.combat_log.data,
+    )
+    assert typed_log.reaction_content_identity == (
+        reaction.reaction_content_identity
+    )
+    assert typed_log.incoming_spell_content_identity == (
+        reaction.incoming_spell_content_identity
+    )
     assert "behavior_binding" not in reaction.model_dump()
     assert "behavior_binding" not in trigger.model_dump()
 

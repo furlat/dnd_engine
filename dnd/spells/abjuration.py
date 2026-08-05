@@ -7,11 +7,12 @@ Contains: Shield, MageArmor, ProtectionFromEnergy, Stoneskin, Counterspell,
           AntimagicField
 """
 import random
+from dataclasses import dataclass
 from functools import partial
 from typing import Any, Dict, Optional, List, Set, Tuple, cast as type_cast
 from uuid import UUID
 
-from pydantic import Field, PrivateAttr
+from pydantic import Field, PrivateAttr, model_validator
 
 from dnd.core.base_actions import (
     ActionEvent,
@@ -34,7 +35,11 @@ from dnd.core.condition_types import (
 from dnd.core.base_object import BaseObject
 from dnd.core.content.registration import get_content_declaration
 from dnd.core.content.identities import ContentRef
-from dnd.core.content.runtime import RuntimeBehaviorKind
+from dnd.core.content.runtime import (
+    BehaviorBinding,
+    RuntimeBehaviorKind,
+    active_runtime_behavior_binding,
+)
 from dnd.core.effect_types import EffectOriginKind
 from dnd.core.events import AbilityName, Event, EventPhase, EventType, EventHandler, Trigger, RangeType, Range, EventQueue, SpatialChangeEvent, TakeDamageEvent, InstantDeathEvent, D20RollResultEvent, HealRollResultEvent
 from dnd.core.creature_types import DamageType
@@ -88,16 +93,120 @@ class CounterspellReactionEvent(ActionEvent):
     """Observable resolution of one Counterspell reaction."""
 
     name: str = Field(default="Counterspell", description="Reaction event name.")
-    event_type: EventType = Field(default=EventType.TRIGGER_EVENT, description="Reaction event category.")
-    triggered_event_uuid: UUID = Field(description="Incoming spell event version that triggered the reaction.")
-    triggered_lineage_uuid: UUID = Field(description="Incoming spell lineage interrupted or challenged.")
-    incoming_spell_name: str = Field(description="Display name of the incoming spell.")
-    incoming_spell_level: int = Field(ge=0, description="Level of the incoming cast.")
-    counterspell_slot_level: int = Field(ge=3, description="Slot level spent on Counterspell.")
-    automatic: bool = Field(description="Whether the selected slot guarantees interruption.")
-    check_total: Optional[int] = Field(default=None, description="Spellcasting check total when required.")
-    check_dc: Optional[int] = Field(default=None, description="Spellcasting check DC when required.")
-    succeeded: bool = Field(description="Whether Counterspell interrupted the incoming spell.")
+    event_type: EventType = Field(
+        default=EventType.TRIGGER_EVENT,
+        description="Reaction event category.",
+    )
+    triggered_event_uuid: UUID = Field(
+        description="Incoming spell event version that triggered the reaction.",
+    )
+    triggered_lineage_uuid: UUID = Field(
+        description="Incoming spell lineage interrupted or challenged.",
+    )
+    incoming_spell_name: str = Field(
+        description="Display name of the incoming spell.",
+    )
+    incoming_spell_level: int = Field(
+        ge=0,
+        le=9,
+        description="Level of the incoming cast.",
+    )
+    counterspell_slot_level: int = Field(
+        ge=3,
+        le=9,
+        description="Slot level spent on Counterspell.",
+    )
+    automatic: bool = Field(
+        description="Whether the selected slot guarantees interruption.",
+    )
+    check_total: Optional[int] = Field(
+        default=None,
+        description="Spellcasting check total when required.",
+    )
+    check_dc: Optional[int] = Field(
+        default=None,
+        description="Spellcasting check DC when required.",
+    )
+    succeeded: bool = Field(
+        description="Whether Counterspell interrupted the incoming spell.",
+    )
+    outcome_code: str = type_cast(
+        str,
+        Field(
+            min_length=1,
+            description="Stable Counterspell result code matching succeeded.",
+        ),
+    )
+    reaction_content_identity: Optional[str] = Field(
+        default=None,
+        min_length=1,
+        description=(
+            "Exact authored Counterspell reaction identity frozen at "
+            "declaration."
+        ),
+    )
+    incoming_spell_content_identity: Optional[str] = Field(
+        default=None,
+        min_length=1,
+        description=(
+            "Exact authored incoming spell identity frozen at declaration."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def validate_counterspell_resolution(
+        self,
+    ) -> "CounterspellReactionEvent":
+        """Reject contradictory reaction, roll, and outcome-code facts."""
+        binding = self.behavior_binding
+        expected_reaction_identity = (
+            binding.definition_ref.identity_key
+            if isinstance(binding, BehaviorBinding)
+            else None
+        )
+        if self.reaction_content_identity != expected_reaction_identity:
+            raise ValueError(
+                "reaction content identity must match its behavior binding",
+            )
+
+        expected_outcome_code = (
+            COUNTERSPELL_INTERRUPTION_OUTCOME_CODE
+            if self.succeeded
+            else COUNTERSPELL_FAILURE_OUTCOME_CODE
+        )
+        if self.outcome_code != expected_outcome_code:
+            raise ValueError(
+                "Counterspell outcome code contradicts its success result",
+            )
+
+        if self.automatic:
+            if self.counterspell_slot_level < self.incoming_spell_level:
+                raise ValueError(
+                    "automatic Counterspell requires a sufficient slot",
+                )
+            if not self.succeeded:
+                raise ValueError("automatic Counterspell must succeed")
+            if self.check_total is not None or self.check_dc is not None:
+                raise ValueError(
+                    "automatic Counterspell forbids check evidence",
+                )
+            return self
+
+        if self.counterspell_slot_level >= self.incoming_spell_level:
+            raise ValueError(
+                "checked Counterspell requires a lower-level slot",
+            )
+        if self.check_total is None or self.check_dc is None:
+            raise ValueError(
+                "checked Counterspell requires total and DC",
+            )
+        if self.check_dc != 10 + self.incoming_spell_level:
+            raise ValueError(
+                "Counterspell check DC must equal 10 plus spell level",
+            )
+        if self.succeeded != (self.check_total >= self.check_dc):
+            raise ValueError("Counterspell success contradicts its check")
+        return self
 
     def generate_combat_log(self) -> CombatLogEntry:
         """Generate a typed, subjectivity-filterable reaction log."""
@@ -109,7 +218,7 @@ class CounterspellReactionEvent(ActionEvent):
             f"{original_caster_name}'s {self.incoming_spell_name}"
         )
         data = SpellInterruptionLogData(
-            outcome_code=self.outcome_code or COUNTERSPELL_FAILURE_OUTCOME_CODE,
+            outcome_code=self.outcome_code,
             counterspeller_name=counterspeller_name,
             counterspeller_uuid=str(self.source_entity_uuid),
             original_caster_name=original_caster_name,
@@ -121,6 +230,10 @@ class CounterspellReactionEvent(ActionEvent):
             check_total=self.check_total,
             check_dc=self.check_dc,
             succeeded=self.succeeded,
+            reaction_content_identity=self.reaction_content_identity,
+            incoming_spell_content_identity=(
+                self.incoming_spell_content_identity
+            ),
         )
         return CombatLogEntry(
             entry_type=CombatLogEntryType.SPELL_INTERRUPTION,
@@ -134,6 +247,164 @@ class CounterspellReactionEvent(ActionEvent):
             data=data.model_dump(mode="json"),
             success=self.succeeded,
         )
+
+    def validate_handler_result(self, result: Event) -> Event:
+        """Cancel an evidence or event-type rewrite before queue storage."""
+        evidence = _CounterspellEvidenceSnapshot.capture(self)
+        if (
+            type(result) is not CounterspellReactionEvent
+            or not isinstance(result, CounterspellReactionEvent)
+            or not self.handler_result_preserves_lifecycle(result)
+            or not evidence.matches(result)
+        ):
+            return self.invalid_handler_result_cancellation(
+                result,
+                status_message=(
+                    "Counterspell evidence or lifecycle changed after "
+                    "resolution."
+                ),
+            )
+        return result
+
+
+@dataclass(frozen=True)
+class _CounterspellEvidenceSnapshot:
+    """Immutable resolution and attribution accepted at declaration."""
+
+    name: str
+    event_type: EventType
+    lineage_uuid: UUID
+    parent_event: Optional[UUID]
+    source_entity_uuid: UUID
+    target_entity_uuid: Optional[UUID]
+    outcome_source_entity_uuid: Optional[UUID]
+    source_entity_name: Optional[str]
+    target_entity_name: Optional[str]
+    triggered_event_uuid: UUID
+    triggered_lineage_uuid: UUID
+    incoming_spell_name: str
+    incoming_spell_level: int
+    counterspell_slot_level: int
+    automatic: bool
+    check_total: Optional[int]
+    check_dc: Optional[int]
+    succeeded: bool
+    outcome_code: str
+    reaction_content_identity: Optional[str]
+    incoming_spell_content_identity: Optional[str]
+    behavior_binding: Optional[BehaviorBinding]
+
+    @classmethod
+    def capture(
+        cls,
+        event: CounterspellReactionEvent,
+    ) -> "_CounterspellEvidenceSnapshot":
+        """Capture every fact handlers must not rewrite after resolution."""
+        return cls(
+            name=event.name,
+            event_type=event.event_type,
+            lineage_uuid=event.lineage_uuid,
+            parent_event=event.parent_event,
+            source_entity_uuid=event.source_entity_uuid,
+            target_entity_uuid=event.target_entity_uuid,
+            outcome_source_entity_uuid=event.outcome_source_entity_uuid,
+            source_entity_name=event.source_entity_name,
+            target_entity_name=event.target_entity_name,
+            triggered_event_uuid=event.triggered_event_uuid,
+            triggered_lineage_uuid=event.triggered_lineage_uuid,
+            incoming_spell_name=event.incoming_spell_name,
+            incoming_spell_level=event.incoming_spell_level,
+            counterspell_slot_level=event.counterspell_slot_level,
+            automatic=event.automatic,
+            check_total=event.check_total,
+            check_dc=event.check_dc,
+            succeeded=event.succeeded,
+            outcome_code=event.outcome_code,
+            reaction_content_identity=event.reaction_content_identity,
+            incoming_spell_content_identity=(
+                event.incoming_spell_content_identity
+            ),
+            behavior_binding=event.behavior_binding,
+        )
+
+    def event_updates(self) -> Dict[str, Any]:
+        """Return the exact facts used to close a rewritten lifecycle."""
+        return {
+            "name": self.name,
+            "event_type": self.event_type,
+            "lineage_uuid": self.lineage_uuid,
+            "parent_event": self.parent_event,
+            "source_entity_uuid": self.source_entity_uuid,
+            "target_entity_uuid": self.target_entity_uuid,
+            "outcome_source_entity_uuid": self.outcome_source_entity_uuid,
+            "source_entity_name": self.source_entity_name,
+            "target_entity_name": self.target_entity_name,
+            "triggered_event_uuid": self.triggered_event_uuid,
+            "triggered_lineage_uuid": self.triggered_lineage_uuid,
+            "incoming_spell_name": self.incoming_spell_name,
+            "incoming_spell_level": self.incoming_spell_level,
+            "counterspell_slot_level": self.counterspell_slot_level,
+            "automatic": self.automatic,
+            "check_total": self.check_total,
+            "check_dc": self.check_dc,
+            "succeeded": self.succeeded,
+            "outcome_code": self.outcome_code,
+            "reaction_content_identity": self.reaction_content_identity,
+            "incoming_spell_content_identity": (
+                self.incoming_spell_content_identity
+            ),
+            "behavior_binding": self.behavior_binding,
+        }
+
+    def matches(self, event: CounterspellReactionEvent) -> bool:
+        """Return whether a phase preserves exact values and runtime types."""
+        return all(
+            type(getattr(event, field_name)) is type(expected_value)
+            and getattr(event, field_name) == expected_value
+            for field_name, expected_value in self.event_updates().items()
+        )
+
+
+def _accept_counterspell_phase(
+    candidate: Event,
+    evidence: _CounterspellEvidenceSnapshot,
+    expected_phase: EventPhase,
+) -> Optional[CounterspellReactionEvent]:
+    """Accept cancellation or exact evidence; fail closed on any rewrite."""
+    if not isinstance(candidate, CounterspellReactionEvent):
+        return None
+    if type(candidate) is not CounterspellReactionEvent:
+        candidate.cancel(
+            status_message="Counterspell event type changed after resolution.",
+            use_register=True,
+            **evidence.event_updates(),
+        )
+        return None
+    valid_lifecycle = (
+        candidate.use_register
+        and (
+            (
+                candidate.canceled
+                and candidate.phase is EventPhase.CANCEL
+                and candidate.canceled_from_phase is expected_phase
+            )
+            or (
+                not candidate.canceled
+                and candidate.phase is expected_phase
+                and candidate.canceled_from_phase is None
+            )
+        )
+    )
+    if not evidence.matches(candidate) or not valid_lifecycle:
+        candidate.cancel(
+            status_message=(
+                "Counterspell evidence changed after resolution."
+            ),
+            use_register=True,
+            **evidence.event_updates(),
+        )
+        return None
+    return None if candidate.canceled else candidate
 
 
 def _is_magic_missile_damage(event: Event) -> bool:
@@ -835,6 +1106,8 @@ def _begin_counterspell_reaction(
         if succeeded
         else COUNTERSPELL_FAILURE_OUTCOME_CODE
     )
+    reaction_binding = active_runtime_behavior_binding()
+    incoming_spell_binding = incoming_event.behavior_binding
     declaration = CounterspellReactionEvent(
         source_entity_uuid=counterspeller.uuid,
         target_entity_uuid=original_caster.uuid,
@@ -850,22 +1123,46 @@ def _begin_counterspell_reaction(
         check_dc=check_dc,
         succeeded=succeeded,
         outcome_code=outcome_code,
+        behavior_binding=reaction_binding,
+        reaction_content_identity=(
+            reaction_binding.definition_ref.identity_key
+            if isinstance(reaction_binding, BehaviorBinding)
+            else None
+        ),
+        incoming_spell_content_identity=(
+            incoming_spell_binding.definition_ref.identity_key
+            if isinstance(incoming_spell_binding, BehaviorBinding)
+            else None
+        ),
         use_register=False,
     )
-    declaration = EventQueue.publish_declaration(declaration)
-    if declaration.canceled:
+    evidence = _CounterspellEvidenceSnapshot.capture(declaration)
+    accepted_declaration = _accept_counterspell_phase(
+        EventQueue.publish_declaration(declaration),
+        evidence,
+        EventPhase.DECLARATION,
+    )
+    if accepted_declaration is None:
         return None
-    execution = declaration.phase_to(
+    execution = _accept_counterspell_phase(
+        accepted_declaration.phase_to(
+            EventPhase.EXECUTION,
+            status_message="Counterspell reaction accepted.",
+        ),
+        evidence,
         EventPhase.EXECUTION,
-        status_message="Counterspell reaction accepted.",
     )
-    if execution.canceled:
+    if execution is None:
         return None
-    effect = execution.phase_to(
+    effect = _accept_counterspell_phase(
+        execution.phase_to(
+            EventPhase.EFFECT,
+            status_message="Counterspell reaction resolved.",
+        ),
+        evidence,
         EventPhase.EFFECT,
-        status_message="Counterspell reaction resolved.",
     )
-    return None if effect.canceled else effect
+    return effect
 
 
 def _complete_counterspell_reaction(
@@ -935,13 +1232,18 @@ def counterspell_reaction_processor(
         if reaction is None:
             return None
         entity.action_economy.consume("reactions", 1)
-        entity.action_economy.consume(spell_slot_cost_type(auto_slot), 1)
-        _complete_counterspell_reaction(reaction)
-        return event.cancel(
-            status_message="The spell was interrupted.",
-            outcome_code=COUNTERSPELL_INTERRUPTION_OUTCOME_CODE,
-            outcome_source_entity_uuid=entity.uuid,
+        entity.action_economy.consume(
+            spell_slot_cost_type(reaction.counterspell_slot_level),
+            1,
         )
+        completion = _complete_counterspell_reaction(reaction)
+        if completion.succeeded:
+            return event.cancel(
+                status_message="The spell was interrupted.",
+                outcome_code=completion.outcome_code,
+                outcome_source_entity_uuid=entity.uuid,
+            )
+        return None
 
     cheap_slot = entity.get_lowest_spell_slot(3)
     if cheap_slot is None:
@@ -984,12 +1286,15 @@ def counterspell_reaction_processor(
     if reaction is None:
         return None
     entity.action_economy.consume("reactions", 1)
-    entity.action_economy.consume(spell_slot_cost_type(cheap_slot), 1)
-    _complete_counterspell_reaction(reaction)
-    if succeeded:
+    entity.action_economy.consume(
+        spell_slot_cost_type(reaction.counterspell_slot_level),
+        1,
+    )
+    completion = _complete_counterspell_reaction(reaction)
+    if completion.succeeded:
         return event.cancel(
             status_message="The spell was interrupted.",
-            outcome_code=COUNTERSPELL_INTERRUPTION_OUTCOME_CODE,
+            outcome_code=completion.outcome_code,
             outcome_source_entity_uuid=entity.uuid,
         )
     return None

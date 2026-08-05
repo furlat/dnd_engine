@@ -11,7 +11,10 @@ from dnd.core.creature_types import CreatureType, DamageDieValue, DamageType, Si
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import CriticalStatus, AutoHitStatus
 from dnd.core.base_conditions import BaseCondition
-from dnd.core.condition_types import ConditionApplicationPolicy
+from dnd.core.condition_types import (
+    ConditionApplicationDisposition,
+    ConditionApplicationPolicy,
+)
 from dnd.core.action_types import RestrictedActionGrant
 from dnd.core.action_types import CostType
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
@@ -71,7 +74,12 @@ from dnd.blocks.appearance import Appearance, AppearanceConfig
 from dnd.core.events import AbilityName, SkillName
 from dnd.core.gridmap import get_map
 from dnd.core.geometry import supercover_line
-from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType, EntitySpottedLogData
+from dnd.core.combat_log import (
+    CombatLogEntry,
+    CombatLogEntryType,
+    ConditionLogData,
+    EntitySpottedLogData,
+)
 from dnd.creature_transforms import (
     ModifierOwnership,
     apply_life_state_transform,
@@ -1047,18 +1055,24 @@ class Entity(BaseBlock):
                 verbose=f"{{yellow:{target_name}}} is **immune** to {condition_name}",
                 detailed=f"{{yellow:{target_name}}} is **immune** to {condition_name}",
                 success=False,
+                data=ConditionLogData(
+                    condition_name=condition_name,
+                    condition_content_identity=(
+                        declaration_event.condition_content_identity
+                    ),
+                    application_disposition=(
+                        ConditionApplicationDisposition.IMMUNE
+                    ),
+                ).model_dump(mode="json"),
             )
             EventQueue.push_combat_log(entry, self.uuid)
 
-            if declaration_event is not None:
-                canceled = declaration_event.cancel(
-                    status_message=f"Condition {condition.name} is immune",
-                )
-                self._discard_uncommitted_condition_tree(condition)
-                return canceled
-            else:
-                self._discard_uncommitted_condition_tree(condition)
-                return None
+            canceled = declaration_event.cancel(
+                status_message=f"Condition {condition.name} is immune",
+                application_disposition=ConditionApplicationDisposition.IMMUNE,
+            )
+            self._discard_uncommitted_condition_tree(condition)
+            return canceled
         if check_save_throw and condition.application_saving_throw is not None:
             (_, _, success) = self.saving_throw(condition.application_saving_throw)
             if success:
@@ -2963,6 +2977,13 @@ class Entity(BaseBlock):
         """Return whether neutral condition transforms permit ordinary actions."""
         return self.action_economy.action_permission.normalized_score > 0
 
+    def can_execute_opportunity_attack(self) -> bool:
+        """Return whether objective state permits an opportunity attack."""
+        return (
+            self.health.life_state is LifeState.ALIVE
+            and self.action_economy.reactions.normalized_score >= 1
+        )
+
     def can_afford_action_resource(
         self,
         resource_name: str,
@@ -3039,7 +3060,7 @@ class Entity(BaseBlock):
             if (
                 reactor is None
                 or not isinstance(reactor, Entity)
-                or not reactor.is_encounter_alive
+                or reactor.health.life_state is not LifeState.ALIVE
                 or not self.is_enemy(reactor)
             ):
                 continue
@@ -6074,6 +6095,10 @@ class Entity(BaseBlock):
                             requesting_entity_uuid=self.uuid,
                             movement_mode=movement_mode,
                             subjective=True,
+                            collision_blocked=self.senses.collision_blocked,
+                            directional_collision_blocked=(
+                                self.senses.directional_collision_blocked
+                            ),
                             ignore_difficult_terrain=self.ignore_difficult_terrain,
                         )
                         paths_by_position = {

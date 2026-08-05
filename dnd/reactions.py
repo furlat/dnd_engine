@@ -8,6 +8,7 @@ from dnd.core.content.runtime import (
     RuntimeBehaviorKind,
     active_runtime_behavior_binding,
 )
+from dnd.core.life_types import LifeState
 from dnd.entity import Entity
 from uuid import UUID
 from typing import Optional
@@ -36,7 +37,23 @@ def opportunity_attack_processor(event: StepMovementEvent, source_entity_uuid: U
     if reaction_source_entity.is_ally(event_source_entity):
         return event
 
-    if "Disengaging" in event_source_entity.active_conditions:
+    if (
+        event_source_entity.action_economy
+        .provokes_opportunity_attacks.normalized_score
+        <= 0
+    ):
+        return event
+
+    if not reaction_source_entity.can_execute_opportunity_attack():
+        return event
+
+    if event_source_entity.position != event.from_position:
+        return event
+
+    if event_source_entity.health.life_state is not LifeState.ALIVE:
+        return event
+
+    if not event_source_entity.can_take_actions():
         return event
 
     threatened_positions = reaction_source_entity.senses.get_threathened_positions()

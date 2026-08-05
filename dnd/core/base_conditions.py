@@ -16,7 +16,11 @@ from dnd.core.modifiers import ContextAwareCondition
 from dnd.core.base_object import BaseObject
 from dnd.core.values import ModifiableValue
 from dnd.core.events import Event, EventPhase, EventType, SavingThrowEvent, EventHandler, EventQueue
-from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
+from dnd.core.combat_log import (
+    CombatLogEntry,
+    CombatLogEntryType,
+    ConditionLogData,
+)
 from dnd.core.content.runtime import (
     BehaviorBinding,
     RuntimeBehaviorKind,
@@ -176,6 +180,54 @@ class ConditionApplicationEvent(Event):
         default=ConditionApplicationDisposition.APPLIED,
         description="Authoritative result of repeated-condition arbitration.",
     )
+    condition_content_identity: Optional[str] = Field(
+        default=None,
+        min_length=1,
+        description=(
+            "Exact authored condition identity frozen when the declaration is "
+            "created; absent only for legacy unbound diagnostic events."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def validate_condition_content_identity(self) -> Self:
+        """Require the frozen scalar to match the live declaration binding."""
+        binding = self.condition.behavior_binding
+        expected_identity = (
+            binding.definition_ref.identity_key
+            if isinstance(binding, BehaviorBinding)
+            else None
+        )
+        if self.condition_content_identity != expected_identity:
+            raise ValueError(
+                "condition content identity must match its behavior binding",
+            )
+        return self
+
+    def validate_handler_result(self, result: Event) -> Event:
+        """Cancel before storage when a handler rewrites frozen identity."""
+        if (
+            type(result) is not ConditionApplicationEvent
+            or not isinstance(result, ConditionApplicationEvent)
+            or not self.handler_result_preserves_lifecycle(result)
+            or result.condition is not self.condition
+            or type(result.condition_content_identity)
+            is not type(self.condition_content_identity)
+            or result.condition_content_identity
+            != self.condition_content_identity
+            or type(result.application_disposition)
+            is not type(self.application_disposition)
+            or result.application_disposition
+            is not self.application_disposition
+        ):
+            return self.invalid_handler_result_cancellation(
+                result,
+                status_message=(
+                    "Condition application identity or lifecycle changed "
+                    "after declaration."
+                ),
+            )
+        return result
 
     def get_effect_origin(self) -> Optional[EffectOrigin]:
         """Return the immutable origin inherited by the applied condition."""
@@ -191,7 +243,12 @@ class ConditionApplicationEvent(Event):
         target_name = self.target_entity_name or "Unknown"
         source_name = self.source_entity_name or "Unknown"
 
-        if self.application_disposition is (
+        if self.application_disposition is ConditionApplicationDisposition.IMMUNE:
+            compact = (
+                f"{{cyan:{target_name}}} is immune to "
+                f"**{cond.name or 'Unknown'}**"
+            )
+        elif self.application_disposition is (
             ConditionApplicationDisposition.RETAINED_STRONGER
         ):
             compact = (
@@ -231,7 +288,13 @@ class ConditionApplicationEvent(Event):
             success=self.application_disposition not in {
                 ConditionApplicationDisposition.REJECTED,
                 ConditionApplicationDisposition.RETAINED_STRONGER,
+                ConditionApplicationDisposition.IMMUNE,
             },
+            data=ConditionLogData(
+                condition_name=cond.name or "Unknown",
+                condition_content_identity=self.condition_content_identity,
+                application_disposition=self.application_disposition,
+            ).model_dump(mode="json"),
         )
 
 
@@ -244,6 +307,50 @@ class ConditionRemovalEvent(Event):
     event_type: EventType = Field(default=EventType.CONDITION_REMOVAL, description="Condition removal event type.")
     source_entity_name: Optional[str] = Field(default=None, description="Display name of the source entity.")
     target_entity_name: Optional[str] = Field(default=None, description="Display name of the target entity.")
+    condition_content_identity: Optional[str] = Field(
+        default=None,
+        min_length=1,
+        description=(
+            "Exact authored condition identity frozen when the declaration is "
+            "created; absent only for legacy unbound diagnostic events."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def validate_condition_content_identity(self) -> Self:
+        """Require the frozen scalar to match the live declaration binding."""
+        binding = self.condition.behavior_binding
+        expected_identity = (
+            binding.definition_ref.identity_key
+            if isinstance(binding, BehaviorBinding)
+            else None
+        )
+        if self.condition_content_identity != expected_identity:
+            raise ValueError(
+                "condition content identity must match its behavior binding",
+            )
+        return self
+
+    def validate_handler_result(self, result: Event) -> Event:
+        """Cancel before storage when a handler rewrites frozen identity."""
+        if (
+            type(result) is not ConditionRemovalEvent
+            or not isinstance(result, ConditionRemovalEvent)
+            or not self.handler_result_preserves_lifecycle(result)
+            or result.condition is not self.condition
+            or type(result.condition_content_identity)
+            is not type(self.condition_content_identity)
+            or result.condition_content_identity
+            != self.condition_content_identity
+        ):
+            return self.invalid_handler_result_cancellation(
+                result,
+                status_message=(
+                    "Condition removal identity or lifecycle changed after "
+                    "declaration."
+                ),
+            )
+        return result
 
     resulting_ac: Optional[int] = Field(default=None, description="Entity AC after condition removal for frontend reducers.")
     resulting_max_hp: Optional[int] = Field(default=None, description="Entity max HP after condition removal for frontend reducers.")
@@ -279,10 +386,11 @@ class ConditionRemovalEvent(Event):
             verbose=verbose,
             detailed=verbose,
             success=True,
-            data={
-                "condition_name": condition_name,
-                "reveals_target": cond.obscures_perceivability,
-            },
+            data=ConditionLogData(
+                condition_name=condition_name,
+                condition_content_identity=self.condition_content_identity,
+                reveals_target=cond.obscures_perceivability,
+            ).model_dump(mode="json"),
         )
 
 
@@ -356,6 +464,19 @@ class BaseCondition(BaseObject):
         if self.semantic_key:
             return self.semantic_key
         return f"unbound:{type(self).__module__}.{type(self).__name__}"
+
+    def authored_content_identity(self) -> Optional[str]:
+        """Return exact bound authored identity, or ``None`` when unbound.
+
+        Names, semantic keys, UUIDs, and Python paths are intentionally not
+        accepted as content-identity fallbacks.
+        """
+        binding = self.behavior_binding
+        return (
+            binding.definition_ref.identity_key
+            if isinstance(binding, BehaviorBinding)
+            else None
+        )
 
     def get_content_kind(self) -> RuntimeBehaviorKind:
         """Return the declared or source-domain-derived rules-content family."""
@@ -609,10 +730,15 @@ class BaseCondition(BaseObject):
             source_entity_name=self.source_entity_name,
             target_entity_name=self.target_entity_name,
             application_disposition=application_disposition,
+            condition_content_identity=self.authored_content_identity(),
             use_register=False,
         )
 
-    def _declare_removal_event(self, expired: bool = False, parent_event: Optional[Event] = None) -> Event:
+    def _declare_removal_event(
+        self,
+        expired: bool = False,
+        parent_event: Optional[Event] = None,
+    ) -> ConditionRemovalEvent:
         """Create the condition removal declaration event.
 
         Args:
@@ -632,6 +758,7 @@ class BaseCondition(BaseObject):
             parent_event=parent_event.uuid if parent_event else None,
             source_entity_name=self.source_entity_name,
             target_entity_name=self.target_entity_name,
+            condition_content_identity=self.authored_content_identity(),
             use_register=False,
         )
 

@@ -28,6 +28,7 @@ from dnd.core.base_actions import (
     ActionEvent,
 )
 from dnd.core.action_types import CostType, spell_slot_cost_type
+from dnd.core.action_execution import MovementTerminationReason
 from dnd.core.events import (
     Event, EventPhase, EventType, EventHandler, Trigger,
     RangeType,
@@ -272,13 +273,21 @@ class Fly(Move):
         description="Dragon Wings always use flying traversal costs.",
     )
 
-    def _validate(self, declaration_event: MovementEvent) -> MovementEvent:
-        entity = Entity.get(self.source_entity_uuid)
-        if entity is None or "Dragon Wings" not in entity.active_conditions:
-            return declaration_event.cancel(
-                status_message="Dragon Wings are not manifested",
-            )
-        return super()._validate(declaration_event)
+    def _validate_move_prerequisites(
+        self,
+        event: MovementEvent,
+        source: Entity,
+    ) -> Optional[MovementTerminationReason]:
+        """Require the accepted flying mode and currently manifested wings."""
+        base_failure = super()._validate_move_prerequisites(event, source)
+        if base_failure is not None:
+            return base_failure
+        if (
+            event.movement_mode is not MovementMode.FLYING
+            or "Dragon Wings" not in source.active_conditions
+        ):
+            return MovementTerminationReason.ACTION_DENIED
+        return None
 
 
 class DragonWings(BaseAction):

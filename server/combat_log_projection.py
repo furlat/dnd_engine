@@ -7,6 +7,7 @@ ownership and authorized event-time observers before constructing a context.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from math import isfinite
 from typing import Any, Dict, FrozenSet, Iterable, List, Optional, Set, Tuple
 
 from dnd.core.combat_log import (
@@ -125,6 +126,7 @@ def _project_combat_log_with_context(
         log,
         sanitized_log,
         filtered_children,
+        context,
     )
     sanitized_log = _sanitize_multi_entity_log_projection(
         sanitized_log,
@@ -303,40 +305,53 @@ def _sanitize_partially_observed_movement(
     original_log: CombatLogEntry,
     sanitized_log: CombatLogEntry,
     filtered_children: List[CombatLogEntry],
+    context: CombatLogProjectionContext,
 ) -> CombatLogEntry:
-    """Replace an objective movement summary with perceived step segments only."""
+    """Derive non-owned Move geometry only from authorized committed Steps."""
     if (
         original_log.entry_type is not CombatLogEntryType.MOVEMENT
+        or original_log.source_uuid in context.controlled_entity_uuids
+        or original_log.data.get("type") in {
+            "step_movement",
+            "forced_movement",
+        }
         or not sanitized_log.source_uuid
+    ):
+        return sanitized_log
+    if (
+        original_log.data.get("requested_end_position") is None
+        and original_log.data.get("objective_end_position") is None
+        and _direct_arc_root_is_fully_authorized(
+            original_log,
+            filtered_children,
+        )
     ):
         return sanitized_log
 
     original_steps = [
         child
         for child in original_log.sub_entries
-        if child.entry_type is CombatLogEntryType.MOVEMENT
-        and child.data.get("type") == "step_movement"
+        if _is_committed_path_step_log(child)
     ]
     filtered_steps = [
         child
         for child in filtered_children
-        if child.entry_type is CombatLogEntryType.MOVEMENT
-        and child.data.get("type") == "step_movement"
+        if _is_committed_path_step_log(child)
     ]
-    if not original_steps or len(filtered_steps) == len(original_steps):
-        return sanitized_log
 
     ordered_steps = sorted(
         filtered_steps,
         key=lambda child: int(child.data.get("path_index", 0)),
     )
     segments: List[List[Tuple[int, int]]] = []
+    observed_distance = 0.0
     observed_cost = 0.0
     for step in ordered_steps:
         origin = _combat_log_position(step.data.get("from_position"))
         destination = _combat_log_position(step.data.get("to_position"))
         if origin is None or destination is None:
             continue
+        observed_distance += 5.0
         observed_cost += float(step.data.get("movement_cost", 0.0))
         if segments and segments[-1][-1] == origin:
             segments[-1].append(destination)
@@ -351,16 +366,19 @@ def _sanitize_partially_observed_movement(
     data: Dict[str, Any] = {
         **identity_data,
         "type": "movement",
-        "observation_complete": False,
+        "observation_complete": (
+            bool(original_steps)
+            and len(filtered_steps) == len(original_steps)
+        ),
         "observed_path_segments": segments,
-        "observed_distance_feet": observed_cost,
+        "observed_distance_feet": observed_distance,
     }
     if len(segments) == 1:
         data.update({
             "start_position": segments[0][0],
             "end_position": segments[0][-1],
             "path": segments[0],
-            "distance_feet": observed_cost,
+            "distance_feet": observed_distance,
             "movement_cost": observed_cost,
         })
 
@@ -369,7 +387,7 @@ def _sanitize_partially_observed_movement(
         destination = segments[0][-1]
         compact = (
             f"{{cyan:{source_name}}} is observed moving "
-            f"{{green:{observed_cost:g}ft}} to {{yellow:{destination}}}"
+            f"{{green:{observed_distance:g}ft}} to {{yellow:{destination}}}"
         )
         verbose = f"{compact} (partial movement observation)"
         path_text = " -> ".join(str(position) for position in segments[0])
@@ -396,6 +414,127 @@ def _sanitize_partially_observed_movement(
         "detailed": detailed,
         "data": data,
     })
+
+
+def _is_committed_path_step_log(log: CombatLogEntry) -> bool:
+    """Classify current and legacy successful voluntary Step evidence."""
+    if (
+        log.entry_type is not CombatLogEntryType.MOVEMENT
+        or log.data.get("type") != "step_movement"
+    ):
+        return False
+    trajectory = log.data.get("trajectory")
+    committed = log.data.get("committed")
+    if trajectory is None and committed is None:
+        return log.success is not False
+    return trajectory == "path" and committed is True
+
+
+def _direct_arc_step_signature(
+    log: CombatLogEntry,
+    root_source_uuid: str,
+) -> Optional[Tuple[int, Tuple[int, int], Tuple[int, int], float]]:
+    """Return exact Jump geometry only for a committed Step by the root mover."""
+    path_index = log.data.get("path_index")
+    movement_cost = log.data.get("movement_cost")
+    from_position = _combat_log_position(log.data.get("from_position"))
+    to_position = _combat_log_position(log.data.get("to_position"))
+    if (
+        log.entry_type is not CombatLogEntryType.MOVEMENT
+        or log.data.get("type") != "step_movement"
+        or log.source_uuid != root_source_uuid
+        or log.data.get("trajectory") != "direct_arc"
+        or log.data.get("committed") is not True
+        or not isinstance(path_index, int)
+        or isinstance(path_index, bool)
+        or path_index < 1
+        or not isinstance(movement_cost, (int, float))
+        or isinstance(movement_cost, bool)
+        or not isfinite(float(movement_cost))
+        or movement_cost < 0
+        or from_position is None
+        or to_position is None
+    ):
+        return None
+    return path_index, from_position, to_position, float(movement_cost)
+
+
+def _direct_arc_root_is_fully_authorized(
+    original_log: CombatLogEntry,
+    filtered_children: List[CombatLogEntry],
+) -> bool:
+    """Preserve Jump geometry only when authorized Steps reconstruct the root."""
+    original_steps = [
+        child
+        for child in original_log.sub_entries
+        if child.entry_type is CombatLogEntryType.MOVEMENT
+        and child.data.get("type") == "step_movement"
+    ]
+    if not original_steps:
+        return False
+    original_signatures: List[
+        Tuple[int, Tuple[int, int], Tuple[int, int], float]
+    ] = []
+    for child in original_steps:
+        signature = _direct_arc_step_signature(
+            child,
+            original_log.source_uuid,
+        )
+        if signature is None:
+            return False
+        original_signatures.append(signature)
+
+    authorized_steps = [
+        child
+        for child in filtered_children
+        if child.entry_type is CombatLogEntryType.MOVEMENT
+        and child.data.get("type") == "step_movement"
+    ]
+    authorized_signatures: List[
+        Tuple[int, Tuple[int, int], Tuple[int, int], float]
+    ] = []
+    for child in authorized_steps:
+        signature = _direct_arc_step_signature(
+            child,
+            original_log.source_uuid,
+        )
+        if signature is None:
+            return False
+        authorized_signatures.append(signature)
+
+    ordered = sorted(original_signatures)
+    if sorted(authorized_signatures) != ordered or [
+        signature[0] for signature in ordered
+    ] != list(range(1, len(ordered) + 1)):
+        return False
+
+    arc_path = [ordered[0][1], *(signature[2] for signature in ordered)]
+    if any(
+        ordered[index - 1][2] != ordered[index][1]
+        for index in range(1, len(ordered))
+    ):
+        return False
+
+    root_path_value = original_log.data.get("path")
+    if not isinstance(root_path_value, (list, tuple)):
+        return False
+    root_path = [_combat_log_position(position) for position in root_path_value]
+    root_start = _combat_log_position(original_log.data.get("start_position"))
+    root_end = _combat_log_position(original_log.data.get("end_position"))
+    distance_feet = original_log.data.get("distance_feet")
+    movement_cost = original_log.data.get("movement_cost")
+    return (
+        all(position is not None for position in root_path)
+        and root_path == arc_path
+        and root_start == arc_path[0]
+        and root_end == arc_path[-1]
+        and isinstance(distance_feet, int)
+        and not isinstance(distance_feet, bool)
+        and distance_feet == len(ordered) * 5
+        and isinstance(movement_cost, int)
+        and not isinstance(movement_cost, bool)
+        and movement_cost == sum(signature[3] for signature in ordered)
+    )
 
 
 def _combat_log_position(value: Any) -> Optional[Tuple[int, int]]:

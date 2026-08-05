@@ -55,12 +55,13 @@ class ConditionApplicationPolicy(str, Enum):
 
 
 class ConditionApplicationDisposition(str, Enum):
-    """Observable result of condition application arbitration."""
+    """Observable outcome of one condition-application attempt."""
 
     APPLIED = "applied"
     REJECTED = "rejected"
     RETAINED_STRONGER = "retained_stronger"
     PROMOTED = "promoted"
+    IMMUNE = "immune"
 
 
 class DurationType(str, Enum):

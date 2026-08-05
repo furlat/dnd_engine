@@ -1,5 +1,5 @@
 {
-  "contract_hash": "98708547e749ea40be7b564e212be64a515a5ab30c74130f8fa9b61e50aa01f5",
+  "contract_hash": "1b52c3021e7106c3a91f523d470ee6da0051c3b042b82288a6c146a387e0c33c",
   "contract_version": 1,
   "enums": {
     "dnd.core.action_execution.MovementTerminationReason": {
@@ -11,8 +11,13 @@
         "insufficient_movement",
         "step_canceled",
         "incapacitated",
+        "action_denied",
         "dead",
-        "subjective_revalidation"
+        "subjective_revalidation",
+        "position_diverged",
+        "invalid_path",
+        "invalid_cost",
+        "canceled"
       ]
     },
     "dnd.core.action_types.ActionPresentationKind": {
@@ -21,6 +26,16 @@
       "values": [
         "default",
         "drink"
+      ]
+    },
+    "dnd.core.base_block.MovementMode": {
+      "python": "dnd.core.base_block.MovementMode",
+      "typescript": "MovementMode",
+      "values": [
+        "walking",
+        "flying",
+        "swimming",
+        "burrowing"
       ]
     },
     "dnd.core.condition_types.ConditionAgencyDenial": {
@@ -38,7 +53,8 @@
         "applied",
         "rejected",
         "retained_stronger",
-        "promoted"
+        "promoted",
+        "immune"
       ]
     },
     "dnd.core.condition_types.ConditionApplicationPolicy": {
@@ -1996,8 +2012,31 @@
         "modified": {
           "kind": "boolean"
         },
+        "movement_mode": {
+          "kind": "enum",
+          "ref": "dnd.core.base_block.MovementMode"
+        },
         "name": {
           "kind": "string"
+        },
+        "objective_end_position": {
+          "items": [
+            {
+              "items": [
+                {
+                  "kind": "number"
+                },
+                {
+                  "kind": "number"
+                }
+              ],
+              "kind": "tuple"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
         },
         "outcome_code": {
           "items": [
@@ -5638,6 +5677,17 @@
           "kind": "model",
           "ref": "dnd.core.base_conditions.BaseCondition"
         },
+        "condition_content_identity": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
         "context": {
           "items": [
             {
@@ -5850,6 +5900,17 @@
         "condition": {
           "kind": "model",
           "ref": "dnd.core.base_conditions.BaseCondition"
+        },
+        "condition_content_identity": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
         },
         "context": {
           "items": [
@@ -17952,6 +18013,17 @@
           "kind": "enum",
           "ref": "dnd.core.events.EventType"
         },
+        "incoming_spell_content_identity": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
         "incoming_spell_level": {
           "kind": "number"
         },
@@ -17994,15 +18066,7 @@
           "kind": "string"
         },
         "outcome_code": {
-          "items": [
-            {
-              "kind": "string"
-            },
-            {
-              "kind": "null"
-            }
-          ],
-          "kind": "union"
+          "kind": "string"
         },
         "outcome_source_entity_uuid": {
           "items": [
@@ -18044,6 +18108,17 @@
         "presentation_kind": {
           "kind": "enum",
           "ref": "dnd.core.action_types.ActionPresentationKind"
+        },
+        "reaction_content_identity": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
         },
         "source_entity_name": {
           "items": [

@@ -402,3 +402,763 @@ def test_noncontrolled_step_retains_geometry_seen_at_both_endpoints() -> None:
     assert projected.data["from_position"] == (4, 4)
     assert projected.data["to_position"] == (5, 4)
     assert projected.located_position_observer_uuids == {}
+
+
+def test_noncontrolled_move_root_is_rebuilt_from_committed_steps_only() -> None:
+    """Even complete observation cannot inherit requested or forced geometry."""
+    context = make_combat_log_projection_context(
+        controlled_entity_uuids={CONTROLLED_UUID},
+        observer_entity_uuids={AUTHORIZED_OBSERVER_UUID},
+    )
+    step = _log(
+        CombatLogEntryType.MOVEMENT,
+        target_name=None,
+        target_uuid=None,
+        data={
+            "type": "step_movement",
+            "from_position": (4, 4),
+            "to_position": (5, 4),
+            "movement_cost": 5,
+            "path_index": 1,
+            "trajectory": "path",
+            "committed": True,
+        },
+        perceiver_uuids=set(),
+    )
+    step.identified_entity_observer_uuids = {
+        HIDDEN_SOURCE_UUID: {AUTHORIZED_OBSERVER_UUID},
+    }
+    step.located_position_observer_uuids = {
+        position_evidence_key((4, 4)): {AUTHORIZED_OBSERVER_UUID},
+        position_evidence_key((5, 4)): {AUTHORIZED_OBSERVER_UUID},
+    }
+    objective = _log(
+        CombatLogEntryType.MOVEMENT,
+        target_name=None,
+        target_uuid=None,
+        data={
+            "entity_name": "Hidden Assassin",
+            "entity_uuid": HIDDEN_SOURCE_UUID,
+            "start_position": (4, 4),
+            "end_position": (5, 4),
+            "path": [(4, 4), (5, 4)],
+            "movement_cost": 5,
+            "requested_end_position": (91, 73),
+            "objective_end_position": (88, 72),
+        },
+        sub_entries=[step],
+        perceiver_uuids={AUTHORIZED_OBSERVER_UUID},
+    )
+    objective.identified_entity_observer_uuids = {
+        HIDDEN_SOURCE_UUID: {AUTHORIZED_OBSERVER_UUID},
+    }
+
+    projected = project_combat_log(objective, context)
+
+    assert projected is not None
+    assert projected.data["observation_complete"] is True
+    assert projected.data["path"] == [(4, 4), (5, 4)]
+    assert projected.data["end_position"] == (5, 4)
+    assert "requested_end_position" not in projected.data
+    assert "objective_end_position" not in projected.data
+    assert "91" not in json.dumps(projected.model_dump(mode="json"))
+    assert "88" not in json.dumps(projected.model_dump(mode="json"))
+
+
+def test_noncontrolled_difficult_step_separates_distance_from_cost() -> None:
+    """One adjacent observed edge is 5ft even when terrain costs 10ft."""
+    context = make_combat_log_projection_context(
+        controlled_entity_uuids={CONTROLLED_UUID},
+        observer_entity_uuids={AUTHORIZED_OBSERVER_UUID},
+    )
+    step = _log(
+        CombatLogEntryType.MOVEMENT,
+        target_name=None,
+        target_uuid=None,
+        data={
+            "type": "step_movement",
+            "from_position": (4, 4),
+            "to_position": (5, 4),
+            "movement_cost": 10,
+            "path_index": 1,
+            "trajectory": "path",
+            "committed": True,
+        },
+        perceiver_uuids=set(),
+    )
+    step.identified_entity_observer_uuids = {
+        HIDDEN_SOURCE_UUID: {AUTHORIZED_OBSERVER_UUID},
+    }
+    step.located_position_observer_uuids = {
+        position_evidence_key((4, 4)): {AUTHORIZED_OBSERVER_UUID},
+        position_evidence_key((5, 4)): {AUTHORIZED_OBSERVER_UUID},
+    }
+    objective = _log(
+        CombatLogEntryType.MOVEMENT,
+        target_name=None,
+        target_uuid=None,
+        data={
+            "entity_name": "Hidden Assassin",
+            "entity_uuid": HIDDEN_SOURCE_UUID,
+            "start_position": (4, 4),
+            "end_position": (5, 4),
+            "path": [(4, 4), (5, 4)],
+            "distance_feet": 5,
+            "movement_cost": 10,
+            "requested_end_position": (5, 4),
+            "objective_end_position": (5, 4),
+        },
+        sub_entries=[step],
+        perceiver_uuids={AUTHORIZED_OBSERVER_UUID},
+    )
+    objective.identified_entity_observer_uuids = {
+        HIDDEN_SOURCE_UUID: {AUTHORIZED_OBSERVER_UUID},
+    }
+
+    projected = project_combat_log(objective, context)
+
+    assert projected is not None
+    assert projected.data["observed_distance_feet"] == 5
+    assert projected.data["distance_feet"] == 5
+    assert projected.data["movement_cost"] == 10
+    assert "5ft" in projected.compact
+    assert "10ft" not in projected.compact
+
+
+def test_noncontrolled_legacy_root_uses_only_authorized_legacy_step() -> None:
+    """A pre-versioned root cannot retain geometry beyond a visible old Step."""
+    context = make_combat_log_projection_context(
+        controlled_entity_uuids={CONTROLLED_UUID},
+        observer_entity_uuids={AUTHORIZED_OBSERVER_UUID},
+    )
+    step = _log(
+        CombatLogEntryType.MOVEMENT,
+        target_name=None,
+        target_uuid=None,
+        data={
+            "type": "step_movement",
+            "from_position": (4, 4),
+            "to_position": (5, 4),
+            "movement_cost": 5,
+            "path_index": 1,
+        },
+        perceiver_uuids=set(),
+    )
+    step.identified_entity_observer_uuids = {
+        HIDDEN_SOURCE_UUID: {AUTHORIZED_OBSERVER_UUID},
+    }
+    step.located_position_observer_uuids = {
+        position_evidence_key((4, 4)): {AUTHORIZED_OBSERVER_UUID},
+        position_evidence_key((5, 4)): {AUTHORIZED_OBSERVER_UUID},
+    }
+    objective = _log(
+        CombatLogEntryType.MOVEMENT,
+        target_name=None,
+        target_uuid=None,
+        data={
+            "entity_name": "Hidden Assassin",
+            "entity_uuid": HIDDEN_SOURCE_UUID,
+            "start_position": (4, 4),
+            "end_position": (91, 73),
+            "path": [(4, 4), (5, 4), (91, 73)],
+            "distance_feet": 10,
+            "movement_cost": 10,
+        },
+        sub_entries=[step],
+        perceiver_uuids={AUTHORIZED_OBSERVER_UUID},
+    )
+    objective.identified_entity_observer_uuids = {
+        HIDDEN_SOURCE_UUID: {AUTHORIZED_OBSERVER_UUID},
+    }
+
+    projected = project_combat_log(objective, context)
+
+    assert projected is not None
+    assert projected.data["path"] == [(4, 4), (5, 4)]
+    assert projected.data["end_position"] == (5, 4)
+    assert projected.data["observation_complete"] is True
+    assert "91" not in json.dumps(projected.model_dump(mode="json"))
+    assert "73" not in json.dumps(projected.model_dump(mode="json"))
+
+
+def test_authorized_noncontrolled_forced_movement_keeps_its_own_contract() -> None:
+    """A controlled target may receive forced geometry without Move rewriting."""
+    context = make_combat_log_projection_context(
+        controlled_entity_uuids={CONTROLLED_UUID},
+        observer_entity_uuids={AUTHORIZED_OBSERVER_UUID},
+    )
+    forced = _log(
+        CombatLogEntryType.MOVEMENT,
+        target_name="Controlled Hero",
+        target_uuid=CONTROLLED_UUID,
+        data={
+            "type": "forced_movement",
+            "cause": "shove",
+            "direction": [1, 0],
+            "intended_distance": 5,
+            "actual_distance": 5,
+            "blocked": False,
+            "blocked_by": None,
+            "start_position": [4, 4],
+            "end_position": [5, 4],
+        },
+        perceiver_uuids={AUTHORIZED_OBSERVER_UUID},
+    )
+    forced.identified_entity_observer_uuids = {
+        HIDDEN_SOURCE_UUID: {AUTHORIZED_OBSERVER_UUID},
+    }
+
+    projected = project_combat_log(forced, context)
+
+    assert projected is not None
+    assert projected.data == forced.data
+    assert projected.compact == forced.compact
+    assert projected.target_uuid == CONTROLLED_UUID
+
+
+def test_authorized_noncontrolled_jump_root_keeps_direct_arc_contract() -> None:
+    """DIRECT_ARC Step evidence prevents Jump from becoming a PATH summary."""
+    context = make_combat_log_projection_context(
+        controlled_entity_uuids={CONTROLLED_UUID},
+        observer_entity_uuids={AUTHORIZED_OBSERVER_UUID},
+    )
+    step = _log(
+        CombatLogEntryType.MOVEMENT,
+        target_name=None,
+        target_uuid=None,
+        data={
+            "type": "step_movement",
+            "from_position": (4, 4),
+            "to_position": (5, 4),
+            "movement_cost": 5.0,
+            "path_index": 1,
+            "trajectory": "direct_arc",
+            "committed": True,
+        },
+        perceiver_uuids=set(),
+    )
+    step.identified_entity_observer_uuids = {
+        HIDDEN_SOURCE_UUID: {AUTHORIZED_OBSERVER_UUID},
+    }
+    step.located_position_observer_uuids = {
+        position_evidence_key((4, 4)): {AUTHORIZED_OBSERVER_UUID},
+        position_evidence_key((5, 4)): {AUTHORIZED_OBSERVER_UUID},
+    }
+    jump = _log(
+        CombatLogEntryType.MOVEMENT,
+        target_name=None,
+        target_uuid=None,
+        data={
+            "entity_name": "Hidden Assassin",
+            "entity_uuid": HIDDEN_SOURCE_UUID,
+            "start_position": (4, 4),
+            "end_position": (5, 4),
+            "path": [(4, 4), (5, 4)],
+            "distance_feet": 5,
+            "movement_cost": 5,
+        },
+        sub_entries=[step],
+        perceiver_uuids={AUTHORIZED_OBSERVER_UUID},
+    )
+    jump.compact = "Hidden Assassin jumps 5ft to (5, 4)"
+    jump.identified_entity_observer_uuids = {
+        HIDDEN_SOURCE_UUID: {AUTHORIZED_OBSERVER_UUID},
+    }
+
+    projected = project_combat_log(jump, context)
+
+    assert projected is not None
+    assert projected.data == jump.data
+    assert "jumps" in projected.compact
+    assert projected.sub_entries[0].data["trajectory"] == "direct_arc"
+
+
+def test_authorized_multi_edge_jump_reconstructs_root_geometry() -> None:
+    """A complete authorized arc chain preserves its matching Jump root."""
+    context = make_combat_log_projection_context(
+        controlled_entity_uuids={CONTROLLED_UUID},
+        observer_entity_uuids={AUTHORIZED_OBSERVER_UUID},
+    )
+
+    def arc_step(
+        origin: tuple[int, int],
+        destination: tuple[int, int],
+        path_index: int,
+    ) -> CombatLogEntry:
+        step = _log(
+            CombatLogEntryType.MOVEMENT,
+            target_name=None,
+            target_uuid=None,
+            data={
+                "type": "step_movement",
+                "from_position": origin,
+                "to_position": destination,
+                "movement_cost": 5.0,
+                "path_index": path_index,
+                "trajectory": "direct_arc",
+                "committed": True,
+            },
+            perceiver_uuids=set(),
+        )
+        step.identified_entity_observer_uuids = {
+            HIDDEN_SOURCE_UUID: {AUTHORIZED_OBSERVER_UUID},
+        }
+        step.located_position_observer_uuids = {
+            position_evidence_key(origin): {AUTHORIZED_OBSERVER_UUID},
+            position_evidence_key(destination): {AUTHORIZED_OBSERVER_UUID},
+        }
+        return step
+
+    jump = _log(
+        CombatLogEntryType.MOVEMENT,
+        target_name=None,
+        target_uuid=None,
+        data={
+            "entity_name": "Hidden Assassin",
+            "entity_uuid": HIDDEN_SOURCE_UUID,
+            "start_position": (4, 4),
+            "end_position": (6, 4),
+            "path": [(4, 4), (5, 4), (6, 4)],
+            "distance_feet": 10,
+            "movement_cost": 10,
+        },
+        sub_entries=[
+            arc_step((4, 4), (5, 4), 1),
+            arc_step((5, 4), (6, 4), 2),
+        ],
+        perceiver_uuids={AUTHORIZED_OBSERVER_UUID},
+    )
+    jump.compact = "Hidden Assassin jumps 10ft to (6, 4)"
+    jump.identified_entity_observer_uuids = {
+        HIDDEN_SOURCE_UUID: {AUTHORIZED_OBSERVER_UUID},
+    }
+
+    projected = project_combat_log(jump, context)
+
+    assert projected is not None
+    assert projected.data == jump.data
+    assert projected.compact == jump.compact
+    assert len(projected.sub_entries) == 2
+
+
+def test_same_actor_unrelated_arc_cannot_authorize_root_geometry() -> None:
+    """An authorized same-mover arc must reconstruct the root it preserves."""
+    context = make_combat_log_projection_context(
+        controlled_entity_uuids={CONTROLLED_UUID},
+        observer_entity_uuids={AUTHORIZED_OBSERVER_UUID},
+    )
+    unrelated_step = _log(
+        CombatLogEntryType.MOVEMENT,
+        target_name=None,
+        target_uuid=None,
+        data={
+            "type": "step_movement",
+            "from_position": (8, 8),
+            "to_position": (9, 8),
+            "movement_cost": 5,
+            "path_index": 1,
+            "trajectory": "direct_arc",
+            "committed": True,
+        },
+        perceiver_uuids=set(),
+    )
+    unrelated_step.identified_entity_observer_uuids = {
+        HIDDEN_SOURCE_UUID: {AUTHORIZED_OBSERVER_UUID},
+    }
+    unrelated_step.located_position_observer_uuids = {
+        position_evidence_key((8, 8)): {AUTHORIZED_OBSERVER_UUID},
+        position_evidence_key((9, 8)): {AUTHORIZED_OBSERVER_UUID},
+    }
+    movement = _log(
+        CombatLogEntryType.MOVEMENT,
+        target_name=None,
+        target_uuid=None,
+        data={
+            "entity_name": "Hidden Assassin",
+            "entity_uuid": HIDDEN_SOURCE_UUID,
+            "start_position": (4, 4),
+            "end_position": (91, 73),
+            "path": [(4, 4), (91, 73)],
+            "distance_feet": 5,
+            "movement_cost": 5,
+        },
+        sub_entries=[unrelated_step],
+        perceiver_uuids={AUTHORIZED_OBSERVER_UUID},
+    )
+    movement.compact = "Hidden Assassin moves to secret (91, 73)"
+    movement.identified_entity_observer_uuids = {
+        HIDDEN_SOURCE_UUID: {AUTHORIZED_OBSERVER_UUID},
+    }
+
+    projected = project_combat_log(movement, context)
+
+    assert projected is not None
+    assert projected.data["observed_path_segments"] == []
+    assert "end_position" not in projected.data
+    assert "path" not in projected.data
+    serialized = json.dumps(projected.model_dump(mode="json"))
+    assert "91" not in serialized
+    assert "73" not in serialized
+
+
+def test_noncontrolled_jump_hides_root_when_arc_endpoint_is_unseen() -> None:
+    """A visible Jump root cannot lend authority to its hidden landing Step."""
+    context = make_combat_log_projection_context(
+        controlled_entity_uuids={CONTROLLED_UUID},
+        observer_entity_uuids={AUTHORIZED_OBSERVER_UUID},
+    )
+    hidden_step = _log(
+        CombatLogEntryType.MOVEMENT,
+        target_name=None,
+        target_uuid=None,
+        data={
+            "type": "step_movement",
+            "from_position": (4, 4),
+            "to_position": (91, 73),
+            "movement_cost": 5,
+            "path_index": 1,
+            "trajectory": "direct_arc",
+            "committed": True,
+        },
+        perceiver_uuids={AUTHORIZED_OBSERVER_UUID},
+    )
+    hidden_step.identified_entity_observer_uuids = {
+        HIDDEN_SOURCE_UUID: {AUTHORIZED_OBSERVER_UUID},
+    }
+    jump = _log(
+        CombatLogEntryType.MOVEMENT,
+        target_name=None,
+        target_uuid=None,
+        data={
+            "entity_name": "Hidden Assassin",
+            "entity_uuid": HIDDEN_SOURCE_UUID,
+            "start_position": (4, 4),
+            "end_position": (91, 73),
+            "path": [(4, 4), (91, 73)],
+            "distance_feet": 5,
+            "movement_cost": 5,
+        },
+        sub_entries=[hidden_step],
+        perceiver_uuids={AUTHORIZED_OBSERVER_UUID},
+    )
+    jump.compact = "Hidden Assassin jumps 5ft to secret (91, 73)"
+    jump.identified_entity_observer_uuids = {
+        HIDDEN_SOURCE_UUID: {AUTHORIZED_OBSERVER_UUID},
+    }
+
+    projected = project_combat_log(jump, context)
+
+    assert projected is not None
+    assert projected.data["observation_complete"] is False
+    assert projected.data["observed_path_segments"] == []
+    assert "end_position" not in projected.data
+    assert "path" not in projected.data
+    serialized = json.dumps(projected.model_dump(mode="json"))
+    assert "91" not in serialized
+    assert "73" not in serialized
+    assert projected.sub_entries[0].data == {
+        "type": "movement",
+        "observation_complete": False,
+    }
+
+
+def test_path_child_keeps_mixed_root_under_move_privacy_rebuilding() -> None:
+    """A DIRECT_ARC child cannot exempt its parent Move root from sanitizing."""
+    context = make_combat_log_projection_context(
+        controlled_entity_uuids={CONTROLLED_UUID},
+        observer_entity_uuids={AUTHORIZED_OBSERVER_UUID},
+    )
+
+    def observed_step(
+        origin: tuple[int, int],
+        destination: tuple[int, int],
+        trajectory: str,
+    ) -> CombatLogEntry:
+        step = _log(
+            CombatLogEntryType.MOVEMENT,
+            target_name=None,
+            target_uuid=None,
+            data={
+                "type": "step_movement",
+                "from_position": origin,
+                "to_position": destination,
+                "movement_cost": 5,
+                "path_index": 1,
+                "trajectory": trajectory,
+                "committed": True,
+            },
+            perceiver_uuids=set(),
+        )
+        step.identified_entity_observer_uuids = {
+            HIDDEN_SOURCE_UUID: {AUTHORIZED_OBSERVER_UUID},
+        }
+        step.located_position_observer_uuids = {
+            position_evidence_key(origin): {AUTHORIZED_OBSERVER_UUID},
+            position_evidence_key(destination): {AUTHORIZED_OBSERVER_UUID},
+        }
+        return step
+
+    path_step = observed_step((4, 4), (5, 4), "path")
+    arc_step = observed_step((8, 8), (9, 8), "direct_arc")
+    movement = _log(
+        CombatLogEntryType.MOVEMENT,
+        target_name=None,
+        target_uuid=None,
+        data={
+            "entity_name": "Hidden Assassin",
+            "entity_uuid": HIDDEN_SOURCE_UUID,
+            "start_position": (4, 4),
+            "end_position": (5, 4),
+            "path": [(4, 4), (5, 4)],
+            "distance_feet": 5,
+            "movement_cost": 5,
+            "requested_end_position": (91, 73),
+            "objective_end_position": (88, 72),
+        },
+        sub_entries=[path_step, arc_step],
+        perceiver_uuids={AUTHORIZED_OBSERVER_UUID},
+    )
+    movement.identified_entity_observer_uuids = {
+        HIDDEN_SOURCE_UUID: {AUTHORIZED_OBSERVER_UUID},
+    }
+
+    projected = project_combat_log(movement, context)
+
+    assert projected is not None
+    assert projected.data["path"] == [(4, 4), (5, 4)]
+    assert "requested_end_position" not in projected.data
+    assert "objective_end_position" not in projected.data
+    serialized = json.dumps(projected.model_dump(mode="json"))
+    assert "91" not in serialized
+    assert "88" not in serialized
+
+
+@pytest.mark.parametrize(
+    "move_marker",
+    ("requested_end_position", "objective_end_position"),
+)
+def test_current_move_marker_outranks_authorized_direct_arc_child(
+    move_marker: str,
+) -> None:
+    """An unrelated authorized arc cannot reclassify a current Move root."""
+    context = make_combat_log_projection_context(
+        controlled_entity_uuids={CONTROLLED_UUID},
+        observer_entity_uuids={AUTHORIZED_OBSERVER_UUID},
+    )
+    arc_step = _log(
+        CombatLogEntryType.MOVEMENT,
+        target_name=None,
+        target_uuid=None,
+        data={
+            "type": "step_movement",
+            "from_position": (8, 8),
+            "to_position": (9, 8),
+            "movement_cost": 5,
+            "path_index": 1,
+            "trajectory": "direct_arc",
+            "committed": True,
+        },
+        perceiver_uuids=set(),
+    )
+    arc_step.identified_entity_observer_uuids = {
+        HIDDEN_SOURCE_UUID: {AUTHORIZED_OBSERVER_UUID},
+    }
+    arc_step.located_position_observer_uuids = {
+        position_evidence_key((8, 8)): {AUTHORIZED_OBSERVER_UUID},
+        position_evidence_key((9, 8)): {AUTHORIZED_OBSERVER_UUID},
+    }
+    movement_data = {
+        "entity_name": "Hidden Assassin",
+        "entity_uuid": HIDDEN_SOURCE_UUID,
+        "start_position": (4, 4),
+        "end_position": (88, 72),
+        "path": [(4, 4), (88, 72)],
+        "distance_feet": 5,
+        "movement_cost": 0,
+        "termination_reason": "position_diverged",
+        move_marker: (91, 73),
+    }
+    movement = _log(
+        CombatLogEntryType.MOVEMENT,
+        target_name=None,
+        target_uuid=None,
+        data=movement_data,
+        sub_entries=[arc_step],
+        perceiver_uuids={AUTHORIZED_OBSERVER_UUID},
+    )
+    movement.identified_entity_observer_uuids = {
+        HIDDEN_SOURCE_UUID: {AUTHORIZED_OBSERVER_UUID},
+    }
+
+    projected = project_combat_log(movement, context)
+
+    assert projected is not None
+    assert projected.data["observed_path_segments"] == []
+    assert "end_position" not in projected.data
+    assert "path" not in projected.data
+    assert "requested_end_position" not in projected.data
+    assert "objective_end_position" not in projected.data
+    serialized = json.dumps(projected.model_dump(mode="json"))
+    assert "91" not in serialized
+    assert "88" not in serialized
+
+
+def test_other_actor_direct_arc_cannot_authorize_root_geometry() -> None:
+    """A child from another mover cannot lend Jump authority to this root."""
+    context = make_combat_log_projection_context(
+        controlled_entity_uuids={CONTROLLED_UUID},
+        observer_entity_uuids={AUTHORIZED_OBSERVER_UUID},
+    )
+    other_actor_step = _log(
+        CombatLogEntryType.MOVEMENT,
+        source_name="Other Actor",
+        source_uuid=VISIBLE_TARGET_UUID,
+        target_name=None,
+        target_uuid=None,
+        data={
+            "type": "step_movement",
+            "from_position": (8, 8),
+            "to_position": (9, 8),
+            "movement_cost": 5,
+            "path_index": 1,
+            "trajectory": "direct_arc",
+            "committed": True,
+        },
+        perceiver_uuids=set(),
+    )
+    other_actor_step.identified_entity_observer_uuids = {
+        VISIBLE_TARGET_UUID: {AUTHORIZED_OBSERVER_UUID},
+    }
+    other_actor_step.located_position_observer_uuids = {
+        position_evidence_key((8, 8)): {AUTHORIZED_OBSERVER_UUID},
+        position_evidence_key((9, 8)): {AUTHORIZED_OBSERVER_UUID},
+    }
+    movement = _log(
+        CombatLogEntryType.MOVEMENT,
+        target_name=None,
+        target_uuid=None,
+        data={
+            "entity_name": "Hidden Assassin",
+            "entity_uuid": HIDDEN_SOURCE_UUID,
+            "start_position": (4, 4),
+            "end_position": (91, 73),
+            "path": [(4, 4), (91, 73)],
+            "distance_feet": 5,
+            "movement_cost": 5,
+        },
+        sub_entries=[other_actor_step],
+        perceiver_uuids={AUTHORIZED_OBSERVER_UUID},
+    )
+    movement.compact = "Hidden Assassin moves to secret (91, 73)"
+    movement.identified_entity_observer_uuids = {
+        HIDDEN_SOURCE_UUID: {AUTHORIZED_OBSERVER_UUID},
+    }
+
+    projected = project_combat_log(movement, context)
+
+    assert projected is not None
+    assert projected.data["observed_path_segments"] == []
+    assert "end_position" not in projected.data
+    assert "path" not in projected.data
+    serialized = json.dumps(projected.model_dump(mode="json"))
+    assert "91" not in serialized
+    assert "73" not in serialized
+
+
+def test_known_legacy_move_without_steps_fails_closed() -> None:
+    """An ambiguous old known root cannot retain objective geometry."""
+    context = make_combat_log_projection_context(
+        controlled_entity_uuids={CONTROLLED_UUID},
+        observer_entity_uuids={AUTHORIZED_OBSERVER_UUID},
+    )
+    movement = _log(
+        CombatLogEntryType.MOVEMENT,
+        target_name=None,
+        target_uuid=None,
+        data={
+            "entity_name": "Hidden Assassin",
+            "entity_uuid": HIDDEN_SOURCE_UUID,
+            "start_position": (4, 4),
+            "end_position": (91, 73),
+            "path": [(4, 4), (91, 73)],
+            "distance_feet": 5,
+            "movement_cost": 5,
+            "requested_end_position": (91, 73),
+        },
+        perceiver_uuids={AUTHORIZED_OBSERVER_UUID},
+    )
+    movement.identified_entity_observer_uuids = {
+        HIDDEN_SOURCE_UUID: {AUTHORIZED_OBSERVER_UUID},
+    }
+
+    projected = project_combat_log(movement, context)
+
+    assert projected is not None
+    assert projected.data["observation_complete"] is False
+    assert projected.data["observed_path_segments"] == []
+    assert "start_position" not in projected.data
+    assert "end_position" not in projected.data
+    assert "path" not in projected.data
+    assert "requested_end_position" not in projected.data
+    serialized = json.dumps(projected.model_dump(mode="json"))
+    assert "91" not in serialized
+    assert "73" not in serialized
+
+
+def test_noncontrolled_move_root_ignores_uncommitted_step_geometry() -> None:
+    """A rejected Step is attempt evidence, never a traversed root segment."""
+    context = make_combat_log_projection_context(
+        controlled_entity_uuids={CONTROLLED_UUID},
+        observer_entity_uuids={AUTHORIZED_OBSERVER_UUID},
+    )
+    false_step = _log(
+        CombatLogEntryType.MOVEMENT,
+        target_name=None,
+        target_uuid=None,
+        data={
+            "type": "step_movement",
+            "from_position": (4, 4),
+            "to_position": (91, 73),
+            "movement_cost": 5,
+            "path_index": 1,
+            "trajectory": "path",
+            "committed": False,
+        },
+        perceiver_uuids=set(),
+    )
+    false_step.identified_entity_observer_uuids = {
+        HIDDEN_SOURCE_UUID: {AUTHORIZED_OBSERVER_UUID},
+    }
+    false_step.located_position_observer_uuids = {
+        position_evidence_key((4, 4)): {AUTHORIZED_OBSERVER_UUID},
+        position_evidence_key((91, 73)): {AUTHORIZED_OBSERVER_UUID},
+    }
+    objective = _log(
+        CombatLogEntryType.MOVEMENT,
+        target_name=None,
+        target_uuid=None,
+        data={
+            "entity_name": "Hidden Assassin",
+            "entity_uuid": HIDDEN_SOURCE_UUID,
+            "start_position": (4, 4),
+            "end_position": (4, 4),
+            "path": [(4, 4)],
+            "movement_cost": 0,
+            "requested_end_position": (91, 73),
+            "objective_end_position": (4, 4),
+        },
+        sub_entries=[false_step],
+        perceiver_uuids={AUTHORIZED_OBSERVER_UUID},
+    )
+    objective.identified_entity_observer_uuids = {
+        HIDDEN_SOURCE_UUID: {AUTHORIZED_OBSERVER_UUID},
+    }
+
+    projected = project_combat_log(objective, context)
+
+    assert projected is not None
+    assert projected.data["observed_path_segments"] == []
+    assert "path" not in projected.data
+    assert "end_position" not in projected.data
+    assert "requested_end_position" not in projected.data
+    assert "objective_end_position" not in projected.data

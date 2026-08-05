@@ -26,8 +26,13 @@ class MovementTerminationReason(str, Enum):
     INSUFFICIENT_MOVEMENT = "insufficient_movement"
     STEP_CANCELED = "step_canceled"
     INCAPACITATED = "incapacitated"
+    ACTION_DENIED = "action_denied"
     DEAD = "dead"
     SUBJECTIVE_REVALIDATION = "subjective_revalidation"
+    POSITION_DIVERGED = "position_diverged"
+    INVALID_PATH = "invalid_path"
+    INVALID_COST = "invalid_cost"
+    CANCELED = "canceled"
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,6 +45,8 @@ class MovementStepBoundary:
     step_event_uuid: UUID
     from_position: tuple[int, int]
     to_position: tuple[int, int]
+    objective_position: tuple[int, int]
+    step_movement_cost: int
     traversed_path: tuple[tuple[int, int], ...]
     movement_spent: int
     movement_remaining: int
