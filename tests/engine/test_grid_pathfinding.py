@@ -193,6 +193,55 @@ def test_eb_11_003_dijkstra_paths_sum_tile_costs_and_can_ignore_difficult_terrai
     assert easy_distances[(4, 0)] == 4
 
 
+@pytest.mark.parametrize(
+    ("movement_mode", "value_name", "modifier_value"),
+    [
+        (MovementMode.FLYING, "flying_cost", 1),
+        (MovementMode.SWIMMING, "swimming_cost", 1),
+    ],
+)
+def test_ignore_difficult_terrain_never_underprices_nonwalking_modes(
+    movement_mode: MovementMode,
+    value_name: str,
+    modifier_value: int,
+) -> None:
+    """Fly/Swim preview uses the same directed edge cost as execution."""
+    reset_grid_state(width=2, height=1)
+    grid = get_map()
+    if movement_mode is MovementMode.SWIMMING:
+        for position in ((0, 0), (1, 0)):
+            grid.set_tile(*position, tile=water_factory(position))
+    for position in ((0, 0), (1, 0)):
+        tile = grid.get_tile(*position)
+        assert tile is not None
+        movement_value = getattr(tile, value_name)
+        movement_value.self_static.add_value_modifier(
+            NumericalModifier.create(
+                source_entity_uuid=tile.uuid,
+                name="Mode-specific terrain cost",
+                value=modifier_value,
+            )
+        )
+    destination = grid.get_tile(1, 0)
+    assert destination is not None
+    assert destination.get_movement_cost(movement_mode) == 2
+    assert grid.movement_edge_cost_units(
+        (0, 0),
+        (1, 0),
+        movement_mode,
+        ignore_difficult_terrain=True,
+    ) == 2
+
+    distances, paths = grid.compute_paths(
+        (0, 0),
+        movement_mode=movement_mode,
+        ignore_difficult_terrain=True,
+    )
+
+    assert distances[(1, 0)] == 2
+    assert paths[(1, 0)] == [(0, 0), (1, 0)]
+
+
 def test_eb_11_012_diagonal_cost_return_and_exact_max_distance_match() -> None:
     """EB-11-012: diagonal tie-break epsilon stays out of max-distance pruning."""
     reset_grid_state(width=2, height=2)

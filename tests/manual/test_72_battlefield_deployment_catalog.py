@@ -22,10 +22,10 @@ from dnd.scenarios.encounter_compatibility import (
 )
 
 
-def test_battlefield_catalog_has_nine_exact_mechanical_states() -> None:
-    assert len(BATTLEFIELDS) == 9
-    assert len({row.battlefield_id for row in BATTLEFIELDS}) == 9
-    assert len({row.content_digest for row in BATTLEFIELDS}) == 9
+def test_battlefield_catalog_has_ten_exact_mechanical_states() -> None:
+    assert len(BATTLEFIELDS) == 10
+    assert len({row.battlefield_id for row in BATTLEFIELDS}) == 10
+    assert len({row.content_digest for row in BATTLEFIELDS}) == 10
     assert all(row.preview is not None for row in BATTLEFIELDS)
 
     bright = get_battlefield("battlefield.open_floor_bright")
@@ -114,7 +114,7 @@ def test_reusable_deployments_fit_every_authored_roster() -> None:
         for encounter in AUTHORED_ENCOUNTER_RECIPES
         for slot in encounter.roster_slots
     )
-    assert len(AUTHORED_DEPLOYMENTS) == 9
+    assert len(AUTHORED_DEPLOYMENTS) == 10
     for deployment in AUTHORED_DEPLOYMENTS:
         assert len(deployment.zones) == 2
         assert all(

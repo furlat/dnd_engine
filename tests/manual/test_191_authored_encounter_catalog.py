@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import cast
 from uuid import uuid4
 
 from dnd.content_system.bootstrap import bootstrap_content_system
@@ -33,11 +34,11 @@ from dnd.scenarios.encounter_catalog import (
 
 
 def test_authored_catalog_inventory_is_complete_and_exact() -> None:
-    assert len(BATTLEFIELDS) == 9
-    assert len(AUTHORED_DEPLOYMENTS) == 9
+    assert len(BATTLEFIELDS) == 10
+    assert len(AUTHORED_DEPLOYMENTS) == 10
     assert len(AUTHORED_ROSTER_RECIPES) == 58
     assert sum(len(row.members) for row in AUTHORED_ROSTER_RECIPES) == 141
-    assert len(AUTHORED_ENCOUNTER_RECIPES) == 38
+    assert len(AUTHORED_ENCOUNTER_RECIPES) == 39
 
     assert len({
         row.battlefield_id for row in BATTLEFIELDS
@@ -144,7 +145,10 @@ def test_every_authored_spell_matrix_preserves_requested_runtime_spells() -> Non
                 if not isinstance(source, AuthoredCreatureRosterSource):
                     continue
                 requested_names = tuple(
-                    source.recipe.parameters.get("spell_names", ()),
+                    cast(
+                        list[str],
+                        source.recipe.parameters.get("spell_names", []),
+                    ),
                 )
                 if not requested_names:
                     continue
@@ -189,7 +193,7 @@ def test_every_authored_spell_matrix_preserves_requested_runtime_spells() -> Non
                 )
     finally:
         reset_engine_runtime()
-    assert audited_members == 25
+    assert audited_members == 26
 
 
 def test_payloads_do_not_export_retired_scenario_ontology() -> None:

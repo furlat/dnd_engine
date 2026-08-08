@@ -73,6 +73,8 @@ from dnd.core.item_types import ItemLocation
 from dnd.blocks.appearance import Appearance, AppearanceConfig
 from dnd.core.events import AbilityName, SkillName
 from dnd.core.gridmap import get_map
+from dnd.core.positioning import PositionCommitError, PositionPublicationError
+from dnd.core.elevation import creature_volume_distance_feet, support_distance_feet
 from dnd.core.geometry import supercover_line
 from dnd.core.combat_log import (
     CombatLogEntry,
@@ -81,6 +83,7 @@ from dnd.core.combat_log import (
     EntitySpottedLogData,
 )
 from dnd.creature_transforms import (
+    CreatureTransformTarget,
     ModifierOwnership,
     apply_life_state_transform,
     remove_modifier_ownership,
@@ -577,10 +580,39 @@ class Entity(BaseBlock):
             new_position: New grid position.
             parent_event: Optional parent event UUID for movement lineage.
         """
-        cls._entity_by_position[entity.position].remove(entity)
-        cls._entity_by_position[new_position].append(entity)
-        entity._set_position(new_position)
-        get_map().move_entity(entity.uuid, new_position, parent_event=parent_event)
+        old_position = entity.position
+        if old_position == new_position:
+            return
+        grid = get_map()
+        old_entities = list(cls._entity_by_position.get(old_position, []))
+        new_entities = list(cls._entity_by_position.get(new_position, []))
+        old_senses_position = entity.senses.position
+        try:
+            cls._entity_by_position[old_position].remove(entity)
+            cls._entity_by_position[new_position].append(entity)
+            entity._set_position(new_position)
+            grid_receipt = grid.stage_entity_position(entity.uuid, new_position)
+        except Exception as exc:
+            cls._entity_by_position[old_position] = old_entities
+            if new_entities:
+                cls._entity_by_position[new_position] = new_entities
+            else:
+                cls._entity_by_position.pop(new_position, None)
+            entity.position = old_position
+            entity.senses.position = old_senses_position
+            if isinstance(exc, PositionCommitError):
+                raise
+            raise PositionCommitError(exc) from exc
+
+        try:
+            grid.publish_staged_entity_position(
+                grid_receipt,
+                parent_event=parent_event,
+            )
+        except Exception as exc:
+            if isinstance(exc, PositionPublicationError):
+                raise
+            raise PositionPublicationError(exc) from exc
 
     @classmethod
     def register_entity(cls, entity: 'Entity') -> None:
@@ -3029,6 +3061,73 @@ class Entity(BaseBlock):
         """
         return self.equipment.get_weapon_range(weapon_slot)
 
+    @staticmethod
+    def _support_elevation_feet(position: Tuple[int, int]) -> int:
+        tile = get_map().get_tile(*position)
+        if tile is None:
+            raise ValueError(f"distance requires a support tile at {position}")
+        return tile.height * 5
+
+    def distance_to_position(self, position: Tuple[int, int]) -> int:
+        """Return elevation-aware distance to one zero-height support point."""
+        return support_distance_feet(
+            self.position,
+            self._support_elevation_feet(self.position),
+            position,
+            self._support_elevation_feet(position),
+        )
+
+    def distance_to_entity(self, target: CreatureTransformTarget) -> int:
+        """Return range between both creatures' tactical occupied volumes."""
+        return creature_volume_distance_feet(
+            self.position,
+            self._support_elevation_feet(self.position),
+            self.size,
+            target.position,
+            self._support_elevation_feet(target.position),
+            target.size,
+        )
+
+    def distance_to_object(self, obj: BaseBlock) -> Optional[int]:
+        """Return support distance to one placed object, if it has a position."""
+        if isinstance(obj, Entity):
+            return self.distance_to_entity(obj)
+        position = get_map().get_object_position(obj.uuid)
+        if position is None:
+            candidate = getattr(obj, "position", None)
+            position = candidate if type(candidate) is tuple else None
+        if position is None:
+            return None
+        return self.distance_to_position(position)
+
+    def threatens_entity_at(
+        self,
+        target: 'Entity',
+        target_position: Optional[Tuple[int, int]] = None,
+    ) -> bool:
+        """Return objective melee threat at an actual or prospective position."""
+        candidate_position = target.position if target_position is None else target_position
+        if (
+            self.health.life_state is not LifeState.ALIVE
+            or target.health.life_state is LifeState.DEAD
+            or not get_map().raycast_clear(
+                self.position,
+                candidate_position,
+                channel="propagation",
+                observer_uuid=self.uuid,
+            )
+        ):
+            return False
+        distance = creature_volume_distance_feet(
+            self.position,
+            self._support_elevation_feet(self.position),
+            self.size,
+            candidate_position,
+            self._support_elevation_feet(candidate_position),
+            target.size,
+        )
+        return distance <= self.get_weapon_range(WeaponSlot.MELEE_MAIN).normal
+
     def is_threatened(self) -> bool:
         """
         Check if any enemy threatens this entity's position.
@@ -3044,7 +3143,7 @@ class Entity(BaseBlock):
         for entity_uuid in self.senses.entities.keys():
             other_entity = Entity.get(entity_uuid)
             if other_entity and self.is_enemy(other_entity):
-                if my_position in other_entity.senses.get_threathened_positions():
+                if other_entity.threatens_entity_at(self, my_position):
                     return True
         return False
 
@@ -3064,10 +3163,26 @@ class Entity(BaseBlock):
                 or not self.is_enemy(reactor)
             ):
                 continue
-            domains.append((
-                reactor,
-                set(reactor.senses.get_threathened_positions()),
-            ))
+            reach_cells = (
+                reactor.get_weapon_range(WeaponSlot.MELEE_MAIN).normal + 4
+            ) // 5
+            threatened_positions = {
+                position
+                for position in (
+                    (x, y)
+                    for x in range(
+                        reactor.position[0] - reach_cells,
+                        reactor.position[0] + reach_cells + 1,
+                    )
+                    for y in range(
+                        reactor.position[1] - reach_cells,
+                        reactor.position[1] + reach_cells + 1,
+                    )
+                )
+                if self.senses.visible.get(position, False)
+                and reactor.threatens_entity_at(self, position)
+            }
+            domains.append((reactor, threatened_positions))
         return domains
 
     @staticmethod
@@ -5016,6 +5131,7 @@ class Entity(BaseBlock):
             ),
             configured_action_ref=template.configured_action_ref,
             selection_parameter=template.selection_parameter,
+            connector_traversal=template.get_connector_traversal_discovery(),
             target_type=target_type,
             availability_status=availability_status,
             valid_targets=valid_targets,
@@ -5204,7 +5320,11 @@ class Entity(BaseBlock):
                 target_uuid=target_uuid,
                 position=target_pos,
                 target_name=target_entity.name if target_entity else None,
-                distance=self.senses.get_feet_distance(target_pos)
+                distance=(
+                    self.distance_to_entity(target_entity)
+                    if target_entity is not None
+                    else self.distance_to_position(target_pos)
+                ),
             ))
         return valid_targets, rules_valid_count
 
@@ -5306,7 +5426,7 @@ class Entity(BaseBlock):
         return AvailableTarget(
             index=idx,
             position=pos,
-            distance=self.senses.get_feet_distance(pos),
+            distance=self.distance_to_position(pos),
             affected_entity_uuids=affected_uuids,
             affected_entity_names=affected_names,
             affected_count=len(affected_uuids),
@@ -5790,7 +5910,7 @@ class Entity(BaseBlock):
         for position in sorted(candidate_positions):
             if contract.exclude_source_position and position == self.position:
                 continue
-            distance = self.senses.get_feet_distance(position)
+            distance = self.distance_to_position(position)
             if max_range > 0 and distance > max_range:
                 continue
             if (
@@ -5969,7 +6089,7 @@ class Entity(BaseBlock):
                 if position != self.position
                 and (
                     max_range <= 0
-                    or self.senses.get_feet_distance(position) <= max_range
+                    or self.distance_to_position(position) <= max_range
                 )
             )
         )
@@ -6170,7 +6290,7 @@ class Entity(BaseBlock):
                             valid_positions.append(AvailableTarget(
                                 index=len(valid_positions),
                                 position=position,
-                                distance=self.senses.get_feet_distance(position),
+                                distance=self.distance_to_position(position),
                                 path_cost=path_cost,
                                 is_path_hazardous=is_hazardous,
                                 safe_path_cost=safe_cost,
@@ -6308,24 +6428,30 @@ class Entity(BaseBlock):
         valid_positions: List[AvailableTarget] = []
         idx = 0
         map_has_hazards = grid.has_any_hazards()
-        step_cost_cache: Dict[Tuple[int, int], float] = {}
+        step_cost_cache: Dict[
+            Tuple[Tuple[int, int], Tuple[int, int]],
+            float,
+        ] = {}
 
         def cached_path_cost_feet(path: List[Tuple[int, int]]) -> int:
             total_cost = 0.0
-            for step in path[1:]:
-                step_cost = step_cost_cache.get(step)
+            for from_position, to_position in zip(path, path[1:]):
+                edge = (from_position, to_position)
+                step_cost = step_cost_cache.get(edge)
                 if step_cost is None:
-                    tile = grid.get_tile(*step)
-                    step_cost = tile.get_movement_cost(movement_mode) if tile else 1.0
-                    if movement_mode == MovementMode.WALKING and self.ignore_difficult_terrain:
-                        step_cost = min(step_cost, 1.0)
+                    step_cost = grid.movement_edge_cost_units(
+                        from_position,
+                        to_position,
+                        movement_mode,
+                        ignore_difficult_terrain=self.ignore_difficult_terrain,
+                    )
                     if (
                         movement_mode == MovementMode.SWIMMING
                         and self.swimming_speed <= 0
                         and not self.ignore_underwater_penalties
                     ):
                         step_cost *= 2
-                    step_cost_cache[step] = step_cost
+                    step_cost_cache[edge] = step_cost
                 total_cost += step_cost
             return int(total_cost * 5)
 
@@ -6339,16 +6465,7 @@ class Entity(BaseBlock):
             if pos == self.senses.position:
                 continue
             phase_started = time.perf_counter() if timing else 0.0
-            cached_path_cost = (
-                self.senses.path_costs.get(pos)
-                if paths_by_position is self.senses.paths
-                else None
-            )
-            path_cost = (
-                cached_path_cost
-                if cached_path_cost is not None
-                else cached_path_cost_feet(normal_path)
-            )
+            path_cost = cached_path_cost_feet(normal_path)
             if timing:
                 path_cost_seconds += time.perf_counter() - phase_started
             if path_cost > remaining_movement:
@@ -6374,9 +6491,7 @@ class Entity(BaseBlock):
             ):
                 phase_started = time.perf_counter() if timing else 0.0
                 safe_path_list = list(self.senses.safe_paths[pos])
-                safe_cost = self.senses.safe_path_costs.get(pos)
-                if safe_cost is None:
-                    safe_cost = cached_path_cost_feet(safe_path_list)
+                safe_cost = cached_path_cost_feet(safe_path_list)
                 if timing:
                     safe_path_seconds += time.perf_counter() - phase_started
 
@@ -6399,7 +6514,7 @@ class Entity(BaseBlock):
             valid_positions.append(AvailableTarget(
                 index=idx,
                 position=pos,
-                distance=self.senses.get_feet_distance(pos),
+                distance=self.distance_to_position(pos),
                 path_cost=path_cost,
                 is_path_hazardous=is_hazardous,
                 safe_path_cost=safe_cost,
@@ -6428,14 +6543,13 @@ class Entity(BaseBlock):
         """Return movement cost in feet for a known path."""
         grid = get_map()
         total_cost = 0.0
-        for step in path[1:]:
-            tile = grid.get_tile(*step)
-            if tile:
-                step_cost = tile.get_movement_cost(movement_mode)
-            else:
-                step_cost = 1.0
-            if movement_mode == MovementMode.WALKING and self.ignore_difficult_terrain:
-                step_cost = min(step_cost, 1.0)
+        for from_position, to_position in zip(path, path[1:]):
+            step_cost = grid.movement_edge_cost_units(
+                from_position,
+                to_position,
+                movement_mode,
+                ignore_difficult_terrain=self.ignore_difficult_terrain,
+            )
             if (
                 movement_mode == MovementMode.SWIMMING
                 and self.swimming_speed <= 0
@@ -6535,7 +6649,7 @@ class Entity(BaseBlock):
                     valid_positions.append(AvailableTarget(
                         index=len(valid_positions),
                         position=pos,
-                        distance=self.senses.get_feet_distance(pos),
+                        distance=self.distance_to_position(pos),
                         path_cost=sum(
                             cost.cost
                             for cost in targeted_template.effective_costs
@@ -6745,7 +6859,11 @@ class Entity(BaseBlock):
                     and targeted_template.check_costs()
                 ):
                     obj_name = obj_block.name if obj_block else "Object"
-                    distance = self.senses.get_feet_distance(obj_pos)
+                    distance = (
+                        self.distance_to_object(obj_block)
+                        if obj_block is not None
+                        else self.distance_to_position(obj_pos)
+                    )
                     valid_targets.append(AvailableTarget(
                         index=idx,
                         target_uuid=obj_uuid,
@@ -6850,13 +6968,14 @@ class Entity(BaseBlock):
                 (use_template, item_uuid, item_name, item_stack, True),
             )
 
-        for obj_uuid, obj_pos in self.senses.objects.items():
+        for obj_uuid, _obj_pos in self.senses.objects.items():
             obj = BaseBlock.get(obj_uuid)
             if not isinstance(obj, UsableItem):
                 continue
             if not obj.should_include_in_available_object_actions():
                 continue
-            if self.senses.get_feet_distance(obj_pos) > 5:
+            object_distance = self.distance_to_object(obj)
+            if object_distance is None or object_distance > 5:
                 continue
             for use_template in obj.get_use_actions(self.uuid):
                 use_sources.append(
@@ -7116,7 +7235,7 @@ class Entity(BaseBlock):
                         use_valid_positions_los.append(AvailableTarget(
                             index=use_idx,
                             position=pos,
-                            distance=self.senses.get_feet_distance(pos),
+                            distance=self.distance_to_position(pos),
                         ))
                         use_idx += 1
                 if use_valid_positions_los:
@@ -7156,7 +7275,7 @@ class Entity(BaseBlock):
                         continue
                     if pos == self.senses.position:
                         continue
-                    dist = self.senses.get_feet_distance(pos)
+                    dist = self.distance_to_position(pos)
                     if max_range > 0 and dist > max_range:
                         continue
                     targeted_template = use_template.model_copy(

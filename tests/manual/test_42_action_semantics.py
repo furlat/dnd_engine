@@ -86,6 +86,13 @@ from dnd.core.base_actions import (
 )
 from tests.content_identity import synthetic_action_attribution
 from dnd.core.modifiers import AdvantageStatus
+from dnd.core.traversal_connectors import (
+    ConnectorDestinationStatus,
+    ConnectorProvocationPolicy,
+    ConnectorTraversalDiscovery,
+    TraversalConnectorCommand,
+    TraversalConnectorKind,
+)
 from dnd.spells.conjuration import Darkness, Daylight, FogCloud
 from dnd.spells.divination import SeeInvisibility, TrueSeeing
 from dnd.spells.evocation import Light
@@ -115,6 +122,7 @@ def _action(
     target_effect_profile: ActionTargetEffectProfile | None = None,
     world_effect_profile: ActionWorldEffectProfile | None = None,
     selection_parameter: ActionSelectionParameter | None = None,
+    connector_traversal: ConnectorTraversalDiscovery | None = None,
 ) -> AvailableActionInfo:
     """Build one discovery row without constructing a live encounter."""
     normalized_costs = costs or []
@@ -134,6 +142,7 @@ def _action(
             "action.synthetic_semantics",
         ),
         base_template_name=base_template_name,
+        connector_traversal=connector_traversal,
         target_type=target_type,
         availability_status=(
             ActionAvailabilityStatus.AVAILABLE
@@ -413,6 +422,66 @@ def test_move_and_dash_expose_distinct_spatial_meaning() -> None:
     assert dash_semantics.spatial is not None
     assert dash_semantics.spatial.movement_kind is MovementKind.NONE
     assert any(effect.fact_id == "actor.movement_remaining" for effect in dash_semantics.guaranteed_effects)
+
+
+def test_connector_semantics_use_typed_destination_instead_of_self_target() -> None:
+    destination = (7, 9)
+    discovery = ConnectorTraversalDiscovery(
+        command=TraversalConnectorCommand(
+            connector_uuid=uuid4(),
+            connector_revision=1,
+            connector_digest="a" * 64,
+            source_position=(1, 1),
+            destination_position=destination,
+        ),
+        authored_id="connector.semantic.passage",
+        kind=TraversalConnectorKind.PASSAGE,
+        presentation_key="traversal.passage",
+        source_elevation_feet=0,
+        destination_elevation_feet=10,
+        movement_cost_feet=15,
+        action_cost_type=None,
+        action_cost_amount=0,
+        bidirectional=False,
+        provocation_policy=ConnectorProvocationPolicy.DOES_NOT_PROVOKE,
+        destination_status=ConnectorDestinationStatus.UNKNOWN,
+    )
+    row = _action(
+        "Traverse Connector",
+        semantic_key="dnd.actions.TraverseConnector",
+        target_type=TargetType.SELF,
+        action_category=ActionCategory.MOVEMENT,
+        costs=[BaseCost(name="Movement", cost_type="movement", cost=15)],
+        connector_traversal=discovery,
+    )
+
+    semantics = action_semantics_for_available_action(row)
+    catalog = {}
+    affordance = _build_affordance_rows_from_actions(
+        "self_actions",
+        [row],
+        catalog,
+    )[0]
+
+    assert row.connector_traversal is not None
+    assert row.connector_traversal.command.destination_position == destination
+    assert affordance.source.connector_traversal is not None
+    assert (
+        affordance.source.connector_traversal.command.destination_position
+        == destination
+    )
+    assert semantics.semantic_id == "movement.connector"
+    assert semantics.spatial is not None
+    assert semantics.spatial.movement_kind is MovementKind.VOLUNTARY
+    assert semantics.spatial.ignores_intermediate_cells is True
+    position_effect = next(
+        effect
+        for effect in semantics.guaranteed_effects
+        if effect.fact_id == "actor.position"
+    )
+    assert position_effect.value_ref == (
+        "connector_traversal.command.destination_position"
+    )
 
 
 def test_open_door_exposes_interaction_topology_and_possible_information_gain() -> None:

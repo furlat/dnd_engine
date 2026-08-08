@@ -317,6 +317,10 @@ class MovementLogData(BaseModel):
         controller_revalidation_reason: Subjective change requiring that decision.
     """
 
+    movement_type: Literal["move", "jump", "connector"] = Field(
+        default="move",
+        description="Authored movement-root family used by privacy projection.",
+    )
     entity_name: str = Field(description="Display name of the moving entity.")
     entity_uuid: str = Field(description="UUID string of the moving entity.")
     start_position: Tuple[int, int] = Field(description="Starting grid position.")
@@ -324,6 +328,18 @@ class MovementLogData(BaseModel):
     path: List[Tuple[int, int]] = Field(default_factory=list, description="Path cells traversed by the movement.")
     distance_feet: int = Field(default=0, description="Movement distance in feet.")
     movement_cost: int = Field(default=0, description="Action-economy movement cost in feet.")
+    start_elevation_feet: Optional[int] = Field(
+        default=None,
+        description="Authorized support elevation at the voluntary start.",
+    )
+    requested_end_elevation_feet: Optional[int] = Field(
+        default=None,
+        description="Accepted support elevation at a requested Jump landing.",
+    )
+    end_elevation_feet: Optional[int] = Field(
+        default=None,
+        description="Authorized support elevation at the voluntary endpoint.",
+    )
     requested_end_position: Optional[Tuple[int, int]] = Field(
         default=None,
         description="Originally requested destination before partial termination.",
@@ -343,6 +359,31 @@ class MovementLogData(BaseModel):
     controller_revalidation_reason: Optional[str] = Field(
         default=None,
         description="Typed subjective change that required controller revalidation.",
+    )
+    connector_uuid: Optional[str] = Field(
+        default=None,
+        description="Encounter-local connector identity for an atomic transfer.",
+    )
+    connector_authored_id: Optional[str] = Field(
+        default=None,
+        description="Stable map-authored connector identity.",
+    )
+    connector_kind: Optional[str] = Field(
+        default=None,
+        description="Authored connector presentation family.",
+    )
+    connector_presentation_key: Optional[str] = Field(
+        default=None,
+        description="Authored semantic presentation key.",
+    )
+    connector_revision: Optional[int] = Field(default=None, ge=1)
+    connector_digest: Optional[str] = Field(default=None)
+    connector_provocation_policy: Optional[str] = Field(default=None)
+    connector_action_cost_type: Optional[str] = Field(default=None)
+    connector_action_cost_amount: int = Field(default=0, ge=0)
+    connector_bidirectional: Optional[bool] = Field(
+        default=None,
+        description="Accepted connector directionality at declaration.",
     )
 
 

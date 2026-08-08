@@ -21,6 +21,7 @@ from dnd.core.action_outcomes import (
     OutcomeApplicationScope as OutcomeApplicationScope,
     OutcomeResolution as OutcomeResolution,
 )
+from dnd.core.traversal_connectors import ConnectorTraversalDiscovery
 
 
 ActionBucket = Literal[
@@ -204,6 +205,10 @@ class ActionSourceDefinition(ControlModel):
     target_options: Sequence[ActionTarget] = Field(
         default_factory=tuple,
         description="All legal targets from the source action row before this executable row was flattened.",
+    )
+    connector_traversal: Optional[ConnectorTraversalDiscovery] = Field(
+        default=None,
+        description="Exact actor-subjective connector command and destination semantics.",
     )
     num_projectiles: Optional[int] = Field(
         default=None,

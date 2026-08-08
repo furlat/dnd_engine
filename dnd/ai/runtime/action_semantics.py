@@ -432,6 +432,33 @@ def _jump_semantics() -> ActionSemantics:
     )
 
 
+def _connector_traversal_semantics() -> ActionSemantics:
+    """Return semantics for one endpoint-selected atomic connector transfer."""
+    return ActionSemantics(
+        semantic_id="movement.connector",
+        tags=frozenset({
+            ActionTag.MOVEMENT_VOLUNTARY,
+            ActionTag.INFORMATION_REVEAL,
+        }),
+        planning_preconditions=_all(
+            _predicate("connector.source_is_current_position", True),
+            _predicate("connector.destination_available", True),
+        ),
+        guaranteed_effects=(
+            LogicalEffect(
+                fact_id="actor.position",
+                operation=EffectOperation.SET_FROM_TARGET,
+                value_ref="connector_traversal.command.destination_position",
+            ),
+        ),
+        spatial=SpatialSemantics(
+            movement_kind=MovementKind.VOLUNTARY,
+            moves_actor=True,
+            ignores_intermediate_cells=True,
+        ),
+    )
+
+
 def _dodge_semantics() -> ActionSemantics:
     """Return semantics for the defensive Dodge condition."""
     return ActionSemantics(
@@ -1114,6 +1141,7 @@ _EXACT_ACTION_BUILDERS: dict[str, SemanticBuilder] = {
     "dnd.actions.Hide": _hide_semantics,
     "dnd.actions.Jump": _jump_semantics,
     "dnd.actions.Move": _move_semantics,
+    "dnd.actions.TraverseConnector": _connector_traversal_semantics,
     "dnd.actions.Shove": _shove_semantics,
     "dnd.monsters.traits.AggressiveMoveAction": _aggressive_movement_semantics,
     "dnd.spells.conjuration.DimensionDoor": _dimension_door_semantics,

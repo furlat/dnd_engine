@@ -781,7 +781,13 @@ def test_eb_18_022_mapeditor_save_load_roundtrip_restores_entity_free_state() ->
             document_response = client.get("/mapeditor/saves/book_roundtrip")
             assert document_response.status_code == 200
             document = document_response.json()
-            assert set(document["snapshot"]) == {"grid_bounds", "tiles", "floor_objects"}
+            assert set(document["snapshot"]) == {
+                "grid_bounds",
+                "tiles",
+                "floor_objects",
+                "connectors",
+            }
+            assert document["snapshot"]["connectors"] == []
             assert (
                 document["object_placements"][0]["recipe"]["ref"]["content_id"]
                 == "environment.door"

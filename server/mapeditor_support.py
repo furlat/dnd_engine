@@ -26,19 +26,32 @@ from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
 from dnd.core.base_actions import BaseAction
 from dnd.core.base_block import BaseBlock, LightLevel
 from dnd.core.base_object import BaseObject
-from dnd.core.base_tiles import Tile, difficult_terrain_factory
+from dnd.core.base_tiles import (
+    Tile,
+    difficult_terrain_factory,
+    validate_elevation_surface_tuple,
+)
 from dnd.core.content.descriptors import (
     ContentOrdering,
     ContentPresentation,
     ContentVisibility,
 )
+from dnd.core.content.canonical import canonical_content_sha256
 from dnd.core.content.identities import ContentDefinitionKind
+from dnd.core.traversal_connectors import (
+    TraversalConnector,
+    TraversalConnectorChangeOperation,
+)
 from dnd.core.content.item_definitions import ItemPersistencePolicy
 from dnd.core.content.recipe_presets import ContentRecipePresetRef
 from dnd.core.content.recipes import ContentRecipe
 from dnd.core.content.registration import ContentDeclaration
 from dnd.core.gridmap import get_map
 from dnd.core.values import BaseValue
+from dnd.core.world_edges import (
+    ElevationSurfaceKind,
+    contradictory_progressive_elevation_edge,
+)
 from dnd.environmental_effect_runtime import (
     extend_spike_trap_effect,
     materialize_spike_trap_effect,
@@ -61,6 +74,10 @@ from server.api_models import (
     MapEditorCatalogEntry,
     MapEditorContentCatalogEntry,
     MapEditorCreateMapRequest,
+    MapEditorConnectorDeleteRequest,
+    MapEditorConnectorEnabledRequest,
+    MapEditorConnectorMutationResponse,
+    MapEditorConnectorUpsertRequest,
     MapEditorGridBounds,
     MapEditorLightCell,
     MapEditorLightResponse,
@@ -98,7 +115,7 @@ _BASE_BLOCK_FIELDS = set(BaseBlock.model_fields.keys()) | {
     "values_dict_uuid_name",
 }
 _ALREADY_SERIALIZED = {"uuid", "name", "map_char"}
-_SAVE_SCHEMA_VERSION = 2
+_SAVE_SCHEMA_VERSION = 3
 
 
 def reset_editor_world() -> None:
@@ -152,6 +169,100 @@ def get_editor_snapshot() -> MapEditorMapSnapshot:
         grid_bounds=MapEditorGridBounds(min_x=bounds[0], min_y=bounds[1], max_x=bounds[2], max_y=bounds[3]),
         tiles=api_grid.tiles,
         floor_objects=_floor_objects(grid),
+        connectors=[
+            connector.definition()
+            for connector in grid.get_all_connectors()
+        ],
+    )
+
+
+def _connector_mutation_response(
+    operation: TraversalConnectorChangeOperation,
+    connector: TraversalConnector,
+    snapshot: MapEditorMapSnapshot,
+    *,
+    removed: bool = False,
+) -> MapEditorConnectorMutationResponse:
+    projected = None
+    if not removed:
+        projected = next(
+            row
+            for row in project_grid(get_map()).connectors
+            if row.uuid == str(connector.uuid)
+        )
+    return MapEditorConnectorMutationResponse(
+        operation=operation,
+        connector_uuid=str(connector.uuid),
+        authored_id=connector.authored_id,
+        connector_revision=connector.revision,
+        connector_digest=connector.objective_digest,
+        connector=projected,
+        snapshot=snapshot,
+    )
+
+
+def upsert_editor_connector(
+    request: MapEditorConnectorUpsertRequest,
+) -> MapEditorConnectorMutationResponse:
+    """Create or replace one connector through GridMap's causal owner."""
+    grid = get_map()
+    existing = grid.get_connector_by_authored_id(request.definition.authored_id)
+    if existing is None:
+        connector = grid.register_connector(request.definition)
+        operation = TraversalConnectorChangeOperation.REGISTER
+    elif request.replace_existing:
+        connector = grid.replace_connector(existing.uuid, request.definition)
+        operation = TraversalConnectorChangeOperation.REPLACE
+    else:
+        raise ValueError(
+            f"connector already exists: {request.definition.authored_id}"
+        )
+    if connector is None:
+        raise ValueError("connector mutation was vetoed")
+    return _connector_mutation_response(
+        operation,
+        connector,
+        get_editor_snapshot(),
+    )
+
+
+def set_editor_connector_enabled(
+    request: MapEditorConnectorEnabledRequest,
+) -> MapEditorConnectorMutationResponse:
+    """Change connector availability without changing path topology."""
+    grid = get_map()
+    connector = grid.get_connector_by_authored_id(request.authored_id)
+    if connector is None:
+        raise ValueError(f"unknown connector: {request.authored_id}")
+    updated = grid.set_connector_enabled(connector.uuid, request.enabled)
+    if updated is None:
+        raise ValueError("connector enable mutation was vetoed")
+    return _connector_mutation_response(
+        (
+            TraversalConnectorChangeOperation.ENABLE
+            if request.enabled
+            else TraversalConnectorChangeOperation.DISABLE
+        ),
+        updated,
+        get_editor_snapshot(),
+    )
+
+
+def delete_editor_connector(
+    request: MapEditorConnectorDeleteRequest,
+) -> MapEditorConnectorMutationResponse:
+    """Remove one authored connector and both endpoint-index entries."""
+    grid = get_map()
+    connector = grid.get_connector_by_authored_id(request.authored_id)
+    if connector is None:
+        raise ValueError(f"unknown connector: {request.authored_id}")
+    if not grid.remove_connector(connector.uuid):
+        raise ValueError("connector removal was vetoed")
+    return _connector_mutation_response(
+        TraversalConnectorChangeOperation.REMOVE,
+        connector,
+        get_editor_snapshot(),
+        removed=True,
     )
 
 
@@ -187,6 +298,14 @@ def save_current_editor_map(request: MapEditorSaveMapRequest) -> MapEditorSavedM
         grid_bounds=snapshot.grid_bounds,
         tile_count=len(snapshot.tiles),
         floor_object_count=len(snapshot.floor_objects),
+        connector_count=len(snapshot.connectors),
+        connector_digest=canonical_content_sha256([
+            connector.model_dump(mode="json")
+            for connector in sorted(
+                snapshot.connectors,
+                key=lambda connector: connector.authored_id,
+            )
+        ]),
     )
     document = MapEditorSavedMapDocument(
         schema_version=_SAVE_SCHEMA_VERSION,
@@ -410,12 +529,97 @@ def apply_tile_patches(patches: Iterable[MapEditorTilePatch]) -> MapEditorMapSna
     grid = get_map()
     spike_positions = set()
     for patch in patches:
+        original_tile = grid.get_tile(patch.x, patch.y)
+        original_height = original_tile.height if original_tile is not None else 0
+        original_kind = (
+            original_tile.elevation_surface_kind
+            if original_tile is not None
+            else ElevationSurfaceKind.ORDINARY
+        )
+        original_axis = original_tile.slope_axis if original_tile is not None else None
+        elevation_touched = bool(
+            {"elevation_steps", "elevation_surface_kind", "slope_axis"}
+            & patch.model_fields_set
+        )
+        if "elevation_steps" in patch.model_fields_set and patch.elevation_steps is None:
+            raise ValueError("elevation_steps cannot be null when supplied")
+        if (
+            "elevation_surface_kind" in patch.model_fields_set
+            and patch.elevation_surface_kind is None
+        ):
+            raise ValueError("elevation_surface_kind cannot be null when supplied")
+        requested_elevation = (
+            patch.elevation_steps
+            if patch.elevation_steps is not None
+            else original_height
+        )
+        requested_kind = (
+            patch.elevation_surface_kind
+            if patch.elevation_surface_kind is not None
+            else original_kind
+        )
+        requested_axis = (
+            patch.slope_axis
+            if "slope_axis" in patch.model_fields_set
+            else original_axis
+        )
+        assert requested_elevation is not None
+        assert requested_kind is not None
+        validate_elevation_surface_tuple(
+            requested_elevation,
+            requested_kind,
+            requested_axis,
+        )
+        directional_parts = (
+            patch.directional_channel,
+            patch.direction,
+            patch.passable,
+        )
+        if any(part is not None for part in directional_parts) and not all(
+            part is not None for part in directional_parts
+        ):
+            raise ValueError(
+                "directional_channel, direction, and passable are required together"
+            )
+        requested_light = (
+            _light_level(patch.light_level)
+            if patch.light_level is not None
+            else None
+        )
+        elevation_changed = (
+            requested_elevation,
+            requested_kind,
+            requested_axis,
+        ) != (
+            original_height,
+            original_kind,
+            original_axis,
+        )
+        if original_tile is not None and elevation_changed:
+            if not grid.set_tile_elevation(
+                (patch.x, patch.y),
+                height=requested_elevation,
+                surface_kind=requested_kind,
+                slope_axis=requested_axis,
+            ):
+                raise ValueError("tile elevation change was rejected")
         tile_type = _normalize_id(patch.type) if patch.type else None
         if tile_type is None:
+            if original_tile is None and elevation_touched:
+                grid.set_tile(
+                    patch.x,
+                    patch.y,
+                    walkable=True,
+                    visible=True,
+                    name="Floor",
+                    height=requested_elevation,
+                    elevation_surface_kind=requested_kind,
+                    slope_axis=requested_axis,
+                )
             _apply_directional_tile_patch(grid, patch)
             old = grid.get_tile(patch.x, patch.y)
-            if old is not None and patch.light_level is not None:
-                old.default_light = _light_level(patch.light_level)
+            if old is not None and requested_light is not None:
+                old.default_light = requested_light
             continue
         if tile_type in {"spike_trap", "spike_zone", "spikes"}:
             old = grid.get_tile(patch.x, patch.y)
@@ -430,10 +634,13 @@ def apply_tile_patches(patches: Iterable[MapEditorTilePatch]) -> MapEditorMapSna
                 walkable=True,
                 visible=True,
                 name="Floor",
+                height=requested_elevation,
+                elevation_surface_kind=requested_kind,
+                slope_axis=requested_axis,
             )
             tile.default_light = (
-                _light_level(patch.light_level)
-                if patch.light_level is not None
+                requested_light
+                if requested_light is not None
                 else old_light
             )
             _apply_directional_tile_patch(grid, patch)
@@ -442,14 +649,28 @@ def apply_tile_patches(patches: Iterable[MapEditorTilePatch]) -> MapEditorMapSna
         old = grid.get_tile(patch.x, patch.y)
         old_light = old.default_light if old is not None else LightLevel.BRIGHT_LIGHT
         if tile_type == "difficult_terrain":
-            tile = difficult_terrain_factory((patch.x, patch.y))
-            tile.default_light = _light_level(patch.light_level) if patch.light_level is not None else old_light
+            tile = difficult_terrain_factory(
+                (patch.x, patch.y),
+                height=requested_elevation,
+                elevation_surface_kind=requested_kind,
+                slope_axis=requested_axis,
+            )
+            tile.default_light = requested_light if requested_light is not None else old_light
             grid.set_tile(patch.x, patch.y, tile=tile)
             _apply_directional_tile_patch(grid, patch)
             continue
         walkable, visible, name = _tile_properties(tile_type)
-        tile = grid.set_tile(patch.x, patch.y, walkable=walkable, visible=visible, name=name)
-        tile.default_light = _light_level(patch.light_level) if patch.light_level is not None else old_light
+        tile = grid.set_tile(
+            patch.x,
+            patch.y,
+            walkable=walkable,
+            visible=visible,
+            name=name,
+            height=requested_elevation,
+            elevation_surface_kind=requested_kind,
+            slope_axis=requested_axis,
+        )
+        tile.default_light = requested_light if requested_light is not None else old_light
         _apply_directional_tile_patch(grid, patch)
 
     if spike_positions:
@@ -805,10 +1026,44 @@ def _preflight_saved_editor_map(
     validate_runtime_state: bool,
 ) -> None:
     """Validate the complete temporary save before replacing the active world."""
-    tile_positions = {
-        (tile.x, tile.y)
+    tiles_by_position = {
+        (tile.x, tile.y): tile
         for tile in document.snapshot.tiles
     }
+    tile_positions = set(tiles_by_position)
+    contradiction = contradictory_progressive_elevation_edge({
+        position: (
+            tile.elevation_steps,
+            tile.elevation_surface_kind,
+            tile.slope_axis,
+        )
+        for position, tile in tiles_by_position.items()
+    })
+    if contradiction is not None:
+        raise ValueError(
+            "saved map contains a contradictory progressive elevation "
+            f"edge between {contradiction[0]} and {contradiction[1]}"
+        )
+    connector_ids = [
+        connector.authored_id for connector in document.snapshot.connectors
+    ]
+    if len(connector_ids) != len(set(connector_ids)):
+        raise ValueError("saved map connector authored IDs must be unique")
+    for connector in document.snapshot.connectors:
+        if any(
+            endpoint not in tile_positions
+            for endpoint in connector.endpoint_positions
+        ):
+            raise ValueError("saved map connector requires two support tiles")
+        first, second = connector.endpoint_positions
+        if (
+            connector.kind.value != "passage"
+            and tiles_by_position[first].elevation_steps
+            == tiles_by_position[second].elevation_steps
+        ):
+            raise ValueError(
+                "saved map vertical connector requires nonzero elevation delta"
+            )
     trap_lever_count = 0
     for placement in document.object_placements:
         if placement.position not in tile_positions:
@@ -876,6 +1131,12 @@ def _load_editor_snapshot(
             tile = difficult_terrain_factory(position)
             tile.default_light = _light_level(tile_data.light_level)
             grid.set_tile(tile_data.x, tile_data.y, tile=tile, fire_event=False)
+            grid.set_tile_elevation(
+                position,
+                height=tile_data.elevation_steps,
+                surface_kind=tile_data.elevation_surface_kind,
+                slope_axis=tile_data.slope_axis,
+            )
             _restore_directional_tile_state(grid, tile_data)
             continue
         tile = grid.set_tile(
@@ -887,7 +1148,23 @@ def _load_editor_snapshot(
             fire_event=False,
         )
         tile.default_light = _light_level(tile_data.light_level)
+        grid.set_tile_elevation(
+            position,
+            height=tile_data.elevation_steps,
+            surface_kind=tile_data.elevation_surface_kind,
+            slope_axis=tile_data.slope_axis,
+        )
         _restore_directional_tile_state(grid, tile_data)
+
+    for connector_definition in sorted(
+        snapshot.connectors,
+        key=lambda connector: connector.authored_id,
+    ):
+        registered = grid.register_connector(connector_definition)
+        if registered is None:
+            raise ValueError(
+                f"saved connector was vetoed: {connector_definition.authored_id}"
+            )
 
     if spike_light:
         spike_effect = materialize_spike_trap_effect(set(spike_light))

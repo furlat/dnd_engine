@@ -23,7 +23,7 @@ from dnd.core.events import (
 from dnd.blocks.equipment import Weapon, WeaponEquipEvent, WeaponUnequipEvent
 from dnd.core.equipment_types import WeaponSlot
 from dnd.entity import Entity
-from dnd.actions import Move, Swim, Dash, Dodge, Disengage, DropConcentration, ShakeAwake, Hide, Attack, Jump, Shove, PickUp, AttackObject, Drop, SpellAction
+from dnd.actions import Move, Swim, Dash, Dodge, Disengage, DropConcentration, ShakeAwake, Hide, Attack, Jump, TraverseConnector, Shove, PickUp, AttackObject, Drop, SpellAction
 from dnd.conditions import (
     create_has_attacked_handler,
     create_has_taken_damage_handler,
@@ -47,6 +47,7 @@ def setup_standard_actions(entity: Entity) -> None:
     entity.register_action(Move(source_entity_uuid=entity.uuid, template=True))
     entity.register_action(Swim(source_entity_uuid=entity.uuid, template=True))
     entity.register_action(Jump(source_entity_uuid=entity.uuid, template=True))
+    entity.register_action(TraverseConnector(source_entity_uuid=entity.uuid, template=True))
     entity.register_action(Dash(source_entity_uuid=entity.uuid, template=True))
     entity.register_action(Dodge(source_entity_uuid=entity.uuid, template=True))
     entity.register_action(Disengage(source_entity_uuid=entity.uuid, template=True))

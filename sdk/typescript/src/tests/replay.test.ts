@@ -186,7 +186,14 @@ function objectiveReplay(): ObjectiveReplayBundle {
       combat_log_cursor: 0,
       world: {
         state: {
-          grid: { min_x: 0, min_y: 0, max_x: 0, max_y: 0, tiles: [] },
+          grid: {
+            min_x: 0,
+            min_y: 0,
+            max_x: 0,
+            max_y: 0,
+            connectors: [],
+            tiles: [],
+          },
           entities: [],
           encounter: {
             uuid: "encounter",

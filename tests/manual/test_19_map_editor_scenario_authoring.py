@@ -449,7 +449,7 @@ def test_save_load_roundtrip_restores_entity_free_map_state(
     assert save_payload["tile_count"] == 12
     assert save_payload["floor_object_count"] == 2
     assert document_response.status_code == 200
-    assert document["schema_version"] == 2
+    assert document["schema_version"] == 3
     assert document["metadata"]["name"] == "Tutorial Room"
     assert {
         placement["recipe"]["ref"]["content_id"]
@@ -492,7 +492,7 @@ def test_save_load_roundtrip_restores_entity_free_map_state(
     expected_lines = [
         "save result: status=200, id=tutorial_room, tiles=12, objects=2",
         (
-            "document: schema=2, name=Tutorial Room, "
+                "document: schema=3, name=Tutorial Room, "
             "placements=['environment.door', 'environment.wall_torch']"
         ),
         (

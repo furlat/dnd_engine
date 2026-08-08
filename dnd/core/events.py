@@ -8,6 +8,7 @@ for logs, sensory updates, and API streams.
 
 __all__ = [
     "EventType", "SpatialChangeType", "EventPhase", "RangeType", "MovementTrajectory",
+    "MovementProvocationPolicy",
     "AbilityName", "SkillName",
     "Event", "Trigger", "BaseHandler", "EventHandler", "SpatialHandler", "EventQueue",
     "SensoryUpdateReason", "SensoryUpdateEvent",
@@ -21,6 +22,7 @@ __all__ = [
     "SkillCheckD20RollResultEvent",
     "DamageRollResultEvent",
     "SensesUpdateHint", "SpatiallyIndexedEvent", "SpatialChangeEvent",
+    "TileElevationChangeEvent",
     "SpatialEffectChangeEvent", "SpatialEffectInteractionEvent",
     "ForcedMovementEvent",
     "TakeDamageEvent", "DamageAppliedEvent", "TemporaryHitPointsEvent",
@@ -72,6 +74,12 @@ from dnd.core.spatial_effect_types import (
     SpatialEffectInteractionIntensity,
     SpatialEffectInteractionOperation,
     SpatialEffectLayer,
+)
+from dnd.core.world_edges import ElevationSurfaceKind, SlopeAxis
+from dnd.core.action_execution import MovementProvocationPolicy
+from dnd.core.traversal_connectors import (
+    TraversalConnector,
+    TraversalConnectorChangeOperation,
 )
 from uuid import UUID, uuid4
 from dnd.core.dice import Dice, DiceRoll, AttackOutcome, RollType
@@ -171,6 +179,7 @@ class EventType(str, Enum):
     SHIELD_UNEQUIP = "shield_unequip"
     ITEM_LOCATION_STATE = "item_location_state"
     ITEM_CHARGE_CONSUMPTION = "item_charge_consumption"
+    TRAVERSAL_CONNECTOR_CHANGED = "traversal_connector_changed"
 
     TRIGGER_EVENT = "trigger_event"
 
@@ -216,6 +225,7 @@ class MovementTrajectory(str, Enum):
 
     PATH = "path"
     DIRECT_ARC = "direct_arc"
+    CONNECTOR_TRANSFER = "connector_transfer"
 
 
 class SpatialChangeType(str, Enum):
@@ -753,6 +763,16 @@ class Event(BaseObject):
             type(self).validate_handler_result
             is not Event.validate_handler_result
         )
+
+    def guarded_related_queue_inputs(self) -> tuple["Event", ...]:
+        """Return queue-owned causal inputs restored after each guarded handler.
+
+        Most event families own only the event version being dispatched. A
+        guarded child family may override this hook when its handlers can
+        resolve an already-stored parent whose causal evidence must remain
+        immutable between handlers.
+        """
+        return ()
 
     def handler_result_stops_dispatch(self, result: "Event") -> bool:
         """Return whether a validated publication must remain terminal."""
@@ -1389,11 +1409,30 @@ class EventQueue:
         before_cursor = cls.event_cursor()
         before_event_index = len(cls._all_events)
         guards_handler_result = event.guards_handler_result()
-        handler_input = event.model_copy() if guards_handler_result else event
+        validation_input = event.model_copy(deep=True) if guards_handler_result else event
+        handler_entry_input = (
+            validation_input.model_copy(deep=True)
+            if guards_handler_result
+            else event
+        )
+        related_inputs = (
+            event.guarded_related_queue_inputs()
+            if guards_handler_result
+            else ()
+        )
+        related_validation_inputs = tuple(
+            (related_input, related_input.model_copy(deep=True))
+            for related_input in related_inputs
+        )
+        handler_input = (
+            validation_input.model_copy(deep=True)
+            if guards_handler_result
+            else event
+        )
         validation_token = uuid4() if guards_handler_result else None
         handler_input._handler_validation_token = validation_token
         handler_token = cls._active_handler_input.set(
-            event if guards_handler_result else None,
+            validation_input if guards_handler_result else None,
         )
         proposal_token = cls._active_handler_proposal.set(
             handler_input if guards_handler_result else None,
@@ -1403,21 +1442,78 @@ class EventQueue:
         )
         storage_result_context = cls._active_handler_storage_result.set(None)
         detached_storage_result: Optional[Tuple[Event, bool]] = None
+        result: Optional[Event] = None
+        stored_input_tampered = False
+        tampered_candidate: Optional[Event] = None
         try:
             with runtime_behavior_provider(handler):
                 result = handler(handler_input)
         finally:
             detached_storage_result = cls._active_handler_storage_result.get()
+            if guards_handler_result:
+                tampered_candidate = event.model_copy(deep=True)
+                stored_input_tampered = cls._restore_guarded_handler_input(
+                    event,
+                    validation_input,
+                    before_event_index,
+                )
+                validation_input.children_events = list(event.children_events)
+                validation_input.lineage_children_events = list(
+                    event.lineage_children_events
+                )
+                validation_input.children_lineages = list(
+                    event.children_lineages
+                )
+                for related_input, related_validation_input in (
+                    related_validation_inputs
+                ):
+                    cls._restore_guarded_handler_input(
+                        related_input,
+                        related_validation_input,
+                        before_event_index,
+                    )
             cls._active_handler_storage_result.reset(storage_result_context)
             cls._active_handler_validation_token.reset(
                 validation_token_context,
             )
             cls._active_handler_proposal.reset(proposal_token)
             cls._active_handler_input.reset(handler_token)
-        if detached_storage_result is not None:
+        if stored_input_tampered:
+            result = tampered_candidate
+        elif detached_storage_result is not None:
             result = detached_storage_result[0]
         if result is not None and guards_handler_result:
-            result = event.validate_handler_result(result)
+            handler_changed_child_evidence = any(
+                not _exact_event_evidence_equal(
+                    getattr(handler_entry_input, field_name),
+                    getattr(result, field_name),
+                )
+                for field_name in (
+                    "children_events",
+                    "lineage_children_events",
+                    "children_lineages",
+                )
+            )
+            if not handler_changed_child_evidence:
+                result = result.model_copy(update={
+                    "children_events": list(validation_input.children_events),
+                    "lineage_children_events": list(
+                        validation_input.lineage_children_events
+                    ),
+                    "children_lineages": list(
+                        validation_input.children_lineages
+                    ),
+                }, deep=True)
+            result = validation_input.validate_handler_result(result)
+            public_candidate = result.model_copy(
+                update={"use_register": validation_input.use_register},
+                deep=True,
+            )
+            if _exact_event_evidence_equal(
+                validation_input,
+                public_candidate,
+            ):
+                result = event
         emitted_event_count = cls.event_cursor() - before_cursor
         result_changed = result is not None and result != event
         if result_changed and result is not None and result.canceled:
@@ -1476,6 +1572,44 @@ class EventQueue:
                     cls._timing_callback_name(callback),
                 )
         return result
+
+    @classmethod
+    def _restore_guarded_handler_input(
+        cls,
+        stored_input: Event,
+        validation_input: Event,
+        emitted_start_index: int,
+    ) -> bool:
+        """Restore a guarded stored input while retaining real child linkage."""
+        expected = validation_input.model_copy(deep=True)
+        expected_children = list(expected.children_events)
+        expected_lineage_children = list(expected.lineage_children_events)
+        for child in cls._all_events[emitted_start_index:]:
+            if child.parent_event == validation_input.uuid:
+                if child.uuid not in expected_children:
+                    expected_children.append(child.uuid)
+            parent = (
+                cls._events_by_uuid.get(child.parent_event)
+                if child.parent_event is not None
+                else None
+            )
+            if (
+                parent is not None
+                and parent.lineage_uuid == validation_input.lineage_uuid
+                and child.uuid not in expected_lineage_children
+            ):
+                expected_lineage_children.append(child.uuid)
+        expected.children_events = expected_children
+        expected.lineage_children_events = expected_lineage_children
+        tampered = any(
+            getattr(stored_input, field_name) != getattr(expected, field_name)
+            for field_name in type(expected).model_fields
+        )
+        restored = expected.model_copy(deep=True)
+        for field_name in type(restored).model_fields:
+            setattr(stored_input, field_name, getattr(restored, field_name))
+        stored_input._handler_validation_token = None
+        return tampered
 
     @classmethod
     def remove_on_event_callback(cls, callback: Callable[['Event'], None]) -> None:
@@ -3952,6 +4086,151 @@ class SpatialChangeEvent(SpatiallyIndexedEvent):
         """
         return (self.position,)
 
+
+class TileElevationChangeEvent(SpatialChangeEvent):
+    """Guarded precommit proposal for one Tile support-tuple mutation."""
+
+    name: str = Field(default="Tile Elevation Change")
+    event_type: EventType = Field(default=EventType.SPATIAL_TILE_CHANGED)
+    change_type: SpatialChangeType = Field(default=SpatialChangeType.TILE_CHANGED)
+    senses_hint: Optional[SensesUpdateHint] = Field(
+        default_factory=lambda: SensesUpdateHint(requires_paths=True)
+    )
+    position: Tuple[int, int]
+    tile_uuid: UUID
+    old_height_steps: int
+    new_height_steps: int
+    old_surface_kind: ElevationSurfaceKind
+    new_surface_kind: ElevationSurfaceKind
+    old_slope_axis: Optional[SlopeAxis] = None
+    new_slope_axis: Optional[SlopeAxis] = None
+
+    def model_copy(
+        self,
+        *,
+        update: Optional[Mapping[str, Any]] = None,
+        deep: bool = False,
+    ) -> Self:
+        """Detach guarded proposals from queue-owned mutable evidence."""
+        return super().model_copy(update=update, deep=True)
+
+    def validate_handler_result(self, result: Event) -> Event:
+        """Allow vetoes while freezing the authored support mutation."""
+        active_proposal = EventQueue.is_active_handler_proposal(result)
+
+        def cancellation(status_message: str) -> TileElevationChangeEvent:
+            canceled = self.invalid_handler_result_cancellation(
+                result,
+                status_message=status_message,
+            )
+            return cast(
+                TileElevationChangeEvent,
+                canceled.model_copy(
+                    update={
+                        "use_register": False if active_proposal else self.use_register,
+                    }
+                ),
+            )
+
+        if type(result) is not TileElevationChangeEvent:
+            return cancellation(
+                "Tile elevation handler returned an incompatible event type."
+            )
+        if not (
+            type(result.uuid) is UUID
+            and type(result.timestamp) is datetime
+            and type(result.modified) is bool
+            and (
+                result.status_message is None
+                or type(result.status_message) is str
+            )
+            and type(result.use_register) is bool
+        ):
+            return cancellation(
+                "Tile elevation handler returned malformed queue evidence."
+            )
+        lifecycle_candidate = result
+        if (
+            not active_proposal
+            and result.use_register is False
+            and self.use_register is True
+        ):
+            lifecycle_candidate = result.model_copy(update={"use_register": True})
+        if not self.handler_result_preserves_lifecycle(lifecycle_candidate):
+            return cancellation("Tile elevation handler changed lifecycle evidence.")
+        if result.canceled:
+            return cancellation(result.status_message or "Tile elevation change canceled.")
+
+        handler_mutable_fields = {
+            "uuid",
+            "timestamp",
+            "modified",
+            "status_message",
+            "use_register",
+        }
+
+        def exact_evidence_equal(expected: Any, candidate: Any) -> bool:
+            if type(candidate) is not type(expected):
+                return False
+            if isinstance(expected, BaseModel):
+                return all(
+                    exact_evidence_equal(
+                        getattr(expected, field_name),
+                        getattr(candidate, field_name),
+                    )
+                    for field_name in type(expected).model_fields
+                )
+            if isinstance(expected, (list, tuple)):
+                return len(expected) == len(candidate) and all(
+                    exact_evidence_equal(left, right)
+                    for left, right in zip(expected, candidate)
+                )
+            if isinstance(expected, dict):
+                if len(expected) != len(candidate):
+                    return False
+                unmatched = list(candidate.items())
+                for expected_key, expected_value in expected.items():
+                    match_index = next(
+                        (
+                            index
+                            for index, (candidate_key, _candidate_value)
+                            in enumerate(unmatched)
+                            if exact_evidence_equal(expected_key, candidate_key)
+                        ),
+                        None,
+                    )
+                    if match_index is None:
+                        return False
+                    _candidate_key, candidate_value = unmatched.pop(match_index)
+                    if not exact_evidence_equal(expected_value, candidate_value):
+                        return False
+                return True
+            if isinstance(expected, (set, frozenset)):
+                return len(expected) == len(candidate) and all(
+                    any(
+                        exact_evidence_equal(expected_item, candidate_item)
+                        for candidate_item in candidate
+                    )
+                    for expected_item in expected
+                )
+            return candidate == expected
+
+        if any(
+            not exact_evidence_equal(
+                getattr(self, field_name),
+                getattr(result, field_name),
+            )
+            for field_name in type(self).model_fields
+            if field_name not in handler_mutable_fields
+        ):
+            return cancellation(
+                "Tile elevation handler changed authored or queue evidence."
+            )
+        return result
+
+    def get_affected_positions(self) -> Set[Tuple[int, int]]:
+        return {self.position}
+
 class ForcedMovementEvent(Event):
     """Forced movement event for pushes, pulls, and similar displacement.
 
@@ -4059,6 +4338,135 @@ class ForcedMovementEvent(Event):
         return evidence
 
 
+def _exact_event_evidence_equal(expected: Any, candidate: Any) -> bool:
+    """Compare guarded event evidence without Python's bool/int equivalence."""
+    if type(candidate) is not type(expected):
+        return False
+    if isinstance(expected, BaseModel):
+        return all(
+            _exact_event_evidence_equal(
+                getattr(expected, field_name),
+                getattr(candidate, field_name),
+            )
+            for field_name in type(expected).model_fields
+        )
+    if isinstance(expected, (list, tuple)):
+        return len(expected) == len(candidate) and all(
+            _exact_event_evidence_equal(left, right)
+            for left, right in zip(expected, candidate)
+        )
+    if isinstance(expected, dict):
+        return expected.keys() == candidate.keys() and all(
+            _exact_event_evidence_equal(expected[key], candidate[key])
+            for key in expected
+        )
+    if isinstance(expected, (set, frozenset)):
+        return len(expected) == len(candidate) and all(
+            any(
+                _exact_event_evidence_equal(left, right)
+                for right in candidate
+            )
+            for left in expected
+        )
+    return candidate == expected
+
+
+class TraversalConnectorChangeEvent(Event):
+    """Guarded precommit lifecycle for one GridMap connector mutation."""
+
+    name: str = Field(default="Traversal Connector Change")
+    event_type: EventType = Field(default=EventType.TRAVERSAL_CONNECTOR_CHANGED)
+    operation: TraversalConnectorChangeOperation
+    connector_uuid: UUID
+    authored_id: str
+    old_connector: Optional[TraversalConnector] = None
+    new_connector: Optional[TraversalConnector] = None
+
+    def model_copy(
+        self,
+        *,
+        update: Optional[Mapping[str, Any]] = None,
+        deep: bool = False,
+    ) -> Self:
+        """Detach the small connector proposal from queue-owned evidence."""
+        del deep
+        return super().model_copy(update=update, deep=True)
+
+    def validate_handler_result(self, result: Event) -> Event:
+        """Permit exact vetoes while freezing every connector mutation fact."""
+        active_proposal = EventQueue.is_active_handler_proposal(result)
+
+        def cancellation(status_message: str) -> TraversalConnectorChangeEvent:
+            canceled = self.invalid_handler_result_cancellation(
+                result,
+                status_message=status_message,
+            )
+            return cast(
+                TraversalConnectorChangeEvent,
+                canceled.model_copy(update={
+                    "use_register": False if active_proposal else self.use_register,
+                }),
+            )
+
+        if type(result) is not TraversalConnectorChangeEvent:
+            return cancellation(
+                "Connector change handler returned an incompatible event type."
+            )
+        if not (
+            type(result.uuid) is UUID
+            and type(result.timestamp) is datetime
+            and type(result.modified) is bool
+            and type(result.use_register) is bool
+            and (
+                result.status_message is None
+                or type(result.status_message) is str
+            )
+        ):
+            return cancellation(
+                "Connector change handler returned malformed queue evidence."
+            )
+        lifecycle_candidate = result
+        if (
+            not active_proposal
+            and result.use_register is False
+            and self.use_register is True
+        ):
+            lifecycle_candidate = result.model_copy(update={"use_register": True})
+        if not self.handler_result_preserves_lifecycle(lifecycle_candidate):
+            return cancellation("Connector change handler changed lifecycle evidence.")
+        if result.canceled:
+            return cancellation(result.status_message or "Connector change canceled.")
+
+        mutable_fields = {
+            "uuid",
+            "timestamp",
+            "modified",
+            "status_message",
+            "use_register",
+        }
+        if any(
+            not _exact_event_evidence_equal(
+                getattr(self, field_name),
+                getattr(result, field_name),
+            )
+            for field_name in type(self).model_fields
+            if field_name not in mutable_fields
+        ):
+            return cancellation(
+                "Connector change handler changed authored or queue evidence."
+            )
+        return result
+
+    def get_affected_positions(self) -> Set[Tuple[int, int]]:
+        """Return both old and new endpoint coordinates."""
+        return {
+            endpoint.position
+            for connector in (self.old_connector, self.new_connector)
+            if connector is not None
+            for endpoint in connector.endpoints
+        }
+
+
 class StepMovementEvent(Event):
     """Single cell transition within a movement path.
 
@@ -4079,14 +4487,37 @@ class StepMovementEvent(Event):
         default=MovementTrajectory.PATH,
         description="Typed trajectory shared by every step in the movement action.",
     )
+    disclosed_path: Tuple[Tuple[int, int], ...] = Field(
+        default_factory=tuple,
+        description="Authorized presentation geometry for this one movement leg.",
+    )
+    from_elevation_feet: int = Field(
+        default=0,
+        description="Support elevation at the objective source endpoint.",
+    )
+    to_elevation_feet: int = Field(
+        default=0,
+        description="Support elevation at the objective destination endpoint.",
+    )
+    provocation_policy: MovementProvocationPolicy = Field(
+        default=MovementProvocationPolicy.ORDINARY_EXIT,
+        description="Source-exit opportunity-attack policy for this leg.",
+    )
     committed: bool = Field(
         default=False,
         description="Whether the entity position was committed to the destination cell.",
     )
 
     def guards_handler_result(self) -> bool:
-        """Guard voluntary path steps without changing Jump's direct arcs."""
-        return self.trajectory is MovementTrajectory.PATH
+        """Guard every authored movement leg before handler publication."""
+        return True
+
+    def guarded_related_queue_inputs(self) -> tuple[Event, ...]:
+        """Keep the queue-owned movement root immutable between Step handlers."""
+        if self.parent_event is None:
+            return ()
+        parent = EventQueue.get_event_by_uuid(self.parent_event)
+        return (parent,) if parent is not None else ()
 
     def model_copy(
         self,
@@ -4094,26 +4525,12 @@ class StepMovementEvent(Event):
         update: Optional[Mapping[str, Any]] = None,
         deep: bool = False,
     ) -> Self:
-        """Copy PATH proposals without aliasing queue-maintained containers."""
-        copied = super().model_copy(
-            update=update,
-            deep=(
-                True
-                if self.trajectory is MovementTrajectory.PATH
-                else deep
-            ),
-        )
-        if (
-            self.trajectory is not MovementTrajectory.PATH
-            and copied.trajectory is not MovementTrajectory.PATH
-        ):
-            return copied
-        return copied
+        """Copy a small leg proposal without aliasing causal evidence."""
+        del deep
+        return super().model_copy(update=update, deep=True)
 
     def validate_handler_result(self, result: Event) -> Event:
-        """Reject PATH handlers that rewrite the pending edge contract."""
-        if EventQueue.get_event_by_uuid(result.uuid) is result:
-            return result
+        """Reject handlers that rewrite the pending movement-leg contract."""
         active_proposal = EventQueue.is_active_handler_proposal(result)
         safe_status = (
             result.status_message
@@ -4157,9 +4574,45 @@ class StepMovementEvent(Event):
                 ),
             }))
 
+        def effect_stop(status_message: str) -> StepMovementEvent:
+            stopped = self.invalid_handler_result_cancellation(
+                result,
+                status_message=status_message,
+            )
+            return cast(StepMovementEvent, stopped.model_copy(update={
+                **queue_updates,
+                "phase": EventPhase.EFFECT,
+                "canceled": False,
+                "canceled_from_phase": self.canceled_from_phase,
+                "committed": False,
+                "outcome_code": "movement.step_stopped",
+                "use_register": False if active_proposal else self.use_register,
+            }))
+
+        def reject(status_message: str) -> StepMovementEvent:
+            if (
+                self.phase is EventPhase.EFFECT
+                and self.trajectory is not MovementTrajectory.PATH
+            ):
+                return effect_stop(status_message)
+            return cancellation(status_message)
+
         if type(result) is not StepMovementEvent:
-            return cancellation(
+            return reject(
                 "Movement step handler returned an incompatible event type."
+            )
+        if not (
+            type(result.uuid) is UUID
+            and type(result.timestamp) is datetime
+            and type(result.modified) is bool
+            and type(result.use_register) is bool
+            and (
+                result.status_message is None
+                or type(result.status_message) is str
+            )
+        ):
+            return reject(
+                "Movement step handler returned malformed queue evidence."
             )
         lifecycle_candidate = result
         if (
@@ -4171,11 +4624,11 @@ class StepMovementEvent(Event):
                 update={"use_register": True}
             )
         if not self.handler_result_preserves_lifecycle(lifecycle_candidate):
-            return cancellation(
+            return reject(
                 "Movement step handler changed lifecycle evidence."
             )
         if result.canceled:
-            return cancellation(
+            return reject(
                 safe_status or "Movement step canceled by handler."
             )
 
@@ -4185,19 +4638,21 @@ class StepMovementEvent(Event):
             "modified",
             "status_message",
             "use_register",
-            *queue_updates,
         }
         if (
             self.committed is not False
             or type(result.committed) is not bool
             or result.committed is not False
             or any(
-                getattr(result, field_name) != getattr(self, field_name)
+                not _exact_event_evidence_equal(
+                    getattr(self, field_name),
+                    getattr(result, field_name),
+                )
                 for field_name in type(self).model_fields
                 if field_name not in allowed_fields
             )
         ):
-            return cancellation(
+            return reject(
                 "Movement step evidence changed before settlement."
             )
 
@@ -4225,6 +4680,16 @@ class StepMovementEvent(Event):
             "status_message": safe_status,
             "use_register": False if active_proposal else self.use_register,
         })
+
+    def handler_result_stops_dispatch(self, result: Event) -> bool:
+        """Keep a rejected accepted-EFFECT leg terminal within dispatch."""
+        return (
+            super().handler_result_stops_dispatch(result)
+            or type(result) is StepMovementEvent
+            and result.phase is EventPhase.EFFECT
+            and result.trajectory is not MovementTrajectory.PATH
+            and result.outcome_code == "movement.step_stopped"
+        )
 
     def completion_position_observer_evidence(
         self,
@@ -4293,6 +4758,10 @@ class StepMovementEvent(Event):
                 "path_index": self.path_index,
                 "movement_cost": self.movement_cost,
                 "trajectory": self.trajectory.value,
+                "disclosed_path": [list(position) for position in self.disclosed_path],
+                "from_elevation_feet": self.from_elevation_feet,
+                "to_elevation_feet": self.to_elevation_feet,
+                "provocation_policy": self.provocation_policy.value,
                 "committed": self.committed,
             },
             success=True

@@ -41,6 +41,8 @@ from server.world_contracts import (
     APIEquipmentOverview,
     APIEquipmentSlot,
     APIGrid,
+    APITraversalConnector,
+    APITraversalConnectorEndpoint,
     APIItemRuntimeRecipeRefSnapshot,
     APIItemSummary,
     APIRecipePresetRefSnapshot,
@@ -423,13 +425,26 @@ def project_grid(
 ) -> APIGrid:
     """Project grid terrain under an optional observer's hazard knowledge."""
     observer_perception = 0
+    connector_observer: Optional[Entity] = None
     if requesting_entity_uuid is not None:
-        observer = BaseBlock.get(requesting_entity_uuid)
-        if observer is not None:
-            observer_perception = observer.get_passive_perception()
+        connector_observer = Entity.get(requesting_entity_uuid)
+        if connector_observer is None:
+            raise ValueError("subjective grid projection requires a known entity")
+        observer_perception = connector_observer.get_passive_perception()
 
     tiles: list[APITile] = []
     for (x, y), tile in grid.get_all_tiles().items():
+        if connector_observer is not None:
+            if not connector_observer.senses.visible.get((x, y), False):
+                continue
+            tiles.append(
+                project_observed_tile(
+                    grid,
+                    (x, y),
+                    (connector_observer.uuid,),
+                )
+            )
+            continue
         walking_cost = int(tile.walking_cost.normalized_score)
         condition_details = _project_public_condition_details(
             condition
@@ -457,6 +472,9 @@ def project_grid(
                 visible=tile.visible,
                 name=tile.name,
                 walking_cost=walking_cost,
+                elevation_steps=tile.height,
+                elevation_surface_kind=tile.elevation_surface_kind,
+                slope_axis=tile.slope_axis,
                 is_hazardous=grid.is_position_hazardous_for(
                     x,
                     y,
@@ -482,6 +500,39 @@ def project_grid(
                 ),
             )
         )
+    connectors: list[APITraversalConnector] = []
+    for connector in grid.get_all_connectors():
+        if connector_observer is not None and not all(
+            connector_observer.senses.visible.get(endpoint.position, False)
+            for endpoint in connector.endpoints
+        ):
+            continue
+        connectors.append(APITraversalConnector(
+            uuid=str(connector.uuid),
+            authored_id=connector.authored_id,
+            kind=connector.kind,
+            presentation_key=connector.presentation_key,
+            endpoints=(
+                APITraversalConnectorEndpoint(
+                    position=connector.endpoints[0].position,
+                    support_tile_uuid=str(connector.endpoints[0].support_tile_uuid),
+                    elevation_feet=connector.endpoints[0].elevation_feet,
+                ),
+                APITraversalConnectorEndpoint(
+                    position=connector.endpoints[1].position,
+                    support_tile_uuid=str(connector.endpoints[1].support_tile_uuid),
+                    elevation_feet=connector.endpoints[1].elevation_feet,
+                ),
+            ),
+            movement_cost_feet=connector.movement_cost_feet,
+            action_cost_type=connector.action_cost_type,
+            action_cost_amount=connector.action_cost_amount,
+            bidirectional=connector.bidirectional,
+            enabled=connector.enabled,
+            provocation_policy=connector.provocation_policy,
+            revision=connector.revision,
+            objective_digest=connector.objective_digest,
+        ))
     min_x, min_y, max_x, max_y = grid.bounds
     return APIGrid(
         min_x=min_x,
@@ -489,6 +540,7 @@ def project_grid(
         max_x=max_x,
         max_y=max_y,
         tiles=tiles,
+        connectors=connectors,
     )
 
 
@@ -596,6 +648,9 @@ def project_observed_tile(
         visible=True,
         name=tile.name,
         walking_cost=walking_cost,
+        elevation_steps=tile.height,
+        elevation_surface_kind=tile.elevation_surface_kind,
+        slope_axis=tile.slope_axis,
         is_hazardous=any(
             grid.is_position_hazardous_for(*position, observer_uuid)
             for observer_uuid in observer_uuids

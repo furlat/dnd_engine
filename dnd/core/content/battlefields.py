@@ -14,16 +14,24 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    StrictInt,
     computed_field,
     field_validator,
     model_validator,
 )
 
 from dnd.core.content.canonical import canonical_content_sha256
+from dnd.core.world_edges import (
+    ElevationSurfaceKind,
+    SlopeAxis,
+    contradictory_progressive_elevation_edge,
+)
+from dnd.core.traversal_connectors import TraversalConnectorDefinition
 
 
 LightLevelName = Literal["bright", "darkness"]
 BattlefieldPreviewTerrain = Literal[
+    "gap",
     "water",
     "difficult_terrain",
     "spikes",
@@ -95,6 +103,36 @@ class BattlefieldPreviewObject(BaseModel):
     )
 
 
+class BattlefieldElevationCell(BaseModel):
+    """One authored support-surface override in a cold battlefield."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    position: tuple[StrictInt, StrictInt] = Field(
+        description="Grid coordinate whose support surface is overridden.",
+    )
+    elevation_steps: StrictInt = Field(
+        description="Signed support elevation in exact five-foot steps.",
+    )
+    surface_kind: ElevationSurfaceKind = Field(
+        default=ElevationSurfaceKind.ORDINARY,
+        description="Ordinary, stairs, or ramp support-surface kind.",
+    )
+    slope_axis: SlopeAxis | None = Field(
+        default=None,
+        description="Required traversal axis for stairs and ramps.",
+    )
+
+    @model_validator(mode="after")
+    def _validate_surface_tuple(self) -> "BattlefieldElevationCell":
+        if self.surface_kind is ElevationSurfaceKind.ORDINARY:
+            if self.slope_axis is not None:
+                raise ValueError("ordinary support surfaces cannot have a slope axis")
+        elif self.slope_axis is None:
+            raise ValueError("stairs and ramps require a slope axis")
+        return self
+
+
 class BattlefieldPreview(BaseModel):
     """Compact projection of canonical battlefield construction."""
 
@@ -108,6 +146,24 @@ class BattlefieldPreview(BaseModel):
         default=(),
         description="Walls, doors, lights, loot, and devices on the floor.",
     )
+    elevation_cells: tuple[BattlefieldElevationCell, ...] = Field(
+        default=(),
+        description="Exact non-flat support surfaces in the authored layout.",
+    )
+    connectors: tuple[TraversalConnectorDefinition, ...] = Field(
+        default=(),
+        description="Stable authored two-endpoint traversal connector rows.",
+    )
+
+    @model_validator(mode="after")
+    def _validate_elevation_positions(self) -> "BattlefieldPreview":
+        positions = [cell.position for cell in self.elevation_cells]
+        if len(positions) != len(set(positions)):
+            raise ValueError("battlefield elevation positions must be unique")
+        connector_ids = [connector.authored_id for connector in self.connectors]
+        if len(connector_ids) != len(set(connector_ids)):
+            raise ValueError("battlefield connector authored IDs must be unique")
+        return self
 
 
 class BattlefieldDefinition(BaseModel):
@@ -173,6 +229,49 @@ class BattlefieldDefinition(BaseModel):
             raise ValueError("battlefield tags must be unique")
         if len(self.capabilities) != len(set(self.capabilities)):
             raise ValueError("battlefield capabilities must be unique")
+        elevation_cells = {}
+        for cell in self.preview.elevation_cells:
+            if not (
+                0 <= cell.position[0] < self.width
+                and 0 <= cell.position[1] < self.height
+            ):
+                raise ValueError(
+                    "battlefield elevation positions must be inside its bounds"
+                )
+            elevation_cells[cell.position] = (
+                cell.elevation_steps,
+                cell.surface_kind,
+                cell.slope_axis,
+            )
+        contradiction = contradictory_progressive_elevation_edge(
+            elevation_cells,
+            implicit_surface=(0, ElevationSurfaceKind.ORDINARY, None),
+            bounds=(self.width, self.height),
+        )
+        if contradiction is not None:
+            raise ValueError(
+                "battlefield contains a contradictory progressive elevation "
+                f"edge between {contradiction[0]} and {contradiction[1]}"
+            )
+        for connector in self.preview.connectors:
+            if any(
+                not (0 <= position[0] < self.width and 0 <= position[1] < self.height)
+                for position in connector.endpoint_positions
+            ):
+                raise ValueError("battlefield connector endpoints must be inside bounds")
+            first, second = connector.endpoint_positions
+            first_height = elevation_cells.get(
+                first,
+                (0, ElevationSurfaceKind.ORDINARY, None),
+            )[0]
+            second_height = elevation_cells.get(
+                second,
+                (0, ElevationSurfaceKind.ORDINARY, None),
+            )[0]
+            if connector.kind.value != "passage" and first_height == second_height:
+                raise ValueError(
+                    "battlefield vertical connector requires nonzero elevation delta"
+                )
         return self
 
     @computed_field(return_type=str)
@@ -189,6 +288,7 @@ class BattlefieldDefinition(BaseModel):
 
 __all__ = [
     "BattlefieldDefinition",
+    "BattlefieldElevationCell",
     "BattlefieldPreview",
     "BattlefieldPreviewCell",
     "BattlefieldPreviewDirection",

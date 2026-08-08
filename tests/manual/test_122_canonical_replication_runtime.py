@@ -18,6 +18,11 @@ from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.events import Event, EventPhase, EventQueue, EventType
 from dnd.core.gridmap import GridMap, LightLevel
+from dnd.core.traversal_connectors import (
+    ConnectorProvocationPolicy,
+    TraversalConnectorDefinition,
+    TraversalConnectorKind,
+)
 from dnd.core.content.materialization import (
     CreatureDeploymentRole,
     CreaturePossessionMode,
@@ -45,6 +50,7 @@ from server.player_replication_contract import (
     ActionPresentationCue,
     ConditionOperation,
     ConditionPresentationCue,
+    ConnectorSetReplacePatch,
     DamagePresentationCue,
     EncounterReplacePatch,
     EntityRemovePatch,
@@ -446,7 +452,7 @@ def test_each_committed_movement_step_has_authoritative_perception_frame() -> No
         result = Move(
             source_entity_uuid=observer.uuid,
             end_position=(3, 0),
-            path=[(0, 0), (1, 0), (2, 0), (3, 0)],
+            path=((0, 0), (1, 0), (2, 0), (3, 0)),
             use_movement_cost=False,
         ).apply()
         assert result is not None and not result.canceled
@@ -522,7 +528,7 @@ def test_spike_damage_is_scheduled_after_its_destination_arrival(
         result = Move(
             source_entity_uuid=scene.observer.uuid,
             end_position=(1, 0),
-            path=[(0, 0), (1, 0)],
+            path=((0, 0), (1, 0)),
             use_movement_cost=False,
         ).apply()
     assert result is not None and not result.canceled, (
@@ -564,6 +570,74 @@ def test_spike_damage_is_scheduled_after_its_destination_arrival(
     assert frame.presentation.index(movement) < frame.presentation.index(damage)
     assert damage.target_uuid == str(scene.observer.uuid)
     assert damage.damage_types == ("Piercing",)
+
+
+def test_live_connector_lifecycle_and_privacy_replace_replica_state(
+    runtime_scene: RuntimeScene,
+) -> None:
+    """Register/disable/hide/reveal/remove all reach the canonical journal."""
+    scene = runtime_scene
+
+    def connector_patches_since(
+        cursor: int,
+    ) -> tuple[ConnectorSetReplacePatch, ...]:
+        return tuple(
+            patch
+            for frame in scene.context.frames(
+                from_observation_cursor=cursor,
+            ).frames
+            for patch in frame.patches
+            if isinstance(patch, ConnectorSetReplacePatch)
+        )
+
+    definition = TraversalConnectorDefinition(
+        authored_id="connector.runtime.delta",
+        kind=TraversalConnectorKind.PASSAGE,
+        presentation_key="traversal.passage",
+        endpoint_positions=((0, 0), (1, 0)),
+        movement_cost_feet=5,
+        action_cost_type=None,
+        action_cost_amount=0,
+        bidirectional=True,
+        enabled=True,
+        provocation_policy=ConnectorProvocationPolicy.DOES_NOT_PROVOKE,
+    )
+
+    cursor = scene.context.journal.watermarks.observation_cursor
+    connector = scene.grid.register_connector(definition)
+    assert connector is not None
+    registered = connector_patches_since(cursor)
+    assert registered
+    assert [row.uuid for row in registered[-1].connectors] == [str(connector.uuid)]
+
+    cursor = scene.context.journal.watermarks.observation_cursor
+    disabled = scene.grid.set_connector_enabled(connector.uuid, False)
+    assert disabled is not None
+    disabled_patches = connector_patches_since(cursor)
+    assert disabled_patches and disabled_patches[-1].connectors[0].enabled is False
+
+    scene.observer.senses.visible[(1, 0)] = False
+    cursor = scene.context.journal.watermarks.observation_cursor
+    Event(
+        source_entity_uuid=scene.observer.uuid,
+        event_type=EventType.BASE_ACTION,
+    ).phase_to(EventPhase.COMPLETION)
+    hidden = connector_patches_since(cursor)
+    assert hidden and hidden[-1].connectors == ()
+
+    scene.observer.senses.visible[(1, 0)] = True
+    cursor = scene.context.journal.watermarks.observation_cursor
+    Event(
+        source_entity_uuid=scene.observer.uuid,
+        event_type=EventType.BASE_ACTION,
+    ).phase_to(EventPhase.COMPLETION)
+    revealed = connector_patches_since(cursor)
+    assert revealed and len(revealed[-1].connectors) == 1
+
+    cursor = scene.context.journal.watermarks.observation_cursor
+    assert scene.grid.remove_connector(connector.uuid) is True
+    removed = connector_patches_since(cursor)
+    assert removed and removed[-1].connectors == ()
 
 
 def test_greater_invisibility_reveal_is_one_closed_subjective_frame() -> None:

@@ -4,7 +4,6 @@ from typing import Callable, DefaultDict, Dict, List, Optional, Self, Set, Tuple
 from uuid import UUID
 from pydantic import Field, PrivateAttr
 
-import math
 from dataclasses import dataclass
 from collections import defaultdict
 import time
@@ -12,6 +11,7 @@ import time
 from dnd.action_timing import action_timing_enabled, record_action_timing
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_tiles import Tile
+from dnd.core.elevation import support_distance_feet
 from dnd.core.gridmap import get_map
 from dnd.core.values import ModifiableValue
 from dnd.core.events import (
@@ -208,12 +208,22 @@ class Senses(BaseBlock):
         return self.sense_mode_sources.pop(source_id, None) is not None
 
     def get_distance(self, position: Tuple[int, int]) -> int:
-        """Return Euclidean tile distance from this senses position."""
-        return int(math.sqrt((self.position[0] - position[0])**2 + (self.position[1] - position[1])**2))
+        """Return elevation-aware support distance in five-foot units."""
+        return self.get_feet_distance(position) // 5
 
     def get_feet_distance(self, position: Tuple[int, int]) -> int:
-        """Return Euclidean distance in feet from this senses position."""
-        return self.get_distance(position) * 5
+        """Return elevation-aware support-point distance in feet."""
+        grid = get_map()
+        source_tile = grid.get_tile(*self.position)
+        target_tile = grid.get_tile(*position)
+        if source_tile is None or target_tile is None:
+            raise ValueError("distance requires both support tiles")
+        return support_distance_feet(
+            self.position,
+            source_tile.height * 5,
+            position,
+            target_tile.height * 5,
+        )
 
     def update_seen(self, visible: Dict[Tuple[int, int], bool]) -> None:
         """Add currently visible cells to the memory set."""

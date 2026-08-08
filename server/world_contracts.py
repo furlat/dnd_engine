@@ -10,11 +10,17 @@ generation to share the exact same DTO identities.
 from enum import Enum
 from typing import Dict, List, Literal, Optional, Tuple
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue, RootModel, model_validator
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, RootModel, StrictBool, StrictInt, model_validator
 
 from dnd.core.equipment_types import WeaponSet
 from dnd.core.life_types import LifeState
 from dnd.core.senses import SenseMode
+from dnd.core.world_edges import ElevationSurfaceKind, SlopeAxis
+from dnd.core.traversal_connectors import (
+    ConnectorActionCostType,
+    ConnectorProvocationPolicy,
+    TraversalConnectorKind,
+)
 
 
 class APIContentRefSnapshot(BaseModel):
@@ -458,6 +464,8 @@ class DirectionalStructuralEdgeMap(BaseModel):
 class APITile(BaseModel):
     """Single public tile snapshot."""
 
+    model_config = ConfigDict(extra="forbid")
+
     x: int = Field(description="Tile x-coordinate.")
     y: int = Field(description="Tile y-coordinate.")
     visual_key: str = Field(
@@ -471,6 +479,18 @@ class APITile(BaseModel):
     visible: bool = Field(description="Whether the tile is visible in the current map view.")
     name: str = Field(default="Floor", description="Tile terrain name.")
     walking_cost: int = Field(default=1, description="Normalized movement cost for entering the tile.")
+    elevation_steps: StrictInt = Field(
+        default=0,
+        description="Authoritative support elevation in five-foot steps.",
+    )
+    elevation_surface_kind: ElevationSurfaceKind = Field(
+        default=ElevationSurfaceKind.ORDINARY,
+        description="Authored support-surface kind.",
+    )
+    slope_axis: Optional[SlopeAxis] = Field(
+        default=None,
+        description="Progressive surface axis, absent for ordinary support.",
+    )
     is_hazardous: bool = Field(
         default=False,
         description="Whether the tile is hazardous for the requesting entity.",
@@ -517,6 +537,11 @@ class APITile(BaseModel):
         detail_names = [detail.name for detail in self.condition_details]
         if self.conditions != detail_names:
             raise ValueError("conditions must equal condition detail names in order")
+        if self.elevation_surface_kind is ElevationSurfaceKind.ORDINARY:
+            if self.slope_axis is not None:
+                raise ValueError("ordinary tile projection cannot carry a slope axis")
+        elif self.slope_axis is None:
+            raise ValueError("progressive tile projection requires a slope axis")
         return self
 
 
@@ -528,6 +553,39 @@ class APIGrid(BaseModel):
     max_x: int = Field(description="Maximum x-coordinate included in the grid bounds.")
     max_y: int = Field(description="Maximum y-coordinate included in the grid bounds.")
     tiles: List[APITile] = Field(description="Serialized tiles in the grid.")
+    connectors: List["APITraversalConnector"] = Field(
+        default_factory=list,
+        description="Objective or recipient-authorized traversal connectors.",
+    )
+
+
+class APITraversalConnectorEndpoint(BaseModel):
+    """One projected connector support anchor."""
+
+    position: Tuple[StrictInt, StrictInt]
+    support_tile_uuid: str
+    elevation_feet: StrictInt
+
+
+class APITraversalConnector(BaseModel):
+    """Typed objective connector projection without executable callbacks."""
+
+    uuid: str
+    authored_id: str
+    kind: TraversalConnectorKind
+    presentation_key: str
+    endpoints: Tuple[
+        APITraversalConnectorEndpoint,
+        APITraversalConnectorEndpoint,
+    ]
+    movement_cost_feet: StrictInt = Field(ge=0)
+    action_cost_type: Optional[ConnectorActionCostType] = None
+    action_cost_amount: StrictInt = Field(default=0, ge=0)
+    bidirectional: StrictBool
+    enabled: StrictBool
+    provocation_policy: ConnectorProvocationPolicy
+    revision: StrictInt = Field(ge=1)
+    objective_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
 class APICombatant(BaseModel):

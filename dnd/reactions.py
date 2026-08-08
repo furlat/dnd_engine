@@ -1,7 +1,14 @@
 """Reaction handlers for combat movement triggers."""
 
 from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import EventHandler, Trigger, EventType, EventPhase, StepMovementEvent
+from dnd.core.events import (
+    EventHandler,
+    EventPhase,
+    EventType,
+    MovementProvocationPolicy,
+    StepMovementEvent,
+    Trigger,
+)
 from dnd.actions import Attack, entity_action_economy_cost_evaluator
 from dnd.core.base_actions import Cost
 from dnd.core.content.runtime import (
@@ -34,6 +41,9 @@ def opportunity_attack_processor(event: StepMovementEvent, source_entity_uuid: U
     if reaction_source_entity.uuid == event_source_entity.uuid:
         return event
 
+    if event.provocation_policy is MovementProvocationPolicy.DOES_NOT_PROVOKE:
+        return event
+
     if reaction_source_entity.is_ally(event_source_entity):
         return event
 
@@ -56,9 +66,16 @@ def opportunity_attack_processor(event: StepMovementEvent, source_entity_uuid: U
     if not event_source_entity.can_take_actions():
         return event
 
-    threatened_positions = reaction_source_entity.senses.get_threathened_positions()
-
-    if event.from_position in threatened_positions and event.to_position not in threatened_positions:
+    if (
+        reaction_source_entity.threatens_entity_at(
+            event_source_entity,
+            event.from_position,
+        )
+        and not reaction_source_entity.threatens_entity_at(
+            event_source_entity,
+            event.to_position,
+        )
+    ):
         reaction_attack = Attack(
             name="Opportunity Attack",
             source_entity_uuid=source_entity_uuid,

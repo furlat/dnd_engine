@@ -26,6 +26,13 @@ from dnd.core.content.identities import (
 from dnd.core.content.item_definitions import ItemPersistencePolicy
 from dnd.core.content.recipes import ContentRecipe
 from dnd.core.gridmap import get_map
+from dnd.core.traversal_connectors import (
+    ConnectorActionCostType,
+    ConnectorProvocationPolicy,
+    TraversalConnectorDefinition,
+    TraversalConnectorKind,
+)
+from dnd.core.world_edges import ElevationSurfaceKind, SlopeAxis
 from dnd.items.environment import DirectionalDoor
 from dnd.items.environment_interactables import DoorObject as DoorObject
 from dnd.items.torches import WallTorch
@@ -33,6 +40,7 @@ from dnd.runtime_reset import reset_engine_runtime
 from server.api_models import (
     MapEditorObjectPlaceRequest,
     MapEditorObjectRuntimeState,
+    MapEditorConnectorUpsertRequest,
     MapEditorSaveMapRequest,
     MapEditorSavedMapDocument,
     MapEditorSavedObjectPlacement,
@@ -46,6 +54,7 @@ from server.mapeditor_support import (
     load_saved_editor_map,
     place_catalog_object,
     save_current_editor_map,
+    upsert_editor_connector,
 )
 from server.api_models import MapEditorTilePatch
 
@@ -165,7 +174,7 @@ def test_mapeditor_place_and_save_models_have_one_exact_identity_path() -> None:
     assert "catalog_id" not in MapEditorSavedObjectPlacement.model_fields
     assert get_args(
         MapEditorSavedMapDocument.model_fields["schema_version"].annotation,
-    ) == (2,)
+    ) == (3,)
 
 
 def test_generic_placement_materializes_every_default_public_root() -> None:
@@ -249,7 +258,7 @@ def test_placement_rejects_wrong_set_kind_policy_and_recipe_integrity() -> None:
         )
 
 
-def test_schema_two_roundtrip_keeps_recipe_and_mutable_state_separate(
+def test_schema_three_roundtrip_keeps_recipe_and_mutable_state_separate(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -293,7 +302,7 @@ def test_schema_two_roundtrip_keeps_recipe_and_mutable_state_separate(
         MapEditorSaveMapRequest(id="recipe_roundtrip", name="Recipe Roundtrip"),
     )
     document = get_saved_editor_map("recipe_roundtrip")
-    assert document.schema_version == 2
+    assert document.schema_version == 3
     assert document.content_set_digest == door.content_set_digest
     assert {row.recipe.ref.content_id for row in document.object_placements} == {
         "environment.door",
@@ -307,7 +316,7 @@ def test_schema_two_roundtrip_keeps_recipe_and_mutable_state_separate(
     )
 
     old_payload = document.model_dump(mode="json")
-    old_payload["schema_version"] = 1
+    old_payload["schema_version"] = 2
     with pytest.raises(ValidationError):
         MapEditorSavedMapDocument.model_validate(old_payload)
 
@@ -325,6 +334,102 @@ def test_schema_two_roundtrip_keeps_recipe_and_mutable_state_separate(
     assert ordinary.blocks_movement is False
     assert directional.is_open is True
     assert torch.is_lit is False
+
+
+def test_schema_three_save_load_preserves_progressive_elevation_tuple(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setenv("DND_MAPEDITOR_SAVE_DIR", str(tmp_path))
+    reset_engine_runtime(grid_size=(2, 1))
+    apply_tile_patches([
+        MapEditorTilePatch(
+            x=0,
+            y=0,
+            elevation_steps=-1,
+            elevation_surface_kind=ElevationSurfaceKind.RAMP,
+            slope_axis=SlopeAxis.EAST_WEST,
+        ),
+        MapEditorTilePatch(
+            x=1,
+            y=0,
+            elevation_steps=0,
+            elevation_surface_kind=ElevationSurfaceKind.RAMP,
+            slope_axis=SlopeAxis.EAST_WEST,
+        ),
+    ])
+    save_current_editor_map(
+        MapEditorSaveMapRequest(id="elevated_roundtrip", name="Elevated Roundtrip"),
+    )
+
+    reset_engine_runtime(grid_size=(1, 1))
+    loaded = load_saved_editor_map("elevated_roundtrip")
+    first = next(tile for tile in loaded.tiles if (tile.x, tile.y) == (0, 0))
+    second = next(tile for tile in loaded.tiles if (tile.x, tile.y) == (1, 0))
+    assert (
+        first.elevation_steps,
+        first.elevation_surface_kind,
+        first.slope_axis,
+    ) == (-1, ElevationSurfaceKind.RAMP, SlopeAxis.EAST_WEST)
+    assert (
+        second.elevation_steps,
+        second.elevation_surface_kind,
+        second.slope_axis,
+    ) == (0, ElevationSurfaceKind.RAMP, SlopeAxis.EAST_WEST)
+
+
+def test_schema_three_save_load_preserves_typed_connector_definition(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setenv("DND_MAPEDITOR_SAVE_DIR", str(tmp_path))
+    reset_engine_runtime(grid_size=(2, 1))
+    get_map().set_tile_elevation(
+        (1, 0),
+        height=1,
+        surface_kind=ElevationSurfaceKind.ORDINARY,
+        slope_axis=None,
+    )
+    definition = TraversalConnectorDefinition(
+        authored_id="connector.editor.roundtrip",
+        kind=TraversalConnectorKind.LADDER,
+        presentation_key="traversal.ladder",
+        endpoint_positions=((0, 0), (1, 0)),
+        movement_cost_feet=10,
+        action_cost_type=ConnectorActionCostType.BONUS_ACTIONS,
+        action_cost_amount=1,
+        bidirectional=True,
+        enabled=True,
+        provocation_policy=ConnectorProvocationPolicy.PROVOKES_SOURCE_EXIT,
+    )
+    mutation = upsert_editor_connector(MapEditorConnectorUpsertRequest(
+        definition=definition,
+    ))
+    assert mutation.snapshot.connectors == [definition]
+    assert mutation.connector is not None
+    assert mutation.connector.authored_id == definition.authored_id
+    assert mutation.connector_revision == 1
+    assert mutation.connector_digest == mutation.connector.objective_digest
+    original = get_map().get_connector_by_authored_id(definition.authored_id)
+    assert original is not None
+
+    metadata = save_current_editor_map(MapEditorSaveMapRequest(
+        id="connector_roundtrip",
+        name="Connector Roundtrip",
+    ))
+    document = get_saved_editor_map("connector_roundtrip")
+
+    assert metadata.connector_count == 1
+    assert document.snapshot.connectors == [definition]
+    assert document.metadata.connector_digest == metadata.connector_digest
+
+    reset_engine_runtime(grid_size=(1, 1))
+    loaded = load_saved_editor_map("connector_roundtrip")
+    assert loaded.connectors == [definition]
+    rebuilt = get_map().get_connector_by_authored_id(definition.authored_id)
+    assert rebuilt is not None
+    assert rebuilt.uuid != original.uuid
+    assert rebuilt.definition() == definition
 
 
 def test_retired_mapeditor_identity_compatibility_code_is_absent() -> None:

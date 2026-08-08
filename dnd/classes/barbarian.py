@@ -480,7 +480,7 @@ def retaliation_processor(event: Event, source_entity_uuid: UUID) -> Optional[Ev
     if not attacker:
         return None
 
-    distance = entity.senses.get_feet_distance(attacker.senses.position)
+    distance = entity.distance_to_entity(attacker)
     if distance > 5:
         return None
 
@@ -587,7 +587,7 @@ def intimidating_presence_end_check_processor(
     if not frightened or frightened.source_entity_uuid != barbarian_uuid:
         return None
 
-    distance = creature.senses.get_feet_distance(barbarian.senses.position)
+    distance = creature.distance_to_entity(barbarian)
     should_end = distance > 60
 
     if not should_end and barbarian_uuid not in creature.senses.entities:
@@ -690,7 +690,7 @@ class IntimidatingPresence(BaseAction):
         if not target:
             return declaration_event.cancel(status_message="Target not found")
 
-        distance = entity.senses.get_feet_distance(target.senses.position)
+        distance = entity.distance_to_entity(target)
         if distance > 30:
             return declaration_event.cancel(status_message="Target beyond 30ft")
 
@@ -810,7 +810,7 @@ class ExtendIntimidatingPresence(BaseAction):
         if not target:
             return declaration_event.cancel(status_message="Target not found")
 
-        distance = entity.senses.get_feet_distance(target.senses.position)
+        distance = entity.distance_to_entity(target)
         if distance > 30:
             return declaration_event.cancel(status_message="Target beyond 30ft")
 

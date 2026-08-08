@@ -595,6 +595,7 @@ function availableAction() {
     item_stack_count: null,
     item_charge_cost: 0,
     fixed_healing: null,
+    connector_traversal: null,
   };
 }
 

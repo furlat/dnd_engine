@@ -2580,6 +2580,10 @@ BUILT_IN_CONTENT_ICON_BINDINGS: dict[
         'action.jump',
         '66b0c490c43dcabf0f81492d5561c7aee5c0999d099d0e9fe1f2658492be423c',
     ),
+    'core.rules:action:action.traverse_connector@1#b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0': (
+        'action.move',
+        '9bc7a1703e280a960f81cb502303d950eff33348cad06c8d41f78c76535847c9',
+    ),
     'core.rules:action:action.move@1#b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0': (
         'action.move',
         '9bc7a1703e280a960f81cb502303d950eff33348cad06c8d41f78c76535847c9',

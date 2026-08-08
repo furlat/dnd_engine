@@ -115,7 +115,7 @@ class CharmPerson(SpellAction):
                 status_message=f"Charm Person only affects humanoids, not {target_entity.creature_type.value}"
             )
 
-        distance = source_entity.senses.get_feet_distance(target_entity.position)
+        distance = source_entity.distance_to_entity(target_entity)
         if distance > self.effective_range:
             return declaration_event.cancel(
                 status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)"
@@ -128,7 +128,7 @@ class CharmPerson(SpellAction):
                     e1 = Entity.get(t1)
                     e2 = Entity.get(t2)
                     if e1 and e2:
-                        dist = e1.senses.get_feet_distance(e2.position)
+                        dist = e1.distance_to_entity(e2)
                         if dist > 30:
                             return declaration_event.cancel(
                                 status_message=f"Targets must be within 30ft of each other ({e1.name} and {e2.name} are {dist}ft apart)"
@@ -1704,7 +1704,7 @@ class CommandFleeEffect(CommandNextTurnEffect):
                         position[1],
                     ),
                 )
-                path = list(target.senses.paths[best_position])
+                path = tuple(target.senses.paths[best_position])
                 Move(
                     source_entity_uuid=target.uuid,
                     end_position=best_position,

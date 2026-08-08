@@ -1,6 +1,6 @@
 {
   "asset_index_digest": "3b17d6d5715c5bd92bf4a251a98a60707160fe20d2775efc8b23512243b8a8a6",
-  "binding_digest": "0672909a4ffb2d60865fbd62a0c878dc796a83396a49a63ad3253f15d87ec447",
+  "binding_digest": "3aad77d3029a263774fe7864452272904660024a9a4f6cc3a0c5e4de656a4bf3",
   "definitions": [
     {
       "asset_sha256": "540da9d7cb94419501c0c8c47d73ca05d826d8d70e2f18c6adae5e13e4c92892",
@@ -8989,6 +8989,20 @@
       "evidence_kind": "authored_presentation",
       "evidence_token": "catalog:core.rules:action:action.jump@1",
       "icon_key": "action.jump"
+    },
+    {
+      "asset_sha256": "9bc7a1703e280a960f81cb502303d950eff33348cad06c8d41f78c76535847c9",
+      "content_ref": {
+        "content_id": "action.traverse_connector",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0",
+        "definition_kind": "action",
+        "pack_id": "core.rules"
+      },
+      "decision": "bind",
+      "evidence_kind": "authored_presentation",
+      "evidence_token": "catalog:core.rules:action:action.traverse_connector@1",
+      "icon_key": "action.move"
     },
     {
       "asset_sha256": "9bc7a1703e280a960f81cb502303d950eff33348cad06c8d41f78c76535847c9",

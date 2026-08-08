@@ -327,7 +327,7 @@ def pack_tactics_advantage(source_entity_uuid: UUID, target_entity_uuid: Optiona
             continue
         if not candidate.can_take_actions():
             continue
-        if candidate.senses.get_feet_distance(target.position) <= 5:
+        if candidate.distance_to_entity(target) <= 5:
             return AdvantageModifier(name="Pack Tactics", value=AdvantageStatus.ADVANTAGE, source_entity_uuid=source.uuid, target_entity_uuid=target.uuid)
     return None
 
@@ -533,7 +533,7 @@ class AggressiveMoveAction(Move):
         if not enemies:
             return MovementTerminationReason.INVALID_PATH
         before = min(
-            source.senses.get_feet_distance(enemy.position)
+            source.distance_to_entity(enemy)
             for enemy in enemies
         )
         after = min(
@@ -677,7 +677,7 @@ class NaturalAttack(Attack):
         if source is None or target is None:
             return declaration_event.cancel(status_message=f"{self.name} requires source and target")
 
-        distance_feet = source.senses.get_feet_distance(target.position)
+        distance_feet = source.distance_to_entity(target)
         is_long_range = False
         if self.natural_range.type == RangeType.RANGE:
             if distance_feet <= self.natural_range.normal:
@@ -1763,7 +1763,7 @@ def _has_adjacent_ally(source: Entity, target: Entity) -> bool:
             continue
         if not candidate.can_take_actions():
             continue
-        if candidate.senses.get_feet_distance(target.position) <= 5:
+        if candidate.distance_to_entity(target) <= 5:
             return True
     return False
 

@@ -36,6 +36,7 @@ from dnd.core.item_types import ItemPresentationProvider, ItemPresentationState
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.effect_types import EffectOrigin, EffectOriginKind
 from dnd.core.modifiers import AdvantageStatus
+from dnd.core.traversal_connectors import ConnectorTraversalDiscovery
 from typing import Any, Optional, Callable, ClassVar, Iterator, List, Dict, Literal, Sequence, Set, Tuple, TypeVar, cast
 from uuid import UUID, uuid4, uuid5
 from enum import Enum
@@ -874,6 +875,12 @@ class BaseAction(BaseObject):
         self,
     ) -> Optional[SpellDiscoveryMetadata]:
         """Return spell-only discovery facts without owned-model probing."""
+        return None
+
+    def get_connector_traversal_discovery(
+        self,
+    ) -> Optional[ConnectorTraversalDiscovery]:
+        """Return typed connector semantics for one oriented SELF variant."""
         return None
 
     def get_semantic_key(self) -> str:
@@ -1992,6 +1999,10 @@ class AvailableActionInfo(BaseModel):
             "Exact selector value for this executable variant; rows sharing "
             "one authored action identity can be grouped by kind."
         ),
+    )
+    connector_traversal: Optional[ConnectorTraversalDiscovery] = Field(
+        default=None,
+        description="Exact actor-specific connector command and subjective destination facts.",
     )
     target_type: TargetType = Field(description="What kind of target this action needs")
     availability_status: ActionAvailabilityStatus = Field(

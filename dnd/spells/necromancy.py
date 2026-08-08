@@ -1400,7 +1400,7 @@ class EyebiteStrike(BaseAction):
         if not target:
             return declaration_event.cancel(status_message="No target specified")
 
-        distance = caster.senses.get_feet_distance(target.position)
+        distance = caster.distance_to_entity(target)
         if distance > 60:
             return declaration_event.cancel(status_message=f"Target out of range ({distance}ft)")
 

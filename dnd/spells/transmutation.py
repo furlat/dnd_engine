@@ -1736,7 +1736,7 @@ class TelekinesisGrab(BaseAction):
         if not source or not target:
             return declaration_event.cancel(status_message="Entity not found")
 
-        distance = source.senses.get_feet_distance(target.position)
+        distance = source.distance_to_entity(target)
         if distance > 60:
             return declaration_event.cancel(status_message=f"Target out of range ({distance}ft > 60ft)")
 

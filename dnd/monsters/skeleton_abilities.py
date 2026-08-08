@@ -218,7 +218,7 @@ class MarkTargetAction(BaseAction):
         if target.uuid not in source.senses.entities:
             return declaration_event.cancel(status_message="Target not in line of sight")
 
-        distance = source.senses.get_feet_distance(target.position)
+        distance = source.distance_to_entity(target)
         if distance > self.spell_range.normal:
             return declaration_event.cancel(
                 status_message=f"Target out of range ({distance}ft > {self.spell_range.normal}ft)"
