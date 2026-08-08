@@ -115,6 +115,7 @@ from server.api_models import (
     TakeoverReleaseResponse, TakeoverRequest,
     SpellCatalogResponse,
     MapEditorCatalog, MapEditorCreateMapRequest, MapEditorLightResponse, MapEditorMapSnapshot,
+    MapEditorConnectorDeleteRequest, MapEditorConnectorEnabledRequest, MapEditorConnectorMutationResponse, MapEditorConnectorUpsertRequest,
     MapEditorObjectDeleteRequest, MapEditorObjectPlaceRequest, MapEditorTilePatchRequest, MapEditorVisibilityResponse,
     MapEditorWalkabilityResponse, MapEditorSaveMapRequest, MapEditorSavedMapDocument,
     MapEditorSavedMapList, MapEditorSavedMapMetadata,
@@ -185,6 +186,7 @@ from server.mapeditor_support import (
     apply_tile_patches,
     build_catalog,
     create_editor_map,
+    delete_editor_connector,
     delete_catalog_object,
     delete_saved_editor_map,
     get_editor_snapshot,
@@ -196,6 +198,8 @@ from server.mapeditor_support import (
     load_saved_editor_map,
     place_catalog_object,
     save_current_editor_map,
+    set_editor_connector_enabled,
+    upsert_editor_connector,
 )
 from server.request_timing import RequestTimingMiddleware
 from server.hosted_worker import (
@@ -2784,6 +2788,48 @@ async def patch_mapeditor_tiles(request: MapEditorTilePatchRequest):
             code="mapeditor_tile_patch_failed",
             message=str(exc),
             requested_tiles=[tile.model_dump(mode="json") for tile in request.tiles],
+        )
+
+
+@app.post("/mapeditor/map/connectors", response_model=MapEditorConnectorMutationResponse)
+async def upsert_mapeditor_connector(request: MapEditorConnectorUpsertRequest):
+    """Create or replace one exact authored connector definition."""
+    try:
+        return upsert_editor_connector(request)
+    except ValueError as exc:
+        raise _mapeditor_http_exception(
+            status_code=400,
+            code="mapeditor_connector_upsert_failed",
+            message=str(exc),
+            requested_connector=request.definition.model_dump(mode="json"),
+        )
+
+
+@app.post("/mapeditor/map/connectors/enabled", response_model=MapEditorConnectorMutationResponse)
+async def enable_mapeditor_connector(request: MapEditorConnectorEnabledRequest):
+    """Enable or disable one connector through GridMap ownership."""
+    try:
+        return set_editor_connector_enabled(request)
+    except ValueError as exc:
+        raise _mapeditor_http_exception(
+            status_code=400,
+            code="mapeditor_connector_enable_failed",
+            message=str(exc),
+            requested_authored_id=request.authored_id,
+        )
+
+
+@app.post("/mapeditor/map/connectors/delete", response_model=MapEditorConnectorMutationResponse)
+async def delete_mapeditor_connector(request: MapEditorConnectorDeleteRequest):
+    """Delete one connector by stable authored identity."""
+    try:
+        return delete_editor_connector(request)
+    except ValueError as exc:
+        raise _mapeditor_http_exception(
+            status_code=400,
+            code="mapeditor_connector_delete_failed",
+            message=str(exc),
+            requested_authored_id=request.authored_id,
         )
 
 

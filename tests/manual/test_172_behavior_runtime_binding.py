@@ -971,6 +971,7 @@ def test_core_behavior_declaration_tuples_are_exact_and_public() -> None:
         "action.shake_awake",
         "action.hide",
         "action.jump",
+        "action.traverse_connector",
         "action.shove",
         "action.pick_up",
         "action.attack_object",

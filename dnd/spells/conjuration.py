@@ -180,7 +180,7 @@ class CallLightningStrike(BaseAction):
         if target.uuid not in caster.senses.entities.keys():
             return declaration_event.cancel(status_message="Target not in line of sight")
 
-        distance = caster.senses.get_feet_distance(target.position)
+        distance = caster.distance_to_entity(target)
         if distance > self.spell_range.normal:
             return declaration_event.cancel(
                 status_message=f"Target out of range ({distance}ft > {self.spell_range.normal}ft)"
@@ -497,7 +497,7 @@ class AcidSplash(SpellAction):
             if target_uuid not in source.senses.entities.keys():
                 return declaration_event.cancel(status_message=f"{target.name} not in line of sight")
 
-            distance = source.senses.get_feet_distance(target.position)
+            distance = source.distance_to_entity(target)
             if distance > self.effective_range:
                 return declaration_event.cancel(
                     status_message=f"{target.name} out of range ({distance}ft > {self.effective_range}ft)"
@@ -506,12 +506,13 @@ class AcidSplash(SpellAction):
 
         if len(target_entities) == 2:
             t1, t2 = target_entities
-            dx = abs(t1.position[0] - t2.position[0])
-            dy = abs(t1.position[1] - t2.position[1])
-
-            if dx > 1 or dy > 1:
+            target_distance = t1.distance_to_entity(t2)
+            if target_distance > 5:
                 return declaration_event.cancel(
-                    status_message=f"Targets must be within 5ft of each other (distance: {max(dx, dy) * 5}ft)"
+                    status_message=(
+                        "Targets must be within 5ft of each other "
+                        f"(distance: {target_distance}ft)"
+                    )
                 )
 
         parent_result = super()._validate(declaration_event)
@@ -620,7 +621,7 @@ class MistyStep(SpellAction):
         if target_pos not in caster.senses.visible or not caster.senses.visible[target_pos]:
             return declaration_event.cancel(status_message=f"Destination {target_pos} not visible")
 
-        distance = caster.senses.get_feet_distance(target_pos)
+        distance = caster.distance_to_position(target_pos)
         if distance > self.teleport_range:
             return declaration_event.cancel(
                 status_message=f"Destination out of range ({distance}ft > {self.teleport_range}ft)"
@@ -2765,7 +2766,7 @@ class Daylight(SpellAction):
         ):
             return declaration_event.cancel(status_message=f"Position {target_pos} not visible")
 
-        distance = caster.senses.get_feet_distance(target_pos)
+        distance = caster.distance_to_position(target_pos)
         if distance > self.effective_range:
             return declaration_event.cancel(
                 status_message=f"Position out of range ({distance}ft > {self.effective_range}ft)"
@@ -3804,7 +3805,7 @@ class DimensionDoor(SpellAction):
         if target_pos not in caster.senses.visible or not caster.senses.visible[target_pos]:
             return declaration_event.cancel(status_message=f"Position {target_pos} not visible")
 
-        distance = caster.senses.get_feet_distance(target_pos)
+        distance = caster.distance_to_position(target_pos)
         if distance > self.effective_range:
             return declaration_event.cancel(status_message=f"Position out of range ({distance}ft)")
 

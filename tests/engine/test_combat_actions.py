@@ -28,6 +28,7 @@ from dnd.core.dice import AttackOutcome, fixed_dice_faces
 from dnd.core.combat_log import CombatLogEntryType
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_object import BaseObject
+from dnd.core.action_execution import MovementTerminationReason
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import (
     AbilityName,
@@ -551,7 +552,7 @@ def test_eb_10_017_lethal_opportunity_attack_stops_before_leaving_reach() -> Non
         and step.source_entity_uuid == mover.uuid
         and step.phase == EventPhase.COMPLETION
     ]
-    assert len({step.uuid for step in effect_steps}) == 1
+    assert len({step.lineage_uuid for step in effect_steps}) == 1
     assert all(step.from_position == (5, 6) for step in effect_steps)
     assert all(step.to_position == (5, 7) for step in effect_steps)
     assert len(completed_steps) == 1
@@ -1551,9 +1552,17 @@ def test_eb_10_012_jump_uses_step_events_and_opportunity_attacks() -> None:
             and step.phase == EventPhase.COMPLETION
         )
     ]
-    assert len(completed_steps) == 3
+    assert len(completed_steps) == 1
     assert jump_event.trajectory is MovementTrajectory.DIRECT_ARC
-    assert all(step.trajectory is MovementTrajectory.DIRECT_ARC for step in completed_steps)
+    assert completed_steps[0].trajectory is MovementTrajectory.DIRECT_ARC
+    assert completed_steps[0].from_position == (5, 5)
+    assert completed_steps[0].to_position == (5, 8)
+    assert completed_steps[0].disclosed_path == (
+        (5, 5),
+        (5, 6),
+        (5, 7),
+        (5, 8),
+    )
     assert any(event.name == "Opportunity Attack" for event in EventQueue.get_events_by_type(EventType.ATTACK))
 
     reset_core_action_state()
@@ -1621,7 +1630,7 @@ def test_eb_10_018_lethal_jump_opportunity_attack_completes_without_cost_error()
 
     assert isinstance(jump_event, JumpEvent)
     assert jump_event.phase == EventPhase.COMPLETION
-    assert "partial" in (jump_event.status_message or "").lower()
+    assert jump_event.termination_reason is MovementTerminationReason.DEAD
     assert jumper.health.life_state is LifeState.DEAD
     assert jumper.get_hp() <= 0
     assert hp_before - jumper.get_hp() >= hp_before
@@ -1643,9 +1652,9 @@ def test_eb_10_018_lethal_jump_opportunity_attack_completes_without_cost_error()
         and step.source_entity_uuid == jumper.uuid
         and step.phase == EventPhase.COMPLETION
     ]
-    assert len({step.uuid for step in effect_steps}) == 1
+    assert len({step.lineage_uuid for step in effect_steps}) == 1
     assert all(step.from_position == (5, 6) for step in effect_steps)
-    assert all(step.to_position == (5, 7) for step in effect_steps)
+    assert all(step.to_position == (5, 9) for step in effect_steps)
     assert len(completed_steps) == 1
     assert completed_steps[0].committed is False
     assert completed_steps[0].trajectory is MovementTrajectory.DIRECT_ARC

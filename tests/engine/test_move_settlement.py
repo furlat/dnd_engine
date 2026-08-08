@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import datetime
 from typing import cast
 from uuid import UUID, uuid4
 
 import pytest
 
 from dnd.actions import Move, MovementEvent
+from dnd.blocks.action_economy import RechargeType, Resource
 from dnd.core.base_actions import Cost
 from dnd.core.action_execution import (
     MovementContinuationDecision,
@@ -31,6 +33,8 @@ from dnd.core.events import (
 )
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.gridmap import get_map
+from dnd.core.life_types import LifeState
+from dnd.core.positioning import PositionCommitError, PositionPublicationError
 from dnd.creature_transforms import (
     apply_opportunity_attack_immunity_transform,
 )
@@ -74,6 +78,47 @@ def _step_versions(
         and event.source_entity_uuid == mover_uuid
         and event.phase is phase
     ]
+
+
+def test_move_staging_failure_restores_exact_edge_debit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A precommit position failure cannot spend the attempted Move edge."""
+    mover = _open_movement_world()
+    grid = get_map()
+    original = grid.recompute_tile_directional_blocking
+    movement_handles_before = set(
+        mover.action_economy.movement.self_static.value_modifiers
+    )
+
+    def fail_at_destination(position: tuple[int, int]) -> None:
+        if position == (1, 0):
+            raise RuntimeError("injected Move staging failure")
+        original(position)
+
+    monkeypatch.setattr(
+        grid,
+        "recompute_tile_directional_blocking",
+        fail_at_destination,
+    )
+
+    with pytest.raises(PositionCommitError) as error:
+        Move(
+            source_entity_uuid=mover.uuid,
+            end_position=(1, 0),
+            path=((0, 0), (1, 0)),
+            prefer_safe=False,
+        ).apply()
+
+    assert error.value.position_committed is False
+    assert mover.position == (0, 0)
+    assert mover.senses.position == (0, 0)
+    assert get_map().get_entity_position(mover.uuid) == (0, 0)
+    assert mover.action_economy.movement.normalized_score == 30
+    assert set(
+        mover.action_economy.movement.self_static.value_modifiers
+    ) == movement_handles_before
+    assert not _step_versions(mover.uuid, EventPhase.COMPLETION)
 
 
 def _add_movement_handler(
@@ -297,6 +342,39 @@ def test_root_nested_cost_mutation_cannot_alias_stored_declaration() -> None:
     assert [cost.cost for cost in declaration.costs] == [5]
 
 
+@pytest.mark.parametrize(
+    ("field_name", "forged_value"),
+    (
+        ("uuid", 7),
+        ("timestamp", 3),
+        ("modified", 1),
+        ("status_message", 99),
+    ),
+)
+def test_root_rejects_malformed_queue_evidence_before_storage(
+    field_name: str,
+    forged_value: object,
+) -> None:
+    mover = _open_movement_world()
+
+    def forge(event: Event, _source_uuid: UUID) -> Event:
+        return event.model_copy(update={field_name: forged_value})
+
+    _add_movement_handler(mover, EventPhase.DECLARATION, forge)
+    result = Move(source_entity_uuid=mover.uuid, end_position=(1, 0)).apply()
+
+    assert isinstance(result, MovementEvent)
+    assert result.phase is EventPhase.CANCEL
+    versions = EventQueue.get_event_history(result.uuid)
+    assert all(type(event.uuid) is UUID for event in versions)
+    assert all(type(event.timestamp) is datetime for event in versions)
+    assert all(type(event.modified) is bool for event in versions)
+    assert all(
+        event.status_message is None or type(event.status_message) is str
+        for event in versions
+    )
+
+
 def test_path_step_cost_rewrite_becomes_one_canonical_cancel() -> None:
     """A PATH handler cannot make the executor commit a rewritten edge."""
     mover = _open_movement_world()
@@ -496,6 +574,42 @@ def test_lethal_opportunity_attack_leaves_a_free_logless_false_step() -> None:
     assert len(false_steps) == 1
     assert false_steps[0].committed is False
     assert false_steps[0].combat_log is None
+
+
+def test_committed_step_and_root_logs_retain_opportunity_attack_child() -> None:
+    """Guard validation preserves queue-authored reaction child lineages."""
+    reset_core_action_state()
+    watcher = strong_entity("Watcher", (0, 0), "monsters")
+    mover = strong_entity("Mover", (0, 1), "heroes")
+    add_opportunity_attack_handler(watcher)
+    Entity.update_all_entities_senses(max_distance=20)
+    force_attack_hit(watcher)
+
+    with fixed_dice(10, 1):
+        result = Move(
+            source_entity_uuid=mover.uuid,
+            end_position=(0, 2),
+        ).apply()
+
+    assert isinstance(result, MovementEvent)
+    assert result.phase is EventPhase.COMPLETION
+    assert result.combat_log is not None
+    completed_step = _step_versions(mover.uuid, EventPhase.COMPLETION)[0]
+    assert completed_step.committed is True
+    assert completed_step.combat_log is not None
+    assert any(
+        child.entry_type.value == "attack"
+        for child in completed_step.combat_log.sub_entries
+    )
+    step_root = next(
+        child
+        for child in result.combat_log.sub_entries
+        if child.data.get("type") == "step_movement"
+    )
+    assert any(
+        child.entry_type.value == "attack"
+        for child in step_root.sub_entries
+    )
 
 
 def test_later_opportunity_attack_skips_after_first_reactor_kills_mover() -> None:
@@ -708,6 +822,46 @@ def test_fixed_resource_cost_requires_an_exact_named_resource() -> None:
     assert mover.action_economy.movement.normalized_score == movement_before
 
 
+def test_move_fixed_resource_failure_restores_channel_and_resource(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mover = _open_movement_world()
+    economy = mover.action_economy
+    economy.add_resource_contribution(
+        "Focus",
+        uuid4(),
+        maximum=1,
+        recharge_type=RechargeType.SHORT_REST,
+    )
+    original_consume = Resource.consume
+
+    def decrement_then_raise(resource: Resource, amount: int = 1) -> bool:
+        result = original_consume(resource, amount)
+        if resource.name == "Focus":
+            raise RuntimeError("injected Move resource failure")
+        return result
+
+    monkeypatch.setattr(Resource, "consume", decrement_then_raise)
+    result = Move(
+        source_entity_uuid=mover.uuid,
+        end_position=(1, 0),
+        costs=[Cost(
+            name="Move focus",
+            cost_type="bonus_actions",
+            cost=1,
+            resource_name="Focus",
+            resource_cost=1,
+        )],
+    ).apply()
+
+    assert isinstance(result, MovementEvent)
+    assert result.phase is EventPhase.COMPLETION
+    assert result.termination_reason is MovementTerminationReason.INVALID_COST
+    assert mover.position == (0, 0)
+    assert economy.bonus_actions.normalized_score == 1
+    assert economy.get_resource_current("Focus") == 1
+
+
 def test_post_reaction_edge_cost_owns_debit_step_boundary_and_root() -> None:
     """One recomputed edge value settles every post-reaction cost fact."""
     mover = _open_movement_world()
@@ -740,6 +894,43 @@ def test_post_reaction_edge_cost_owns_debit_step_boundary_and_root() -> None:
     assert _movement_cost(result) == 10
     assert mover.action_economy.movement.normalized_score == movement_before - 10
     assert guard.boundaries[0].step_movement_cost == 10
+
+
+def test_step_handler_cannot_rewrite_move_mode_to_underpay_edge() -> None:
+    """Accepted WALKING truth remains authoritative after Step reactions."""
+    mover = _open_movement_world()
+    tile = get_map().get_tile(1, 0)
+    assert tile is not None
+    tile.walking_cost.self_static.add_value_modifier(
+        NumericalModifier.create(
+            source_entity_uuid=mover.uuid,
+            name="Authored difficult terrain",
+            value=1,
+        )
+    )
+
+    def rewrite_parent_mode(event: Event, _source_uuid: UUID) -> Event:
+        if event.parent_event is not None:
+            stored_root = EventQueue.get_event_by_uuid(event.parent_event)
+            if type(stored_root) is MovementEvent:
+                stored_root.movement_mode = MovementMode.FLYING
+        return event
+
+    _add_step_handler(mover, rewrite_parent_mode)
+    result = Move(
+        source_entity_uuid=mover.uuid,
+        end_position=(1, 0),
+    ).apply()
+
+    assert type(result) is MovementEvent
+    assert result.phase is EventPhase.COMPLETION
+    assert result.movement_mode is MovementMode.WALKING
+    assert mover.position == (1, 0)
+    assert mover.action_economy.movement.normalized_score == 20
+    assert _movement_cost(result) == 10
+    completed_steps = _step_versions(mover.uuid, EventPhase.COMPLETION)
+    assert len(completed_steps) == 1
+    assert completed_steps[0].movement_cost == 10
 
 
 def test_effect_stop_marker_yields_to_later_objective_death() -> None:
@@ -851,3 +1042,186 @@ def test_arrival_child_displacement_preserves_voluntary_and_objective_ends() -> 
     assert result.objective_end_position == (1, 1)
     assert mover.position == (1, 1)
     assert _movement_cost(result) == 5
+
+
+def test_arrival_handler_cannot_mutate_stored_step_or_root_effect_geometry() -> None:
+    """Landing children cannot rewrite the already accepted Move transaction."""
+    mover = _open_movement_world()
+
+    def mutate_stored_effects(event: Event, _source_uuid: UUID) -> Event:
+        if event.parent_event is None:
+            return event
+        stored_step = EventQueue.get_event_by_uuid(event.parent_event)
+        if type(stored_step) is not StepMovementEvent:
+            return event
+        stored_root = (
+            EventQueue.get_event_by_uuid(stored_step.parent_event)
+            if stored_step.parent_event is not None
+            else None
+        )
+        stored_step.to_position = (99, 99)
+        stored_step.to_elevation_feet = 999
+        stored_step.movement_cost = 999
+        stored_step.disclosed_path = ((0, 0), (99, 99))
+        if type(stored_root) is MovementEvent:
+            stored_root.end_position = (99, 99)
+            stored_root.objective_end_position = (99, 99)
+            stored_root.path = ((0, 0), (99, 99))
+        return event
+
+    mover.add_event_handler(EventHandler(
+        name="Mutate stored Move effects during arrival",
+        source_entity_uuid=mover.uuid,
+        trigger_conditions=[Trigger(
+            event_type=EventType.SPATIAL_ENTITY_ENTERED,
+            event_phase=EventPhase.EFFECT,
+            event_source_entity_uuid=mover.uuid,
+        )],
+        event_processor=mutate_stored_effects,
+    ))
+
+    result = Move(source_entity_uuid=mover.uuid, end_position=(1, 0)).apply()
+
+    assert type(result) is MovementEvent
+    assert result.phase is EventPhase.COMPLETION
+    assert result.path == ((0, 0), (1, 0))
+    assert result.end_position == (1, 0)
+    assert result.objective_end_position == (1, 0)
+    assert _movement_cost(result) == 5
+    assert result.combat_log is not None
+    assert result.combat_log.data["path"] == [(0, 0), (1, 0)]
+    assert result.combat_log.data["distance_feet"] == 5
+    step_versions = [
+        event
+        for event in EventQueue.get_events_by_type(EventType.STEP_MOVEMENT)
+        if type(event) is StepMovementEvent
+        and event.source_entity_uuid == mover.uuid
+    ]
+    assert step_versions
+    assert all(step.to_position == (1, 0) for step in step_versions)
+    assert all(step.to_elevation_feet == 0 for step in step_versions)
+    assert all(step.movement_cost == 5 for step in step_versions)
+    assert all((99, 99) not in step.disclosed_path for step in step_versions)
+
+
+def test_move_arrival_mutation_is_restored_before_publication_error_escapes() -> None:
+    """A committed arrival failure cannot leave forged Step/root history."""
+    mover = _open_movement_world()
+
+    def mutate_effects_then_raise(event: Event, _source_uuid: UUID) -> Event:
+        if event.parent_event is None:
+            return event
+        stored_step = EventQueue.get_event_by_uuid(event.parent_event)
+        if type(stored_step) is not StepMovementEvent:
+            return event
+        stored_root = (
+            EventQueue.get_event_by_uuid(stored_step.parent_event)
+            if stored_step.parent_event is not None
+            else None
+        )
+        stored_step.uuid = uuid4()
+        stored_step.to_position = (99, 99)
+        stored_step.to_elevation_feet = 999
+        stored_step.movement_cost = 999
+        if type(stored_root) is MovementEvent:
+            stored_root.uuid = uuid4()
+            stored_root.requested_end_position = (99, 99)
+            stored_root.end_position = (99, 99)
+            stored_root.path = ((0, 0), (99, 99))
+        raise RuntimeError("injected Move arrival publication failure")
+
+    mover.add_event_handler(EventHandler(
+        name="Mutate and fail Move arrival publication",
+        source_entity_uuid=mover.uuid,
+        trigger_conditions=[Trigger(
+            event_type=EventType.SPATIAL_ENTITY_ENTERED,
+            event_phase=EventPhase.EFFECT,
+            event_source_entity_uuid=mover.uuid,
+        )],
+        event_processor=mutate_effects_then_raise,
+    ))
+
+    with pytest.raises(PositionPublicationError):
+        Move(source_entity_uuid=mover.uuid, end_position=(1, 0)).apply()
+
+    assert mover.position == (1, 0)
+    assert mover.action_economy.movement.normalized_score == 25
+    roots = [
+        event
+        for event in EventQueue.get_events_by_type(EventType.MOVEMENT)
+        if type(event) is MovementEvent
+        and event.source_entity_uuid == mover.uuid
+        and event.phase is EventPhase.EFFECT
+    ]
+    steps = _step_versions(mover.uuid, EventPhase.EFFECT)
+    assert len(roots) == 1
+    assert len(steps) == 1
+    assert EventQueue.get_event_by_uuid(roots[0].uuid) is roots[0]
+    assert EventQueue.get_event_by_uuid(steps[0].uuid) is steps[0]
+    assert roots[0].requested_end_position == (1, 0)
+    assert roots[0].end_position == (1, 0)
+    assert roots[0].path == ((0, 0), (1, 0))
+    assert steps[0].to_position == (1, 0)
+    assert steps[0].to_elevation_feet == 0
+    assert steps[0].movement_cost == 5
+    assert not _step_versions(mover.uuid, EventPhase.COMPLETION)
+
+
+def test_move_restores_parent_between_step_handlers_and_when_later_handler_raises() -> None:
+    """A Step handler cannot lend forged root mechanics to the next handler."""
+    mover = _open_movement_world()
+    seen_modes: list[MovementMode] = []
+
+    def forge_parent(event: Event, _source_uuid: UUID) -> Event:
+        if type(event) is StepMovementEvent and event.parent_event is not None:
+            parent = EventQueue.get_event_by_uuid(event.parent_event)
+            if type(parent) is MovementEvent:
+                parent.uuid = uuid4()
+                parent.movement_mode = MovementMode.FLYING
+                parent.requested_end_position = (99, 99)
+        return event
+
+    def observe_reforge_and_raise(event: Event, _source_uuid: UUID) -> Event:
+        if type(event) is StepMovementEvent and event.parent_event is not None:
+            parent = EventQueue.get_event_by_uuid(event.parent_event)
+            if type(parent) is MovementEvent:
+                seen_modes.append(parent.movement_mode)
+                if parent.movement_mode is MovementMode.FLYING:
+                    set_hp(mover, 0)
+                parent.uuid = uuid4()
+                parent.requested_end_position = (88, 88)
+        raise RuntimeError("injected Move Step handler failure")
+
+    for name, processor in (
+        ("Forge Move parent in first Step handler", forge_parent),
+        ("Observe Move parent in second Step handler", observe_reforge_and_raise),
+    ):
+        mover.add_event_handler(EventHandler(
+            name=name,
+            source_entity_uuid=mover.uuid,
+            trigger_conditions=[Trigger(
+                event_type=EventType.STEP_MOVEMENT,
+                event_phase=EventPhase.EFFECT,
+                event_source_entity_uuid=mover.uuid,
+            )],
+            event_processor=processor,
+        ))
+
+    with pytest.raises(RuntimeError, match="injected Move Step handler failure"):
+        Move(source_entity_uuid=mover.uuid, end_position=(1, 0)).apply()
+
+    assert seen_modes == [MovementMode.WALKING]
+    assert mover.health.life_state is LifeState.ALIVE
+    assert mover.position == (0, 0)
+    assert mover.action_economy.movement.normalized_score == 30
+    roots = [
+        event
+        for event in EventQueue.get_events_by_type(EventType.MOVEMENT)
+        if type(event) is MovementEvent
+        and event.source_entity_uuid == mover.uuid
+        and event.phase is EventPhase.EFFECT
+    ]
+    assert len(roots) == 1
+    assert EventQueue.get_event_by_uuid(roots[0].uuid) is roots[0]
+    assert roots[0].movement_mode is MovementMode.WALKING
+    assert roots[0].requested_end_position == (1, 0)

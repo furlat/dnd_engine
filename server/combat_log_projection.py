@@ -16,6 +16,7 @@ from dnd.core.combat_log import (
     damage_total_from_log_data,
     position_evidence_key,
 )
+from dnd.core.elevation import support_distance_feet
 
 
 SUBJECTIVE_COMBAT_LOG_ENTRY_TYPES = frozenset({
@@ -268,26 +269,44 @@ def _sanitize_unlocated_movement_step(
         return log
     if log.source_uuid in context.controlled_entity_uuids:
         return log
-    from_position = log.data.get("from_position")
-    to_position = log.data.get("to_position")
-    if (
-        isinstance(from_position, (tuple, list))
-        and len(from_position) == 2
-        and all(isinstance(value, int) for value in from_position)
-        and isinstance(to_position, (tuple, list))
-        and len(to_position) == 2
-        and all(isinstance(value, int) for value in to_position)
+    from_position = _combat_log_position(log.data.get("from_position"))
+    to_position = _combat_log_position(log.data.get("to_position"))
+    positions: Optional[List[Tuple[int, int]]] = None
+    if from_position is not None and to_position is not None:
+        positions = [from_position, to_position]
+        if log.data.get("trajectory") == "direct_arc":
+            raw_path = log.data.get("disclosed_path")
+            if raw_path is None:
+                positions = [from_position, to_position]
+            elif isinstance(raw_path, (tuple, list)):
+                normalized_path = [
+                    _combat_log_position(position)
+                    for position in raw_path
+                ]
+                if (
+                    normalized_path
+                    and all(position is not None for position in normalized_path)
+                    and normalized_path[0] == from_position
+                    and normalized_path[-1] == to_position
+                ):
+                    positions = [
+                        position
+                        for position in normalized_path
+                        if position is not None
+                    ]
+                else:
+                    positions = None
+            else:
+                positions = None
+    observer_uuids = set(context.observer_entity_uuids)
+    if positions is not None and all(
+        log.located_position_observer_uuids.get(
+            position_evidence_key(position),
+            set(),
+        ) & observer_uuids
+        for position in positions
     ):
-        origin = log.located_position_observer_uuids.get(
-            position_evidence_key((from_position[0], from_position[1])),
-            set(),
-        )
-        destination = log.located_position_observer_uuids.get(
-            position_evidence_key((to_position[0], to_position[1])),
-            set(),
-        )
-        if origin & destination & set(context.observer_entity_uuids):
-            return log
+        return log
     source_name = log.source_name or "Known entity"
     text = f"{{cyan:{source_name}}} moves outside current perception"
     return log.model_copy(update={
@@ -318,13 +337,29 @@ def _sanitize_partially_observed_movement(
         or not sanitized_log.source_uuid
     ):
         return sanitized_log
-    if (
-        original_log.data.get("requested_end_position") is None
-        and original_log.data.get("objective_end_position") is None
-        and _direct_arc_root_is_fully_authorized(
+    movement_type = original_log.data.get("movement_type")
+    if movement_type == "jump":
+        if _direct_arc_root_is_fully_authorized(
             original_log,
             filtered_children,
-        )
+        ):
+            return sanitized_log
+        # A current Jump is one atomic DIRECT_ARC transfer.  A failed arc
+        # proof cannot borrow unrelated PATH children to manufacture partial
+        # Jump geometry.
+        filtered_children = []
+    if movement_type == "connector":
+        if _connector_transfer_root_is_fully_authorized(
+            original_log,
+            filtered_children,
+        ):
+            return sanitized_log
+        filtered_children = []
+    if (
+        movement_type != "move"
+        and original_log.data.get("requested_end_position") is None
+        and original_log.data.get("objective_end_position") is None
+        and _direct_arc_root_is_fully_authorized(original_log, filtered_children)
     ):
         return sanitized_log
 
@@ -351,7 +386,17 @@ def _sanitize_partially_observed_movement(
         destination = _combat_log_position(step.data.get("to_position"))
         if origin is None or destination is None:
             continue
-        observed_distance += 5.0
+        from_elevation = step.data.get("from_elevation_feet")
+        to_elevation = step.data.get("to_elevation_feet")
+        if type(from_elevation) is int and type(to_elevation) is int:
+            observed_distance += float(support_distance_feet(
+                origin,
+                from_elevation,
+                destination,
+                to_elevation,
+            ))
+        else:
+            observed_distance += 5.0
         observed_cost += float(step.data.get("movement_cost", 0.0))
         if segments and segments[-1][-1] == origin:
             segments[-1].append(destination)
@@ -430,15 +475,28 @@ def _is_committed_path_step_log(log: CombatLogEntry) -> bool:
     return trajectory == "path" and committed is True
 
 
+_DirectArcStepSignature = Tuple[
+    int,
+    Tuple[int, int],
+    Tuple[int, int],
+    float,
+    Tuple[Tuple[int, int], ...],
+    Optional[int],
+    Optional[int],
+]
+
+
 def _direct_arc_step_signature(
     log: CombatLogEntry,
     root_source_uuid: str,
-) -> Optional[Tuple[int, Tuple[int, int], Tuple[int, int], float]]:
+) -> Optional[_DirectArcStepSignature]:
     """Return exact Jump geometry only for a committed Step by the root mover."""
     path_index = log.data.get("path_index")
     movement_cost = log.data.get("movement_cost")
     from_position = _combat_log_position(log.data.get("from_position"))
     to_position = _combat_log_position(log.data.get("to_position"))
+    from_elevation = log.data.get("from_elevation_feet")
+    to_elevation = log.data.get("to_elevation_feet")
     if (
         log.entry_type is not CombatLogEntryType.MOVEMENT
         or log.data.get("type") != "step_movement"
@@ -454,9 +512,43 @@ def _direct_arc_step_signature(
         or movement_cost < 0
         or from_position is None
         or to_position is None
+        or from_elevation is not None
+        and (type(from_elevation) is not int)
+        or to_elevation is not None
+        and (type(to_elevation) is not int)
     ):
         return None
-    return path_index, from_position, to_position, float(movement_cost)
+    raw_path = log.data.get("disclosed_path")
+    if raw_path is None:
+        disclosed_path = (from_position, to_position)
+    elif isinstance(raw_path, (tuple, list)):
+        normalized_path = tuple(
+            _combat_log_position(position)
+            for position in raw_path
+        )
+        if (
+            not normalized_path
+            or any(position is None for position in normalized_path)
+            or normalized_path[0] != from_position
+            or normalized_path[-1] != to_position
+        ):
+            return None
+        disclosed_path = tuple(
+            position
+            for position in normalized_path
+            if position is not None
+        )
+    else:
+        return None
+    return (
+        path_index,
+        from_position,
+        to_position,
+        float(movement_cost),
+        disclosed_path,
+        from_elevation,
+        to_elevation,
+    )
 
 
 def _direct_arc_root_is_fully_authorized(
@@ -472,9 +564,7 @@ def _direct_arc_root_is_fully_authorized(
     ]
     if not original_steps:
         return False
-    original_signatures: List[
-        Tuple[int, Tuple[int, int], Tuple[int, int], float]
-    ] = []
+    original_signatures: List[_DirectArcStepSignature] = []
     for child in original_steps:
         signature = _direct_arc_step_signature(
             child,
@@ -490,9 +580,7 @@ def _direct_arc_root_is_fully_authorized(
         if child.entry_type is CombatLogEntryType.MOVEMENT
         and child.data.get("type") == "step_movement"
     ]
-    authorized_signatures: List[
-        Tuple[int, Tuple[int, int], Tuple[int, int], float]
-    ] = []
+    authorized_signatures: List[_DirectArcStepSignature] = []
     for child in authorized_steps:
         signature = _direct_arc_step_signature(
             child,
@@ -508,7 +596,9 @@ def _direct_arc_root_is_fully_authorized(
     ] != list(range(1, len(ordered) + 1)):
         return False
 
-    arc_path = [ordered[0][1], *(signature[2] for signature in ordered)]
+    arc_path = list(ordered[0][4])
+    for signature in ordered[1:]:
+        arc_path.extend(signature[4][1:])
     if any(
         ordered[index - 1][2] != ordered[index][1]
         for index in range(1, len(ordered))
@@ -521,19 +611,133 @@ def _direct_arc_root_is_fully_authorized(
     root_path = [_combat_log_position(position) for position in root_path_value]
     root_start = _combat_log_position(original_log.data.get("start_position"))
     root_end = _combat_log_position(original_log.data.get("end_position"))
+    raw_requested_end = original_log.data.get("requested_end_position")
+    raw_objective_end = original_log.data.get("objective_end_position")
+    requested_end = _combat_log_position(raw_requested_end)
+    objective_end = _combat_log_position(raw_objective_end)
     distance_feet = original_log.data.get("distance_feet")
     movement_cost = original_log.data.get("movement_cost")
+    root_start_elevation = original_log.data.get("start_elevation_feet")
+    root_requested_elevation = original_log.data.get(
+        "requested_end_elevation_feet"
+    )
+    root_end_elevation = original_log.data.get("end_elevation_feet")
+    total_cost = sum(signature[3] for signature in ordered)
+    elevation_evidence_matches = (
+        root_start_elevation is None
+        and root_requested_elevation is None
+        and root_end_elevation is None
+        or type(root_start_elevation) is int
+        and type(root_requested_elevation) is int
+        and type(root_end_elevation) is int
+        and ordered[0][5] == root_start_elevation
+        and ordered[-1][6] == root_requested_elevation
+        and ordered[-1][6] == root_end_elevation
+    )
     return (
         all(position is not None for position in root_path)
         and root_path == arc_path
         and root_start == arc_path[0]
         and root_end == arc_path[-1]
+        and (
+            raw_requested_end is None
+            or requested_end == arc_path[-1]
+        )
+        and (
+            raw_objective_end is None
+            or objective_end == arc_path[-1]
+        )
+        and elevation_evidence_matches
         and isinstance(distance_feet, int)
         and not isinstance(distance_feet, bool)
-        and distance_feet == len(ordered) * 5
+        and distance_feet == total_cost
         and isinstance(movement_cost, int)
         and not isinstance(movement_cost, bool)
-        and movement_cost == sum(signature[3] for signature in ordered)
+        and movement_cost == total_cost
+    )
+
+
+def _connector_transfer_root_is_fully_authorized(
+    original_log: CombatLogEntry,
+    filtered_children: List[CombatLogEntry],
+) -> bool:
+    """Authorize a connector root only from its exact surviving atomic Step."""
+    original_steps = [
+        child for child in original_log.sub_entries
+        if child.entry_type is CombatLogEntryType.MOVEMENT
+        and child.data.get("type") == "step_movement"
+    ]
+    filtered_steps = [
+        child for child in filtered_children
+        if child.entry_type is CombatLogEntryType.MOVEMENT
+        and child.data.get("type") == "step_movement"
+    ]
+    if len(original_steps) != 1 or len(filtered_steps) != 1:
+        return False
+    original = original_steps[0]
+    filtered = filtered_steps[0]
+    if (
+        original.source_uuid != original_log.source_uuid
+        or filtered.source_uuid != original_log.source_uuid
+        or original.data.get("trajectory") != "connector_transfer"
+        or filtered.data.get("trajectory") != "connector_transfer"
+        or original.data.get("committed") is not True
+        or filtered.data.get("committed") is not True
+    ):
+        return False
+    origin = _combat_log_position(original.data.get("from_position"))
+    destination = _combat_log_position(original.data.get("to_position"))
+    filtered_origin = _combat_log_position(filtered.data.get("from_position"))
+    filtered_destination = _combat_log_position(filtered.data.get("to_position"))
+    from_elevation = original.data.get("from_elevation_feet")
+    to_elevation = original.data.get("to_elevation_feet")
+    movement_cost = original.data.get("movement_cost")
+    if (
+        origin is None
+        or destination is None
+        or filtered_origin != origin
+        or filtered_destination != destination
+        or type(from_elevation) is not int
+        or type(to_elevation) is not int
+        or not isinstance(movement_cost, (int, float))
+        or isinstance(movement_cost, bool)
+        or not isfinite(float(movement_cost))
+        or movement_cost < 0
+        or filtered.data.get("from_elevation_feet") != from_elevation
+        or filtered.data.get("to_elevation_feet") != to_elevation
+        or filtered.data.get("movement_cost") != movement_cost
+    ):
+        return False
+    root_path = original_log.data.get("path")
+    root_start = _combat_log_position(original_log.data.get("start_position"))
+    root_end = _combat_log_position(original_log.data.get("end_position"))
+    requested = _combat_log_position(
+        original_log.data.get("requested_end_position")
+    )
+    objective = _combat_log_position(
+        original_log.data.get("objective_end_position")
+    )
+    return (
+        isinstance(root_path, (list, tuple))
+        and [_combat_log_position(value) for value in root_path]
+        == [origin, destination]
+        and root_start == origin
+        and root_end == destination
+        and requested == destination
+        and objective == destination
+        and original_log.data.get("start_elevation_feet") == from_elevation
+        and original_log.data.get("requested_end_elevation_feet") == to_elevation
+        and original_log.data.get("end_elevation_feet") == to_elevation
+        and original_log.data.get("distance_feet")
+        == support_distance_feet(
+            origin,
+            from_elevation,
+            destination,
+            to_elevation,
+        )
+        and original_log.data.get("movement_cost") == movement_cost
+        and type(original_log.data.get("connector_uuid")) is str
+        and type(original_log.data.get("connector_authored_id")) is str
     )
 
 

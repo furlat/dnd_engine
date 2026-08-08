@@ -12,8 +12,10 @@ import {
   decodeAlias,
   decodeSubjectiveEnvelope,
   parseJson,
+  reduceSubjectiveWorld,
   type SubjectiveReplicationBootstrap,
   type SubjectiveReplicationJournalState,
+  type APITraversalConnector,
 } from "../index.js";
 import {
   bootstrap,
@@ -29,6 +31,311 @@ function heroPosition(journal: SubjectiveReplicationJournal, view: "authoritativ
   assert.notEqual(replica, null);
   return replica?.world.state.entities.find((entity) => entity.uuid === "hero")?.position;
 }
+
+test("connector set replacement updates and clears the canonical replica", () => {
+  const seedWorld = bootstrap().world;
+  const firstTile = seedWorld.state.grid.tiles[0];
+  assert.notEqual(firstTile, undefined);
+  const world = {
+    ...seedWorld,
+    state: {
+      ...seedWorld.state,
+      grid: {
+        ...seedWorld.state.grid,
+        tiles: [
+          firstTile!,
+          { ...firstTile!, x: 1, y: 0, elevation_steps: 1 },
+        ],
+      },
+    },
+    visibility: {
+      ...seedWorld.visibility,
+      hero: {
+        ...seedWorld.visibility.hero!,
+        visible_cells: [[0, 0], [1, 0]] as Array<[number, number]>,
+        effective_light_levels: { "0,0": 3, "1,0": 3 },
+      },
+    },
+  };
+  const connector: APITraversalConnector = {
+    uuid: "connector-1",
+    authored_id: "connector.sdk.ladder",
+    kind: "ladder" as const,
+    presentation_key: "traversal.ladder",
+    endpoints: [
+      { position: [0, 0] as [number, number], support_tile_uuid: "tile-a", elevation_feet: 0 },
+      { position: [1, 0] as [number, number], support_tile_uuid: "tile-b", elevation_feet: 5 },
+    ],
+    movement_cost_feet: 10,
+    action_cost_type: null,
+    action_cost_amount: 0,
+    bidirectional: true,
+    enabled: true,
+    provocation_policy: "provokes_source_exit" as const,
+    revision: 1,
+    objective_digest: "0".repeat(64),
+  };
+
+  const installed = reduceSubjectiveWorld(world, [{
+    kind: "connector_set_replace",
+    connectors: [connector],
+  }]);
+  assert.deepEqual(installed.state.grid.connectors, [connector]);
+
+  const removed = reduceSubjectiveWorld(installed, [{
+    kind: "connector_set_replace",
+    connectors: [],
+  }]);
+  assert.deepEqual(removed.state.grid.connectors, []);
+});
+
+test("connector replacement rejects duplicate identity and unauthorized supports", () => {
+  const world = bootstrap().world;
+  const connector: APITraversalConnector = {
+    uuid: "connector-duplicate",
+    authored_id: "connector.sdk.duplicate",
+    kind: "ladder",
+    presentation_key: "traversal.ladder",
+    endpoints: [
+      { position: [99, 99], support_tile_uuid: "hidden-a", elevation_feet: 500 },
+      { position: [100, 99], support_tile_uuid: "hidden-b", elevation_feet: 505 },
+    ],
+    movement_cost_feet: 10,
+    action_cost_type: null,
+    action_cost_amount: 0,
+    bidirectional: true,
+    enabled: true,
+    provocation_policy: "provokes_source_exit",
+    revision: 1,
+    objective_digest: "0".repeat(64),
+  };
+
+  assert.throws(
+    () => reduceSubjectiveWorld(world, [{
+      kind: "connector_set_replace",
+      connectors: [connector, connector],
+    }]),
+    ContractValidationError,
+  );
+  assert.throws(
+    () => reduceSubjectiveWorld(world, [{
+      kind: "connector_set_replace",
+      connectors: [connector],
+    }]),
+    ContractValidationError,
+  );
+
+  const visibleTile = world.state.grid.tiles[0];
+  assert.notEqual(visibleTile, undefined);
+  const rememberedWorld = {
+    ...world,
+    state: {
+      ...world.state,
+      grid: {
+        ...world.state.grid,
+        tiles: [
+          visibleTile!,
+          { ...visibleTile!, x: 1, y: 0, visible: false, elevation_steps: 1 },
+        ],
+      },
+    },
+  };
+  const rememberedConnector: APITraversalConnector = {
+    ...connector,
+    uuid: "connector-remembered",
+    authored_id: "connector.sdk.remembered",
+    endpoints: [
+      { position: [0, 0], support_tile_uuid: "tile-a", elevation_feet: 0 },
+      { position: [1, 0], support_tile_uuid: "tile-b", elevation_feet: 5 },
+    ],
+  };
+  assert.throws(
+    () => reduceSubjectiveWorld(rememberedWorld, [{
+      kind: "connector_set_replace",
+      connectors: [rememberedConnector],
+    }]),
+    ContractValidationError,
+  );
+
+  const unauthorizedWorld = {
+    ...rememberedWorld,
+    state: {
+      ...rememberedWorld.state,
+      grid: {
+        ...rememberedWorld.state.grid,
+        tiles: rememberedWorld.state.grid.tiles.map((tile) => (
+          tile.x === 1 && tile.y === 0 ? { ...tile, visible: true } : tile
+        )),
+      },
+    },
+  };
+  assert.throws(
+    () => reduceSubjectiveWorld(unauthorizedWorld, [{
+      kind: "connector_set_replace",
+      connectors: [rememberedConnector],
+    }]),
+    ContractValidationError,
+  );
+
+  const sameEndpointConnector: APITraversalConnector = {
+    ...rememberedConnector,
+    uuid: "connector-same-endpoint",
+    authored_id: "connector.sdk.same_endpoint",
+    endpoints: [
+      { position: [0, 0], support_tile_uuid: "tile-a", elevation_feet: 0 },
+      { position: [0, 0], support_tile_uuid: "tile-b", elevation_feet: 0 },
+    ],
+  };
+  assert.throws(
+    () => reduceSubjectiveWorld(world, [{
+      kind: "connector_set_replace",
+      connectors: [sameEndpointConnector],
+    }]),
+    ContractValidationError,
+  );
+});
+
+test("connector support integrity is enforced by frame and bootstrap journals", () => {
+  const connector: APITraversalConnector = {
+    uuid: "connector-hidden",
+    authored_id: "connector.sdk.hidden",
+    kind: "ladder",
+    presentation_key: "traversal.ladder",
+    endpoints: [
+      { position: [0, 0], support_tile_uuid: "tile-a", elevation_feet: 0 },
+      { position: [1, 0], support_tile_uuid: "hidden-b", elevation_feet: 5 },
+    ],
+    movement_cost_feet: 10,
+    action_cost_type: null,
+    action_cost_amount: 0,
+    bidirectional: true,
+    enabled: true,
+    provocation_policy: "provokes_source_exit",
+    revision: 1,
+    objective_digest: "0".repeat(64),
+  };
+
+  const journal = new SubjectiveReplicationJournal();
+  assert.equal(journal.bootstrap(bootstrap()).health, "ready");
+  const delivery = frameDelivery();
+  const firstTile = bootstrap().world.state.grid.tiles[0];
+  assert.notEqual(firstTile, undefined);
+  const unauthorizedTile = {
+    ...firstTile!,
+    x: 1,
+    y: 0,
+    visible: true,
+    elevation_steps: 1,
+  };
+  const decoded = decodeSubjectiveEnvelope({
+    event: "frame",
+    id: "s=1;o=1;p=1;l=0",
+    data: parseJson(JSON.stringify({
+      ...delivery,
+      frame: {
+        ...delivery.frame,
+        patches: [
+          { kind: "tile_upsert", tile: unauthorizedTile },
+          { kind: "connector_set_replace", connectors: [connector] },
+        ],
+      },
+    })),
+  });
+  const rejectedFrame = journal.ingest(decoded);
+  assert.equal(rejectedFrame.status, "resync_required");
+  assert.equal(rejectedFrame.state.health, "resync_required");
+
+  const seed = bootstrap("generation-invalid-connector");
+  const invalidSeed = {
+    ...seed,
+    world: {
+      ...seed.world,
+      state: {
+        ...seed.world.state,
+        grid: {
+          ...seed.world.state.grid,
+          tiles: [...seed.world.state.grid.tiles, unauthorizedTile],
+          connectors: [connector],
+        },
+      },
+    },
+  };
+  const rejectedBootstrap = new SubjectiveReplicationJournal().bootstrap(invalidSeed);
+  assert.equal(rejectedBootstrap.health, "resync_required");
+  assert.equal(rejectedBootstrap.authoritative, null);
+
+  const sameEndpointConnector: APITraversalConnector = {
+    ...connector,
+    uuid: "connector-same-endpoint-bootstrap",
+    authored_id: "connector.sdk.same_endpoint_bootstrap",
+    endpoints: [
+      { position: [0, 0], support_tile_uuid: "tile-a", elevation_feet: 0 },
+      { position: [0, 0], support_tile_uuid: "tile-b", elevation_feet: 0 },
+    ],
+  };
+  const sameEndpointSeed = {
+    ...seed,
+    world: {
+      ...seed.world,
+      state: {
+        ...seed.world.state,
+        grid: {
+          ...seed.world.state.grid,
+          connectors: [sameEndpointConnector],
+        },
+      },
+    },
+  };
+  assert.equal(
+    new SubjectiveReplicationJournal().bootstrap(sameEndpointSeed).health,
+    "resync_required",
+  );
+});
+
+test("current observer-union visibility requires projected tile coverage", () => {
+  const seed = bootstrap("generation-visible-cell-without-tile");
+  const visibleWithoutTile = {
+    ...seed.world.visibility.hero!,
+    visible_cells: [[0, 0], [1, 0]] as Array<[number, number]>,
+    effective_light_levels: { "0,0": 3, "1,0": 3 },
+  };
+
+  const journal = new SubjectiveReplicationJournal();
+  assert.equal(journal.bootstrap(bootstrap()).health, "ready");
+  const delivery = frameDelivery();
+  const decoded = decodeSubjectiveEnvelope({
+    event: "frame",
+    id: "s=1;o=1;p=1;l=0",
+    data: parseJson(JSON.stringify({
+      ...delivery,
+      frame: {
+        ...delivery.frame,
+        patches: [{
+          kind: "observer_visibility_replace",
+          observer_uuid: "hero",
+          visibility: visibleWithoutTile,
+        }],
+      },
+    })),
+  });
+  const rejectedFrame = journal.ingest(decoded);
+  assert.equal(rejectedFrame.status, "resync_required");
+  assert.equal(rejectedFrame.state.health, "resync_required");
+
+  const invalidSeed = {
+    ...seed,
+    world: {
+      ...seed.world,
+      visibility: {
+        ...seed.world.visibility,
+        hero: visibleWithoutTile,
+      },
+    },
+  };
+  const rejectedBootstrap = new SubjectiveReplicationJournal().bootstrap(invalidSeed);
+  assert.equal(rejectedBootstrap.health, "resync_required");
+  assert.equal(rejectedBootstrap.authoritative, null);
+});
 
 test("typed observation patches outrun presentation without exposing engine events", () => {
   const journal = new SubjectiveReplicationJournal();

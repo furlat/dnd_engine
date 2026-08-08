@@ -17,6 +17,7 @@ from dnd.core.item_types import EquippedVisualPolicy, ItemPresentationKind
 from dnd.core.life_types import LifeState, LifeStateChangeReason
 from server.world_contracts import (
     APIAppearance,
+    APIContentRefSnapshot,
     APIDirectionalBlockMap,
     APIEntitySummary,
     APIEntityVisibility,
@@ -40,6 +41,7 @@ from server.player_replication_contract import (
     ConeAreaGeometry,
     ConditionOperation,
     ConditionPresentationCue,
+    ConnectorSetReplacePatch,
     CounterspellAutomaticSuccess,
     CounterspellCheckFailure,
     CounterspellCheckSuccess,
@@ -204,11 +206,13 @@ def test_structural_edge_appearance_is_closed_and_privacy_minimal() -> None:
 def _entity(uuid: str, name: str, position: tuple[int, int], tint: int) -> APIEntitySummary:
     return APIEntitySummary(
         uuid=uuid,
-        content_ref=_content_ref(
-            kind=ContentDefinitionKind.CREATURE,
-            content_id=f"creature.fixture_{uuid}",
-            digest_char="a",
-        ).model_dump(mode="python"),
+        content_ref=APIContentRefSnapshot.model_validate(
+            _content_ref(
+                kind=ContentDefinitionKind.CREATURE,
+                content_id=f"creature.fixture_{uuid}",
+                digest_char="a",
+            ).model_dump(mode="python"),
+        ),
         name=name,
         position=position,
         hp=10,
@@ -486,6 +490,7 @@ def test_world_patches_are_discriminated_and_have_no_opaque_data_payload() -> No
     assert schema["discriminator"]["propertyName"] == "kind"
     assert set(schema["discriminator"]["mapping"]) == {
         "controlled_equipment_replace",
+        "connector_set_replace",
         "door_state",
         "encounter_replace",
         "entity_remove",
@@ -505,6 +510,13 @@ def test_world_patches_are_discriminated_and_have_no_opaque_data_payload() -> No
         })
     with pytest.raises(ValidationError, match="union_tag_invalid"):
         adapter.validate_python({"kind": "raw_event", "event": {}})
+
+    connector_patch = adapter.validate_python({
+        "kind": "connector_set_replace",
+        "connectors": [],
+    })
+    assert isinstance(connector_patch, ConnectorSetReplacePatch)
+    assert connector_patch.connectors == ()
 
 
 def test_floor_objects_use_a_closed_typed_world_and_patch_projection() -> None:

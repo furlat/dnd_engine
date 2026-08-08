@@ -2,6 +2,8 @@
 
 from uuid import UUID, uuid4
 
+import pytest
+
 from dnd.actions import Attack, Move, Shove, ShoveEvent
 from dnd.actions_functional import setup_standard_actions
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
@@ -13,7 +15,7 @@ from dnd.core.base_conditions import BaseCondition
 from dnd.core.base_object import BaseObject
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import EventPhase, EventQueue, EventType
+from dnd.core.events import EventPhase, EventQueue, EventType, Range, RangeType
 from dnd.core.gridmap import GridMap, get_map
 from dnd.core.creature_types import Size
 from dnd.core.modifiers import (
@@ -426,6 +428,85 @@ def test_step_movement_can_trigger_opportunity_attack(capsys) -> None:
     ]
     assert opportunity_lines == expected_opportunity_lines
     assert capsys.readouterr().out.splitlines() == expected_opportunity_lines
+
+
+def test_diagonal_threat_exit_preview_matches_runtime_opportunity_attack() -> None:
+    """The engine's five-foot diagonal metric owns preview and execution."""
+    reset_combat_tutorial_state()
+    watcher = create_skeleton(name="Watcher", position=(5, 5), faction="monsters")
+    mover = create_goblin(name="Mover", position=(6, 6), faction="heroes")
+    add_opportunity_attack_handler(watcher)
+    Entity.update_all_entities_senses(max_distance=20)
+    setup_standard_actions(mover)
+
+    move = next(
+        action
+        for action in mover.get_available_actions().position_actions
+        if action.template_name == "Move"
+    )
+    target = next(
+        candidate for candidate in move.valid_targets
+        if candidate.position == (8, 8)
+    )
+    assert [
+        (row.from_position, row.to_position)
+        for row in target.opportunity_attack_exposures
+    ] == [((6, 6), (7, 7))]
+
+    result = Move(source_entity_uuid=mover.uuid, end_position=(8, 8)).apply()
+
+    assert result is not None
+    assert watcher.action_economy.reactions.normalized_score == 0
+    assert any(
+        event.name == "Opportunity Attack"
+        for event in EventQueue.get_events_by_type(EventType.ATTACK)
+    )
+
+
+def test_extended_reach_exit_preview_matches_runtime_opportunity_attack(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Bounded preview candidates still cover an authored ten-foot reach."""
+    reset_combat_tutorial_state()
+    watcher = create_skeleton(name="Watcher", position=(5, 5), faction="monsters")
+    mover = create_goblin(name="Mover", position=(7, 5), faction="heroes")
+    original_get_weapon_range = Entity.get_weapon_range
+
+    def get_weapon_range(
+        entity: Entity,
+        weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN,
+    ) -> Range:
+        if entity.uuid == watcher.uuid:
+            return Range(type=RangeType.REACH, normal=10)
+        return original_get_weapon_range(entity, weapon_slot)
+
+    monkeypatch.setattr(Entity, "get_weapon_range", get_weapon_range)
+    add_opportunity_attack_handler(watcher)
+    Entity.update_all_entities_senses(max_distance=20)
+    setup_standard_actions(mover)
+
+    move = next(
+        action
+        for action in mover.get_available_actions().position_actions
+        if action.template_name == "Move"
+    )
+    target = next(
+        candidate for candidate in move.valid_targets
+        if candidate.position == (8, 5)
+    )
+    assert [
+        (row.from_position, row.to_position)
+        for row in target.opportunity_attack_exposures
+    ] == [((7, 5), (8, 5))]
+
+    result = Move(source_entity_uuid=mover.uuid, end_position=(8, 5)).apply()
+
+    assert result is not None
+    assert watcher.action_economy.reactions.normalized_score == 0
+    assert any(
+        event.name == "Opportunity Attack"
+        for event in EventQueue.get_events_by_type(EventType.ATTACK)
+    )
 
 
 def test_bg3_shove_uses_bonus_action_and_forced_movement_not_opportunity_attack(capsys) -> None:

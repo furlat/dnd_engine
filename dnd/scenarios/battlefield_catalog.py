@@ -10,6 +10,7 @@ from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
 from dnd.core.content.battlefields import (
     BattlefieldDefinition,
+    BattlefieldElevationCell,
     BattlefieldPreview,
     BattlefieldPreviewCell,
     BattlefieldPreviewDirection,
@@ -18,6 +19,14 @@ from dnd.core.content.battlefields import (
     BattlefieldPreviewTerrain,
     LightLevelName,
 )
+from dnd.core.world_edges import ElevationSurfaceKind, SlopeAxis
+from dnd.core.traversal_connectors import (
+    ConnectorActionCostType,
+    ConnectorProvocationPolicy,
+    TraversalConnectorDefinition,
+    TraversalConnectorKind,
+)
+from dnd.environmental_effect_runtime import materialize_spike_trap_effect
 from dnd.core.gridmap import GridMap, get_map
 from dnd.items.consumables import (
     FIRE_WEAPON_COAT_RECIPE,
@@ -192,6 +201,135 @@ def _two_barrier_preview(*, first_door_y: int, second_door_y: int) -> Battlefiel
     return BattlefieldPreview(objects=tuple(objects))
 
 
+def _elevation_proving_preview() -> BattlefieldPreview:
+    """Project the maintained level, slope, cliff, and jump proving geometry."""
+    return BattlefieldPreview(
+        cells=(
+            _terrain_cell((10, 9), "gap", walkable=False),
+            _terrain_cell((11, 9), "spikes", hazardous=True),
+        ),
+        objects=tuple(
+            _preview_object(
+                (4, y),
+                "door" if y == 7 else "wall",
+                "Proving Door" if y == 7 else "Proving Wall",
+                blocked_directions=("west",),
+                is_open=False if y == 7 else None,
+            )
+            for y in range(3, 12)
+        ),
+        elevation_cells=(
+            BattlefieldElevationCell(
+                position=(5, 4),
+                elevation_steps=0,
+                surface_kind=ElevationSurfaceKind.STAIRS,
+                slope_axis=SlopeAxis.EAST_WEST,
+            ),
+            BattlefieldElevationCell(
+                position=(6, 4),
+                elevation_steps=1,
+                surface_kind=ElevationSurfaceKind.STAIRS,
+                slope_axis=SlopeAxis.EAST_WEST,
+            ),
+            BattlefieldElevationCell(
+                position=(7, 4),
+                elevation_steps=2,
+                surface_kind=ElevationSurfaceKind.STAIRS,
+                slope_axis=SlopeAxis.EAST_WEST,
+            ),
+            BattlefieldElevationCell(position=(8, 4), elevation_steps=2),
+            BattlefieldElevationCell(position=(5, 10), elevation_steps=2),
+            BattlefieldElevationCell(
+                position=(6, 10),
+                elevation_steps=2,
+                surface_kind=ElevationSurfaceKind.RAMP,
+                slope_axis=SlopeAxis.EAST_WEST,
+            ),
+            BattlefieldElevationCell(
+                position=(7, 10),
+                elevation_steps=1,
+                surface_kind=ElevationSurfaceKind.RAMP,
+                slope_axis=SlopeAxis.EAST_WEST,
+            ),
+            BattlefieldElevationCell(
+                position=(8, 10),
+                elevation_steps=0,
+                surface_kind=ElevationSurfaceKind.RAMP,
+                slope_axis=SlopeAxis.EAST_WEST,
+            ),
+            BattlefieldElevationCell(position=(11, 5), elevation_steps=2),
+            BattlefieldElevationCell(position=(11, 9), elevation_steps=1),
+            BattlefieldElevationCell(position=(2, 12), elevation_steps=1),
+            BattlefieldElevationCell(position=(4, 12), elevation_steps=1),
+            BattlefieldElevationCell(position=(6, 12), elevation_steps=2),
+            BattlefieldElevationCell(position=(8, 12), elevation_steps=1),
+            BattlefieldElevationCell(position=(12, 13), elevation_steps=2),
+        ),
+        connectors=(
+            TraversalConnectorDefinition(
+                authored_id="connector.proving.ladder",
+                kind=TraversalConnectorKind.LADDER,
+                presentation_key="traversal.ladder",
+                endpoint_positions=((1, 12), (2, 12)),
+                movement_cost_feet=10,
+                action_cost_type=None,
+                action_cost_amount=0,
+                bidirectional=True,
+                enabled=True,
+                provocation_policy=ConnectorProvocationPolicy.PROVOKES_SOURCE_EXIT,
+            ),
+            TraversalConnectorDefinition(
+                authored_id="connector.proving.rope",
+                kind=TraversalConnectorKind.ROPE,
+                presentation_key="traversal.rope",
+                endpoint_positions=((3, 12), (4, 12)),
+                movement_cost_feet=10,
+                action_cost_type=ConnectorActionCostType.ACTIONS,
+                action_cost_amount=1,
+                bidirectional=True,
+                enabled=True,
+                provocation_policy=ConnectorProvocationPolicy.PROVOKES_SOURCE_EXIT,
+            ),
+            TraversalConnectorDefinition(
+                authored_id="connector.proving.lift",
+                kind=TraversalConnectorKind.LIFT,
+                presentation_key="traversal.lift",
+                endpoint_positions=((5, 12), (6, 12)),
+                movement_cost_feet=5,
+                action_cost_type=ConnectorActionCostType.BONUS_ACTIONS,
+                action_cost_amount=1,
+                bidirectional=True,
+                enabled=True,
+                provocation_policy=ConnectorProvocationPolicy.DOES_NOT_PROVOKE,
+            ),
+            TraversalConnectorDefinition(
+                authored_id="connector.proving.vertical_stairs",
+                kind=TraversalConnectorKind.VERTICAL_STAIRS,
+                presentation_key="traversal.vertical_stairs",
+                endpoint_positions=((7, 12), (8, 12)),
+                movement_cost_feet=10,
+                action_cost_type=None,
+                action_cost_amount=0,
+                bidirectional=True,
+                enabled=True,
+                provocation_policy=ConnectorProvocationPolicy.DOES_NOT_PROVOKE,
+            ),
+            TraversalConnectorDefinition(
+                authored_id="connector.proving.passage",
+                kind=TraversalConnectorKind.PASSAGE,
+                presentation_key="traversal.passage",
+                endpoint_positions=((1, 13), (12, 13)),
+                movement_cost_feet=15,
+                action_cost_type=ConnectorActionCostType.ACTIONS,
+                action_cost_amount=1,
+                bidirectional=False,
+                enabled=True,
+                provocation_policy=ConnectorProvocationPolicy.PROVOKES_SOURCE_EXIT,
+            ),
+        ),
+    )
+
+
 def _preview_for_battlefield(battlefield_id: str) -> BattlefieldPreview:
     """Return the canonical compact preview for one registered builder."""
     builder_id = battlefield_id.removeprefix("battlefield.")
@@ -224,6 +362,8 @@ def _preview_for_battlefield(battlefield_id: str) -> BattlefieldPreview:
                 _preview_object((5, 10), "loot_chest", "Control Cache"),
             ),
         })
+    if builder_id == "elevation_proving_ground":
+        return _elevation_proving_preview()
     raise ValueError(f"Unknown battlefield preview builder: {builder_id}")
 
 
@@ -290,6 +430,26 @@ BATTLEFIELDS: tuple[BattlefieldDefinition, ...] = (
         ("darkness", "open-field"),
         "darkness",
         ("open-floor", "darkness"),
+    ),
+    _battlefield(
+        "battlefield.elevation_proving_ground",
+        "Elevation And Vertical Traversal Proving Ground",
+        ("bright", "door", "stairs", "ramp", "cliff", "jump-gap", "spikes", "connectors"),
+        "bright",
+        (
+            "bright-light",
+            "closed-door",
+            "progressive-stairs",
+            "progressive-ramp",
+            "cliff",
+            "jump-gap",
+            "landing-hazard",
+            "ladder",
+            "rope",
+            "lift",
+            "vertical-stairs",
+            "passage",
+        ),
     ),
 )
 
@@ -570,6 +730,78 @@ def _build_multi_object_dark(
     )
 
 
+def _build_elevation_proving_ground(
+    definition: BattlefieldDefinition,
+    grid: GridMap,
+) -> BuiltBattlefield:
+    """Build the maintained non-connector elevation proving geometry."""
+    create_standard_arena_floor(grid)
+    preview = definition.preview
+    for cell in preview.cells:
+        if not cell.walkable:
+            grid.set_tile(
+                cell.position[0],
+                cell.position[1],
+                walkable=False,
+                visible=True,
+                name="Gap",
+                sprite_name="gap.png",
+            )
+    for elevation in preview.elevation_cells:
+        grid.set_tile_elevation(
+            elevation.position,
+            height=elevation.elevation_steps,
+            surface_kind=elevation.surface_kind,
+            slope_axis=elevation.slope_axis,
+        )
+    runtime_connectors = {}
+    for connector_definition in preview.connectors:
+        connector = grid.register_connector(connector_definition)
+        if connector is None:
+            raise ValueError(
+                f"battlefield connector was vetoed: {connector_definition.authored_id}"
+            )
+        runtime_connectors[connector.authored_id] = connector.uuid
+    barrier = _place_directional_barrier(
+        grid,
+        column=4,
+        door_y=7,
+        label="Proving",
+    )
+    landing_hazard = materialize_spike_trap_effect({(11, 9)})
+    return BuiltBattlefield(
+        definition=definition,
+        environment=None,
+        notable_positions={
+            "door": (4, 7),
+            "stairs_start": (5, 4),
+            "stairs_top": (8, 4),
+            "ramp_top": (5, 10),
+            "ramp_end": (8, 10),
+            "cliff_from": (10, 5),
+            "cliff_top": (11, 5),
+            "jump_takeoff": (9, 9),
+            "jump_landing": (11, 9),
+            **{
+                f"{connector.kind.value}_start": connector.endpoint_positions[0]
+                for connector in preview.connectors
+            },
+            **{
+                f"{connector.kind.value}_end": connector.endpoint_positions[1]
+                for connector in preview.connectors
+            },
+        },
+        object_uuids={
+            "door": barrier.door.uuid,
+            "landing_hazard": landing_hazard.uuid,
+            **{
+                authored_id: connector_uuid
+                for authored_id, connector_uuid in runtime_connectors.items()
+            },
+        },
+    )
+
+
 BattlefieldBuilder = Callable[
     [BattlefieldDefinition, GridMap],
     BuiltBattlefield,
@@ -585,6 +817,7 @@ _BUILDERS: dict[str, BattlefieldBuilder] = {
     "battlefield.field_cache_bright": _build_field_cache_bright,
     "battlefield.multi_object_dark": _build_multi_object_dark,
     "battlefield.open_floor_dark": _build_open_floor_dark,
+    "battlefield.elevation_proving_ground": _build_elevation_proving_ground,
 }
 
 

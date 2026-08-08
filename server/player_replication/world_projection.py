@@ -18,6 +18,8 @@ from server.world_contracts import (
     APIEntitySummary,
     APIGrid,
     APITile,
+    APITraversalConnector,
+    APITraversalConnectorEndpoint,
     APIVisibilityResponse,
 )
 from server.world_projection import (
@@ -30,6 +32,7 @@ from server.player_replication.journal import SubjectiveWorldProjectionContext
 from server.player_replication_contract import (
     ActiveWeaponSet,
     ControlledEquipmentReplacePatch,
+    ConnectorSetReplacePatch,
     DoorStatePatch,
     EncounterReplacePatch,
     EntityRemovePatch,
@@ -411,6 +414,10 @@ def diff_subjective_worlds(
     for position in sorted(current_tiles):
         if previous_tiles.get(position) != current_tiles[position]:
             patches.append(TileUpsertPatch(tile=current_tiles[position]))
+    if previous.state.grid.connectors != current.state.grid.connectors:
+        patches.append(ConnectorSetReplacePatch(
+            connectors=tuple(current.state.grid.connectors),
+        ))
 
     previous_objects = {obj.uuid: obj for obj in previous.state.floor_objects}
     current_objects = {obj.uuid: obj for obj in current.state.floor_objects}
@@ -594,6 +601,43 @@ def _project_grid(
         remembered_tiles[position].materialize(visible=position in visible_cells)
         for position in sorted(remembered_tiles)
     ]
+    connectors = [
+        APITraversalConnector(
+            uuid=str(connector.uuid),
+            authored_id=connector.authored_id,
+            kind=connector.kind,
+            presentation_key=connector.presentation_key,
+            endpoints=(
+                APITraversalConnectorEndpoint(
+                    position=connector.endpoints[0].position,
+                    support_tile_uuid=str(
+                        connector.endpoints[0].support_tile_uuid
+                    ),
+                    elevation_feet=connector.endpoints[0].elevation_feet,
+                ),
+                APITraversalConnectorEndpoint(
+                    position=connector.endpoints[1].position,
+                    support_tile_uuid=str(
+                        connector.endpoints[1].support_tile_uuid
+                    ),
+                    elevation_feet=connector.endpoints[1].elevation_feet,
+                ),
+            ),
+            movement_cost_feet=connector.movement_cost_feet,
+            action_cost_type=connector.action_cost_type,
+            action_cost_amount=connector.action_cost_amount,
+            bidirectional=connector.bidirectional,
+            enabled=connector.enabled,
+            provocation_policy=connector.provocation_policy,
+            revision=connector.revision,
+            objective_digest=connector.objective_digest,
+        )
+        for connector in grid.get_all_connectors()
+        if all(
+            endpoint.position in visible_cells
+            for endpoint in connector.endpoints
+        )
+    ]
     min_x, min_y, max_x, max_y = grid.bounds
     return APIGrid(
         min_x=min_x,
@@ -601,6 +645,7 @@ def _project_grid(
         max_x=max_x,
         max_y=max_y,
         tiles=tiles,
+        connectors=connectors,
     )
 
 

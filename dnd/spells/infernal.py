@@ -152,7 +152,7 @@ def _rebuke_processor(
     caster.update_entity_senses(max_distance=60)
     if (
         attacker.uuid not in caster.senses.entities
-        or caster.senses.get_feet_distance(attacker.position) > 60
+        or caster.distance_to_entity(attacker) > 60
     ):
         return None
 

@@ -236,7 +236,7 @@ def protection_processor(
     target = Entity.get(event.target_entity_uuid) if event.target_entity_uuid else None
     if not target:
         return None
-    distance = protector.senses.get_feet_distance(target.senses.position)
+    distance = protector.distance_to_entity(target)
     if distance > 5:
         return None
 

@@ -282,7 +282,7 @@ class _AcidFlaskSpell(SpellAction):
                 ),
             )
 
-        distance = caster.senses.get_feet_distance(target_pos)
+        distance = caster.distance_to_position(target_pos)
         if distance > self.spell_range.normal:
             return declaration_event.cancel(
                 status_message=(

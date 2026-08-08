@@ -19,6 +19,12 @@ from dnd.core.events import EventPhase, EventQueue, SpatialChangeEvent
 from dnd.core.gridmap import GridMap
 from dnd.core.item_types import EquippedVisualPolicy, ItemDirection
 from dnd.core.life_types import LifeState
+from dnd.core.traversal_connectors import (
+    ConnectorProvocationPolicy,
+    TraversalConnectorDefinition,
+    TraversalConnectorKind,
+)
+from dnd.core.world_edges import ElevationSurfaceKind
 from dnd.encounter import CombatantState, Encounter, EncounterState
 from dnd.entity import Entity
 from dnd.items.environment_interactables import StorageChest
@@ -47,6 +53,7 @@ from server.player_replication.mapper import (
 )
 from server.player_replication_contract import (
     ActiveWeaponSet,
+    ConnectorSetReplacePatch,
     DoorPresentationCue,
     DoorStatePatch,
     EntityRemovePatch,
@@ -58,7 +65,7 @@ from server.player_replication_contract import (
     SubjectivePerspective,
 )
 from server.world_contracts import StructuralEdgeKind
-from server.world_projection import project_observed_tile
+from server.world_projection import project_grid, project_observed_tile
 
 
 def _materialize_test_actor(
@@ -302,6 +309,88 @@ def test_world_diff_emits_typed_entity_replacement(
         and patch.entity.uuid == str(visible.uuid)
         for patch in patches
     )
+
+
+def test_world_diff_replaces_authorized_connector_set() -> None:
+    """Connector lifecycle and privacy changes reach incremental replicas."""
+    grid = reset_engine_runtime(grid_size=(2, 1))
+    assert grid.set_tile_elevation(
+        (1, 0),
+        height=1,
+        surface_kind=ElevationSurfaceKind.ORDINARY,
+        slope_axis=None,
+    )
+    observer = _materialize_test_actor(
+        name="Connector delta observer",
+        position=(0, 0),
+        faction="heroes",
+    )
+    observer.senses.visible = {(0, 0): True, (1, 0): True}
+    perspective = _participant(observer)
+    memory = _memory(perspective)
+
+    def world():
+        return build_subjective_world(
+            perspective=perspective,
+            grid=grid,
+            entities=[observer],
+            encounter=None,
+            memory=memory,
+        )
+
+    before = world()
+    connector = grid.register_connector(TraversalConnectorDefinition(
+        authored_id="connector.subjective.delta",
+        kind=TraversalConnectorKind.LADDER,
+        presentation_key="traversal.ladder",
+        endpoint_positions=((0, 0), (1, 0)),
+        movement_cost_feet=5,
+        action_cost_type=None,
+        action_cost_amount=0,
+        bidirectional=True,
+        enabled=True,
+        provocation_policy=ConnectorProvocationPolicy.PROVOKES_SOURCE_EXIT,
+    ))
+    assert connector is not None
+    registered = world()
+    patch = next(
+        row for row in diff_subjective_worlds(before, registered)
+        if isinstance(row, ConnectorSetReplacePatch)
+    )
+    assert [row.uuid for row in patch.connectors] == [str(connector.uuid)]
+
+    disabled_connector = grid.set_connector_enabled(connector.uuid, False)
+    assert disabled_connector is not None
+    disabled = world()
+    patch = next(
+        row for row in diff_subjective_worlds(registered, disabled)
+        if isinstance(row, ConnectorSetReplacePatch)
+    )
+    assert len(patch.connectors) == 1
+    assert patch.connectors[0].enabled is False
+
+    observer.senses.visible[(1, 0)] = False
+    hidden = world()
+    patch = next(
+        row for row in diff_subjective_worlds(disabled, hidden)
+        if isinstance(row, ConnectorSetReplacePatch)
+    )
+    assert patch.connectors == ()
+
+    observer.senses.visible[(1, 0)] = True
+    revealed = world()
+    assert len(next(
+        row for row in diff_subjective_worlds(hidden, revealed)
+        if isinstance(row, ConnectorSetReplacePatch)
+    ).connectors) == 1
+
+    assert grid.remove_connector(connector.uuid) is True
+    removed = world()
+    patch = next(
+        row for row in diff_subjective_worlds(revealed, removed)
+        if isinstance(row, ConnectorSetReplacePatch)
+    )
+    assert patch.connectors == ()
 
 
 def test_perceived_corpse_persists_privately_until_authoritative_reobservation(
@@ -999,3 +1088,51 @@ def test_conflicting_door_appearances_are_conservative_and_observer_order_stable
         assert forward.directional_structural_edges.east.is_open is False
     finally:
         reset_engine_runtime()
+
+
+def test_subjective_connector_projection_requires_both_endpoint_grants() -> None:
+    grid = reset_engine_runtime(grid_size=(2, 1))
+    grid.set_tile_elevation(
+        (1, 0),
+        height=1,
+        surface_kind=ElevationSurfaceKind.ORDINARY,
+        slope_axis=None,
+    )
+    connector = grid.register_connector(TraversalConnectorDefinition(
+        authored_id="connector.subjective.ladder",
+        kind=TraversalConnectorKind.LADDER,
+        presentation_key="traversal.ladder",
+        endpoint_positions=((0, 0), (1, 0)),
+        movement_cost_feet=10,
+        action_cost_type=None,
+        action_cost_amount=0,
+        bidirectional=True,
+        enabled=True,
+        provocation_policy=ConnectorProvocationPolicy.PROVOKES_SOURCE_EXIT,
+    ))
+    assert connector is not None
+    observer = _materialize_test_actor(
+        name="Connector Observer",
+        position=(0, 0),
+        faction="heroes",
+    )
+    Entity.update_all_entities_senses(max_distance=20)
+
+    visible_projection = project_grid(
+        grid,
+        requesting_entity_uuid=observer.uuid,
+    )
+    assert [row.authored_id for row in visible_projection.connectors] == [
+        connector.authored_id
+    ]
+
+    observer.senses.visible[(1, 0)] = False
+    hidden_projection = project_grid(
+        grid,
+        requesting_entity_uuid=observer.uuid,
+    )
+    assert hidden_projection.connectors == []
+    assert (1, 0) not in {(tile.x, tile.y) for tile in hidden_projection.tiles}
+
+    with pytest.raises(ValueError, match="known entity"):
+        project_grid(grid, requesting_entity_uuid=uuid4())

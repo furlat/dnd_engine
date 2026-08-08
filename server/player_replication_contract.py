@@ -39,6 +39,7 @@ from server.world_contracts import (
     APIEntityVisibility,
     APIEquipmentOverview,
     APIGrid,
+    APITraversalConnector,
     APITile,
     APIVisibilityResponse,
     SafeContentPresentationRef,
@@ -78,6 +79,7 @@ _PLAYER_REPLICATION_SEMANTICS: Final[dict[str, object]] = {
         "observer_visibility_replace",
         "observer_visibility_remove",
         "controlled_equipment_replace",
+        "connector_set_replace",
         "visual_loadout_replace",
         "door_state",
     ],
@@ -563,6 +565,13 @@ class TileUpsertPatch(PlayerReplicationModel):
     tile: APITile
 
 
+class ConnectorSetReplacePatch(PlayerReplicationModel):
+    """Replace the complete connector set authorized for this perspective."""
+
+    kind: Literal["connector_set_replace"] = "connector_set_replace"
+    connectors: Tuple[APITraversalConnector, ...] = Field(default_factory=tuple)
+
+
 class FloorObjectUpsertPatch(PlayerReplicationModel):
     kind: Literal["floor_object_upsert"] = "floor_object_upsert"
     object: SubjectiveFloorObject
@@ -628,6 +637,7 @@ SubjectiveWorldPatch: TypeAlias = Annotated[
         EntityUpsertPatch,
         EntityRemovePatch,
         TileUpsertPatch,
+        ConnectorSetReplacePatch,
         FloorObjectUpsertPatch,
         FloorObjectRemovePatch,
         EncounterReplacePatch,
@@ -2122,6 +2132,7 @@ __all__ = [
     "ConeAreaGeometry",
     "ConditionOperation",
     "ConditionPresentationCue",
+    "ConnectorSetReplacePatch",
     "ControlledEquipmentReplacePatch",
     "CubeAreaGeometry",
     "CylinderAreaGeometry",

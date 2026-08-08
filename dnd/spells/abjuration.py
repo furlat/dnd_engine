@@ -1205,7 +1205,7 @@ def counterspell_reaction_processor(
         return None
     if not entity.is_enemy(spell_caster):
         return None
-    distance = entity.senses.get_feet_distance(spell_caster.position)
+    distance = entity.distance_to_entity(spell_caster)
     if distance > 60:
         return None
 

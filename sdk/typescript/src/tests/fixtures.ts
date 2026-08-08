@@ -82,6 +82,7 @@ export function bootstrap(generationId = "generation-a"): SubjectiveReplicationB
           min_y: 0,
           max_x: 9,
           max_y: 9,
+          connectors: [],
           tiles: [{
             x: 0,
             y: 0,
@@ -90,6 +91,9 @@ export function bootstrap(generationId = "generation-a"): SubjectiveReplicationB
             visible: true,
             name: "Floor",
             walking_cost: 1,
+            elevation_steps: 0,
+            elevation_surface_kind: "ordinary",
+            slope_axis: null,
             is_hazardous: false,
             conditions: [],
             condition_details: [],
@@ -250,6 +254,10 @@ export function objectiveStepFrame(cursor = 1): GameEventFrame {
     total_path_length: cursor,
     movement_cost: 5,
     trajectory: "path",
+    disclosed_path: [[cursor - 1, 0], [cursor, 0]],
+    from_elevation_feet: 0,
+    to_elevation_feet: 0,
+    provocation_policy: "ordinary_exit",
     committed: true,
   };
   return {

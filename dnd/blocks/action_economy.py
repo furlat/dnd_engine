@@ -1,9 +1,9 @@
 """Action economy resources, turn costs, and spell slot values."""
 
-from typing import Optional, List, Tuple, Dict, Union
+from typing import Optional, List, Tuple, Dict, Union, Sequence
 from uuid import UUID, uuid4
 from enum import Enum
-from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, StrictInt
 from dnd.core.values import ModifiableValue
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.action_types import (
@@ -31,6 +31,59 @@ class ResourceCapacityPolicy(str, Enum):
 
     SUM = "sum"
     MAXIMUM = "maximum"
+
+
+class ActionEconomyChannelCost(BaseModel):
+    """One exact value-channel debit with no named-resource ambiguity."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    cost_type: CostType
+    amount: StrictInt = Field(ge=0)
+    name: Optional[str] = None
+
+
+class NamedResourceCost(BaseModel):
+    """One exact named-resource debit kept outside modifier channels."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    name: str = Field(min_length=1)
+    amount: StrictInt = Field(ge=1)
+
+
+class ActionEconomyDebitHandle(BaseModel):
+    """Exact installed modifier evidence for one aggregated channel."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    cost_type: CostType
+    modifier_uuid: UUID
+    amount: StrictInt = Field(ge=0)
+    modifier_name: str
+
+
+class ActionEconomyDebitReceipt(BaseModel):
+    """One-use receipt for modifiers installed by one aggregate commit."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    receipt_uuid: UUID = Field(default_factory=uuid4)
+    owner_uuid: UUID
+    handles: Tuple[ActionEconomyDebitHandle, ...]
+
+
+class FixedCostCommitReceipt(BaseModel):
+    """Successful fixed-cost evidence retained by Jump or a connector."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    channel_receipt: ActionEconomyDebitReceipt
+    resources: Tuple[NamedResourceCost, ...]
+
+
+class FixedCostCommitError(RuntimeError):
+    """A synchronous no-dispatch fixed-cost commit failed and was unwound."""
 
 
 class ResourceRecoveryContribution(BaseModel):
@@ -329,6 +382,7 @@ class ActionEconomy(BaseBlock):
     _normal_spell_slot_floor_modifier_uuids: Dict[int, UUID] = PrivateAttr(
         default_factory=dict,
     )
+    _used_debit_receipts: set[UUID] = PrivateAttr(default_factory=set)
 
     def add_restricted_action_grant(
         self,
@@ -845,11 +899,11 @@ class ActionEconomy(BaseBlock):
         Uses the full `normalized_score` rather than only static modifiers so
         contextual bonuses and constraints affect affordability consistently.
         """
-        value = self._get_value_for_cost_type(cost_type)
-        if value.normalized_score - amount < 0:
-            raise ValueError(f"Not enough {cost_type} to consume {amount} {cost_name if cost_name is not None else 'cost'}")
-
-        self.consume_prevalidated(cost_type, amount, cost_name)
+        self.consume_aggregate_with_receipt((ActionEconomyChannelCost(
+            cost_type=cost_type,
+            amount=amount,
+            name=cost_name,
+        ),))
 
     def consume_prevalidated(
         self,
@@ -869,16 +923,211 @@ class ActionEconomy(BaseBlock):
         ordinary callers use :meth:`consume`, which performs affordability
         validation.
         """
-        if amount < 0:
-            raise ValueError("Committed action-economy cost cannot be negative")
-        value = self._get_value_for_cost_type(cost_type)
-        modifier_name = f"{cost_name}_cost" if cost_name is not None else "cost"
-        cost_modifier = NumericalModifier.create(
-            source_entity_uuid=self.source_entity_uuid,
-            name=modifier_name,
-            value=-amount
+        self.install_prevalidated_aggregate_with_receipt((
+            ActionEconomyChannelCost(
+                cost_type=cost_type,
+                amount=amount,
+                name=cost_name,
+            ),
+        ))
+
+    @staticmethod
+    def _aggregate_channel_costs(
+        costs: Sequence[ActionEconomyChannelCost],
+    ) -> Tuple[ActionEconomyChannelCost, ...]:
+        """Validate and combine repeated typed channels deterministically."""
+        totals: Dict[CostType, int] = {}
+        labels: Dict[CostType, set[str]] = {}
+        for cost in costs:
+            if type(cost) is not ActionEconomyChannelCost:
+                raise TypeError("aggregate debits accept ActionEconomyChannelCost only")
+            totals[cost.cost_type] = totals.get(cost.cost_type, 0) + cost.amount
+            if cost.name:
+                labels.setdefault(cost.cost_type, set()).add(cost.name)
+        return tuple(
+            ActionEconomyChannelCost(
+                cost_type=cost_type,
+                amount=totals[cost_type],
+                name=(
+                    " + ".join(sorted(labels.get(cost_type, set())))
+                    or None
+                ),
+            )
+            for cost_type in sorted(totals)
+            if totals[cost_type] > 0
         )
-        value.self_static.add_value_modifier(cost_modifier)
+
+    def install_prevalidated_aggregate_with_receipt(
+        self,
+        costs: Sequence[ActionEconomyChannelCost],
+    ) -> ActionEconomyDebitReceipt:
+        """Install an admitted aggregate without rechecking affordability."""
+        aggregated = self._aggregate_channel_costs(costs)
+        installed: List[ActionEconomyDebitHandle] = []
+        pending_modifier: Optional[NumericalModifier] = None
+        pending_cost_type: Optional[CostType] = None
+        try:
+            for cost in aggregated:
+                value = self._get_value_for_cost_type(cost.cost_type)
+                modifier_name = (
+                    f"{cost.name}_cost" if cost.name is not None else "cost"
+                )
+                modifier = NumericalModifier.create(
+                    source_entity_uuid=self.source_entity_uuid,
+                    name=modifier_name,
+                    value=-cost.amount,
+                )
+                pending_modifier = modifier
+                pending_cost_type = cost.cost_type
+                value.self_static.add_value_modifier(modifier)
+                installed.append(ActionEconomyDebitHandle(
+                    cost_type=cost.cost_type,
+                    modifier_uuid=modifier.uuid,
+                    amount=cost.amount,
+                    modifier_name=modifier_name,
+                ))
+                pending_modifier = None
+                pending_cost_type = None
+        except Exception:
+            if pending_modifier is not None and pending_cost_type is not None:
+                pending_value = self._get_value_for_cost_type(pending_cost_type)
+                pending_value.self_static.remove_value_modifier(
+                    pending_modifier.uuid
+                )
+                pending_modifier.remove_from_register()
+            for handle in reversed(installed):
+                value = self._get_value_for_cost_type(handle.cost_type)
+                modifier = value.self_static.value_modifiers.get(
+                    handle.modifier_uuid
+                )
+                value.self_static.remove_value_modifier(handle.modifier_uuid)
+                if modifier is not None:
+                    modifier.remove_from_register()
+            raise
+        return ActionEconomyDebitReceipt(
+            owner_uuid=self.uuid,
+            handles=tuple(installed),
+        )
+
+    def consume_aggregate_with_receipt(
+        self,
+        costs: Sequence[ActionEconomyChannelCost],
+    ) -> ActionEconomyDebitReceipt:
+        """Prove current aggregate affordability and install it exactly once."""
+        aggregated = self._aggregate_channel_costs(costs)
+        unaffordable = next(
+            (
+                cost
+                for cost in aggregated
+                if not self.can_afford(cost.cost_type, cost.amount)
+            ),
+            None,
+        )
+        if unaffordable is not None:
+            raise ValueError(
+                f"Not enough {unaffordable.cost_type} to consume "
+                f"{unaffordable.amount} aggregate cost"
+            )
+        return self.install_prevalidated_aggregate_with_receipt(aggregated)
+
+    def undo_prevalidated_debit(
+        self,
+        receipt: ActionEconomyDebitReceipt,
+    ) -> None:
+        """Remove only still-exact modifiers from one unused owned receipt."""
+        if type(receipt) is not ActionEconomyDebitReceipt:
+            raise TypeError("debit undo requires an ActionEconomyDebitReceipt")
+        if (
+            type(receipt.receipt_uuid) is not UUID
+            or type(receipt.owner_uuid) is not UUID
+            or type(receipt.handles) is not tuple
+        ):
+            raise TypeError("debit receipt has malformed identity or handles")
+        if receipt.owner_uuid != self.uuid:
+            raise ValueError("debit receipt belongs to another action economy")
+        if receipt.receipt_uuid in self._used_debit_receipts:
+            raise ValueError("debit receipt has already been used")
+
+        exact_modifiers: List[Tuple[ActionEconomyDebitHandle, NumericalModifier]] = []
+        for handle in receipt.handles:
+            if (
+                type(handle) is not ActionEconomyDebitHandle
+                or type(handle.cost_type) is not str
+                or type(handle.modifier_uuid) is not UUID
+                or type(handle.amount) is not int
+                or handle.amount < 0
+                or type(handle.modifier_name) is not str
+            ):
+                raise TypeError("debit handle has malformed typed evidence")
+            value = self._get_value_for_cost_type(handle.cost_type)
+            modifier = value.self_static.value_modifiers.get(handle.modifier_uuid)
+            if (
+                type(modifier) is not NumericalModifier
+                or modifier.name != handle.modifier_name
+                or modifier.value != -handle.amount
+                or modifier.source_entity_uuid != self.source_entity_uuid
+            ):
+                raise ValueError("debit receipt no longer names exact installed state")
+            exact_modifiers.append((handle, modifier))
+
+        for handle, modifier in exact_modifiers:
+            value = self._get_value_for_cost_type(handle.cost_type)
+            value.self_static.remove_value_modifier(handle.modifier_uuid)
+            modifier.remove_from_register()
+        self._used_debit_receipts.add(receipt.receipt_uuid)
+
+    def commit_fixed_costs_without_dispatch(
+        self,
+        *,
+        channel_costs: Sequence[ActionEconomyChannelCost],
+        resource_costs: Sequence[NamedResourceCost],
+    ) -> FixedCostCommitReceipt:
+        """Synchronously commit disjoint fixed channels and named resources."""
+        aggregated_channels = self._aggregate_channel_costs(channel_costs)
+        resource_totals: Dict[str, int] = {}
+        for cost in resource_costs:
+            if type(cost) is not NamedResourceCost:
+                raise TypeError("fixed resources accept NamedResourceCost only")
+            resource_totals[cost.name] = resource_totals.get(cost.name, 0) + cost.amount
+        aggregated_resources = tuple(
+            NamedResourceCost(name=name, amount=resource_totals[name])
+            for name in sorted(resource_totals)
+        )
+
+        if any(
+            not self.can_afford(cost.cost_type, cost.amount)
+            for cost in aggregated_channels
+        ) or any(
+            not self.can_afford_resource(cost.name, cost.amount)
+            for cost in aggregated_resources
+        ):
+            raise FixedCostCommitError("fixed costs are no longer affordable")
+
+        try:
+            channel_receipt = self.install_prevalidated_aggregate_with_receipt(
+                aggregated_channels
+            )
+        except Exception as exc:
+            raise FixedCostCommitError("failed to install fixed channel costs") from exc
+
+        consumed_resources: List[Tuple[Resource, int]] = []
+        try:
+            for cost in aggregated_resources:
+                resource = self.resources[cost.name]
+                previous = resource.current
+                consumed_resources.append((resource, previous))
+                if not resource.consume(cost.amount):
+                    raise RuntimeError("prevalidated resource became unavailable")
+        except Exception as exc:
+            for resource, previous in reversed(consumed_resources):
+                resource.current = previous
+            self.undo_prevalidated_debit(channel_receipt)
+            raise FixedCostCommitError("failed to install fixed resource costs") from exc
+
+        return FixedCostCommitReceipt(
+            channel_receipt=channel_receipt,
+            resources=aggregated_resources,
+        )
 
     @classmethod
     def create(cls, source_entity_uuid: UUID, name: str = "ActionEconomy", source_entity_name: Optional[str] = None,

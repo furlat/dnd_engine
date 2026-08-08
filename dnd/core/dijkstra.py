@@ -20,6 +20,9 @@ def dijkstra(
     diagonal: bool = True,
     max_distance: Optional[int] = None,
     cost_func: Optional[Callable[[int, int], float]] = None,
+    edge_cost_func: Optional[
+        Callable[[Tuple[int, int], Tuple[int, int]], float]
+    ] = None,
     can_enter: Optional[Callable[[Tuple[int, int], Tuple[int, int]], bool]] = None,
     epsilon: float = 0.001,
     min_x: int = 0,
@@ -36,6 +39,8 @@ def dijkstra(
         max_distance: Maximum movement cost to search.
         cost_func: Optional movement-cost callback. Costs less than or equal to
             zero are impassable.
+        edge_cost_func: Optional transition-cost callback used instead of
+            `cost_func` when cost depends on both endpoints.
         can_enter: Optional transition callback for directional borders.
         epsilon: Small priority cost added to diagonal moves for tie-breaking.
         min_x: Minimum x coordinate included in the search bound.
@@ -75,7 +80,11 @@ def dijkstra(
             if can_enter is not None and not can_enter(current_position, neighbor):
                 continue
 
-            if cost_func is not None:
+            if edge_cost_func is not None:
+                tile_cost = edge_cost_func(current_position, neighbor)
+                if tile_cost <= 0:
+                    continue
+            elif cost_func is not None:
                 tile_cost = cost_func(neighbor[0], neighbor[1])
                 if tile_cost <= 0:
                     continue

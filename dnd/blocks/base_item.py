@@ -297,6 +297,18 @@ class BaseItem(BaseBlock):
         """Return this item's authored directional topology, when present."""
         return None
 
+    def get_objective_directional_structural_channels(
+        self,
+        direction: str,
+    ) -> Optional[Tuple[str, ...]]:
+        """Expose stable authored identity plus noncontextual current state."""
+        structure = self.get_directional_structure_state()
+        if structure is None or direction not in structure.blocked_directions:
+            return None
+        if self.get_spatial_open_state() is True:
+            return ()
+        return tuple(structure.blocked_channels)
+
     def get_light_source_state(self) -> Optional[ItemLightSourceState]:
         """Return this item's visible light-emitter state, when present."""
         return None

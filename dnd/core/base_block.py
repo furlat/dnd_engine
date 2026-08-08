@@ -171,6 +171,18 @@ class BaseBlock(BaseModel):
         """Open/closed state for spatial objects that expose one."""
         return None
 
+    def get_objective_directional_structural_channels(
+        self,
+        direction: str,
+    ) -> Optional[Tuple[str, ...]]:
+        """Return noncontextual current channels for one authored structure.
+
+        ``None`` means this block does not author that edge. An empty tuple
+        means the provider identity remains present while currently open.
+        """
+        del direction
+        return None
+
     def should_include_in_senses_objects(self) -> bool:
         """Whether this block should appear in entity senses.objects."""
         return True

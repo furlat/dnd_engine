@@ -15,6 +15,7 @@ from dnd.blocks.equipment import Equipment
 from dnd.blocks.saving_throws import SavingThrowSet
 from dnd.blocks.sensory import Senses
 from dnd.core.base_block import BaseBlock
+from dnd.core.creature_types import Size
 from dnd.core.life_types import LifeState
 from dnd.core.modifiers import (
     AdvantageModifier,
@@ -38,10 +39,16 @@ class CreatureTransformTarget(Protocol):
     """Structural capability surface required by creature transforms."""
 
     uuid: UUID
+    position: tuple[int, int]
+    size: Size
     action_economy: ActionEconomy
     equipment: Equipment
     saving_throws: SavingThrowSet
     senses: Senses
+
+    def distance_to_entity(self, target: "CreatureTransformTarget") -> int:
+        """Return objective creature-volume distance to another target."""
+        ...
 
 
 def remove_modifier_ownership(ownership: ModifierOwnership) -> None:
@@ -218,7 +225,7 @@ def close_range_auto_critical(
     attacker = _transform_target(target_entity_uuid)
     if source is None or attacker is None:
         return None
-    if source.senses.get_feet_distance(attacker.senses.position) > 5:
+    if source.distance_to_entity(attacker) > 5:
         return None
     return CriticalModifier(
         name="Close Range Auto-Critical",
@@ -243,7 +250,7 @@ def prone_distance_advantage(
         return None
     status = (
         AdvantageStatus.ADVANTAGE
-        if source.senses.get_feet_distance(attacker.senses.position) <= 5
+        if source.distance_to_entity(attacker) <= 5
         else AdvantageStatus.DISADVANTAGE
     )
     return AdvantageModifier(

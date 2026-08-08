@@ -1,7 +1,15 @@
 {
-  "contract_hash": "1b52c3021e7106c3a91f523d470ee6da0051c3b042b82288a6c146a387e0c33c",
+  "contract_hash": "c9a6e51b3718d8c89ea0446db95ee19ca3edf4d5edb7dd854daa521dee691169",
   "contract_version": 1,
   "enums": {
+    "dnd.core.action_execution.MovementProvocationPolicy": {
+      "python": "dnd.core.action_execution.MovementProvocationPolicy",
+      "typescript": "MovementProvocationPolicy",
+      "values": [
+        "ordinary_exit",
+        "does_not_provoke"
+      ]
+    },
     "dnd.core.action_execution.MovementTerminationReason": {
       "python": "dnd.core.action_execution.MovementTerminationReason",
       "typescript": "MovementTerminationReason",
@@ -319,6 +327,7 @@
         "shield_unequip",
         "item_location_state",
         "item_charge_consumption",
+        "traversal_connector_changed",
         "trigger_event",
         "dice_roll",
         "d20_roll_result",
@@ -360,7 +369,8 @@
       "typescript": "MovementTrajectory",
       "values": [
         "path",
-        "direct_arc"
+        "direct_arc",
+        "connector_transfer"
       ]
     },
     "dnd.core.events.RangeType": {
@@ -575,6 +585,61 @@
         "cloud",
         "field"
       ]
+    },
+    "dnd.core.traversal_connectors.ConnectorActionCostType": {
+      "python": "dnd.core.traversal_connectors.ConnectorActionCostType",
+      "typescript": "ConnectorActionCostType",
+      "values": [
+        "actions",
+        "bonus_actions"
+      ]
+    },
+    "dnd.core.traversal_connectors.ConnectorProvocationPolicy": {
+      "python": "dnd.core.traversal_connectors.ConnectorProvocationPolicy",
+      "typescript": "ConnectorProvocationPolicy",
+      "values": [
+        "provokes_source_exit",
+        "does_not_provoke"
+      ]
+    },
+    "dnd.core.traversal_connectors.TraversalConnectorChangeOperation": {
+      "python": "dnd.core.traversal_connectors.TraversalConnectorChangeOperation",
+      "typescript": "TraversalConnectorChangeOperation",
+      "values": [
+        "register",
+        "replace",
+        "enable",
+        "disable",
+        "remove"
+      ]
+    },
+    "dnd.core.traversal_connectors.TraversalConnectorKind": {
+      "python": "dnd.core.traversal_connectors.TraversalConnectorKind",
+      "typescript": "TraversalConnectorKind",
+      "values": [
+        "ladder",
+        "rope",
+        "lift",
+        "vertical_stairs",
+        "passage"
+      ]
+    },
+    "dnd.core.world_edges.ElevationSurfaceKind": {
+      "python": "dnd.core.world_edges.ElevationSurfaceKind",
+      "typescript": "ElevationSurfaceKind",
+      "values": [
+        "ordinary",
+        "stairs",
+        "ramp"
+      ]
+    },
+    "dnd.core.world_edges.SlopeAxis": {
+      "python": "dnd.core.world_edges.SlopeAxis",
+      "typescript": "SlopeAxis",
+      "values": [
+        "north_south",
+        "east_west"
+      ]
     }
   },
   "event_classes": {
@@ -612,6 +677,13 @@
       ],
       "model": "dnd.actions.SpellEvent",
       "typescript": "SpellEvent"
+    },
+    "dnd.actions.TraverseConnectorEvent": {
+      "event_types": [
+        "movement"
+      ],
+      "model": "dnd.actions.TraverseConnectorEvent",
+      "typescript": "TraverseConnectorEvent"
     },
     "dnd.blocks.base_item.ItemChargeConsumptionEvent": {
       "event_types": [
@@ -789,6 +861,7 @@
         "shield_unequip",
         "item_location_state",
         "item_charge_consumption",
+        "traversal_connector_changed",
         "trigger_event",
         "dice_roll",
         "d20_roll_result",
@@ -970,6 +1043,20 @@
       "model": "dnd.core.events.TemporaryHitPointsEvent",
       "typescript": "TemporaryHitPointsEvent"
     },
+    "dnd.core.events.TileElevationChangeEvent": {
+      "event_types": [
+        "spatial_tile_changed"
+      ],
+      "model": "dnd.core.events.TileElevationChangeEvent",
+      "typescript": "TileElevationChangeEvent"
+    },
+    "dnd.core.events.TraversalConnectorChangeEvent": {
+      "event_types": [
+        "traversal_connector_changed"
+      ],
+      "model": "dnd.core.events.TraversalConnectorChangeEvent",
+      "typescript": "TraversalConnectorChangeEvent"
+    },
     "dnd.core.events.TurnEndEvent": {
       "event_types": [
         "turn_end"
@@ -1027,6 +1114,7 @@
     "shield_unequip",
     "item_location_state",
     "item_charge_consumption",
+    "traversal_connector_changed",
     "trigger_event",
     "dice_roll",
     "d20_roll_result",
@@ -1609,6 +1697,9 @@
         "description": {
           "kind": "string"
         },
+        "end_elevation_feet": {
+          "kind": "number"
+        },
         "end_position": {
           "items": [
             {
@@ -1623,6 +1714,9 @@
         "event_type": {
           "kind": "enum",
           "ref": "dnd.core.events.EventType"
+        },
+        "fixed_costs_committed": {
+          "kind": "boolean"
         },
         "is_first": {
           "kind": "boolean"
@@ -1659,8 +1753,30 @@
         "modified": {
           "kind": "boolean"
         },
+        "movement_spent": {
+          "kind": "number"
+        },
         "name": {
           "kind": "string"
+        },
+        "objective_end_position": {
+          "items": [
+            {
+              "items": [
+                {
+                  "kind": "number"
+                },
+                {
+                  "kind": "number"
+                }
+              ],
+              "kind": "tuple"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
         },
         "outcome_code": {
           "items": [
@@ -1736,6 +1852,28 @@
           "kind": "enum",
           "ref": "dnd.core.action_types.ActionPresentationKind"
         },
+        "requested_end_elevation_feet": {
+          "kind": "number"
+        },
+        "requested_end_position": {
+          "items": [
+            {
+              "items": [
+                {
+                  "kind": "number"
+                },
+                {
+                  "kind": "number"
+                }
+              ],
+              "kind": "tuple"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
         "source_entity_name": {
           "items": [
             {
@@ -1772,6 +1910,9 @@
             }
           ],
           "kind": "union"
+        },
+        "start_elevation_feet": {
+          "kind": "number"
         },
         "start_position": {
           "items": [
@@ -1816,6 +1957,10 @@
             }
           ],
           "kind": "union"
+        },
+        "termination_reason": {
+          "kind": "enum",
+          "ref": "dnd.core.action_execution.MovementTerminationReason"
         },
         "timestamp": {
           "kind": "string"
@@ -3228,6 +3373,406 @@
       },
       "python": "dnd.actions.SpellEvent",
       "typescript": "SpellEvent"
+    },
+    "dnd.actions.TraverseConnectorEvent": {
+      "fields": {
+        "action_cost_amount": {
+          "kind": "number"
+        },
+        "action_cost_type": {
+          "items": [
+            {
+              "kind": "enum",
+              "ref": "dnd.core.traversal_connectors.ConnectorActionCostType"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "aoe_position": {
+          "items": [
+            {
+              "items": [
+                {
+                  "kind": "number"
+                },
+                {
+                  "kind": "number"
+                }
+              ],
+              "kind": "tuple"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "application_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "application_index": {
+          "items": [
+            {
+              "kind": "number"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "canceled": {
+          "kind": "boolean"
+        },
+        "canceled_from_phase": {
+          "items": [
+            {
+              "kind": "enum",
+              "ref": "dnd.core.events.EventPhase"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "children_events": {
+          "items": {
+            "kind": "string"
+          },
+          "kind": "array"
+        },
+        "children_lineages": {
+          "items": {
+            "kind": "string"
+          },
+          "kind": "array"
+        },
+        "connector_authored_id": {
+          "kind": "string"
+        },
+        "connector_bidirectional": {
+          "kind": "boolean"
+        },
+        "connector_digest": {
+          "kind": "string"
+        },
+        "connector_kind": {
+          "kind": "enum",
+          "ref": "dnd.core.traversal_connectors.TraversalConnectorKind"
+        },
+        "connector_presentation_key": {
+          "kind": "string"
+        },
+        "connector_provocation_policy": {
+          "kind": "enum",
+          "ref": "dnd.core.traversal_connectors.ConnectorProvocationPolicy"
+        },
+        "connector_revision": {
+          "kind": "number"
+        },
+        "connector_uuid": {
+          "kind": "string"
+        },
+        "context": {
+          "items": [
+            {
+              "kind": "record",
+              "values": {
+                "kind": "json"
+              }
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "costs": {
+          "items": {
+            "kind": "model",
+            "ref": "dnd.core.base_actions.BaseCost"
+          },
+          "kind": "array"
+        },
+        "declared_target_entity_uuids": {
+          "items": {
+            "kind": "string"
+          },
+          "kind": "array"
+        },
+        "description": {
+          "kind": "string"
+        },
+        "end_elevation_feet": {
+          "kind": "number"
+        },
+        "end_position": {
+          "items": [
+            {
+              "kind": "number"
+            },
+            {
+              "kind": "number"
+            }
+          ],
+          "kind": "tuple"
+        },
+        "event_type": {
+          "kind": "enum",
+          "ref": "dnd.core.events.EventType"
+        },
+        "is_first": {
+          "kind": "boolean"
+        },
+        "is_last": {
+          "kind": "boolean"
+        },
+        "item_charge_action_lineage_uuid": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "item_charge_cost": {
+          "kind": "number"
+        },
+        "lineage_children_events": {
+          "items": {
+            "kind": "string"
+          },
+          "kind": "array"
+        },
+        "lineage_uuid": {
+          "kind": "string"
+        },
+        "modified": {
+          "kind": "boolean"
+        },
+        "movement_cost_feet": {
+          "kind": "number"
+        },
+        "name": {
+          "kind": "string"
+        },
+        "objective_end_position": {
+          "items": [
+            {
+              "items": [
+                {
+                  "kind": "number"
+                },
+                {
+                  "kind": "number"
+                }
+              ],
+              "kind": "tuple"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "outcome_code": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "outcome_source_entity_uuid": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "parent_event": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "parent_lineage": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "phase": {
+          "kind": "enum",
+          "ref": "dnd.core.events.EventPhase"
+        },
+        "presentation_kind": {
+          "kind": "enum",
+          "ref": "dnd.core.action_types.ActionPresentationKind"
+        },
+        "requested_end_elevation_feet": {
+          "kind": "number"
+        },
+        "requested_end_position": {
+          "items": [
+            {
+              "kind": "number"
+            },
+            {
+              "kind": "number"
+            }
+          ],
+          "kind": "tuple"
+        },
+        "source_entity_name": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "source_entity_uuid": {
+          "kind": "string"
+        },
+        "source_item_presentation": {
+          "items": [
+            {
+              "kind": "model",
+              "ref": "dnd.core.item_types.ItemPresentationState"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "source_item_uuid": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "start_elevation_feet": {
+          "kind": "number"
+        },
+        "start_position": {
+          "items": [
+            {
+              "kind": "number"
+            },
+            {
+              "kind": "number"
+            }
+          ],
+          "kind": "tuple"
+        },
+        "status_message": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "target_entity_name": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "target_entity_uuid": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "termination_reason": {
+          "kind": "enum",
+          "ref": "dnd.core.action_execution.MovementTerminationReason"
+        },
+        "timestamp": {
+          "kind": "string"
+        },
+        "total_damage": {
+          "kind": "number"
+        },
+        "total_targets": {
+          "kind": "number"
+        },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "use_register": {
+          "kind": "boolean"
+        },
+        "uuid": {
+          "kind": "string"
+        }
+      },
+      "python": "dnd.actions.TraverseConnectorEvent",
+      "typescript": "TraverseConnectorEvent"
     },
     "dnd.blocks.base_item.ItemChargeConsumptionEvent": {
       "fields": {
@@ -13926,9 +14471,26 @@
           ],
           "kind": "union"
         },
+        "disclosed_path": {
+          "items": {
+            "items": [
+              {
+                "kind": "number"
+              },
+              {
+                "kind": "number"
+              }
+            ],
+            "kind": "tuple"
+          },
+          "kind": "array"
+        },
         "event_type": {
           "kind": "enum",
           "ref": "dnd.core.events.EventType"
+        },
+        "from_elevation_feet": {
+          "kind": "number"
         },
         "from_position": {
           "items": [
@@ -14016,6 +14578,10 @@
           "kind": "enum",
           "ref": "dnd.core.events.EventPhase"
         },
+        "provocation_policy": {
+          "kind": "enum",
+          "ref": "dnd.core.action_execution.MovementProvocationPolicy"
+        },
         "source_entity_name": {
           "items": [
             {
@@ -14065,6 +14631,9 @@
         },
         "timestamp": {
           "kind": "string"
+        },
+        "to_elevation_feet": {
+          "kind": "number"
         },
         "to_position": {
           "items": [
@@ -14563,6 +15132,766 @@
       },
       "python": "dnd.core.events.TemporaryHitPointsEvent",
       "typescript": "TemporaryHitPointsEvent"
+    },
+    "dnd.core.events.TileElevationChangeEvent": {
+      "fields": {
+        "canceled": {
+          "kind": "boolean"
+        },
+        "canceled_from_phase": {
+          "items": [
+            {
+              "kind": "enum",
+              "ref": "dnd.core.events.EventPhase"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "change_type": {
+          "kind": "enum",
+          "ref": "dnd.core.events.SpatialChangeType"
+        },
+        "children_events": {
+          "items": {
+            "kind": "string"
+          },
+          "kind": "array"
+        },
+        "children_lineages": {
+          "items": {
+            "kind": "string"
+          },
+          "kind": "array"
+        },
+        "context": {
+          "items": [
+            {
+              "kind": "record",
+              "values": {
+                "kind": "json"
+              }
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "directional_blocks_light": {
+          "items": [
+            {
+              "kind": "record",
+              "values": {
+                "kind": "boolean"
+              }
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "directional_blocks_movement": {
+          "items": [
+            {
+              "kind": "record",
+              "values": {
+                "kind": "boolean"
+              }
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "directional_blocks_propagation": {
+          "items": [
+            {
+              "kind": "record",
+              "values": {
+                "kind": "boolean"
+              }
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "directional_blocks_vision": {
+          "items": [
+            {
+              "kind": "record",
+              "values": {
+                "kind": "boolean"
+              }
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "directional_channels": {
+          "items": [
+            {
+              "items": {
+                "kind": "string"
+              },
+              "kind": "array"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "directional_directions": {
+          "items": [
+            {
+              "items": {
+                "kind": "string"
+              },
+              "kind": "array"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "directional_position": {
+          "items": [
+            {
+              "items": [
+                {
+                  "kind": "number"
+                },
+                {
+                  "kind": "number"
+                }
+              ],
+              "kind": "tuple"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "entity_uuid": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "event_type": {
+          "kind": "enum",
+          "ref": "dnd.core.events.EventType"
+        },
+        "is_first": {
+          "kind": "boolean"
+        },
+        "is_last": {
+          "kind": "boolean"
+        },
+        "light_level_map": {
+          "items": [
+            {
+              "kind": "record",
+              "values": {
+                "kind": "number"
+              }
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "lineage_children_events": {
+          "items": {
+            "kind": "string"
+          },
+          "kind": "array"
+        },
+        "lineage_uuid": {
+          "kind": "string"
+        },
+        "modified": {
+          "kind": "boolean"
+        },
+        "name": {
+          "kind": "string"
+        },
+        "new_height_steps": {
+          "kind": "number"
+        },
+        "new_light_level": {
+          "items": [
+            {
+              "kind": "number"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "new_slope_axis": {
+          "items": [
+            {
+              "kind": "enum",
+              "ref": "dnd.core.world_edges.SlopeAxis"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "new_surface_kind": {
+          "kind": "enum",
+          "ref": "dnd.core.world_edges.ElevationSurfaceKind"
+        },
+        "object_blocks_movement": {
+          "items": [
+            {
+              "kind": "boolean"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "object_blocks_vision": {
+          "items": [
+            {
+              "kind": "boolean"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "object_is_open": {
+          "items": [
+            {
+              "kind": "boolean"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "object_map_char": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "object_name": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "object_uuid": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "old_height_steps": {
+          "kind": "number"
+        },
+        "old_position": {
+          "items": [
+            {
+              "items": [
+                {
+                  "kind": "number"
+                },
+                {
+                  "kind": "number"
+                }
+              ],
+              "kind": "tuple"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "old_slope_axis": {
+          "items": [
+            {
+              "kind": "enum",
+              "ref": "dnd.core.world_edges.SlopeAxis"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "old_surface_kind": {
+          "kind": "enum",
+          "ref": "dnd.core.world_edges.ElevationSurfaceKind"
+        },
+        "outcome_code": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "outcome_source_entity_uuid": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "parent_event": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "parent_lineage": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "phase": {
+          "kind": "enum",
+          "ref": "dnd.core.events.EventPhase"
+        },
+        "position": {
+          "items": [
+            {
+              "kind": "number"
+            },
+            {
+              "kind": "number"
+            }
+          ],
+          "kind": "tuple"
+        },
+        "senses_hint": {
+          "items": [
+            {
+              "kind": "model",
+              "ref": "dnd.core.events.SensesUpdateHint"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "source_entity_name": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "source_entity_uuid": {
+          "kind": "string"
+        },
+        "status_message": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "target_entity_name": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "target_entity_uuid": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "tile_uuid": {
+          "kind": "string"
+        },
+        "tile_visible": {
+          "items": [
+            {
+              "kind": "boolean"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "tile_walkable": {
+          "items": [
+            {
+              "kind": "boolean"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "timestamp": {
+          "kind": "string"
+        },
+        "transition_from": {
+          "items": [
+            {
+              "items": [
+                {
+                  "kind": "number"
+                },
+                {
+                  "kind": "number"
+                }
+              ],
+              "kind": "tuple"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "transition_to": {
+          "items": [
+            {
+              "items": [
+                {
+                  "kind": "number"
+                },
+                {
+                  "kind": "number"
+                }
+              ],
+              "kind": "tuple"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "use_register": {
+          "kind": "boolean"
+        },
+        "uuid": {
+          "kind": "string"
+        }
+      },
+      "python": "dnd.core.events.TileElevationChangeEvent",
+      "typescript": "TileElevationChangeEvent"
+    },
+    "dnd.core.events.TraversalConnectorChangeEvent": {
+      "fields": {
+        "authored_id": {
+          "kind": "string"
+        },
+        "canceled": {
+          "kind": "boolean"
+        },
+        "canceled_from_phase": {
+          "items": [
+            {
+              "kind": "enum",
+              "ref": "dnd.core.events.EventPhase"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "children_events": {
+          "items": {
+            "kind": "string"
+          },
+          "kind": "array"
+        },
+        "children_lineages": {
+          "items": {
+            "kind": "string"
+          },
+          "kind": "array"
+        },
+        "connector_uuid": {
+          "kind": "string"
+        },
+        "context": {
+          "items": [
+            {
+              "kind": "record",
+              "values": {
+                "kind": "json"
+              }
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "event_type": {
+          "kind": "enum",
+          "ref": "dnd.core.events.EventType"
+        },
+        "is_first": {
+          "kind": "boolean"
+        },
+        "is_last": {
+          "kind": "boolean"
+        },
+        "lineage_children_events": {
+          "items": {
+            "kind": "string"
+          },
+          "kind": "array"
+        },
+        "lineage_uuid": {
+          "kind": "string"
+        },
+        "modified": {
+          "kind": "boolean"
+        },
+        "name": {
+          "kind": "string"
+        },
+        "new_connector": {
+          "items": [
+            {
+              "kind": "model",
+              "ref": "dnd.core.traversal_connectors.TraversalConnector"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "old_connector": {
+          "items": [
+            {
+              "kind": "model",
+              "ref": "dnd.core.traversal_connectors.TraversalConnector"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "operation": {
+          "kind": "enum",
+          "ref": "dnd.core.traversal_connectors.TraversalConnectorChangeOperation"
+        },
+        "outcome_code": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "outcome_source_entity_uuid": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "parent_event": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "parent_lineage": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "phase": {
+          "kind": "enum",
+          "ref": "dnd.core.events.EventPhase"
+        },
+        "source_entity_name": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "source_entity_uuid": {
+          "kind": "string"
+        },
+        "status_message": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "target_entity_name": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "target_entity_uuid": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "timestamp": {
+          "kind": "string"
+        },
+        "turn_execution_id": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "use_register": {
+          "kind": "boolean"
+        },
+        "uuid": {
+          "kind": "string"
+        }
+      },
+      "python": "dnd.core.events.TraversalConnectorChangeEvent",
+      "typescript": "TraversalConnectorChangeEvent"
     },
     "dnd.core.events.TurnEndEvent": {
       "fields": {
@@ -16865,6 +18194,95 @@
       },
       "python": "dnd.core.senses.SenseMode",
       "typescript": "SenseMode"
+    },
+    "dnd.core.traversal_connectors.TraversalConnector": {
+      "fields": {
+        "action_cost_amount": {
+          "kind": "number"
+        },
+        "action_cost_type": {
+          "items": [
+            {
+              "kind": "enum",
+              "ref": "dnd.core.traversal_connectors.ConnectorActionCostType"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "authored_id": {
+          "kind": "string"
+        },
+        "bidirectional": {
+          "kind": "boolean"
+        },
+        "enabled": {
+          "kind": "boolean"
+        },
+        "endpoints": {
+          "items": [
+            {
+              "kind": "model",
+              "ref": "dnd.core.traversal_connectors.TraversalConnectorEndpoint"
+            },
+            {
+              "kind": "model",
+              "ref": "dnd.core.traversal_connectors.TraversalConnectorEndpoint"
+            }
+          ],
+          "kind": "tuple"
+        },
+        "kind": {
+          "kind": "enum",
+          "ref": "dnd.core.traversal_connectors.TraversalConnectorKind"
+        },
+        "movement_cost_feet": {
+          "kind": "number"
+        },
+        "objective_digest": {
+          "kind": "string"
+        },
+        "presentation_key": {
+          "kind": "string"
+        },
+        "provocation_policy": {
+          "kind": "enum",
+          "ref": "dnd.core.traversal_connectors.ConnectorProvocationPolicy"
+        },
+        "revision": {
+          "kind": "number"
+        },
+        "uuid": {
+          "kind": "string"
+        }
+      },
+      "python": "dnd.core.traversal_connectors.TraversalConnector",
+      "typescript": "TraversalConnector"
+    },
+    "dnd.core.traversal_connectors.TraversalConnectorEndpoint": {
+      "fields": {
+        "elevation_feet": {
+          "kind": "number"
+        },
+        "position": {
+          "items": [
+            {
+              "kind": "number"
+            },
+            {
+              "kind": "number"
+            }
+          ],
+          "kind": "tuple"
+        },
+        "support_tile_uuid": {
+          "kind": "string"
+        }
+      },
+      "python": "dnd.core.traversal_connectors.TraversalConnectorEndpoint",
+      "typescript": "TraversalConnectorEndpoint"
     },
     "dnd.core.values.ContextualValue": {
       "fields": {

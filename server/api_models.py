@@ -4,6 +4,8 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    StrictBool,
+    StrictInt,
     field_validator,
     model_validator,
 )
@@ -16,6 +18,7 @@ from dnd.ai.policy import PolicyDescriptor
 from dnd.core.base_actions import AvailableActionsResult, AvailableHandlerInfo
 from dnd.core.content.battlefields import BattlefieldDefinition
 from dnd.core.content.descriptors import ContentOrdering, ContentPresentation
+from dnd.core.content.canonical import canonical_content_sha256
 from dnd.core.content.identities import ContentRef, validate_sha256
 from dnd.core.content.encounters import (
     EncounterCompatibilityReport,
@@ -28,6 +31,11 @@ from dnd.core.content.encounters import (
 from dnd.core.content.recipe_presets import ContentRecipePresetRef
 from dnd.core.content.recipes import ContentRecipe
 from dnd.core.events import AbilityName
+from dnd.core.world_edges import ElevationSurfaceKind, SlopeAxis
+from dnd.core.traversal_connectors import (
+    TraversalConnectorChangeOperation,
+    TraversalConnectorDefinition,
+)
 from server.game_creation_preview_contracts import (
     GameCreationEncounterVisualPreviewResponse,
 )
@@ -168,6 +176,10 @@ class MapEditorMapSnapshot(BaseModel):
         default_factory=list,
         description="Serialized floor objects placed on the map.",
     )
+    connectors: List[TraversalConnectorDefinition] = Field(
+        default_factory=list,
+        description="Stable authored connector definitions in authored-ID order.",
+    )
 
 
 class MapEditorSavedObjectPlacement(BaseModel):
@@ -230,6 +242,19 @@ class MapEditorSavedMapMetadata(BaseModel):
     grid_bounds: MapEditorGridBounds = Field(description="Inclusive saved map bounds.")
     tile_count: int = Field(description="Number of serialized tiles.")
     floor_object_count: int = Field(description="Number of serialized floor objects.")
+    connector_count: int = Field(
+        default=0,
+        description="Number of serialized authored connector definitions.",
+    )
+    connector_digest: str = Field(
+        default=canonical_content_sha256([]),
+        description="Digest of connector definitions in authored-ID order.",
+    )
+
+    @field_validator("connector_digest")
+    @classmethod
+    def _validate_connector_digest(cls, value: str) -> str:
+        return validate_sha256(value, "connector_digest")
 
 
 class MapEditorSavedMapDocument(BaseModel):
@@ -245,7 +270,7 @@ class MapEditorSavedMapDocument(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    schema_version: Literal[2] = Field(default=2, description="Saved map schema version.")
+    schema_version: Literal[3] = Field(default=3, description="Saved map schema version.")
     content_set_digest: str = Field(
         description="Exact installed content set required for loading this map.",
     )
@@ -265,7 +290,7 @@ class MapEditorSavedMapDocument(BaseModel):
     def _validate_single_object_authority(self) -> "MapEditorSavedMapDocument":
         if self.snapshot.floor_objects:
             raise ValueError(
-                "schema-2 snapshot.floor_objects must be empty; "
+                "schema-3 snapshot.floor_objects must be empty; "
                 "object_placements are the durable object authority",
             )
         if self.metadata.floor_object_count != len(self.object_placements):
@@ -274,6 +299,19 @@ class MapEditorSavedMapDocument(BaseModel):
             )
         if self.metadata.tile_count != len(self.snapshot.tiles):
             raise ValueError("saved map tile_count must match snapshot tiles")
+        if self.metadata.connector_count != len(self.snapshot.connectors):
+            raise ValueError("saved map connector_count must match snapshot connectors")
+        connector_payload = [
+            connector.model_dump(mode="json")
+            for connector in sorted(
+                self.snapshot.connectors,
+                key=lambda connector: connector.authored_id,
+            )
+        ]
+        if self.metadata.connector_digest != canonical_content_sha256(
+            connector_payload
+        ):
+            raise ValueError("saved map connector_digest must match snapshot connectors")
         return self
 
 
@@ -324,10 +362,24 @@ class MapEditorTilePatch(BaseModel):
         passable: Whether the patched directional side is passable.
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     x: int = Field(description="Tile x-coordinate to patch.")
     y: int = Field(description="Tile y-coordinate to patch.")
     type: Optional[str] = Field(default=None, description="Optional replacement terrain type.")
     light_level: Optional[int] = Field(default=None, description="Optional replacement light level.")
+    elevation_steps: Optional[StrictInt] = Field(
+        default=None,
+        description="Optional support elevation in five-foot steps.",
+    )
+    elevation_surface_kind: Optional[ElevationSurfaceKind] = Field(
+        default=None,
+        description="Optional replacement support-surface kind.",
+    )
+    slope_axis: Optional[SlopeAxis] = Field(
+        default=None,
+        description="Optional progressive surface axis; explicit null clears it.",
+    )
     directional_channel: Optional[Literal["movement", "vision", "light", "propagation"]] = Field(
         default=None,
         description="Directional blocking channel to patch.",
@@ -347,6 +399,42 @@ class MapEditorTilePatchRequest(BaseModel):
     """
 
     tiles: List[MapEditorTilePatch] = Field(description="Tile patches to apply.")
+
+
+class MapEditorConnectorUpsertRequest(BaseModel):
+    """Create or replace one exact authored connector definition."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    definition: TraversalConnectorDefinition
+    replace_existing: StrictBool = False
+
+
+class MapEditorConnectorEnabledRequest(BaseModel):
+    """Enable or disable one connector by stable authored identity."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    authored_id: str
+    enabled: StrictBool
+
+
+class MapEditorConnectorDeleteRequest(BaseModel):
+    """Remove one connector by stable authored identity."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    authored_id: str
+
+
+class MapEditorConnectorMutationResponse(BaseModel):
+    """Authoritative connector mutation receipt plus the refreshed editor map."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    operation: TraversalConnectorChangeOperation
+    connector_uuid: str
+    authored_id: str
+    connector_revision: StrictInt = Field(ge=1)
+    connector_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    connector: Optional[world_contracts.APITraversalConnector] = None
+    snapshot: MapEditorMapSnapshot
 
 
 class MapEditorObjectRuntimeState(BaseModel):

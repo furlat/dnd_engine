@@ -2,17 +2,37 @@
 
 from typing import Dict, Optional, Tuple
 from uuid import UUID, uuid4
-from pydantic import Field, PrivateAttr
+from pydantic import Field, PrivateAttr, StrictInt, model_validator
 from dnd.core.base_block import BaseBlock, MovementMode, LightLevel, SensesType
 from dnd.core.values import ModifiableValue
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.events import SpatialChangeEvent, EventQueue
 from dnd.core.geometry import grid_distance_feet
+from dnd.core.world_edges import ElevationSurfaceKind, SlopeAxis
 
 _DARKVISION_SHIFT: Dict[LightLevel, LightLevel] = {
     LightLevel.DARKNESS: LightLevel.DIM_LIGHT,
     LightLevel.DIM_LIGHT: LightLevel.BRIGHT_LIGHT,
 }
+
+
+def validate_elevation_surface_tuple(
+    height: int,
+    surface_kind: ElevationSurfaceKind,
+    slope_axis: Optional[SlopeAxis],
+) -> None:
+    """Validate one exact stored support tuple without creating a Tile."""
+    if type(height) is not int:
+        raise TypeError("tile height must be an exact integer number of steps")
+    if type(surface_kind) is not ElevationSurfaceKind:
+        raise TypeError("surface_kind must be an ElevationSurfaceKind")
+    if slope_axis is not None and type(slope_axis) is not SlopeAxis:
+        raise TypeError("slope_axis must be a SlopeAxis or None")
+    if surface_kind is ElevationSurfaceKind.ORDINARY:
+        if slope_axis is not None:
+            raise ValueError("ordinary elevation surfaces cannot define a slope axis")
+    elif slope_axis is None:
+        raise ValueError("stairs and ramps require a slope axis")
 
 
 class Tile(BaseBlock):
@@ -95,13 +115,31 @@ class Tile(BaseBlock):
     object_propagation_border_east: bool = Field(default=True, description="Object-derived propagation contribution east")
     object_propagation_border_west: bool = Field(default=True, description="Object-derived propagation contribution west")
 
-    height: int = Field(default=0, description="Tile elevation in 5ft increments")
+    height: StrictInt = Field(default=0, description="Support elevation in five-foot steps.")
+    elevation_surface_kind: ElevationSurfaceKind = Field(
+        default=ElevationSurfaceKind.ORDINARY,
+        description="Authored support-surface kind governing progressive elevation.",
+    )
+    slope_axis: Optional[SlopeAxis] = Field(
+        default=None,
+        description="Cardinal axis of stairs or ramp; absent for ordinary support.",
+    )
     default_light: LightLevel = Field(
         default=LightLevel.BRIGHT_LIGHT,
         description="Base objective light level before illumination or obscurement modifiers.",
     )
     _illuminations: Dict[UUID, LightLevel] = PrivateAttr(default_factory=dict)
     _obscurements: Dict[UUID, LightLevel] = PrivateAttr(default_factory=dict)
+
+    @model_validator(mode="after")
+    def validate_elevation_surface(self) -> "Tile":
+        """Keep every stored elevation tuple internally coherent."""
+        validate_elevation_surface_tuple(
+            self.height,
+            self.elevation_surface_kind,
+            self.slope_axis,
+        )
+        return self
 
     def get_movement_cost(self, mode: MovementMode) -> float:
         """Get the movement cost for a specific mode."""
@@ -463,6 +501,8 @@ class Tile(BaseBlock):
                name: str = "Floor",
                sprite_name: Optional[str] = None,
                height: int = 0,
+               elevation_surface_kind: ElevationSurfaceKind = ElevationSurfaceKind.ORDINARY,
+               slope_axis: Optional[SlopeAxis] = None,
                default_light: LightLevel = LightLevel.BRIGHT_LIGHT) -> 'Tile':
         """Create a tile with movement-mode `ModifiableValue` costs."""
         tile_uuid = uuid4()
@@ -526,6 +566,8 @@ class Tile(BaseBlock):
             swimming_cost=swimming_cost,
             burrowing_cost=burrowing_cost,
             height=height,
+            elevation_surface_kind=elevation_surface_kind,
+            slope_axis=slope_axis,
             default_light=default_light
         )
 
@@ -570,9 +612,24 @@ def water_factory(position: Tuple[int, int]) -> Tile:
     return tile
 
 
-def difficult_terrain_factory(position: Tuple[int, int]) -> Tile:
+def difficult_terrain_factory(
+    position: Tuple[int, int],
+    *,
+    height: int = 0,
+    elevation_surface_kind: ElevationSurfaceKind = ElevationSurfaceKind.ORDINARY,
+    slope_axis: Optional[SlopeAxis] = None,
+) -> Tile:
     """Create a difficult terrain tile (walking costs 2x movement)."""
-    tile = Tile.create(position, walkable=True, visible=True, name="Difficult Terrain", sprite_name="rough.png")
+    tile = Tile.create(
+        position,
+        walkable=True,
+        visible=True,
+        name="Difficult Terrain",
+        sprite_name="rough.png",
+        height=height,
+        elevation_surface_kind=elevation_surface_kind,
+        slope_axis=slope_axis,
+    )
 
     tile.walking_cost.self_static.add_value_modifier(
         NumericalModifier.create(

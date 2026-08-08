@@ -4,6 +4,7 @@ import type {
   EntityVisualLoadout,
   SubjectiveEncounter,
   SubjectiveFloorObject,
+  APITraversalConnector,
   SubjectivePerspective,
   SubjectiveReplicatedWorld,
   SubjectiveWorldPatch,
@@ -17,6 +18,7 @@ export function reduceSubjectiveWorld(
 ): SubjectiveReplicatedWorld {
   const entities = keyed(world.state.entities, (entity) => entity.uuid);
   const tiles = keyed(world.state.grid.tiles, tileKey);
+  let connectors = world.state.grid.connectors;
   const floorObjects = keyed(world.state.floor_objects, (object) => object.uuid);
   const visibility = { ...world.visibility };
   const equipment = { ...world.equipment_by_entity };
@@ -37,6 +39,9 @@ export function reduceSubjectiveWorld(
       case "tile_upsert":
         assertTileInsideGrid(patch.tile, world);
         tiles.set(tileKey(patch.tile), patch.tile);
+        break;
+      case "connector_set_replace":
+        connectors = patch.connectors;
         break;
       case "floor_object_upsert":
         floorObjects.set(patch.object.uuid, patch.object);
@@ -67,11 +72,11 @@ export function reduceSubjectiveWorld(
     }
   }
 
-  return {
+  const reduced = {
     state: {
       ...world.state,
       entities: [...entities.values()],
-      grid: { ...world.state.grid, tiles: [...tiles.values()] },
+      grid: { ...world.state.grid, tiles: [...tiles.values()], connectors: [...connectors] },
       encounter,
       floor_objects: [...floorObjects.values()],
     },
@@ -79,6 +84,8 @@ export function reduceSubjectiveWorld(
     equipment_by_entity: equipment,
     visual_loadout_by_entity: visualLoadouts,
   };
+  assertGridConnectorIntegrity(reduced, "$subjective.world.state.grid");
+  return reduced;
 }
 
 /** Validate the cross-field invariants needed by every renderer seed. */
@@ -160,6 +167,7 @@ export function assertSubjectiveWorld(
   for (const tile of grid.tiles) {
     assertTileInsideGrid(tile, world, `${path}.state.grid.tiles`);
   }
+  assertGridConnectorIntegrity(world, `${path}.state.grid`);
   for (const [observerUuid, row] of Object.entries(world.visibility)) {
     const visibleKeys = new Set(row.visible_cells.map(([x, y]) => `${x},${y}`));
     assertExactKeys(
@@ -196,6 +204,9 @@ export function assertSubjectiveWorldPatch(
     case "visual_loadout_replace":
       assertEntityVisualLoadout(patch.loadout, `${path}.loadout`);
       return;
+    case "connector_set_replace":
+      assertConnectorSetIdentity(patch.connectors, `${path}.connectors`);
+      return;
     case "entity_upsert":
     case "entity_remove":
     case "tile_upsert":
@@ -207,6 +218,101 @@ export function assertSubjectiveWorldPatch(
     default:
       assertNever(patch);
   }
+}
+
+function assertConnectorSetIdentity(
+  connectors: ReadonlyArray<APITraversalConnector>,
+  path: string,
+): void {
+  uniqueValues(connectors.map((connector) => connector.uuid), `${path}.uuid`);
+  uniqueValues(
+    connectors.map((connector) => connector.authored_id),
+    `${path}.authored_id`,
+  );
+}
+
+function assertGridConnectorIntegrity(
+  world: SubjectiveReplicatedWorld,
+  path: string,
+): void {
+  const grid = world.state.grid;
+  assertConnectorSetIdentity(grid.connectors, `${path}.connectors`);
+  const tiles = keyed(grid.tiles, tileKey);
+  const currentlyVisibleCells = new Set(
+    Object.values(world.visibility).flatMap((row) => (
+      row.visible_cells.map(([x, y]) => `${x},${y}`)
+    )),
+  );
+  grid.tiles.forEach((tile, tileIndex) => {
+    const isCurrentlyVisible = currentlyVisibleCells.has(tileKey(tile));
+    if (tile.visible !== isCurrentlyVisible) {
+      throw new ContractValidationError(
+        `${path}.tiles[${tileIndex}].visible`,
+        "tile visibility must equal the current observer-union visibility",
+      );
+    }
+  });
+  for (const visibleCell of currentlyVisibleCells) {
+    const tile = tiles.get(visibleCell);
+    if (tile === undefined || !tile.visible) {
+      throw new ContractValidationError(
+        `${path}.tiles`,
+        "every current observer-union cell requires a projected visible tile",
+      );
+    }
+  }
+  grid.connectors.forEach((connector, connectorIndex) => {
+    if (
+      connector.endpoints[0].position[0] === connector.endpoints[1].position[0]
+      && connector.endpoints[0].position[1] === connector.endpoints[1].position[1]
+    ) {
+      throw new ContractValidationError(
+        `${path}.connectors[${connectorIndex}].endpoints`,
+        "connector endpoints must occupy two distinct positions",
+      );
+    }
+    connector.endpoints.forEach((endpoint, endpointIndex) => {
+      const endpointPath = (
+        `${path}.connectors[${connectorIndex}].endpoints[${endpointIndex}]`
+      );
+      const [x, y] = endpoint.position;
+      if (x < grid.min_x || x > grid.max_x || y < grid.min_y || y > grid.max_y) {
+        throw new ContractValidationError(
+          `${endpointPath}.position`,
+          "connector endpoint lies outside projected grid bounds",
+        );
+      }
+      const tile = tiles.get(`${x},${y}`);
+      if (tile === undefined) {
+        throw new ContractValidationError(
+          `${endpointPath}.position`,
+          "connector endpoint requires an authorized projected support tile",
+        );
+      }
+      if (!tile.visible) {
+        throw new ContractValidationError(
+          `${endpointPath}.position`,
+          "connector endpoint requires a currently visible support tile",
+        );
+      }
+      if (!currentlyVisibleCells.has(`${x},${y}`)) {
+        throw new ContractValidationError(
+          `${endpointPath}.position`,
+          "connector endpoint requires current observer-union authorization",
+        );
+      }
+      if (endpoint.elevation_feet !== tile.elevation_steps * 5) {
+        throw new ContractValidationError(
+          `${endpointPath}.elevation_feet`,
+          "connector endpoint elevation differs from its projected support tile",
+        );
+      }
+      // APITile intentionally exposes no objective tile UUID. The endpoint's
+      // support_tile_uuid therefore remains an opaque identity carried from
+      // the server; coordinate authorization and elevation agreement are the
+      // complete client-enforceable relation.
+    });
+  });
 }
 
 export function assertSubjectiveFloorObject(

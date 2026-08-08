@@ -92,7 +92,7 @@ class AegisSpark(SpellAction):
             return declaration_event.cancel(status_message="Aegis Spark caster or target not found")
         if target.uuid != caster.uuid and target.uuid not in caster.senses.entities:
             return declaration_event.cancel(status_message="Aegis Spark target is not visible")
-        if caster.senses.get_feet_distance(target.position) > self.effective_range:
+        if caster.distance_to_entity(target) > self.effective_range:
             return declaration_event.cancel(status_message="Aegis Spark target is out of range")
         if not caster.is_ally(target):
             return declaration_event.cancel(status_message="Aegis Spark can only target allies")

@@ -1876,7 +1876,7 @@ class Sunburst(SpellAction):
         if target_pos not in caster.senses.visible or not caster.senses.visible[target_pos]:
             return declaration_event.cancel(status_message=f"Position {target_pos} not in LOS")
 
-        distance = caster.senses.get_feet_distance(target_pos)
+        distance = caster.distance_to_position(target_pos)
         if distance > self.effective_range:
             return declaration_event.cancel(status_message=f"Out of range ({distance}ft)")
 
@@ -3158,7 +3158,6 @@ class ChainLightning(SpellAction):
         )
 
         chain_targets = [target]
-        chain_positions: Set[Tuple[int, int]] = {target.position}
         chain_uuids = {target.uuid}
 
         visible_enemy_dict = caster.get_visible_enemies()
@@ -3176,8 +3175,8 @@ class ChainLightning(SpellAction):
                 if enemy.uuid in chain_uuids or not enemy.has_hp:
                     continue
 
-                for chain_pos in chain_positions:
-                    dist = enemy.senses.get_feet_distance(chain_pos)
+                for chain_target in chain_targets:
+                    dist = enemy.distance_to_entity(chain_target)
                     if dist <= 30 and dist < best_distance:
                         best_distance = dist
                         best_candidate = enemy
@@ -3185,7 +3184,6 @@ class ChainLightning(SpellAction):
             if best_candidate is None:
                 break
             chain_targets.append(best_candidate)
-            chain_positions.add(best_candidate.position)
             chain_uuids.add(best_candidate.uuid)
 
         total_damage = 0
@@ -3917,7 +3915,8 @@ class ContinualFlame(SpellAction):
             return declaration_event.cancel(
                 status_message="Target object is not placed on the grid",
             )
-        if caster.senses.get_feet_distance(position) > 5:
+        target_distance = caster.distance_to_object(target)
+        if target_distance is None or target_distance > 5:
             return declaration_event.cancel(status_message="Target object is out of reach")
         return declaration_event.phase_to(EventPhase.EXECUTION)
 

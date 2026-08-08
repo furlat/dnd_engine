@@ -35,6 +35,13 @@ class MovementTerminationReason(str, Enum):
     CANCELED = "canceled"
 
 
+class MovementProvocationPolicy(str, Enum):
+    """Objective source-exit reaction policy carried by one movement leg."""
+
+    ORDINARY_EXIT = "ordinary_exit"
+    DOES_NOT_PROVOKE = "does_not_provoke"
+
+
 @dataclass(frozen=True, slots=True)
 class MovementStepBoundary:
     """Truth committed by one voluntary movement step before revalidation."""

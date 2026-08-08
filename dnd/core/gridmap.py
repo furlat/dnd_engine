@@ -2,26 +2,62 @@
 
 import math
 import time
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple, Set, DefaultDict
 from uuid import UUID, uuid4
 from collections import OrderedDict, defaultdict
 
 from pydantic import BaseModel, Field
 
+from dnd.core.elevation import support_distance_feet
 from dnd.core.geometry import circle_positions, supercover_line, supercover_line_offsets
 from dnd.core.shadowcast import compute_fov
 from dnd.core.dijkstra import breadth_first_paths, dijkstra
 from dnd.core.base_block import BaseBlock, MovementMode, LightLevel
-from dnd.core.base_tiles import Tile
-from dnd.core.events import Event, SpatialChangeEvent, SpatialChangeType, EventPhase, EventQueue, EventType, SensesUpdateHint
+from dnd.core.base_tiles import Tile, validate_elevation_surface_tuple
+from dnd.core.events import Event, SpatialChangeEvent, SpatialChangeType, EventPhase, EventQueue, EventType, SensesUpdateHint, TileElevationChangeEvent, TraversalConnectorChangeEvent
 from dnd.core.spatial_effect_types import (
     SpatialEffectLayer,
     SpatialEffectOccupancyPolicy,
 )
 from dnd.action_timing import action_timing_enabled, record_action_elapsed, record_action_timing
+from dnd.core.world_edges import (
+    AdjacentEdgeKey,
+    ElevationSurfaceKind,
+    SlopeAxis,
+    WorldEdgeChannel,
+    WorldEdgeStructuralContribution,
+    WorldEdgeView,
+    progressive_elevation_transition,
+    transition_axis,
+)
+from dnd.core.positioning import PositionCommitError, PositionPublicationError
+from dnd.core.traversal_connectors import (
+    TraversalConnector,
+    TraversalConnectorChangeOperation,
+    TraversalConnectorDefinition,
+    TraversalConnectorEndpoint,
+)
 
 DIRECTIONS: Tuple[str, ...] = ("north", "south", "east", "west")
 DIRECTIONAL_CHANNELS: Tuple[str, ...] = ("movement", "vision", "light", "propagation")
+
+_OBJECT_BORDER_FIELDS: Tuple[str, ...] = tuple(
+    f"object_{channel}_border_{direction}"
+    for channel in DIRECTIONAL_CHANNELS
+    for direction in DIRECTIONS
+)
+
+
+@dataclass(frozen=True, slots=True)
+class GridEntityPositionReceipt:
+    """Exact staged GridMap index transition awaiting spatial publication."""
+
+    entity_uuid: UUID
+    old_position: Optional[Tuple[int, int]]
+    new_position: Tuple[int, int]
+    old_directional_metadata: Dict[str, Any]
+    new_directional_metadata: Dict[str, Any]
 
 
 class LightSourceData(BaseModel):
@@ -75,8 +111,16 @@ class GridMap:
         self._light_sources: Dict[UUID, LightSourceData] = {}
         self._block_light_suppressions: DefaultDict[UUID, Set[str]] = defaultdict(set)
 
+        self._connectors_by_uuid: Dict[UUID, TraversalConnector] = {}
+        self._connector_uuid_by_authored_id: Dict[str, UUID] = {}
+        self._connector_uuids_by_endpoint: DefaultDict[
+            Tuple[int, int], List[UUID]
+        ] = defaultdict(list)
+        self._connector_revision: int = 0
+
         self._events_enabled: bool = True
         self._pending_events: List['SpatialChangeEvent'] = []
+        self._pending_committed_events: List['SpatialChangeEvent'] = []
 
         self._light_callback_registered: bool = False
         self._blocking_callback_registered: bool = False
@@ -161,13 +205,29 @@ class GridMap:
 
         return EventQueue.publish_lifecycle(event)
 
+    def _fire_committed_spatial_event(
+        self,
+        event: 'SpatialChangeEvent',
+    ) -> Optional['SpatialChangeEvent']:
+        """Publish a non-vetoable observation fact for an existing commit."""
+        if not self._events_enabled:
+            self._pending_committed_events.append(event)
+            return None
+        execution = event.phase_to(EventPhase.EXECUTION)
+        effect = execution.phase_to(EventPhase.EFFECT)
+        return effect.phase_to(EventPhase.COMPLETION, use_register=True)
+
     def enable_events(self) -> None:
         """Enable event firing and flush pending events through full lifecycle."""
         self._events_enabled = True
         pending = self._pending_events.copy()
+        pending_committed = self._pending_committed_events.copy()
         self._pending_events.clear()
+        self._pending_committed_events.clear()
         for event in pending:
             self._fire_spatial_event(event)
+        for event in pending_committed:
+            self._fire_committed_spatial_event(event)
 
     def disable_events(self) -> None:
         """Disable event firing (for batch operations)."""
@@ -224,6 +284,11 @@ class GridMap:
     def propagation_revision(self) -> int:
         """Return the current physical-propagation topology revision."""
         return self._propagation_revision
+
+    @property
+    def connector_revision(self) -> int:
+        """Return the connector/action-discovery topology revision."""
+        return self._connector_revision
 
     def invalidate_spatial_caches(self, channels: Set[str]) -> None:
         """Invalidate spatial query caches after authoritative topology changes.
@@ -320,21 +385,55 @@ class GridMap:
 
     def set_tile(self, x: int, y: int, walkable: bool = True, visible: bool = True,
                  name: str = "Floor", sprite_name: Optional[str] = None,
-                 fire_event: bool = True, tile: Optional[Tile] = None) -> Tile:
+                 fire_event: bool = True, tile: Optional[Tile] = None,
+                 height: int = 0,
+                 elevation_surface_kind: ElevationSurfaceKind = ElevationSurfaceKind.ORDINARY,
+                 slope_axis: Optional[SlopeAxis] = None) -> Tile:
         """Set or replace a tile at a position.
 
         If tile parameter is provided, uses that tile directly (updating its position if needed).
         Otherwise creates a new Tile object with the given parameters.
         Returns the stored tile.
         """
+        validate_elevation_surface_tuple(
+            height if tile is None else tile.height,
+            (
+                elevation_surface_kind
+                if tile is None
+                else tile.elevation_surface_kind
+            ),
+            slope_axis if tile is None else tile.slope_axis,
+        )
         position = (x, y)
         old_tile = self._tiles.get(position)
+        if old_tile is not None and self._connector_uuids_by_endpoint.get(position):
+            raise ValueError(
+                "cannot replace a support tile while a traversal connector is anchored"
+            )
         old_directional = self._directional_block_map(position)
-
-        if old_tile:
-            self._tiles_by_uuid.pop(old_tile.uuid, None)
+        old_elevation_tuple = (
+            (
+                old_tile.height,
+                old_tile.elevation_surface_kind,
+                old_tile.slope_axis,
+            )
+            if old_tile is not None
+            else None
+        )
 
         if tile is not None:
+            if BaseBlock.get(tile.uuid) is not tile:
+                raise ValueError(
+                    "tile UUID must resolve to the exact global Tile object"
+                )
+            indexed_position = self._tiles_by_uuid.get(tile.uuid)
+            if indexed_position is not None and (
+                indexed_position != position
+                or self._tiles.get(indexed_position) is not tile
+            ):
+                raise ValueError(
+                    "cannot install a live Tile or UUID at a second position"
+                )
             tile.position = position
         else:
             tile = Tile.create(
@@ -342,8 +441,13 @@ class GridMap:
                 walkable=walkable,
                 visible=visible,
                 name=name,
-                sprite_name=sprite_name
+                sprite_name=sprite_name,
+                height=height,
+                elevation_surface_kind=elevation_surface_kind,
+                slope_axis=slope_axis,
             )
+        if old_tile:
+            self._tiles_by_uuid.pop(old_tile.uuid, None)
         self._tiles[position] = tile
         self._tiles_by_uuid[tile.uuid] = position
         self._bounds_dirty = True
@@ -355,6 +459,16 @@ class GridMap:
             revision_channels.update({"movement", "vision", "light", "propagation"})
         else:
             if old_tile.walkable != tile.walkable:
+                revision_channels.add("movement")
+            if (
+                old_tile.height,
+                old_tile.elevation_surface_kind,
+                old_tile.slope_axis,
+            ) != (
+                tile.height,
+                tile.elevation_surface_kind,
+                tile.slope_axis,
+            ):
                 revision_channels.add("movement")
             if old_tile.visible != tile.visible:
                 revision_channels.update({"vision", "propagation"})
@@ -371,11 +485,25 @@ class GridMap:
             tile_visible = tile.visible
             scalar_walk_changed = old_tile is None or old_walkable != tile_walkable
             scalar_visible_changed = old_tile is None or old_visible != tile_visible
+            scalar_elevation_changed = old_elevation_tuple != (
+                tile.height,
+                tile.elevation_surface_kind,
+                tile.slope_axis,
+            )
             directional_channels = set(directional_metadata.get("directional_channels") or [])
-            if scalar_walk_changed or scalar_visible_changed or directional_channels:
+            if (
+                scalar_walk_changed
+                or scalar_visible_changed
+                or scalar_elevation_changed
+                or directional_channels
+            ):
                 hint = SensesUpdateHint(
                     requires_fov=scalar_visible_changed or "vision" in directional_channels,
-                    requires_paths=scalar_walk_changed or "movement" in directional_channels,
+                    requires_paths=(
+                        scalar_walk_changed
+                        or scalar_elevation_changed
+                        or "movement" in directional_channels
+                    ),
                     directional_positions={position} if directional_channels else None,
                     directional_neighbors={
                         neighbor
@@ -391,9 +519,164 @@ class GridMap:
                     senses_hint=hint,
                     **directional_metadata,
                 )
-                self._fire_spatial_event(event)
+                if scalar_elevation_changed:
+                    self._fire_committed_spatial_event(event)
+                else:
+                    self._fire_spatial_event(event)
 
         return tile
+
+    def set_tile_elevation(
+        self,
+        position: Tuple[int, int],
+        *,
+        height: int,
+        surface_kind: ElevationSurfaceKind,
+        slope_axis: Optional[SlopeAxis],
+        parent_event: Optional[UUID] = None,
+    ) -> bool:
+        """Validate, publish, and commit one exact support-tuple mutation."""
+        validate_elevation_surface_tuple(height, surface_kind, slope_axis)
+        tile = self._tiles.get(position)
+        if tile is None:
+            raise ValueError(f"cannot set elevation on missing tile {position}")
+        if (
+            tile.height == height
+            and tile.elevation_surface_kind is surface_kind
+            and tile.slope_axis is slope_axis
+        ):
+            return False
+        if height != tile.height and self._connector_uuids_by_endpoint.get(position):
+            raise ValueError(
+                "cannot change support height while a traversal connector is anchored"
+            )
+        original_tile_tuple = (
+            tile.height,
+            tile.elevation_surface_kind,
+            tile.slope_axis,
+        )
+        original_connector_uuids = tuple(
+            self._connector_uuids_by_endpoint.get(position, ())
+        )
+
+        declaration = TileElevationChangeEvent(
+            source_entity_uuid=tile.uuid,
+            target_entity_uuid=tile.uuid,
+            position=position,
+            tile_uuid=tile.uuid,
+            old_height_steps=tile.height,
+            new_height_steps=height,
+            old_surface_kind=tile.elevation_surface_kind,
+            new_surface_kind=surface_kind,
+            old_slope_axis=tile.slope_axis,
+            new_slope_axis=slope_axis,
+            parent_event=parent_event,
+            phase=EventPhase.DECLARATION,
+            use_register=False,
+        )
+        accepted = EventQueue.publish_declaration(declaration)
+        if accepted.canceled:
+            return False
+        for phase in (EventPhase.EXECUTION, EventPhase.EFFECT):
+            accepted = accepted.phase_to(phase)
+            if accepted.canceled:
+                return False
+        if type(accepted) is not TileElevationChangeEvent:
+            raise TypeError("tile elevation lifecycle changed event family")
+
+        if (
+            self._tiles.get(position) is not tile
+            or BaseBlock.get(tile.uuid) is not tile
+            or self._tiles_by_uuid.get(tile.uuid) != position
+            or self.get_tile_by_uuid(tile.uuid) is not tile
+            or (
+                tile.height,
+                tile.elevation_surface_kind,
+                tile.slope_axis,
+            ) != original_tile_tuple
+            or tuple(self._connector_uuids_by_endpoint.get(position, ()))
+            != original_connector_uuids
+        ):
+            accepted.cancel(
+                status_message=(
+                    "Tile support changed before the elevation mutation committed"
+                )
+            )
+            return False
+
+        tile.height = height
+        tile.elevation_surface_kind = surface_kind
+        tile.slope_axis = slope_axis
+        self._bump_spatial_revisions({"movement"})
+        accepted.phase_to(EventPhase.COMPLETION)
+        return True
+
+    def get_world_edge(
+        self,
+        first: Tuple[int, int],
+        second: Tuple[int, int],
+    ) -> WorldEdgeView:
+        """Derive one reciprocal objective boundary view from live owners."""
+        key = AdjacentEdgeKey.between(first, second)
+        first_tile = self._tiles.get(key.first)
+        second_tile = self._tiles.get(key.second)
+        if first_tile is None or second_tile is None:
+            raise ValueError("world-edge endpoints must both have supporting tiles")
+
+        contributions: Dict[UUID, Set[WorldEdgeChannel]] = defaultdict(set)
+        endpoints = ((key.first, first_tile), (key.second, second_tile))
+        for position, tile in endpoints:
+            direction = tile.directions_toward(
+                key.second if position == key.first else key.first
+            )[0]
+            for channel in WorldEdgeChannel:
+                if not tile.allows_direction(
+                    direction,
+                    channel.value,
+                    include_derived=False,
+                ):
+                    contributions[tile.uuid].add(channel)
+            for provider_uuid in self._objects_by_position.get(position, set()):
+                provider = BaseBlock.get(provider_uuid)
+                if provider is None:
+                    continue
+                structural_channels = (
+                    provider.get_objective_directional_structural_channels(
+                        direction
+                    )
+                )
+                if structural_channels is None:
+                    continue
+                contributions.setdefault(provider_uuid, set()).update(
+                    WorldEdgeChannel(channel)
+                    for channel in structural_channels
+                )
+
+        ordered_channels = tuple(WorldEdgeChannel)
+        structural_contributions = tuple(
+            WorldEdgeStructuralContribution(
+                provider_uuid=provider_uuid,
+                blocked_channels=tuple(
+                    channel
+                    for channel in ordered_channels
+                    if channel in contributions[provider_uuid]
+                ),
+            )
+            for provider_uuid in sorted(contributions, key=str)
+        )
+        return WorldEdgeView(
+            key=key,
+            first_tile_uuid=first_tile.uuid,
+            second_tile_uuid=second_tile.uuid,
+            first_height_steps=first_tile.height,
+            second_height_steps=second_tile.height,
+            elevation_delta_steps=second_tile.height - first_tile.height,
+            first_surface_kind=first_tile.elevation_surface_kind,
+            second_surface_kind=second_tile.elevation_surface_kind,
+            first_slope_axis=first_tile.slope_axis,
+            second_slope_axis=second_tile.slope_axis,
+            structural_contributions=structural_contributions,
+        )
 
     def set_tile_directional_border(self, position: Tuple[int, int], channel: str,
                                     direction: str, passable: bool,
@@ -465,9 +748,11 @@ class GridMap:
         """Remove a tile at the given position."""
         position = (x, y)
         if position in self._tiles:
+            if self._connector_uuids_by_endpoint.get(position):
+                raise ValueError(
+                    "cannot remove a support tile while a traversal connector is anchored"
+                )
             tile = self._tiles[position]
-            was_blocking_vision = not tile.visible
-            was_blocking_walking = not tile.walkable
             self._tiles_by_uuid.pop(tile.uuid, None)
             del self._tiles[position]
             self._bounds_dirty = True
@@ -475,8 +760,8 @@ class GridMap:
 
             if fire_event and self._events_enabled:
                 hint = SensesUpdateHint(
-                    requires_fov=was_blocking_vision,
-                    requires_paths=was_blocking_walking,
+                    requires_fov=True,
+                    requires_paths=True,
                 )
                 event = SpatialChangeEvent(
                     source_entity_uuid=uuid4(),
@@ -486,11 +771,18 @@ class GridMap:
                     phase=EventPhase.DECLARATION,
                     use_register=False,
                 )
-                self._fire_spatial_event(event)
+                self._fire_committed_spatial_event(event)
 
     def get_tile(self, x: int, y: int) -> Optional[Tile]:
         """Get tile at position, or None if no tile exists."""
         return self._tiles.get((x, y))
+
+    def get_support_elevation_feet(self, position: Tuple[int, int]) -> int:
+        """Return one existing tile's authoritative support elevation."""
+        tile = self._tiles.get(position)
+        if tile is None:
+            raise ValueError(f"missing support tile at {position}")
+        return tile.height * 5
 
     def get_tile_by_uuid(self, tile_uuid: UUID) -> Optional[Tile]:
         """Get tile by UUID, or None if not found."""
@@ -498,6 +790,317 @@ class GridMap:
         if position:
             return self._tiles.get(position)
         return None
+
+    def _build_connector(
+        self,
+        definition: TraversalConnectorDefinition,
+        *,
+        connector_uuid: Optional[UUID] = None,
+        revision: int = 1,
+    ) -> TraversalConnector:
+        """Resolve one authored connector against its exact live supports."""
+        endpoints: List[TraversalConnectorEndpoint] = []
+        for position in definition.endpoint_positions:
+            tile = self._tiles.get(position)
+            if tile is None:
+                raise ValueError(
+                    f"connector endpoint has no support tile at {position}"
+                )
+            endpoints.append(TraversalConnectorEndpoint(
+                position=position,
+                support_tile_uuid=tile.uuid,
+                elevation_feet=tile.height * 5,
+            ))
+        return TraversalConnector.create(
+            definition,
+            (endpoints[0], endpoints[1]),
+            connector_uuid=connector_uuid,
+            revision=revision,
+        )
+
+    def _publish_connector_change(
+        self,
+        operation: TraversalConnectorChangeOperation,
+        *,
+        connector_uuid: UUID,
+        authored_id: str,
+        old_connector: Optional[TraversalConnector],
+        new_connector: Optional[TraversalConnector],
+        parent_event: Optional[UUID],
+    ) -> Optional[TraversalConnectorChangeEvent]:
+        """Publish the cancelable precommit boundary for one connector edit."""
+        declaration = TraversalConnectorChangeEvent(
+            source_entity_uuid=connector_uuid,
+            operation=operation,
+            connector_uuid=connector_uuid,
+            authored_id=authored_id,
+            old_connector=old_connector,
+            new_connector=new_connector,
+            parent_event=parent_event,
+            phase=EventPhase.DECLARATION,
+            use_register=False,
+        )
+        accepted = EventQueue.publish_declaration(declaration)
+        if accepted.canceled:
+            return None
+        for phase in (EventPhase.EXECUTION, EventPhase.EFFECT):
+            accepted = accepted.phase_to(phase)
+            if accepted.canceled:
+                return None
+        if type(accepted) is not TraversalConnectorChangeEvent:
+            raise TypeError("connector lifecycle changed event family")
+        return accepted
+
+    def _index_connector(self, connector: TraversalConnector) -> None:
+        """Install one already validated connector into all exact indexes."""
+        self._connectors_by_uuid[connector.uuid] = connector
+        self._connector_uuid_by_authored_id[connector.authored_id] = connector.uuid
+        for endpoint in connector.endpoints:
+            values = self._connector_uuids_by_endpoint[endpoint.position]
+            if connector.uuid not in values:
+                values.append(connector.uuid)
+            values.sort(key=lambda connector_uuid: (
+                self._connectors_by_uuid[connector_uuid].authored_id,
+                str(connector_uuid),
+            ))
+
+    def _unindex_connector(self, connector: TraversalConnector) -> None:
+        """Remove one connector from every index without publishing events."""
+        self._connectors_by_uuid.pop(connector.uuid, None)
+        if self._connector_uuid_by_authored_id.get(connector.authored_id) == connector.uuid:
+            self._connector_uuid_by_authored_id.pop(connector.authored_id, None)
+        for endpoint in connector.endpoints:
+            values = self._connector_uuids_by_endpoint.get(endpoint.position)
+            if values is None:
+                continue
+            self._connector_uuids_by_endpoint[endpoint.position] = [
+                value for value in values if value != connector.uuid
+            ]
+            if not self._connector_uuids_by_endpoint[endpoint.position]:
+                self._connector_uuids_by_endpoint.pop(endpoint.position, None)
+
+    def connector_supports_are_current(
+        self,
+        connector: TraversalConnector,
+    ) -> bool:
+        """Return whether both frozen support anchors still match the map."""
+        return all(
+            (tile := self._tiles.get(endpoint.position)) is not None
+            and tile.uuid == endpoint.support_tile_uuid
+            and tile.position == endpoint.position
+            and BaseBlock.get(tile.uuid) is tile
+            and self._tiles_by_uuid.get(tile.uuid) == endpoint.position
+            and self.get_tile_by_uuid(tile.uuid) is tile
+            and tile.height * 5 == endpoint.elevation_feet
+            for endpoint in connector.endpoints
+        )
+
+    @staticmethod
+    def _cancel_stale_connector_change(
+        effect: TraversalConnectorChangeEvent,
+    ) -> None:
+        """Close an accepted lifecycle whose frozen supports changed in-handler."""
+        effect.cancel(
+            status_message=(
+                "Connector support changed before the connector mutation committed"
+            )
+        )
+
+    def register_connector(
+        self,
+        definition: TraversalConnectorDefinition,
+        *,
+        connector_uuid: Optional[UUID] = None,
+        parent_event: Optional[UUID] = None,
+    ) -> Optional[TraversalConnector]:
+        """Register one authored connector after its accepted change lifecycle."""
+        if definition.authored_id in self._connector_uuid_by_authored_id:
+            raise ValueError(f"duplicate connector authored_id {definition.authored_id}")
+        connector = self._build_connector(
+            definition,
+            connector_uuid=connector_uuid,
+        )
+        if connector.uuid in self._connectors_by_uuid:
+            raise ValueError(f"duplicate connector UUID {connector.uuid}")
+        effect = self._publish_connector_change(
+            TraversalConnectorChangeOperation.REGISTER,
+            connector_uuid=connector.uuid,
+            authored_id=connector.authored_id,
+            old_connector=None,
+            new_connector=connector,
+            parent_event=parent_event,
+        )
+        if effect is None:
+            return None
+        if (
+            connector.uuid in self._connectors_by_uuid
+            or connector.authored_id in self._connector_uuid_by_authored_id
+            or not self.connector_supports_are_current(connector)
+        ):
+            self._cancel_stale_connector_change(effect)
+            return None
+        self._index_connector(connector)
+        self._connector_revision += 1
+        effect.phase_to(EventPhase.COMPLETION)
+        return connector
+
+    def replace_connector(
+        self,
+        connector_uuid: UUID,
+        definition: TraversalConnectorDefinition,
+        *,
+        parent_event: Optional[UUID] = None,
+    ) -> Optional[TraversalConnector]:
+        """Replace authored mechanics while preserving runtime identity."""
+        old = self._connectors_by_uuid.get(connector_uuid)
+        if old is None:
+            raise ValueError(f"unknown connector {connector_uuid}")
+        if definition.authored_id != old.authored_id:
+            raise ValueError("connector replacement must preserve authored_id")
+        replacement = self._build_connector(
+            definition,
+            connector_uuid=connector_uuid,
+            revision=old.revision + 1,
+        )
+        effect = self._publish_connector_change(
+            TraversalConnectorChangeOperation.REPLACE,
+            connector_uuid=connector_uuid,
+            authored_id=old.authored_id,
+            old_connector=old,
+            new_connector=replacement,
+            parent_event=parent_event,
+        )
+        if effect is None:
+            return None
+        if (
+            self._connectors_by_uuid.get(connector_uuid) is not old
+            or self._connector_uuid_by_authored_id.get(old.authored_id)
+            != connector_uuid
+            or not self.connector_supports_are_current(replacement)
+        ):
+            self._cancel_stale_connector_change(effect)
+            return None
+        self._unindex_connector(old)
+        self._index_connector(replacement)
+        self._connector_revision += 1
+        effect.phase_to(EventPhase.COMPLETION)
+        return replacement
+
+    def set_connector_enabled(
+        self,
+        connector_uuid: UUID,
+        enabled: bool,
+        *,
+        parent_event: Optional[UUID] = None,
+    ) -> Optional[TraversalConnector]:
+        """Enable or disable one connector through the same guarded lifecycle."""
+        if type(enabled) is not bool:
+            raise TypeError("enabled must be an exact bool")
+        old = self._connectors_by_uuid.get(connector_uuid)
+        if old is None:
+            raise ValueError(f"unknown connector {connector_uuid}")
+        if old.enabled is enabled:
+            return old
+        definition = old.definition().model_copy(update={"enabled": enabled})
+        replacement = self._build_connector(
+            definition,
+            connector_uuid=connector_uuid,
+            revision=old.revision + 1,
+        )
+        operation = (
+            TraversalConnectorChangeOperation.ENABLE
+            if enabled
+            else TraversalConnectorChangeOperation.DISABLE
+        )
+        effect = self._publish_connector_change(
+            operation,
+            connector_uuid=connector_uuid,
+            authored_id=old.authored_id,
+            old_connector=old,
+            new_connector=replacement,
+            parent_event=parent_event,
+        )
+        if effect is None:
+            return None
+        if (
+            self._connectors_by_uuid.get(connector_uuid) is not old
+            or self._connector_uuid_by_authored_id.get(old.authored_id)
+            != connector_uuid
+            or not self.connector_supports_are_current(replacement)
+        ):
+            self._cancel_stale_connector_change(effect)
+            return None
+        self._unindex_connector(old)
+        self._index_connector(replacement)
+        self._connector_revision += 1
+        effect.phase_to(EventPhase.COMPLETION)
+        return replacement
+
+    def remove_connector(
+        self,
+        connector_uuid: UUID,
+        *,
+        parent_event: Optional[UUID] = None,
+    ) -> bool:
+        """Remove one connector atomically after accepted precommit phases."""
+        old = self._connectors_by_uuid.get(connector_uuid)
+        if old is None:
+            return False
+        effect = self._publish_connector_change(
+            TraversalConnectorChangeOperation.REMOVE,
+            connector_uuid=connector_uuid,
+            authored_id=old.authored_id,
+            old_connector=old,
+            new_connector=None,
+            parent_event=parent_event,
+        )
+        if effect is None:
+            return False
+        if (
+            self._connectors_by_uuid.get(connector_uuid) is not old
+            or self._connector_uuid_by_authored_id.get(old.authored_id)
+            != connector_uuid
+        ):
+            self._cancel_stale_connector_change(effect)
+            return False
+        self._unindex_connector(old)
+        self._connector_revision += 1
+        effect.phase_to(EventPhase.COMPLETION)
+        return True
+
+    def get_connector(self, connector_uuid: UUID) -> Optional[TraversalConnector]:
+        """Return one live connector by encounter-local identity."""
+        return self._connectors_by_uuid.get(connector_uuid)
+
+    def get_connector_by_authored_id(
+        self,
+        authored_id: str,
+    ) -> Optional[TraversalConnector]:
+        """Return one connector by stable map-authored identity."""
+        connector_uuid = self._connector_uuid_by_authored_id.get(authored_id)
+        return (
+            self._connectors_by_uuid.get(connector_uuid)
+            if connector_uuid is not None
+            else None
+        )
+
+    def get_connectors_at(
+        self,
+        position: Tuple[int, int],
+    ) -> Tuple[TraversalConnector, ...]:
+        """Return deterministic endpoint-indexed connector facts."""
+        return tuple(
+            self._connectors_by_uuid[connector_uuid]
+            for connector_uuid in self._connector_uuids_by_endpoint.get(position, ())
+            if connector_uuid in self._connectors_by_uuid
+        )
+
+    def get_all_connectors(self) -> Tuple[TraversalConnector, ...]:
+        """Return all connectors in stable authored/runtime identity order."""
+        return tuple(sorted(
+            self._connectors_by_uuid.values(),
+            key=lambda connector: (connector.authored_id, str(connector.uuid)),
+        ))
 
     def has_tile(self, x: int, y: int) -> bool:
         """Check if a tile exists at position."""
@@ -993,6 +1596,59 @@ class GridMap:
             )
         )
 
+    def _elevation_transition_allows(
+        self,
+        from_pos: Tuple[int, int],
+        to_pos: Tuple[int, int],
+        movement_mode: MovementMode,
+    ) -> bool:
+        """Return whether one cardinal leg is legal for its movement mode."""
+        from_tile = self._tiles.get(from_pos)
+        to_tile = self._tiles.get(to_pos)
+        if from_tile is None or to_tile is None:
+            return False
+        if from_tile.height == to_tile.height:
+            return True
+        if movement_mode is MovementMode.FLYING:
+            return True
+        if movement_mode is not MovementMode.WALKING:
+            return False
+        return progressive_elevation_transition(
+            from_tile.height,
+            from_tile.elevation_surface_kind,
+            from_tile.slope_axis,
+            to_tile.height,
+            to_tile.elevation_surface_kind,
+            to_tile.slope_axis,
+            transition_axis(from_pos, to_pos),
+        )
+
+    def movement_edge_cost_units(
+        self,
+        from_pos: Tuple[int, int],
+        to_pos: Tuple[int, int],
+        movement_mode: MovementMode,
+        *,
+        ignore_difficult_terrain: bool = False,
+    ) -> float:
+        """Return the exact destination-policy cost for one admitted edge."""
+        from_tile = self._tiles.get(from_pos)
+        to_tile = self._tiles.get(to_pos)
+        if from_tile is None or to_tile is None:
+            raise ValueError("movement edge cost requires both support tiles")
+        terrain_multiplier = to_tile.get_movement_cost(movement_mode)
+        if movement_mode is MovementMode.WALKING and ignore_difficult_terrain:
+            terrain_multiplier = min(terrain_multiplier, 1.0)
+        if movement_mode is not MovementMode.FLYING:
+            return terrain_multiplier
+        base_leg_feet = support_distance_feet(
+            from_pos,
+            from_tile.height * 5,
+            to_pos,
+            to_tile.height * 5,
+        )
+        return (base_leg_feet / 5) * terrain_multiplier
+
     def _diagonal_transition_allows(self, from_pos: Tuple[int, int], to_pos: Tuple[int, int],
                                     channel: str,
                                     requester_uuid: Optional[UUID] = None,
@@ -1007,6 +1663,15 @@ class GridMap:
         dy = to_pos[1] - from_pos[1]
         if abs(dx) != 1 or abs(dy) != 1:
             return False
+        if channel == "movement" and movement_mode is not MovementMode.FLYING:
+            from_tile = self._tiles.get(from_pos)
+            to_tile = self._tiles.get(to_pos)
+            if (
+                from_tile is None
+                or to_tile is None
+                or from_tile.height != to_tile.height
+            ):
+                return False
 
         bridges = ((from_pos[0] + dx, from_pos[1]), (from_pos[0], from_pos[1] + dy))
         for bridge in bridges:
@@ -1019,7 +1684,22 @@ class GridMap:
             ):
                 continue
             if (
-                self._cardinal_transition_sides_allow(
+                (
+                    channel != "movement"
+                    or (
+                        self._elevation_transition_allows(
+                            from_pos,
+                            bridge,
+                            movement_mode,
+                        )
+                        and self._elevation_transition_allows(
+                            bridge,
+                            to_pos,
+                            movement_mode,
+                        )
+                    )
+                )
+                and self._cardinal_transition_sides_allow(
                     from_pos, bridge, channel, requester_uuid, movement_mode,
                     subjective, directional_collision_blocked, side_cache,
                 )
@@ -1086,6 +1766,10 @@ class GridMap:
             subjective,
             collision_blocked,
             movement_cell_cache,
+        ) and self._elevation_transition_allows(
+            from_pos,
+            to_pos,
+            movement_mode,
         )
 
     def can_see_transition(self, from_pos: Tuple[int, int], to_pos: Tuple[int, int],
@@ -1275,43 +1959,103 @@ class GridMap:
             new_position: New grid position
             parent_event: Optional parent event UUID for lineage (e.g., StepMovementEvent)
         """
+        receipt = self.stage_entity_position(entity_uuid, new_position)
+        try:
+            self.publish_staged_entity_position(
+                receipt,
+                parent_event=parent_event,
+            )
+        except Exception as exc:
+            raise PositionPublicationError(exc) from exc
+
+    def stage_entity_position(
+        self,
+        entity_uuid: UUID,
+        new_position: Tuple[int, int],
+    ) -> GridEntityPositionReceipt:
+        """Stage the GridMap indexes without publishing spatial events."""
         old_position = self._entity_positions.get(entity_uuid)
-
-        if old_position is not None:
-            started = time.perf_counter()
-            self._entities_by_position[old_position].discard(entity_uuid)
-            self.invalidate_occupancy_paths()
-            record_action_timing("grid.move_entity.discard_old_position_ms", started)
-            started = time.perf_counter()
-            old_directional_metadata = self.recompute_tile_directional_blocking(old_position)
-            record_action_timing("grid.move_entity.recompute_old_directional_ms", started)
-
-            if self._events_enabled:
-                started = time.perf_counter()
-                event = SpatialChangeEvent.entity_left(
-                    old_position, entity_uuid, new_position, parent_event=parent_event,
-                    **old_directional_metadata,
+        affected_positions = {
+            position
+            for position in (old_position, new_position)
+            if position is not None
+        }
+        directional_snapshots = {
+            position: {
+                field_name: getattr(tile, field_name)
+                for field_name in _OBJECT_BORDER_FIELDS
+            }
+            for position in affected_positions
+            if (tile := self._tiles.get(position)) is not None
+        }
+        old_directional_metadata: Dict[str, Any] = {}
+        new_directional_metadata: Dict[str, Any] = {}
+        try:
+            if old_position is not None:
+                self._entities_by_position[old_position].discard(entity_uuid)
+                old_directional_metadata = (
+                    self.recompute_tile_directional_blocking(old_position)
                 )
-                self._fire_spatial_event(event)
-                record_action_timing("grid.move_entity.fire_entity_left_ms", started)
+            self._entity_positions[entity_uuid] = new_position
+            self._entities_by_position[new_position].add(entity_uuid)
+            new_directional_metadata = self.recompute_tile_directional_blocking(
+                new_position
+            )
+            self.invalidate_occupancy_paths()
+        except Exception as exc:
+            self._entities_by_position[new_position].discard(entity_uuid)
+            if not self._entities_by_position[new_position]:
+                self._entities_by_position.pop(new_position, None)
+            if old_position is None:
+                self._entity_positions.pop(entity_uuid, None)
+            else:
+                self._entity_positions[entity_uuid] = old_position
+                self._entities_by_position[old_position].add(entity_uuid)
+            for position, snapshot in directional_snapshots.items():
+                tile = self._tiles.get(position)
+                if tile is None:
+                    continue
+                for field_name, value in snapshot.items():
+                    setattr(tile, field_name, value)
+            self.invalidate_occupancy_paths()
+            raise PositionCommitError(exc) from exc
 
-        started = time.perf_counter()
-        self._entity_positions[entity_uuid] = new_position
-        self._entities_by_position[new_position].add(entity_uuid)
-        self.invalidate_occupancy_paths()
-        record_action_timing("grid.move_entity.store_new_position_ms", started)
-        started = time.perf_counter()
-        new_directional_metadata = self.recompute_tile_directional_blocking(new_position)
-        record_action_timing("grid.move_entity.recompute_new_directional_ms", started)
+        return GridEntityPositionReceipt(
+            entity_uuid=entity_uuid,
+            old_position=old_position,
+            new_position=new_position,
+            old_directional_metadata=old_directional_metadata,
+            new_directional_metadata=new_directional_metadata,
+        )
 
-        if self._events_enabled:
-            started = time.perf_counter()
-            event = SpatialChangeEvent.entity_entered(
-                new_position, entity_uuid, old_position, parent_event=parent_event,
-                **new_directional_metadata,
+    def publish_staged_entity_position(
+        self,
+        receipt: GridEntityPositionReceipt,
+        *,
+        parent_event: Optional[UUID] = None,
+    ) -> None:
+        """Publish LEFT then ENTERED for an already committed GridMap index."""
+        if self._entity_positions.get(receipt.entity_uuid) != receipt.new_position:
+            raise ValueError("staged position receipt no longer matches GridMap")
+        if not self._events_enabled:
+            return
+        if receipt.old_position is not None:
+            event = SpatialChangeEvent.entity_left(
+                receipt.old_position,
+                receipt.entity_uuid,
+                receipt.new_position,
+                parent_event=parent_event,
+                **receipt.old_directional_metadata,
             )
             self._fire_spatial_event(event)
-            record_action_timing("grid.move_entity.fire_entity_entered_ms", started)
+        event = SpatialChangeEvent.entity_entered(
+            receipt.new_position,
+            receipt.entity_uuid,
+            receipt.old_position,
+            parent_event=parent_event,
+            **receipt.new_directional_metadata,
+        )
+        self._fire_spatial_event(event)
 
     def get_entity_position(self, entity_uuid: UUID) -> Optional[Tuple[int, int]]:
         """Get an entity's position."""
@@ -1786,19 +2530,24 @@ class GridMap:
             def raw_walkable_check(x: int, y: int) -> bool:
                 return self.is_walkable(x, y, movement_mode)
 
-        def raw_get_tile_cost(x: int, y: int) -> float:
-            tile = self.get_tile(x, y)
-            if not tile:
-                return 0
-            cost = tile.get_movement_cost(movement_mode)
-            if ignore_difficult_terrain:
-                return min(cost, 1.0)
-            return cost
+        def raw_get_edge_cost(
+            from_pos: Tuple[int, int],
+            to_pos: Tuple[int, int],
+        ) -> float:
+            return self.movement_edge_cost_units(
+                from_pos,
+                to_pos,
+                movement_mode,
+                ignore_difficult_terrain=ignore_difficult_terrain,
+            )
 
         def unit_movement_costs() -> bool:
             for tile in self._tiles.values():
                 cost = tile.get_movement_cost(movement_mode)
-                if ignore_difficult_terrain:
+                if (
+                    movement_mode is MovementMode.WALKING
+                    and ignore_difficult_terrain
+                ):
                     cost = min(cost, 1.0)
                 if cost != 1:
                     return False
@@ -1814,7 +2563,10 @@ class GridMap:
             )
 
         walkable_cache: Dict[Tuple[int, int], bool] = {}
-        tile_cost_cache: Dict[Tuple[int, int], float] = {}
+        edge_cost_cache: Dict[
+            Tuple[Tuple[int, int], Tuple[int, int]],
+            float,
+        ] = {}
         transition_cache: Dict[Tuple[Tuple[int, int], Tuple[int, int]], bool] = {}
 
         def cached_walkable_check(x: int, y: int) -> bool:
@@ -1826,13 +2578,16 @@ class GridMap:
             walkable_cache[key] = value
             return value
 
-        def cached_get_tile_cost(x: int, y: int) -> float:
-            key = (x, y)
-            cached = tile_cost_cache.get(key)
+        def cached_get_edge_cost(
+            from_pos: Tuple[int, int],
+            to_pos: Tuple[int, int],
+        ) -> float:
+            key = (from_pos, to_pos)
+            cached = edge_cost_cache.get(key)
             if cached is not None:
                 return cached
-            value = raw_get_tile_cost(x, y)
-            tile_cost_cache[key] = value
+            value = raw_get_edge_cost(from_pos, to_pos)
+            edge_cost_cache[key] = value
             return value
 
         def cached_can_enter_tile(from_pos: Tuple[int, int], to_pos: Tuple[int, int]) -> bool:
@@ -1857,11 +2612,14 @@ class GridMap:
                 finally:
                     walkable_elapsed += time.perf_counter() - started
 
-            def get_tile_cost(x: int, y: int) -> float:
+            def get_edge_cost(
+                from_pos: Tuple[int, int],
+                to_pos: Tuple[int, int],
+            ) -> float:
                 nonlocal tile_cost_elapsed
                 started = time.perf_counter()
                 try:
-                    return cached_get_tile_cost(x, y)
+                    return cached_get_edge_cost(from_pos, to_pos)
                 finally:
                     tile_cost_elapsed += time.perf_counter() - started
 
@@ -1874,7 +2632,7 @@ class GridMap:
                     can_enter_elapsed += time.perf_counter() - started
         else:
             walkable_check = cached_walkable_check
-            get_tile_cost = cached_get_tile_cost
+            get_edge_cost = cached_get_edge_cost
             can_enter_tile = cached_can_enter_tile
 
         start_tile = self.get_tile(*start)
@@ -1895,7 +2653,10 @@ class GridMap:
             return sentinel_result
 
         started = time.perf_counter() if timing else 0.0
-        use_unit_pathfinder = unit_movement_costs()
+        use_unit_pathfinder = unit_movement_costs() and (
+            movement_mode is not MovementMode.FLYING
+            or len({tile.height for tile in self._tiles.values()}) <= 1
+        )
         if use_unit_pathfinder:
             result = breadth_first_paths(
                 start,
@@ -1916,7 +2677,7 @@ class GridMap:
                 grid_height,
                 diagonal=True,
                 max_distance=max_distance,
-                cost_func=get_tile_cost,
+                edge_cost_func=get_edge_cost,
                 can_enter=can_enter_tile,
                 min_x=self._min_x,
                 min_y=self._min_y,
@@ -2578,7 +3339,12 @@ class GridMap:
         self._entity_subscriptions.clear()
         self._light_sources.clear()
         self._block_light_suppressions.clear()
+        self._connectors_by_uuid.clear()
+        self._connector_uuid_by_authored_id.clear()
+        self._connector_uuids_by_endpoint.clear()
+        self._connector_revision = 0
         self._pending_events.clear()
+        self._pending_committed_events.clear()
         self._bounds_dirty = True
         self._spatial_revision = 0
         self._vision_revision = 0
