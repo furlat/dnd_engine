@@ -59,6 +59,8 @@ from dnd.core.creature_types import DamageDieValue, DamageType
 from dnd.core.gridmap import GridMap, get_map
 from dnd.core.positioning import PositionCommitError, PositionPublicationError
 from dnd.core.traversal_connectors import (
+    CONNECTOR_AUTHORED_ID_PATTERN,
+    CONNECTOR_PRESENTATION_KEY_PATTERN,
     ConnectorActionCostType,
     ConnectorDestinationStatus,
     ConnectorProvocationPolicy,
@@ -3194,11 +3196,11 @@ class TraverseConnectorEvent(ActionEvent):
     event_type: EventType = Field(default=EventType.MOVEMENT)
     connector_uuid: UUID
     connector_authored_id: str = Field(
-        pattern=r"^connector\.[a-z][a-z0-9_.-]*$"
+        pattern=CONNECTOR_AUTHORED_ID_PATTERN
     )
     connector_kind: TraversalConnectorKind
     connector_presentation_key: str = Field(
-        pattern=r"^[a-z][a-z0-9_.-]*$"
+        pattern=CONNECTOR_PRESENTATION_KEY_PATTERN
     )
     connector_revision: StrictInt = Field(ge=1)
     connector_digest: str = Field(pattern=r"^[0-9a-f]{64}$")

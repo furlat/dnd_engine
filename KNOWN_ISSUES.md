@@ -21,6 +21,44 @@ This section is the canonical status index as of 2026-07-24. The historical
 ledger below is preserved as discovery evidence, but an older `OPEN` label does
 not override a status recorded here.
 
+### NeuroClient presentation smokes cannot enter the current Studio tab surface
+
+- **Found**: 2026-08-10 while running adjacent consumer gates for the replay
+  decorative-callback ownership fix.
+- **Behavior**: three maintained NeuroClient browser smokes time out before
+  their presentation assertions because the mounted app never exposes the
+  expected Spell Studio tab button.
+- **Automated reproducers** (from `/home/tommaso/Dev/NeuroClient/app`):
+  - `npm run reaction-presentation:smoke` times out waiting for
+    `#spell-studio button` with exact text `Actions` at
+    `scripts/reaction-presentation-smoke.mjs:531`.
+  - `npm run movement-presentation:smoke` times out waiting for the same
+    `Actions` button at `scripts/movement-presentation-smoke.mjs:339`.
+  - `npm run condition-presentation:smoke` times out waiting for the exact
+    `Conditions` button at `scripts/condition-presentation-smoke.mjs:463`.
+- **Hypothesis**: these smokes still depend on an older mounted Spell Studio
+  navigation surface or do not establish the current route/workspace before
+  selecting their authoring tab. The failure occurs before the presentation
+  runtime assertions and is independent of ClipQueue callback fencing.
+- **Status**: INVESTIGATING.
+
+### NeuroClient cold-Rolling readiness fixture completes before its texture gate
+
+- **Found**: 2026-08-10 while running adjacent request-frame clip gates for the
+  replay decorative-callback ownership fix.
+- **Behavior**: the cold Jump fixture reports `done=true`, requested/applied
+  `Idle`, and position `(4, 0)` before `rollingGate.resolve()`, rather than
+  retaining requested `Rolling` with an unresolved operation.
+- **Automated reproducer**: from `/home/tommaso/Dev/NeuroClient/app`,
+  `npm run animation-readiness:smoke` deterministically fails at
+  `scripts/animation-readiness-smoke.mjs:411` with
+  `cold Rolling started movement or the FSM before its textures were ready`.
+- **Hypothesis**: the fixture's intended cold Rolling asset is already treated
+  as resolved, or its gate no longer intercepts the current Jump clip loading
+  owner. The case invokes `JumpClip.run` directly and does not cross the
+  transaction callback lease changed by the replay fix.
+- **Status**: INVESTIGATING.
+
 ### Stale Berserker assertion caused unbounded Pytest entity rendering
 
 - **Found**: 2026-07-29 during the complete pre-commit manual-test sweep.

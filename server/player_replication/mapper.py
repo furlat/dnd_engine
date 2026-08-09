@@ -13,11 +13,11 @@ projection-native graph whose identities contain no engine lineage UUIDs.
 
 from __future__ import annotations
 
-import hashlib
 import math
+import re
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
+from typing import Optional, TypeAlias, cast
 from uuid import UUID
 
 from dnd.actions import (
@@ -26,7 +26,9 @@ from dnd.actions import (
     MovementEvent,
     ShoveEvent,
     SpellEvent,
+    TraverseConnectorEvent,
 )
+from dnd.core.base_block import MovementMode
 from dnd.blocks.base_item import ItemLocationStateEvent
 from dnd.core.action_types import ActionPresentationKind
 from dnd.core.base_actions import ActionEvent
@@ -48,6 +50,7 @@ from dnd.core.events import (
     EncounterStartEvent,
     Event,
     EventPhase,
+    EventType,
     ForcedMovementEvent,
     HealEvent,
     InstantDeathEvent,
@@ -76,6 +79,11 @@ from dnd.core.presentation_geometry import (
 from dnd.core.spatial_effect_types import (
     SpatialEffectChangeOperation,
     SpatialEffectLayer,
+)
+from dnd.core.traversal_connectors import (
+    CONNECTOR_AUTHORED_ID_PATTERN,
+    CONNECTOR_PRESENTATION_KEY_PATTERN,
+    TraversalConnectorKind,
 )
 from dnd.spells.abjuration import CounterspellReactionEvent
 from server.player_replication.journal import SubjectiveFrameProjectionContext
@@ -121,7 +129,10 @@ from server.player_replication_contract import (
     LifeStatePresentationCue,
     LightPresentationCue,
     LineAreaGeometry,
-    MovementKind,
+    ConnectorPresentationIdentity,
+    LocomotionAnchor,
+    LocomotionFamily,
+    LocomotionTrajectory,
     MovementEndpointOutcome,
     MovementPresentationCue,
     PlayerReplicationWatermarks,
@@ -171,6 +182,249 @@ class ProjectedEventSlot:
             raise TypeError("projected event slot requires an engine Event")
 
 
+class MovementRootDeliveryScope(str, Enum):
+    """Delivery topology frozen when the accepted root EFFECT is stored."""
+
+    EXPLICIT_ACTION_BATCH = "explicit_action_batch"
+    IMMEDIATE_SINGLETON_SEQUENCE = "immediate_singleton_sequence"
+
+
+MAX_MOVEMENT_ROOT_CONTEXTS = 64
+MAX_ROOT_EFFECT_ALIASES_PER_LINEAGE = 16
+
+
+class MovementRootKind(str, Enum):
+    """Exact engine root family retained without an Event reference."""
+
+    PATH = "path"
+    JUMP = "jump"
+    CONNECTOR = "connector"
+
+
+@dataclass(frozen=True, slots=True)
+class MovementRootContextBase:
+    """Immutable common evidence copied once from one accepted root EFFECT."""
+
+    generation_id: str
+    first_effect_source_cursor: int
+    first_effect_uuid: UUID
+    root_kind: MovementRootKind
+    phase: EventPhase
+    source_entity_uuid: UUID
+    lineage_uuid: UUID
+    identified_source_observer_uuids: frozenset[str]
+    delivery_scope: MovementRootDeliveryScope
+
+    def __post_init__(self) -> None:
+        _validate_movement_root_context(cast(MovementRootProjectionContext, self))
+
+
+@dataclass(frozen=True, slots=True)
+class PathMovementRootContext(MovementRootContextBase):
+    movement_mode: MovementMode
+    trajectory: MovementTrajectory
+    admitted_path: tuple[tuple[int, int], ...]
+
+
+@dataclass(frozen=True, slots=True)
+class JumpRootContext(MovementRootContextBase):
+    trajectory: MovementTrajectory
+    takeoff_position: tuple[int, int]
+    landing_position: tuple[int, int]
+    takeoff_elevation_feet: int
+    landing_elevation_feet: int
+    disclosed_arc: tuple[tuple[int, int], ...]
+
+
+@dataclass(frozen=True, slots=True)
+class ConnectorRootContext(MovementRootContextBase):
+    source_position: tuple[int, int]
+    destination_position: tuple[int, int]
+    source_elevation_feet: int
+    destination_elevation_feet: int
+    connector_uuid: UUID
+    connector_authored_id: str
+    connector_kind: TraversalConnectorKind
+    connector_presentation_key: str
+    connector_revision: int
+
+
+MovementRootProjectionContext: TypeAlias = (
+    PathMovementRootContext | JumpRootContext | ConnectorRootContext
+)
+
+
+@dataclass(frozen=True, slots=True)
+class MovementRootEffectAlias:
+    """One accepted root EFFECT UUID and its exact stored source cursor."""
+
+    effect_uuid: UUID
+    source_event_cursor: int
+
+    def __post_init__(self) -> None:
+        if type(self.effect_uuid) is not UUID:
+            raise TypeError("movement root alias UUID must be an exact UUID")
+        if (
+            type(self.source_event_cursor) is not int
+            or self.source_event_cursor < 1
+        ):
+            raise ValueError("movement root alias cursor must be a positive integer")
+
+
+@dataclass(frozen=True, slots=True)
+class MovementRootProjectionView:
+    """Bounded immutable context plus accepted status-only EFFECT aliases."""
+
+    context: MovementRootProjectionContext
+    effect_uuid_aliases: tuple[MovementRootEffectAlias, ...]
+
+    def __post_init__(self) -> None:
+        if type(self.context) not in {
+            PathMovementRootContext,
+            JumpRootContext,
+            ConnectorRootContext,
+        }:
+            raise TypeError("movement root view requires one closed context variant")
+        if type(self.effect_uuid_aliases) is not tuple:
+            raise TypeError("movement root aliases must be an immutable tuple")
+        if not 1 <= len(self.effect_uuid_aliases) <= MAX_ROOT_EFFECT_ALIASES_PER_LINEAGE:
+            raise ValueError("movement root aliases must contain between 1 and 16 entries")
+        if any(
+            type(alias) is not MovementRootEffectAlias
+            for alias in self.effect_uuid_aliases
+        ):
+            raise TypeError("movement root aliases require exact alias records")
+        uuids = tuple(alias.effect_uuid for alias in self.effect_uuid_aliases)
+        cursors = tuple(alias.source_event_cursor for alias in self.effect_uuid_aliases)
+        if len(set(uuids)) != len(uuids) or len(set(cursors)) != len(cursors):
+            raise ValueError("movement root aliases must have unique UUIDs and cursors")
+        first = self.effect_uuid_aliases[0]
+        if (
+            first.effect_uuid != self.context.first_effect_uuid
+            or first.source_event_cursor != self.context.first_effect_source_cursor
+        ):
+            raise ValueError("movement root alias one must be the captured first EFFECT")
+
+
+def _validate_movement_root_context(
+    context: MovementRootProjectionContext,
+) -> None:
+    """Reject manually constructed context records that bypass capture validation."""
+    if type(context.generation_id) is not str or not context.generation_id:
+        raise ValueError("movement root generation must be nonempty")
+    if (
+        type(context.first_effect_source_cursor) is not int
+        or context.first_effect_source_cursor < 1
+    ):
+        raise ValueError("movement root first EFFECT cursor must be positive")
+    if type(context.first_effect_uuid) is not UUID:
+        raise TypeError("movement root first EFFECT UUID must be exact")
+    if type(context.phase) is not EventPhase or context.phase is not EventPhase.EFFECT:
+        raise ValueError("movement root context must describe EFFECT")
+    if type(context.source_entity_uuid) is not UUID:
+        raise TypeError("movement root source UUID must be exact")
+    if type(context.lineage_uuid) is not UUID:
+        raise TypeError("movement root lineage UUID must be exact")
+    if (
+        type(context.identified_source_observer_uuids) is not frozenset
+        or any(
+            type(observer_uuid) is not str
+            for observer_uuid in context.identified_source_observer_uuids
+        )
+    ):
+        raise TypeError("movement root identity grants must be exact strings")
+    if type(context.delivery_scope) is not MovementRootDeliveryScope:
+        raise TypeError("movement root delivery scope must be exact")
+
+    if type(context) is PathMovementRootContext:
+        if context.root_kind is not MovementRootKind.PATH:
+            raise ValueError("path context has the wrong root kind")
+        if type(context.movement_mode) is not MovementMode:
+            raise TypeError("path context movement mode must be exact")
+        if (
+            type(context.trajectory) is not MovementTrajectory
+            or context.trajectory is not MovementTrajectory.PATH
+        ):
+            raise ValueError("path context must use PATH trajectory")
+        _require_position_path(
+            context.admitted_path,
+            field_name="movement root admitted path",
+            minimum_length=1,
+        )
+        return
+    if type(context) is JumpRootContext:
+        if context.root_kind is not MovementRootKind.JUMP:
+            raise ValueError("jump context has the wrong root kind")
+        if (
+            type(context.trajectory) is not MovementTrajectory
+            or context.trajectory is not MovementTrajectory.DIRECT_ARC
+        ):
+            raise ValueError("jump context must use DIRECT_ARC trajectory")
+        _require_position(context.takeoff_position, field_name="jump takeoff")
+        _require_position(context.landing_position, field_name="jump landing")
+        _require_elevation(
+            context.takeoff_elevation_feet,
+            field_name="jump takeoff elevation",
+        )
+        _require_elevation(
+            context.landing_elevation_feet,
+            field_name="jump landing elevation",
+        )
+        _require_position_path(
+            context.disclosed_arc,
+            field_name="jump disclosed arc",
+            minimum_length=2,
+        )
+        return
+    if type(context) is ConnectorRootContext:
+        if context.root_kind is not MovementRootKind.CONNECTOR:
+            raise ValueError("connector context has the wrong root kind")
+        _require_position(context.source_position, field_name="connector source")
+        _require_position(
+            context.destination_position,
+            field_name="connector destination",
+        )
+        if context.source_position == context.destination_position:
+            raise ValueError("connector context endpoints must be distinct")
+        _require_elevation(
+            context.source_elevation_feet,
+            field_name="connector source elevation",
+        )
+        _require_elevation(
+            context.destination_elevation_feet,
+            field_name="connector destination elevation",
+        )
+        if type(context.connector_uuid) is not UUID:
+            raise TypeError("connector context UUID must be exact")
+        if (
+            type(context.connector_authored_id) is not str
+            or re.fullmatch(
+                CONNECTOR_AUTHORED_ID_PATTERN,
+                context.connector_authored_id,
+            )
+            is None
+        ):
+            raise ValueError("connector context authored ID is malformed")
+        if type(context.connector_kind) is not TraversalConnectorKind:
+            raise TypeError("connector context kind must be exact")
+        if (
+            type(context.connector_presentation_key) is not str
+            or re.fullmatch(
+                CONNECTOR_PRESENTATION_KEY_PATTERN,
+                context.connector_presentation_key,
+            )
+            is None
+        ):
+            raise ValueError("connector context presentation key is malformed")
+        if (
+            type(context.connector_revision) is not int
+            or context.connector_revision < 1
+        ):
+            raise ValueError("connector context revision must be positive")
+        return
+    raise TypeError("movement root context requires one closed context variant")
+
+
 @dataclass(frozen=True)
 class CausalEventBatch:
     """One exact source window plus already-authorized typed world mutations.
@@ -186,6 +440,9 @@ class CausalEventBatch:
     slots: tuple[ProjectedEventSlot, ...]
     through_source_event_cursor: int
     patches: tuple[SubjectiveWorldPatch, ...] = field(default_factory=tuple)
+    movement_root_contexts: tuple[MovementRootProjectionView, ...] = field(
+        default_factory=tuple,
+    )
 
     def __post_init__(self) -> None:
         if (
@@ -204,6 +461,366 @@ class CausalEventBatch:
         event_uuids = tuple(slot.event.uuid for slot in self.slots)
         if len(event_uuids) != len(set(event_uuids)):
             raise ValueError("source batch event version UUIDs must be unique")
+        if type(self.movement_root_contexts) is not tuple:
+            raise TypeError("movement root contexts must be an immutable tuple")
+        lineages: set[UUID] = set()
+        aliases: set[UUID] = set()
+        alias_cursors: set[int] = set()
+        generations: set[str] = set()
+        for view in self.movement_root_contexts:
+            if type(view) is not MovementRootProjectionView:
+                raise TypeError("movement root contexts require exact projection views")
+            context = view.context
+            if context.lineage_uuid in lineages:
+                raise ValueError("movement root lineages must have unique owners")
+            lineages.add(context.lineage_uuid)
+            generations.add(context.generation_id)
+            for alias in view.effect_uuid_aliases:
+                if alias.effect_uuid in aliases or alias.source_event_cursor in alias_cursors:
+                    raise ValueError("movement root aliases conflict across lineages")
+                if alias.source_event_cursor > self.through_source_event_cursor:
+                    raise ValueError("movement root alias exceeds the batch watermark")
+                aliases.add(alias.effect_uuid)
+                alias_cursors.add(alias.source_event_cursor)
+        if len(generations) > 1:
+            raise ValueError("movement root contexts must belong to one generation")
+        if len(self.movement_root_contexts) > MAX_MOVEMENT_ROOT_CONTEXTS:
+            raise ValueError("movement root context capacity exceeded")
+
+
+def capture_movement_root_context(
+    event: Event,
+    *,
+    source_event_cursor: int,
+    generation_id: str,
+    delivery_scope: MovementRootDeliveryScope,
+) -> MovementRootProjectionView:
+    """Copy one accepted movement-root EFFECT into closed immutable evidence."""
+    _require_root_common_evidence(
+        event,
+        source_event_cursor=source_event_cursor,
+        generation_id=generation_id,
+        delivery_scope=delivery_scope,
+    )
+    common = {
+        "generation_id": generation_id,
+        "first_effect_source_cursor": source_event_cursor,
+        "first_effect_uuid": event.uuid,
+        "phase": EventPhase.EFFECT,
+        "source_entity_uuid": event.source_entity_uuid,
+        "lineage_uuid": event.lineage_uuid,
+        "identified_source_observer_uuids": _root_source_identity_grants(event),
+        "delivery_scope": delivery_scope,
+    }
+    context: MovementRootProjectionContext
+    if type(event) is MovementEvent:
+        if type(event.movement_mode) is not MovementMode:
+            raise SubjectiveEventProjectionError("movement root has malformed mode")
+        if event.trajectory is not MovementTrajectory.PATH:
+            raise SubjectiveEventProjectionError("movement root must use PATH trajectory")
+        context = PathMovementRootContext(
+            **common,
+            root_kind=MovementRootKind.PATH,
+            movement_mode=event.movement_mode,
+            trajectory=event.trajectory,
+            admitted_path=_require_position_path(
+                event.path,
+                field_name="movement root admitted path",
+                minimum_length=1,
+            ),
+        )
+    elif type(event) is JumpEvent:
+        if event.trajectory is not MovementTrajectory.DIRECT_ARC:
+            raise SubjectiveEventProjectionError("jump root must use DIRECT_ARC trajectory")
+        if event.requested_end_position is None:
+            raise SubjectiveEventProjectionError("jump root requires an accepted landing")
+        context = JumpRootContext(
+            **common,
+            root_kind=MovementRootKind.JUMP,
+            trajectory=event.trajectory,
+            takeoff_position=_require_position(
+                event.start_position,
+                field_name="jump takeoff",
+            ),
+            landing_position=_require_position(
+                event.requested_end_position,
+                field_name="jump landing",
+            ),
+            takeoff_elevation_feet=_require_elevation(
+                event.start_elevation_feet,
+                field_name="jump takeoff elevation",
+            ),
+            landing_elevation_feet=_require_elevation(
+                event.requested_end_elevation_feet,
+                field_name="jump landing elevation",
+            ),
+            disclosed_arc=_require_position_path(
+                event.path,
+                field_name="jump disclosed arc",
+                minimum_length=2,
+            ),
+        )
+    elif type(event) is TraverseConnectorEvent:
+        if type(event.connector_uuid) is not UUID:
+            raise SubjectiveEventProjectionError("connector root has malformed UUID")
+        if (
+            type(event.connector_authored_id) is not str
+            or re.fullmatch(
+                CONNECTOR_AUTHORED_ID_PATTERN,
+                event.connector_authored_id,
+            ) is None
+        ):
+            raise SubjectiveEventProjectionError("connector root has malformed authored ID")
+        if type(event.connector_kind) is not TraversalConnectorKind:
+            raise SubjectiveEventProjectionError("connector root has malformed kind")
+        if (
+            type(event.connector_presentation_key) is not str
+            or re.fullmatch(
+                CONNECTOR_PRESENTATION_KEY_PATTERN,
+                event.connector_presentation_key,
+            ) is None
+        ):
+            raise SubjectiveEventProjectionError(
+                "connector root has malformed presentation key"
+            )
+        if type(event.connector_revision) is not int or event.connector_revision < 1:
+            raise SubjectiveEventProjectionError("connector root has malformed revision")
+        context = ConnectorRootContext(
+            **common,
+            root_kind=MovementRootKind.CONNECTOR,
+            source_position=_require_position(
+                event.start_position,
+                field_name="connector source",
+            ),
+            destination_position=_require_position(
+                event.requested_end_position,
+                field_name="connector destination",
+            ),
+            source_elevation_feet=_require_elevation(
+                event.start_elevation_feet,
+                field_name="connector source elevation",
+            ),
+            destination_elevation_feet=_require_elevation(
+                event.requested_end_elevation_feet,
+                field_name="connector destination elevation",
+            ),
+            connector_uuid=event.connector_uuid,
+            connector_authored_id=event.connector_authored_id,
+            connector_kind=event.connector_kind,
+            connector_presentation_key=event.connector_presentation_key,
+            connector_revision=event.connector_revision,
+        )
+    else:
+        raise SubjectiveEventProjectionError(
+            "movement root capture requires MovementEvent, JumpEvent, or TraverseConnectorEvent"
+        )
+    return MovementRootProjectionView(
+        context=context,
+        effect_uuid_aliases=(
+            MovementRootEffectAlias(
+                effect_uuid=event.uuid,
+                source_event_cursor=source_event_cursor,
+            ),
+        ),
+    )
+
+
+def add_movement_root_effect_alias(
+    view: MovementRootProjectionView,
+    event: Event,
+    *,
+    source_event_cursor: int,
+) -> MovementRootProjectionView:
+    """Return a view containing one mechanically identical status-only alias."""
+    if type(view) is not MovementRootProjectionView:
+        raise TypeError("movement root aliasing requires an exact projection view")
+    if not _movement_root_event_matches_context(view.context, event):
+        raise SubjectiveEventProjectionError(
+            "movement root EFFECT alias changed frozen mechanical or identity evidence"
+        )
+    alias = MovementRootEffectAlias(
+        effect_uuid=event.uuid,
+        source_event_cursor=source_event_cursor,
+    )
+    for existing in view.effect_uuid_aliases:
+        if existing.effect_uuid == alias.effect_uuid:
+            if existing.source_event_cursor != alias.source_event_cursor:
+                raise SubjectiveEventProjectionError(
+                    "movement root EFFECT UUID was reused at another cursor"
+                )
+            return view
+        if existing.source_event_cursor == alias.source_event_cursor:
+            raise SubjectiveEventProjectionError(
+                "movement root EFFECT cursor is already owned by another UUID"
+            )
+    if len(view.effect_uuid_aliases) >= MAX_ROOT_EFFECT_ALIASES_PER_LINEAGE:
+        raise SubjectiveEventProjectionError("movement root EFFECT alias capacity exceeded")
+    return MovementRootProjectionView(
+        context=view.context,
+        effect_uuid_aliases=(*view.effect_uuid_aliases, alias),
+    )
+
+
+def _require_root_common_evidence(
+    event: Event,
+    *,
+    source_event_cursor: int,
+    generation_id: str,
+    delivery_scope: MovementRootDeliveryScope,
+) -> None:
+    if type(source_event_cursor) is not int or source_event_cursor < 1:
+        raise SubjectiveEventProjectionError("movement root cursor must be positive")
+    if type(generation_id) is not str or not generation_id:
+        raise SubjectiveEventProjectionError("movement root generation must be nonempty")
+    if type(delivery_scope) is not MovementRootDeliveryScope:
+        raise SubjectiveEventProjectionError("movement root delivery scope is malformed")
+    if (
+        type(event) not in {MovementEvent, JumpEvent, TraverseConnectorEvent}
+        or event.phase is not EventPhase.EFFECT
+        or type(event.canceled) is not bool
+        or event.canceled
+        or event.canceled_from_phase is not None
+        or event.event_type is not EventType.MOVEMENT
+        or type(event.uuid) is not UUID
+        or type(event.source_entity_uuid) is not UUID
+        or type(event.lineage_uuid) is not UUID
+    ):
+        raise SubjectiveEventProjectionError(
+            "movement root capture requires an exact accepted EFFECT event"
+        )
+
+
+def _root_source_identity_grants(event: Event) -> frozenset[str]:
+    grants_by_entity = event.identified_entity_observer_uuids
+    if type(grants_by_entity) is not dict:
+        raise SubjectiveEventProjectionError("movement root identity grants are malformed")
+    grants = grants_by_entity.get(str(event.source_entity_uuid), set())
+    if type(grants) is not set or any(type(observer) is not str for observer in grants):
+        raise SubjectiveEventProjectionError("movement root source identity grant is malformed")
+    return frozenset(grants)
+
+
+def _root_source_identity_grants_match(
+    event: Event,
+    expected: frozenset[str],
+) -> bool:
+    """Validate alias grant shapes and compare without rebuilding frozen evidence."""
+    grants_by_entity = event.identified_entity_observer_uuids
+    if type(grants_by_entity) is not dict:
+        raise SubjectiveEventProjectionError("movement root identity grants are malformed")
+    grants = grants_by_entity.get(str(event.source_entity_uuid), set())
+    if type(grants) is not set or any(type(observer) is not str for observer in grants):
+        raise SubjectiveEventProjectionError("movement root source identity grant is malformed")
+    return grants == expected
+
+
+def _require_position(
+    value: object,
+    *,
+    field_name: str,
+) -> tuple[int, int]:
+    if (
+        type(value) is not tuple
+        or len(value) != 2
+        or any(type(component) is not int for component in value)
+    ):
+        raise SubjectiveEventProjectionError(f"{field_name} is malformed")
+    return value
+
+
+def _require_position_path(
+    value: object,
+    *,
+    field_name: str,
+    minimum_length: int,
+) -> tuple[tuple[int, int], ...]:
+    if type(value) is not tuple or len(value) < minimum_length:
+        raise SubjectiveEventProjectionError(f"{field_name} is malformed")
+    for position in value:
+        _require_position(position, field_name=field_name)
+    return cast(tuple[tuple[int, int], ...], value)
+
+
+def _require_elevation(value: object, *, field_name: str) -> int:
+    if type(value) is not int or value % 5 != 0:
+        raise SubjectiveEventProjectionError(f"{field_name} is malformed")
+    return value
+
+
+def _movement_root_event_matches_context(
+    context: MovementRootProjectionContext,
+    event: Event,
+) -> bool:
+    try:
+        _require_root_common_evidence(
+            event,
+            source_event_cursor=context.first_effect_source_cursor,
+            generation_id=context.generation_id,
+            delivery_scope=context.delivery_scope,
+        )
+        if (
+            event.source_entity_uuid != context.source_entity_uuid
+            or event.lineage_uuid != context.lineage_uuid
+            or not _root_source_identity_grants_match(
+                event,
+                context.identified_source_observer_uuids,
+            )
+        ):
+            return False
+        if type(context) is PathMovementRootContext:
+            return (
+                type(event) is MovementEvent
+                and event.movement_mode is context.movement_mode
+                and event.trajectory is context.trajectory
+                and _require_position_path(
+                    event.path,
+                    field_name="movement root admitted path",
+                    minimum_length=1,
+                ) == context.admitted_path
+            )
+        if type(context) is JumpRootContext:
+            return (
+                type(event) is JumpEvent
+                and event.requested_end_position is not None
+                and event.trajectory is context.trajectory
+                and _require_position(event.start_position, field_name="jump takeoff")
+                == context.takeoff_position
+                and _require_position(event.requested_end_position, field_name="jump landing")
+                == context.landing_position
+                and _require_elevation(event.start_elevation_feet, field_name="jump takeoff elevation")
+                == context.takeoff_elevation_feet
+                and _require_elevation(event.requested_end_elevation_feet, field_name="jump landing elevation")
+                == context.landing_elevation_feet
+                and _require_position_path(
+                    event.path,
+                    field_name="jump disclosed arc",
+                    minimum_length=2,
+                ) == context.disclosed_arc
+            )
+        return (
+            type(context) is ConnectorRootContext
+            and type(event) is TraverseConnectorEvent
+            and _require_position(event.start_position, field_name="connector source")
+            == context.source_position
+            and _require_position(event.requested_end_position, field_name="connector destination")
+            == context.destination_position
+            and _require_elevation(event.start_elevation_feet, field_name="connector source elevation")
+            == context.source_elevation_feet
+            and _require_elevation(event.requested_end_elevation_feet, field_name="connector destination elevation")
+            == context.destination_elevation_feet
+            and type(event.connector_uuid) is UUID
+            and event.connector_uuid == context.connector_uuid
+            and type(event.connector_authored_id) is str
+            and event.connector_authored_id == context.connector_authored_id
+            and type(event.connector_kind) is TraversalConnectorKind
+            and event.connector_kind is context.connector_kind
+            and type(event.connector_presentation_key) is str
+            and event.connector_presentation_key == context.connector_presentation_key
+            and type(event.connector_revision) is int
+            and event.connector_revision == context.connector_revision
+        )
+    except SubjectiveEventProjectionError:
+        return False
 
 
 class _NodeKind(str, Enum):
@@ -230,11 +847,10 @@ class _NodeKind(str, Enum):
 @dataclass(frozen=True)
 class _MovementPayload:
     entity_uuid: str
-    movement_kind: MovementKind
-    movement_sequence_id: str
-    trajectory: tuple[tuple[int, int], ...]
-    path_start_index: int
-    path_total_steps: int
+    locomotion_family: LocomotionFamily
+    trajectory_family: LocomotionTrajectory
+    anchors: tuple[LocomotionAnchor, ...]
+    connector: Optional[ConnectorPresentationIdentity]
     endpoint_outcome: MovementEndpointOutcome
 
 
@@ -432,10 +1048,173 @@ class _NodeSpec:
     parent_key: Optional[str] = None
 
 
+@dataclass(frozen=True)
+class _SpellRootPresentationAuthority:
+    """Frozen requester grants admitted by one exact spell-root lifecycle."""
+
+    runtime_type: type[SpellEvent]
+    lineage_uuid: UUID
+    source_entity_uuid: UUID
+    source_position: tuple[int, int] | None
+    spell_id: str
+    area_geometry: object
+    identified_source_observer_uuids: frozenset[str]
+    located_source_observer_uuids: frozenset[str]
+
+
+def _spell_source_observer_grants(
+    event: SpellEvent,
+    *,
+    located: bool,
+) -> frozenset[str]:
+    grants_by_entity = (
+        event.located_entity_observer_uuids
+        if located
+        else event.identified_entity_observer_uuids
+    )
+    if type(grants_by_entity) is not dict:
+        raise SubjectiveEventProjectionError(
+            "spell root source observer grants are malformed"
+        )
+    grants = grants_by_entity.get(str(event.source_entity_uuid), set())
+    if type(grants) is not set or any(
+        type(observer_uuid) is not str for observer_uuid in grants
+    ):
+        raise SubjectiveEventProjectionError(
+            "spell root source observer grant is malformed"
+        )
+    return frozenset(grants)
+
+
+def _capture_spell_root_presentation_authority(
+    event: SpellEvent,
+) -> _SpellRootPresentationAuthority:
+    if (
+        type(event.lineage_uuid) is not UUID
+        or type(event.source_entity_uuid) is not UUID
+        or event.event_type is not EventType.CAST_SPELL
+        or type(event.phase) is not EventPhase
+        or event.phase
+        not in {
+            EventPhase.DECLARATION,
+            EventPhase.EXECUTION,
+            EventPhase.EFFECT,
+            EventPhase.COMPLETION,
+        }
+        or event.canceled is not False
+        or event.canceled_from_phase is not None
+        or event.application_index is not None
+        or type(event.spell_id) is not str
+        or not event.spell_id
+    ):
+        raise SubjectiveEventProjectionError(
+            "spell root presentation authority is malformed"
+        )
+    source_position = (
+        None
+        if event.source_position is None
+        else _require_position(
+            event.source_position,
+            field_name="spell root source_position",
+        )
+    )
+    return _SpellRootPresentationAuthority(
+        runtime_type=type(event),
+        lineage_uuid=event.lineage_uuid,
+        source_entity_uuid=event.source_entity_uuid,
+        source_position=source_position,
+        spell_id=event.spell_id,
+        area_geometry=event.area_geometry,
+        identified_source_observer_uuids=_spell_source_observer_grants(
+            event,
+            located=False,
+        ),
+        located_source_observer_uuids=_spell_source_observer_grants(
+            event,
+            located=True,
+        ),
+    )
+
+
+def _spell_root_authority_signature_matches(
+    left: _SpellRootPresentationAuthority,
+    right: _SpellRootPresentationAuthority,
+) -> bool:
+    return (
+        left.runtime_type is right.runtime_type
+        and left.lineage_uuid == right.lineage_uuid
+        and left.source_entity_uuid == right.source_entity_uuid
+        and left.source_position == right.source_position
+        and left.spell_id == right.spell_id
+        and type(left.area_geometry) is type(right.area_geometry)
+        and left.area_geometry == right.area_geometry
+    )
+
+
+def _merge_spell_root_presentation_authority(
+    existing: _SpellRootPresentationAuthority,
+    candidate: _SpellRootPresentationAuthority,
+) -> _SpellRootPresentationAuthority:
+    if not _spell_root_authority_signature_matches(existing, candidate):
+        raise SubjectiveEventProjectionError(
+            "spell root presentation authority changed across lifecycle"
+        )
+    return _SpellRootPresentationAuthority(
+        runtime_type=existing.runtime_type,
+        lineage_uuid=existing.lineage_uuid,
+        source_entity_uuid=existing.source_entity_uuid,
+        source_position=existing.source_position,
+        spell_id=existing.spell_id,
+        area_geometry=existing.area_geometry,
+        identified_source_observer_uuids=(
+            existing.identified_source_observer_uuids
+            | candidate.identified_source_observer_uuids
+        ),
+        located_source_observer_uuids=(
+            existing.located_source_observer_uuids
+            | candidate.located_source_observer_uuids
+        ),
+    )
+
+
+def _spell_root_authority_matches_event(
+    authority: _SpellRootPresentationAuthority,
+    event: SpellEvent,
+) -> bool:
+    try:
+        source_position = (
+            None
+            if event.source_position is None
+            else _require_position(
+                event.source_position,
+                field_name="spell root source_position",
+            )
+        )
+    except SubjectiveEventProjectionError:
+        return False
+    return (
+        type(event) is authority.runtime_type
+        and type(event.lineage_uuid) is UUID
+        and event.lineage_uuid == authority.lineage_uuid
+        and type(event.source_entity_uuid) is UUID
+        and event.source_entity_uuid == authority.source_entity_uuid
+        and event.event_type is EventType.CAST_SPELL
+        and event.phase is EventPhase.COMPLETION
+        and event.canceled is False
+        and event.canceled_from_phase is None
+        and event.application_index is None
+        and type(event.spell_id) is str
+        and event.spell_id == authority.spell_id
+        and source_position == authority.source_position
+        and type(event.area_geometry) is type(authority.area_geometry)
+        and event.area_geometry == authority.area_geometry
+    )
+
+
 class _BatchIndex:
     """In-batch lineage topology; it never consults EventQueue or registries."""
 
-    def __init__(self, batch: CausalEventBatch) -> None:
+    def __init__(self, batch: CausalEventBatch, *, generation_id: str) -> None:
         self.slots = batch.slots
         self.completions = tuple(
             slot
@@ -446,13 +1225,75 @@ class _BatchIndex:
         self.first_cursor_by_lineage: dict[str, int] = {}
         event_lineage_by_uuid: dict[UUID, str] = {}
         self.slot_by_event_uuid: dict[UUID, ProjectedEventSlot] = {}
+        self.movement_root_by_effect_uuid: dict[
+            UUID,
+            MovementRootProjectionContext,
+        ] = {}
+        self.movement_root_by_lineage: dict[
+            UUID,
+            MovementRootProjectionContext,
+        ] = {}
+        self.spell_root_authority_by_lineage: dict[
+            UUID,
+            _SpellRootPresentationAuthority,
+        ] = {}
+        self.spell_root_lifecycle_lineages: set[UUID] = set()
+        invalid_spell_root_lineages: set[UUID] = set()
+        for view in batch.movement_root_contexts:
+            context = view.context
+            if context.generation_id != generation_id:
+                raise SubjectiveEventProjectionError(
+                    "movement root context belongs to another generation"
+                )
+            if context.lineage_uuid in self.movement_root_by_lineage:
+                raise SubjectiveEventProjectionError(
+                    "movement root lineage has ambiguous context ownership"
+                )
+            self.movement_root_by_lineage[context.lineage_uuid] = context
+            for alias in view.effect_uuid_aliases:
+                if alias.effect_uuid in self.movement_root_by_effect_uuid:
+                    raise SubjectiveEventProjectionError(
+                        "movement root EFFECT alias has ambiguous ownership"
+                    )
+                self.movement_root_by_effect_uuid[alias.effect_uuid] = context
         for slot in batch.slots:
+            event = slot.event
+            if (
+                isinstance(event, SpellEvent)
+                and event.application_index is None
+                and event.phase in {
+                    EventPhase.DECLARATION,
+                    EventPhase.EXECUTION,
+                    EventPhase.EFFECT,
+                    EventPhase.COMPLETION,
+                }
+            ):
+                lineage_uuid = event.lineage_uuid
+                self.spell_root_lifecycle_lineages.add(lineage_uuid)
+                try:
+                    candidate = _capture_spell_root_presentation_authority(event)
+                    existing = self.spell_root_authority_by_lineage.get(lineage_uuid)
+                    if existing is None:
+                        self.spell_root_authority_by_lineage[lineage_uuid] = candidate
+                    else:
+                        self.spell_root_authority_by_lineage[lineage_uuid] = (
+                            _merge_spell_root_presentation_authority(
+                                existing,
+                                candidate,
+                            )
+                        )
+                except (TypeError, ValueError, SubjectiveEventProjectionError):
+                    invalid_spell_root_lineages.add(lineage_uuid)
+
             lineage = str(slot.event.lineage_uuid)
             event_lineage_by_uuid[slot.event.uuid] = lineage
             self.slot_by_event_uuid[slot.event.uuid] = slot
             self.first_cursor_by_lineage.setdefault(lineage, slot.source_event_cursor)
             if slot.event.phase is EventPhase.COMPLETION and not slot.event.canceled:
                 self.completion_by_lineage[lineage] = slot
+
+        for lineage_uuid in invalid_spell_root_lineages:
+            self.spell_root_authority_by_lineage.pop(lineage_uuid, None)
 
         self.parent_by_lineage: dict[str, str] = {}
         for slot in batch.slots:
@@ -490,6 +1331,76 @@ class _BatchIndex:
         ]
         return min(cursors, default=fallback)
 
+    def movement_root_for_step(
+        self,
+        step: StepMovementEvent,
+    ) -> MovementRootProjectionContext:
+        """Resolve only the exact root EFFECT UUID carried by Step.parent_event."""
+        if type(step.parent_event) is not UUID:
+            raise SubjectiveEventProjectionError(
+                "movement Step requires an exact parent_event EFFECT alias"
+            )
+        context = self.movement_root_by_effect_uuid.get(step.parent_event)
+        if context is None:
+            raise SubjectiveEventProjectionError(
+                "movement Step parent_event does not resolve to a frozen root EFFECT"
+            )
+        return context
+
+    def spell_source_identity_allowed(
+        self,
+        event: SpellEvent,
+        perspective: SubjectivePerspective,
+    ) -> bool:
+        """Use the union of grants proven by this exact spell-root lifecycle."""
+        authority = self._spell_root_authority(event)
+        if authority is None:
+            return (
+                False
+                if event.lineage_uuid in self.spell_root_lifecycle_lineages
+                else _identity_allowed(event, event.source_entity_uuid, perspective)
+            )
+        source_key = str(event.source_entity_uuid)
+        if source_key in perspective.controlled_entity_uuids:
+            return True
+        return bool(
+            set(perspective.observer_entity_uuids)
+            & authority.identified_source_observer_uuids
+        )
+
+    def spell_source_location_allowed(
+        self,
+        event: SpellEvent,
+        perspective: SubjectivePerspective,
+    ) -> bool:
+        """Authorize declared spell geometry from the same frozen root boundary."""
+        authority = self._spell_root_authority(event)
+        if authority is None:
+            return (
+                False
+                if event.lineage_uuid in self.spell_root_lifecycle_lineages
+                else _location_allowed(event, event.source_entity_uuid, perspective)
+            )
+        source_key = str(event.source_entity_uuid)
+        if source_key in perspective.controlled_entity_uuids:
+            return True
+        return bool(
+            set(perspective.observer_entity_uuids)
+            & authority.located_source_observer_uuids
+        )
+
+    def _spell_root_authority(
+        self,
+        event: SpellEvent,
+    ) -> _SpellRootPresentationAuthority | None:
+        authority = self.spell_root_authority_by_lineage.get(event.lineage_uuid)
+        if authority is None or not _spell_root_authority_matches_event(
+            authority,
+            event,
+        ):
+            return None
+        return authority
+
 
 class CanonicalSubjectivePresentationMapper:
     """Journal projector for exact engine batches and canonical subjective cues."""
@@ -518,13 +1429,14 @@ class CanonicalSubjectivePresentationMapper:
                 "an advancing source watermark requires its exact event slots"
             )
 
-        index = _BatchIndex(source)
+        index = _BatchIndex(
+            source,
+            generation_id=context.protocol.generation_id,
+        )
         nodes = _build_semantic_nodes(
             source,
             index=index,
             perspective=context.perspective,
-            source_stream_id=context.protocol.source_stream_id,
-            generation_id=context.protocol.generation_id,
         )
         drafts = tuple(
             PresentationNodeDraft(
@@ -566,8 +1478,6 @@ def _build_semantic_nodes(
     *,
     index: _BatchIndex,
     perspective: SubjectivePerspective,
-    source_stream_id: str,
-    generation_id: str,
 ) -> tuple[_NodeSpec, ...]:
     nodes: list[_NodeSpec] = []
     nodes_by_key: dict[str, _NodeSpec] = {}
@@ -592,7 +1502,15 @@ def _build_semantic_nodes(
     for slot in index.completions:
         event = slot.event
         node: Optional[_NodeSpec] = None
-        if isinstance(event, (MovementEvent, JumpEvent, StepMovementEvent)):
+        if isinstance(
+            event,
+            (
+                MovementEvent,
+                JumpEvent,
+                TraverseConnectorEvent,
+                StepMovementEvent,
+            ),
+        ):
             continue
         if isinstance(event, ShoveEvent):
             node = _shove_node(slot, index=index, perspective=perspective)
@@ -704,8 +1622,6 @@ def _build_semantic_nodes(
         post_arrival_step_lineages=frozenset(
             arrival_step_lineage_by_node_key.values()
         ),
-        source_stream_id=source_stream_id,
-        generation_id=generation_id,
     )
     _attach_movement_reactions(
         nodes=nodes,
@@ -822,56 +1738,67 @@ def _add_movement_nodes(
     semantic_key_by_lineage: dict[str, str],
     reactive_step_lineages: frozenset[str],
     post_arrival_step_lineages: frozenset[str],
-    source_stream_id: str,
-    generation_id: str,
 ) -> None:
-    """Coalesce committed steps and retain authorized interrupted attempts.
+    """Validate exact root-owned Steps, then project authorized local runs.
 
     Movement-owned Attack, Spell, and Shove cues are pre-edge reactions. The
     owning segment therefore begins with the exact triggering step; later
     nonreactive steps may remain coalesced until the next reaction boundary.
     """
-    grouped: dict[str, list[ProjectedEventSlot]] = {}
-    root_event_by_lineage: dict[str, MovementEvent] = {}
+    grouped: dict[
+        UUID,
+        list[tuple[ProjectedEventSlot, MovementRootProjectionContext]],
+    ] = {}
+    seen_path_indexes: dict[UUID, set[int]] = {}
     for slot in index.completions:
         if not isinstance(slot.event, StepMovementEvent):
             continue
         step = slot.event
-        step_lineage = str(step.lineage_uuid)
-        if not step.committed and step_lineage not in reactive_step_lineages:
-            continue
-        if not _identity_allowed(step, step.source_entity_uuid, perspective):
-            continue
-        if not _step_geometry_allowed(step, perspective):
-            continue
-        root_lineage: Optional[str] = None
-        for ancestor in index.ancestors(str(step.lineage_uuid)):
-            root_slot = index.completion_by_lineage.get(ancestor)
-            if root_slot is not None and isinstance(root_slot.event, MovementEvent):
-                root_lineage = ancestor
-                root_event_by_lineage[ancestor] = root_slot.event
-                break
-        root_lineage = root_lineage or str(step.parent_lineage or step.lineage_uuid)
-        grouped.setdefault(root_lineage, []).append(slot)
+        context = index.movement_root_for_step(step)
+        validate_step_against_movement_root(step, context)
+        path_indexes = seen_path_indexes.setdefault(context.lineage_uuid, set())
+        if step.path_index in path_indexes:
+            raise SubjectiveEventProjectionError(
+                "movement root contains duplicate Step path indexes"
+            )
+        path_indexes.add(step.path_index)
+        grouped.setdefault(context.lineage_uuid, []).append((slot, context))
 
     add_node = add
     if not callable(add_node):
         raise TypeError("movement node sink must be callable")
-    for root_lineage, step_slots in grouped.items():
-        step_slots.sort(
-            key=lambda candidate: (
-                candidate.event.path_index
-                if isinstance(candidate.event, StepMovementEvent)
-                else 0,
-                candidate.source_event_cursor,
+    for root_lineage_uuid, candidates in grouped.items():
+        contexts = {id(context): context for _, context in candidates}
+        if len(contexts) != 1:
+            raise SubjectiveEventProjectionError(
+                "movement root lineage resolved to more than one frozen context"
             )
-        )
-        segments: list[list[ProjectedEventSlot]] = []
-        for slot in step_slots:
+        context = next(iter(contexts.values()))
+        if type(context) in {JumpRootContext, ConnectorRootContext} and len(candidates) != 1:
+            raise SubjectiveEventProjectionError(
+                "one-leg locomotion root contains multiple completed Steps"
+            )
+        candidates.sort(key=lambda candidate: _movement_step_slot_order(candidate[0]))
+        authorized: list[ProjectedEventSlot] = []
+        for slot, _ in candidates:
             step = slot.event
             if not isinstance(step, StepMovementEvent):
                 continue
-            if not step.committed:
+            step_lineage = str(step.lineage_uuid)
+            if not step.committed and step_lineage not in reactive_step_lineages:
+                continue
+            if not _movement_root_identity_allowed(context, perspective):
+                continue
+            if not _step_geometry_allowed(step, perspective):
+                continue
+            authorized.append(slot)
+
+        segments: list[list[ProjectedEventSlot]] = []
+        for slot in authorized:
+            step = slot.event
+            if not isinstance(step, StepMovementEvent):
+                continue
+            if type(context) is not PathMovementRootContext or not step.committed:
                 segments.append([slot])
                 continue
             if not segments:
@@ -883,11 +1810,9 @@ def _add_movement_nodes(
                 segments.append([slot])
                 continue
             contiguous = (
-                step.source_entity_uuid == previous.source_entity_uuid
-                and step.total_path_length == previous.total_path_length
-                and step.path_index == previous.path_index + 1
+                step.path_index == previous.path_index + 1
                 and step.from_position == previous.to_position
-                and step.trajectory is previous.trajectory
+                and step.from_elevation_feet == previous.to_elevation_feet
                 and str(step.lineage_uuid) not in reactive_step_lineages
                 and str(previous.lineage_uuid) not in post_arrival_step_lineages
             )
@@ -896,23 +1821,12 @@ def _add_movement_nodes(
             else:
                 segments.append([slot])
 
-        root_event = root_event_by_lineage.get(root_lineage)
+        root_lineage = str(root_lineage_uuid)
         for segment_index, segment in enumerate(segments):
             first = segment[0].event
             last_slot = segment[-1]
             if not isinstance(first, StepMovementEvent):
                 continue
-            trajectory = (first.from_position,) + tuple(
-                step_slot.event.to_position
-                for step_slot in segment
-                if isinstance(step_slot.event, StepMovementEvent)
-            )
-            movement_kind = (
-                MovementKind.JUMP
-                if isinstance(root_event, JumpEvent)
-                or first.trajectory is MovementTrajectory.DIRECT_ARC
-                else MovementKind.WALK
-            )
             key = f"movement:{last_slot.event.uuid}:{segment_index}"
             node = _NodeSpec(
                 key=key,
@@ -920,19 +1834,10 @@ def _add_movement_nodes(
                 slot=last_slot,
                 payload=_MovementPayload(
                     entity_uuid=str(first.source_entity_uuid),
-                    movement_kind=movement_kind,
-                    movement_sequence_id=_movement_sequence_id(
-                        source_stream_id=source_stream_id,
-                        generation_id=generation_id,
-                        perspective_epoch_id=perspective.perspective_epoch_id,
-                        root_lineage=root_lineage,
-                    ),
-                    trajectory=trajectory,
-                    path_start_index=max(0, first.path_index - 1),
-                    path_total_steps=max(
-                        first.path_index,
-                        first.total_path_length - 1,
-                    ),
+                    locomotion_family=_locomotion_family(context),
+                    trajectory_family=_locomotion_trajectory(context),
+                    anchors=_locomotion_anchors(segment),
+                    connector=_connector_presentation_identity(context),
                     endpoint_outcome=(
                         MovementEndpointOutcome.COMMITTED
                         if first.committed
@@ -941,18 +1846,10 @@ def _add_movement_nodes(
                 ),
                 lineage=root_lineage,
                 order_key=(
-                    index.root_order_cursor(
-                        root_lineage,
-                        last_slot.source_event_cursor,
-                    ),
+                    context.first_effect_source_cursor,
                     10,
                     first.path_index,
                     segment_index,
-                ),
-                content_attributions=_behavior_content_attributions(
-                    root_event.behavior_binding
-                    if root_event is not None
-                    else None,
                 ),
             )
             add_node(node, map_lineage=False)
@@ -961,23 +1858,186 @@ def _add_movement_nodes(
             semantic_key_by_lineage.setdefault(root_lineage, key)
 
 
-def _movement_sequence_id(
-    *,
-    source_stream_id: str,
-    generation_id: str,
-    perspective_epoch_id: str,
-    root_lineage: str,
-) -> str:
-    """Derive one opaque partition-local identity without exposing lineage."""
-    material = "\x1f".join(
-        (
-            source_stream_id,
-            generation_id,
-            perspective_epoch_id,
-            root_lineage,
+def _movement_step_slot_order(
+    slot: ProjectedEventSlot,
+) -> tuple[int, int]:
+    step = slot.event
+    if type(step) is not StepMovementEvent:
+        raise SubjectiveEventProjectionError("movement candidate is not an exact Step")
+    return step.path_index, slot.source_event_cursor
+
+
+def validate_step_against_movement_root(
+    step: StepMovementEvent,
+    context: MovementRootProjectionContext,
+) -> None:
+    """Fail before privacy filtering when one Step contradicts frozen authority."""
+    if (
+        type(step) is not StepMovementEvent
+        or step.phase is not EventPhase.COMPLETION
+        or type(step.canceled) is not bool
+        or step.canceled
+        or step.canceled_from_phase is not None
+        or type(step.event_type) is not EventType
+        or step.event_type is not EventType.STEP_MOVEMENT
+        or type(step.uuid) is not UUID
+        or type(step.lineage_uuid) is not UUID
+        or type(step.source_entity_uuid) is not UUID
+        or step.source_entity_uuid != context.source_entity_uuid
+        or type(step.parent_event) is not UUID
+        or type(step.parent_lineage) is not UUID
+        or step.parent_lineage != context.lineage_uuid
+        or type(step.path_index) is not int
+        or step.path_index < 1
+        or type(step.total_path_length) is not int
+        or step.total_path_length < 2
+        or type(step.trajectory) is not MovementTrajectory
+        or type(step.committed) is not bool
+    ):
+        raise SubjectiveEventProjectionError(
+            "movement Step changed root, lifecycle, or typed path evidence"
         )
+    from_position = _require_position(step.from_position, field_name="Step origin")
+    to_position = _require_position(step.to_position, field_name="Step destination")
+    from_elevation = _require_elevation(
+        step.from_elevation_feet,
+        field_name="Step origin elevation",
     )
-    return f"movement_{hashlib.sha256(material.encode('utf-8')).hexdigest()}"
+    to_elevation = _require_elevation(
+        step.to_elevation_feet,
+        field_name="Step destination elevation",
+    )
+    disclosed_path = _require_position_path(
+        step.disclosed_path,
+        field_name="Step disclosed path",
+        minimum_length=2,
+    )
+    if type(context) is PathMovementRootContext:
+        if (
+            step.trajectory is not MovementTrajectory.PATH
+            or step.total_path_length != len(context.admitted_path)
+            or step.path_index >= len(context.admitted_path)
+            or from_position != context.admitted_path[step.path_index - 1]
+            or to_position != context.admitted_path[step.path_index]
+            or disclosed_path != (from_position, to_position)
+        ):
+            raise SubjectiveEventProjectionError(
+                "PATH Step contradicts the admitted root path"
+            )
+        return
+    if type(context) is JumpRootContext:
+        if (
+            step.trajectory is not MovementTrajectory.DIRECT_ARC
+            or step.path_index != 1
+            or step.total_path_length != len(context.disclosed_arc)
+            or disclosed_path != context.disclosed_arc
+            or from_position != context.takeoff_position
+            or to_position != context.landing_position
+            or from_elevation != context.takeoff_elevation_feet
+            or to_elevation != context.landing_elevation_feet
+        ):
+            raise SubjectiveEventProjectionError(
+                "DIRECT_ARC Step contradicts the frozen Jump root"
+            )
+        return
+    if type(context) is ConnectorRootContext:
+        if (
+            step.trajectory is not MovementTrajectory.CONNECTOR_TRANSFER
+            or step.path_index != 1
+            or step.total_path_length != 2
+            or disclosed_path != (context.source_position, context.destination_position)
+            or from_position != context.source_position
+            or to_position != context.destination_position
+            or from_elevation != context.source_elevation_feet
+            or to_elevation != context.destination_elevation_feet
+        ):
+            raise SubjectiveEventProjectionError(
+                "CONNECTOR_TRANSFER Step contradicts the frozen connector root"
+            )
+        return
+    raise SubjectiveEventProjectionError("unsupported frozen movement root context")
+
+
+def _movement_root_identity_allowed(
+    context: MovementRootProjectionContext,
+    perspective: SubjectivePerspective,
+) -> bool:
+    source = str(context.source_entity_uuid)
+    if source in perspective.controlled_entity_uuids:
+        return True
+    return bool(
+        context.identified_source_observer_uuids
+        & frozenset(perspective.observer_entity_uuids)
+    )
+
+
+def _locomotion_family(
+    context: MovementRootProjectionContext,
+) -> LocomotionFamily:
+    if type(context) is JumpRootContext:
+        return LocomotionFamily.JUMP
+    if type(context) is ConnectorRootContext:
+        return LocomotionFamily.CONNECTOR
+    if type(context) is not PathMovementRootContext:
+        raise SubjectiveEventProjectionError("unsupported movement root family")
+    match context.movement_mode:
+        case MovementMode.WALKING:
+            return LocomotionFamily.WALK
+        case MovementMode.SWIMMING:
+            return LocomotionFamily.SWIM
+        case MovementMode.FLYING:
+            return LocomotionFamily.FLY
+        case MovementMode.BURROWING:
+            return LocomotionFamily.BURROW
+    raise SubjectiveEventProjectionError("unhandled path movement mode")
+
+
+def _locomotion_trajectory(
+    context: MovementRootProjectionContext,
+) -> LocomotionTrajectory:
+    if type(context) is PathMovementRootContext:
+        return LocomotionTrajectory.PATH
+    if type(context) is JumpRootContext:
+        return LocomotionTrajectory.DIRECT_ARC
+    if type(context) is ConnectorRootContext:
+        return LocomotionTrajectory.CONNECTOR_TRANSFER
+    raise SubjectiveEventProjectionError("unsupported movement root trajectory")
+
+
+def _locomotion_anchors(
+    segment: list[ProjectedEventSlot],
+) -> tuple[LocomotionAnchor, ...]:
+    first = segment[0].event
+    if not isinstance(first, StepMovementEvent):
+        raise SubjectiveEventProjectionError("locomotion segment has no Step")
+    return (
+        LocomotionAnchor(
+            position=first.from_position,
+            elevation_feet=first.from_elevation_feet,
+        ),
+        *tuple(
+            LocomotionAnchor(
+                position=step_slot.event.to_position,
+                elevation_feet=step_slot.event.to_elevation_feet,
+            )
+            for step_slot in segment
+            if isinstance(step_slot.event, StepMovementEvent)
+        ),
+    )
+
+
+def _connector_presentation_identity(
+    context: MovementRootProjectionContext,
+) -> Optional[ConnectorPresentationIdentity]:
+    if type(context) is not ConnectorRootContext:
+        return None
+    return ConnectorPresentationIdentity(
+        uuid=context.connector_uuid,
+        authored_id=context.connector_authored_id,
+        kind=context.connector_kind,
+        presentation_key=context.connector_presentation_key,
+        revision=context.connector_revision,
+    )
 
 
 def _attach_movement_reactions(
@@ -1184,7 +2244,7 @@ def _spell_node(
     event = slot.event
     if not isinstance(event, SpellEvent):
         return None
-    if not _identity_allowed(event, event.source_entity_uuid, perspective):
+    if not index.spell_source_identity_allowed(event, perspective):
         return None
     if not event.spell_id:
         return None
@@ -1198,9 +2258,8 @@ def _spell_node(
     area = _area_geometry(event)
     if event.area_geometry is not None and area is None:
         return None
-    if area is not None and not _location_allowed(
+    if area is not None and not index.spell_source_location_allowed(
         event,
-        event.source_entity_uuid,
         perspective,
     ):
         return None
@@ -2588,11 +3647,10 @@ def _materialize_node(
         return MovementPresentationCue(
             **common,
             entity_uuid=payload.entity_uuid,
-            movement_kind=payload.movement_kind,
-            movement_sequence_id=payload.movement_sequence_id,
-            trajectory=payload.trajectory,
-            path_start_index=payload.path_start_index,
-            path_total_steps=payload.path_total_steps,
+            locomotion_family=payload.locomotion_family,
+            trajectory_family=payload.trajectory_family,
+            anchors=payload.anchors,
+            connector=payload.connector,
             endpoint_outcome=payload.endpoint_outcome,
             perception_commit="observation_frame",
         )
@@ -3074,4 +4132,5 @@ __all__ = [
     "ProjectedEventSlot",
     "SubjectiveEventProjectionError",
     "canonical_subjective_presentation_mapper",
+    "validate_step_against_movement_root",
 ]

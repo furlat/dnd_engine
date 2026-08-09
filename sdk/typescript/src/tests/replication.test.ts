@@ -5,15 +5,20 @@ import {
   ContractValidationError,
   SUBJECTIVE_DUPLICATE_RETENTION_LIMIT,
   SubjectiveReplicationClient,
+  SubjectiveFrameCatchupResyncError,
+  SubjectiveReplicationHttpError,
   SubjectiveReplicationJournal,
   SubjectiveSseDecoder,
   SubjectiveStreamFollower,
+  assertSubjectiveFrame,
   assertSubjectiveReplicationBootstrap,
   decodeAlias,
   decodeSubjectiveEnvelope,
   parseJson,
   reduceSubjectiveWorld,
+  type SubjectiveFramesResponse,
   type SubjectiveReplicationBootstrap,
+  type SubjectiveReplicationFrame,
   type SubjectiveReplicationJournalState,
   type APITraversalConnector,
 } from "../index.js";
@@ -351,9 +356,37 @@ test("typed observation patches outrun presentation without exposing engine even
   assert.equal(result.status, "applied");
   assert.deepEqual(heroPosition(journal, "authoritative"), [1, 0]);
   assert.deepEqual(heroPosition(journal, "presentation"), [0, 0]);
-  assert.equal(journal.peekPresentationFrame()?.presentation[0]?.kind, "movement");
-  journal.commitPresentationFrame(1);
+  const preview = journal.previewPresentationFrame(1);
+  assert.equal(preview.frame.presentation[0]?.kind, "movement");
+  assert.deepEqual(
+    preview.candidatePresentation.world.state.entities.find((entity) => entity.uuid === "hero")?.position,
+    [1, 0],
+  );
+  assert.deepEqual(heroPosition(journal, "presentation"), [0, 0]);
+  journal.commitPresentationFrame(preview.token);
   assert.deepEqual(heroPosition(journal, "presentation"), [1, 0]);
+});
+
+test("NORMAL preview reduces only the exact head against presentation state, never canonical ahead", () => {
+  const journal = new SubjectiveReplicationJournal();
+  journal.bootstrap(bootstrap());
+  journal.ingest({ event: "frame", id: "normal-head-1", data: frameDelivery(1) });
+  journal.ingest({ event: "frame", id: "normal-head-2", data: frameDelivery(2) });
+  assert.deepEqual(heroPosition(journal, "authoritative"), [2, 0]);
+  assert.deepEqual(heroPosition(journal, "presentation"), [0, 0]);
+
+  const first = journal.previewPresentationFrame(1);
+  assert.deepEqual(
+    first.candidatePresentation.world.state.entities.find((entity) => entity.uuid === "hero")?.position,
+    [1, 0],
+  );
+  journal.commitPresentationFrame(first.token);
+  assert.deepEqual(heroPosition(journal, "presentation"), [1, 0]);
+  const second = journal.previewPresentationFrame(2);
+  assert.deepEqual(
+    second.candidatePresentation.world.state.entities.find((entity) => entity.uuid === "hero")?.position,
+    [2, 0],
+  );
 });
 
 test("nullable subjective log slots wait behind the presentation source barrier", () => {
@@ -373,9 +406,352 @@ test("nullable subjective log slots wait behind the presentation source barrier"
   assert.equal(journal.state().authoritative?.watermarks.combat_log_cursor, 1);
   assert.equal(journal.state().presentation?.watermarks.combat_log_cursor, 0);
 
-  journal.commitPresentationFrame(1);
+  const preview = journal.previewPresentationFrame(1);
+  journal.commitPresentationFrame(preview.token);
   assert.equal(journal.state().presentation?.watermarks.combat_log_cursor, 1);
   assert.deepEqual(journal.state().presentation?.combatLog, []);
+});
+
+test("legal combat-log delivery does not stale an active NORMAL head token", () => {
+  const journal = new SubjectiveReplicationJournal();
+  journal.bootstrap(bootstrap());
+  journal.ingest({
+    event: "frame",
+    id: "normal-head-before-log",
+    data: frameDelivery(),
+  });
+  const preview = journal.previewPresentationFrame(1);
+
+  assert.equal(journal.ingest({
+    event: "combat_log",
+    id: "normal-head-log",
+    data: hiddenLogDelivery(),
+  }).status, "applied");
+  assert.equal(journal.state().presentation?.watermarks.combat_log_cursor, 0);
+
+  const committed = journal.commitPresentationFrame(preview.token);
+  assert.deepEqual(
+    committed.world.state.entities.find((entity) => entity.uuid === "hero")?.position,
+    [1, 0],
+  );
+  assert.equal(committed.watermarks.combat_log_cursor, 1);
+  assert.deepEqual(committed.combatLog, []);
+});
+
+test("normal presentation preview is immutable, exact-head bound, and token committed once", () => {
+  const journal = new SubjectiveReplicationJournal();
+  journal.bootstrap(bootstrap());
+  journal.ingest({ event: "frame", id: "normal-1", data: frameDelivery() });
+
+  const first = journal.previewPresentationFrame(1);
+  const repeated = journal.previewPresentationFrame(1);
+  assert.equal(repeated, first);
+  assert.equal(Object.isFrozen(first), true);
+  assert.equal(Object.isFrozen(first.frame), true);
+  assert.equal(Object.isFrozen(first.candidatePresentation), true);
+  assert.throws(
+    () => (first.frame.patches as unknown[]).push({}),
+    TypeError,
+  );
+  assert.deepEqual(heroPosition(journal, "presentation"), [0, 0]);
+
+  journal.commitPresentationFrame(first.token);
+  assert.deepEqual(heroPosition(journal, "presentation"), [1, 0]);
+  assert.throws(() => journal.commitPresentationFrame(first.token), Error);
+});
+
+test("presentation head tokens are private, nonserializable, and journal-local", () => {
+  const firstJournal = new SubjectiveReplicationJournal();
+  const secondJournal = new SubjectiveReplicationJournal();
+  firstJournal.bootstrap(bootstrap());
+  secondJournal.bootstrap(bootstrap());
+  firstJournal.ingest({ event: "frame", id: "first", data: frameDelivery() });
+  secondJournal.ingest({ event: "frame", id: "second", data: frameDelivery() });
+  const first = firstJournal.previewPresentationFrame(1);
+  const second = secondJournal.previewPresentationFrame(1);
+
+  assert.throws(() => JSON.stringify(first.token), TypeError);
+  assert.throws(() => secondJournal.commitPresentationFrame(first.token), Error);
+  assert.deepEqual(heroPosition(secondJournal, "presentation"), [0, 0]);
+  secondJournal.commitPresentationFrame(second.token);
+  assert.deepEqual(heroPosition(secondJournal, "presentation"), [1, 0]);
+});
+
+test("reset head applies only through its exact token and never advances cue cursor", () => {
+  const journal = new SubjectiveReplicationJournal();
+  journal.bootstrap(bootstrap());
+  const reset = resetFrame(1);
+  assert.equal(journal.ingest({
+    event: "frame",
+    id: "reset-1",
+    data: { kind: "frame", frame: reset },
+  }).status, "applied");
+  assert.equal(journal.state().pendingResetFrames, 1);
+  assert.throws(() => journal.previewPresentationFrame(1), Error);
+
+  const head = journal.inspectResetPresentationHead(1);
+  assert.equal(Object.isFrozen(head), true);
+  assert.equal(Object.isFrozen(head.frame), true);
+  assert.throws(() => JSON.stringify(head.token), TypeError);
+  assert.throws(
+    () => journal.resetPresentationFrame({} as typeof head.token),
+    Error,
+  );
+  assert.deepEqual(heroPosition(journal, "presentation"), [0, 0]);
+  const applied = journal.resetPresentationFrame(head.token);
+  assert.deepEqual(applied.world.state.entities.find((entity) => entity.uuid === "hero")?.position, [1, 0]);
+  assert.equal(applied.watermarks.presentation_cursor, 0);
+  assert.equal(journal.state().pendingResetFrames, 0);
+  assert.throws(() => journal.resetPresentationFrame(head.token), Error);
+});
+
+test("legal combat-log delivery does not stale an active RESET head token", () => {
+  const journal = new SubjectiveReplicationJournal();
+  journal.bootstrap(bootstrap());
+  assert.equal(journal.ingest({
+    event: "frame",
+    id: "reset-head-before-log",
+    data: { kind: "frame", frame: resetFrame(1) },
+  }).status, "applied");
+  const head = journal.inspectResetPresentationHead(1);
+
+  const resetCompatibleLog = hiddenLogDelivery();
+
+  assert.equal(journal.ingest({
+    event: "combat_log",
+    id: "reset-head-log",
+    data: {
+      ...resetCompatibleLog,
+      watermarks: {
+        ...resetCompatibleLog.watermarks,
+        presentation_cursor: 0,
+      },
+    },
+  }).status, "applied");
+  assert.equal(journal.state().presentation?.watermarks.combat_log_cursor, 0);
+
+  const reset = journal.resetPresentationFrame(head.token);
+  assert.deepEqual(
+    reset.world.state.entities.find((entity) => entity.uuid === "hero")?.position,
+    [1, 0],
+  );
+  assert.equal(reset.watermarks.presentation_cursor, 0);
+  assert.equal(reset.watermarks.combat_log_cursor, 1);
+  assert.deepEqual(reset.combatLog, []);
+});
+
+test("reset backlog count remains exact across consecutive reset consumption and replacement", () => {
+  const journal = new SubjectiveReplicationJournal();
+  journal.bootstrap(bootstrap());
+  for (const cursor of [1, 2]) {
+    assert.equal(journal.ingest({
+      event: "frame",
+      id: `reset-${cursor}`,
+      data: { kind: "frame", frame: resetFrame(cursor) },
+    }).status, "applied");
+  }
+  assert.equal(journal.state().pendingResetFrames, 2);
+  const first = journal.inspectResetPresentationHead(1);
+  journal.resetPresentationFrame(first.token);
+  assert.equal(journal.state().pendingResetFrames, 1);
+  journal.bootstrap(bootstrap("generation-b"));
+  assert.equal(journal.state().pendingResetFrames, 0);
+});
+
+test("reset backlog count is duplicate-safe, compaction-safe, and invalidation-safe", () => {
+  const journal = new SubjectiveReplicationJournal();
+  journal.bootstrap(bootstrap());
+  const frames = Array.from({ length: 1_025 }, (_, index) => ({
+    ...resetFrame(index + 1),
+    patches: [],
+  }));
+  for (const frame of frames) {
+    assert.equal(journal.ingest({
+      event: "frame",
+      id: `reset-count-${frame.watermarks.observation_cursor}`,
+      data: { kind: "frame", frame },
+    }).status, "applied");
+  }
+  assert.equal(journal.ingest({
+    event: "frame",
+    id: "reset-count-duplicate",
+    data: { kind: "frame", frame: frames[1_024]! },
+  }).status, "duplicate");
+  assert.equal(journal.state().pendingResetFrames, 1_025);
+
+  for (let cursor = 1; cursor <= 1_024; cursor += 1) {
+    const head = journal.inspectResetPresentationHead(cursor);
+    journal.resetPresentationFrame(head.token);
+  }
+  assert.equal(journal.state().pendingResetFrames, 1);
+  const internals = journal as unknown as {
+    readonly pendingFrameHead: number;
+    readonly pendingFrames: ReadonlyArray<SubjectiveReplicationFrame>;
+  };
+  assert.equal(internals.pendingFrameHead, 0);
+  assert.equal(internals.pendingFrames.length, 1);
+  journal.invalidate("generation_changed");
+  assert.equal(journal.state().pendingResetFrames, 0);
+});
+
+test("frame semantics keep NORMAL and RESET_REQUIRED authorities disjoint", () => {
+  const normal = replicationFrame();
+  const reset = resetFrame(1);
+  assert.doesNotThrow(() => assertSubjectiveFrame(normal));
+  assert.doesNotThrow(() => assertSubjectiveFrame(reset));
+  assert.throws(
+    () => assertSubjectiveFrame({
+      ...normal,
+      presentation_reset_reason: "source_presentation_discontinuity",
+    }),
+    ContractValidationError,
+  );
+  assert.throws(
+    () => assertSubjectiveFrame({
+      ...reset,
+      presentation: normal.presentation,
+    }),
+    ContractValidationError,
+  );
+  assert.throws(
+    () => assertSubjectiveFrame({
+      ...reset,
+      watermarks: { ...reset.watermarks, presentation_cursor: 1 },
+    }),
+    ContractValidationError,
+  );
+});
+
+test("terminal reset authority exactly binds the final source slot and ended encounter", () => {
+  const valid = terminalResetFrame();
+  assert.doesNotThrow(() => assertSubjectiveFrame(valid));
+  assert.throws(
+    () => assertSubjectiveFrame({
+      ...valid,
+      encounter_terminal: {
+        ...valid.encounter_terminal!,
+        terminal_authority_id: "forged",
+      },
+    }),
+    ContractValidationError,
+  );
+  assert.throws(
+    () => assertSubjectiveFrame({
+      ...valid,
+      encounter_terminal: {
+        ...valid.encounter_terminal!,
+        source_event_cursor: 2,
+      },
+    }),
+    ContractValidationError,
+  );
+  assert.throws(
+    () => assertSubjectiveFrame({ ...valid, encounter_terminal: null }),
+    ContractValidationError,
+  );
+});
+
+test("normal terminal cue exactly matches the final source and ended encounter patch", () => {
+  const valid = normalTerminalFrame();
+  assert.doesNotThrow(() => assertSubjectiveFrame(valid));
+  assert.throws(
+    () => assertSubjectiveFrame({
+      ...valid,
+      watermarks: { ...valid.watermarks, source_event_cursor: 2 },
+    }),
+    ContractValidationError,
+  );
+  assert.throws(
+    () => assertSubjectiveFrame({ ...valid, patches: [] }),
+    ContractValidationError,
+  );
+  assert.throws(
+    () => assertSubjectiveFrame({
+      ...valid,
+      presentation: replicationFrame().presentation,
+    }),
+    ContractValidationError,
+  );
+});
+
+test("ordinary and reset terminal authority require the final reduced encounter to remain ended", () => {
+  for (const valid of [normalTerminalFrame(), terminalResetFrame()]) {
+    const ended = valid.patches.find((patch) => (
+      patch.kind === "encounter_replace"
+      && patch.encounter !== null
+      && patch.encounter.state === "ended"
+    ));
+    assert.ok(ended?.kind === "encounter_replace" && ended.encounter !== null);
+    for (const finalEncounter of [
+      { ...ended.encounter, state: "active" },
+      null,
+    ]) {
+      assert.throws(
+        () => assertSubjectiveFrame({
+          ...valid,
+          patches: [
+            ...valid.patches,
+            { kind: "encounter_replace", encounter: finalEncounter },
+          ],
+        }),
+        ContractValidationError,
+      );
+    }
+  }
+});
+
+test("NORMAL head retains one immutable accepted frame despite caller mutation after ingest", () => {
+  const journal = new SubjectiveReplicationJournal();
+  journal.bootstrap(bootstrap());
+  const frame = replicationFrame();
+  assert.equal(journal.ingest({
+    event: "frame",
+    id: "normal-mutable-input",
+    data: { kind: "frame", frame },
+  }).status, "applied");
+  const mutable = frame as unknown as {
+    patches: Array<{ entity: { position: [number, number] } }>;
+    presentation: Array<{ anchors: Array<{ position: [number, number] }> }>;
+  };
+  mutable.patches[0]!.entity.position = [99, 99];
+  mutable.presentation[0]!.anchors[1]!.position = [88, 88];
+
+  const preview = journal.previewPresentationFrame(1);
+  assert.deepEqual(
+    preview.frame.presentation[0]?.kind === "movement"
+      ? preview.frame.presentation[0].anchors[1]?.position
+      : null,
+    [1, 0],
+  );
+  assert.deepEqual(
+    preview.candidatePresentation.world.state.entities.find((entity) => entity.uuid === "hero")?.position,
+    [1, 0],
+  );
+});
+
+test("RESET head retains one immutable accepted frame despite caller mutation after ingest", () => {
+  const journal = new SubjectiveReplicationJournal();
+  journal.bootstrap(bootstrap());
+  const frame = resetFrame(1);
+  assert.equal(journal.ingest({
+    event: "frame",
+    id: "reset-mutable-input",
+    data: { kind: "frame", frame },
+  }).status, "applied");
+  const mutable = frame as unknown as {
+    patches: Array<{ entity: { position: [number, number] } }>;
+    presentation_reset_reason: string | null;
+  };
+  mutable.patches[0]!.entity.position = [99, 99];
+  mutable.presentation_reset_reason = null;
+
+  const head = journal.inspectResetPresentationHead(1);
+  assert.equal(head.frame.presentation_reset_reason, "source_presentation_discontinuity");
+  const applied = journal.resetPresentationFrame(head.token);
+  assert.deepEqual(
+    applied.world.state.entities.find((entity) => entity.uuid === "hero")?.position,
+    [1, 0],
+  );
 });
 
 test("subjective SSE accepts exactly sync, frame, and narrow combat-log deliveries", () => {
@@ -525,7 +901,7 @@ test("combat-log delivery may advance only its own independent cursor", () => {
   assert.equal(result.state.resyncReason, "combat_log_cursor_gap");
 });
 
-test("REST frame pages are audit-only and cannot become a second journal reducer path", () => {
+test("REST frame pages cannot reduce state outside the SDK client journal catch-up", () => {
   const journal = new SubjectiveReplicationJournal();
   assert.equal("ingestFramesPage" in journal, false);
 });
@@ -784,6 +1160,71 @@ test("follow labels only a truly uninitialized journal as initial bootstrap", as
   assert.deepEqual(resets, ["initial_bootstrap"]);
 });
 
+test("follow propagates an initial generic bootstrap 409 after exactly one request", async () => {
+  const controller = new AbortController();
+  const payload = genericReplicationIdentityConflict();
+  let bootstrapRequests = 0;
+  const client = new SubjectiveReplicationClient("/api", {
+    fetchImplementation: async () => {
+      bootstrapRequests += 1;
+      if (bootstrapRequests > 1) controller.abort();
+      return jsonResponse(payload, 409);
+    },
+  });
+
+  await assert.rejects(
+    () => client.follow(new SubjectiveReplicationJournal(), {
+      sessionId: "session-a",
+      signal: controller.signal,
+      initialReconnectDelayMs: 0,
+      maximumReconnectDelayMs: 0,
+    }),
+    (error: unknown) => {
+      if (!(error instanceof SubjectiveReplicationHttpError)) return false;
+      assert.equal(error.status, 409);
+      assert.deepEqual(error.payload, payload);
+      return true;
+    },
+  );
+  assert.equal(bootstrapRequests, 1);
+});
+
+test("follow propagates a replacement-bootstrap generic 409 without looping", async () => {
+  const controller = new AbortController();
+  const payload = genericReplicationIdentityConflict();
+  let bootstrapRequests = 0;
+  let subscribeRequests = 0;
+  const client = new SubjectiveReplicationClient("/api", {
+    fetchImplementation: async (input) => {
+      if (String(input).includes("/replication/bootstrap")) {
+        bootstrapRequests += 1;
+        if (bootstrapRequests > 1) controller.abort();
+      } else {
+        subscribeRequests += 1;
+      }
+      return jsonResponse(payload, 409);
+    },
+  });
+
+  await assert.rejects(
+    () => client.follow(new SubjectiveReplicationJournal(), {
+      sessionId: "session-a",
+      initialBootstrap: bootstrap(),
+      signal: controller.signal,
+      initialReconnectDelayMs: 0,
+      maximumReconnectDelayMs: 0,
+    }),
+    (error: unknown) => {
+      if (!(error instanceof SubjectiveReplicationHttpError)) return false;
+      assert.equal(error.status, 409);
+      assert.deepEqual(error.payload, payload);
+      return true;
+    },
+  );
+  assert.equal(subscribeRequests, 1);
+  assert.equal(bootstrapRequests, 1);
+});
+
 test("follow preserves an explicit journal invalidation reason on reentry", async () => {
   const controller = new AbortController();
   const journal = new SubjectiveReplicationJournal();
@@ -1036,6 +1477,21 @@ test("duplicate payload storage is retention-bounded while presentation IDs rema
 test("the subjective wire gate accepts every canonical presentation and area kind", () => {
   const validGraphs = [
     [movementCue()],
+    [movementCue({ locomotion_family: "swim" })],
+    [movementCue({ locomotion_family: "fly" })],
+    [movementCue({ locomotion_family: "burrow" })],
+    [movementCue({ locomotion_family: "jump", trajectory_family: "direct_arc" })],
+    [movementCue({
+      locomotion_family: "connector",
+      trajectory_family: "connector_transfer",
+      connector: {
+        uuid: "00000000-0000-4000-8000-000000000010",
+        authored_id: "connector.fixture.ladder",
+        kind: "ladder",
+        presentation_key: "traversal.ladder",
+        revision: 1,
+      },
+    })],
     movementReactionGraph(),
     movementReactionGraph({
       movement: { endpoint_outcome: "not_committed" },
@@ -1069,8 +1525,9 @@ test("generated field constraints reject invalid presentation scalars at the wir
   const cases: ReadonlyArray<readonly [string, ReadonlyArray<Record<string, unknown>>]> = [
     ["empty ID", [{ ...movementCue(), presentation_id: "" }]],
     ["zero source cursor", [{ ...movementCue(), source_event_cursor: 0 }]],
-    ["fractional integer", [{ ...movementCue(), path_start_index: 0.5 }]],
-    ["short trajectory", [{ ...movementCue(), trajectory: [[0, 0]] }]],
+    ["fractional elevation", [{ ...movementCue(), anchors: [{ position: [0, 0], elevation_feet: 0.5 }, { position: [1, 0], elevation_feet: 0 }] }]],
+    ["short anchors", [{ ...movementCue(), anchors: [{ position: [0, 0], elevation_feet: 0 }] }]],
+    ["retired movement field", [{ ...movementCue(), movement_kind: "walk" }]],
     ["spell level above nine", [{ ...spellCue(), spell_level: 10 }]],
     ["nonpositive area", [spellCue({ delivery: "aoe", area: { shape: "sphere", center: [0, 0], radius_feet: 0 } })]],
     ["nonpositive playback", [{ ...itemCue(), playback_speed: 0 }]],
@@ -1094,13 +1551,32 @@ test("local presentation semantics reject malformed renderer transactions", () =
     ],
   };
   const cases: ReadonlyArray<readonly [string, ReadonlyArray<Record<string, unknown>>]> = [
-    ["movement path overflow", [{ ...movementCue(), path_start_index: 2, path_total_steps: 2 }]],
+    ["path movement with direct arc", [{ ...movementCue(), trajectory_family: "direct_arc" }]],
+    ["Jump with PATH", [{ ...movementCue(), locomotion_family: "jump" }]],
+    ["connector without identity", [{
+      ...movementCue(),
+      locomotion_family: "connector",
+      trajectory_family: "connector_transfer",
+    }]],
+    ["path movement with connector identity", [{
+      ...movementCue(),
+      connector: {
+        uuid: "00000000-0000-4000-8000-000000000010",
+        authored_id: "connector.fixture.ladder",
+        kind: "ladder",
+        presentation_key: "traversal.ladder",
+        revision: 1,
+      },
+    }]],
     ["uncommitted movement without reaction", [{ ...movementCue(), endpoint_outcome: "not_committed" }]],
     ["uncommitted multi-edge movement", movementReactionGraph({
       movement: {
         endpoint_outcome: "not_committed",
-        trajectory: [[0, 0], [1, 0], [2, 0]],
-        path_total_steps: 2,
+        anchors: [
+          { position: [0, 0], elevation_feet: 0 },
+          { position: [1, 0], elevation_feet: 0 },
+          { position: [2, 0], elevation_feet: 0 },
+        ],
       },
     })],
     ["duplicate action target", [{ ...actionCue(), target_uuids: ["hero", "hero"] }]],
@@ -1214,6 +1690,30 @@ test("cross-node presentation semantics reject mismatched actors, targets, and e
   }
 });
 
+test("alive-to-alive life-state evidence remains a valid reducer-only cue", () => {
+  assert.doesNotThrow(() => decodePresentationGraph(lifecycleGraph(
+    { cause_kind: "direct_state_check", source_uuid: null },
+    { previous: "alive", current: "alive", reason: "direct_state_check" },
+  )));
+  assert.throws(
+    () => decodePresentationGraph(lifecycleGraph(
+      { cause_kind: "direct_state_check", source_uuid: null },
+      { previous: "stable", current: "stable", reason: "direct_state_check" },
+    )),
+    ContractValidationError,
+  );
+});
+
+test("effectless lifecycle cause remains a valid reducer-only envelope", () => {
+  assert.doesNotThrow(() => decodePresentationGraph([{
+    ...cueBase("lifecycle_cause", "cause", 1, null, []),
+    entity_uuid: "monster",
+    cause_kind: "direct_state_check",
+    source_uuid: null,
+    death_save_outcome: null,
+  }]));
+});
+
 type CueOverrides = Readonly<Record<string, unknown>>;
 
 function cueBase(
@@ -1239,14 +1739,64 @@ function movementCue(overrides: CueOverrides = {}): Record<string, unknown> {
   return {
     ...cueBase("movement", "movement"),
     entity_uuid: "hero",
-    movement_kind: "walk",
-    movement_sequence_id: "movement-sequence-a",
-    trajectory: [[0, 0], [1, 0]],
-    path_start_index: 0,
-    path_total_steps: 1,
+    locomotion_family: "walk",
+    trajectory_family: "path",
+    anchors: [
+      { position: [0, 0], elevation_feet: 0 },
+      { position: [1, 0], elevation_feet: 0 },
+    ],
+    connector: null,
     endpoint_outcome: "committed",
     perception_commit: "observation_frame",
     ...overrides,
+  };
+}
+
+function resetFrame(cursor: number): SubjectiveReplicationFrame {
+  return {
+    ...replicationFrame(cursor),
+    watermarks: watermarks(cursor, cursor, 0, 0),
+    presentation_from_cursor: 0,
+    presentation: [],
+    presentation_delivery: "presentation_reset_required" as const,
+    presentation_reset_reason: "source_presentation_discontinuity" as const,
+    encounter_terminal: null,
+  };
+}
+
+function terminalResetFrame(cursor = 1): SubjectiveReplicationFrame {
+  const sourceEventUuid = "00000000-0000-4000-8000-000000000001";
+  const seed = bootstrap();
+  const encounter = seed.world.state.encounter;
+  assert.notEqual(encounter, null);
+  return {
+    ...resetFrame(cursor),
+    patches: [{
+      kind: "encounter_replace",
+      encounter: { ...encounter!, state: "ended" },
+    }],
+    encounter_terminal: {
+      encounter_uuid: encounter!.uuid,
+      source_event_uuid: sourceEventUuid,
+      source_event_cursor: cursor,
+      terminal_authority_id: `perspective-a:${cursor}:reset-terminal:${sourceEventUuid}`,
+      reason: "victory",
+      projected_combatant_uuids: ["hero", "monster"],
+      terminal_barrier: true,
+    },
+  };
+}
+
+function normalTerminalFrame(): SubjectiveReplicationFrame {
+  const seedEncounter = bootstrap().world.state.encounter;
+  assert.notEqual(seedEncounter, null);
+  return {
+    ...replicationFrame(),
+    patches: [{
+      kind: "encounter_replace",
+      encounter: { ...seedEncounter!, state: "ended" },
+    }],
+    presentation: [encounterCue() as unknown as SubjectiveReplicationFrame["presentation"][number]],
   };
 }
 
@@ -1623,6 +2173,16 @@ function decodePresentationGraph(presentation: ReadonlyArray<Record<string, unkn
         : 1
     )),
   );
+  const terminalCue = presentation.find((cue) => (
+    cue.kind === "encounter" && cue.transition === "end"
+  ));
+  const seedEncounter = bootstrap().world.state.encounter;
+  const patches = terminalCue === undefined || seedEncounter === null
+    ? []
+    : [{
+      kind: "encounter_replace",
+      encounter: { ...seedEncounter, state: "ended" },
+    }];
   decodeSubjectiveEnvelope({
     event: "frame",
     id: `s=${sourceEventCursor};o=1;p=${count};l=0`,
@@ -1639,12 +2199,243 @@ function decodePresentationGraph(presentation: ReadonlyArray<Record<string, unkn
           combat_log_cursor: 0,
         },
         presentation_from_cursor: 0,
-        patches: [],
+        patches,
         presentation,
+        presentation_delivery: "normal",
+        presentation_reset_reason: null,
+        encounter_terminal: null,
       },
     })),
   });
 }
+
+test("REST frame catch-up feeds the canonical journal through one frozen captured target", async () => {
+  const seed = bootstrap();
+  const journal = new SubjectiveReplicationJournal();
+  journal.bootstrap(seed);
+  const requests: string[] = [];
+  const updates: number[] = [];
+  const page = (
+    from: number,
+    through: number,
+    captured: number,
+  ): SubjectiveFramesResponse => ({
+    source_stream_id: seed.protocol.source_stream_id,
+    generation_id: seed.protocol.generation_id,
+    perspective_epoch_id: seed.perspective.perspective_epoch_id,
+    retained_from_observation_cursor: 0,
+    from_watermarks: watermarks(from, from, from, 0),
+    through_watermarks: watermarks(through, through, through, 0),
+    captured_watermarks: watermarks(captured, captured, captured, 0),
+    frames: Array.from(
+      { length: through - from },
+      (_, index) => replicationFrame(from + index + 1),
+    ),
+  });
+  const first = page(0, 1, 3);
+  const client = new SubjectiveReplicationClient("/api", {
+    fetchImplementation: async (input) => {
+      const url = String(input);
+      requests.push(url);
+      const from = Number(new URL(url, "https://example.invalid")
+        .searchParams.get("from_observation_cursor"));
+      if (from === 1) return jsonResponse(page(1, 2, 4));
+      if (from === 2) return jsonResponse(page(2, 4, 5));
+      throw new Error(`unexpected continuation cursor ${from}`);
+    },
+  });
+
+  const state = await client.ingestFramesThrough(journal, first, {
+    sessionId: "session-a",
+    fixedTarget: {
+      sourceEventCursor: 3,
+      observationCursor: 3,
+      presentationCursor: 3,
+    },
+    onUpdate: ({ envelope, result }) => {
+      assert.equal(envelope.event, "frame");
+      assert.equal(result.status, "applied");
+      updates.push(envelope.data.frame.watermarks.observation_cursor);
+    },
+  });
+
+  assert.deepEqual(updates, [1, 2, 3]);
+  assert.equal(state.authoritative?.watermarks.observation_cursor, 3);
+  assert.equal(state.presentation?.watermarks.observation_cursor, 0);
+  assert.equal(state.presentationBacklog, 3);
+  assert.equal(requests.length, 2);
+  assert.match(requests[0] ?? "", /from_observation_cursor=1/);
+  assert.match(requests[1] ?? "", /from_observation_cursor=2/);
+});
+
+test("REST frame catch-up rejects a target not authored by its first page", async () => {
+  const seed = bootstrap();
+  const journal = new SubjectiveReplicationJournal();
+  journal.bootstrap(seed);
+  const first: SubjectiveFramesResponse = {
+    source_stream_id: seed.protocol.source_stream_id,
+    generation_id: seed.protocol.generation_id,
+    perspective_epoch_id: seed.perspective.perspective_epoch_id,
+    retained_from_observation_cursor: 0,
+    from_watermarks: watermarks(),
+    through_watermarks: watermarks(1, 1, 1, 0),
+    captured_watermarks: watermarks(2, 2, 2, 0),
+    frames: [replicationFrame(1)],
+  };
+  const client = new SubjectiveReplicationClient("/api", {
+    fetchImplementation: async () => {
+      throw new Error("forged target must fail before continuation fetch");
+    },
+  });
+
+  await assert.rejects(
+    () => client.ingestFramesThrough(journal, first, {
+      sessionId: "session-a",
+      fixedTarget: {
+        sourceEventCursor: 2,
+        observationCursor: 2,
+        presentationCursor: 1,
+      },
+    }),
+    ContractValidationError,
+  );
+  assert.equal(journal.state().authoritative?.watermarks.observation_cursor, 0);
+  assert.equal(journal.state().presentationBacklog, 0);
+});
+
+test("REST frame catch-up accepts an exact SSE duplicate without double-applying it", async () => {
+  const seed = bootstrap();
+  const journal = new SubjectiveReplicationJournal();
+  journal.bootstrap(seed);
+  const alreadyAccepted = journal.ingest({
+    event: "frame",
+    id: "s=1;o=1;p=1;l=0",
+    data: frameDelivery(1),
+  });
+  assert.equal(alreadyAccepted.status, "applied");
+  const first: SubjectiveFramesResponse = {
+    source_stream_id: seed.protocol.source_stream_id,
+    generation_id: seed.protocol.generation_id,
+    perspective_epoch_id: seed.perspective.perspective_epoch_id,
+    retained_from_observation_cursor: 0,
+    from_watermarks: watermarks(),
+    through_watermarks: watermarks(2, 2, 2, 0),
+    captured_watermarks: watermarks(2, 2, 2, 0),
+    frames: [replicationFrame(1), replicationFrame(2)],
+  };
+  const statuses: string[] = [];
+  const client = new SubjectiveReplicationClient("/api", {
+    fetchImplementation: async () => {
+      throw new Error("duplicate overlap requires no continuation fetch");
+    },
+  });
+
+  const state = await client.ingestFramesThrough(journal, first, {
+    sessionId: "session-a",
+    fixedTarget: {
+      sourceEventCursor: 2,
+      observationCursor: 2,
+      presentationCursor: 2,
+    },
+    onUpdate: ({ result }) => {
+      statuses.push(result.status);
+      if (result.status === "duplicate") {
+        const callerOwned = first as unknown as {
+          frames: Array<{ watermarks: { observation_cursor: number } }>;
+        };
+        const later = callerOwned.frames[1];
+        if (later !== undefined) later.watermarks.observation_cursor = 99;
+      }
+    },
+  });
+
+  assert.deepEqual(statuses, ["duplicate", "applied"]);
+  assert.equal(state.authoritative?.watermarks.observation_cursor, 2);
+  assert.equal(state.presentationBacklog, 2);
+});
+
+test("REST frame catch-up honors an already-aborted owner before journal mutation", async () => {
+  const seed = bootstrap();
+  const journal = new SubjectiveReplicationJournal();
+  journal.bootstrap(seed);
+  const first: SubjectiveFramesResponse = {
+    source_stream_id: seed.protocol.source_stream_id,
+    generation_id: seed.protocol.generation_id,
+    perspective_epoch_id: seed.perspective.perspective_epoch_id,
+    retained_from_observation_cursor: 0,
+    from_watermarks: watermarks(),
+    through_watermarks: watermarks(1, 1, 1, 0),
+    captured_watermarks: watermarks(1, 1, 1, 0),
+    frames: [replicationFrame(1)],
+  };
+  const controller = new AbortController();
+  controller.abort(new Error("catch-up owner retired"));
+  const client = new SubjectiveReplicationClient("/api", {
+    fetchImplementation: async () => {
+      throw new Error("aborted catch-up must not fetch");
+    },
+  });
+
+  await assert.rejects(
+    () => client.ingestFramesThrough(journal, first, {
+      sessionId: "session-a",
+      fixedTarget: {
+        sourceEventCursor: 1,
+        observationCursor: 1,
+        presentationCursor: 1,
+      },
+      signal: controller.signal,
+    }),
+    /catch-up owner retired/,
+  );
+  assert.equal(journal.state().authoritative?.watermarks.observation_cursor, 0);
+  assert.equal(journal.state().presentationBacklog, 0);
+});
+
+test("REST frame catch-up reports an exact typed journal resync", async () => {
+  const seed = bootstrap();
+  const journal = new SubjectiveReplicationJournal();
+  journal.bootstrap(seed);
+  const invalidFrame = {
+    ...replicationFrame(1),
+    watermarks: watermarks(1, 1, 1, 1),
+  };
+  const first: SubjectiveFramesResponse = {
+    source_stream_id: seed.protocol.source_stream_id,
+    generation_id: seed.protocol.generation_id,
+    perspective_epoch_id: seed.perspective.perspective_epoch_id,
+    retained_from_observation_cursor: 0,
+    from_watermarks: watermarks(),
+    through_watermarks: watermarks(1, 1, 1, 1),
+    captured_watermarks: watermarks(1, 1, 1, 1),
+    frames: [invalidFrame],
+  };
+  const client = new SubjectiveReplicationClient("/api", {
+    fetchImplementation: async () => {
+      throw new Error("resync must not attempt continuation fetch");
+    },
+  });
+  let callbackHealth = "";
+
+  await assert.rejects(
+    () => client.ingestFramesThrough(journal, first, {
+      sessionId: "session-a",
+      fixedTarget: {
+        sourceEventCursor: 1,
+        observationCursor: 1,
+        presentationCursor: 1,
+      },
+      onUpdate: ({ result }) => { callbackHealth = result.state.health; },
+    }),
+    (error: unknown) => (
+      error instanceof SubjectiveFrameCatchupResyncError
+      && error.reason === "observation_cursor_gap"
+      && error.state.health === "resync_required"
+    ),
+  );
+  assert.equal(callbackHealth, "resync_required");
+  assert.equal(journal.state().health, "resync_required");
+});
 
 function encode(event: string, id: string, data: unknown): string {
   return `id: ${id}\nevent: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
@@ -1669,9 +2460,10 @@ function boundedReplicationFrame(
       presentation_id: presentationId,
       source_event_cursor: cursor,
       source_event_uuid: `bounded-event-${cursor}`,
-      trajectory: [[0, 0], [1, 0]] as [[number, number], [number, number]],
-      path_start_index: 0,
-      path_total_steps: 1,
+      anchors: [
+        { position: [0, 0] as [number, number], elevation_feet: 0 },
+        { position: [1, 0] as [number, number], elevation_feet: 0 },
+      ],
     }],
   };
 }
@@ -1682,6 +2474,18 @@ function callbackFailures(): ReadonlyArray<Error> {
     new SyntaxError("callback syntax failure"),
     new ContractValidationError("$callback", "callback contract failure"),
   ];
+}
+
+function genericReplicationIdentityConflict() {
+  return {
+    detail: {
+      code: "replication_identity_changed",
+      message: "explicit encounter is not the runtime subscribed source",
+      expected_source_stream_id: null,
+      expected_generation_id: null,
+      expected_perspective_epoch_id: null,
+    },
+  };
 }
 
 function jsonResponse(value: unknown, status = 200): Response {

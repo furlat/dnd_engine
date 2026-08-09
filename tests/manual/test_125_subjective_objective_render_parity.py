@@ -33,13 +33,17 @@ from dnd.core.content.materialization import (
     CreaturePossessionMode,
 )
 from dnd.core.equipment_types import WeaponSlot
+from dnd.core.dice import fixed_dice_faces
+from dnd.core.events import EventPhase
 from dnd.entity import Entity
+from dnd.encounter import CombatantState, Encounter, EncounterState
 from dnd.items.environment import DirectionalDoor
 from dnd.items.environment_content import directional_door_recipe
 from dnd.items.torches import TORCH_RECIPE, Torch
 from dnd.items.weapons import DAGGER_RECIPE, SHORTBOW_RECIPE
 from dnd.monsters.bestiary_content import BESTIARY_CREATURE_RECIPES_BY_ID
 from dnd.runtime_reset import reset_engine_runtime
+from dnd.spells.evocation import Fireball
 from server.objective_state import build_objective_world
 from server.player_replication.world_projection import (
     SubjectiveSpatialMemory,
@@ -681,6 +685,167 @@ def test_subjective_seed_equals_objective_checkpoint_plus_censorship() -> None:
             row.path.endswith(".visual_key")
             for row in mismatch.mismatches
         )
+    finally:
+        reset_engine_runtime()
+
+
+def test_live_oracle_ignores_lawfully_remembered_unseen_fireball_corpses() -> None:
+    """A retained corpse is not a current-visible parity mismatch at W_i."""
+    grid = reset_engine_runtime(grid_size=(9, 9))
+    caster = _materialize_test_actor(
+        name="Fireball observer",
+        position=(0, 8),
+        faction="heroes",
+    )
+    targets = (
+        _materialize_test_actor(
+            name="Fireball target west",
+            position=(6, 1),
+            faction="monsters",
+        ),
+        _materialize_test_actor(
+            name="Fireball target east",
+            position=(7, 1),
+            faction="monsters",
+        ),
+    )
+    observed_cells = {caster.position, *(target.position for target in targets)}
+    caster.senses.visible = {position: True for position in observed_cells}
+    caster.senses.seen = set(observed_cells)
+    caster.senses.entities = {
+        target.uuid: target.position for target in targets
+    }
+    caster.senses.objects = {}
+    encounter = Encounter(
+        name="Lethal Fireball parity",
+        source_entity_uuid=caster.uuid,
+    )
+    for initiative, entity in enumerate((caster, *targets), start=1):
+        encounter.combatants[entity.uuid] = CombatantState(
+            source_entity_uuid=entity.uuid,
+            entity_uuid=entity.uuid,
+            controller_uuid=uuid4(),
+            initiative_total=initiative,
+        )
+    encounter.initiative_order = [caster.uuid, *(target.uuid for target in targets)]
+    encounter.current_turn_index = 0
+    encounter.round_number = 1
+    encounter.state = EncounterState.ACTIVE
+    perspective = SubjectivePerspective(
+        perspective_epoch_id="lethal-fireball-parity",
+        kind=PerspectiveKind.CONTROLLED_KNOWLEDGE_UNION,
+        controlled_entity_uuids=(str(caster.uuid),),
+        observer_entity_uuids=(str(caster.uuid),),
+        active_observer_uuid=str(caster.uuid),
+    )
+    memory = SubjectiveSpatialMemory(
+        perspective_epoch_id=perspective.perspective_epoch_id,
+    )
+
+    try:
+        # W_0 establishes the exact previously identified target set.
+        build_subjective_world(
+            perspective=perspective,
+            grid=grid,
+            entities=(caster, *targets),
+            encounter=encounter,
+            memory=memory,
+        )
+
+        with fixed_dice_faces(*([6] * 64)):
+            result = Fireball(
+                source_entity_uuid=caster.uuid,
+                end_position=targets[0].position,
+                costs=[],
+                spell_level=0,
+                template=False,
+            ).apply()
+        assert result is not None
+        assert result.phase is EventPhase.COMPLETION
+        assert all(target.health.life_state.value == "dead" for target in targets)
+
+        # W_1 observes the dead positions once, freezing lawful corpse memory.
+        caster.senses.entities = {}
+        caster.senses.visible = {
+            position: True for position in observed_cells
+        }
+        build_subjective_world(
+            perspective=perspective,
+            grid=grid,
+            entities=(caster, *targets),
+            encounter=encounter,
+            memory=memory,
+        )
+
+        # W_2 is a prefix boundary where both corpses are retained but unseen.
+        caster.senses.visible = {caster.position: True}
+        objective = build_objective_world(
+            grid=grid,
+            entities=(caster, *targets),
+            encounter=encounter,
+        )
+        subjective = build_subjective_world(
+            perspective=perspective,
+            grid=grid,
+            entities=(caster, *targets),
+            encounter=encounter,
+            memory=memory,
+        )
+        retained_corpse_uuids = {
+            entity.uuid
+            for entity in subjective.state.entities
+            if entity.life_state.value == "dead"
+        }
+        assert retained_corpse_uuids == {
+            str(target.uuid) for target in targets
+        }
+
+        report = build_subjective_render_parity_diagnostics(
+            objective=objective,
+            subjective=subjective,
+            perspective=perspective,
+            watermarks=PlayerReplicationWatermarks(
+                source_event_cursor=2,
+                observation_cursor=2,
+                presentation_cursor=2,
+                combat_log_cursor=1,
+            ),
+            source_stream_id="lethal-fireball-prefix",
+            generation_id="lethal-fireball-generation",
+            grid=grid,
+        )
+        assert report.matches is True
+        assert report.mismatches == ()
+
+        altered_entities = tuple(
+            entity.model_copy(update={"name": "Wrong current-visible name"})
+            if entity.uuid == str(caster.uuid)
+            else entity
+            for entity in subjective.state.entities
+        )
+        altered = subjective.model_copy(
+            update={
+                "state": subjective.state.model_copy(
+                    update={"entities": altered_entities},
+                ),
+            },
+        )
+        mismatch = build_subjective_render_parity_diagnostics(
+            objective=objective,
+            subjective=altered,
+            perspective=perspective,
+            watermarks=PlayerReplicationWatermarks(
+                source_event_cursor=2,
+                observation_cursor=2,
+                presentation_cursor=2,
+                combat_log_cursor=1,
+            ),
+            source_stream_id="lethal-fireball-prefix",
+            generation_id="lethal-fireball-generation",
+            grid=grid,
+        )
+        assert mismatch.matches is False
+        assert any(row.path.endswith(".name") for row in mismatch.mismatches)
     finally:
         reset_engine_runtime()
 

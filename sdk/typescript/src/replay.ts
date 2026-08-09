@@ -4,8 +4,11 @@ import {
   PLAYER_REPLAY_CONTRACT_HASH,
   PLAYER_REPLAY_CONTRACT_VERSION,
   type ObjectiveReplayBundle,
+  type EncounterPresentationCue,
+  type EncounterReplacePatch,
   type PlayerReplicationWatermarks,
   type SubjectivePlayerReplayBundle,
+  type SubjectiveReplicationFrame,
   type SubjectiveReplaySegment,
 } from "./generated/contracts.generated.js";
 import {
@@ -34,6 +37,7 @@ export function decodeObjectiveReplay(value: unknown): ObjectiveReplayBundle {
 
 /** Decode one membership-scoped replay; objective/raw event payloads are not in its schema. */
 export function decodeSubjectivePlayerReplay(value: unknown): SubjectivePlayerReplayBundle {
+  preflightSubjectivePlayerReplayIdentity(value);
   const replay = decodeModel("SubjectivePlayerReplayBundle", value);
   assertSubjectivePlayerReplay(replay);
   return replay;
@@ -144,7 +148,32 @@ export function assertSubjectivePlayerReplay(replay: SubjectivePlayerReplayBundl
 
   const partitions = new Set<string>();
   const ended: number[] = [];
-  let previousOpeningSourceCursor = -1;
+  const previousThroughByBranch = new Map<
+    string,
+    PlayerReplicationWatermarks
+  >();
+  const combatLogEventBarriersByGeneration = new Map<
+    string,
+    Map<number, number>
+  >();
+  const combatLogFrontierCursorByGeneration = new Map<string, number>();
+  const combatLogFrontierEventCursorByGeneration = new Map<string, number>();
+  const terminalGenerationIds = new Set(
+    replay.segments
+      .filter((segment) => segment.end_reason === "encounter_ended")
+      .map((segment) => segment.bootstrap.protocol.generation_id),
+  );
+  if (terminalGenerationIds.size === 0) {
+    fail("$subjective_replay.segments", "ended replay has no encounter-ended branch");
+  }
+  if (terminalGenerationIds.size !== 1) {
+    fail("$subjective_replay.segments", "terminal branches use different generations");
+  }
+  const terminalGenerationId = [...terminalGenerationIds][0]!;
+  const endedBranches = new Set<string>();
+  let terminalGenerationStarted = false;
+  let activeGenerationId: string | null = null;
+  const departedGenerationIds = new Set<string>();
   replay.segments.forEach((segment, index) => {
     const path = `$subjective_replay.segments[${index}]`;
     if (segment.segment_index !== index) {
@@ -171,33 +200,164 @@ export function assertSubjectivePlayerReplay(replay: SubjectivePlayerReplayBundl
       fail(path, "generation-and-perspective partition is repeated");
     }
     partitions.add(partition);
-    const opening = segment.bootstrap.watermarks.source_event_cursor;
-    if (opening < previousOpeningSourceCursor) {
-      fail(`${path}.bootstrap.watermarks.source_event_cursor`, "segment openings moved backwards");
+    const opening = segment.bootstrap.watermarks;
+    const generationId = protocol.generation_id;
+    if (generationId !== activeGenerationId) {
+      if (departedGenerationIds.has(generationId)) {
+        fail(path, "replay generations must form contiguous segment runs");
+      }
+      if (activeGenerationId !== null) {
+        departedGenerationIds.add(activeGenerationId);
+      }
+      activeGenerationId = generationId;
     }
-    previousOpeningSourceCursor = opening;
-    if (segment.through_watermarks.source_event_cursor > replay.terminal_source_event_cursor) {
+    if (generationId === terminalGenerationId) {
+      terminalGenerationStarted = true;
+    } else if (terminalGenerationStarted) {
+      fail(path, "no replay generation may follow the terminal generation");
+    }
+    const branchId = JSON.stringify([generationId, segment.runtime_session_id]);
+    if (endedBranches.has(branchId)) {
+      fail(path, "replay branch continued after encounter end");
+    }
+    const previousThrough = previousThroughByBranch.get(branchId) ?? null;
+    if (
+      previousThrough !== null
+      && opening.source_event_cursor < previousThrough.source_event_cursor
+    ) {
+      fail(`${path}.bootstrap.watermarks.source_event_cursor`, "segment source history regressed");
+    }
+    if (
+      previousThrough !== null
+      && opening.combat_log_cursor < previousThrough.combat_log_cursor
+    ) {
+      fail(`${path}.bootstrap.watermarks.combat_log_cursor`, "segment combat-log history regressed");
+    }
+    const combatLogEventBarrierByCursor = combatLogEventBarriersByGeneration.get(
+      generationId,
+    ) ?? new Map<number, number>();
+    combatLogEventBarriersByGeneration.set(
+      generationId,
+      combatLogEventBarrierByCursor,
+    );
+    let combatLogFrontierCursor = combatLogFrontierCursorByGeneration.get(
+      generationId,
+    ) ?? -1;
+    let combatLogFrontierEventCursor = combatLogFrontierEventCursorByGeneration.get(
+      generationId,
+    ) ?? 0;
+    for (const frame of segment.bootstrap.combat_log_frames.frames) {
+      [combatLogFrontierCursor, combatLogFrontierEventCursor] = rememberCombatLogEventBarrier(
+        combatLogEventBarrierByCursor,
+        frame.combat_log_cursor,
+        frame.event_cursor,
+        `${path}.bootstrap.combat_log_frames`,
+        combatLogFrontierCursor,
+        combatLogFrontierEventCursor,
+      );
+    }
+    for (const [deliveryIndex, delivery] of segment.deliveries.entries()) {
+      if (delivery.kind !== "combat_log") continue;
+      [combatLogFrontierCursor, combatLogFrontierEventCursor] = rememberCombatLogEventBarrier(
+        combatLogEventBarrierByCursor,
+        delivery.frame.combat_log_cursor,
+        delivery.frame.event_cursor,
+        `${path}.deliveries[${deliveryIndex}].frame`,
+        combatLogFrontierCursor,
+        combatLogFrontierEventCursor,
+      );
+    }
+    previousThroughByBranch.set(branchId, segment.through_watermarks);
+    combatLogFrontierCursorByGeneration.set(
+      generationId,
+      combatLogFrontierCursor,
+    );
+    combatLogFrontierEventCursorByGeneration.set(
+      generationId,
+      combatLogFrontierEventCursor,
+    );
+    if (
+      generationId === terminalGenerationId
+      && segment.through_watermarks.source_event_cursor
+        > replay.terminal_source_event_cursor
+    ) {
       fail(`${path}.through_watermarks.source_event_cursor`, "segment exceeds terminal source cursor");
     }
-    if (segment.through_watermarks.combat_log_cursor > replay.terminal_combat_log_cursor) {
+    if (
+      generationId === terminalGenerationId
+      && segment.through_watermarks.combat_log_cursor
+        > replay.terminal_combat_log_cursor
+    ) {
       fail(`${path}.through_watermarks.combat_log_cursor`, "segment exceeds terminal log cursor");
     }
-    if (segment.end_reason === "encounter_ended") ended.push(index);
+    if (segment.end_reason === "encounter_ended") {
+      ended.push(index);
+      endedBranches.add(branchId);
+    }
   });
 
-  if (ended.length !== 1 || ended[0] !== replay.segments.length - 1) {
-    fail("$subjective_replay.segments", "exactly the final segment must end the encounter");
+  for (const endedIndex of ended) {
+    const terminal = replay.segments[endedIndex]!.through_watermarks;
+    if (terminal.source_event_cursor !== replay.terminal_source_event_cursor) {
+      fail("$subjective_replay.terminal_source_event_cursor", "terminal branch source cursor is incomplete");
+    }
+    if (terminal.combat_log_cursor !== replay.terminal_combat_log_cursor) {
+      fail("$subjective_replay.terminal_combat_log_cursor", "terminal branch log cursor is incomplete");
+    }
   }
-  const terminal = replay.segments.at(-1)?.through_watermarks;
-  if (terminal === undefined) {
-    fail("$subjective_replay.segments", "ended replay requires at least one segment");
+  const identities = ended.map((index) => (
+    replaySegmentTerminalEventIdentity(replay.segments[index]!)
+  ));
+  if (identities.some((identity) => (
+    identity !== null && identity.encounterUuid !== replay.encounter_uuid
+  ))) {
+    fail("$subjective_replay.segments", "terminal replay branch belongs to another encounter");
   }
-  if (terminal.source_event_cursor !== replay.terminal_source_event_cursor) {
-    fail("$subjective_replay.terminal_source_event_cursor", "terminal source cursor is incomplete");
+  if (ended.length > 1) {
+    const first = identities[0]!;
+    if (
+      first === null
+      || identities.some((identity) => (
+        identity === null
+        || identity.mode !== first.mode
+        || identity.sourceEventUuid !== first.sourceEventUuid
+        || identity.encounterUuid !== first.encounterUuid
+        || identity.reason !== first.reason
+      ))
+    ) {
+      fail("$subjective_replay.segments", "terminal replay branches disagree on terminal event identity");
+    }
   }
-  if (terminal.combat_log_cursor !== replay.terminal_combat_log_cursor) {
-    fail("$subjective_replay.terminal_combat_log_cursor", "terminal log cursor is incomplete");
+}
+
+interface ReplayTerminalEventIdentity {
+  readonly mode: "ordinary" | "reset";
+  readonly sourceEventUuid: string;
+  readonly encounterUuid: string;
+  readonly reason: string | null;
+}
+
+function replaySegmentTerminalEventIdentity(
+  segment: SubjectiveReplaySegment,
+): ReplayTerminalEventIdentity | null {
+  for (const delivery of segment.deliveries) {
+    if (delivery.kind !== "frame") continue;
+    const cue = delivery.frame.presentation.find(
+      (candidate): candidate is EncounterPresentationCue => (
+        candidate.kind === "encounter" && candidate.transition === "end"
+      ),
+    );
+    const authority = cue ?? delivery.frame.encounter_terminal;
+    if (authority !== undefined && authority !== null) {
+      return {
+        mode: cue === undefined ? "reset" : "ordinary",
+        sourceEventUuid: authority.source_event_uuid,
+        encounterUuid: authority.encounter_uuid,
+        reason: authority.reason,
+      };
+    }
   }
+  return null;
 }
 
 export function assertSubjectiveReplaySegment(
@@ -207,8 +367,12 @@ export function assertSubjectiveReplaySegment(
   assertSubjectiveReplicationBootstrap(segment.bootstrap);
   const { protocol, perspective } = segment.bootstrap;
   let previous = segment.bootstrap.watermarks;
+  let previousCombatLogEventCursor = (
+    segment.bootstrap.combat_log_frames.frames.at(-1)?.event_cursor ?? 0
+  );
   const presentationIds = new Set<string>();
   let encounterEndSeen = segment.bootstrap.world.state.encounter?.state === "ended";
+  let terminalSourceEventCursor: number | null = null;
 
   segment.deliveries.forEach((delivery, index) => {
     const deliveryPath = `${path}.deliveries[${index}]`;
@@ -235,13 +399,11 @@ export function assertSubjectiveReplaySegment(
         }
         presentationIds.add(cue.presentation_id);
       }
-      const terminalCues = frame.presentation.filter(
-        (cue) => cue.kind === "encounter" && cue.transition === "end",
-      );
-      if (terminalCues.length > 1) {
-        fail(deliveryPath, "one frame cannot end the encounter twice");
+      const terminalCursor = assertReplayTerminalAuthority(frame, deliveryPath);
+      if (terminalCursor !== null) {
+        encounterEndSeen = true;
+        terminalSourceEventCursor = terminalCursor;
       }
-      if (terminalCues.length === 1) encounterEndSeen = true;
       previous = frame.watermarks;
       return;
     }
@@ -255,22 +417,116 @@ export function assertSubjectiveReplaySegment(
     if (frame.event_cursor > previous.source_event_cursor) {
       fail(`${deliveryPath}.frame.event_cursor`, "combat-log barrier exceeds consumed source events");
     }
+    if (frame.event_cursor < previousCombatLogEventCursor) {
+      fail(`${deliveryPath}.frame.event_cursor`, "combat-log event barriers moved backwards");
+    }
+    if (
+      terminalSourceEventCursor !== null
+      && frame.event_cursor > terminalSourceEventCursor
+    ) {
+      fail(`${deliveryPath}.frame.event_cursor`, "combat-log barrier exceeds encounter terminal authority");
+    }
     const expected = { ...previous, combat_log_cursor: frame.combat_log_cursor };
     if (!equalWatermarks(delivery.watermarks, expected)) {
       fail(`${deliveryPath}.watermarks`, "combat-log delivery does not match its exact slot");
     }
     previous = delivery.watermarks;
+    previousCombatLogEventCursor = frame.event_cursor;
   });
 
   if (!equalWatermarks(previous, segment.through_watermarks)) {
     fail(`${path}.through_watermarks`, "through watermarks differ from delivery stream");
   }
   if (segment.end_reason === "encounter_ended" && !encounterEndSeen) {
-    fail(`${path}.end_reason`, "encounter-ended segment has no terminal bootstrap or cue");
+    fail(`${path}.end_reason`, "encounter-ended segment has no terminal bootstrap, cue, or reset fact");
   }
   if (segment.end_reason === "perspective_retired" && encounterEndSeen) {
     fail(`${path}.end_reason`, "terminal segment is labeled perspective-retired");
   }
+}
+
+function rememberCombatLogEventBarrier(
+  known: Map<number, number>,
+  combatLogCursor: number,
+  eventCursor: number,
+  path: string,
+  frontierCursor: number,
+  frontierEventCursor: number,
+): readonly [number, number] {
+  const previous = known.get(combatLogCursor);
+  if (previous !== undefined && previous !== eventCursor) {
+    fail(
+      `${path}.event_cursor`,
+      "retained combat-log cursor changed its canonical event barrier",
+    );
+  }
+  known.set(combatLogCursor, eventCursor);
+  if (combatLogCursor > frontierCursor) {
+    if (frontierCursor >= 0 && eventCursor < frontierEventCursor) {
+      fail(`${path}.event_cursor`, "combat-log event barriers moved backwards across replay segments");
+    }
+    return [combatLogCursor, eventCursor];
+  }
+  return [frontierCursor, frontierEventCursor];
+}
+
+function preflightSubjectivePlayerReplayIdentity(value: unknown): void {
+  if (!isRecord(value)) {
+    fail("$subjective_replay", "player replay envelope must be an object");
+  }
+  if (value.replay_contract_version !== PLAYER_REPLAY_CONTRACT_VERSION) {
+    fail(
+      "$subjective_replay.replay_contract_version",
+      "unsupported player replay contract version",
+    );
+  }
+  if (value.replay_contract_hash !== PLAYER_REPLAY_CONTRACT_HASH) {
+    fail(
+      "$subjective_replay.replay_contract_hash",
+      "player replay contract hash mismatch",
+    );
+  }
+}
+
+function assertReplayTerminalAuthority(
+  frame: SubjectiveReplicationFrame,
+  path: string,
+): number | null {
+  const terminalCues = frame.presentation.filter(
+    (cue): cue is EncounterPresentationCue => (
+      cue.kind === "encounter" && cue.transition === "end"
+    ),
+  );
+  const resetFact = frame.encounter_terminal;
+  if (terminalCues.length > 1) {
+    fail(path, "one frame cannot end the encounter twice");
+  }
+  if (terminalCues.length === 1 && resetFact !== null) {
+    fail(path, "ordinary cue and reset fact terminal authority are mutually exclusive");
+  }
+  const endedPatches = frame.patches.filter(
+    (patch): patch is EncounterReplacePatch => patch.kind === "encounter_replace"
+      && patch.encounter !== null
+      && patch.encounter.state === "ended",
+  );
+  const cue = terminalCues[0];
+  const authority = cue ?? resetFact;
+  if (authority === undefined || authority === null) {
+    if (endedPatches.length !== 0) {
+      fail(path, "ended encounter patch requires matching terminal authority");
+    }
+    return null;
+  }
+  if (authority.source_event_cursor !== frame.watermarks.source_event_cursor) {
+    fail(path, "encounter terminal authority must occupy the final source event slot");
+  }
+  if (
+    endedPatches.length !== 1
+    || endedPatches[0]?.encounter?.uuid !== authority.encounter_uuid
+  ) {
+    fail(path, "encounter terminal authority requires exactly one matching ended patch");
+  }
+  return authority.source_event_cursor;
 }
 
 function assertObjectiveWorld(replay: ObjectiveReplayBundle): void {
@@ -317,6 +573,10 @@ function upperBound(sorted: ReadonlyArray<number>, value: number): number {
     else high = middle;
   }
   return low;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function fail(path: string, message: string): never {

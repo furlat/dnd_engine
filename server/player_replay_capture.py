@@ -13,6 +13,8 @@ from dataclasses import dataclass
 from threading import RLock
 from typing import Optional
 
+from pydantic import ValidationError
+
 from server.player_replay import (
     SubjectivePlayerReplayBundle,
     SubjectivePlayerReplayArchive,
@@ -20,16 +22,18 @@ from server.player_replay import (
     SubjectiveReplaySegment,
     SubjectiveReplaySegmentEnd,
     subjective_bootstrap_encounter_ended,
+    validate_subjective_replay_segment_transition,
 )
 from server.player_replication_contract import (
-    EncounterPresentationCue,
-    EncounterTransition,
+    EncounterTerminalPresentationFact,
     PlayerReplicationWatermarks,
     SubjectiveCombatLogDelivery,
     SubjectiveCombatLogFrame,
     SubjectiveFrameDelivery,
     SubjectiveReplicationBootstrap,
     SubjectiveReplicationFrame,
+    validate_ordinary_encounter_terminal_authority,
+    validate_reset_encounter_terminal_authority,
 )
 
 
@@ -63,6 +67,7 @@ class SubjectiveReplayRecorder:
         membership_id: str,
         runtime_session_id: str,
         bootstrap: SubjectiveReplicationBootstrap,
+        minimum_combat_log_event_cursor: int = 0,
     ) -> None:
         if segment_index < 0:
             raise ValueError("segment_index must be nonnegative")
@@ -83,9 +88,23 @@ class SubjectiveReplayRecorder:
         )
         self._deliveries: list[SubjectiveReplayDelivery] = []
         self._through = self.bootstrap.watermarks
+        bootstrap_log_event_cursor = (
+            self.bootstrap.combat_log_frames.frames[-1].event_cursor
+            if self.bootstrap.combat_log_frames.frames
+            else 0
+        )
+        self._previous_combat_log_event_cursor = max(
+            minimum_combat_log_event_cursor,
+            bootstrap_log_event_cursor,
+        )
         self._presentation_ids: set[str] = set()
         self._encounter_ended = subjective_bootstrap_encounter_ended(
             self.bootstrap,
+        )
+        self._terminal_source_event_cursor: Optional[int] = (
+            self.bootstrap.watermarks.source_event_cursor
+            if self._encounter_ended
+            else None
         )
         self._end_reason: Optional[SubjectiveReplaySegmentEnd] = None
         self._aborted = False
@@ -117,7 +136,10 @@ class SubjectiveReplayRecorder:
     ) -> SubjectiveFrameDelivery:
         """Record one canonical frame after its journal commit."""
 
-        delivery = SubjectiveFrameDelivery(frame=frame)
+        try:
+            delivery = SubjectiveFrameDelivery(frame=frame)
+        except ValidationError as exc:
+            raise SubjectiveReplayCaptureError(str(exc)) from exc
         with self._lock:
             self._require_open()
             if self._encounter_ended:
@@ -152,17 +174,40 @@ class SubjectiveReplayRecorder:
                     "replay presentation ID was already recorded"
                 )
             self._presentation_ids.update(frame_ids)
-            terminal_cues = tuple(
-                cue
-                for cue in frame.presentation
-                if isinstance(cue, EncounterPresentationCue)
-                and cue.transition is EncounterTransition.END
-            )
-            if len(terminal_cues) > 1:
+            try:
+                terminal_cue = validate_ordinary_encounter_terminal_authority(frame)
+            except ValueError as exc:
+                raise SubjectiveReplayCaptureError(str(exc)) from exc
+            try:
+                reset_terminal = validate_reset_encounter_terminal_authority(frame)
+            except ValueError as exc:
+                raise SubjectiveReplayCaptureError(str(exc)) from exc
+            if terminal_cue is not None and reset_terminal is not None:
                 raise SubjectiveReplayCaptureError(
-                    "one replay frame cannot end the encounter twice"
+                    "one replay frame cannot carry both terminal authority branches"
                 )
-            self._encounter_ended = bool(terminal_cues)
+            if terminal_cue is not None:
+                if not (
+                    self._through.source_event_cursor
+                    < terminal_cue.source_event_cursor
+                    == frame.watermarks.source_event_cursor
+                ):
+                    raise SubjectiveReplayCaptureError(
+                        "terminal cue does not belong to the newly consumed source interval"
+                    )
+                self._encounter_ended = True
+                self._terminal_source_event_cursor = terminal_cue.source_event_cursor
+            elif isinstance(reset_terminal, EncounterTerminalPresentationFact):
+                if not (
+                    self._through.source_event_cursor
+                    < reset_terminal.source_event_cursor
+                    == frame.watermarks.source_event_cursor
+                ):
+                    raise SubjectiveReplayCaptureError(
+                        "reset terminal fact does not belong to the newly consumed source interval"
+                    )
+                self._encounter_ended = True
+                self._terminal_source_event_cursor = reset_terminal.source_event_cursor
             self._deliveries.append(delivery)
             self._through = frame.watermarks
             return delivery
@@ -193,9 +238,18 @@ class SubjectiveReplayRecorder:
                 raise SubjectiveReplayCaptureError(
                     "replay combat-log cursor is not contiguous"
                 )
-            if frame.event_cursor > self._through.source_event_cursor:
+            event_barrier = (
+                self._terminal_source_event_cursor
+                if self._terminal_source_event_cursor is not None
+                else self._through.source_event_cursor
+            )
+            if frame.event_cursor > event_barrier:
                 raise SubjectiveReplayCaptureError(
                     "replay combat-log barrier exceeds consumed source events"
+                )
+            if frame.event_cursor < self._previous_combat_log_event_cursor:
+                raise SubjectiveReplayCaptureError(
+                    "replay combat-log event barriers moved backwards"
                 )
             expected = self._through.model_copy(
                 update={"combat_log_cursor": frame.combat_log_cursor}
@@ -206,6 +260,7 @@ class SubjectiveReplayRecorder:
                 )
             self._deliveries.append(delivery)
             self._through = watermarks
+            self._previous_combat_log_event_cursor = frame.event_cursor
             return delivery
 
     def close(
@@ -340,13 +395,49 @@ class SubjectiveReplayCaptureStore:
                 raise SubjectiveReplayCaptureFrozenError(
                     "terminal player replay capture is already frozen"
                 )
+            if any(
+                candidate.key.source_stream_id == key.source_stream_id
+                and candidate.membership_id == membership_id
+                and candidate.encounter_ended
+                for candidate in self._recorders.values()
+            ):
+                raise SubjectiveReplayCaptureFrozenError(
+                    "terminal player replay capture is already recorded for this membership"
+                )
             index_key = (key.source_stream_id, membership_id)
             segment_index = self._membership_indices.get(index_key, 0)
+            previous_segments = tuple(
+                recorder.segment()
+                for recorder in sorted(
+                    (
+                        candidate
+                        for candidate_key, candidate in self._recorders.items()
+                        if candidate_key.source_stream_id == key.source_stream_id
+                        and candidate.membership_id == membership_id
+                        and candidate.runtime_session_id == runtime_session_id
+                        and candidate.closed
+                    ),
+                    key=lambda candidate: candidate.segment_index,
+                )
+            )
+            try:
+                minimum_combat_log_event_cursor = (
+                    validate_subjective_replay_segment_transition(
+                    previous_segments,
+                    bootstrap,
+                    )
+                )
+            except ValueError as exc:
+                raise SubjectiveReplayCaptureError(
+                    "new replay partition does not continue retained history: "
+                    f"{exc}"
+                ) from exc
             recorder = SubjectiveReplayRecorder(
                 segment_index=segment_index,
                 membership_id=membership_id,
                 runtime_session_id=runtime_session_id,
                 bootstrap=bootstrap,
+                minimum_combat_log_event_cursor=minimum_combat_log_event_cursor,
             )
             self._recorders[key] = recorder
             self._membership_indices[index_key] = segment_index + 1

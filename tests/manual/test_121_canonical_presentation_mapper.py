@@ -1,6 +1,6 @@
 """Focused contracts for canonical event-to-player presentation projection."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TypeVar
 from uuid import UUID, uuid4
 
@@ -16,7 +16,9 @@ from dnd.actions import (
     Shove,
     ShoveEvent,
     SpellEvent,
+    TraverseConnectorEvent,
 )
+from dnd.core.base_block import MovementMode
 from dnd.blocks.base_item import ItemLocationStateEvent
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.classes.paladin import create_divine_smite_handler
@@ -74,10 +76,15 @@ from dnd.core.modifiers import (
 from dnd.core.presentation_geometry import (
     ConePresentationGeometry,
     CubePresentationGeometry,
+    SpherePresentationGeometry,
 )
 from dnd.core.spatial_effect_types import (
     SpatialEffectChangeOperation,
     SpatialEffectLayer,
+)
+from dnd.core.traversal_connectors import (
+    ConnectorProvocationPolicy,
+    TraversalConnectorKind,
 )
 from dnd.entity import Entity, EntityConfig
 from dnd.monsters.bestiary import create_goblin, create_skeleton
@@ -101,10 +108,14 @@ from tests.engine.support import (
 )
 from server.player_replication.journal import SubjectiveFrameProjectionContext
 from server.player_replication.mapper import (
+    MovementRootDeliveryScope,
     CanonicalSubjectivePresentationMapper,
     CausalEventBatch,
     ProjectedEventSlot,
     SubjectiveEventProjectionError,
+    MovementRootProjectionView,
+    add_movement_root_effect_alias,
+    capture_movement_root_context,
 )
 from server.player_replication_contract import (
     ActiveWeaponSet,
@@ -120,6 +131,7 @@ from server.player_replication_contract import (
     DamagePresentationCue,
     DoorPresentationCue,
     DoorStatePatch,
+    EncounterReplacePatch,
     EncounterPresentationCue,
     EntityVisualLoadout,
     EquipmentPresentationCue,
@@ -129,7 +141,8 @@ from server.player_replication_contract import (
     ItemActionPresentationCue,
     LifeStatePresentationCue,
     LightPresentationCue,
-    MovementKind,
+    LocomotionFamily,
+    LocomotionTrajectory,
     MovementPresentationCue,
     PerspectiveKind,
     PlayerReplicationProtocolIdentity,
@@ -138,6 +151,7 @@ from server.player_replication_contract import (
     PresentationProjectile,
     ShoveOutcome,
     ShovePresentationCue,
+    SphereAreaGeometry,
     RootedBehaviorPresentationAttribution,
     SourceItemPresentationAttribution,
     SpellApplicationOutcome,
@@ -146,6 +160,7 @@ from server.player_replication_contract import (
     SpellTargetPresentation,
     SpatialEffectPresentationCue,
     SubjectivePerspective,
+    SubjectiveEncounter,
     SubjectiveReplicationFrame,
     VisualLoadoutReplacePatch,
     UnrootedBehaviorPresentationAttribution,
@@ -265,7 +280,39 @@ def _batch(
         slots=slots,
         through_source_event_cursor=len(slots),
         patches=patches,
+        movement_root_contexts=_movement_root_contexts(slots),
     )
+
+
+def _movement_root_contexts(
+    slots: tuple[ProjectedEventSlot, ...],
+) -> tuple[MovementRootProjectionView, ...]:
+    """Mirror the runtime's frozen root capture for real EventQueue windows."""
+    by_lineage: dict[UUID, MovementRootProjectionView] = {}
+    for slot in slots:
+        event = slot.event
+        if (
+            type(event) not in {MovementEvent, JumpEvent, TraverseConnectorEvent}
+            or event.phase is not EventPhase.EFFECT
+            or event.canceled
+        ):
+            continue
+        existing = by_lineage.get(event.lineage_uuid)
+        by_lineage[event.lineage_uuid] = (
+            capture_movement_root_context(
+                event,
+                source_event_cursor=slot.source_event_cursor,
+                generation_id="generation-test",
+                delivery_scope=MovementRootDeliveryScope.EXPLICIT_ACTION_BATCH,
+            )
+            if existing is None
+            else add_movement_root_effect_alias(
+                existing,
+                event,
+                source_event_cursor=slot.source_event_cursor,
+            )
+        )
+    return tuple(by_lineage.values())
 
 
 def _project_event_queue_since(
@@ -281,6 +328,7 @@ def _project_event_queue_since(
             CausalEventBatch(
                 slots=slots,
                 through_source_event_cursor=EventQueue.event_cursor(),
+                movement_root_contexts=_movement_root_contexts(slots),
             ),
             _context(perspective, source_cursor=source_cursor),
         ),
@@ -349,7 +397,7 @@ class _ReactiveMovementProjection:
 
 
 def _project_real_multi_reaction_movement(
-    movement_kind: MovementKind,
+    movement_kind: LocomotionFamily,
 ) -> _ReactiveMovementProjection:
     """Execute one real Move or Jump with two visible, deterministic misses."""
     reset_combat_state()
@@ -360,12 +408,12 @@ def _project_real_multi_reaction_movement(
             position=(1, 2),
             faction="heroes",
         )
-        if movement_kind is MovementKind.WALK:
+        if movement_kind is LocomotionFamily.WALK:
             path = tuple((x, 2) for x in range(1, 8))
             reactor_specs = (((1, 1), 2), ((4, 1), 5))
         else:
             path = tuple((x, 2) for x in range(1, 5))
-            reactor_specs = (((0, 2), 1), ((2, 1), 3))
+            reactor_specs = (((0, 2), 1),)
 
         reactor_uuid_by_path_index: dict[int, UUID] = {}
         reaction_ref_by_path_index: dict[int, ContentRef] = {}
@@ -415,7 +463,7 @@ def _project_real_multi_reaction_movement(
                 end_position=path[-1],
                 path=tuple(path),
             ).apply()
-            if movement_kind is MovementKind.WALK
+            if movement_kind is LocomotionFamily.WALK
             else Jump(
                 source_entity_uuid=mover.uuid,
                 end_position=path[-1],
@@ -430,6 +478,7 @@ def _project_real_multi_reaction_movement(
         batch = CausalEventBatch(
             slots=slots,
             through_source_event_cursor=EventQueue.event_cursor(),
+            movement_root_contexts=_movement_root_contexts(slots),
         )
         frame = MAPPER.project_frame(
             batch,
@@ -487,7 +536,7 @@ def _project_real_multi_reaction_movement(
 def _assert_exact_reactive_movement_segments(
     projection: _ReactiveMovementProjection,
     *,
-    movement_kind: MovementKind,
+    movement_kind: LocomotionFamily,
     expected_segments: tuple[
         tuple[int, tuple[tuple[int, int], ...]],
         ...,
@@ -496,8 +545,10 @@ def _assert_exact_reactive_movement_segments(
     """Prove engine timing and the frame's exact pre-edge segment graph."""
     assert projection.root_event.phase is EventPhase.COMPLETION
     total_steps = len(projection.path) - 1
-    assert tuple(sorted(projection.step_slot_by_path_index)) == tuple(
-        range(1, total_steps + 1)
+    assert tuple(sorted(projection.step_slot_by_path_index)) == (
+        tuple(range(1, total_steps + 1))
+        if movement_kind is LocomotionFamily.WALK
+        else (1,)
     )
     assert set(projection.attack_slots_by_path_index) == set(
         projection.reactor_uuid_by_path_index
@@ -562,11 +613,33 @@ def _assert_exact_reactive_movement_segments(
         for cue in projection.frame.presentation
     )
 
-    assert tuple(
-        (cue.path_start_index, cue.trajectory) for cue in movement_cues
-    ) == expected_segments
-    assert all(cue.movement_kind is movement_kind for cue in movement_cues)
-    assert all(cue.path_total_steps == total_steps for cue in movement_cues)
+    actual_segments = tuple(
+        (
+            projection.path.index(cue.anchors[0].position),
+            tuple(anchor.position for anchor in cue.anchors),
+        )
+        for cue in movement_cues
+    )
+    assert actual_segments == expected_segments
+    assert all(cue.locomotion_family is movement_kind for cue in movement_cues)
+    assert all(
+        cue.trajectory_family
+        is (
+            LocomotionTrajectory.PATH
+            if movement_kind is LocomotionFamily.WALK
+            else LocomotionTrajectory.DIRECT_ARC
+        )
+        for cue in movement_cues
+    )
+    assert all(
+        not {
+            "movement_sequence_id",
+            "path_start_index",
+            "path_total_steps",
+        }
+        & cue.model_dump().keys()
+        for cue in movement_cues
+    )
     assert len(attack_cues) == len(projection.reactor_uuid_by_path_index)
     for path_index, reactor_uuid in projection.reactor_uuid_by_path_index.items():
         cue = next(cue for cue in attack_cues if cue.actor_uuid == str(reactor_uuid))
@@ -602,23 +675,32 @@ def _assert_exact_reactive_movement_segments(
     reconstructed_path = [projection.path[0]]
     next_path_start = 0
     for cue in movement_cues:
-        represented_steps = len(cue.trajectory) - 1
-        assert cue.path_start_index == next_path_start
-        assert cue.trajectory[0] == reconstructed_path[-1]
-        reconstructed_path.extend(cue.trajectory[1:])
+        trajectory = tuple(anchor.position for anchor in cue.anchors)
+        represented_steps = len(trajectory) - 1
+        path_start_index = projection.path.index(trajectory[0])
+        assert path_start_index == next_path_start
+        assert trajectory[0] == reconstructed_path[-1]
+        reconstructed_path.extend(trajectory[1:])
         next_path_start += represented_steps
 
-        last_step_path_index = cue.path_start_index + represented_steps
+        last_step_path_index = path_start_index + represented_steps
         last_step_slot = projection.step_slot_by_path_index[last_step_path_index]
         assert cue.source_event_cursor == last_step_slot.source_event_cursor
         assert cue.source_event_uuid == str(last_step_slot.event.uuid)
 
-    assert tuple(reconstructed_path) == projection.path
-    assert next_path_start == total_steps
+    if movement_kind is LocomotionFamily.WALK:
+        assert tuple(reconstructed_path) == projection.path
+        assert next_path_start == total_steps
+    else:
+        assert tuple(reconstructed_path) == (
+            projection.path[0],
+            projection.path[-1],
+        )
 
     expected_semantic_order: list[tuple[str, int | str]] = []
     movement_by_start = {
-        cue.path_start_index: cue for cue in movement_cues
+        projection.path.index(cue.anchors[0].position): cue
+        for cue in movement_cues
     }
     attack_by_source_event_uuid = {
         cue.source_event_uuid: cue for cue in attack_cues
@@ -639,8 +721,11 @@ def _assert_exact_reactive_movement_segments(
         attack_cue = attack_by_source_event_uuid[str(attack_slot.event.uuid)]
         step = projection.step_slot_by_path_index[path_index].event
         assert isinstance(step, StepMovementEvent)
-        assert cue.path_start_index == step.path_index - 1
-        assert cue.trajectory[:2] == (step.from_position, step.to_position)
+        assert path_start_index == step.path_index - 1
+        assert tuple(anchor.position for anchor in cue.anchors[:2]) == (
+            step.from_position,
+            step.to_position,
+        )
         assert cue.child_presentation_ids == (attack_cue.presentation_id,)
         assert attack_cue.parent_presentation_id == cue.presentation_id
         assert attack_cue.presentation_cursor == cue.presentation_cursor + 1
@@ -648,7 +733,7 @@ def _assert_exact_reactive_movement_segments(
 
     assert tuple(
         (
-            ("movement", cue.path_start_index)
+            ("movement", projection.path.index(cue.anchors[0].position))
             if isinstance(cue, MovementPresentationCue)
             else ("attack", cue.actor_uuid)
         )
@@ -846,6 +931,119 @@ def test_duplicate_spell_targets_keep_distinct_projection_applications() -> None
         for effect_id in application.effect_presentation_ids
     )
     _assert_closed_graph(frame)
+
+
+def test_spell_root_retains_declared_location_authority_after_observer_death() -> None:
+    """A fatal spell cannot erase the already-authorized root presentation.
+
+    This is the boundary-preserving reduction of the missing second Fireball
+    captured in the immutable live artifacts:
+    subjective replay SHA-256 103e109a205c4b216f0cdc42b4d2bf823b630443b7618312e80dc2639ffc04d1,
+    objective events SHA-256 0c6f1051867a876d93942b14e89955a3b8927b7512c6ce74aecf094b6e234f39,
+    and combat log SHA-256 234f5be0398190b90452b26bd3ee0f652d1d49c57a70383f787915524f7aae22.
+    The controlled observer located the caster when the root was declared,
+    then died inside the spell's child application before root COMPLETION.
+    """
+    observer = uuid4()
+    caster = uuid4()
+    source_position = (8, 8)
+    root = SpellEvent(
+        name="Fireball",
+        spell_id="fireball",
+        source_entity_uuid=caster,
+        source_position=source_position,
+        spell_school="evocation",
+        spell_level=3,
+        cast_at_level=3,
+        range_type="ranged",
+        area_geometry=SpherePresentationGeometry(
+            center=(10, 12),
+            radius_feet=20,
+        ),
+        phase=EventPhase.DECLARATION,
+        use_register=False,
+    )
+    root = _visible(
+        root,
+        observer,
+        identified=(caster,),
+        located=(caster,),
+    )
+    completion = root.model_copy(
+        update={
+            "uuid": uuid4(),
+            "phase": EventPhase.COMPLETION,
+            "modified": True,
+            "located_entity_observer_uuids": {},
+        },
+    )
+    application = SpellEvent(
+        name="Fireball",
+        spell_id="fireball",
+        source_entity_uuid=caster,
+        target_entity_uuid=observer,
+        source_position=source_position,
+        spell_school="evocation",
+        spell_level=3,
+        cast_at_level=3,
+        range_type="ranged",
+        application_index=0,
+        application_id=uuid4(),
+        save_success=False,
+        parent_lineage=root.lineage_uuid,
+        phase=EventPhase.COMPLETION,
+        use_register=False,
+    )
+    damage = _damage(
+        source_uuid=caster,
+        target_uuid=observer,
+        parent_lineage=application.lineage_uuid,
+        amount=28,
+        resulting_hp=0,
+    )
+    damage = _visible(damage, observer, identified=(caster, observer))
+    technical_death = Event(
+        source_entity_uuid=caster,
+        target_entity_uuid=observer,
+        event_type=EventType.DEATH,
+        parent_lineage=damage.lineage_uuid,
+        phase=EventPhase.COMPLETION,
+        use_register=False,
+    )
+    life = LifeStateChangeEvent(
+        source_entity_uuid=observer,
+        target_entity_uuid=observer,
+        entity_uuid=observer,
+        previous_state=LifeState.ALIVE,
+        new_state=LifeState.DEAD,
+        reason=LifeStateChangeReason.DAMAGE,
+        parent_lineage=technical_death.lineage_uuid,
+        phase=EventPhase.COMPLETION,
+        use_register=False,
+    )
+
+    frame = MAPPER.project_frame(
+        _batch(
+            root,
+            damage,
+            technical_death,
+            life,
+            application,
+            completion,
+        ),
+        _context(_perspective(observer)),
+    )
+
+    cue = next(
+        candidate
+        for candidate in frame.presentation
+        if isinstance(candidate, SpellPresentationCue)
+    )
+    assert isinstance(cue, SpellPresentationCue)
+    assert cue.actor_uuid == str(caster)
+    assert cue.spell_id == "fireball"
+    assert isinstance(cue.area, SphereAreaGeometry)
+    assert cue.area.center == (10, 12)
 
 
 def test_spell_created_spatial_effect_is_an_exact_position_application() -> None:
@@ -2476,6 +2674,494 @@ def test_damage_life_transition_reparents_across_technical_siblings() -> None:
     _assert_closed_graph(frame)
 
 
+@pytest.mark.parametrize(
+    ("movement_mode", "expected_family"),
+    (
+        (MovementMode.WALKING, LocomotionFamily.WALK),
+        (MovementMode.SWIMMING, LocomotionFamily.SWIM),
+        (MovementMode.FLYING, LocomotionFamily.FLY),
+        (MovementMode.BURROWING, LocomotionFamily.BURROW),
+    ),
+)
+def test_path_root_context_owns_closed_locomotion_family_and_anchors(
+    movement_mode: MovementMode,
+    expected_family: LocomotionFamily,
+) -> None:
+    actor = uuid4()
+    perspective = _perspective(actor)
+    root = MovementEvent(
+        source_entity_uuid=actor,
+        start_position=(1, 1),
+        end_position=(3, 1),
+        path=((1, 1), (2, 1), (3, 1)),
+        movement_mode=movement_mode,
+        trajectory=MovementTrajectory.PATH,
+        phase=EventPhase.EFFECT,
+        use_register=False,
+    )
+    steps = (
+        StepMovementEvent(
+            source_entity_uuid=actor,
+            from_position=(1, 1),
+            to_position=(2, 1),
+            from_elevation_feet=0,
+            to_elevation_feet=5,
+            path_index=1,
+            total_path_length=3,
+            trajectory=MovementTrajectory.PATH,
+            disclosed_path=((1, 1), (2, 1)),
+            committed=True,
+            parent_event=root.uuid,
+            parent_lineage=root.lineage_uuid,
+            phase=EventPhase.COMPLETION,
+            use_register=False,
+        ),
+        StepMovementEvent(
+            source_entity_uuid=actor,
+            from_position=(2, 1),
+            to_position=(3, 1),
+            from_elevation_feet=5,
+            to_elevation_feet=10,
+            path_index=2,
+            total_path_length=3,
+            trajectory=MovementTrajectory.PATH,
+            disclosed_path=((2, 1), (3, 1)),
+            committed=True,
+            parent_event=root.uuid,
+            parent_lineage=root.lineage_uuid,
+            phase=EventPhase.COMPLETION,
+            use_register=False,
+        ),
+    )
+    slots = tuple(
+        ProjectedEventSlot(source_event_cursor=index, event=event)
+        for index, event in enumerate((root, *steps), start=1)
+    )
+    root_view = capture_movement_root_context(
+        root,
+        source_event_cursor=1,
+        generation_id="generation-test",
+        delivery_scope=MovementRootDeliveryScope.EXPLICIT_ACTION_BATCH,
+    )
+
+    frame = MAPPER.project_frame(
+        CausalEventBatch(
+            slots=slots,
+            through_source_event_cursor=3,
+            movement_root_contexts=(root_view,),
+        ),
+        _context(perspective),
+    )
+
+    assert len(frame.presentation) == 1
+    cue = frame.presentation[0]
+    assert isinstance(cue, MovementPresentationCue)
+    assert cue.locomotion_family is expected_family
+    assert cue.trajectory_family is LocomotionTrajectory.PATH
+    assert tuple((anchor.position, anchor.elevation_feet) for anchor in cue.anchors) == (
+        ((1, 1), 0),
+        ((2, 1), 5),
+        ((3, 1), 10),
+    )
+    assert cue.connector is None
+    assert not {
+        "movement_sequence_id",
+        "path_start_index",
+        "path_total_steps",
+        "movement_kind",
+        "trajectory",
+    } & cue.model_dump().keys()
+
+
+def test_jump_and_connector_use_one_exact_root_authorized_leg() -> None:
+    actor = uuid4()
+    perspective = _perspective(actor)
+    jump = JumpEvent(
+        source_entity_uuid=actor,
+        start_position=(1, 1),
+        requested_end_position=(4, 1),
+        end_position=(4, 1),
+        objective_end_position=(4, 1),
+        start_elevation_feet=0,
+        requested_end_elevation_feet=10,
+        end_elevation_feet=10,
+        jump_distance=15,
+        movement_spent=15,
+        path=((1, 1), (2, 1), (3, 1), (4, 1)),
+        trajectory=MovementTrajectory.DIRECT_ARC,
+        phase=EventPhase.EFFECT,
+        use_register=False,
+    )
+    jump_step = StepMovementEvent(
+        source_entity_uuid=actor,
+        from_position=(1, 1),
+        to_position=(4, 1),
+        from_elevation_feet=0,
+        to_elevation_feet=10,
+        path_index=1,
+        total_path_length=4,
+        trajectory=MovementTrajectory.DIRECT_ARC,
+        disclosed_path=((1, 1), (2, 1), (3, 1), (4, 1)),
+        committed=True,
+        parent_event=jump.uuid,
+        parent_lineage=jump.lineage_uuid,
+        phase=EventPhase.COMPLETION,
+        use_register=False,
+    )
+    connector_ref = _content_ref(
+        kind=ContentDefinitionKind.ACTION,
+        content_id="action.fixture.connector",
+        digest_char="9",
+    )
+    connector = TraverseConnectorEvent(
+        source_entity_uuid=actor,
+        connector_uuid=uuid4(),
+        connector_authored_id="connector.fixture.ladder",
+        connector_kind=TraversalConnectorKind.LADDER,
+        connector_presentation_key="connector.fixture.ladder",
+        connector_revision=3,
+        connector_digest="a" * 64,
+        connector_provocation_policy=(
+            ConnectorProvocationPolicy.PROVOKES_SOURCE_EXIT
+        ),
+        connector_bidirectional=True,
+        start_position=(4, 1),
+        requested_end_position=(4, 2),
+        end_position=(4, 2),
+        objective_end_position=(4, 2),
+        start_elevation_feet=10,
+        requested_end_elevation_feet=20,
+        end_elevation_feet=20,
+        movement_cost_feet=10,
+        behavior_binding=_binding(
+            definition_ref=connector_ref,
+            owner_uuid=actor,
+        ),
+        phase=EventPhase.EFFECT,
+        use_register=False,
+    )
+    connector_step = StepMovementEvent(
+        source_entity_uuid=actor,
+        from_position=(4, 1),
+        to_position=(4, 2),
+        from_elevation_feet=10,
+        to_elevation_feet=20,
+        path_index=1,
+        total_path_length=2,
+        trajectory=MovementTrajectory.CONNECTOR_TRANSFER,
+        disclosed_path=((4, 1), (4, 2)),
+        committed=True,
+        parent_event=connector.uuid,
+        parent_lineage=connector.lineage_uuid,
+        phase=EventPhase.COMPLETION,
+        use_register=False,
+    )
+    events = (jump, jump_step, connector, connector_step)
+    roots = tuple(
+        capture_movement_root_context(
+            root,
+            source_event_cursor=cursor,
+            generation_id="generation-test",
+            delivery_scope=MovementRootDeliveryScope.EXPLICIT_ACTION_BATCH,
+        )
+        for cursor, root in ((1, jump), (3, connector))
+    )
+    frame = MAPPER.project_frame(
+        CausalEventBatch(
+            slots=tuple(
+                ProjectedEventSlot(source_event_cursor=index, event=event)
+                for index, event in enumerate(events, start=1)
+            ),
+            through_source_event_cursor=4,
+            movement_root_contexts=roots,
+        ),
+        _context(perspective),
+    )
+
+    movement_cues = tuple(
+        cue for cue in frame.presentation
+        if isinstance(cue, MovementPresentationCue)
+    )
+    assert tuple(cue.locomotion_family for cue in movement_cues) == (
+        LocomotionFamily.JUMP,
+        LocomotionFamily.CONNECTOR,
+    )
+    assert tuple(cue.trajectory_family for cue in movement_cues) == (
+        LocomotionTrajectory.DIRECT_ARC,
+        LocomotionTrajectory.CONNECTOR_TRANSFER,
+    )
+    assert tuple(anchor.position for anchor in movement_cues[0].anchors) == (
+        (1, 1),
+        (4, 1),
+    )
+    assert movement_cues[0].connector is None
+    connector_identity = movement_cues[1].connector
+    assert connector_identity is not None
+    assert connector_identity.uuid == connector.connector_uuid
+    assert connector_identity.authored_id == connector.connector_authored_id
+    assert connector_identity.kind is connector.connector_kind
+    assert connector_identity.presentation_key == connector.connector_presentation_key
+    assert connector_identity.revision == connector.connector_revision
+    assert not any(isinstance(cue, ActionPresentationCue) for cue in frame.presentation)
+
+
+def test_step_parent_lineage_cannot_replace_exact_effect_alias() -> None:
+    actor = uuid4()
+    root = MovementEvent(
+        source_entity_uuid=actor,
+        start_position=(1, 1),
+        end_position=(2, 1),
+        path=((1, 1), (2, 1)),
+        phase=EventPhase.EFFECT,
+        use_register=False,
+    )
+    step = StepMovementEvent(
+        source_entity_uuid=actor,
+        from_position=(1, 1),
+        to_position=(2, 1),
+        path_index=1,
+        total_path_length=2,
+        trajectory=MovementTrajectory.PATH,
+        disclosed_path=((1, 1), (2, 1)),
+        committed=True,
+        parent_event=None,
+        parent_lineage=root.lineage_uuid,
+        phase=EventPhase.COMPLETION,
+        use_register=False,
+    )
+    root_view = capture_movement_root_context(
+        root,
+        source_event_cursor=1,
+        generation_id="generation-test",
+        delivery_scope=MovementRootDeliveryScope.EXPLICIT_ACTION_BATCH,
+    )
+
+    with pytest.raises(SubjectiveEventProjectionError, match="parent_event"):
+        MAPPER.project_frame(
+            CausalEventBatch(
+                slots=(
+                    ProjectedEventSlot(source_event_cursor=1, event=root),
+                    ProjectedEventSlot(source_event_cursor=2, event=step),
+                ),
+                through_source_event_cursor=2,
+                movement_root_contexts=(root_view,),
+            ),
+            _context(_perspective(actor)),
+        )
+
+
+@pytest.mark.parametrize(
+    "updates",
+    (
+        {"phase": EventPhase.COMPLETION},
+        {"first_effect_source_cursor": True},
+        {"source_entity_uuid": "not-a-uuid"},
+        {"identified_source_observer_uuids": {"observer"}},
+        {"movement_mode": MovementMode.WALKING.value},
+        {"admitted_path": [(1, 1), (2, 1)]},
+    ),
+)
+def test_manual_frozen_root_context_revalidates_exact_runtime_shapes(
+    updates: dict[str, object],
+) -> None:
+    actor = uuid4()
+    root = MovementEvent(
+        source_entity_uuid=actor,
+        start_position=(1, 1),
+        end_position=(2, 1),
+        path=((1, 1), (2, 1)),
+        phase=EventPhase.EFFECT,
+        use_register=False,
+    )
+    view = capture_movement_root_context(
+        root,
+        source_event_cursor=1,
+        generation_id="generation-test",
+        delivery_scope=MovementRootDeliveryScope.EXPLICIT_ACTION_BATCH,
+    )
+    with pytest.raises((TypeError, ValueError)):
+        replace(view.context, **updates)
+
+
+def test_final_status_only_effect_alias_is_exact_step_parent_authority() -> None:
+    actor = uuid4()
+    root = MovementEvent(
+        source_entity_uuid=actor,
+        start_position=(1, 1),
+        end_position=(2, 1),
+        path=((1, 1), (2, 1)),
+        phase=EventPhase.EFFECT,
+        use_register=False,
+    )
+    status_alias = root.model_copy(
+        update={
+            "uuid": uuid4(),
+            "modified": True,
+            "status_message": "accepted status edit",
+        }
+    )
+    view = add_movement_root_effect_alias(
+        capture_movement_root_context(
+            root,
+            source_event_cursor=1,
+            generation_id="generation-test",
+            delivery_scope=MovementRootDeliveryScope.EXPLICIT_ACTION_BATCH,
+        ),
+        status_alias,
+        source_event_cursor=2,
+    )
+    step = StepMovementEvent(
+        source_entity_uuid=actor,
+        from_position=(1, 1),
+        to_position=(2, 1),
+        path_index=1,
+        total_path_length=2,
+        trajectory=MovementTrajectory.PATH,
+        disclosed_path=((1, 1), (2, 1)),
+        committed=True,
+        parent_event=status_alias.uuid,
+        parent_lineage=root.lineage_uuid,
+        phase=EventPhase.COMPLETION,
+        use_register=False,
+    )
+
+    frame = MAPPER.project_frame(
+        CausalEventBatch(
+            slots=(
+                ProjectedEventSlot(source_event_cursor=1, event=root),
+                ProjectedEventSlot(source_event_cursor=2, event=status_alias),
+                ProjectedEventSlot(source_event_cursor=3, event=step),
+            ),
+            through_source_event_cursor=3,
+            movement_root_contexts=(view,),
+        ),
+        _context(_perspective(actor)),
+    )
+
+    assert len(frame.presentation) == 1
+    cue = frame.presentation[0]
+    assert isinstance(cue, MovementPresentationCue)
+    assert tuple(anchor.position for anchor in cue.anchors) == ((1, 1), (2, 1))
+
+
+def test_root_effect_rejects_residual_cancellation_evidence() -> None:
+    actor = uuid4()
+    root = MovementEvent(
+        source_entity_uuid=actor,
+        start_position=(1, 1),
+        end_position=(2, 1),
+        path=((1, 1), (2, 1)),
+        phase=EventPhase.EFFECT,
+        use_register=False,
+    ).model_copy(update={"canceled_from_phase": EventPhase.DECLARATION})
+
+    with pytest.raises(SubjectiveEventProjectionError, match="accepted EFFECT"):
+        capture_movement_root_context(
+            root,
+            source_event_cursor=1,
+            generation_id="generation-test",
+            delivery_scope=MovementRootDeliveryScope.EXPLICIT_ACTION_BATCH,
+        )
+
+
+def test_effect_alias_rejects_changed_frozen_root_mechanics() -> None:
+    actor = uuid4()
+    root = MovementEvent(
+        source_entity_uuid=actor,
+        start_position=(1, 1),
+        end_position=(2, 1),
+        path=((1, 1), (2, 1)),
+        phase=EventPhase.EFFECT,
+        use_register=False,
+    )
+    view = capture_movement_root_context(
+        root,
+        source_event_cursor=1,
+        generation_id="generation-test",
+        delivery_scope=MovementRootDeliveryScope.EXPLICIT_ACTION_BATCH,
+    )
+    forged = root.model_copy(
+        update={
+            "uuid": uuid4(),
+            "path": ((1, 1), (9, 9)),
+            "modified": True,
+        }
+    )
+
+    with pytest.raises(SubjectiveEventProjectionError, match="changed frozen"):
+        add_movement_root_effect_alias(
+            view,
+            forged,
+            source_event_cursor=2,
+        )
+
+
+def test_path_projection_splits_visible_runs_across_hidden_edge() -> None:
+    observer = uuid4()
+    mover = uuid4()
+    observer_key = str(observer)
+    root = _visible(
+        MovementEvent(
+            source_entity_uuid=mover,
+            start_position=(1, 1),
+            end_position=(4, 1),
+            path=((1, 1), (2, 1), (3, 1), (4, 1)),
+            phase=EventPhase.EFFECT,
+            use_register=False,
+        ),
+        observer,
+        identified=(mover,),
+    )
+    steps = tuple(
+        StepMovementEvent(
+            source_entity_uuid=mover,
+            from_position=(path_index, 1),
+            to_position=(path_index + 1, 1),
+            path_index=path_index,
+            total_path_length=4,
+            trajectory=MovementTrajectory.PATH,
+            disclosed_path=((path_index, 1), (path_index + 1, 1)),
+            committed=True,
+            parent_event=root.uuid,
+            parent_lineage=root.lineage_uuid,
+            phase=EventPhase.COMPLETION,
+            located_position_observer_uuids=(
+                {
+                    position_evidence_key((path_index, 1)): {observer_key},
+                    position_evidence_key((path_index + 1, 1)): {observer_key},
+                }
+                if path_index in {1, 3}
+                else {}
+            ),
+            use_register=False,
+        )
+        for path_index in range(1, 4)
+    )
+
+    frame = MAPPER.project_frame(
+        _batch(root, *steps),
+        _context(_perspective(observer, controlled=False)),
+    )
+
+    cues = tuple(
+        cue for cue in frame.presentation
+        if isinstance(cue, MovementPresentationCue)
+    )
+    assert tuple(
+        tuple(anchor.position for anchor in cue.anchors)
+        for cue in cues
+    ) == (
+        ((1, 1), (2, 1)),
+        ((3, 1), (4, 1)),
+    )
+    assert cues[0].presentation_id != cues[1].presentation_id
+    assert all(
+        not {"movement_sequence_id", "path_start_index", "path_total_steps"}
+        & cue.model_dump().keys()
+        for cue in cues
+    )
+
+
 def test_committed_step_events_form_one_ordered_movement_segment() -> None:
     """Only committed contiguous steps determine the renderer trajectory."""
     actor = uuid4()
@@ -2485,7 +3171,7 @@ def test_committed_step_events_form_one_ordered_movement_segment() -> None:
         start_position=(1, 1),
         end_position=(3, 1),
         path=((1, 1), (2, 1), (3, 1)),
-        phase=EventPhase.COMPLETION,
+        phase=EventPhase.EFFECT,
         use_register=False,
     )
     steps: list[StepMovementEvent] = []
@@ -2500,7 +3186,9 @@ def test_committed_step_events_form_one_ordered_movement_segment() -> None:
             path_index=path_index,
             total_path_length=3,
             trajectory=MovementTrajectory.PATH,
+            disclosed_path=(start, end),
             committed=True,
+            parent_event=movement.uuid,
             parent_lineage=movement.lineage_uuid,
             phase=EventPhase.COMPLETION,
             use_register=False,
@@ -2515,19 +3203,23 @@ def test_committed_step_events_form_one_ordered_movement_segment() -> None:
     assert len(frame.presentation) == 1
     cue = frame.presentation[0]
     assert isinstance(cue, MovementPresentationCue)
-    assert cue.trajectory == ((1, 1), (2, 1), (3, 1))
-    assert cue.path_start_index == 0
-    assert cue.path_total_steps == 2
+    assert cue.locomotion_family is LocomotionFamily.WALK
+    assert cue.trajectory_family is LocomotionTrajectory.PATH
+    assert tuple(anchor.position for anchor in cue.anchors) == (
+        (1, 1),
+        (2, 1),
+        (3, 1),
+    )
     assert cue.perception_commit == "observation_frame"
 
 
 def test_real_move_starts_segments_at_multiple_opportunity_attack_edges() -> None:
     """Each real Move reaction is owned by the segment starting at its step."""
-    projection = _project_real_multi_reaction_movement(MovementKind.WALK)
+    projection = _project_real_multi_reaction_movement(LocomotionFamily.WALK)
 
     _assert_exact_reactive_movement_segments(
         projection,
-        movement_kind=MovementKind.WALK,
+        movement_kind=LocomotionFamily.WALK,
         expected_segments=(
             (0, ((1, 2), (2, 2))),
             (1, ((2, 2), (3, 2), (4, 2), (5, 2))),
@@ -2536,16 +3228,15 @@ def test_real_move_starts_segments_at_multiple_opportunity_attack_edges() -> Non
     )
 
 
-def test_real_jump_starts_segments_at_multiple_opportunity_attack_edges() -> None:
-    """Each real Jump reaction is owned by the segment starting at its step."""
-    projection = _project_real_multi_reaction_movement(MovementKind.JUMP)
+def test_real_jump_projects_one_takeoff_owned_opportunity_attack_leg() -> None:
+    """A real Jump is one DIRECT_ARC leg with takeoff-only reaction authority."""
+    projection = _project_real_multi_reaction_movement(LocomotionFamily.JUMP)
 
     _assert_exact_reactive_movement_segments(
         projection,
-        movement_kind=MovementKind.JUMP,
+        movement_kind=LocomotionFamily.JUMP,
         expected_segments=(
-            (0, ((1, 2), (2, 2), (3, 2))),
-            (2, ((3, 2), (4, 2))),
+            (0, ((1, 2), (4, 2))),
         ),
     )
 
@@ -2555,15 +3246,25 @@ def test_lethal_opportunity_attack_keeps_exact_uncommitted_provoking_edge() -> N
     mover = uuid4()
     reactor = uuid4()
     perspective = _perspective(mover)
-    movement_lineage = uuid4()
+    movement = MovementEvent(
+        source_entity_uuid=mover,
+        start_position=(5, 6),
+        end_position=(5, 10),
+        path=((5, 6), (5, 7), (5, 8), (5, 9), (5, 10)),
+        phase=EventPhase.EFFECT,
+        use_register=False,
+    )
     step = StepMovementEvent(
         source_entity_uuid=mover,
         from_position=(5, 6),
         to_position=(5, 7),
         path_index=1,
         total_path_length=5,
+        trajectory=MovementTrajectory.PATH,
+        disclosed_path=((5, 6), (5, 7)),
         committed=False,
-        parent_lineage=movement_lineage,
+        parent_event=movement.uuid,
+        parent_lineage=movement.lineage_uuid,
         phase=EventPhase.COMPLETION,
         use_register=False,
     )
@@ -2585,7 +3286,7 @@ def test_lethal_opportunity_attack_keeps_exact_uncommitted_provoking_edge() -> N
     )
 
     frame = MAPPER.project_frame(
-        _batch(reaction, step),
+        _batch(movement, reaction, step),
         _context(perspective),
     )
 
@@ -2597,9 +3298,12 @@ def test_lethal_opportunity_attack_keeps_exact_uncommitted_provoking_edge() -> N
         cue for cue in frame.presentation
         if isinstance(cue, AttackPresentationCue)
     )
-    assert attempted.trajectory == ((5, 6), (5, 7))
-    assert attempted.path_start_index == 0
-    assert attempted.path_total_steps == 4
+    assert attempted.locomotion_family is LocomotionFamily.WALK
+    assert attempted.trajectory_family is LocomotionTrajectory.PATH
+    assert tuple(anchor.position for anchor in attempted.anchors) == (
+        (5, 6),
+        (5, 7),
+    )
     assert attempted.model_dump()["endpoint_outcome"] == "not_committed"
     assert attempted.child_presentation_ids == (attack.presentation_id,)
     assert attack.parent_presentation_id == attempted.presentation_id
@@ -2686,7 +3390,11 @@ def test_real_lethal_opportunity_attack_projects_attempt_before_death() -> None:
             for cue in frame.presentation
             if isinstance(cue, LifeStatePresentationCue)
         )
-        assert attempted.trajectory == ((5, 6), (5, 7))
+        assert attempted.trajectory_family is LocomotionTrajectory.PATH
+        assert tuple(anchor.position for anchor in attempted.anchors) == (
+            (5, 6),
+            (5, 7),
+        )
         assert attempted.endpoint_outcome.value == "not_committed"
         assert attempted.child_presentation_ids == (attack.presentation_id,)
         assert attack.child_presentation_ids == (damage.presentation_id,)
@@ -2707,7 +3415,7 @@ def test_visible_pre_step_spell_reaction_owns_exact_movement_segment() -> None:
         start_position=(1, 1),
         end_position=(2, 1),
         path=((1, 1), (2, 1)),
-        phase=EventPhase.COMPLETION,
+        phase=EventPhase.EFFECT,
         use_register=False,
     )
     step = StepMovementEvent(
@@ -2716,7 +3424,10 @@ def test_visible_pre_step_spell_reaction_owns_exact_movement_segment() -> None:
         to_position=(2, 1),
         path_index=1,
         total_path_length=2,
+        trajectory=MovementTrajectory.PATH,
+        disclosed_path=((1, 1), (2, 1)),
         committed=True,
+        parent_event=movement.uuid,
         parent_lineage=movement.lineage_uuid,
         phase=EventPhase.COMPLETION,
         use_register=False,
@@ -2741,7 +3452,7 @@ def test_visible_pre_step_spell_reaction_owns_exact_movement_segment() -> None:
     )
 
     frame = MAPPER.project_frame(
-        _batch(reaction, step, movement),
+        _batch(movement, reaction, step),
         _context(perspective),
     )
 
@@ -2773,7 +3484,7 @@ def test_visible_pre_step_shove_reaction_owns_exact_movement_segment() -> None:
         start_position=(1, 1),
         end_position=(2, 1),
         path=((1, 1), (2, 1)),
-        phase=EventPhase.COMPLETION,
+        phase=EventPhase.EFFECT,
         use_register=False,
     )
     step = StepMovementEvent(
@@ -2782,7 +3493,10 @@ def test_visible_pre_step_shove_reaction_owns_exact_movement_segment() -> None:
         to_position=(2, 1),
         path_index=1,
         total_path_length=2,
+        trajectory=MovementTrajectory.PATH,
+        disclosed_path=((1, 1), (2, 1)),
         committed=True,
+        parent_event=movement.uuid,
         parent_lineage=movement.lineage_uuid,
         phase=EventPhase.COMPLETION,
         use_register=False,
@@ -2802,7 +3516,7 @@ def test_visible_pre_step_shove_reaction_owns_exact_movement_segment() -> None:
     )
 
     frame = MAPPER.project_frame(
-        _batch(reaction, step, movement),
+        _batch(movement, reaction, step),
         _context(perspective),
     )
 
@@ -2835,7 +3549,7 @@ def test_hidden_step_reaction_does_not_leak_through_movement_segmentation() -> N
         start_position=(1, 1),
         end_position=(4, 1),
         path=((1, 1), (2, 1), (3, 1), (4, 1)),
-        phase=EventPhase.COMPLETION,
+        phase=EventPhase.EFFECT,
         use_register=False,
     )
     steps = [
@@ -2845,7 +3559,10 @@ def test_hidden_step_reaction_does_not_leak_through_movement_segmentation() -> N
             to_position=(path_index + 1, 1),
             path_index=path_index,
             total_path_length=4,
+            trajectory=MovementTrajectory.PATH,
+            disclosed_path=((path_index, 1), (path_index + 1, 1)),
             committed=True,
+            parent_event=movement.uuid,
             parent_lineage=movement.lineage_uuid,
             phase=EventPhase.COMPLETION,
             use_register=False,
@@ -2872,7 +3589,12 @@ def test_hidden_step_reaction_does_not_leak_through_movement_segmentation() -> N
     assert len(frame.presentation) == 1
     cue = frame.presentation[0]
     assert isinstance(cue, MovementPresentationCue)
-    assert cue.trajectory == ((1, 1), (2, 1), (3, 1), (4, 1))
+    assert tuple(anchor.position for anchor in cue.anchors) == (
+        (1, 1),
+        (2, 1),
+        (3, 1),
+        (4, 1),
+    )
     assert cue.child_presentation_ids == ()
     assert str(hidden_reactor) not in frame.model_dump_json()
 
@@ -2888,16 +3610,20 @@ def test_visible_reaction_stays_root_when_its_exact_step_is_not_disclosed() -> N
         start_position=(1, 1),
         end_position=(3, 1),
         path=((1, 1), (2, 1), (3, 1)),
-        phase=EventPhase.COMPLETION,
+        phase=EventPhase.EFFECT,
         use_register=False,
     )
+    movement = _visible(movement, observer, identified=(mover,))
     disclosed_step = StepMovementEvent(
         source_entity_uuid=mover,
         from_position=(1, 1),
         to_position=(2, 1),
         path_index=1,
         total_path_length=3,
+        trajectory=MovementTrajectory.PATH,
+        disclosed_path=((1, 1), (2, 1)),
         committed=True,
+        parent_event=movement.uuid,
         parent_lineage=movement.lineage_uuid,
         phase=EventPhase.COMPLETION,
         use_register=False,
@@ -2920,7 +3646,10 @@ def test_visible_reaction_stays_root_when_its_exact_step_is_not_disclosed() -> N
         to_position=(3, 1),
         path_index=2,
         total_path_length=3,
+        trajectory=MovementTrajectory.PATH,
+        disclosed_path=((2, 1), (3, 1)),
         committed=True,
+        parent_event=movement.uuid,
         parent_lineage=movement.lineage_uuid,
         phase=EventPhase.COMPLETION,
         use_register=False,
@@ -2955,7 +3684,10 @@ def test_visible_reaction_stays_root_when_its_exact_step_is_not_disclosed() -> N
         cue for cue in frame.presentation
         if isinstance(cue, AttackPresentationCue)
     )
-    assert movement_cue.trajectory == ((1, 1), (2, 1))
+    assert tuple(anchor.position for anchor in movement_cue.anchors) == (
+        (1, 1),
+        (2, 1),
+    )
     assert movement_cue.child_presentation_ids == ()
     assert reaction_cue.parent_presentation_id is None
     _assert_closed_graph(frame)
@@ -2971,7 +3703,7 @@ def test_post_step_descendant_stays_root_without_splitting_movement() -> None:
         start_position=(1, 1),
         end_position=(4, 1),
         path=((1, 1), (2, 1), (3, 1), (4, 1)),
-        phase=EventPhase.COMPLETION,
+        phase=EventPhase.EFFECT,
         use_register=False,
     )
     steps = [
@@ -2981,7 +3713,10 @@ def test_post_step_descendant_stays_root_without_splitting_movement() -> None:
             to_position=(path_index + 1, 1),
             path_index=path_index,
             total_path_length=4,
+            trajectory=MovementTrajectory.PATH,
+            disclosed_path=((path_index, 1), (path_index + 1, 1)),
             committed=True,
+            parent_event=movement.uuid,
             parent_lineage=movement.lineage_uuid,
             phase=EventPhase.COMPLETION,
             use_register=False,
@@ -3024,7 +3759,12 @@ def test_post_step_descendant_stays_root_without_splitting_movement() -> None:
         cue for cue in frame.presentation
         if isinstance(cue, AttackPresentationCue)
     )
-    assert movement_cue.trajectory == ((1, 1), (2, 1), (3, 1), (4, 1))
+    assert tuple(anchor.position for anchor in movement_cue.anchors) == (
+        (1, 1),
+        (2, 1),
+        (3, 1),
+        (4, 1),
+    )
     assert movement_cue.child_presentation_ids == ()
     assert reaction_cue.parent_presentation_id is None
     assert reaction_cue.source_event_cursor < movement_cue.source_event_cursor
@@ -3041,16 +3781,20 @@ def test_spectator_keeps_enemy_step_seen_at_both_endpoints() -> None:
         start_position=(4, 4),
         end_position=(5, 4),
         path=((4, 4), (5, 4)),
-        phase=EventPhase.COMPLETION,
+        phase=EventPhase.EFFECT,
         use_register=False,
     )
+    movement = _visible(movement, observer, identified=(mover,))
     step = StepMovementEvent(
         source_entity_uuid=mover,
         from_position=(4, 4),
         to_position=(5, 4),
         path_index=1,
         total_path_length=2,
+        trajectory=MovementTrajectory.PATH,
+        disclosed_path=((4, 4), (5, 4)),
         committed=True,
+        parent_event=movement.uuid,
         parent_lineage=movement.lineage_uuid,
         phase=EventPhase.COMPLETION,
         use_register=False,
@@ -3072,7 +3816,7 @@ def test_spectator_keeps_enemy_step_seen_at_both_endpoints() -> None:
     assert len(frame.presentation) == 1
     cue = frame.presentation[0]
     assert isinstance(cue, MovementPresentationCue)
-    assert cue.trajectory == ((4, 4), (5, 4))
+    assert tuple(anchor.position for anchor in cue.anchors) == ((4, 4), (5, 4))
 
 
 def test_step_completion_freezes_pre_and_post_position_evidence_for_logs() -> None:
@@ -3277,8 +4021,8 @@ def test_patch_backed_equipment_door_light_condition_and_terminal_cues() -> None
             item,
             door,
             light,
-            encounter,
             condition,
+            encounter,
             patches=(
                 VisualLoadoutReplacePatch(loadout=loadout),
                 DoorStatePatch(
@@ -3287,6 +4031,14 @@ def test_patch_backed_equipment_door_light_condition_and_terminal_cues() -> None
                     is_open=True,
                     blocks_movement=False,
                     blocks_vision=False,
+                ),
+                EncounterReplacePatch(
+                    encounter=SubjectiveEncounter(
+                        uuid=str(encounter.encounter_uuid),
+                        name="Ended encounter",
+                        state="ended",
+                        round_number=0,
+                    )
                 ),
             ),
         ),
@@ -3344,7 +4096,7 @@ def test_boundary_location_grant_does_not_disclose_movement_origin() -> None:
         start_position=(50, 50),
         end_position=(51, 50),
         path=((50, 50), (51, 50)),
-        phase=EventPhase.COMPLETION,
+        phase=EventPhase.EFFECT,
         use_register=False,
     )
     movement = _visible(
@@ -3359,7 +4111,10 @@ def test_boundary_location_grant_does_not_disclose_movement_origin() -> None:
         to_position=(51, 50),
         path_index=1,
         total_path_length=2,
+        trajectory=MovementTrajectory.PATH,
+        disclosed_path=((50, 50), (51, 50)),
         committed=True,
+        parent_event=movement.uuid,
         parent_lineage=movement.lineage_uuid,
         phase=EventPhase.COMPLETION,
         use_register=False,

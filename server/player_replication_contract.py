@@ -23,8 +23,9 @@ import hashlib
 import json
 from enum import Enum
 from typing import Annotated, Dict, Final, Literal, Optional, Tuple, TypeAlias, Union
+from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, TypeAdapter, model_validator
 
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.equipment_types import VisualLoadoutSlot
@@ -33,6 +34,11 @@ from dnd.core.life_types import LifeState, LifeStateChangeReason
 from dnd.core.spatial_effect_types import (
     SpatialEffectChangeOperation,
     SpatialEffectLayer,
+)
+from dnd.core.traversal_connectors import (
+    CONNECTOR_AUTHORED_ID_PATTERN,
+    CONNECTOR_PRESENTATION_KEY_PATTERN,
+    TraversalConnectorKind,
 )
 from server.world_contracts import (
     APIEntitySummary,
@@ -51,7 +57,7 @@ from server.timeline_contracts import (
 )
 
 
-PLAYER_REPLICATION_CONTRACT_VERSION: Final[int] = 1
+PLAYER_REPLICATION_CONTRACT_VERSION: Final[int] = 2
 PLAYER_REPLICATION_CONTRACT_HASH: Final[str]
 _PLAYER_REPLICATION_SEMANTICS: Final[dict[str, object]] = {
     "contract_version": PLAYER_REPLICATION_CONTRACT_VERSION,
@@ -106,6 +112,11 @@ _PLAYER_REPLICATION_SEMANTICS: Final[dict[str, object]] = {
     "presentation_graph": (
         "closed per observation frame; partition-wide unique presentation IDs; ordered, "
         "bidirectionally validated child edges; no source-lineage references"
+    ),
+    "encounter_terminal_authority": (
+        "exactly one ordinary encounter-end cue or reset terminal fact owns the final "
+        "source slot and exactly one matching ended encounter replacement patch; "
+        "that matching ended patch is the resulting final encounter replacement"
     ),
     "generic_action_roots": (
         "exact public action-or-reaction behavior identity only; persistent "
@@ -752,9 +763,45 @@ class PresentationCueBase(PlayerReplicationModel):
         return self
 
 
-class MovementKind(str, Enum):
+class LocomotionFamily(str, Enum):
     WALK = "walk"
+    SWIM = "swim"
+    FLY = "fly"
+    BURROW = "burrow"
     JUMP = "jump"
+    CONNECTOR = "connector"
+
+
+class LocomotionTrajectory(str, Enum):
+    PATH = "path"
+    DIRECT_ARC = "direct_arc"
+    CONNECTOR_TRANSFER = "connector_transfer"
+
+
+class LocomotionAnchor(PlayerReplicationModel):
+    """One authorized support anchor in a delivered locomotion leg."""
+
+    position: Tuple[StrictInt, StrictInt]
+    elevation_feet: StrictInt
+
+    @model_validator(mode="after")
+    def validate_elevation_quantization(self) -> "LocomotionAnchor":
+        if self.elevation_feet % 5 != 0:
+            raise ValueError("locomotion anchor elevation must be divisible by 5 feet")
+        return self
+
+
+class ConnectorPresentationIdentity(PlayerReplicationModel):
+    """Exact authored presentation identity for one visible connector transfer."""
+
+    uuid: UUID
+    authored_id: str = Field(min_length=1, pattern=CONNECTOR_AUTHORED_ID_PATTERN)
+    kind: TraversalConnectorKind
+    presentation_key: str = Field(
+        min_length=1,
+        pattern=CONNECTOR_PRESENTATION_KEY_PATTERN,
+    )
+    revision: StrictInt = Field(ge=1)
 
 
 class MovementEndpointOutcome(str, Enum):
@@ -767,24 +814,17 @@ class MovementEndpointOutcome(str, Enum):
 class MovementPresentationCue(PresentationCueBase):
     kind: Literal["movement"] = "movement"
     entity_uuid: str = Field(min_length=1)
-    movement_kind: MovementKind
-    movement_sequence_id: str = Field(
-        min_length=1,
-        description=(
-            "Projection-native identity shared by every segment from one "
-            "movement action inside this replication partition."
-        ),
-    )
-    trajectory: Tuple[Position, ...] = Field(
+    locomotion_family: LocomotionFamily
+    trajectory_family: LocomotionTrajectory
+    anchors: Tuple[LocomotionAnchor, ...] = Field(
         min_length=2,
         description=(
-            "Ordered positions including the segment start. Committed cues "
+            "Ordered authorized support anchors including the segment start. Committed cues "
             "contain committed destinations; a not-committed cue ends at one "
-            "authorized intended destination that did not become world state."
+            "authorized intended anchor that did not become world state."
         ),
     )
-    path_start_index: int = Field(default=0, ge=0)
-    path_total_steps: int = Field(ge=1)
+    connector: Optional[ConnectorPresentationIdentity] = None
     endpoint_outcome: MovementEndpointOutcome
     perception_commit: Literal["observation_frame"] = Field(
         description=(
@@ -794,12 +834,33 @@ class MovementPresentationCue(PresentationCueBase):
     )
 
     @model_validator(mode="after")
-    def validate_path_order(self) -> "MovementPresentationCue":
-        represented_steps = len(self.trajectory) - 1
-        if self.path_start_index + represented_steps > self.path_total_steps:
-            raise ValueError("movement trajectory exceeds declared path order")
+    def validate_locomotion_family(self) -> "MovementPresentationCue":
+        if self.locomotion_family in {
+            LocomotionFamily.WALK,
+            LocomotionFamily.SWIM,
+            LocomotionFamily.FLY,
+            LocomotionFamily.BURROW,
+        }:
+            if self.trajectory_family is not LocomotionTrajectory.PATH:
+                raise ValueError("path locomotion requires path trajectory")
+            if self.connector is not None:
+                raise ValueError("path locomotion cannot carry connector identity")
+        elif self.locomotion_family is LocomotionFamily.JUMP:
+            if self.trajectory_family is not LocomotionTrajectory.DIRECT_ARC:
+                raise ValueError("jump locomotion requires direct-arc trajectory")
+            if len(self.anchors) != 2:
+                raise ValueError("jump locomotion must describe exactly one leg")
+            if self.connector is not None:
+                raise ValueError("jump locomotion cannot carry connector identity")
+        else:
+            if self.trajectory_family is not LocomotionTrajectory.CONNECTOR_TRANSFER:
+                raise ValueError("connector locomotion requires connector-transfer trajectory")
+            if len(self.anchors) != 2:
+                raise ValueError("connector locomotion must describe exactly one leg")
+            if self.connector is None:
+                raise ValueError("connector locomotion requires connector identity")
         if self.endpoint_outcome is MovementEndpointOutcome.NOT_COMMITTED:
-            if represented_steps != 1:
+            if len(self.anchors) != 2:
                 raise ValueError(
                     "not-committed movement must describe exactly one intended edge"
                 )
@@ -1570,6 +1631,61 @@ SubjectivePresentationCue: TypeAlias = Annotated[
 ]
 
 
+class PresentationDeliveryMode(str, Enum):
+    NORMAL = "normal"
+    RESET_REQUIRED = "presentation_reset_required"
+
+
+class PresentationResetReason(str, Enum):
+    SOURCE_PRESENTATION_DISCONTINUITY = "source_presentation_discontinuity"
+
+
+class SubjectiveBootstrapDeferred(PlayerReplicationModel):
+    """Requester-safe transient result for an in-flight source boundary."""
+
+    code: Literal["source_batch_in_flight"] = "source_batch_in_flight"
+    retryable: Literal[True] = True
+    source_stream_id: str = Field(min_length=1)
+    generation_id: str = Field(min_length=1)
+
+
+class EncounterTerminalPresentationFact(PlayerReplicationModel):
+    """Requester-safe encounter-end authority for a cue-less reset frame."""
+
+    encounter_uuid: str = Field(min_length=1)
+    source_event_uuid: UUID
+    source_event_cursor: StrictInt = Field(ge=1)
+    terminal_authority_id: str = Field(min_length=1)
+    reason: Optional[str] = None
+    projected_combatant_uuids: Tuple[str, ...] = Field(default_factory=tuple)
+    terminal_barrier: Literal[True] = True
+
+    @model_validator(mode="after")
+    def validate_terminal_fact(self) -> "EncounterTerminalPresentationFact":
+        if len(set(self.projected_combatant_uuids)) != len(
+            self.projected_combatant_uuids
+        ):
+            raise ValueError("projected terminal combatants must be unique")
+        return self
+
+
+def reset_terminal_authority_id(
+    perspective_epoch_id: str,
+    observation_cursor: int,
+    source_event_uuid: UUID,
+) -> str:
+    """Build the sole deterministic authority ID for a reset terminal fact."""
+
+    if not perspective_epoch_id:
+        raise ValueError("perspective epoch ID must not be empty")
+    if type(observation_cursor) is not int or observation_cursor < 0:
+        raise ValueError("observation cursor must be a nonnegative integer")
+    return (
+        f"{perspective_epoch_id}:{observation_cursor}:reset-terminal:"
+        f"{source_event_uuid}"
+    )
+
+
 class SubjectiveReplicationFrame(PlayerReplicationModel):
     """One ordered perspective-safe world/presentation transaction."""
 
@@ -1583,14 +1699,44 @@ class SubjectiveReplicationFrame(PlayerReplicationModel):
     )
     patches: Tuple[SubjectiveWorldPatch, ...] = Field(default_factory=tuple)
     presentation: Tuple[SubjectivePresentationCue, ...] = Field(default_factory=tuple)
+    presentation_delivery: PresentationDeliveryMode = PresentationDeliveryMode.NORMAL
+    presentation_reset_reason: Optional[PresentationResetReason] = None
+    encounter_terminal: Optional[EncounterTerminalPresentationFact] = None
 
     @model_validator(mode="after")
     def validate_presentation_window(self) -> "SubjectiveReplicationFrame":
         through = self.watermarks.presentation_cursor
         if self.presentation_from_cursor > through:
             raise ValueError("presentation_from_cursor exceeds frame watermark")
-        if len(self.presentation) != through - self.presentation_from_cursor:
-            raise ValueError("presentation cues must cover the exact local cursor window")
+        if self.presentation_delivery is PresentationDeliveryMode.NORMAL:
+            if self.presentation_reset_reason is not None or self.encounter_terminal is not None:
+                raise ValueError(
+                    "normal presentation cannot carry reset reason or terminal fact"
+                )
+            if len(self.presentation) != through - self.presentation_from_cursor:
+                raise ValueError("presentation cues must cover the exact local cursor window")
+            validate_ordinary_encounter_terminal_authority(self)
+        else:
+            if self.presentation_reset_reason is None:
+                raise ValueError("reset presentation requires a closed reset reason")
+            if self.presentation:
+                raise ValueError("reset presentation requires empty presentation cues")
+            if through != self.presentation_from_cursor:
+                raise ValueError("reset presentation cannot advance presentation cursor")
+
+            fact = validate_reset_encounter_terminal_authority(self)
+            if fact is not None:
+                if fact.source_event_cursor != self.watermarks.source_event_cursor:
+                    raise ValueError(
+                        "encounter terminal fact must be the final source event slot"
+                    )
+                expected_authority = reset_terminal_authority_id(
+                    self.perspective_epoch_id,
+                    self.watermarks.observation_cursor,
+                    fact.source_event_uuid,
+                )
+                if fact.terminal_authority_id != expected_authority:
+                    raise ValueError("terminal authority ID does not match its frame")
         by_id: dict[str, PresentationCueBase] = {}
         for expected, cue in enumerate(
             self.presentation,
@@ -1629,7 +1775,7 @@ class SubjectiveReplicationFrame(PlayerReplicationModel):
                     if any(
                         isinstance(patch, EntityUpsertPatch)
                         and patch.entity.uuid == cue.entity_uuid
-                        and patch.entity.position == cue.trajectory[-1]
+                        and patch.entity.position == cue.anchors[-1].position
                         for patch in self.patches
                     ):
                         raise ValueError(
@@ -1938,6 +2084,107 @@ class SubjectiveReplicationFrame(PlayerReplicationModel):
         return self
 
 
+def validate_ordinary_encounter_terminal_authority(
+    frame: SubjectiveReplicationFrame,
+) -> Optional[EncounterPresentationCue]:
+    """Validate and return one ordinary terminal cue's exact frame authority."""
+    if frame.presentation_delivery is not PresentationDeliveryMode.NORMAL:
+        return None
+    terminal_cues = tuple(
+        cue
+        for cue in frame.presentation
+        if isinstance(cue, EncounterPresentationCue)
+        and cue.transition is EncounterTransition.END
+    )
+    ended_patches = _ended_encounter_patches(frame)
+    if len(terminal_cues) > 1:
+        raise ValueError("one ordinary frame cannot end the encounter twice")
+    if not terminal_cues:
+        if ended_patches:
+            raise ValueError(
+                "ended encounter patch requires a matching terminal cue"
+            )
+        return None
+    cue = terminal_cues[0]
+    if cue.source_event_cursor != frame.watermarks.source_event_cursor:
+        raise ValueError("terminal cue must be the final source event slot")
+    _validate_terminal_resulting_encounter(
+        frame,
+        encounter_uuid=cue.encounter_uuid,
+        authority_name="terminal cue",
+    )
+    return cue
+
+
+def validate_reset_encounter_terminal_authority(
+    frame: SubjectiveReplicationFrame,
+) -> Optional[EncounterTerminalPresentationFact]:
+    """Validate and return one reset terminal fact's resulting encounter state."""
+    if frame.presentation_delivery is not PresentationDeliveryMode.RESET_REQUIRED:
+        return None
+    fact = frame.encounter_terminal
+    ended_patches = _ended_encounter_patches(frame)
+    if fact is None:
+        if ended_patches:
+            raise ValueError(
+                "ended encounter patch requires an encounter terminal fact"
+            )
+        return None
+    _validate_terminal_resulting_encounter(
+        frame,
+        encounter_uuid=fact.encounter_uuid,
+        authority_name="encounter terminal fact",
+    )
+    return fact
+
+
+def _ended_encounter_patches(
+    frame: SubjectiveReplicationFrame,
+) -> tuple[EncounterReplacePatch, ...]:
+    return tuple(
+        patch
+        for patch in frame.patches
+        if isinstance(patch, EncounterReplacePatch)
+        and patch.encounter is not None
+        and patch.encounter.state == "ended"
+    )
+
+
+def _validate_terminal_resulting_encounter(
+    frame: SubjectiveReplicationFrame,
+    *,
+    encounter_uuid: str,
+    authority_name: str,
+) -> None:
+    replacements = tuple(
+        patch
+        for patch in frame.patches
+        if isinstance(patch, EncounterReplacePatch)
+    )
+    ended = _ended_encounter_patches(frame)
+    if len(ended) != 1:
+        raise ValueError(
+            f"{authority_name} requires exactly one matching ended encounter patch"
+        )
+    if any(
+        patch.encounter is not None and patch.encounter.uuid != encounter_uuid
+        for patch in replacements
+    ):
+        raise ValueError(
+            f"{authority_name} cannot cross encounter replacement identity"
+        )
+    final = replacements[-1] if replacements else None
+    if (
+        final is None
+        or final.encounter is None
+        or final.encounter.uuid != encounter_uuid
+        or final.encounter.state != "ended"
+    ):
+        raise ValueError(
+            f"{authority_name} must leave its matching ended encounter as the final replacement"
+        )
+
+
 class SubjectiveFramesResponse(PlayerReplicationModel):
     """Exact observation page with independent through/captured watermarks."""
 
@@ -2096,6 +2343,9 @@ def player_replication_wire_schema() -> dict[str, object]:
         ),
         "semantics": _PLAYER_REPLICATION_SEMANTICS,
         "bootstrap": SubjectiveReplicationBootstrap.model_json_schema(mode="serialization"),
+        "bootstrap_deferred": SubjectiveBootstrapDeferred.model_json_schema(
+            mode="serialization"
+        ),
         "frames": SubjectiveFramesResponse.model_json_schema(mode="serialization"),
         "combat_log": SubjectiveCombatLogFramesResponse.model_json_schema(
             mode="serialization"
@@ -2132,6 +2382,7 @@ __all__ = [
     "ConeAreaGeometry",
     "ConditionOperation",
     "ConditionPresentationCue",
+    "ConnectorPresentationIdentity",
     "ConnectorSetReplacePatch",
     "ControlledEquipmentReplacePatch",
     "CubeAreaGeometry",
@@ -2147,6 +2398,7 @@ __all__ = [
     "DoorPresentationCue",
     "DoorStatePatch",
     "EffectiveLightCell",
+    "EncounterTerminalPresentationFact",
     "EncounterPresentationCue",
     "EncounterReplacePatch",
     "EncounterTransition",
@@ -2170,7 +2422,9 @@ __all__ = [
     "LineAreaGeometry",
     "LightPresentationCue",
     "SpatialEffectPresentationCue",
-    "MovementKind",
+    "LocomotionAnchor",
+    "LocomotionFamily",
+    "LocomotionTrajectory",
     "MovementEndpointOutcome",
     "MovementPresentationCue",
     "ObserverVisibilityRemovePatch",
@@ -2180,10 +2434,12 @@ __all__ = [
     "PerspectiveKind",
     "PlayerReplicationProtocolIdentity",
     "PlayerReplicationWatermarks",
+    "PresentationDeliveryMode",
     "PresentationContentAttribution",
     "PresentationDamageType",
     "PresentationProjectile",
     "PresentationSpellSchool",
+    "PresentationResetReason",
     "PresentationWeaponSlot",
     "ShoveOutcome",
     "ShovePresentationCue",
@@ -2207,7 +2463,11 @@ __all__ = [
     "SubjectivePresentationCue",
     "SubjectiveReplicatedWorld",
     "SubjectiveReplicationBootstrap",
+    "SubjectiveBootstrapDeferred",
     "SubjectiveReplicationFrame",
+    "reset_terminal_authority_id",
+    "validate_ordinary_encounter_terminal_authority",
+    "validate_reset_encounter_terminal_authority",
     "SubjectiveStreamDelivery",
     "SubjectiveSyncDelivery",
     "SubjectiveWorldPatch",

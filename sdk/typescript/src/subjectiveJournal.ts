@@ -56,6 +56,7 @@ export interface SubjectiveReplicationJournalState {
   readonly presentation: SubjectiveReplicaView | null;
   readonly capturedWatermarks: PlayerReplicationWatermarks | null;
   readonly presentationBacklog: number;
+  readonly pendingResetFrames: number;
 }
 
 export interface SubjectiveJournalIngestResult {
@@ -66,6 +67,68 @@ export interface SubjectiveJournalIngestResult {
 export interface SubjectiveReplicationJournalOptions {
   readonly presentationQueueLimit?: number;
 }
+
+declare const normalHeadTokenBrand: unique symbol;
+declare const resetHeadTokenBrand: unique symbol;
+
+/** Opaque authority for committing one exact immutable NORMAL queue head. */
+export interface PresentationHeadPreviewToken {
+  readonly [normalHeadTokenBrand]: "normal";
+}
+
+/** Opaque authority for applying one exact immutable RESET_REQUIRED queue head. */
+export interface PresentationResetHeadToken {
+  readonly [resetHeadTokenBrand]: "reset";
+}
+
+export interface SubjectivePresentationFramePreview {
+  readonly token: PresentationHeadPreviewToken;
+  readonly frame: SubjectiveReplicationFrame;
+  readonly candidatePresentation: SubjectiveReplicaView;
+}
+
+export interface ExactResetPresentationHead {
+  readonly token: PresentationResetHeadToken;
+  readonly frame: SubjectiveReplicationFrame;
+}
+
+class NormalHeadToken implements PresentationHeadPreviewToken {
+  declare readonly [normalHeadTokenBrand]: "normal";
+
+  toJSON(): never {
+    throw new TypeError("presentation head tokens are not serializable");
+  }
+}
+
+class ResetHeadToken implements PresentationResetHeadToken {
+  declare readonly [resetHeadTokenBrand]: "reset";
+
+  toJSON(): never {
+    throw new TypeError("presentation reset tokens are not serializable");
+  }
+}
+
+type PresentationHeadSlot =
+  | {
+    readonly kind: "normal";
+    readonly incarnation: number;
+    readonly basePresentation: SubjectiveReplicaView;
+    readonly baseDigest: string;
+    readonly headDigest: string;
+    readonly observationCursor: number;
+    readonly token: NormalHeadToken;
+    readonly preview: SubjectivePresentationFramePreview;
+  }
+  | {
+    readonly kind: "reset";
+    readonly incarnation: number;
+    readonly basePresentation: SubjectiveReplicaView;
+    readonly baseDigest: string;
+    readonly headDigest: string;
+    readonly observationCursor: number;
+    readonly token: ResetHeadToken;
+    readonly head: ExactResetPresentationHead;
+  };
 
 const DEFAULT_PRESENTATION_QUEUE_LIMIT = 16_384;
 /**
@@ -88,6 +151,9 @@ export class SubjectiveReplicationJournal {
   private readonly knownFrames = new Map<number, string>();
   private readonly knownLogs = new Map<number, string>();
   private readonly presentationIds = new Set<string>();
+  private presentationHeadSlot: PresentationHeadSlot | null = null;
+  private pendingResetFrameCount = 0;
+  private incarnation = 0;
   private lastLogEventCursor = 0;
   private readonly presentationQueueLimit: number;
 
@@ -120,16 +186,16 @@ export class SubjectiveReplicationJournal {
         });
       }
     }
-    const view: SubjectiveReplicaView = {
+    const view = cloneFrozen<SubjectiveReplicaView>({
       protocol: seed.protocol,
       perspective: seed.perspective,
       watermarks: seed.watermarks,
       world: seed.world,
       combatLog,
-    };
+    });
     this.authoritativeValue = view;
     this.presentationValue = view;
-    this.capturedWatermarksValue = seed.watermarks;
+    this.capturedWatermarksValue = cloneFrozen(seed.watermarks);
     this.healthValue = "ready";
     return this.state();
   }
@@ -160,35 +226,158 @@ export class SubjectiveReplicationJournal {
     return this.pendingFrames.slice(this.pendingFrameHead);
   }
 
-  commitPresentationFrame(observationCursor: number): SubjectiveReplicaView {
+  previewPresentationFrame(observationCursor: number): SubjectivePresentationFramePreview {
     if (this.healthValue !== "ready") throw new Error("replication requires resynchronization");
     const frame = this.pendingFrames[this.pendingFrameHead];
     if (frame === undefined) throw new Error("no presentation frame is pending");
     if (frame.watermarks.observation_cursor !== observationCursor) {
       throw new Error(
-        `presentation acknowledgement ${observationCursor} does not match ${frame.watermarks.observation_cursor}`,
+        `presentation preview ${observationCursor} does not match ${frame.watermarks.observation_cursor}`,
       );
     }
+    if (frame.presentation_delivery !== "normal") {
+      throw new Error("the presentation queue head requires reset handling");
+    }
     const presentation = this.requirePresentation();
+    const headDigest = stableJson(frame);
+    const baseDigest = stableJson(presentation);
+    const existing = this.presentationHeadSlot;
+    if (
+      existing?.kind === "normal"
+      && existing.incarnation === this.incarnation
+      && existing.basePresentation === presentation
+      && existing.baseDigest === baseDigest
+      && existing.headDigest === headDigest
+      && existing.observationCursor === observationCursor
+    ) {
+      return existing.preview;
+    }
     const world = reduceSubjectiveWorld(presentation.world, frame.patches);
     assertSubjectiveWorld(world, presentation.perspective);
-    this.pendingFrameHead += 1;
-    this.compactPendingFrames();
-    this.presentationValue = {
+    const candidate = cloneFrozen<SubjectiveReplicaView>({
       ...presentation,
       watermarks: {
         ...frame.watermarks,
         combat_log_cursor: presentation.watermarks.combat_log_cursor,
       },
       world,
+    });
+    const frozenFrame = cloneFrozen(frame);
+    const token = Object.freeze(new NormalHeadToken());
+    const preview = Object.freeze({
+      token,
+      frame: frozenFrame,
+      candidatePresentation: candidate,
+    });
+    this.presentationHeadSlot = {
+      kind: "normal",
+      incarnation: this.incarnation,
+      basePresentation: presentation,
+      baseDigest,
+      headDigest,
+      observationCursor,
+      token,
+      preview,
     };
+    return preview;
+  }
+
+  commitPresentationFrame(token: PresentationHeadPreviewToken): SubjectiveReplicaView {
+    const slot = this.requireHeadSlot("normal", token);
+    const frame = this.pendingFrames[this.pendingFrameHead];
+    const presentation = this.requirePresentation();
+    if (
+      frame === undefined
+      || frame.presentation_delivery !== "normal"
+      || frame.watermarks.observation_cursor !== slot.observationCursor
+      || stableJson(frame) !== slot.headDigest
+      || presentation !== slot.basePresentation
+      || stableJson(presentation) !== slot.baseDigest
+    ) {
+      this.presentationHeadSlot = null;
+      throw new Error("presentation head token is stale");
+    }
+    this.presentationValue = slot.preview.candidatePresentation;
+    this.pendingFrameHead += 1;
+    this.presentationHeadSlot = null;
+    this.compactPendingFrames();
     this.flushPresentationLogs();
     return this.requirePresentation();
   }
 
-  commitNextPresentationFrame(): SubjectiveReplicaView | null {
-    const next = this.peekPresentationFrame();
-    return next === null ? null : this.commitPresentationFrame(next.watermarks.observation_cursor);
+  inspectResetPresentationHead(observationCursor: number): ExactResetPresentationHead {
+    if (this.healthValue !== "ready") throw new Error("replication requires resynchronization");
+    const frame = this.pendingFrames[this.pendingFrameHead];
+    if (frame === undefined) throw new Error("no presentation frame is pending");
+    if (frame.watermarks.observation_cursor !== observationCursor) {
+      throw new Error(
+        `presentation reset ${observationCursor} does not match ${frame.watermarks.observation_cursor}`,
+      );
+    }
+    if (frame.presentation_delivery !== "presentation_reset_required") {
+      throw new Error("the presentation queue head requires normal preview handling");
+    }
+    const presentation = this.requirePresentation();
+    const headDigest = stableJson(frame);
+    const baseDigest = stableJson(presentation);
+    const existing = this.presentationHeadSlot;
+    if (
+      existing?.kind === "reset"
+      && existing.incarnation === this.incarnation
+      && existing.basePresentation === presentation
+      && existing.baseDigest === baseDigest
+      && existing.headDigest === headDigest
+      && existing.observationCursor === observationCursor
+    ) {
+      return existing.head;
+    }
+    const token = Object.freeze(new ResetHeadToken());
+    const head = Object.freeze({ token, frame: cloneFrozen(frame) });
+    this.presentationHeadSlot = {
+      kind: "reset",
+      incarnation: this.incarnation,
+      basePresentation: presentation,
+      baseDigest,
+      headDigest,
+      observationCursor,
+      token,
+      head,
+    };
+    return head;
+  }
+
+  resetPresentationFrame(token: PresentationResetHeadToken): SubjectiveReplicaView {
+    const slot = this.requireHeadSlot("reset", token);
+    const frame = this.pendingFrames[this.pendingFrameHead];
+    const presentation = this.requirePresentation();
+    if (
+      frame === undefined
+      || frame.presentation_delivery !== "presentation_reset_required"
+      || frame.watermarks.observation_cursor !== slot.observationCursor
+      || stableJson(frame) !== slot.headDigest
+      || presentation !== slot.basePresentation
+      || stableJson(presentation) !== slot.baseDigest
+    ) {
+      this.presentationHeadSlot = null;
+      throw new Error("presentation reset token is stale");
+    }
+    const world = reduceSubjectiveWorld(presentation.world, frame.patches);
+    assertSubjectiveWorld(world, presentation.perspective);
+    const candidate = cloneFrozen<SubjectiveReplicaView>({
+      ...presentation,
+      watermarks: {
+        ...frame.watermarks,
+        combat_log_cursor: presentation.watermarks.combat_log_cursor,
+      },
+      world,
+    });
+    this.presentationValue = candidate;
+    this.pendingFrameHead += 1;
+    this.pendingResetFrameCount -= 1;
+    this.presentationHeadSlot = null;
+    this.compactPendingFrames();
+    this.flushPresentationLogs();
+    return this.requirePresentation();
   }
 
   streamPosition(): SubjectiveStreamPosition {
@@ -212,6 +401,7 @@ export class SubjectiveReplicationJournal {
       presentation: this.presentationValue,
       capturedWatermarks: this.capturedWatermarksValue,
       presentationBacklog: this.pendingFrames.length - this.pendingFrameHead,
+      pendingResetFrames: this.pendingResetFrameCount,
     };
   }
 
@@ -243,7 +433,7 @@ export class SubjectiveReplicationJournal {
       return this.result("resync_required");
     }
     assertDominates(delivery.watermarks, authoritative.watermarks, "$subjective.sync.watermarks");
-    this.capturedWatermarksValue = delivery.watermarks;
+    this.capturedWatermarksValue = cloneFrozen(delivery.watermarks);
     return this.result("metadata");
   }
 
@@ -255,6 +445,7 @@ export class SubjectiveReplicationJournal {
       return this.result("resync_required");
     }
     assertSubjectiveFrame(frame);
+    frame = cloneFrozen(frame);
     const cursor = frame.watermarks.observation_cursor;
     if (cursor <= authoritative.watermarks.observation_cursor) {
       return this.knownFrames.get(cursor) === stableJson(frame)
@@ -280,21 +471,25 @@ export class SubjectiveReplicationJournal {
     // age out; an old ID may never identify a different renderer transaction.
     for (const cue of frame.presentation) this.presentationIds.add(cue.presentation_id);
     rememberRecent(this.knownFrames, cursor, stableJson(frame));
-    this.authoritativeValue = {
+    this.authoritativeValue = cloneFrozen<SubjectiveReplicaView>({
       ...authoritative,
       watermarks: {
         ...frame.watermarks,
         combat_log_cursor: authoritative.watermarks.combat_log_cursor,
       },
       world,
-    };
+    });
     this.pendingFrames.push(frame);
+    if (frame.presentation_delivery === "presentation_reset_required") {
+      this.pendingResetFrameCount += 1;
+    }
     return this.checkQueueLimit();
   }
 
   private ingestLog(delivery: SubjectiveCombatLogDelivery): SubjectiveJournalIngestResult {
     const authoritative = this.requireAuthoritative();
     assertSubjectiveCombatLogDelivery(delivery);
+    delivery = cloneFrozen(delivery);
     const frame = delivery.frame;
     const reason = identityReason(frame, authoritative);
     if (reason !== "contract_mismatch") {
@@ -321,14 +516,14 @@ export class SubjectiveReplicationJournal {
       eventCursor: frame.event_cursor,
       entry: frame.entry,
     };
-    this.authoritativeValue = {
+    this.authoritativeValue = cloneFrozen<SubjectiveReplicaView>({
       ...authoritative,
       watermarks: {
         ...authoritative.watermarks,
         combat_log_cursor: frame.combat_log_cursor,
       },
       combatLog: record === null ? authoritative.combatLog : [...authoritative.combatLog, record],
-    };
+    });
     this.lastLogEventCursor = frame.event_cursor;
     rememberRecent(this.knownLogs, frame.combat_log_cursor, stableJson(delivery));
     this.pendingLogs.push(frame);
@@ -337,6 +532,13 @@ export class SubjectiveReplicationJournal {
   }
 
   private flushPresentationLogs(): void {
+    // An issued presentation-head token is an exact authority over the current
+    // presentation base plus one immutable world frame. Legal combat-log
+    // delivery is an independent stream and must not replace that base object
+    // (or the frozen candidate) while the token is live. Retain eligible logs
+    // behind the active head; commit/reset installs the candidate exactly once,
+    // clears the slot, then calls this method to attach every now-eligible log.
+    if (this.presentationHeadSlot !== null) return;
     let presentation = this.requirePresentation();
     while (
       this.pendingLogHead < this.pendingLogs.length
@@ -358,7 +560,7 @@ export class SubjectiveReplicationJournal {
       };
     }
     this.compactPendingLogs();
-    this.presentationValue = presentation;
+    this.presentationValue = cloneFrozen(presentation);
   }
 
   private checkQueueLimit(): SubjectiveJournalIngestResult {
@@ -376,12 +578,15 @@ export class SubjectiveReplicationJournal {
   }
 
   private requireResync(reason: SubjectiveResyncReason, clearReplica: boolean): void {
+    this.incarnation += 1;
     this.healthValue = "resync_required";
     this.resyncReasonValue = reason;
     this.pendingFrames.length = 0;
     this.pendingLogs.length = 0;
     this.pendingFrameHead = 0;
     this.pendingLogHead = 0;
+    this.pendingResetFrameCount = 0;
+    this.presentationHeadSlot = null;
     if (clearReplica) {
       this.authoritativeValue = null;
       this.presentationValue = null;
@@ -390,6 +595,7 @@ export class SubjectiveReplicationJournal {
   }
 
   private clear(): void {
+    this.incarnation += 1;
     this.authoritativeValue = null;
     this.presentationValue = null;
     this.capturedWatermarksValue = null;
@@ -397,6 +603,8 @@ export class SubjectiveReplicationJournal {
     this.pendingLogs.length = 0;
     this.pendingFrameHead = 0;
     this.pendingLogHead = 0;
+    this.pendingResetFrameCount = 0;
+    this.presentationHeadSlot = null;
     this.knownFrames.clear();
     this.knownLogs.clear();
     this.presentationIds.clear();
@@ -429,9 +637,48 @@ export class SubjectiveReplicationJournal {
     return this.presentationValue;
   }
 
+  private requireHeadSlot(
+    kind: "normal",
+    token: PresentationHeadPreviewToken,
+  ): Extract<PresentationHeadSlot, { readonly kind: "normal" }>;
+  private requireHeadSlot(
+    kind: "reset",
+    token: PresentationResetHeadToken,
+  ): Extract<PresentationHeadSlot, { readonly kind: "reset" }>;
+  private requireHeadSlot(
+    kind: PresentationHeadSlot["kind"],
+    token: PresentationHeadPreviewToken | PresentationResetHeadToken,
+  ): PresentationHeadSlot {
+    if (this.healthValue !== "ready") throw new Error("replication requires resynchronization");
+    const slot = this.presentationHeadSlot;
+    if (
+      slot === null
+      || slot.kind !== kind
+      || slot.incarnation !== this.incarnation
+      || slot.token !== token
+    ) {
+      throw new Error("presentation head token does not identify the exact current head");
+    }
+    return slot;
+  }
+
   private result(status: SubjectiveJournalIngestResult["status"]): SubjectiveJournalIngestResult {
     return { status, state: this.state() };
   }
+}
+
+function cloneFrozen<T>(value: T): T {
+  return deepFreeze(JSON.parse(JSON.stringify(value)) as T);
+}
+
+function deepFreeze<T>(value: T): T {
+  if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
+    for (const child of Object.values(value as Readonly<Record<string, unknown>>)) {
+      deepFreeze(child);
+    }
+    Object.freeze(value);
+  }
+  return value;
 }
 
 export function assertCombatLogWindow(

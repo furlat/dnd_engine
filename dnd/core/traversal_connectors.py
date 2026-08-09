@@ -22,8 +22,11 @@ from dnd.core.content.canonical import canonical_content_sha256
 
 ConnectorPosition = tuple[StrictInt, StrictInt]
 
-_AUTHORED_ID = re.compile(r"^connector\.[a-z][a-z0-9_.-]*$")
-_PRESENTATION_KEY = re.compile(r"^[a-z][a-z0-9_.-]*$")
+CONNECTOR_AUTHORED_ID_PATTERN = r"^connector\.[a-z][a-z0-9_.-]*$"
+CONNECTOR_PRESENTATION_KEY_PATTERN = r"^[a-z][a-z0-9_.-]*$"
+
+_AUTHORED_ID = re.compile(CONNECTOR_AUTHORED_ID_PATTERN)
+_PRESENTATION_KEY = re.compile(CONNECTOR_PRESENTATION_KEY_PATTERN)
 
 
 class TraversalConnectorKind(str, Enum):
@@ -285,6 +288,8 @@ class ConnectorTraversalDiscovery(BaseModel):
 
 
 __all__ = [
+    "CONNECTOR_AUTHORED_ID_PATTERN",
+    "CONNECTOR_PRESENTATION_KEY_PATTERN",
     "ConnectorActionCostType",
     "ConnectorDestinationStatus",
     "ConnectorProvocationPolicy",

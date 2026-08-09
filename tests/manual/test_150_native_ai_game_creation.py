@@ -2,15 +2,23 @@
 
 from collections.abc import Iterator
 import time
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 
 from dnd.ai.runtime.controller import NativeAIController
-from dnd.core.events import EventPhase, EventQueue, EventType
-from dnd.encounter import EncounterState, TurnState
+from dnd.core.events import (
+    EventPhase,
+    EventQueue,
+    EventType,
+    MovementTrajectory,
+    StepMovementEvent,
+)
+from dnd.encounter import Encounter, EncounterState, TurnState
 from dnd.entity import Entity
 from server import event_server
+from server.combat_log_source import CombatLogSourceError
+from server.event_stream import event_stream
 from tests.manual.server_test_client import (
     ServerTestClient,
     reset_server_test_runtime,
@@ -81,6 +89,141 @@ def test_core_catalog_always_exposes_native_ai_without_managed_service(
     )
 
 
+def test_consecutive_prepared_games_replace_the_exact_objective_source(
+    client: ServerTestClient,
+) -> None:
+    """A new prepared world cannot retain the prior objective source owner."""
+    _first_composition, _first_payload = start_composed_game(
+        client,
+        controllers=("human", "human"),
+    )
+    first_encounter = event_server.sim.encounter
+    assert first_encounter is not None
+    assert event_stream.source_encounter is first_encounter
+
+    _second_composition, second_payload = start_composed_game(
+        client,
+        controllers=("human", "human"),
+    )
+    second_encounter = event_server.sim.encounter
+    assert second_encounter is not None
+    assert second_encounter is not first_encounter
+    assert event_stream.source_encounter is second_encounter
+
+    controlled = roster_result(
+        second_payload,
+        "roster_1",
+    )["entity_assignments"][0]["entity_uuid"]
+    created = client.post(
+        "/session/create",
+        json={"player_type": "human", "name": "Replacement owner"},
+    )
+    assert created.status_code == 200
+    session_id = created.json()["session_id"]
+    joined = client.post(
+        "/game/join",
+        json={"session_id": session_id, "entity_uuids": [controlled]},
+    )
+    assert joined.status_code == 200
+
+    bootstrap = client.get(
+        "/replication/bootstrap",
+        params={"session_id": session_id},
+    )
+
+    assert bootstrap.status_code == 200, bootstrap.text
+    assert bootstrap.json()["protocol"]["source_stream_id"] == str(
+        second_encounter.uuid
+    )
+
+
+def test_prepared_objective_source_rejects_a_foreign_encounter(
+    client: ServerTestClient,
+) -> None:
+    """Diagnostics cannot silently replace the prepared source owner."""
+    _composition, _payload = start_composed_game(
+        client,
+        controllers=("human", "human"),
+    )
+    prepared = event_server.sim.encounter
+    assert prepared is not None
+    assert event_stream.source_encounter is prepared
+    foreign = Encounter(
+        name="Foreign prepared source",
+        source_entity_uuid=prepared.source_entity_uuid,
+    )
+
+    with pytest.raises(CombatLogSourceError, match="installed source"):
+        event_stream.install_prepared_source(foreign)
+    with pytest.raises(CombatLogSourceError, match="objective source"):
+        event_stream.capture_objective_source_snapshot(foreign)
+
+    assert event_stream.source_encounter is prepared
+
+
+def test_real_bootstrap_route_returns_typed_deferral_during_poisoned_batch(
+    client: ServerTestClient,
+) -> None:
+    """The live GET producer emits the raw requester-safe 409 contract."""
+    _composition, payload = start_composed_game(
+        client,
+        controllers=("human", "human"),
+    )
+    encounter = event_server.sim.encounter
+    assert encounter is not None
+    controlled = roster_result(
+        payload,
+        "roster_1",
+    )["entity_assignments"][0]["entity_uuid"]
+    actor = Entity.get(UUID(controlled))
+    assert actor is not None
+    created = client.post(
+        "/session/create",
+        json={"player_type": "human", "name": "Deferred route owner"},
+    )
+    assert created.status_code == 200
+    session_id = created.json()["session_id"]
+    joined = client.post(
+        "/game/join",
+        json={"session_id": session_id, "entity_uuids": [controlled]},
+    )
+    assert joined.status_code == 200
+
+    with EventQueue.batch_on_event_callbacks():
+        StepMovementEvent(
+            source_entity_uuid=actor.uuid,
+            source_entity_name=actor.name,
+            from_position=actor.position,
+            to_position=actor.position,
+            path_index=1,
+            total_path_length=2,
+            movement_cost=0,
+            trajectory=MovementTrajectory.PATH,
+            disclosed_path=(actor.position, actor.position),
+            committed=False,
+            parent_event=uuid4(),
+            phase=EventPhase.COMPLETION,
+        )
+        deferred = client.get(
+            "/replication/bootstrap",
+            params={"session_id": session_id},
+        )
+        assert deferred.status_code == 409
+        assert deferred.headers["cache-control"] == "private, no-store"
+        assert deferred.json() == {
+            "code": "source_batch_in_flight",
+            "retryable": True,
+            "source_stream_id": str(encounter.uuid),
+            "generation_id": str(EventQueue.generation_id()),
+        }
+
+    recovered = client.get(
+        "/replication/bootstrap",
+        params={"session_id": session_id},
+    )
+    assert recovered.status_code == 200, recovered.text
+
+
 def test_ai_game_creation_is_prepared_without_session_http_or_gameplay(
     client: ServerTestClient,
 ) -> None:
@@ -115,6 +258,7 @@ def test_ai_game_creation_is_prepared_without_session_http_or_gameplay(
 
     encounter = event_server.sim.encounter
     assert encounter is not None
+    assert event_stream.source_encounter is encounter
     assert encounter.state is EncounterState.NOT_STARTED
     assert encounter.turn_state is TurnState.NOT_STARTED
     assert encounter.round_number == 0

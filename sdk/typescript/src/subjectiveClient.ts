@@ -1,8 +1,11 @@
 import type {
   JsonValue,
+  PlayerReplicationWatermarks,
+  SubjectiveBootstrapDeferred,
   SubjectiveCombatLogFramesResponse,
   SubjectiveFramesResponse,
   SubjectiveReplicationBootstrap,
+  SubjectiveReplicationFrame,
 } from "./generated/contracts.generated.js";
 import {
   SubjectiveReplicationJournal,
@@ -43,7 +46,26 @@ export class SubjectiveReplicationHttpError extends Error {
 export interface SubjectiveReplicationClientOptions {
   readonly fetchImplementation?: typeof fetch;
   readonly headers?: Readonly<Record<string, string>>;
+  readonly monotonicNow?: () => number;
 }
+
+export type SubjectiveBootstrapAttempt =
+  | { readonly status: "ready"; readonly bootstrap: SubjectiveReplicationBootstrap }
+  | { readonly status: "deferred"; readonly deferral: SubjectiveBootstrapDeferred };
+
+export class SubjectiveBootstrapUnavailableError extends Error {
+  readonly lastDeferral: SubjectiveBootstrapDeferred | null;
+
+  constructor(lastDeferral: SubjectiveBootstrapDeferred | null) {
+    super("Subjective replication bootstrap did not become available within the bounded window");
+    this.name = "SubjectiveBootstrapUnavailableError";
+    this.lastDeferral = lastDeferral;
+  }
+}
+
+const BOOTSTRAP_RETRY_WINDOW_MS = 10_000;
+const BOOTSTRAP_RETRY_DELAY_MS = 250;
+const BOOTSTRAP_DEADLINE_ABORT = Object.freeze({ kind: "subjective_bootstrap_deadline" });
 
 export interface SubjectiveReplicationIdentity {
   readonly sourceStreamId: string;
@@ -54,6 +76,32 @@ export interface SubjectiveReplicationIdentity {
 export interface SubjectiveFramesQuery extends SubjectiveReplicationIdentity {
   readonly fromObservationCursor?: number;
   readonly limit?: number;
+}
+
+export interface SubjectivePresentationCatchupTarget {
+  readonly sourceEventCursor: number;
+  readonly observationCursor: number;
+  readonly presentationCursor: number;
+}
+
+export interface IngestSubjectiveFramesThroughOptions {
+  readonly sessionId: string;
+  readonly fixedTarget: SubjectivePresentationCatchupTarget;
+  readonly signal?: AbortSignal;
+  readonly onUpdate?: (update: SubjectiveReplicationUpdate) => void | Promise<void>;
+}
+
+export class SubjectiveFrameCatchupResyncError extends Error {
+  readonly reason: SubjectiveResyncReason;
+  readonly state: SubjectiveReplicationJournalState;
+
+  constructor(state: SubjectiveReplicationJournalState) {
+    const reason = state.resyncReason ?? "contract_mismatch";
+    super(`subjective REST catch-up requires journal resynchronization: ${reason}`);
+    this.name = "SubjectiveFrameCatchupResyncError";
+    this.reason = reason;
+    this.state = state;
+  }
 }
 
 export interface SubjectiveCombatLogQuery extends SubjectiveReplicationIdentity {
@@ -96,21 +144,97 @@ export class SubjectiveReplicationClient {
   readonly baseUrl: string;
   private readonly fetchImplementation: typeof fetch;
   private readonly defaultHeaders: Readonly<Record<string, string>>;
+  private readonly monotonicNow: () => number;
 
   constructor(baseUrl: string, options: SubjectiveReplicationClientOptions = {}) {
     this.baseUrl = baseUrl.replace(/\/$/, "");
     this.fetchImplementation = (options.fetchImplementation ?? globalThis.fetch).bind(globalThis);
     this.defaultHeaders = Object.freeze({ ...(options.headers ?? {}) });
+    this.monotonicNow = options.monotonicNow ?? defaultMonotonicNow;
   }
 
   async bootstrap(sessionId: string, signal?: AbortSignal): Promise<SubjectiveReplicationBootstrap> {
-    const parameters = new URLSearchParams({ session_id: requireNonEmpty(sessionId, "sessionId") });
-    const seed = decodeModel(
-      "SubjectiveReplicationBootstrap",
-      await this.getJson(`${SUBJECTIVE_REPLICATION_ROUTES.bootstrap}?${parameters.toString()}`, signal),
+    const startedAt = this.readMonotonicNow();
+    const deadlineController = new AbortController();
+    const forwardAbort = (): void => deadlineController.abort(signal?.reason);
+    if (signal?.aborted) forwardAbort();
+    else signal?.addEventListener("abort", forwardAbort, { once: true });
+    const deadlineTimer = setTimeout(
+      () => deadlineController.abort(BOOTSTRAP_DEADLINE_ABORT),
+      BOOTSTRAP_RETRY_WINDOW_MS,
     );
+    let lastDeferral: SubjectiveBootstrapDeferred | null = null;
+    try {
+      while (true) {
+        if (signal?.aborted) throw signal.reason ?? abortError();
+        if (this.bootstrapWindowExpired(startedAt)) {
+          throw new SubjectiveBootstrapUnavailableError(lastDeferral);
+        }
+        let attempt: SubjectiveBootstrapAttempt;
+        try {
+          attempt = await this.bootstrapAttempt(sessionId, deadlineController.signal);
+        } catch (error) {
+          if (signal?.aborted) throw signal.reason ?? abortError();
+          if (
+            deadlineController.signal.aborted
+            && deadlineController.signal.reason === BOOTSTRAP_DEADLINE_ABORT
+          ) {
+            throw new SubjectiveBootstrapUnavailableError(lastDeferral);
+          }
+          throw error;
+        }
+        if (this.bootstrapWindowExpired(startedAt)) {
+          throw new SubjectiveBootstrapUnavailableError(
+            attempt.status === "deferred" ? attempt.deferral : lastDeferral,
+          );
+        }
+        if (signal?.aborted) throw signal.reason ?? abortError();
+        if (attempt.status === "ready") return attempt.bootstrap;
+        lastDeferral = attempt.deferral;
+        try {
+          await waitForBootstrapRetry(
+            BOOTSTRAP_RETRY_DELAY_MS,
+            deadlineController.signal,
+          );
+        } catch (error) {
+          if (signal?.aborted) throw signal.reason ?? abortError();
+          if (
+            deadlineController.signal.aborted
+            && deadlineController.signal.reason === BOOTSTRAP_DEADLINE_ABORT
+          ) {
+            throw new SubjectiveBootstrapUnavailableError(lastDeferral);
+          }
+          throw error;
+        }
+      }
+    } finally {
+      clearTimeout(deadlineTimer);
+      signal?.removeEventListener("abort", forwardAbort);
+    }
+  }
+
+  async bootstrapAttempt(
+    sessionId: string,
+    signal?: AbortSignal,
+  ): Promise<SubjectiveBootstrapAttempt> {
+    const parameters = new URLSearchParams({ session_id: requireNonEmpty(sessionId, "sessionId") });
+    const response = await this.fetchImplementation(
+      `${this.baseUrl}${SUBJECTIVE_REPLICATION_ROUTES.bootstrap}?${parameters.toString()}`,
+      signal === undefined ? { headers: this.headers() } : { headers: this.headers(), signal },
+    );
+    const payload = parseJson(await response.text());
+    if (
+      response.status === 409
+      && isJsonObject(payload)
+      && payload.code === "source_batch_in_flight"
+    ) {
+      const deferral = decodeModel("SubjectiveBootstrapDeferred", payload);
+      return { status: "deferred", deferral };
+    }
+    if (!response.ok) throw new SubjectiveReplicationHttpError(response.status, payload);
+    const seed = decodeModel("SubjectiveReplicationBootstrap", payload);
     assertSubjectiveReplicationBootstrap(seed);
-    return seed;
+    return { status: "ready", bootstrap: seed };
   }
 
   async frames(
@@ -138,6 +262,136 @@ export class SubjectiveReplicationClient {
       );
     }
     return response;
+  }
+
+  /**
+   * Feed one validated REST observation page and only the continuations needed
+   * for its original captured fence through the existing canonical journal.
+   * The operation does not reduce world state itself and never extends the
+   * caller's fixed target when a continuation reports a newer capture.
+   */
+  async ingestFramesThrough(
+    journal: SubjectiveReplicationJournal,
+    firstPage: SubjectiveFramesResponse,
+    options: IngestSubjectiveFramesThroughOptions,
+  ): Promise<SubjectiveReplicationJournalState> {
+    firstPage = isolateFramesPage(firstPage);
+    assertSubjectiveFramesPage(firstPage);
+    const position = journal.streamPosition();
+    const identity = identityFromPosition(position);
+    assertResponseIdentity(firstPage, identity, "$subjective.catchup.first_page");
+    requireNonEmpty(options.sessionId, "sessionId");
+    const target = requireCatchupTarget(options.fixedTarget);
+    if (!matchesCatchupTarget(firstPage.captured_watermarks, target)) {
+      throw new ContractValidationError(
+        "$subjective.catchup.fixed_target",
+        "fixed target differs from the first page capture",
+      );
+    }
+    if (firstPage.from_watermarks.observation_cursor > position.observationCursor) {
+      throw new ContractValidationError(
+        "$subjective.catchup.first_page.from_watermarks",
+        "first page starts after the journal cursor",
+      );
+    }
+    if (
+      firstPage.from_watermarks.observation_cursor === position.observationCursor
+      && !matchesCatchupTarget(firstPage.from_watermarks, position)
+    ) {
+      throw new ContractValidationError(
+        "$subjective.catchup.first_page.from_watermarks",
+        "first page start differs from the journal cursor",
+      );
+    }
+    if (firstPage.through_watermarks.observation_cursor < position.observationCursor) {
+      throw new ContractValidationError(
+        "$subjective.catchup.first_page.through_watermarks",
+        "first page does not cover the journal cursor",
+      );
+    }
+    if (options.signal?.aborted) throw options.signal.reason ?? abortError();
+    if (matchesCatchupTarget(position, target)) return journal.state();
+    if (catchupTargetPassed(position, target)) {
+      throw new ContractValidationError(
+        "$subjective.catchup.fixed_target",
+        "journal already advanced beyond the fixed target",
+      );
+    }
+
+    const maximumPages = target.observationCursor - position.observationCursor + 1;
+    if (maximumPages < 1) {
+      throw new ContractValidationError(
+        "$subjective.catchup.fixed_target",
+        "fixed target precedes the journal cursor",
+      );
+    }
+    let page = firstPage;
+    let pagesConsumed = 0;
+    while (pagesConsumed < maximumPages) {
+      pagesConsumed += 1;
+      const beforePage = journal.streamPosition();
+      if (page.from_watermarks.observation_cursor > beforePage.observationCursor) {
+        throw new ContractValidationError(
+          "$subjective.catchup.page.from_watermarks",
+          "continuation page starts after the journal cursor",
+        );
+      }
+      if (
+        page.from_watermarks.observation_cursor === beforePage.observationCursor
+        && !matchesCatchupTarget(page.from_watermarks, beforePage)
+      ) {
+        throw new ContractValidationError(
+          "$subjective.catchup.page.from_watermarks",
+          "continuation page start differs from the journal cursor",
+        );
+      }
+      if (page.through_watermarks.observation_cursor < beforePage.observationCursor) {
+        throw new ContractValidationError(
+          "$subjective.catchup.page.through_watermarks",
+          "continuation page does not cover the journal cursor",
+        );
+      }
+      for (const frame of page.frames) {
+        if (frame.watermarks.observation_cursor > target.observationCursor) break;
+        if (options.signal?.aborted) throw options.signal.reason ?? abortError();
+        const envelope: SubjectiveSseEnvelope = {
+          event: "frame",
+          id: subjectiveFrameEnvelopeId(frame),
+          data: { kind: "frame", frame },
+        };
+        const result = journal.ingest(envelope);
+        await options.onUpdate?.({ envelope, result });
+        if (options.signal?.aborted) throw options.signal.reason ?? abortError();
+        if (result.state.health !== "ready") {
+          throw new SubjectiveFrameCatchupResyncError(result.state);
+        }
+        const current = journal.streamPosition();
+        if (matchesCatchupTarget(current, target)) return journal.state();
+        if (catchupTargetPassed(current, target)) {
+          throw new ContractValidationError(
+            "$subjective.catchup.fixed_target",
+            "journal advanced beyond the fixed target",
+          );
+        }
+      }
+
+      const current = journal.streamPosition();
+      if (matchesCatchupTarget(current, target)) return journal.state();
+      if (current.observationCursor >= target.observationCursor) {
+        throw new ContractValidationError(
+          "$subjective.catchup.page",
+          "REST catch-up made no exact progress toward its fixed target",
+        );
+      }
+      page = await this.frames(options.sessionId, {
+        ...identityFromPosition(current),
+        fromObservationCursor: current.observationCursor,
+      }, options.signal);
+    }
+    throw new ContractValidationError(
+      "$subjective.catchup",
+      "REST catch-up exceeded its fixed observation bound",
+    );
   }
 
   async combatLog(
@@ -266,7 +520,7 @@ export class SubjectiveReplicationClient {
           }
         } catch (error) {
           if (options.signal?.aborted) return;
-          if (!isRetryable(error) && resyncReason(error) === null) throw error;
+          if (!isRetryable(error)) throw error;
           await wait(delay, options.signal);
           delay = Math.min(Math.max(delay * 2, 1), maximumDelay);
           continue;
@@ -356,6 +610,16 @@ export class SubjectiveReplicationClient {
 
   private headers(additional: Readonly<Record<string, string>> = {}): Record<string, string> {
     return { ...this.defaultHeaders, ...additional };
+  }
+
+  private readMonotonicNow(): number {
+    const value = this.monotonicNow();
+    if (!Number.isFinite(value)) throw new TypeError("monotonic clock returned a non-finite value");
+    return value;
+  }
+
+  private bootstrapWindowExpired(startedAt: number): boolean {
+    return this.readMonotonicNow() - startedAt >= BOOTSTRAP_RETRY_WINDOW_MS;
   }
 }
 
@@ -447,6 +711,79 @@ async function wait(delay: number, signal?: AbortSignal): Promise<void> {
       clearTimeout(timeout);
       signal?.removeEventListener("abort", done);
       resolve();
+    }
+  });
+}
+
+function requireCatchupTarget(
+  value: SubjectivePresentationCatchupTarget,
+): SubjectivePresentationCatchupTarget {
+  return Object.freeze({
+    sourceEventCursor: requireCursor(value.sourceEventCursor, "fixedTarget.sourceEventCursor"),
+    observationCursor: requireCursor(value.observationCursor, "fixedTarget.observationCursor"),
+    presentationCursor: requireCursor(value.presentationCursor, "fixedTarget.presentationCursor"),
+  });
+}
+
+function matchesCatchupTarget(
+  value: PlayerReplicationWatermarks | SubjectiveStreamPosition,
+  target: SubjectivePresentationCatchupTarget | SubjectiveStreamPosition,
+): boolean {
+  const source = "source_event_cursor" in value
+    ? value.source_event_cursor
+    : value.sourceEventCursor;
+  const observation = "observation_cursor" in value
+    ? value.observation_cursor
+    : value.observationCursor;
+  const presentation = "presentation_cursor" in value
+    ? value.presentation_cursor
+    : value.presentationCursor;
+  return source === target.sourceEventCursor
+    && observation === target.observationCursor
+    && presentation === target.presentationCursor;
+}
+
+function catchupTargetPassed(
+  position: SubjectiveStreamPosition,
+  target: SubjectivePresentationCatchupTarget,
+): boolean {
+  return position.sourceEventCursor > target.sourceEventCursor
+    || position.observationCursor > target.observationCursor
+    || position.presentationCursor > target.presentationCursor;
+}
+
+function subjectiveFrameEnvelopeId(frame: SubjectiveReplicationFrame): string {
+  const watermarks = frame.watermarks;
+  return `s=${watermarks.source_event_cursor};o=${watermarks.observation_cursor};p=${watermarks.presentation_cursor};l=${watermarks.combat_log_cursor}`;
+}
+
+function isolateFramesPage(page: SubjectiveFramesResponse): SubjectiveFramesResponse {
+  return decodeModel(
+    "SubjectiveFramesResponse",
+    parseJson(JSON.stringify(page)),
+  );
+}
+
+function defaultMonotonicNow(): number {
+  return globalThis.performance?.now() ?? Date.now();
+}
+
+function abortError(): DOMException {
+  return new DOMException("The operation was aborted", "AbortError");
+}
+
+async function waitForBootstrapRetry(delay: number, signal: AbortSignal): Promise<void> {
+  if (signal.aborted) throw signal.reason ?? abortError();
+  await new Promise<void>((resolve, reject) => {
+    const timeout = setTimeout(done, delay);
+    signal.addEventListener("abort", aborted, { once: true });
+    function done(): void {
+      signal.removeEventListener("abort", aborted);
+      resolve();
+    }
+    function aborted(): void {
+      clearTimeout(timeout);
+      reject(signal.reason ?? abortError());
     }
   });
 }

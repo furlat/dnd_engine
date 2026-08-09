@@ -1,5 +1,6 @@
 import type {
   APIEntitySummary,
+  APIGrid,
   APITile,
   EntityVisualLoadout,
   SubjectiveEncounter,
@@ -231,12 +232,53 @@ function assertConnectorSetIdentity(
   );
 }
 
+/** Validate connector structure shared by objective and subjective projections. */
+export function assertGridConnectorStructure(grid: APIGrid): void {
+  assertConnectorSetIdentity(grid.connectors, "$grid.connectors");
+  const tiles = keyed(grid.tiles, tileKey);
+  grid.connectors.forEach((connector, connectorIndex) => {
+    const path = `$grid.connectors[${connectorIndex}]`;
+    if (
+      connector.endpoints[0].position[0] === connector.endpoints[1].position[0]
+      && connector.endpoints[0].position[1] === connector.endpoints[1].position[1]
+    ) {
+      throw new ContractValidationError(
+        `${path}.endpoints`,
+        "connector endpoints must occupy two distinct positions",
+      );
+    }
+    connector.endpoints.forEach((endpoint, endpointIndex) => {
+      const endpointPath = `${path}.endpoints[${endpointIndex}]`;
+      const [x, y] = endpoint.position;
+      if (x < grid.min_x || x > grid.max_x || y < grid.min_y || y > grid.max_y) {
+        throw new ContractValidationError(
+          `${endpointPath}.position`,
+          "connector endpoint lies outside projected grid bounds",
+        );
+      }
+      const tile = tiles.get(`${x},${y}`);
+      if (tile === undefined) {
+        throw new ContractValidationError(
+          `${endpointPath}.position`,
+          "connector endpoint requires a projected support tile",
+        );
+      }
+      if (endpoint.elevation_feet !== tile.elevation_steps * 5) {
+        throw new ContractValidationError(
+          `${endpointPath}.elevation_feet`,
+          "connector endpoint elevation differs from its projected support tile",
+        );
+      }
+    });
+  });
+}
+
 function assertGridConnectorIntegrity(
   world: SubjectiveReplicatedWorld,
   path: string,
 ): void {
   const grid = world.state.grid;
-  assertConnectorSetIdentity(grid.connectors, `${path}.connectors`);
+  assertGridConnectorStructure(grid);
   const tiles = keyed(grid.tiles, tileKey);
   const currentlyVisibleCells = new Set(
     Object.values(world.visibility).flatMap((row) => (
@@ -262,33 +304,13 @@ function assertGridConnectorIntegrity(
     }
   }
   grid.connectors.forEach((connector, connectorIndex) => {
-    if (
-      connector.endpoints[0].position[0] === connector.endpoints[1].position[0]
-      && connector.endpoints[0].position[1] === connector.endpoints[1].position[1]
-    ) {
-      throw new ContractValidationError(
-        `${path}.connectors[${connectorIndex}].endpoints`,
-        "connector endpoints must occupy two distinct positions",
-      );
-    }
     connector.endpoints.forEach((endpoint, endpointIndex) => {
       const endpointPath = (
         `${path}.connectors[${connectorIndex}].endpoints[${endpointIndex}]`
       );
       const [x, y] = endpoint.position;
-      if (x < grid.min_x || x > grid.max_x || y < grid.min_y || y > grid.max_y) {
-        throw new ContractValidationError(
-          `${endpointPath}.position`,
-          "connector endpoint lies outside projected grid bounds",
-        );
-      }
       const tile = tiles.get(`${x},${y}`);
-      if (tile === undefined) {
-        throw new ContractValidationError(
-          `${endpointPath}.position`,
-          "connector endpoint requires an authorized projected support tile",
-        );
-      }
+      if (tile === undefined) return;
       if (!tile.visible) {
         throw new ContractValidationError(
           `${endpointPath}.position`,
@@ -299,12 +321,6 @@ function assertGridConnectorIntegrity(
         throw new ContractValidationError(
           `${endpointPath}.position`,
           "connector endpoint requires current observer-union authorization",
-        );
-      }
-      if (endpoint.elevation_feet !== tile.elevation_steps * 5) {
-        throw new ContractValidationError(
-          `${endpointPath}.elevation_feet`,
-          "connector endpoint elevation differs from its projected support tile",
         );
       }
       // APITile intentionally exposes no objective tile UUID. The endpoint's

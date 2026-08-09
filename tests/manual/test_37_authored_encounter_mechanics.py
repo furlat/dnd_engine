@@ -34,6 +34,7 @@ from dnd.scenarios.encounter_catalog import (
     encounter_recipe,
 )
 from dnd.spatial_effects import SpatialEffect
+from server.world_projection import project_grid
 
 
 @dataclass(frozen=True)
@@ -216,6 +217,51 @@ def test_standard_skeleton_door_arena_uses_current_baseline_content() -> None:
         "Validation Skeleton Archer",
         "Validation Skeleton Warlock",
     }
+
+
+def test_standard_arena_water_uses_canonical_mechanics_and_projection() -> None:
+    """The product arena authors water through the canonical tile factory."""
+    arena = create_authored_encounter("standard_skeleton_doors")
+    grid = get_map()
+
+    for position in WATER_POSITIONS:
+        tile = grid.get_tile(*position)
+        assert tile is not None
+        assert tile.name == "Water"
+        assert tile.sprite_name == "water.png"
+        assert tile.get_movement_cost(MovementMode.WALKING) == 0
+        assert tile.get_movement_cost(MovementMode.SWIMMING) == 1
+        assert not grid.is_walkable(*position, mode=MovementMode.WALKING)
+        assert grid.is_walkable(*position, mode=MovementMode.SWIMMING)
+        arena.hero.senses.visible[position] = True
+
+    assert not grid.can_transition(
+        WATER_POSITIONS[0],
+        WATER_POSITIONS[1],
+        movement_mode=MovementMode.WALKING,
+    )
+    assert grid.can_transition(
+        WATER_POSITIONS[0],
+        WATER_POSITIONS[1],
+        movement_mode=MovementMode.SWIMMING,
+    )
+
+    objective_tiles = {
+        (tile.x, tile.y): tile for tile in project_grid(grid).tiles
+    }
+    subjective_tiles = {
+        (tile.x, tile.y): tile
+        for tile in project_grid(
+            grid,
+            requesting_entity_uuid=arena.hero.uuid,
+        ).tiles
+    }
+    assert {
+        objective_tiles[position].visual_key for position in WATER_POSITIONS
+    } == {"water.png"}
+    assert {
+        subjective_tiles[position].visual_key for position in WATER_POSITIONS
+    } == {"water.png"}
 
 
 def test_goblin_water_skirmish_samples_goblins_caster_and_route_blockers() -> None:
