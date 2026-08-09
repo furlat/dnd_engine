@@ -8,6 +8,7 @@ import type {
   APIGrid,
   APIItemSummary,
   APITile,
+  APITraversalConnector,
   APIVisibilityResponse,
   EntityVisualLoadout,
   FloorObjectBlockingChannel,
@@ -28,7 +29,10 @@ import type {
   VisualEquipmentLayer,
   VisualLoadoutSlot,
 } from "./generated/contracts.generated.js";
-import { assertSubjectiveWorld } from "./reducer.js";
+import {
+  assertGridConnectorStructure,
+  assertSubjectiveWorld,
+} from "./reducer.js";
 import { ContractValidationError, decodeModel } from "./validation.js";
 
 export type RenderProjection = "subjective" | "objective";
@@ -66,12 +70,35 @@ export interface RenderKnowledgeUnion {
 export type RenderOwnedEdgeDirection = "north" | "east";
 export type RenderStructuralEdgeKind = StructuralEdgeKind | "generic";
 
+declare const renderStructuralEdgeKeyBrand: unique symbol;
+export type RenderStructuralEdgeKey = string & {
+  readonly [renderStructuralEdgeKeyBrand]: true;
+};
+
 export interface RenderStructuralEdge {
+  readonly edge_key: RenderStructuralEdgeKey;
   readonly position: [number, number];
   readonly direction: RenderOwnedEdgeDirection;
   readonly kind: RenderStructuralEdgeKind;
   readonly is_open: boolean | null;
   readonly blocked_channels: Array<FloorObjectBlockingChannel>;
+}
+
+export interface RenderTraversalConnectorEndpoint {
+  readonly position: readonly [number, number];
+  readonly elevation_feet: number;
+}
+
+export interface RenderTraversalConnector {
+  readonly uuid: string;
+  readonly authored_id: string;
+  readonly kind: APITraversalConnector["kind"];
+  readonly presentation_key: string;
+  readonly endpoints: readonly [
+    RenderTraversalConnectorEndpoint,
+    RenderTraversalConnectorEndpoint,
+  ];
+  readonly enabled: boolean;
 }
 
 /**
@@ -124,6 +151,7 @@ export interface RenderGrid {
   readonly max_x: number;
   readonly max_y: number;
   readonly tiles: Array<APITile>;
+  readonly connectors: ReadonlyArray<RenderTraversalConnector>;
   readonly structural_edges: Array<RenderStructuralEdge>;
 }
 
@@ -418,7 +446,10 @@ export function mergeObserverVisibility(
 export function projectStructuralEdges(
   tiles: ReadonlyArray<APITile>,
 ): Array<RenderStructuralEdge> {
-  const candidates = new Map<string, Array<StructuralEdgeCandidate>>();
+  const candidates = new Map<RenderStructuralEdgeKey, {
+    readonly owner: CanonicalEdgeOwner;
+    readonly rows: Array<StructuralEdgeCandidate>;
+  }>();
   for (const tile of [...tiles].sort(compareTile)) {
     for (const direction of DIRECTIONS) {
       const blockedChannels = CHANNELS.filter((channel) => (
@@ -433,36 +464,60 @@ export function projectStructuralEdges(
       }
       if (blockedChannels.length === 0 && appearance === null) continue;
       const owned = canonicalEdgeOwner([tile.x, tile.y], direction);
-      const key = `${owned.position[0]},${owned.position[1]}:${owned.direction}`;
-      const rows = candidates.get(key) ?? [];
-      rows.push({
+      const key = canonicalRenderStructuralEdgeKey(
+        owned.position,
+        owned.direction,
+      );
+      const group = candidates.get(key) ?? { owner: owned, rows: [] };
+      group.rows.push({
         source_visible: tile.visible,
         appearance,
         blocked_channels: blockedChannels,
       });
-      candidates.set(key, rows);
+      candidates.set(key, group);
     }
   }
   const edges: RenderStructuralEdge[] = [];
-  for (const [key, rows] of candidates) {
-    const separator = key.lastIndexOf(":");
-    const [xText, yText] = key.slice(0, separator).split(",");
-    const direction = key.slice(separator + 1) as RenderOwnedEdgeDirection;
-    const x = Number(xText);
-    const y = Number(yText);
-    if (
-      !Number.isSafeInteger(x)
-      || !Number.isSafeInteger(y)
-      || !OWNED_EDGE_DIRECTIONS.includes(direction)
-    ) {
-      throw new ContractValidationError(
-        "$render.structural_edges",
-        "canonical structural-edge ownership is invalid",
-      );
-    }
-    edges.push(mergeStructuralEdge([x, y], direction, rows));
+  for (const [key, group] of candidates) {
+    edges.push(mergeStructuralEdge(key, group.owner, group.rows));
   }
   return edges.sort(compareStructuralEdge);
+}
+
+/** Return the sole stable identity for one reciprocal physical boundary. */
+export function canonicalRenderStructuralEdgeKey(
+  position: readonly [number, number],
+  direction: FloorObjectDirection,
+): RenderStructuralEdgeKey {
+  const owner = canonicalEdgeOwner(position, direction);
+  const key = `edge:${owner.position[0]},${owner.position[1]}:${owner.direction}`;
+  return key as RenderStructuralEdgeKey;
+}
+
+/** Project the privacy-safe connector field subset in deterministic order. */
+export function projectTraversalConnectors(
+  connectors: ReadonlyArray<APITraversalConnector>,
+): Array<RenderTraversalConnector> {
+  return connectors.map((connector) => ({
+    uuid: connector.uuid,
+    authored_id: connector.authored_id,
+    kind: connector.kind,
+    presentation_key: connector.presentation_key,
+    endpoints: [
+      {
+        position: copyPosition(connector.endpoints[0].position),
+        elevation_feet: connector.endpoints[0].elevation_feet,
+      },
+      {
+        position: copyPosition(connector.endpoints[1].position),
+        elevation_feet: connector.endpoints[1].elevation_feet,
+      },
+    ] as const,
+    enabled: connector.enabled,
+  })).sort((left, right) => (
+    compareString(left.authored_id, right.authored_id)
+    || compareString(left.uuid, right.uuid)
+  ));
 }
 
 /** Derive the safe appearance layer used by the objective debug projection. */
@@ -496,6 +551,7 @@ export function deriveVisualLoadout(
 }
 
 function projectGrid(grid: APIGrid): RenderGrid {
+  assertGridConnectorStructure(grid);
   const tiles = [...grid.tiles].sort(compareTile);
   return {
     min_x: grid.min_x,
@@ -503,6 +559,7 @@ function projectGrid(grid: APIGrid): RenderGrid {
     max_x: grid.max_x,
     max_y: grid.max_y,
     tiles,
+    connectors: projectTraversalConnectors(grid.connectors),
     structural_edges: projectStructuralEdges(tiles),
   };
 }
@@ -740,13 +797,15 @@ interface StructuralEdgeCandidate {
   readonly blocked_channels: Array<FloorObjectBlockingChannel>;
 }
 
+interface CanonicalEdgeOwner {
+  readonly position: [number, number];
+  readonly direction: RenderOwnedEdgeDirection;
+}
+
 function canonicalEdgeOwner(
   position: readonly [number, number],
   direction: FloorObjectDirection,
-): {
-  readonly position: [number, number];
-  readonly direction: RenderOwnedEdgeDirection;
-} {
+): CanonicalEdgeOwner {
   switch (direction) {
     case "north":
       return { position: copyPosition(position), direction: "north" };
@@ -760,13 +819,16 @@ function canonicalEdgeOwner(
 }
 
 function mergeStructuralEdge(
-  position: [number, number],
-  direction: RenderOwnedEdgeDirection,
+  edgeKey: RenderStructuralEdgeKey,
+  owner: CanonicalEdgeOwner,
   candidates: ReadonlyArray<StructuralEdgeCandidate>,
 ): RenderStructuralEdge {
+  const position = owner.position;
+  const direction = owner.direction;
   const specific = candidates.filter((candidate) => candidate.appearance !== null);
   if (specific.length === 0) {
     return {
+      edge_key: edgeKey,
       position,
       direction,
       kind: "generic",
@@ -800,6 +862,7 @@ function mergeStructuralEdge(
     );
   }
   return {
+    edge_key: edgeKey,
     position,
     direction,
     kind: appearance.kind,

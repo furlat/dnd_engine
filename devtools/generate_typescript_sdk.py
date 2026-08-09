@@ -58,6 +58,7 @@ from server import player_replication_contract
 from server.player_replication_contract import (
     PLAYER_REPLICATION_CONTRACT_HASH,
     PLAYER_REPLICATION_CONTRACT_VERSION,
+    SubjectiveBootstrapDeferred,
     SubjectiveCombatLogDelivery,
     SubjectiveCombatLogFramesResponse,
     SubjectiveFrameDelivery,
@@ -103,6 +104,7 @@ OBJECTIVE_DIAGNOSTICS_MODELS = (
     ReplicatedWorld,
 )
 PLAYER_REPLICATION_MODELS = (
+    SubjectiveBootstrapDeferred,
     SubjectiveReplicationBootstrap,
     SubjectiveFramesResponse,
     SubjectiveCombatLogFramesResponse,

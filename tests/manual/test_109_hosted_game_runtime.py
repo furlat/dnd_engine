@@ -47,6 +47,7 @@ from server.worker_proxy import (
     classify_worker_route,
     proxy_runtime_request,
 )
+from server.player_replication_contract import SubjectiveBootstrapDeferred
 
 
 @pytest.fixture(autouse=True)
@@ -401,6 +402,104 @@ def test_objective_diagnostics_proxy_requires_administer_before_worker_io() -> N
 
     assert response.status_code == 403
     assert b"runtime_authority_rejected" in response.body
+
+
+def test_hosted_bootstrap_proxy_preserves_typed_source_batch_deferral(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The gateway relays the worker's closed 409 body without wrapping it."""
+    game_id = uuid4()
+    session_id = uuid4()
+    observer_uuid = uuid4()
+    cache = RuntimeAuthorityCache()
+    issued = cache.issue(
+        hosted_game_id=game_id,
+        runtime_session_id=session_id,
+        membership_id=uuid4(),
+        scopes={RuntimeScope.SUBJECTIVE_OBSERVE},
+        controlled_entity_uuids=(observer_uuid,),
+        observer_entity_uuids=(observer_uuid,),
+        active_observer_uuid=observer_uuid,
+    )
+    deferral = SubjectiveBootstrapDeferred(
+        source_stream_id="worker-stream",
+        generation_id="worker-generation",
+    )
+
+    class DeferredWorkerClient:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            del args, kwargs
+
+        def build_request(
+            self,
+            method: str,
+            path: str,
+            *,
+            headers: dict[str, str],
+            content: bytes,
+        ) -> httpx.Request:
+            return httpx.Request(
+                method,
+                f"http://game-worker{path}",
+                headers=headers,
+                content=content,
+            )
+
+        async def send(
+            self,
+            request: httpx.Request,
+            *,
+            stream: bool,
+        ) -> httpx.Response:
+            assert stream is True
+            return httpx.Response(
+                409,
+                request=request,
+                content=deferral.model_dump_json().encode("utf-8"),
+                headers={
+                    "content-type": "application/json",
+                    "cache-control": "private, no-store",
+                },
+            )
+
+        async def aclose(self) -> None:
+            return None
+
+    class DeferredWorkerManager:
+        def socket_path(self, _game_id: object) -> Path:
+            return Path("/tmp/dnd-engine-deferred-worker.sock")
+
+    async def receive() -> dict[str, object]:
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    monkeypatch.setattr(httpx, "AsyncClient", DeferredWorkerClient)
+    request = Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "scheme": "http",
+            "server": ("gateway", 80),
+            "path": "/games/game/runtime/replication/bootstrap",
+            "query_string": f"session_id={session_id}".encode("ascii"),
+            "headers": [
+                (b"authorization", f"Bearer {issued.token}".encode("ascii")),
+            ],
+        },
+        receive=receive,
+    )
+    response = asyncio.run(
+        proxy_runtime_request(
+            request,
+            hosted_game_id=game_id,
+            worker_path="replication/bootstrap",
+            worker_manager=cast(HostedWorkerManager, DeferredWorkerManager()),
+            authority_cache=cache,
+        )
+    )
+
+    assert response.status_code == 409
+    assert response.body == deferral.model_dump_json().encode("utf-8")
+    assert response.headers["cache-control"] == "private, no-store"
 
 
 def test_runtime_stream_stops_after_hot_capability_revocation() -> None:

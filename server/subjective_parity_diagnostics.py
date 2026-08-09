@@ -27,6 +27,7 @@ from server.agent_protocol.objective_diagnostics import (
 from server.canonical_json import canonical_json, canonical_json_sha256
 from server.player_replication_contract import (
     PlayerReplicationWatermarks,
+    SubjectiveEncounter,
     SubjectivePerspective,
     SubjectiveReplicatedWorld,
 )
@@ -71,18 +72,20 @@ def build_subjective_render_parity_diagnostics(
 ) -> SubjectiveRenderParityDiagnosticsResponse:
     """Compare one retained subjective boundary with independent censorship."""
 
-    expected, visible_cells = _independent_censorship_manifest(
-        objective,
-        perspective=perspective,
-        observed_tiles=(
-            _independent_observed_tiles(
-                grid,
-                objective=objective,
-                perspective=perspective,
-            )
-            if grid is not None
-            else None
-        ),
+    expected, visible_cells, currently_identified_entity_uuids = (
+        _independent_censorship_manifest(
+            objective,
+            perspective=perspective,
+            observed_tiles=(
+                _independent_observed_tiles(
+                    grid,
+                    objective=objective,
+                    perspective=perspective,
+                )
+                if grid is not None
+                else None
+            ),
+        )
     )
     visible_object_uuids = {
         object_uuid
@@ -93,6 +96,7 @@ def build_subjective_render_parity_diagnostics(
         subjective,
         visible_cells=visible_cells,
         visible_object_uuids=visible_object_uuids,
+        currently_identified_entity_uuids=currently_identified_entity_uuids,
     )
 
     expected_json = canonical_json(expected)
@@ -136,7 +140,7 @@ def _independent_censorship_manifest(
     *,
     perspective: SubjectivePerspective,
     observed_tiles: Mapping[tuple[int, int], Mapping[str, Any]] | None,
-) -> tuple[dict[str, Any], set[tuple[int, int]]]:
+) -> tuple[dict[str, Any], set[tuple[int, int]], set[str]]:
     """Apply the documented current-knowledge policy to an objective DTO."""
 
     missing_observers = sorted(
@@ -238,7 +242,7 @@ def _independent_censorship_manifest(
             )
             for entity_uuid in sorted(identified_entity_uuids)
         },
-    }, visible_cells
+    }, visible_cells, identified_entity_uuids
 
 
 def _subjective_visible_manifest(
@@ -246,6 +250,7 @@ def _subjective_visible_manifest(
     *,
     visible_cells: set[tuple[int, int]],
     visible_object_uuids: set[str],
+    currently_identified_entity_uuids: set[str],
 ) -> dict[str, Any]:
     """Normalize only current-visible facts from the retained player reducer."""
 
@@ -260,11 +265,11 @@ def _subjective_visible_manifest(
         "entities": {
             entity.uuid: entity.model_dump(mode="json")
             for entity in world.state.entities
+            if entity.uuid in currently_identified_entity_uuids
         },
-        "encounter": (
-            world.state.encounter.model_dump(mode="json")
-            if world.state.encounter is not None
-            else None
+        "encounter": _subjective_current_encounter_manifest(
+            world.state.encounter,
+            currently_identified_entity_uuids=currently_identified_entity_uuids,
         ),
         "floor_objects": {
             obj.uuid: {
@@ -297,7 +302,40 @@ def _subjective_visible_manifest(
         "visual_loadouts": {
             entity_uuid: loadout.model_dump(mode="json")
             for entity_uuid, loadout in world.visual_loadout_by_entity.items()
+            if entity_uuid in currently_identified_entity_uuids
         },
+    }
+
+
+def _subjective_current_encounter_manifest(
+    encounter: SubjectiveEncounter | None,
+    *,
+    currently_identified_entity_uuids: set[str],
+) -> dict[str, Any] | None:
+    """Normalize retained combatants to the oracle's current-visible scope."""
+
+    if encounter is None:
+        return None
+    initiative_order = [
+        row.model_dump(mode="json")
+        for row in encounter.initiative_order
+        if row.uuid in currently_identified_entity_uuids
+    ]
+    projected_order = [row["uuid"] for row in initiative_order]
+    current_entity_uuid = encounter.current_entity_uuid
+    if current_entity_uuid not in projected_order:
+        current_entity_uuid = None
+        current_turn_index = None
+    else:
+        current_turn_index = projected_order.index(current_entity_uuid)
+    return {
+        "uuid": encounter.uuid,
+        "name": encounter.name,
+        "state": encounter.state,
+        "round_number": encounter.round_number,
+        "current_turn_index": current_turn_index,
+        "current_entity_uuid": current_entity_uuid,
+        "initiative_order": initiative_order,
     }
 
 

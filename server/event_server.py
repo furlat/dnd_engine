@@ -298,6 +298,7 @@ from server.player_replication.journal import (
 )
 from server.player_replication.runtime import (
     CanonicalSubjectiveReplicationContext,
+    SubjectiveBootstrapDeferredError,
     SubjectiveRuntimeError,
     SubjectiveRuntimeIdentityError,
     canonical_subjective_replication_runtime,
@@ -1604,6 +1605,7 @@ def _replication_runtime_context(
     expected_source_stream_id: Optional[str] = None,
     expected_generation_id: Optional[str],
     expected_perspective_epoch_id: Optional[str],
+    allow_bootstrap_deferral: bool = False,
 ) -> CanonicalSubjectiveReplicationContext:
     """Bind and identity-check one canonical journal partition."""
     if sim.encounter is None:
@@ -1624,6 +1626,14 @@ def _replication_runtime_context(
             expected_perspective_epoch_id=expected_perspective_epoch_id,
         )
         return context
+    except SubjectiveBootstrapDeferredError as exc:
+        if allow_bootstrap_deferral:
+            raise
+        raise _api_http_exception(
+            status_code=409,
+            code="replication_partition_unavailable",
+            message=str(exc),
+        ) from exc
     except SubjectiveRuntimeIdentityError as exc:
         raise _api_http_exception(
             status_code=409,
@@ -3011,17 +3021,24 @@ async def get_replication_bootstrap(
     request: Request,
     response: Response,
     session_id: str,
-) -> SubjectiveReplicationBootstrap:
+) -> SubjectiveReplicationBootstrap | JSONResponse:
     """Return one atomic renderer-complete subjective reducer seed."""
     response.headers["Cache-Control"] = "private, no-store"
     request_context = _resolve_replication_request(request, session_id)
-    context = _replication_runtime_context(
-        request_context,
-        expected_generation_id=None,
-        expected_perspective_epoch_id=None,
-    )
     try:
+        context = _replication_runtime_context(
+            request_context,
+            expected_generation_id=None,
+            expected_perspective_epoch_id=None,
+            allow_bootstrap_deferral=True,
+        )
         return context.bootstrap()
+    except SubjectiveBootstrapDeferredError as exc:
+        return JSONResponse(
+            status_code=409,
+            content=exc.deferral.model_dump(mode="json"),
+            headers={"Cache-Control": "private, no-store"},
+        )
     except (SubjectiveRuntimeError, SubjectiveJournalError) as exc:
         raise _replication_window_http_exception(exc) from exc
 
@@ -6638,6 +6655,8 @@ async def start_created_game(
         sim.encounter.clear_combat_log()
         game_summary_store.reset()
         event_stream.ensure_attached()
+        event_stream.install_prepared_source(sim.encounter)
+        canonical_subjective_replication_runtime.ensure_attached()
         _ensure_local_terminal_callback()
         if is_hosted_worker:
             _hosted_character_entity_uuids = {

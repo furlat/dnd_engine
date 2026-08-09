@@ -255,11 +255,22 @@ def test_sdk_descriptors_preserve_player_field_constraints() -> None:
         "kind": "string",
         "min_length": 1,
     }
-    assert movement["trajectory"]["kind"] == "array"
-    assert movement["trajectory"]["min_length"] == 2
-    assert movement["trajectory"]["items"] == {
-        "kind": "tuple",
-        "items": [{"kind": "integer"}, {"kind": "integer"}],
+    assert "trajectory" not in movement
+    assert movement["anchors"] == {
+        "kind": "array",
+        "items": {
+            "kind": "model",
+            "ref": "server.player_replication_contract.LocomotionAnchor",
+        },
+        "min_length": 2,
+    }
+    assert movement["locomotion_family"] == {
+        "kind": "enum",
+        "ref": "server.player_replication_contract.LocomotionFamily",
+    }
+    assert movement["trajectory_family"] == {
+        "kind": "enum",
+        "ref": "server.player_replication_contract.LocomotionTrajectory",
     }
     assert spell["spell_level"] == {
         "kind": "integer",

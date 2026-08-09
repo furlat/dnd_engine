@@ -18,6 +18,7 @@ from server import event_server
 from server.event_stream import event_stream
 from tests.manual.live_replication_support import drain_subscription
 from tests.manual.game_creation_test_support import (
+    authored_compose_request,
     compose_and_preview,
     roster_result,
     start_composed_game,
@@ -140,6 +141,32 @@ def test_openapi_has_one_game_creation_and_native_ai_path(
         "/simulation/start",
         "/simulation/reset",
     }.intersection(paths)
+
+
+def test_compose_rejects_an_explicit_empty_owned_character_roster(
+    client: ServerTestClient,
+) -> None:
+    """The authoritative route never normalizes an empty owned party."""
+    assert event_server.sim.encounter is None
+    assert event_server.sim.game is None
+    request = authored_compose_request()
+    roster_slots = request["roster_slots"]
+    assert isinstance(roster_slots, list)
+    first_slot = roster_slots[0]
+    assert isinstance(first_slot, dict)
+    first_slot["roster"] = {
+        "kind": "owned_characters",
+        "title": "Empty owned party",
+        "character_ids": [],
+        "member_controller_overrides": [],
+    }
+
+    response = client.post("/game-creation/compose", json=request)
+
+    assert response.status_code == 422
+    assert response.json()["detail"][0]["loc"][-1] == "character_ids"
+    assert event_server.sim.encounter is None
+    assert event_server.sim.game is None
 
 
 def test_compose_and_preview_are_pure_and_preserve_the_live_game(

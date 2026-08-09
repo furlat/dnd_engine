@@ -3,14 +3,18 @@ import test from "node:test";
 
 import {
   ContractValidationError,
+  assertGridConnectorStructure,
+  canonicalRenderStructuralEdgeKey,
   decodeModel,
   deriveVisualLoadout,
   projectObjectiveRenderWorld,
   projectStructuralEdges,
   projectSubjectiveRenderWorld,
+  projectTraversalConnectors,
   type APIEntityVisibility,
   type APIEquipmentOverview,
   type APIItemSummary,
+  type APITraversalConnector,
   type APITile,
   type ObjectiveReplicatedWorld,
   type SubjectivePerspective,
@@ -21,6 +25,156 @@ import { bootstrap } from "./fixtures.js";
 const safePresentationRef = {
   presentation_contract_hash: "a".repeat(64),
 };
+
+test("render projection retains only privacy-safe deterministic connectors", () => {
+  const seed = bootstrap();
+  const base = required(seed.world.state.grid.tiles[0]);
+  const connector = traversalConnector("connector-b", "connector.test.b", [
+    { position: [0, 0], support_tile_uuid: "tile-a", elevation_feet: 0 },
+    { position: [1, 0], support_tile_uuid: "tile-b", elevation_feet: 5 },
+  ]);
+  const earlier = traversalConnector("connector-a", "connector.test.a", [
+    { position: [1, 0], support_tile_uuid: "tile-b", elevation_feet: 5 },
+    { position: [0, 0], support_tile_uuid: "tile-a", elevation_feet: 0 },
+  ]);
+  const grid = {
+    ...seed.world.state.grid,
+    min_x: 0,
+    min_y: 0,
+    max_x: 1,
+    max_y: 0,
+    tiles: [
+      { ...copyTile(base, 0, 0), elevation_steps: 0 },
+      { ...copyTile(base, 1, 0), elevation_steps: 1 },
+    ],
+    connectors: [connector, earlier],
+  };
+
+  assertGridConnectorStructure(grid);
+  const projected = projectTraversalConnectors(grid.connectors);
+  assert.deepEqual(projected, [
+    {
+      uuid: "connector-a",
+      authored_id: "connector.test.a",
+      kind: "ladder",
+      presentation_key: "connector.neutral",
+      endpoints: [
+        { position: [1, 0], elevation_feet: 5 },
+        { position: [0, 0], elevation_feet: 0 },
+      ],
+      enabled: true,
+    },
+    {
+      uuid: "connector-b",
+      authored_id: "connector.test.b",
+      kind: "ladder",
+      presentation_key: "connector.neutral",
+      endpoints: [
+        { position: [0, 0], elevation_feet: 0 },
+        { position: [1, 0], elevation_feet: 5 },
+      ],
+      enabled: true,
+    },
+  ]);
+  connector.endpoints[0].position[0] = 99;
+  assert.deepEqual(projected[1]?.endpoints[0].position, [0, 0]);
+  connector.endpoints[0].position[0] = 0;
+
+  const visibility = {
+    hero: {
+      ...required(seed.world.visibility.hero),
+      visible_cells: [[0, 0], [1, 0]] as Array<[number, number]>,
+      seen_cells: [[0, 0], [1, 0]] as Array<[number, number]>,
+      effective_light_levels: { "0,0": 3, "1,0": 3 },
+    },
+  };
+  const subjective = projectSubjectiveRenderWorld({
+    ...seed.world,
+    state: { ...seed.world.state, grid },
+    visibility,
+  }, seed.perspective);
+  const objective = projectObjectiveRenderWorld({
+    state: {
+      grid,
+      entities: seed.world.state.entities,
+      encounter: {
+        ...required(seed.world.state.encounter),
+        current_turn_index: required(
+          required(seed.world.state.encounter).current_turn_index,
+        ),
+      },
+      floor_objects: [],
+    },
+    visibility,
+    equipment_by_entity: seed.world.equipment_by_entity,
+  });
+  assert.deepEqual(subjective.state.grid.connectors, objective.state.grid.connectors);
+});
+
+test("projection-neutral connector structure rejects invalid objective rows", () => {
+  const seed = bootstrap();
+  const base = required(seed.world.state.grid.tiles[0]);
+  const grid = {
+    ...seed.world.state.grid,
+    min_x: 0,
+    min_y: 0,
+    max_x: 1,
+    max_y: 0,
+    tiles: [copyTile(base, 0, 0), copyTile(base, 1, 0)],
+    connectors: [traversalConnector("connector", "connector.test.one", [
+      { position: [0, 0], support_tile_uuid: "tile-a", elevation_feet: 0 },
+      { position: [1, 0], support_tile_uuid: "tile-b", elevation_feet: 5 },
+    ])],
+  };
+  assert.throws(() => assertGridConnectorStructure({
+    ...grid,
+    connectors: [
+      required(grid.connectors[0]),
+      { ...required(grid.connectors[0]), authored_id: "connector.test.two" },
+    ],
+  }), ContractValidationError);
+  assert.throws(() => assertGridConnectorStructure({
+    ...grid,
+    connectors: [{
+      ...required(grid.connectors[0]),
+      endpoints: [
+        required(grid.connectors[0]).endpoints[0],
+        required(grid.connectors[0]).endpoints[0],
+      ],
+    }],
+  }), ContractValidationError);
+  assert.throws(() => assertGridConnectorStructure({
+    ...grid,
+    tiles: [required(grid.tiles[0])],
+  }), ContractValidationError);
+  assert.throws(() => assertGridConnectorStructure({
+    ...grid,
+    connectors: [{
+      ...required(grid.connectors[0]),
+      endpoints: [
+        required(grid.connectors[0]).endpoints[0],
+        { ...required(grid.connectors[0]).endpoints[1], position: [2, 0] },
+      ],
+    }],
+  }), ContractValidationError);
+  assert.throws(() => assertGridConnectorStructure({
+    ...grid,
+    connectors: [{
+      ...required(grid.connectors[0]),
+      endpoints: [
+        required(grid.connectors[0]).endpoints[0],
+        { ...required(grid.connectors[0]).endpoints[1], elevation_feet: 10 },
+      ],
+    }],
+  }), ContractValidationError);
+});
+
+test("canonical structural-edge key owns reciprocal identity without parsing", () => {
+  assert.equal(canonicalRenderStructuralEdgeKey([5, 5], "north"), "edge:5,5:north");
+  assert.equal(canonicalRenderStructuralEdgeKey([5, 6], "south"), "edge:5,5:north");
+  assert.equal(canonicalRenderStructuralEdgeKey([-2, 3], "east"), "edge:-2,3:east");
+  assert.equal(canonicalRenderStructuralEdgeKey([-1, 3], "west"), "edge:-2,3:east");
+});
 
 test("structural edge wire model rejects malformed or identity-bearing rows", () => {
   const base = required(bootstrap().world.state.grid.tiles[0]);
@@ -93,9 +247,9 @@ test("subjective render projection unions every observer while active observer i
         ...seed.world.state.grid,
         tiles: [
           tile,
-          copyTile(tile, 1, 0),
+          { ...copyTile(tile, 1, 0), visible: false },
           copyTile(tile, 2, 0),
-          copyTile(tile, 3, 0),
+          { ...copyTile(tile, 3, 0), visible: false },
           copyTile(tile, 4, 0),
         ],
       },
@@ -150,6 +304,7 @@ test("structural edges retain the visible half of a hidden-neighbor vision wall"
   }, seed.perspective);
 
   assert.deepEqual(edges, [{
+    edge_key: "edge:0,0:east",
     position: [0, 0],
     direction: "east",
     kind: "wall",
@@ -177,6 +332,7 @@ test("all tile-local directions normalize to deterministic undirected ownership"
       ["vision"],
     );
     assert.deepEqual(projectStructuralEdges([tile]), [{
+      edge_key: canonicalRenderStructuralEdgeKey(row.position, row.direction),
       position: row.owned,
       direction: row.ownedDirection,
       kind: "door",
@@ -201,6 +357,7 @@ test("known doors suppress reciprocal generic duplicates and stale blocker chann
     ["movement", "vision", "light", "propagation"],
   );
   const expected = [{
+    edge_key: "edge:0,0:east" as const,
     position: [0, 0] as [number, number],
     direction: "east" as const,
     kind: "door" as const,
@@ -234,6 +391,7 @@ test("authorized open door remains one structural edge with no blocked channels"
   );
 
   assert.deepEqual(projectStructuralEdges([openDoor, staleReciprocal]), [{
+    edge_key: "edge:0,0:east",
     position: [0, 0],
     direction: "east",
     kind: "door",
@@ -435,6 +593,7 @@ test("objective diagnostics normalize into the same render structure", () => {
     "ranged",
   );
   assert.deepEqual(rendered.state.grid.structural_edges, [{
+    edge_key: "edge:0,0:north",
     position: [0, 0],
     direction: "north",
     kind: "generic",
@@ -524,6 +683,28 @@ function tileWithEdge(
       ...tile.directional_structural_edges,
       [direction]: appearance,
     },
+  };
+}
+
+function traversalConnector(
+  uuid: string,
+  authoredId: string,
+  endpoints: APITraversalConnector["endpoints"],
+): APITraversalConnector {
+  return {
+    uuid,
+    authored_id: authoredId,
+    kind: "ladder",
+    presentation_key: "connector.neutral",
+    endpoints,
+    movement_cost_feet: 5,
+    action_cost_type: null,
+    action_cost_amount: 0,
+    bidirectional: true,
+    enabled: true,
+    provocation_policy: "does_not_provoke",
+    revision: 1,
+    objective_digest: "a".repeat(64),
   };
 }
 

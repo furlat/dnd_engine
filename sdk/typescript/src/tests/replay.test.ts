@@ -14,6 +14,7 @@ import {
   GameDirectoryClient,
   decodeObjectiveReplay,
   decodeSubjectivePlayerReplay,
+  type EncounterPresentationCue,
   type EncounterEndEvent,
   type ObjectiveCombatLogFramesResponse,
   type ObjectiveReplayBundle,
@@ -91,6 +92,763 @@ test("player replay decoder rejects objective, raw-event, and malformed presenta
     ContractValidationError,
   );
   assert.throws(() => decodeSubjectivePlayerReplay(malformedGraph), ContractValidationError);
+});
+
+test("player replay identity preflight rejects V1 and unknown hashes before nested V2 decode", () => {
+  let nestedReads = 0;
+  const legacy = Object.defineProperty({
+    replay_contract_version: 1,
+    replay_contract_hash: "legacy",
+  }, "segments", {
+    enumerable: true,
+    get: () => {
+      nestedReads += 1;
+      throw new Error("nested V2 decoder must not run");
+    },
+  });
+  assert.throws(
+    () => decodeSubjectivePlayerReplay(legacy),
+    (error: unknown) => (
+      error instanceof ContractValidationError
+      && error.path === "$subjective_replay.replay_contract_version"
+    ),
+  );
+  assert.equal(nestedReads, 0);
+
+  const unknownHash = Object.defineProperty({
+    replay_contract_version: PLAYER_REPLAY_CONTRACT_VERSION,
+    replay_contract_hash: "0".repeat(64),
+  }, "segments", {
+    enumerable: true,
+    get: () => {
+      nestedReads += 1;
+      throw new Error("nested V2 decoder must not run");
+    },
+  });
+  assert.throws(
+    () => decodeSubjectivePlayerReplay(unknownHash),
+    (error: unknown) => (
+      error instanceof ContractValidationError
+      && error.path === "$subjective_replay.replay_contract_hash"
+    ),
+  );
+  assert.equal(nestedReads, 0);
+});
+
+test("player replay preserves exact reset-terminal authority and finalized trailing logs", () => {
+  const replay = resetTerminalSubjectiveReplay();
+  const decoded = decodeSubjectivePlayerReplay(replay);
+  const delivery = decoded.segments[0]?.deliveries[0];
+  assert.equal(delivery?.kind, "frame");
+  assert.equal(
+    delivery?.kind === "frame"
+      ? delivery.frame.encounter_terminal?.terminal_authority_id
+      : null,
+    "perspective-a:1:reset-terminal:00000000-0000-4000-8000-000000000001",
+  );
+
+  const segment = replay.segments[0]!;
+  const firstLogWatermarks = { ...segment.through_watermarks, combat_log_cursor: 1 };
+  const trailingWatermarks = { ...segment.through_watermarks, combat_log_cursor: 2 };
+  const withTrailingLog: SubjectivePlayerReplayBundle = {
+    ...replay,
+    terminal_combat_log_cursor: 2,
+    segments: [{
+      ...segment,
+      deliveries: [
+        ...segment.deliveries,
+        {
+          kind: "combat_log",
+          watermarks: firstLogWatermarks,
+          frame: {
+            source_stream_id: "encounter",
+            generation_id: segment.bootstrap.protocol.generation_id,
+            perspective_epoch_id: segment.bootstrap.perspective.perspective_epoch_id,
+            projection: "subjective",
+            combat_log_cursor: 1,
+            event_cursor: 1,
+            entry: null,
+          },
+        },
+        {
+          kind: "combat_log",
+          watermarks: trailingWatermarks,
+          frame: {
+            source_stream_id: "encounter",
+            generation_id: segment.bootstrap.protocol.generation_id,
+            perspective_epoch_id: segment.bootstrap.perspective.perspective_epoch_id,
+            projection: "subjective",
+            combat_log_cursor: 2,
+            event_cursor: 1,
+            entry: null,
+          },
+        },
+      ],
+      through_watermarks: trailingWatermarks,
+    }],
+  };
+  assert.doesNotThrow(() => decodeSubjectivePlayerReplay(withTrailingLog));
+
+  const decreasing = structuredClone(withTrailingLog) as {
+    segments: Array<{
+      deliveries: Array<{
+        kind: string;
+        frame: { event_cursor?: number };
+      }>;
+    }>;
+  };
+  const finalDelivery = decreasing.segments[0]?.deliveries.at(-1);
+  assert.equal(finalDelivery?.kind, "combat_log");
+  if (finalDelivery?.frame.event_cursor === undefined) {
+    throw new Error("expected trailing combat-log delivery");
+  }
+  finalDelivery.frame.event_cursor = 0;
+  assert.throws(
+    () => decodeSubjectivePlayerReplay(decreasing),
+    (error: unknown) => (
+      error instanceof ContractValidationError
+      && error.message.includes("event barriers moved backwards")
+    ),
+  );
+});
+
+test("player replay carries source and combat-log history across perspective segments", () => {
+  const lawful = rotatedSubjectiveReplay();
+  assert.doesNotThrow(() => decodeSubjectivePlayerReplay(lawful));
+  assert.doesNotThrow(() => decodeSubjectivePlayerReplay(threeSegmentSubjectiveReplay()));
+
+  const sourceRegression = structuredClone(lawful) as {
+    segments: Array<{ bootstrap: {
+      watermarks: { source_event_cursor: number };
+      combat_log_frames: { frames: Array<{ event_cursor: number }> };
+    } }>;
+  };
+  sourceRegression.segments[1]!.bootstrap.watermarks.source_event_cursor = 3;
+  for (const frame of sourceRegression.segments[1]!
+    .bootstrap.combat_log_frames.frames) {
+    frame.event_cursor = 3;
+  }
+  assert.throws(
+    () => decodeSubjectivePlayerReplay(sourceRegression),
+    (error: unknown) => (
+      error instanceof ContractValidationError
+      && error.message.includes("source history regressed")
+    ),
+  );
+
+  const logRegression = structuredClone(lawful) as {
+    segments: Array<{
+      bootstrap: {
+        watermarks: { combat_log_cursor: number };
+        combat_log_frames: {
+          through_cursor: number;
+          total: number;
+          frames: Array<{ event_cursor: number }>;
+        };
+      };
+      deliveries: Array<{ kind: string; frame: { watermarks?: { combat_log_cursor: number } } }>;
+      through_watermarks: { combat_log_cursor: number };
+    }>;
+  };
+  logRegression.segments[1]!.bootstrap.watermarks.combat_log_cursor = 1;
+  logRegression.segments[1]!.bootstrap.combat_log_frames.through_cursor = 1;
+  logRegression.segments[1]!.bootstrap.combat_log_frames.total = 1;
+  logRegression.segments[1]!.bootstrap.combat_log_frames.frames.splice(1);
+  const terminalAfterRegression = logRegression.segments[1]!.deliveries[0];
+  if (terminalAfterRegression?.kind !== "frame" || terminalAfterRegression.frame.watermarks === undefined) {
+    throw new Error("expected terminal frame");
+  }
+  terminalAfterRegression.frame.watermarks.combat_log_cursor = 1;
+  logRegression.segments[1]!.through_watermarks.combat_log_cursor = 1;
+  assert.throws(
+    () => decodeSubjectivePlayerReplay(logRegression),
+    (error: unknown) => (
+      error instanceof ContractValidationError
+      && error.message.includes("combat-log history regressed")
+    ),
+  );
+
+  const barrierRegression = structuredClone(lawful) as {
+    segments: Array<{ bootstrap: {
+      combat_log_frames: { frames: Array<{ event_cursor: number }> };
+    } }>;
+  };
+  barrierRegression.segments[1]!
+    .bootstrap.combat_log_frames.frames[0]!.event_cursor = 4;
+  assert.throws(
+    () => decodeSubjectivePlayerReplay(barrierRegression),
+    (error: unknown) => (
+      error instanceof ContractValidationError
+      && error.message.includes("canonical event barrier")
+    ),
+  );
+
+  const hiddenGapRegression = structuredClone(lawful) as unknown as MutableCrossSegmentReplay;
+  const hiddenGapSegment = hiddenGapRegression.segments[1]!;
+  const retained = hiddenGapSegment.bootstrap.combat_log_frames;
+  const hiddenGapFrame = {
+    ...retained.frames[1]!,
+    combat_log_cursor: 3,
+    event_cursor: 4,
+  };
+  hiddenGapSegment.bootstrap.watermarks.combat_log_cursor = 3;
+  retained.retained_from_cursor = 2;
+  retained.from_cursor = 2;
+  retained.through_cursor = 3;
+  retained.total = 3;
+  retained.frames = [hiddenGapFrame];
+  const hiddenGapTerminal = hiddenGapSegment.deliveries[0]!;
+  if (hiddenGapTerminal.kind !== "frame") throw new Error("expected terminal frame");
+  hiddenGapTerminal.frame.watermarks.combat_log_cursor = 3;
+  hiddenGapSegment.through_watermarks.combat_log_cursor = 3;
+  hiddenGapRegression.terminal_combat_log_cursor = 3;
+  assert.throws(
+    () => decodeSubjectivePlayerReplay(hiddenGapRegression),
+    (error: unknown) => (
+      error instanceof ContractValidationError
+      && error.message.includes("across replay segments")
+    ),
+  );
+
+  const emptyRetainedRegression = structuredClone(lawful) as unknown as MutableCrossSegmentReplay;
+  const emptySegment = emptyRetainedRegression.segments[1]!;
+  emptySegment.bootstrap.combat_log_frames.retained_from_cursor = 2;
+  emptySegment.bootstrap.combat_log_frames.from_cursor = 2;
+  emptySegment.bootstrap.combat_log_frames.through_cursor = 2;
+  emptySegment.bootstrap.combat_log_frames.total = 2;
+  emptySegment.bootstrap.combat_log_frames.frames = [];
+  const emptyTerminal = emptySegment.deliveries[0]!;
+  if (emptyTerminal.kind !== "frame") throw new Error("expected terminal frame");
+  const trailingWatermarks = {
+    ...emptyTerminal.frame.watermarks,
+    combat_log_cursor: 3,
+  };
+  emptySegment.deliveries.push({
+    kind: "combat_log",
+    watermarks: trailingWatermarks,
+    frame: {
+      source_stream_id: emptyTerminal.frame.source_stream_id,
+      generation_id: emptyTerminal.frame.generation_id,
+      perspective_epoch_id: emptyTerminal.frame.perspective_epoch_id,
+      projection: "subjective",
+      combat_log_cursor: 3,
+      event_cursor: 4,
+      entry: null,
+    },
+  });
+  emptySegment.through_watermarks = trailingWatermarks;
+  emptyRetainedRegression.terminal_combat_log_cursor = 3;
+  assert.throws(
+    () => decodeSubjectivePlayerReplay(emptyRetainedRegression),
+    (error: unknown) => (
+      error instanceof ContractValidationError
+      && error.message.includes("across replay segments")
+    ),
+  );
+});
+
+test("parallel replay perspectives are sibling runtime-session branches", () => {
+  const base = rotatedSubjectiveReplay();
+  const baseFirst = base.segments[0]!;
+  const baseSecond = base.segments[1]!;
+  const first = {
+    ...baseFirst,
+    runtime_session_id: "parallel-runtime-a",
+    deliveries: baseFirst.deliveries.map((delivery) => (
+      delivery.kind === "frame"
+        ? {
+          ...delivery,
+          frame: {
+            ...delivery.frame,
+            watermarks: {
+              ...delivery.frame.watermarks,
+              source_event_cursor: 6,
+            },
+          },
+        }
+        : {
+          ...delivery,
+          watermarks: {
+            ...delivery.watermarks,
+            source_event_cursor: 6,
+          },
+        }
+    )),
+    through_watermarks: {
+      ...baseFirst.through_watermarks,
+      source_event_cursor: 6,
+    },
+  };
+  const second = {
+    ...baseSecond,
+    runtime_session_id: "parallel-runtime-b",
+  };
+  const siblings: SubjectivePlayerReplayBundle = {
+    ...base,
+    segments: [first, second],
+  };
+  assert.equal(second.bootstrap.watermarks.source_event_cursor, 5);
+  assert.doesNotThrow(() => decodeSubjectivePlayerReplay(siblings));
+
+  const falseSuccessor: SubjectivePlayerReplayBundle = {
+    ...siblings,
+    segments: [
+      first,
+      { ...second, runtime_session_id: first.runtime_session_id },
+    ],
+  };
+  assert.throws(
+    () => decodeSubjectivePlayerReplay(falseSuccessor),
+    (error: unknown) => (
+      error instanceof ContractValidationError
+      && error.message.includes("source history regressed")
+    ),
+  );
+
+  const terminalSiblingEpoch = "terminal-perspective-a";
+  const terminalSibling = {
+    ...baseSecond,
+    segment_index: 0,
+    runtime_session_id: "terminal-runtime-a",
+    bootstrap: {
+      ...baseSecond.bootstrap,
+      perspective: {
+        ...baseSecond.bootstrap.perspective,
+        perspective_epoch_id: terminalSiblingEpoch,
+      },
+      combat_log_frames: {
+        ...baseSecond.bootstrap.combat_log_frames,
+        perspective_epoch_id: terminalSiblingEpoch,
+        frames: baseSecond.bootstrap.combat_log_frames.frames.map((frame) => ({
+          ...frame,
+          perspective_epoch_id: terminalSiblingEpoch,
+        })),
+      },
+    },
+    deliveries: baseSecond.deliveries.map((delivery) => (
+      delivery.kind === "frame"
+        ? {
+          ...delivery,
+          frame: {
+            ...delivery.frame,
+            perspective_epoch_id: terminalSiblingEpoch,
+          },
+        }
+        : {
+          ...delivery,
+          frame: {
+            ...delivery.frame,
+            perspective_epoch_id: terminalSiblingEpoch,
+          },
+        }
+    )),
+  };
+  const terminalBranches: SubjectivePlayerReplayBundle = {
+    ...base,
+    segments: [
+      terminalSibling,
+      { ...baseSecond, runtime_session_id: "terminal-runtime-b" },
+    ],
+  };
+  assert.doesNotThrow(() => decodeSubjectivePlayerReplay(terminalBranches));
+});
+
+test("player replay starts fresh cursor authority at an exact new generation", () => {
+  const reset = generationResetSubjectiveReplay();
+  assert.doesNotThrow(() => decodeSubjectivePlayerReplay(reset));
+
+  const postTerminalSeed = structuredClone(reset.segments[0]!.bootstrap);
+  const postTerminalBootstrap = {
+    ...postTerminalSeed,
+    protocol: {
+      ...postTerminalSeed.protocol,
+      generation_id: "post-terminal-generation",
+    },
+    perspective: {
+      ...postTerminalSeed.perspective,
+      perspective_epoch_id: "post-terminal-epoch",
+    },
+    combat_log_frames: {
+      ...postTerminalSeed.combat_log_frames,
+      generation_id: "post-terminal-generation",
+      perspective_epoch_id: "post-terminal-epoch",
+      frames: postTerminalSeed.combat_log_frames.frames.map((frame) => ({
+        ...frame,
+        generation_id: "post-terminal-generation",
+        perspective_epoch_id: "post-terminal-epoch",
+      })),
+    },
+  };
+  const postTerminal = {
+    ...reset,
+    segments: [
+      ...reset.segments,
+      {
+        ...structuredClone(reset.segments[0]!),
+        segment_index: 2,
+        runtime_session_id: "post-terminal-runtime",
+        bootstrap: postTerminalBootstrap,
+        deliveries: [],
+        through_watermarks: postTerminalBootstrap.watermarks,
+        end_reason: "perspective_retired" as const,
+      },
+    ],
+  };
+  assert.throws(
+    () => decodeSubjectivePlayerReplay(postTerminal),
+    (error: unknown) => (
+      error instanceof ContractValidationError
+      && error.message.includes("terminal generation")
+    ),
+  );
+
+  const sameGeneration = structuredClone(reset) as unknown as {
+    segments: Array<{
+      bootstrap: {
+        protocol: { generation_id: string };
+        combat_log_frames: {
+          generation_id: string;
+          frames: Array<{ generation_id: string }>;
+        };
+      };
+      deliveries: Array<{
+        kind: "frame" | "combat_log";
+        frame: { generation_id: string };
+      }>;
+    }>;
+  };
+  const firstGeneration = sameGeneration.segments[0]!.bootstrap.protocol.generation_id;
+  const second = sameGeneration.segments[1]!;
+  second.bootstrap.protocol.generation_id = firstGeneration;
+  second.bootstrap.combat_log_frames.generation_id = firstGeneration;
+  for (const frame of second.bootstrap.combat_log_frames.frames) {
+    frame.generation_id = firstGeneration;
+  }
+  for (const delivery of second.deliveries) {
+    if (delivery.kind === "frame") delivery.frame.generation_id = firstGeneration;
+    else delivery.frame.generation_id = firstGeneration;
+  }
+  assert.throws(
+    () => decodeSubjectivePlayerReplay(sameGeneration),
+    ContractValidationError,
+  );
+});
+
+test("player replay generations are contiguous while parallel siblings remain lawful", () => {
+  const base = rotatedSubjectiveReplay();
+  const template = base.segments[1]!;
+  const identifiedSegment = (
+    generationId: string,
+    perspectiveEpochId: string,
+    runtimeSessionId: string,
+    terminal: boolean,
+  ) => {
+    const bootstrap = {
+      ...structuredClone(template.bootstrap),
+      protocol: {
+        ...template.bootstrap.protocol,
+        generation_id: generationId,
+      },
+      perspective: {
+        ...template.bootstrap.perspective,
+        perspective_epoch_id: perspectiveEpochId,
+      },
+      combat_log_frames: {
+        ...template.bootstrap.combat_log_frames,
+        generation_id: generationId,
+        perspective_epoch_id: perspectiveEpochId,
+        frames: template.bootstrap.combat_log_frames.frames.map((frame) => ({
+          ...frame,
+          generation_id: generationId,
+          perspective_epoch_id: perspectiveEpochId,
+        })),
+      },
+    };
+    return {
+      ...structuredClone(template),
+      runtime_session_id: runtimeSessionId,
+      bootstrap,
+      deliveries: terminal
+        ? template.deliveries.map((delivery) => (
+          delivery.kind === "frame"
+            ? {
+              ...delivery,
+              frame: {
+                ...delivery.frame,
+                generation_id: generationId,
+                perspective_epoch_id: perspectiveEpochId,
+              },
+            }
+            : {
+              ...delivery,
+              frame: {
+                ...delivery.frame,
+                generation_id: generationId,
+                perspective_epoch_id: perspectiveEpochId,
+              },
+            }
+        ))
+        : [],
+      through_watermarks: terminal
+        ? template.through_watermarks
+        : bootstrap.watermarks,
+      end_reason: terminal ? "encounter_ended" as const : "perspective_retired" as const,
+    };
+  };
+  const a0 = identifiedSegment("generation-a", "a-epoch-0", "a-runtime-0", false);
+  const a1 = identifiedSegment("generation-a", "a-epoch-1", "a-runtime-1", false);
+  const b0 = identifiedSegment("generation-b", "b-epoch-0", "b-runtime-0", true);
+  const b1 = identifiedSegment("generation-b", "b-epoch-1", "b-runtime-1", true);
+  const lawful: SubjectivePlayerReplayBundle = {
+    ...base,
+    segments: [a0, a1, b0, b1].map((segment, segment_index) => ({
+      ...segment,
+      segment_index,
+    })),
+  };
+  assert.doesNotThrow(() => decodeSubjectivePlayerReplay(lawful));
+
+  const resurrected = {
+    ...lawful,
+    segments: [a0, b0, a1, b1].map((segment, segment_index) => ({
+      ...segment,
+      segment_index,
+    })),
+  };
+  assert.throws(
+    () => decodeSubjectivePlayerReplay(resurrected),
+    (error: unknown) => (
+      error instanceof ContractValidationError
+      && error.message.includes("contiguous segment runs")
+    ),
+  );
+
+  const withTerminalConflict = (updates: Partial<EncounterPresentationCue>) => ({
+    ...lawful,
+    segments: lawful.segments.map((segment, index) => (
+      index !== 3
+        ? segment
+        : {
+          ...segment,
+          deliveries: segment.deliveries.map((delivery) => (
+            delivery.kind !== "frame"
+              ? delivery
+              : {
+                ...delivery,
+                frame: {
+                  ...delivery.frame,
+                  presentation: delivery.frame.presentation.map((cue) => (
+                    cue.kind === "encounter" && cue.transition === "end"
+                      ? { ...cue, ...updates }
+                      : cue
+                  )),
+                },
+              }
+          )),
+        }
+    )),
+  });
+  for (const updates of [
+    { source_event_uuid: "conflicting-terminal-event" },
+    { reason: "conflicting terminal reason" },
+  ]) {
+    assert.throws(
+      () => decodeSubjectivePlayerReplay(withTerminalConflict(updates)),
+      (error: unknown) => (
+        error instanceof ContractValidationError
+        && error.message.includes("terminal event identity")
+      ),
+    );
+  }
+
+  const sharedTerminalEventUuid = "00000000-0000-4000-8000-000000000099";
+  const withOrdinarySource = (segment: typeof b0) => ({
+    ...segment,
+    deliveries: segment.deliveries.map((delivery) => (
+      delivery.kind !== "frame"
+        ? delivery
+        : {
+          ...delivery,
+          frame: {
+            ...delivery.frame,
+            presentation: delivery.frame.presentation.map((cue) => (
+              cue.kind === "encounter" && cue.transition === "end"
+                ? { ...cue, source_event_uuid: sharedTerminalEventUuid }
+                : cue
+            )),
+          },
+        }
+    )),
+  });
+  const ordinaryB0 = withOrdinarySource(b0);
+  const b1TerminalDelivery = b1.deliveries.find((delivery) => (
+    delivery.kind === "frame"
+    && delivery.frame.presentation.some(
+      (cue) => cue.kind === "encounter" && cue.transition === "end",
+    )
+  ));
+  assert.ok(b1TerminalDelivery?.kind === "frame");
+  const b1TerminalCue = b1TerminalDelivery.frame.presentation.find(
+    (cue): cue is EncounterPresentationCue => (
+      cue.kind === "encounter" && cue.transition === "end"
+    ),
+  );
+  assert.ok(b1TerminalCue !== undefined);
+  const resetWatermarks = {
+    ...b1TerminalDelivery.frame.watermarks,
+    presentation_cursor: b1TerminalDelivery.frame.presentation_from_cursor,
+  };
+  const resetB1 = {
+    ...b1,
+    deliveries: b1.deliveries.map((delivery) => (
+      delivery !== b1TerminalDelivery
+        ? delivery
+        : {
+          ...delivery,
+          frame: {
+            ...delivery.frame,
+            watermarks: resetWatermarks,
+            presentation: [],
+            presentation_delivery: "presentation_reset_required" as const,
+            presentation_reset_reason: "source_presentation_discontinuity" as const,
+            encounter_terminal: {
+              encounter_uuid: b1TerminalCue.encounter_uuid,
+              source_event_uuid: sharedTerminalEventUuid,
+              source_event_cursor: b1TerminalCue.source_event_cursor,
+              terminal_authority_id: (
+                `b-epoch-1:${resetWatermarks.observation_cursor}:reset-terminal:${sharedTerminalEventUuid}`
+              ),
+              reason: b1TerminalCue.reason,
+              projected_combatant_uuids: b1TerminalCue.projected_combatant_uuids,
+              terminal_barrier: true as const,
+            },
+          },
+        }
+    )),
+    through_watermarks: resetWatermarks,
+  };
+  const mixedMode = {
+    ...lawful,
+    segments: [a0, a1, ordinaryB0, resetB1].map((segment, segment_index) => ({
+      ...segment,
+      segment_index,
+    })),
+  };
+  assert.throws(
+    () => decodeSubjectivePlayerReplay(mixedMode),
+    (error: unknown) => (
+      error instanceof ContractValidationError
+      && error.message.includes("terminal event identity")
+    ),
+  );
+
+  const withForeignTerminalEncounter = (
+    replay: SubjectivePlayerReplayBundle,
+  ) => ({
+    ...replay,
+    segments: replay.segments.map((segment) => ({
+      ...segment,
+      deliveries: segment.deliveries.map((delivery) => (
+        delivery.kind !== "frame"
+          ? delivery
+          : {
+            ...delivery,
+            frame: {
+              ...delivery.frame,
+              patches: delivery.frame.patches.map((patch) => (
+                patch.kind === "encounter_replace"
+                && patch.encounter?.state === "ended"
+                  ? {
+                    ...patch,
+                    encounter: { ...patch.encounter, uuid: "foreign-encounter" },
+                  }
+                  : patch
+              )),
+              presentation: delivery.frame.presentation.map((cue) => (
+                cue.kind === "encounter" && cue.transition === "end"
+                  ? { ...cue, encounter_uuid: "foreign-encounter" }
+                  : cue
+              )),
+              encounter_terminal: delivery.frame.encounter_terminal === null
+                ? null
+                : {
+                  ...delivery.frame.encounter_terminal,
+                  encounter_uuid: "foreign-encounter",
+                },
+            },
+          }
+      )),
+    })),
+  });
+  for (const foreign of [subjectiveReplay(), lawful]) {
+    assert.throws(
+      () => decodeSubjectivePlayerReplay(withForeignTerminalEncounter(foreign)),
+      (error: unknown) => (
+        error instanceof ContractValidationError
+        && error.message.includes("another encounter")
+      ),
+    );
+  }
+});
+
+test("player replay rejects observation or invalid resulting state after reset terminal", () => {
+  const replay = resetTerminalSubjectiveReplay();
+  const segment = replay.segments[0]!;
+  const resetDelivery = segment.deliveries[0]!;
+  assert.equal(resetDelivery.kind, "frame");
+  if (resetDelivery.kind !== "frame") throw new Error("expected reset frame");
+
+  const laterFrame: SubjectiveReplicationFrame = {
+    ...resetDelivery.frame,
+    watermarks: {
+      ...resetDelivery.frame.watermarks,
+      source_event_cursor: 2,
+      observation_cursor: 2,
+    },
+    patches: [],
+    presentation_delivery: "normal",
+    presentation_reset_reason: null,
+    encounter_terminal: null,
+  };
+  assert.throws(
+    () => decodeSubjectivePlayerReplay({
+      ...replay,
+      terminal_source_event_cursor: 2,
+      segments: [{
+        ...segment,
+        deliveries: [...segment.deliveries, { kind: "frame", frame: laterFrame }],
+        through_watermarks: laterFrame.watermarks,
+      }],
+    }),
+    ContractValidationError,
+  );
+
+  const endedPatch = resetDelivery.frame.patches[0];
+  assert.ok(endedPatch?.kind === "encounter_replace" && endedPatch.encounter !== null);
+  for (const finalEncounter of [
+    { ...endedPatch.encounter, state: "active" },
+    null,
+  ]) {
+    assert.throws(
+      () => decodeSubjectivePlayerReplay({
+        ...replay,
+        segments: [{
+          ...segment,
+          deliveries: [{
+            kind: "frame",
+            frame: {
+              ...resetDelivery.frame,
+              patches: [
+                ...resetDelivery.frame.patches,
+                { kind: "encounter_replace", encounter: finalEncounter },
+              ],
+            },
+          }],
+        }],
+      }),
+      ContractValidationError,
+    );
+  }
 });
 
 test("directory replay methods use exact routes and principal headers", async () => {
@@ -270,6 +1028,9 @@ function subjectiveReplay(): SubjectivePlayerReplayBundle {
       terminal_barrier: true,
       projected_combatant_uuids: ["hero", "monster"],
     }],
+    presentation_delivery: "normal",
+    presentation_reset_reason: null,
+    encounter_terminal: null,
   };
   return {
     replay_contract_version: PLAYER_REPLAY_CONTRACT_VERSION,
@@ -291,9 +1052,326 @@ function subjectiveReplay(): SubjectivePlayerReplayBundle {
   };
 }
 
+function resetTerminalSubjectiveReplay(): SubjectivePlayerReplayBundle {
+  const replay = subjectiveReplay();
+  const segment = replay.segments[0]!;
+  const delivery = segment.deliveries[0]!;
+  if (delivery.kind !== "frame") throw new Error("expected terminal frame");
+  const cue = delivery.frame.presentation[0];
+  if (cue?.kind !== "encounter") throw new Error("expected terminal encounter cue");
+  const sourceEventUuid = "00000000-0000-4000-8000-000000000001";
+  const watermarks = {
+    ...delivery.frame.watermarks,
+    presentation_cursor: 0,
+  };
+  const frame: SubjectiveReplicationFrame = {
+    ...delivery.frame,
+    watermarks,
+    presentation_from_cursor: 0,
+    presentation: [],
+    presentation_delivery: "presentation_reset_required",
+    presentation_reset_reason: "source_presentation_discontinuity",
+    encounter_terminal: {
+      encounter_uuid: cue.encounter_uuid,
+      source_event_uuid: sourceEventUuid,
+      source_event_cursor: 1,
+      terminal_authority_id: (
+        `perspective-a:1:reset-terminal:${sourceEventUuid}`
+      ),
+      reason: cue.reason,
+      projected_combatant_uuids: cue.projected_combatant_uuids,
+      terminal_barrier: true,
+    },
+  };
+  return {
+    ...replay,
+    segments: [{
+      ...segment,
+      deliveries: [{ kind: "frame", frame }],
+      through_watermarks: watermarks,
+    }],
+  };
+}
+
+function rotatedSubjectiveReplay(): SubjectivePlayerReplayBundle {
+  const terminal = subjectiveReplay();
+  const terminalSegment = terminal.segments[0]!;
+  const firstBootstrap = structuredClone(terminalSegment.bootstrap);
+  const stateOnly = {
+    ...terminalSegment.deliveries[0]!.frame,
+    watermarks: watermarks(5, 1, 0, 0),
+    presentation_from_cursor: 0,
+    patches: [],
+    presentation: [],
+    presentation_delivery: "normal" as const,
+    presentation_reset_reason: null,
+    encounter_terminal: null,
+  };
+  const firstLogWatermarks = watermarks(5, 1, 0, 1);
+  const secondLogWatermarks = watermarks(5, 1, 0, 2);
+  const logFrames = [
+    {
+      source_stream_id: "encounter",
+      generation_id: "generation-a",
+      perspective_epoch_id: "perspective-a",
+      projection: "subjective" as const,
+      combat_log_cursor: 1,
+      event_cursor: 5,
+      entry: null,
+    },
+    {
+      source_stream_id: "encounter",
+      generation_id: "generation-a",
+      perspective_epoch_id: "perspective-a",
+      projection: "subjective" as const,
+      combat_log_cursor: 2,
+      event_cursor: 5,
+      entry: null,
+    },
+  ];
+  const first = {
+    ...terminalSegment,
+    segment_index: 0,
+    bootstrap: firstBootstrap,
+    deliveries: [
+      { kind: "frame" as const, frame: stateOnly },
+      { kind: "combat_log" as const, watermarks: firstLogWatermarks, frame: logFrames[0]! },
+      { kind: "combat_log" as const, watermarks: secondLogWatermarks, frame: logFrames[1]! },
+    ],
+    through_watermarks: secondLogWatermarks,
+    end_reason: "perspective_retired" as const,
+  };
+  const secondBootstrap = {
+    ...structuredClone(terminalSegment.bootstrap),
+    protocol: {
+      ...terminalSegment.bootstrap.protocol,
+      generation_id: "generation-a",
+    },
+    perspective: {
+      ...terminalSegment.bootstrap.perspective,
+      perspective_epoch_id: "perspective-b",
+    },
+    watermarks: watermarks(5, 0, 0, 2),
+    combat_log_frames: {
+    source_stream_id: "encounter",
+    generation_id: "generation-a",
+    perspective_epoch_id: "perspective-b",
+    projection: "subjective" as const,
+    retained_from_cursor: 0,
+    from_cursor: 0,
+    through_cursor: 2,
+    frames: logFrames.map((frame) => ({
+      ...frame,
+      generation_id: "generation-a",
+      perspective_epoch_id: "perspective-b",
+    })),
+    total: 2,
+    },
+  };
+  const originalTerminal = terminalSegment.deliveries[0]!;
+  if (originalTerminal.kind !== "frame") throw new Error("expected terminal frame");
+  const terminalDelivery = {
+    kind: "frame" as const,
+    frame: {
+      ...structuredClone(originalTerminal.frame),
+      generation_id: "generation-a",
+      perspective_epoch_id: "perspective-b",
+      watermarks: watermarks(6, 1, 1, 2),
+      presentation: originalTerminal.frame.presentation.map((cue) => ({
+        ...cue,
+        source_event_cursor: 6,
+      })),
+    },
+  };
+  const second = {
+    ...terminalSegment,
+    segment_index: 1,
+    runtime_session_id: first.runtime_session_id,
+    bootstrap: secondBootstrap,
+    deliveries: [terminalDelivery],
+    through_watermarks: terminalDelivery.frame.watermarks,
+  };
+  return {
+    ...terminal,
+    terminal_source_event_cursor: 6,
+    terminal_combat_log_cursor: 2,
+    segments: [first, second],
+  };
+}
+
+function generationResetSubjectiveReplay(): SubjectivePlayerReplayBundle {
+  const replay = rotatedSubjectiveReplay();
+  const first = replay.segments[0]!;
+  const terminal = replay.segments[1]!;
+  const generationId = "generation-reset-b";
+  const terminalDelivery = terminal.deliveries[0]!;
+  if (terminalDelivery.kind !== "frame") throw new Error("expected terminal frame");
+  const bootstrap = {
+    ...structuredClone(terminal.bootstrap),
+    protocol: {
+      ...terminal.bootstrap.protocol,
+      generation_id: generationId,
+    },
+    watermarks: watermarks(0, 0, 0, 0),
+    combat_log_frames: {
+      ...terminal.bootstrap.combat_log_frames,
+      generation_id: generationId,
+      retained_from_cursor: 0,
+      from_cursor: 0,
+      through_cursor: 0,
+      frames: [],
+      total: 0,
+    },
+  };
+  const frame = {
+    ...structuredClone(terminalDelivery.frame),
+    generation_id: generationId,
+    watermarks: watermarks(1, 1, 1, 0),
+    presentation: terminalDelivery.frame.presentation.map((cue) => ({
+      ...cue,
+      source_event_cursor: 1,
+    })),
+  };
+  assert.ok(first.through_watermarks.source_event_cursor > frame.watermarks.source_event_cursor);
+  assert.ok(first.through_watermarks.combat_log_cursor > frame.watermarks.combat_log_cursor);
+  return {
+    ...replay,
+    terminal_source_event_cursor: 1,
+    terminal_combat_log_cursor: 0,
+    segments: [
+      first,
+      {
+        ...terminal,
+        bootstrap,
+        deliveries: [{ kind: "frame", frame }],
+        through_watermarks: frame.watermarks,
+      },
+    ],
+  };
+}
+
+function threeSegmentSubjectiveReplay(): SubjectivePlayerReplayBundle {
+  const two = rotatedSubjectiveReplay();
+  const terminal = two.segments[1]!;
+  const middleBootstrap = structuredClone(terminal.bootstrap);
+  const middleFrame = {
+    ...structuredClone(terminal.deliveries[0]!.frame),
+    watermarks: watermarks(6, 1, 0, 2),
+    presentation_from_cursor: 0,
+    patches: [],
+    presentation: [],
+    presentation_delivery: "normal" as const,
+    presentation_reset_reason: null,
+    encounter_terminal: null,
+  };
+  const middle = {
+    ...terminal,
+    segment_index: 1,
+    deliveries: [{ kind: "frame" as const, frame: middleFrame }],
+    through_watermarks: middleFrame.watermarks,
+    end_reason: "perspective_retired" as const,
+  };
+  const finalBootstrap = {
+    ...structuredClone(terminal.bootstrap),
+    protocol: { ...terminal.bootstrap.protocol, generation_id: "generation-c" },
+    perspective: {
+      ...terminal.bootstrap.perspective,
+      perspective_epoch_id: "perspective-c",
+    },
+    watermarks: watermarks(6, 0, 0, 2),
+    combat_log_frames: {
+      ...terminal.bootstrap.combat_log_frames,
+      generation_id: "generation-c",
+      perspective_epoch_id: "perspective-c",
+      frames: terminal.bootstrap.combat_log_frames.frames.map((frame) => ({
+        ...frame,
+        generation_id: "generation-c",
+        perspective_epoch_id: "perspective-c",
+      })),
+    },
+  };
+  const originalTerminal = terminal.deliveries[0]!;
+  if (originalTerminal.kind !== "frame") throw new Error("expected terminal frame");
+  const finalFrame = {
+    ...structuredClone(originalTerminal.frame),
+    generation_id: "generation-c",
+    perspective_epoch_id: "perspective-c",
+    watermarks: watermarks(7, 1, 1, 2),
+    presentation: originalTerminal.frame.presentation.map((cue) => ({
+      ...cue,
+      source_event_cursor: 7,
+    })),
+  };
+  return {
+    ...two,
+    terminal_source_event_cursor: 7,
+    segments: [
+      two.segments[0]!,
+      middle,
+      {
+        ...terminal,
+        segment_index: 2,
+        runtime_session_id: middle.runtime_session_id,
+        bootstrap: finalBootstrap,
+        deliveries: [{ kind: "frame", frame: finalFrame }],
+        through_watermarks: finalFrame.watermarks,
+      },
+    ],
+  };
+}
+
 function jsonResponse(payload: unknown): Response {
   return new Response(JSON.stringify(payload), {
     status: 200,
     headers: { "Content-Type": "application/json" },
   });
+}
+
+interface MutableCrossSegmentReplay {
+  terminal_combat_log_cursor: number;
+  segments: Array<{
+    bootstrap: {
+      watermarks: { combat_log_cursor: number };
+      combat_log_frames: {
+        retained_from_cursor: number;
+        from_cursor: number;
+        through_cursor: number;
+        total: number;
+        frames: Array<{
+          source_stream_id: string;
+          generation_id: string;
+          perspective_epoch_id: string;
+          projection: "subjective";
+          combat_log_cursor: number;
+          event_cursor: number;
+          entry: unknown;
+        }>;
+      };
+    };
+    deliveries: Array<
+      | {
+        kind: "frame";
+        frame: {
+          source_stream_id: string;
+          generation_id: string;
+          perspective_epoch_id: string;
+          watermarks: ReturnType<typeof watermarks>;
+        };
+      }
+      | {
+        kind: "combat_log";
+        watermarks: ReturnType<typeof watermarks>;
+        frame: {
+          source_stream_id: string;
+          generation_id: string;
+          perspective_epoch_id: string;
+          projection: "subjective";
+          combat_log_cursor: number;
+          event_cursor: number;
+          entry: unknown;
+        };
+      }
+    >;
+    through_watermarks: ReturnType<typeof watermarks>;
+  }>;
 }

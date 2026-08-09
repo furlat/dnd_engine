@@ -178,14 +178,19 @@ export function replicationFrame(cursor = 1): SubjectiveReplicationFrame {
       source_event_uuid: `event-${cursor}`,
       content_attributions: [],
       entity_uuid: "hero",
-      movement_kind: "walk",
-      movement_sequence_id: "movement-sequence-a",
-      trajectory: [[cursor - 1, 0], [cursor, 0]],
-      path_start_index: cursor - 1,
-      path_total_steps: cursor,
+      locomotion_family: "walk",
+      trajectory_family: "path",
+      anchors: [
+        { position: [cursor - 1, 0], elevation_feet: 0 },
+        { position: [cursor, 0], elevation_feet: 0 },
+      ],
+      connector: null,
       endpoint_outcome: "committed",
       perception_commit: "observation_frame",
     }],
+    presentation_delivery: "normal",
+    presentation_reset_reason: null,
+    encounter_terminal: null,
   };
 }
 

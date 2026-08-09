@@ -3,6 +3,7 @@
 import hashlib
 import json
 from typing import get_args
+from uuid import uuid4
 
 import pytest
 from pydantic import TypeAdapter, ValidationError
@@ -51,6 +52,8 @@ from server.player_replication_contract import (
     DeathSaveOutcome,
     DoorPresentationCue,
     EffectiveLightCell,
+    EncounterReplacePatch,
+    EncounterTerminalPresentationFact,
     EncounterPresentationCue,
     EncounterTransition,
     EntityVisualLoadout,
@@ -68,11 +71,16 @@ from server.player_replication_contract import (
     LifecycleCausePresentationCue,
     LifeStatePresentationCue,
     LightPresentationCue,
-    MovementKind,
+    ConnectorPresentationIdentity,
+    LocomotionAnchor,
+    LocomotionFamily,
+    LocomotionTrajectory,
     MovementPresentationCue,
     PerspectiveKind,
     PlayerReplicationProtocolIdentity,
     PlayerReplicationWatermarks,
+    PresentationDeliveryMode,
+    PresentationResetReason,
     PresentationDamageType,
     BehaviorPresentationRole,
     PresentationProjectile,
@@ -90,6 +98,7 @@ from server.player_replication_contract import (
     SubjectiveCombatLogDelivery,
     SubjectiveCombatLogFrame,
     SubjectiveCombatLogFramesResponse,
+    SubjectiveEncounter,
     SubjectiveFrameDelivery,
     SubjectiveFramesResponse,
     SubjectiveFloorObject,
@@ -97,6 +106,7 @@ from server.player_replication_contract import (
     SubjectivePerspective,
     SubjectivePresentationCue,
     SubjectiveReplicatedWorld,
+    SubjectiveBootstrapDeferred,
     SubjectiveReplicationBootstrap,
     SubjectiveReplicationFrame,
     SubjectiveStreamDelivery,
@@ -589,6 +599,223 @@ def _cue_base(
     }
 
 
+def _movement_cue_payload(
+    *,
+    family: LocomotionFamily = LocomotionFamily.WALK,
+    trajectory: LocomotionTrajectory = LocomotionTrajectory.PATH,
+    anchors: tuple[dict[str, object], ...] = (
+        {"position": (0, 0), "elevation_feet": 0},
+        {"position": (1, 0), "elevation_feet": 5},
+    ),
+    connector: dict[str, object] | None = None,
+) -> dict[str, object]:
+    return {
+        **_cue_base(1, presentation_id="movement"),
+        "entity_uuid": "hero",
+        "locomotion_family": family,
+        "trajectory_family": trajectory,
+        "anchors": anchors,
+        "connector": connector,
+        "endpoint_outcome": "committed",
+        "perception_commit": "observation_frame",
+    }
+
+
+def test_locomotion_cue_is_a_strict_closed_family_contract() -> None:
+    path = MovementPresentationCue.model_validate(_movement_cue_payload())
+    assert path.locomotion_family is LocomotionFamily.WALK
+    assert path.trajectory_family is LocomotionTrajectory.PATH
+    assert path.anchors == (
+        LocomotionAnchor(position=(0, 0), elevation_feet=0),
+        LocomotionAnchor(position=(1, 0), elevation_feet=5),
+    )
+    assert path.connector is None
+
+    connector_payload = {
+        "uuid": uuid4(),
+        "authored_id": "connector.proving.ladder",
+        "kind": "ladder",
+        "presentation_key": "connector.ladder.wood",
+        "revision": 3,
+    }
+    connector = MovementPresentationCue.model_validate(_movement_cue_payload(
+        family=LocomotionFamily.CONNECTOR,
+        trajectory=LocomotionTrajectory.CONNECTOR_TRANSFER,
+        connector=connector_payload,
+    ))
+    assert isinstance(connector.connector, ConnectorPresentationIdentity)
+    assert connector.connector.authored_id == "connector.proving.ladder"
+
+    jump = MovementPresentationCue.model_validate(_movement_cue_payload(
+        family=LocomotionFamily.JUMP,
+        trajectory=LocomotionTrajectory.DIRECT_ARC,
+    ))
+    assert len(jump.anchors) == 2
+
+    for retired_field, retired_value in (
+        ("movement_kind", "walk"),
+        ("movement_sequence_id", "retired-sequence"),
+        ("trajectory", ((0, 0), (1, 0))),
+        ("path_start_index", 0),
+        ("path_total_steps", 1),
+    ):
+        with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+            MovementPresentationCue.model_validate({
+                **_movement_cue_payload(),
+                retired_field: retired_value,
+            })
+
+    malformed_value = _movement_cue_payload()["anchors"]
+    assert isinstance(malformed_value, tuple)
+    malformed = malformed_value
+    for anchors in (
+        ({"position": (False, 0), "elevation_feet": 0}, malformed[1]),
+        ({"position": (0, 0), "elevation_feet": "0"}, malformed[1]),
+        ({"position": (0, 0), "elevation_feet": 3}, malformed[1]),
+    ):
+        with pytest.raises(ValidationError):
+            MovementPresentationCue.model_validate(_movement_cue_payload(
+                anchors=anchors,
+            ))
+
+    for family, trajectory, connector_identity in (
+        (LocomotionFamily.WALK, LocomotionTrajectory.DIRECT_ARC, None),
+        (LocomotionFamily.JUMP, LocomotionTrajectory.PATH, None),
+        (LocomotionFamily.CONNECTOR, LocomotionTrajectory.PATH, connector_payload),
+        (LocomotionFamily.CONNECTOR, LocomotionTrajectory.CONNECTOR_TRANSFER, None),
+        (LocomotionFamily.FLY, LocomotionTrajectory.PATH, connector_payload),
+    ):
+        with pytest.raises(ValidationError):
+            MovementPresentationCue.model_validate(_movement_cue_payload(
+                family=family,
+                trajectory=trajectory,
+                connector=connector_identity,
+            ))
+
+
+def test_reset_delivery_and_terminal_authority_are_exact_frame_facts() -> None:
+    terminal_event_uuid = uuid4()
+    ended_patch = EncounterReplacePatch(
+        encounter=SubjectiveEncounter(
+            uuid="encounter-1",
+            name="Ended encounter",
+            state="ended",
+            round_number=4,
+        )
+    )
+    terminal = EncounterTerminalPresentationFact(
+        encounter_uuid="encounter-1",
+        source_event_uuid=terminal_event_uuid,
+        source_event_cursor=40,
+        terminal_authority_id=(
+            "perspective-1:7:reset-terminal:"
+            f"{terminal_event_uuid}"
+        ),
+        reason="victory",
+        projected_combatant_uuids=("hero", "enemy"),
+    )
+    reset = SubjectiveReplicationFrame(
+        source_stream_id="stream-1",
+        generation_id="generation-1",
+        perspective_epoch_id="perspective-1",
+        watermarks=_watermarks(source=40, observation=7, presentation=3),
+        presentation_from_cursor=3,
+        patches=(ended_patch,),
+        presentation_delivery=PresentationDeliveryMode.RESET_REQUIRED,
+        presentation_reset_reason=(
+            PresentationResetReason.SOURCE_PRESENTATION_DISCONTINUITY
+        ),
+        encounter_terminal=terminal,
+    )
+    assert reset.presentation == ()
+    assert reset.encounter_terminal == terminal
+
+    ordinary_terminal = SubjectiveReplicationFrame(
+        source_stream_id="stream-1",
+        generation_id="generation-1",
+        perspective_epoch_id="perspective-1",
+        watermarks=_watermarks(source=40, observation=7, presentation=1),
+        presentation_from_cursor=0,
+        patches=(ended_patch,),
+        presentation=(
+            EncounterPresentationCue(
+                presentation_cursor=1,
+                presentation_id="encounter-terminal-cue",
+                source_event_cursor=40,
+                source_event_uuid=str(terminal_event_uuid),
+                encounter_uuid="encounter-1",
+                transition=EncounterTransition.END,
+                round_number=4,
+                reason="victory",
+                terminal_barrier=True,
+                projected_combatant_uuids=("hero", "enemy"),
+            ),
+        ),
+    )
+
+    ordinary = SubjectiveReplicationFrame(
+        source_stream_id="stream-1",
+        generation_id="generation-1",
+        perspective_epoch_id="perspective-1",
+        watermarks=_watermarks(source=40, observation=7, presentation=3),
+        presentation_from_cursor=3,
+    )
+    assert ordinary.presentation_delivery is PresentationDeliveryMode.NORMAL
+    assert ordinary.presentation_reset_reason is None
+    assert ordinary.encounter_terminal is None
+
+    reset_payload = reset.model_dump(mode="python")
+    reset_payload["encounter_terminal"]["terminal_authority_id"] = "forged"
+    with pytest.raises(ValidationError, match="terminal authority"):
+        SubjectiveReplicationFrame.model_validate(reset_payload)
+
+    missing_fact = reset.model_dump(mode="python")
+    missing_fact["encounter_terminal"] = None
+    with pytest.raises(ValidationError, match="ended encounter patch"):
+        SubjectiveReplicationFrame.model_validate(missing_fact)
+
+    missing_ended_patch = reset.model_dump(mode="python")
+    missing_ended_patch["patches"] = []
+    with pytest.raises(ValidationError, match="ended encounter patch"):
+        SubjectiveReplicationFrame.model_validate(missing_ended_patch)
+
+    terminal_before_source_watermark = reset.model_dump(mode="python")
+    terminal_before_source_watermark["watermarks"]["source_event_cursor"] = 41
+    with pytest.raises(ValidationError, match="final source event slot"):
+        SubjectiveReplicationFrame.model_validate(terminal_before_source_watermark)
+
+    assert ended_patch.encounter is not None
+    for terminal_frame in (ordinary_terminal, reset):
+        for final_encounter in (
+            ended_patch.encounter.model_copy(update={"state": "active"}),
+            None,
+        ):
+            ended_then_overridden = terminal_frame.model_dump(mode="python")
+            ended_then_overridden["patches"] = (
+                *ended_then_overridden["patches"],
+                EncounterReplacePatch(encounter=final_encounter).model_dump(
+                    mode="python"
+                ),
+            )
+            with pytest.raises(ValidationError, match="final replacement"):
+                SubjectiveReplicationFrame.model_validate(ended_then_overridden)
+
+    normal_with_reason = ordinary.model_dump(mode="python")
+    normal_with_reason["presentation_reset_reason"] = (
+        PresentationResetReason.SOURCE_PRESENTATION_DISCONTINUITY
+    )
+    with pytest.raises(ValidationError, match="normal presentation"):
+        SubjectiveReplicationFrame.model_validate(normal_with_reason)
+
+    reset_with_cue = reset.model_dump(mode="python")
+    reset_with_cue["presentation"] = [
+        {"kind": "movement", **_movement_cue_payload()}
+    ]
+    reset_with_cue["watermarks"]["presentation_cursor"] = 4
+    with pytest.raises(ValidationError, match="reset.*empty presentation"):
+        SubjectiveReplicationFrame.model_validate(reset_with_cue)
+
+
 def _all_presentation_cues() -> tuple[SubjectivePresentationCue, ...]:
     enemy_loadout = _loadout("enemy", "RustySword")
     action_ref = _content_ref(
@@ -600,11 +827,14 @@ def _all_presentation_cues() -> tuple[SubjectivePresentationCue, ...]:
         MovementPresentationCue.model_validate({
             **_cue_base(1, presentation_id="movement"),
             "entity_uuid": "hero",
-            "movement_kind": MovementKind.WALK,
-            "movement_sequence_id": "movement-sequence",
-            "trajectory": ((0, 0), (1, 0), (2, 0)),
-            "path_start_index": 0,
-            "path_total_steps": 2,
+            "locomotion_family": LocomotionFamily.WALK,
+            "trajectory_family": LocomotionTrajectory.PATH,
+            "anchors": (
+                {"position": (0, 0), "elevation_feet": 0},
+                {"position": (1, 0), "elevation_feet": 5},
+                {"position": (2, 0), "elevation_feet": 5},
+            ),
+            "connector": None,
             "endpoint_outcome": "committed",
             "perception_commit": "observation_frame",
         }),
@@ -812,12 +1042,12 @@ def _all_presentation_cues() -> tuple[SubjectivePresentationCue, ...]:
         EncounterPresentationCue.model_validate({
             **_cue_base(17, presentation_id="encounter-end"),
             "encounter_uuid": "encounter-1",
-            "transition": EncounterTransition.END,
+            "transition": EncounterTransition.START,
             "round_number": 3,
             "acting_entity_uuid": "hero",
-            "reason": "victory",
-            "terminal_barrier": True,
-            "projected_combatant_uuids": ("hero", "enemy"),
+            "reason": None,
+            "terminal_barrier": False,
+            "projected_combatant_uuids": (),
         }),
         ActionPresentationCue.model_validate({
             **_cue_base(18, presentation_id="generic-action"),
@@ -875,7 +1105,11 @@ def test_presentation_union_covers_renderer_semantics_without_raw_events() -> No
     ]
     movement = restored.presentation[0]
     assert isinstance(movement, MovementPresentationCue)
-    assert movement.trajectory == ((0, 0), (1, 0), (2, 0))
+    assert tuple(anchor.position for anchor in movement.anchors) == (
+        (0, 0),
+        (1, 0),
+        (2, 0),
+    )
     attack = restored.presentation[1]
     assert isinstance(attack, AttackPresentationCue)
     assert attack.projectile_type is PresentationProjectile.BOLT
@@ -908,9 +1142,9 @@ def test_presentation_union_covers_renderer_semantics_without_raw_events() -> No
     assert forced.actor_action_presentation_id == shove.presentation_id
     assert resisted.outcome is ShoveOutcome.RESISTED
     assert resisted.forced_movement_presentation_id is None
-    terminal = restored.presentation[-2]
-    assert isinstance(terminal, EncounterPresentationCue)
-    assert terminal.terminal_barrier is True
+    encounter = restored.presentation[-2]
+    assert isinstance(encounter, EncounterPresentationCue)
+    assert encounter.transition is EncounterTransition.START
     action = restored.presentation[-1]
     assert isinstance(action, ActionPresentationCue)
     assert action.action_name == "Dodge"
@@ -1090,11 +1324,14 @@ def test_movement_children_are_pre_segment_reactive_actions() -> None:
         ),
         "source_event_cursor": 30,
         "entity_uuid": "hero",
-        "movement_kind": MovementKind.WALK,
-        "movement_sequence_id": "movement-sequence",
-        "trajectory": ((0, 0), (1, 0), (2, 0)),
-        "path_start_index": 4,
-        "path_total_steps": 8,
+        "locomotion_family": LocomotionFamily.WALK,
+        "trajectory_family": LocomotionTrajectory.PATH,
+        "anchors": (
+            {"position": (0, 0), "elevation_feet": 0},
+            {"position": (1, 0), "elevation_feet": 0},
+            {"position": (2, 0), "elevation_feet": 5},
+        ),
+        "connector": None,
         "endpoint_outcome": "committed",
         "perception_commit": "observation_frame",
     })
@@ -1364,10 +1601,13 @@ def test_presentation_ids_remain_unique_across_an_observation_page() -> None:
     first_cue = MovementPresentationCue.model_validate({
         **_cue_base(1, presentation_id="reused-id"),
         "entity_uuid": "hero",
-        "movement_kind": MovementKind.WALK,
-        "movement_sequence_id": "movement-sequence",
-        "trajectory": ((0, 0), (1, 0)),
-        "path_total_steps": 1,
+        "locomotion_family": LocomotionFamily.WALK,
+        "trajectory_family": LocomotionTrajectory.PATH,
+        "anchors": (
+            {"position": (0, 0), "elevation_feet": 0},
+            {"position": (1, 0), "elevation_feet": 0},
+        ),
+        "connector": None,
         "endpoint_outcome": "committed",
         "perception_commit": "observation_frame",
     })
@@ -2024,6 +2264,29 @@ def test_bootstrap_rejects_mixed_log_identity_and_objective_projection() -> None
         )
 
 
+def test_bootstrap_deferral_is_one_strict_requester_safe_wire_shape() -> None:
+    deferral = SubjectiveBootstrapDeferred(
+        source_stream_id="stream-1",
+        generation_id="generation-1",
+    )
+    assert deferral.model_dump(mode="json") == {
+        "code": "source_batch_in_flight",
+        "retryable": True,
+        "source_stream_id": "stream-1",
+        "generation_id": "generation-1",
+    }
+    with pytest.raises(ValidationError):
+        SubjectiveBootstrapDeferred.model_validate({
+            **deferral.model_dump(mode="json"),
+            "retryable": False,
+        })
+    with pytest.raises(ValidationError):
+        SubjectiveBootstrapDeferred.model_validate({
+            **deferral.model_dump(mode="json"),
+            "root_uuid": str(uuid4()),
+        })
+
+
 def test_contract_identity_is_stable_and_self_authenticating() -> None:
     summary = player_replication_contract_summary()
     wire_schema = player_replication_wire_schema()
@@ -2049,6 +2312,11 @@ def test_contract_identity_is_stable_and_self_authenticating() -> None:
         "/replication/combat-log",
         "/replication/subscribe",
     )
+
+    retired = _bootstrap().protocol.model_dump(mode="python")
+    retired["player_replication_contract_version"] = 1
+    with pytest.raises(ValidationError, match="unsupported player replication"):
+        PlayerReplicationProtocolIdentity.model_validate(retired)
     with pytest.raises(ValidationError, match="contract hash mismatch"):
         PlayerReplicationProtocolIdentity(
             player_replication_contract_hash="drift",

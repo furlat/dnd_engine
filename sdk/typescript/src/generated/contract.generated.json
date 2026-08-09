@@ -161,7 +161,7 @@
       "kind": "union"
     }
   },
-  "contract_hash": "44141732613094d8a74cd86b2c35fb131106ef655b2a9a762bd981f0f1c08d94",
+  "contract_hash": "40714dd659463346f45621d5dc50170c20e6f7238c1e4c8fc664a4d8b0d8773e",
   "contract_version": 1,
   "enums": {
     "dnd.analytics.models.GameOutcomeResolution": {
@@ -1840,20 +1840,33 @@
         "direct_state_check"
       ]
     },
+    "server.player_replication_contract.LocomotionFamily": {
+      "python": "server.player_replication_contract.LocomotionFamily",
+      "typescript": "LocomotionFamily",
+      "values": [
+        "walk",
+        "swim",
+        "fly",
+        "burrow",
+        "jump",
+        "connector"
+      ]
+    },
+    "server.player_replication_contract.LocomotionTrajectory": {
+      "python": "server.player_replication_contract.LocomotionTrajectory",
+      "typescript": "LocomotionTrajectory",
+      "values": [
+        "path",
+        "direct_arc",
+        "connector_transfer"
+      ]
+    },
     "server.player_replication_contract.MovementEndpointOutcome": {
       "python": "server.player_replication_contract.MovementEndpointOutcome",
       "typescript": "MovementEndpointOutcome",
       "values": [
         "committed",
         "not_committed"
-      ]
-    },
-    "server.player_replication_contract.MovementKind": {
-      "python": "server.player_replication_contract.MovementKind",
-      "typescript": "MovementKind",
-      "values": [
-        "walk",
-        "jump"
       ]
     },
     "server.player_replication_contract.PerspectiveKind": {
@@ -1883,6 +1896,14 @@
         "Force"
       ]
     },
+    "server.player_replication_contract.PresentationDeliveryMode": {
+      "python": "server.player_replication_contract.PresentationDeliveryMode",
+      "typescript": "PresentationDeliveryMode",
+      "values": [
+        "normal",
+        "presentation_reset_required"
+      ]
+    },
     "server.player_replication_contract.PresentationProjectile": {
       "python": "server.player_replication_contract.PresentationProjectile",
       "typescript": "PresentationProjectile",
@@ -1896,6 +1917,13 @@
         "radiance",
         "touch",
         "rain"
+      ]
+    },
+    "server.player_replication_contract.PresentationResetReason": {
+      "python": "server.player_replication_contract.PresentationResetReason",
+      "typescript": "PresentationResetReason",
+      "values": [
+        "source_presentation_discontinuity"
       ]
     },
     "server.player_replication_contract.PresentationSpellSchool": {
@@ -37189,6 +37217,32 @@
       "root_model": false,
       "typescript": "ConeAreaGeometry"
     },
+    "server.player_replication_contract.ConnectorPresentationIdentity": {
+      "fields": {
+        "authored_id": {
+          "kind": "string",
+          "min_length": 1
+        },
+        "kind": {
+          "kind": "enum",
+          "ref": "dnd.core.traversal_connectors.TraversalConnectorKind"
+        },
+        "presentation_key": {
+          "kind": "string",
+          "min_length": 1
+        },
+        "revision": {
+          "kind": "integer",
+          "minimum": 1
+        },
+        "uuid": {
+          "kind": "string"
+        }
+      },
+      "python": "server.player_replication_contract.ConnectorPresentationIdentity",
+      "root_model": false,
+      "typescript": "ConnectorPresentationIdentity"
+    },
     "server.player_replication_contract.ConnectorSetReplacePatch": {
       "fields": {
         "connectors": {
@@ -37877,6 +37931,54 @@
       "python": "server.player_replication_contract.EncounterReplacePatch",
       "root_model": false,
       "typescript": "EncounterReplacePatch"
+    },
+    "server.player_replication_contract.EncounterTerminalPresentationFact": {
+      "fields": {
+        "encounter_uuid": {
+          "kind": "string",
+          "min_length": 1
+        },
+        "projected_combatant_uuids": {
+          "items": {
+            "kind": "string"
+          },
+          "kind": "array"
+        },
+        "reason": {
+          "items": [
+            {
+              "kind": "string"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
+        "source_event_cursor": {
+          "kind": "integer",
+          "minimum": 1
+        },
+        "source_event_uuid": {
+          "kind": "string"
+        },
+        "terminal_authority_id": {
+          "kind": "string",
+          "min_length": 1
+        },
+        "terminal_barrier": {
+          "items": [
+            {
+              "kind": "literal",
+              "value": true
+            }
+          ],
+          "kind": "union"
+        }
+      },
+      "python": "server.player_replication_contract.EncounterTerminalPresentationFact",
+      "root_model": false,
+      "typescript": "EncounterTerminalPresentationFact"
     },
     "server.player_replication_contract.EntityRemovePatch": {
       "fields": {
@@ -38715,13 +38817,54 @@
       "root_model": false,
       "typescript": "LineAreaGeometry"
     },
+    "server.player_replication_contract.LocomotionAnchor": {
+      "fields": {
+        "elevation_feet": {
+          "kind": "integer"
+        },
+        "position": {
+          "items": [
+            {
+              "kind": "integer"
+            },
+            {
+              "kind": "integer"
+            }
+          ],
+          "kind": "tuple"
+        }
+      },
+      "python": "server.player_replication_contract.LocomotionAnchor",
+      "root_model": false,
+      "typescript": "LocomotionAnchor"
+    },
     "server.player_replication_contract.MovementPresentationCue": {
       "fields": {
+        "anchors": {
+          "items": {
+            "kind": "model",
+            "ref": "server.player_replication_contract.LocomotionAnchor"
+          },
+          "kind": "array",
+          "min_length": 2
+        },
         "child_presentation_ids": {
           "items": {
             "kind": "string"
           },
           "kind": "array"
+        },
+        "connector": {
+          "items": [
+            {
+              "kind": "model",
+              "ref": "server.player_replication_contract.ConnectorPresentationIdentity"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
         },
         "content_attributions": {
           "items": {
@@ -38760,13 +38903,9 @@
           ],
           "kind": "union"
         },
-        "movement_kind": {
+        "locomotion_family": {
           "kind": "enum",
-          "ref": "server.player_replication_contract.MovementKind"
-        },
-        "movement_sequence_id": {
-          "kind": "string",
-          "min_length": 1
+          "ref": "server.player_replication_contract.LocomotionFamily"
         },
         "parent_presentation_id": {
           "items": [
@@ -38778,14 +38917,6 @@
             }
           ],
           "kind": "union"
-        },
-        "path_start_index": {
-          "kind": "integer",
-          "minimum": 0
-        },
-        "path_total_steps": {
-          "kind": "integer",
-          "minimum": 1
         },
         "perception_commit": {
           "items": [
@@ -38812,20 +38943,9 @@
           "kind": "string",
           "min_length": 1
         },
-        "trajectory": {
-          "items": {
-            "items": [
-              {
-                "kind": "integer"
-              },
-              {
-                "kind": "integer"
-              }
-            ],
-            "kind": "tuple"
-          },
-          "kind": "array",
-          "min_length": 2
+        "trajectory_family": {
+          "kind": "enum",
+          "ref": "server.player_replication_contract.LocomotionTrajectory"
         }
       },
       "python": "server.player_replication_contract.MovementPresentationCue",
@@ -39458,6 +39578,39 @@
       "root_model": false,
       "typescript": "SphereAreaGeometry"
     },
+    "server.player_replication_contract.SubjectiveBootstrapDeferred": {
+      "fields": {
+        "code": {
+          "items": [
+            {
+              "kind": "literal",
+              "value": "source_batch_in_flight"
+            }
+          ],
+          "kind": "union"
+        },
+        "generation_id": {
+          "kind": "string",
+          "min_length": 1
+        },
+        "retryable": {
+          "items": [
+            {
+              "kind": "literal",
+              "value": true
+            }
+          ],
+          "kind": "union"
+        },
+        "source_stream_id": {
+          "kind": "string",
+          "min_length": 1
+        }
+      },
+      "python": "server.player_replication_contract.SubjectiveBootstrapDeferred",
+      "root_model": false,
+      "typescript": "SubjectiveBootstrapDeferred"
+    },
     "server.player_replication_contract.SubjectiveCombatLogDelivery": {
       "fields": {
         "frame": {
@@ -39993,6 +40146,18 @@
     },
     "server.player_replication_contract.SubjectiveReplicationFrame": {
       "fields": {
+        "encounter_terminal": {
+          "items": [
+            {
+              "kind": "model",
+              "ref": "server.player_replication_contract.EncounterTerminalPresentationFact"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
+        },
         "generation_id": {
           "kind": "string",
           "min_length": 1
@@ -40137,9 +40302,25 @@
           },
           "kind": "array"
         },
+        "presentation_delivery": {
+          "kind": "enum",
+          "ref": "server.player_replication_contract.PresentationDeliveryMode"
+        },
         "presentation_from_cursor": {
           "kind": "integer",
           "minimum": 0
+        },
+        "presentation_reset_reason": {
+          "items": [
+            {
+              "kind": "enum",
+              "ref": "server.player_replication_contract.PresentationResetReason"
+            },
+            {
+              "kind": "null"
+            }
+          ],
+          "kind": "union"
         },
         "source_stream_id": {
           "kind": "string",
@@ -41919,10 +42100,10 @@
   },
   "objective_replay_contract_hash": "1435866d271439a3602ce8b48266fb7922e829e90e35146816b619d2a4ba6717",
   "objective_replay_contract_version": 1,
-  "player_replay_contract_hash": "c0b2f80b6d91c6c5b3d04672eddcae789d20804a54e037ceebc290047db093f2",
-  "player_replay_contract_version": 1,
-  "player_replication_contract_hash": "578dcc06df17ef94f72a20749be3d4d059f53a9e1862c9571d2e39cadba9d373",
-  "player_replication_contract_version": 1,
+  "player_replay_contract_hash": "d60b30416221204b23c5dda092f7aa20e3fdf6ab35345a9e6d1f0e05b1e59f0f",
+  "player_replay_contract_version": 2,
+  "player_replication_contract_hash": "4159259d669cd257564caa59735d5e88ed15eb3ffaeba23e6e89ae99aed89d5e",
+  "player_replication_contract_version": 2,
   "roots": [
     "server.api_models.AIProviderCatalogEntry",
     "server.api_models.AIProviderCatalogResponse",
@@ -42123,6 +42304,7 @@
     "dnd.core.combat_log.SpellSaveLogData",
     "dnd.core.combat_log.TemporaryHitPointsLogData",
     "dnd.core.combat_log.TurnLogData",
+    "server.player_replication_contract.SubjectiveBootstrapDeferred",
     "server.player_replication_contract.SubjectiveReplicationBootstrap",
     "server.player_replication_contract.SubjectiveFramesResponse",
     "server.player_replication_contract.SubjectiveCombatLogFramesResponse",

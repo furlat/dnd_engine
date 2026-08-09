@@ -244,6 +244,64 @@ class DndEventStream:
             Callable[[CombatLogSourceSlot], None]
         ] = []
 
+    @property
+    def source_encounter(self) -> Optional[Encounter]:
+        """Return the exact encounter retained by the objective source journal."""
+        with self._source_lock:
+            self._ensure_current_generation()
+            return self._source_encounter
+
+    def install_prepared_source(self, encounter: Encounter) -> None:
+        """Install the exact not-yet-active encounter after world replacement.
+
+        Prepared encounters cannot be discovered through
+        :meth:`Encounter.get_active`, but their pre-start event history is
+        already frozen by :meth:`ensure_attached`. The world-replacement owner
+        calls this seam once so objective diagnostics and subjective
+        replication derive the same source without trusting an arbitrary
+        request-supplied encounter.
+        """
+        with self._source_lock:
+            self._ensure_current_generation()
+            active_encounter = Encounter.get_active()
+            if active_encounter is not None and active_encounter is not encounter:
+                raise CombatLogSourceError(
+                    "prepared objective source conflicts with the active encounter"
+                )
+            if (
+                self._source_encounter is not None
+                and self._source_encounter is not encounter
+            ):
+                raise CombatLogSourceError(
+                    "prepared objective source conflicts with the installed source"
+                )
+            if self._objective_event_source_failure is not None:
+                raise CombatLogSourceError(
+                    "prepared objective source has invalid event history: "
+                    f"{self._objective_event_source_failure}"
+                )
+            event_total = EventQueue.event_cursor()
+            if (
+                len(self._objective_event_source_slots) != event_total
+                or any(
+                    index not in self._objective_event_source_slots
+                    for index in range(event_total)
+                )
+            ):
+                raise CombatLogSourceError(
+                    "prepared objective source does not own exact current event history"
+                )
+            if (
+                self._combat_log_source_slots
+                or self._finalized_causal_event_cursors
+                or self._pending_log_slots_by_lineage
+                or encounter.combat_log
+            ):
+                raise CombatLogSourceError(
+                    "prepared objective source cannot adopt prior combat-log state"
+                )
+            self._source_encounter = encounter
+
     def start(self) -> None:
         with self._source_lock:
             self._ensure_current_generation()
@@ -835,7 +893,10 @@ class DndEventStream:
     ) -> ObjectiveSourceSnapshot:
         """Copy one source boundary while ``_source_lock`` is held."""
         self._ensure_current_generation()
-        self._source_encounter = encounter
+        if self._source_encounter is None:
+            raise CombatLogSourceError("objective source is not installed")
+        if self._source_encounter is not encounter:
+            raise CombatLogSourceError("objective source encounter changed")
         source_stream_id = str(encounter.uuid)
         generation_id = self._journal_generation_id
         if (

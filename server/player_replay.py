@@ -17,17 +17,18 @@ from typing import Annotated, Final, Tuple, TypeAlias, Union
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 
 from server.player_replication_contract import (
-    EncounterPresentationCue,
-    EncounterTransition,
+    EncounterTerminalPresentationFact,
     PLAYER_REPLICATION_CONTRACT_HASH,
     PlayerReplicationWatermarks,
     SubjectiveCombatLogDelivery,
     SubjectiveFrameDelivery,
     SubjectiveReplicationBootstrap,
+    validate_ordinary_encounter_terminal_authority,
+    validate_reset_encounter_terminal_authority,
 )
 
 
-PLAYER_REPLAY_CONTRACT_VERSION: Final[int] = 1
+PLAYER_REPLAY_CONTRACT_VERSION: Final[int] = 2
 PLAYER_REPLAY_CONTRACT_HASH: Final[str]
 
 
@@ -96,9 +97,17 @@ class SubjectiveReplaySegment(PlayerReplayModel):
         protocol = self.bootstrap.protocol
         perspective = self.bootstrap.perspective
         previous = self.bootstrap.watermarks
+        previous_combat_log_event_cursor = (
+            self.bootstrap.combat_log_frames.frames[-1].event_cursor
+            if self.bootstrap.combat_log_frames.frames
+            else 0
+        )
         presentation_ids: set[str] = set()
         encounter_end_seen = subjective_bootstrap_encounter_ended(
             self.bootstrap,
+        )
+        terminal_source_event_cursor = (
+            previous.source_event_cursor if encounter_end_seen else None
         )
 
         for delivery in self.deliveries:
@@ -130,16 +139,34 @@ class SubjectiveReplaySegment(PlayerReplayModel):
                         "presentation IDs must remain unique across the replay segment"
                     )
                 presentation_ids.update(frame_ids)
-                terminal_cues = tuple(
-                    cue
-                    for cue in frame.presentation
-                    if isinstance(cue, EncounterPresentationCue)
-                    and cue.transition is EncounterTransition.END
-                )
-                if len(terminal_cues) > 1:
-                    raise ValueError("one replay frame cannot end the encounter twice")
-                if terminal_cues:
+                terminal_cue = validate_ordinary_encounter_terminal_authority(frame)
+                reset_terminal = validate_reset_encounter_terminal_authority(frame)
+                if terminal_cue is not None and reset_terminal is not None:
+                    raise ValueError(
+                        "one replay frame cannot carry both terminal authority branches"
+                    )
+                if terminal_cue is not None:
+                    if not (
+                        previous.source_event_cursor
+                        < terminal_cue.source_event_cursor
+                        == frame.watermarks.source_event_cursor
+                    ):
+                        raise ValueError(
+                            "terminal cue must belong to the newly consumed source interval"
+                        )
                     encounter_end_seen = True
+                    terminal_source_event_cursor = terminal_cue.source_event_cursor
+                elif isinstance(reset_terminal, EncounterTerminalPresentationFact):
+                    if not (
+                        previous.source_event_cursor
+                        < reset_terminal.source_event_cursor
+                        == frame.watermarks.source_event_cursor
+                    ):
+                        raise ValueError(
+                            "reset terminal fact must belong to the newly consumed source interval"
+                        )
+                    encounter_end_seen = True
+                    terminal_source_event_cursor = reset_terminal.source_event_cursor
                 previous = frame.watermarks
                 continue
 
@@ -152,8 +179,15 @@ class SubjectiveReplaySegment(PlayerReplayModel):
                 raise ValueError("replay combat-log frame identity does not match bootstrap")
             if frame.combat_log_cursor != previous.combat_log_cursor + 1:
                 raise ValueError("replay combat-log frames must be contiguous")
-            if frame.event_cursor > previous.source_event_cursor:
+            event_barrier = (
+                terminal_source_event_cursor
+                if terminal_source_event_cursor is not None
+                else previous.source_event_cursor
+            )
+            if frame.event_cursor > event_barrier:
                 raise ValueError("replay combat-log barrier exceeds consumed source events")
+            if frame.event_cursor < previous_combat_log_event_cursor:
+                raise ValueError("replay combat-log event barriers moved backwards")
             expected = previous.model_copy(
                 update={"combat_log_cursor": frame.combat_log_cursor}
             )
@@ -162,13 +196,14 @@ class SubjectiveReplaySegment(PlayerReplayModel):
                     "replay combat-log delivery watermarks do not match its exact slot"
                 )
             previous = delivery.watermarks
+            previous_combat_log_event_cursor = frame.event_cursor
 
         if previous != self.through_watermarks:
             raise ValueError("replay through watermarks do not match the delivery stream")
         if self.end_reason is SubjectiveReplaySegmentEnd.ENCOUNTER_ENDED:
             if not encounter_end_seen:
                 raise ValueError(
-                    "encounter-ended replay segment requires a terminal bootstrap or cue"
+                    "encounter-ended replay segment requires a terminal bootstrap, cue, or reset fact"
                 )
         elif encounter_end_seen:
             raise ValueError(
@@ -207,7 +242,34 @@ class SubjectivePlayerReplayBundle(PlayerReplayModel):
 
         partition_ids: set[tuple[str, str]] = set()
         ended_indices: list[int] = []
-        previous_opening_source_cursor = -1
+        previous_through_by_branch: dict[
+            tuple[str, str],
+            PlayerReplicationWatermarks,
+        ] = {}
+        combat_log_event_barriers_by_generation: dict[
+            str,
+            dict[int, int],
+        ] = {}
+        combat_log_frontier_cursor_by_generation: dict[str, int] = {}
+        combat_log_frontier_event_cursor_by_generation: dict[str, int] = {}
+        terminal_generation_ids = {
+            segment.bootstrap.protocol.generation_id
+            for segment in self.segments
+            if segment.end_reason is SubjectiveReplaySegmentEnd.ENCOUNTER_ENDED
+        }
+        if not terminal_generation_ids:
+            raise ValueError(
+                "ended-game player replay requires at least one encounter-ended branch"
+            )
+        if len(terminal_generation_ids) != 1:
+            raise ValueError(
+                "all encounter-ended replay branches must use one terminal generation"
+            )
+        terminal_generation_id = next(iter(terminal_generation_ids))
+        ended_branches: set[tuple[str, str]] = set()
+        terminal_generation_started = False
+        active_generation_id: str | None = None
+        departed_generation_ids: set[str] = set()
         for segment in self.segments:
             bootstrap = segment.bootstrap
             protocol = bootstrap.protocol
@@ -226,29 +288,235 @@ class SubjectivePlayerReplayBundle(PlayerReplayModel):
             if partition_id in partition_ids:
                 raise ValueError("replay cannot repeat a generation-and-perspective partition")
             partition_ids.add(partition_id)
-            opening_cursor = bootstrap.watermarks.source_event_cursor
-            if opening_cursor < previous_opening_source_cursor:
-                raise ValueError("replay segment openings must not move backwards")
-            previous_opening_source_cursor = opening_cursor
-            if segment.through_watermarks.source_event_cursor > self.terminal_source_event_cursor:
+            opening = bootstrap.watermarks
+            generation_id = protocol.generation_id
+            if generation_id != active_generation_id:
+                if generation_id in departed_generation_ids:
+                    raise ValueError(
+                        "replay generations must form contiguous segment runs"
+                    )
+                if active_generation_id is not None:
+                    departed_generation_ids.add(active_generation_id)
+                active_generation_id = generation_id
+            if generation_id == terminal_generation_id:
+                terminal_generation_started = True
+            elif terminal_generation_started:
+                raise ValueError(
+                    "no replay generation may follow the terminal generation"
+                )
+            branch_id = (generation_id, segment.runtime_session_id)
+            if branch_id in ended_branches:
+                raise ValueError("replay branch continued after encounter end")
+            previous_through = previous_through_by_branch.get(branch_id)
+            if (
+                previous_through is not None
+                and opening.source_event_cursor
+                < previous_through.source_event_cursor
+            ):
+                raise ValueError("replay segment source history must not regress")
+            if (
+                previous_through is not None
+                and opening.combat_log_cursor
+                < previous_through.combat_log_cursor
+            ):
+                raise ValueError(
+                    "replay segment combat-log history must not regress"
+                )
+            combat_log_event_barrier_by_cursor = (
+                combat_log_event_barriers_by_generation.setdefault(
+                    generation_id,
+                    {},
+                )
+            )
+            combat_log_frontier_cursor = (
+                combat_log_frontier_cursor_by_generation.get(generation_id, -1)
+            )
+            combat_log_frontier_event_cursor = (
+                combat_log_frontier_event_cursor_by_generation.get(
+                    generation_id,
+                    0,
+                )
+            )
+            for frame in bootstrap.combat_log_frames.frames:
+                (
+                    combat_log_frontier_cursor,
+                    combat_log_frontier_event_cursor,
+                ) = _remember_combat_log_event_barrier(
+                    combat_log_event_barrier_by_cursor,
+                    combat_log_cursor=frame.combat_log_cursor,
+                    event_cursor=frame.event_cursor,
+                    frontier_cursor=combat_log_frontier_cursor,
+                    frontier_event_cursor=combat_log_frontier_event_cursor,
+                )
+            for delivery in segment.deliveries:
+                if isinstance(delivery, SubjectiveCombatLogDelivery):
+                    (
+                        combat_log_frontier_cursor,
+                        combat_log_frontier_event_cursor,
+                    ) = _remember_combat_log_event_barrier(
+                        combat_log_event_barrier_by_cursor,
+                        combat_log_cursor=delivery.frame.combat_log_cursor,
+                        event_cursor=delivery.frame.event_cursor,
+                        frontier_cursor=combat_log_frontier_cursor,
+                        frontier_event_cursor=combat_log_frontier_event_cursor,
+                    )
+            previous_through_by_branch[branch_id] = (
+                segment.through_watermarks
+            )
+            combat_log_frontier_cursor_by_generation[generation_id] = (
+                combat_log_frontier_cursor
+            )
+            combat_log_frontier_event_cursor_by_generation[generation_id] = (
+                combat_log_frontier_event_cursor
+            )
+            if (
+                generation_id == terminal_generation_id
+                and segment.through_watermarks.source_event_cursor
+                > self.terminal_source_event_cursor
+            ):
                 raise ValueError("replay segment exceeds the terminal source cursor")
-            if segment.through_watermarks.combat_log_cursor > self.terminal_combat_log_cursor:
+            if (
+                generation_id == terminal_generation_id
+                and segment.through_watermarks.combat_log_cursor
+                > self.terminal_combat_log_cursor
+            ):
                 raise ValueError("replay segment exceeds the terminal combat-log cursor")
             if segment.end_reason is SubjectiveReplaySegmentEnd.ENCOUNTER_ENDED:
                 ended_indices.append(segment.segment_index)
+                ended_branches.add(branch_id)
 
-        if len(ended_indices) != 1:
+        for ended_index in ended_indices:
+            terminal = self.segments[ended_index].through_watermarks
+            if terminal.source_event_cursor != self.terminal_source_event_cursor:
+                raise ValueError("terminal replay branch source cursor is incomplete")
+            if terminal.combat_log_cursor != self.terminal_combat_log_cursor:
+                raise ValueError("terminal replay branch combat-log cursor is incomplete")
+        terminal_identities = tuple(
+            _segment_terminal_event_identity(self.segments[index])
+            for index in ended_indices
+        )
+        if any(
+            identity is not None and identity[2] != self.encounter_uuid
+            for identity in terminal_identities
+        ):
             raise ValueError(
-                "ended-game player replay requires exactly one encounter-ended segment"
+                "terminal replay branch belongs to another encounter"
             )
-        if ended_indices[0] != len(self.segments) - 1:
-            raise ValueError("encounter end must terminate the final replay segment")
-        terminal = self.segments[-1].through_watermarks
-        if terminal.source_event_cursor != self.terminal_source_event_cursor:
-            raise ValueError("terminal replay segment source cursor is incomplete")
-        if terminal.combat_log_cursor != self.terminal_combat_log_cursor:
-            raise ValueError("terminal replay segment combat-log cursor is incomplete")
+        if len(ended_indices) > 1:
+            if (
+                any(identity is None for identity in terminal_identities)
+                or len(set(terminal_identities)) != 1
+            ):
+                raise ValueError(
+                    "terminal replay branches disagree on terminal event identity"
+                )
         return self
+
+
+def _segment_terminal_event_identity(
+    segment: SubjectiveReplaySegment,
+) -> tuple[str, str, str, str | None] | None:
+    """Return the branch-neutral terminal fact shared by sibling perspectives."""
+    for delivery in segment.deliveries:
+        if not isinstance(delivery, SubjectiveFrameDelivery):
+            continue
+        frame = delivery.frame
+        ordinary = validate_ordinary_encounter_terminal_authority(frame)
+        reset = validate_reset_encounter_terminal_authority(frame)
+        authority = ordinary if ordinary is not None else reset
+        if authority is not None:
+            return (
+                "ordinary" if ordinary is not None else "reset",
+                str(authority.source_event_uuid),
+                authority.encounter_uuid,
+                authority.reason,
+            )
+    return None
+
+
+def _remember_combat_log_event_barrier(
+    known: dict[int, int],
+    *,
+    combat_log_cursor: int,
+    event_cursor: int,
+    frontier_cursor: int,
+    frontier_event_cursor: int,
+) -> tuple[int, int]:
+    previous = known.get(combat_log_cursor)
+    if previous is not None and previous != event_cursor:
+        raise ValueError(
+            "retained combat-log cursor changed its canonical event barrier"
+        )
+    known[combat_log_cursor] = event_cursor
+    if combat_log_cursor > frontier_cursor:
+        if (
+            frontier_cursor >= 0
+            and event_cursor < frontier_event_cursor
+        ):
+            raise ValueError(
+                "combat-log event barriers moved backwards across replay segments"
+            )
+        return combat_log_cursor, event_cursor
+    return frontier_cursor, frontier_event_cursor
+
+
+def validate_subjective_replay_segment_transition(
+    previous_segments: Tuple[SubjectiveReplaySegment, ...],
+    bootstrap: SubjectiveReplicationBootstrap,
+) -> int:
+    """Validate one live perspective reset against every retained prior segment."""
+    current_generation_id = bootstrap.protocol.generation_id
+    generation_segments = tuple(
+        segment
+        for segment in previous_segments
+        if segment.bootstrap.protocol.generation_id == current_generation_id
+    )
+    if any(
+        segment.end_reason is SubjectiveReplaySegmentEnd.ENCOUNTER_ENDED
+        for segment in generation_segments
+    ):
+        raise ValueError("replay branch continued after encounter end")
+    if generation_segments:
+        previous_through = generation_segments[-1].through_watermarks
+        opening = bootstrap.watermarks
+        if opening.source_event_cursor < previous_through.source_event_cursor:
+            raise ValueError("replay segment source history must not regress")
+        if opening.combat_log_cursor < previous_through.combat_log_cursor:
+            raise ValueError("replay segment combat-log history must not regress")
+    known: dict[int, int] = {}
+    frontier_cursor = -1
+    frontier_event_cursor = 0
+    for segment in generation_segments:
+        for frame in segment.bootstrap.combat_log_frames.frames:
+            frontier_cursor, frontier_event_cursor = (
+                _remember_combat_log_event_barrier(
+                known,
+                combat_log_cursor=frame.combat_log_cursor,
+                event_cursor=frame.event_cursor,
+                frontier_cursor=frontier_cursor,
+                frontier_event_cursor=frontier_event_cursor,
+                )
+            )
+        for delivery in segment.deliveries:
+            if isinstance(delivery, SubjectiveCombatLogDelivery):
+                frontier_cursor, frontier_event_cursor = (
+                    _remember_combat_log_event_barrier(
+                    known,
+                    combat_log_cursor=delivery.frame.combat_log_cursor,
+                    event_cursor=delivery.frame.event_cursor,
+                    frontier_cursor=frontier_cursor,
+                    frontier_event_cursor=frontier_event_cursor,
+                    )
+                )
+    for frame in bootstrap.combat_log_frames.frames:
+        frontier_cursor, frontier_event_cursor = _remember_combat_log_event_barrier(
+            known,
+            combat_log_cursor=frame.combat_log_cursor,
+            event_cursor=frame.event_cursor,
+            frontier_cursor=frontier_cursor,
+            frontier_event_cursor=frontier_event_cursor,
+        )
+    return frontier_event_cursor
 
 
 class SubjectivePlayerReplayArchive(PlayerReplayModel):
@@ -328,6 +596,23 @@ def player_replay_wire_schema() -> dict[str, object]:
             "objective_state": "forbidden",
             "segment_reset": "exact SubjectiveReplicationBootstrap",
             "delivery_order": "original frame/combat-log journal commit order",
+            "segment_history": (
+                "within one exact source generation and runtime-session branch each "
+                "reset source/log watermark dominates its prior segment through; "
+                "simultaneous runtime-session branches remain siblings; overlapping "
+                "combat-log cursors "
+                "preserve canonical event barriers, and new log cursors keep "
+                "nondecreasing event barriers; a new generation starts fresh "
+                "cursor and event-barrier authority and occupies one contiguous "
+                "segment run which cannot later reappear; an ended runtime-session "
+                "branch cannot reopen, every live terminal branch ends independently "
+                "at the shared exact terminal watermarks and preserves one shared "
+                "ordinary-vs-reset authority mode, source-event UUID, encounter "
+                "UUID, and reason across perspective-specific presentation IDs and "
+                "projected combatants, and every terminal authority names the "
+                "bundle encounter; that terminal generation is "
+                "globally final in the archive"
+            ),
             "excluded": ("sync", "command_result"),
         },
         "bundle": SubjectivePlayerReplayBundle.model_json_schema(

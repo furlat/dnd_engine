@@ -41,8 +41,11 @@ from server.player_replication.combat_log_projection import (
 from server.combat_log_source import CombatLogSourceSlot
 from server.player_replication_contract import (
     ActiveWeaponSet,
-    MovementKind,
+    LocomotionAnchor,
+    LocomotionFamily,
+    LocomotionTrajectory,
     MovementPresentationCue,
+    MovementEndpointOutcome,
     PerspectiveKind,
     PlayerReplicationProtocolIdentity,
     PlayerReplicationWatermarks,
@@ -117,12 +120,13 @@ def _frame(
                 source_event_cursor=source,
                 source_event_uuid=f"event-{source}",
                 entity_uuid="hero",
-                movement_kind=MovementKind.WALK,
-                movement_sequence_id="movement-test-sequence",
-                trajectory=((0, 0), (1, 0)),
-                path_start_index=0,
-                path_total_steps=1,
-                endpoint_outcome="committed",
+                locomotion_family=LocomotionFamily.WALK,
+                trajectory_family=LocomotionTrajectory.PATH,
+                anchors=(
+                    LocomotionAnchor(position=(0, 0), elevation_feet=0),
+                    LocomotionAnchor(position=(1, 0), elevation_feet=0),
+                ),
+                endpoint_outcome=MovementEndpointOutcome.COMMITTED,
                 perception_commit="observation_frame",
             ),
         )

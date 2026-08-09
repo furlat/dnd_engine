@@ -12,7 +12,7 @@ from uuid import uuid4
 import httpx
 import pytest
 from fastapi import HTTPException
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 from starlette.requests import Request
 
 from dnd.blocks.equipment import Weapon
@@ -67,8 +67,14 @@ from server.player_replication.journal import (
     SubjectiveSubscriptionClosedError,
     subjective_journal_store,
 )
-from server.player_replication.runtime import canonical_subjective_replication_runtime
-from server.player_replication_contract import SubjectiveReplicationBootstrap
+from server.player_replication.runtime import (
+    SubjectiveBootstrapDeferredError,
+    canonical_subjective_replication_runtime,
+)
+from server.player_replication_contract import (
+    SubjectiveBootstrapDeferred,
+    SubjectiveReplicationBootstrap,
+)
 from server.session import PlayerSession, PlayerType
 from server.timeline_contracts import CombatLogProjection
 
@@ -144,6 +150,7 @@ def canonical_route_scene(
     encounter = Encounter(name="Canonical route encounter", source_entity_uuid=observer.uuid)
     EventQueue.set_combat_log_callback(encounter._on_event_combat_log)
     sim.encounter = encounter
+    event_stream.install_prepared_source(encounter)
     game = sim.create_game_session(encounter)
     session = sim.get_session_manager().create_session(PlayerType.HUMAN, "Route player")
     game.add_player(session)
@@ -169,8 +176,42 @@ def _bootstrap(scene: CanonicalRouteScene) -> SubjectiveReplicationBootstrap:
         response=response,
         session_id=str(scene.session.session_id),
     ))
+    assert isinstance(bootstrap, SubjectiveReplicationBootstrap)
     assert response.headers["cache-control"] == "private, no-store"
     return bootstrap
+
+
+def test_bootstrap_deferral_returns_exact_typed_409_body(
+    canonical_route_scene: CanonicalRouteScene,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The GET boundary preserves the requester-safe model without detail wrapping."""
+    def deferred_bind(*args: object, **kwargs: object) -> object:
+        del args, kwargs
+        raise SubjectiveBootstrapDeferredError(SubjectiveBootstrapDeferred(
+            source_stream_id=str(canonical_route_scene.encounter.uuid),
+            generation_id=str(EventQueue.generation_id()),
+        ))
+
+    monkeypatch.setattr(
+        canonical_subjective_replication_runtime,
+        "bind",
+        deferred_bind,
+    )
+    response = asyncio.run(get_replication_bootstrap(
+        request=_request("/replication/bootstrap"),
+        response=Response(),
+        session_id=str(canonical_route_scene.session.session_id),
+    ))
+    assert isinstance(response, JSONResponse)
+    assert response.status_code == 409
+    assert response.headers["cache-control"] == "private, no-store"
+    assert json.loads(bytes(response.body)) == {
+        "code": "source_batch_in_flight",
+        "retryable": True,
+        "source_stream_id": str(canonical_route_scene.encounter.uuid),
+        "generation_id": str(EventQueue.generation_id()),
+    }
 
 
 def _identity(bootstrap: SubjectiveReplicationBootstrap) -> tuple[str, str, str]:

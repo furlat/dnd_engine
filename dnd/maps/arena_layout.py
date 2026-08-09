@@ -24,7 +24,7 @@ from dnd.items.environment_interactables import (
 )
 from dnd.items.torches import WallTorch
 from dnd.environmental_effect_runtime import materialize_spike_trap_effect
-from dnd.core.base_tiles import difficult_terrain_factory
+from dnd.core.base_tiles import difficult_terrain_factory, water_factory
 
 ARENA_WIDTH = 15
 ARENA_HEIGHT = 15
@@ -125,7 +125,12 @@ def build_standard_arena_environment(grid: GridMap) -> StandardArenaObjects:
     barrier = place_standard_directional_barrier(grid)
 
     for position in WATER_POSITIONS:
-        grid.set_tile(position[0], position[1], walkable=False, visible=True, name="Water")
+        grid.set_tile(
+            position[0],
+            position[1],
+            tile=water_factory(position),
+            fire_event=False,
+        )
 
     spike_effect = materialize_spike_trap_effect(
         set(SPIKE_ZONE_POSITIONS),

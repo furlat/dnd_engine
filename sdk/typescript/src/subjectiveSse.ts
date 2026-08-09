@@ -228,11 +228,31 @@ export function assertSubjectiveFrame(frame: SubjectiveReplicationFrame): void {
   assertWatermarks(frame.watermarks, "$subjective.frame.watermarks");
   requirePositiveCursor(frame.watermarks.observation_cursor, "$subjective.frame.watermarks.observation_cursor");
   requireCursor(frame.presentation_from_cursor, "$subjective.frame.presentation_from_cursor");
-  if (
-    frame.presentation.length
-    !== frame.watermarks.presentation_cursor - frame.presentation_from_cursor
-  ) {
-    throw new ContractValidationError("$subjective.frame.presentation", "presentation window is not exact");
+  if (frame.presentation_delivery === "normal") {
+    if (frame.presentation_reset_reason !== null || frame.encounter_terminal !== null) {
+      throw new ContractValidationError(
+        "$subjective.frame.presentation_delivery",
+        "normal presentation cannot carry reset authority",
+      );
+    }
+    if (
+      frame.presentation.length
+      !== frame.watermarks.presentation_cursor - frame.presentation_from_cursor
+    ) {
+      throw new ContractValidationError("$subjective.frame.presentation", "presentation window is not exact");
+    }
+  } else {
+    if (
+      frame.presentation_reset_reason !== "source_presentation_discontinuity"
+      || frame.presentation.length !== 0
+      || frame.watermarks.presentation_cursor !== frame.presentation_from_cursor
+    ) {
+      throw new ContractValidationError(
+        "$subjective.frame.presentation_delivery",
+        "reset presentation requires its closed reason, no cues, and no cue-cursor advance",
+      );
+    }
+    assertResetTerminalSemantics(frame);
   }
   frame.patches.forEach((patch, index) => {
     assertSubjectiveWorldPatch(patch, `$subjective.frame.patches[${index}]`);
@@ -284,7 +304,7 @@ export function assertSubjectiveFrame(frame: SubjectiveReplicationFrame): void {
       && frame.patches.some((patch) => (
         patch.kind === "entity_upsert"
         && patch.entity.uuid === cue.entity_uuid
-        && samePosition(patch.entity.position, cue.trajectory[cue.trajectory.length - 1]!)
+        && samePosition(patch.entity.position, cue.anchors[cue.anchors.length - 1]!.position)
       ))
     ) {
       throw new ContractValidationError(
@@ -293,6 +313,9 @@ export function assertSubjectiveFrame(frame: SubjectiveReplicationFrame): void {
       );
     }
   });
+  if (frame.presentation_delivery === "normal") {
+    assertNormalTerminalSemantics(frame);
+  }
 }
 
 function assertPresentationCueSemantics(cue: SubjectivePresentationCue, path: string): void {
@@ -304,13 +327,37 @@ function assertPresentationCueSemantics(cue: SubjectivePresentationCue, path: st
   }
   switch (cue.kind) {
     case "movement": {
-      const representedSteps = cue.trajectory.length - 1;
-      if (cue.path_start_index + representedSteps > cue.path_total_steps) {
-        throw new ContractValidationError(path, "movement trajectory exceeds declared path order");
+      if (cue.anchors.length < 2) {
+        throw new ContractValidationError(path, "movement requires at least two authorized anchors");
+      }
+      for (const anchor of cue.anchors) {
+        if (!Number.isSafeInteger(anchor.elevation_feet) || anchor.elevation_feet % 5 !== 0) {
+          throw new ContractValidationError(path, "movement elevation must use exact five-foot steps");
+        }
+      }
+      if (
+        cue.locomotion_family === "walk"
+        || cue.locomotion_family === "swim"
+        || cue.locomotion_family === "fly"
+        || cue.locomotion_family === "burrow"
+      ) {
+        if (cue.trajectory_family !== "path" || cue.connector !== null) {
+          throw new ContractValidationError(path, "path locomotion requires PATH with no connector");
+        }
+      } else if (cue.locomotion_family === "jump") {
+        if (cue.trajectory_family !== "direct_arc" || cue.anchors.length !== 2 || cue.connector !== null) {
+          throw new ContractValidationError(path, "jump requires one direct-arc leg with no connector");
+        }
+      } else if (
+        cue.trajectory_family !== "connector_transfer"
+        || cue.anchors.length !== 2
+        || cue.connector === null
+      ) {
+        throw new ContractValidationError(path, "connector locomotion requires one typed transfer leg");
       }
       if (
         cue.endpoint_outcome === "not_committed"
-        && (representedSteps !== 1 || cue.child_presentation_ids.length === 0)
+        && (cue.anchors.length !== 2 || cue.child_presentation_ids.length === 0)
       ) {
         throw new ContractValidationError(
           path,
@@ -485,12 +532,24 @@ function assertPresentationCueSemantics(cue: SubjectivePresentationCue, path: st
       } else if (cue.death_save_outcome !== null) {
         throw new ContractValidationError(path, "death-save outcome belongs only to a death-save cause");
       }
-      if (cue.child_presentation_ids.length !== 1) {
-        throw new ContractValidationError(path, "lifecycle cause must own exactly one life-state child");
+      if (
+        cue.child_presentation_ids.length > 1
+        || (
+          cue.cause_kind === "death_save"
+          && cue.child_presentation_ids.length !== 1
+        )
+      ) {
+        throw new ContractValidationError(
+          path,
+          "lifecycle cause may own at most one life-state child and a death save requires one",
+        );
       }
       return;
     case "life_state":
-      if (cue.previous === cue.current) {
+      if (
+        cue.previous === cue.current
+        && (cue.previous !== "alive" || cue.current !== "alive")
+      ) {
         throw new ContractValidationError(path, "life-state cue requires a real transition");
       }
       if (cue.parent_presentation_id !== cue.causing_effect_presentation_id) {
@@ -579,6 +638,109 @@ function assertPresentationCueSemantics(cue: SubjectivePresentationCue, path: st
       return;
     default:
       assertNever(cue);
+  }
+}
+
+function assertResetTerminalSemantics(frame: SubjectiveReplicationFrame): void {
+  const ended = frame.patches.flatMap((patch) => (
+    patch.kind === "encounter_replace"
+    && patch.encounter !== null
+    && patch.encounter.state === "ended"
+      ? [patch.encounter]
+      : []
+  ));
+  const fact = frame.encounter_terminal;
+  if (fact === null) {
+    if (ended.length !== 0) {
+      throw new ContractValidationError(
+        "$subjective.frame.encounter_terminal",
+        "ended encounter patch requires terminal reset authority",
+      );
+    }
+    return;
+  }
+  assertTerminalResultingEncounter(
+    frame,
+    fact.encounter_uuid,
+    "$subjective.frame.encounter_terminal",
+  );
+  const expectedAuthority = (
+    `${frame.perspective_epoch_id}:${frame.watermarks.observation_cursor}`
+    + `:reset-terminal:${fact.source_event_uuid}`
+  );
+  if (
+    fact.terminal_barrier !== true
+    || !UUID_PATTERN.test(fact.source_event_uuid)
+    || !Number.isSafeInteger(fact.source_event_cursor)
+    || fact.source_event_cursor < 1
+    || fact.source_event_cursor !== frame.watermarks.source_event_cursor
+    || fact.terminal_authority_id !== expectedAuthority
+    || fact.encounter_uuid.length === 0
+    || fact.projected_combatant_uuids.some((uuid) => uuid.length === 0)
+    || new Set(fact.projected_combatant_uuids).size !== fact.projected_combatant_uuids.length
+  ) {
+    throw new ContractValidationError(
+      "$subjective.frame.encounter_terminal",
+      "terminal reset authority does not exactly match the final source slot and ended encounter",
+    );
+  }
+}
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+function assertNormalTerminalSemantics(frame: SubjectiveReplicationFrame): void {
+  const terminalCues = frame.presentation.flatMap((cue) => (
+    cue.kind === "encounter" && cue.transition === "end" ? [cue] : []
+  ));
+  const ended = frame.patches.flatMap((patch) => (
+    patch.kind === "encounter_replace"
+    && patch.encounter !== null
+    && patch.encounter.state === "ended"
+      ? [patch.encounter]
+      : []
+  ));
+  if (terminalCues.length === 0 && ended.length === 0) return;
+  const cue = terminalCues.length === 1 ? terminalCues[0]! : null;
+  if (
+    cue === null
+    || cue.source_event_cursor !== frame.watermarks.source_event_cursor
+  ) {
+    throw new ContractValidationError(
+      "$subjective.frame.presentation",
+      "normal encounter end requires one matching final-source cue and ended encounter patch",
+    );
+  }
+  assertTerminalResultingEncounter(
+    frame,
+    cue.encounter_uuid,
+    "$subjective.frame.presentation",
+  );
+}
+
+function assertTerminalResultingEncounter(
+  frame: SubjectiveReplicationFrame,
+  encounterUuid: string,
+  path: string,
+): void {
+  const replacements = frame.patches.flatMap((patch) => (
+    patch.kind === "encounter_replace" ? [patch.encounter] : []
+  ));
+  const ended = replacements.filter((encounter) => encounter?.state === "ended");
+  const finalEncounter = replacements.at(-1);
+  if (
+    ended.length !== 1
+    || replacements.some((encounter) => (
+      encounter !== null && encounter.uuid !== encounterUuid
+    ))
+    || finalEncounter === undefined
+    || finalEncounter === null
+    || finalEncounter.uuid !== encounterUuid
+    || finalEncounter.state !== "ended"
+  ) {
+    throw new ContractValidationError(
+      path,
+      "terminal authority must leave one matching ended encounter as the final replacement",
+    );
   }
 }
 
@@ -929,6 +1091,7 @@ function assertPresentationGraphSemantics(
       }
       return;
     case "lifecycle_cause": {
+      if (cue.child_presentation_ids.length === 0) return;
       const child = requirePresentationCue(cue.child_presentation_ids[0] ?? null, byId, path);
       if (child.kind !== "life_state" || child.entity_uuid !== cue.entity_uuid) {
         throw new ContractValidationError(path, "lifecycle cause must own a matching life-state transition");
