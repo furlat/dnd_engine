@@ -283,6 +283,58 @@ def test_existing_ledger_promotes_new_reviewed_provider_asset() -> None:
     assert action["evidence_token"].startswith("grants_action:")
 
 
+def test_existing_ledger_promotes_attack_intentional_null_to_reviewed() -> None:
+    existing = BUILT_IN_CONTENT_ICON_BINDING_LEDGER.model_dump(mode="json")
+    attack = next(
+        row
+        for row in existing["definitions"]
+        if (
+            row["content_ref"]["pack_id"] == "core.rules"
+            and row["content_ref"]["definition_kind"] == "action"
+            and row["content_ref"]["content_id"] == "action.attack"
+            and row["content_ref"]["content_version"] == 1
+            and row["content_ref"]["definition_contract_hash"]
+            == "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+        )
+    )
+    attack.update({
+        "decision": "intentional_null",
+        "icon_key": None,
+        "asset_sha256": None,
+        "evidence_kind": "intentional_dynamic_provider",
+        "evidence_token": (
+            "provider_attributed_runtime_icon:"
+            "core.rules:action:action.attack@1"
+        ),
+    })
+
+    imported = _definition_rows_from_existing(
+        existing=existing,
+        declarations=BUILT_IN_DECLARATIONS,
+        assets_by_key={
+            row.icon_key: row.model_dump(mode="json")
+            for row in NEUROCLIENT_GAME_ICON_ASSET_INDEX.assets
+        },
+    )
+    imported_attack = next(
+        row
+        for row in imported
+        if row["content_ref"] == attack["content_ref"]
+    )
+
+    assert imported_attack["decision"] == "bind"
+    assert imported_attack["icon_key"] == "ui.filter-attacks"
+    assert imported_attack["asset_sha256"] == (
+        "00b85f45f2ecb784e0fb1c79b00a01fee"
+        "95bbc537fe1689260d29ac862f61bbc"
+    )
+    assert imported_attack["evidence_kind"] == "human_reviewed"
+    assert imported_attack["evidence_token"] == (
+        "reviewed_content_ref_to_manifest_asset:"
+        "core.rules:action:action.attack@1->ui.filter-attacks"
+    )
+
+
 def test_missing_or_unknown_public_binding_row_fails_closed() -> None:
     def remove_first(payload: dict[str, object]) -> None:
         definitions = payload["definitions"]

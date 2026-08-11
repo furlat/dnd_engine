@@ -2549,8 +2549,8 @@ BUILT_IN_CONTENT_ICON_BINDINGS: dict[
         'ea90f56d5a70338a32e3506dbb1646245f4a3300149598092d9be1b5d660daf8',
     ),
     'core.rules:action:action.attack@1#b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0': (
-        None,
-        None,
+        'ui.filter-attacks',
+        '00b85f45f2ecb784e0fb1c79b00a01fee95bbc537fe1689260d29ac862f61bbc',
     ),
     'core.rules:action:action.attack_object@1#b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0': (
         'action.attack-object',

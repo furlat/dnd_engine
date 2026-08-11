@@ -1,6 +1,6 @@
 {
   "asset_index_digest": "3b17d6d5715c5bd92bf4a251a98a60707160fe20d2775efc8b23512243b8a8a6",
-  "binding_digest": "3aad77d3029a263774fe7864452272904660024a9a4f6cc3a0c5e4de656a4bf3",
+  "binding_digest": "f7d1642da1b9af7426a589a0457adff36471fc065a82880e3cce6bb8068326ee",
   "definitions": [
     {
       "asset_sha256": "540da9d7cb94419501c0c8c47d73ca05d826d8d70e2f18c6adae5e13e4c92892",
@@ -8879,7 +8879,7 @@
       "icon_key": "condition.dnd-monsters-traits-hitsaveriderfeature"
     },
     {
-      "asset_sha256": null,
+      "asset_sha256": "00b85f45f2ecb784e0fb1c79b00a01fee95bbc537fe1689260d29ac862f61bbc",
       "content_ref": {
         "content_id": "action.attack",
         "content_version": 1,
@@ -8887,10 +8887,10 @@
         "definition_kind": "action",
         "pack_id": "core.rules"
       },
-      "decision": "intentional_null",
-      "evidence_kind": "intentional_dynamic_provider",
-      "evidence_token": "provider_attributed_runtime_icon:core.rules:action:action.attack@1",
-      "icon_key": null
+      "decision": "bind",
+      "evidence_kind": "human_reviewed",
+      "evidence_token": "reviewed_content_ref_to_manifest_asset:core.rules:action:action.attack@1->ui.filter-attacks",
+      "icon_key": "ui.filter-attacks"
     },
     {
       "asset_sha256": "fcacf00d428fa28722b48ea7c6ad556961af1b42ee9bad3f3f079e9bad8fbd98",

@@ -56,6 +56,7 @@ EXPECTED_STYLE_ID = "fantasy-classic-v1"
 
 
 _HUMAN_REVIEWED_BINDINGS = {
+    "core.rules:action:action.attack@1": "ui.filter-attacks",
     (
         "content.neurodragon:condition:"
         "condition.environment.wet@1"
@@ -1036,7 +1037,6 @@ _EVIDENCE_KIND_MAP = {
     ),
 }
 _INTENTIONAL_DYNAMIC_PROVIDER_IDENTITIES = frozenset({
-    "core.rules:action:action.attack@1",
 })
 _NON_GAME_ICON_DEFINITION_KINDS = frozenset({
     ContentDefinitionKind.BACKGROUND,

@@ -1521,6 +1521,129 @@ test("the subjective wire gate accepts every canonical presentation and area kin
   }
 });
 
+test("spell position application accepts a created spatial effect in current geometry", () => {
+  assert.doesNotThrow(() => decodePresentationGraph(spellSpatialEffectGraph(
+    {
+      operation: "created",
+      anchor_position: [0, 0],
+      affected_positions: [[0, 0], [0, 1]],
+      previous_positions: [],
+    },
+    { position: [0, 1] },
+  )));
+});
+
+test("spell position application accepts a removed spatial effect in previous geometry", () => {
+  assert.doesNotThrow(() => decodePresentationGraph(spellSpatialEffectGraph(
+    {
+      operation: "removed",
+      anchor_position: [2, 0],
+      affected_positions: [],
+      previous_positions: [[2, 0], [2, 1]],
+    },
+    { position: [2, 1] },
+  )));
+});
+
+test("spell position applications reject delivered non-spatial effect children", () => {
+  const lawfulCases: ReadonlyArray<
+    readonly [string, Array<Record<string, unknown>>]
+  > = [
+    [
+      "damage",
+      spellNonSpatialEffectGraph(
+        "damage",
+        "monster",
+        damageCue("damage", 2, "spell"),
+      ),
+    ],
+    [
+      "heal",
+      spellNonSpatialEffectGraph(
+        "heal",
+        "hero",
+        healCue("heal", 2, "spell"),
+      ),
+    ],
+    [
+      "condition",
+      spellNonSpatialEffectGraph(
+        "condition",
+        "monster",
+        conditionCue("condition", 2, "spell"),
+      ),
+    ],
+    [
+      "forced movement",
+      spellNonSpatialEffectGraph(
+        "forced",
+        "monster",
+        {
+          ...cueBase("forced_movement", "forced", 2, "spell"),
+          entity_uuid: "monster",
+          source_uuid: "hero",
+          cause: "spell",
+          actor_action_presentation_id: "spell",
+          start_position: [0, 0],
+          end_position: [1, 0],
+          duration_ms: 100,
+          target_clip: "TakeDamage",
+          brace_frame: 1,
+          playback_speed: 1,
+        },
+      ),
+    ],
+  ];
+
+  for (const [name, lawfulGraph] of lawfulCases) {
+    assert.doesNotThrow(
+      () => decodePresentationGraph(lawfulGraph),
+      `${name} lawful entity-target baseline`,
+    );
+    const spell = lawfulGraph[0]!;
+    const applications = spell.targets as ReadonlyArray<Record<string, unknown>>;
+    const positionOnlyGraph = [
+      {
+        ...spell,
+        targets: applications.map((application) => ({
+          ...application,
+          target_uuid: null,
+          position: [4, 4],
+        })),
+      },
+      ...lawfulGraph.slice(1),
+    ];
+    assert.throws(
+      () => decodePresentationGraph(positionOnlyGraph),
+      ContractValidationError,
+      name,
+    );
+  }
+});
+
+test("spell-owned spatial effects reject entity ownership and undisclosed positions", () => {
+  const cases: ReadonlyArray<
+    readonly [string, Array<Record<string, unknown>>]
+  > = [
+    [
+      "entity-owned spatial application",
+      spellSpatialEffectGraph({}, { target_uuid: "monster" }),
+    ],
+    [
+      "spatial application outside disclosed geometry",
+      spellSpatialEffectGraph({}, { position: [9, 9] }),
+    ],
+  ];
+
+  for (const [name, graph] of cases) {
+    assert.throws(
+      () => decodePresentationGraph(graph),
+      ContractValidationError,
+      name,
+    );
+  }
+});
+
 test("generated field constraints reject invalid presentation scalars at the wire gate", () => {
   const cases: ReadonlyArray<readonly [string, ReadonlyArray<Record<string, unknown>>]> = [
     ["empty ID", [{ ...movementCue(), presentation_id: "" }]],
@@ -1592,7 +1715,7 @@ test("local presentation semantics reject malformed renderer transactions", () =
     ["centered cube direction", [spellCue({ delivery: "aoe", area: { shape: "cube", origin: [0, 0], direction: [1, 0], size_feet: 10, centered: true } })]],
     ["directionless cube", [spellCue({ delivery: "aoe", area: { shape: "cube", origin: [0, 0], direction: null, size_feet: 10, centered: false } })]],
     ["target without entity or position", [spellCue({ targets: [{ ...spellTarget(), target_uuid: null, position: null }] })]],
-    ["position target with entity effects", [spellCue({ targets: [{ ...spellTarget(), target_uuid: null, position: [1, 1], effect_presentation_ids: ["effect"] }], child_presentation_ids: ["effect"] })]],
+    ["position target with dangling effect child", [spellCue({ targets: [{ ...spellTarget(), target_uuid: null, position: [1, 1], effect_presentation_ids: ["effect"] }], child_presentation_ids: ["effect"] })]],
     ["duplicate application effects", [spellCue({ targets: [{ ...spellTarget(), effect_presentation_ids: ["effect", "effect"] }], child_presentation_ids: ["effect", "effect"] })]],
     ["noncontiguous applications", [spellCue({ targets: [spellTarget(0, "a"), spellTarget(2, "b")] })]],
     ["duplicate application IDs", [spellCue({ targets: [spellTarget(0, "same"), spellTarget(1, "same")] })]],
@@ -1926,6 +2049,44 @@ function spatialEffectCue(overrides: CueOverrides = {}): Record<string, unknown>
     previous_positions: [],
     ...overrides,
   };
+}
+
+function spellSpatialEffectGraph(
+  effectOverrides: CueOverrides = {},
+  applicationOverrides: CueOverrides = {},
+): Array<Record<string, unknown>> {
+  return [
+    spellCue({
+      ...cueBase("spell", "spell", 1, null, ["spatial-effect"]),
+      targets: [{
+        ...spellTarget(0, "application-0", ["spatial-effect"]),
+        target_uuid: null,
+        position: [0, 0],
+        ...applicationOverrides,
+      }],
+    }),
+    spatialEffectCue({
+      ...cueBase("spatial_effect", "spatial-effect", 2, "spell"),
+      ...effectOverrides,
+    }),
+  ];
+}
+
+function spellNonSpatialEffectGraph(
+  effectId: string,
+  targetUuid: string,
+  effect: Record<string, unknown>,
+): Array<Record<string, unknown>> {
+  return [
+    spellCue({
+      ...cueBase("spell", "spell", 1, null, [effectId]),
+      targets: [{
+        ...spellTarget(0, "application-0", [effectId]),
+        target_uuid: targetUuid,
+      }],
+    }),
+    effect,
+  ];
 }
 
 function contentRef(
