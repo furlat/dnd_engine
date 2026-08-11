@@ -751,9 +751,6 @@ function assertSpellTargetSemantics(
   if (target.target_uuid === null && target.position === null) {
     throw new ContractValidationError(path, "spell application requires an entity or position");
   }
-  if (target.effect_presentation_ids.length !== 0 && target.target_uuid === null) {
-    throw new ContractValidationError(path, "spell entity effects require an entity target");
-  }
   if (new Set(target.effect_presentation_ids).size !== target.effect_presentation_ids.length) {
     throw new ContractValidationError(path, "spell application effect IDs must be unique");
   }
@@ -1074,8 +1071,28 @@ function assertPresentationGraphSemantics(
             && effect.kind !== "heal"
             && effect.kind !== "condition"
             && effect.kind !== "forced_movement"
+            && effect.kind !== "spatial_effect"
           ) {
             throw new ContractValidationError(path, "spell child is not an impact effect");
+          }
+          if (effect.kind === "spatial_effect") {
+            if (target.target_uuid !== null) {
+              throw new ContractValidationError(path, "spell spatial effect cannot have an entity target");
+            }
+            const targetPosition = target.position;
+            if (targetPosition === null) {
+              throw new ContractValidationError(path, "spell spatial effect requires a position target");
+            }
+            if (
+              !effect.affected_positions.some((position) => samePosition(position, targetPosition))
+              && !effect.previous_positions.some((position) => samePosition(position, targetPosition))
+            ) {
+              throw new ContractValidationError(path, "spell spatial effect does not contain its application position");
+            }
+            continue;
+          }
+          if (target.target_uuid === null) {
+            throw new ContractValidationError(path, "spell entity effects require an entity target");
           }
           const effectTarget = effect.kind === "forced_movement" ? effect.entity_uuid : effect.target_uuid;
           if (effectTarget !== target.target_uuid) {

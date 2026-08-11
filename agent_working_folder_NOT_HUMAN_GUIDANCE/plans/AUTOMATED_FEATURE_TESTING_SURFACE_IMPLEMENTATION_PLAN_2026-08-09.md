@@ -217,6 +217,30 @@ the owning runner, command, and self-test. A runner which accumulates private
 production calls, per-case orchestration code, ambient IO, or fixed waits fails
 this audit even if its cases are green.
 
+### 3.8 The permanent failure-to-fix loop
+
+After the surface exists, a gameplay report follows one maintained loop:
+
+1. capture the smallest public input or production trace that reproduces the
+   failure, preserving exact identities and the observed positive reachability;
+2. add it as data to the nearest public-boundary `check_*` owner and prove it is
+   red for the intended reason, not an earlier schema/setup failure;
+3. use the reconciliation chain, normalized diff, coverage marks, and minimized
+   prefix to identify the first authoritative owner that diverged;
+4. fix that owner without adding client inference, compatibility fallback,
+   sleep, retry, or test-only control flow;
+5. rerun the nearest fast cases, the affected production composition root, and
+   the named owned-product representative;
+6. retain the case, pre-fix artifact digest, timing, and first-red/fixed
+   expectation permanently in the inventory.
+
+The runner's `--case` and artifact bundle must make this loop usable by an
+engineer or model without manual play. A generic stack, combat log, screenshot,
+or final-state mismatch is an input to the loop, not sufficient localization.
+If the surface cannot distinguish the first failing producer/transport/
+presentation/resource node for one of the stabilization regressions in §4.3,
+that surface checkpoint remains incomplete.
+
 ## 4. Scope and non-goals
 
 ### 4.1 In scope
@@ -247,6 +271,57 @@ this audit even if its cases are green.
   releasable;
 - compatibility routes, fake player rosters, or retry fallbacks added only for
   tests.
+
+### 4.3 Mandatory entry gate: stabilize the current game first
+
+Implementation of the new testing surface must not become a reason to defer the
+bugs already observed in the playable product. Before Checkpoint 0 may change
+runner, harness, command, or migration code, the current implementation owner
+must deliver one frozen `CURRENT_GAMEPLAY_STABILIZATION_MANIFEST` accepted on
+the same source bytes by internal, engine-external, and NeuroClient-external
+review.
+
+That manifest owns the current confirmed regression cluster:
+
+- fatal spell-root disclosure, including the omitted second Fireball cue after
+  perspective visibility/life-state changes;
+- remembered-corpse parity-oracle correctness at every lethal prefix;
+- BannerClip/FloatingText/RAF/timer/deferred resource terminality across live,
+  replay, Studio, stateSync, terminal, reset, seek, destroy, and replacement;
+- Fire Bolt atlas/device compatibility and last-committed-scene survival through
+  real recovery/rebootstrap failure;
+- recognizable potion/Haste semantic presentation rather than generic Taunt;
+- canonical water factory/material/swim authoring through mounted rendering;
+- multi-Step walking body-cycle continuity with an explicit backend/client
+  presentation boundary and no hidden-route inference;
+- Acid Splash one-of-two Finish and Enter through real lease, request,
+  mechanics, presentation, and continued input;
+- `hero.sorcerer_l5_standard_torch` Invisibility grant/materialization/action;
+- any still-confirmed position-only SpatialEffect, diagnostics non-authority,
+  canceled-generation sink, nonzero-origin, or pre-try storage defect.
+
+Each row requires a deterministic red-first regression in the existing nearest
+test owner, the smallest authoritative fix, focused green gates, and an owned-
+process product or exact production-root representative appropriate to that
+feature. Focused smoke/build success alone is not enough. The real journeys
+must have no unexpected page/console/network fault, no manual/model clicking as
+acceptance, and truthful first-failure evidence to the extent the current
+product exposes it. No row may remain xfailed, skipped, “known but acceptable,”
+or green only because its intended branch was unreachable.
+
+The stabilization manifest records source hashes, exact red and green commands,
+case/artifact identities, product transcripts, screenshots/scene manifests as
+supplemental evidence, independent verdicts, and the preserved pre-fix input
+for every row. Those pre-fix traces, malformed payloads, oversized media,
+content recipes, and lifecycle schedules are copied as immutable regression
+data; production source is never rolled back to prove the later surface.
+
+Only after this gate is accepted may Checkpoint 0 implement the new surface.
+The first responsibility of that surface is to import the stabilization corpus,
+run the fixed current product as the positive branch, and run preserved
+pre-fix/mutated data as the negative branch. The surface is not useful until it
+fails each historical escape at the intended boundary and keeps every current
+fixed branch green.
 
 ## 5. Canonical feature-case model
 
@@ -479,8 +554,9 @@ It covers:
 - REST catch-up through the sole journal;
 - objective/subjective render projection and privacy;
 - replay import, segment topology, terminal authority, and seek.
-- generated player-safe reconciliation diagnostic decoding, hard version/hash
-  parity, stale/cross-perspective rejection, and diagnostic-unavailable truth.
+- generated player-safe reconciliation diagnostic fixed-target paging and
+  decoding, hard version/hash parity, stale/cross-perspective rejection,
+  abort/teardown fencing, and diagnostic-unavailable truth.
 
 A protocol fixture is not product evidence. Every fixture case states which
 wire contract it isolates, and the same successful path is exercised against
@@ -617,8 +693,9 @@ The closed operation set distinguishes:
 - opening a new SSE follower after reconnect, seeded from the existing journal;
 - authenticated bootstrap plus journal/attachment replacement for changed
   source, generation, or perspective identity;
-- receiving an authenticated perspective-safe reconciliation diagnostic through
-  its read-only evidence owner, never through the journal/reducer;
+- triggering and completing the public generated-client fixed-target
+  acquisition of an authenticated perspective-safe reconciliation diagnostic
+  through its sole read-only evidence owner, never through the journal/reducer;
 - waiting for the production head drain or replacement owner to become idle.
 
 Each SSE connection owns a new real follower and cannot cross identity. REST
@@ -763,6 +840,9 @@ does not need the server:
 - panel state, focus, modal, and teardown;
 - render projection to Pixi manifests;
 - clip/animation/replay behavior under injected deterministic clocks;
+- the generated presentation-expectation diagnostic acquisition state machine,
+  including fixed-target paging, positive install, unavailable/stale/duplicate
+  results, attachment/reset/replacement fencing, and mounted read-only view;
 - visual state for loading, error, disabled, empty, and terminal conditions.
 
 Route interception is allowed only in this layer and only through the shared
@@ -1039,6 +1119,10 @@ maintaining hand-written counts:
   presentation recipe, and referenced media atlas with its compiled dimensions
   and renderer/device-limit policy;
 - every player-facing HTTP/SSE route and generated SDK operation;
+- the player-safe presentation-expectation diagnostic route/DTO/page state,
+  monotonic per-perspective diagnostic cursor/target, acquisition lifecycle,
+  unavailable/fenced discriminators, and disjoint
+  administrator-only objective diagnostic scope;
 - every closed presentation disposition and locomotion family;
 - every presentation-owned requestFrame, timeout, deferred callback, decorative
   child, and resource-lease/transfer terminal;
@@ -1331,9 +1415,15 @@ person reconstructing it from console stacks and combat logs.
 
 The evidence schema has three mutually exclusive incident roots:
 
-1. `DELIVERY_ADMISSION_INCIDENT` is used when raw delivery, generated decode,
-   semantic envelope/follower, journal admission, or head preview fails before
-   the production owner issues an exact accepted head/token. It carries only
+1. `DELIVERY_ADMISSION_INCIDENT` owns delivery/admission outcomes before the
+   production owner issues an exact accepted head/token. It is used when raw
+   delivery, generated decode, semantic envelope/follower, journal admission,
+   or head preview fails. It also always owns a server-authenticated upstream
+   producer-omission observation for an exact accepted delivery, whether or not
+   that same delivery also produces other accepted heads. That deterministic
+   classification depends on the fact's production relation, never on whether
+   the asynchronous diagnostic response arrives before or after head issuance;
+   it has no fabricated causal failure or `BLOCKS` edge. It carries only
    identities actually available at that boundary: connection/attachment,
    delivery digest/kind, authenticated/validated
    source/generation/perspective/cursors when present, stable rule/path, and
@@ -1342,27 +1432,37 @@ The evidence schema has three mutually exclusive incident roots:
    values never become identity. It never claims an accepted head, token, cue
    graph, transaction, or clip which was not produced.
 2. `ACCEPTED_HEAD_PRESENTATION_INCIDENT` exists only after the production owner
-   issues an exact head/token. It anchors causal presentation failure to that
-   real head and may reference only cue, transaction, clip, recipe, profile,
-   asset, staging, scene, commit, and stateSync identities subsequently issued
-   by the same production root.
+   issues an exact head/token. It anchors production-stage outcomes and any
+   evidence-only incidents observed for that real accepted head. It may have a
+   causal production failure, only observational evidence faults, or both; an
+   observational-only root never fabricates a causal failure or `BLOCKS` edge.
+   Upstream `EXPECTED_CUE_NOT_EMITTED` facts are excluded because they remain
+   delivery-scoped under rule 1, although they may carry a read-only relation
+   to a production-issued head.
+   It may reference only cue, transaction, clip, recipe, profile, asset,
+   staging, scene, commit, and stateSync identities subsequently issued by the
+   same production root.
 3. `EVIDENCE_OWNER_INCIDENT` is observational-only and exists for evidence
    startup/migration, first persistence write, schema, compaction, export, or
-   mounted-view failures which occur before any connection, delivery, or head.
-   Its real identity is the product run/browser context, evidence-owner
-   incarnation, schema version, storage boundary, and ledger sequence. Product
-   delivery/head/cue identities are explicitly null. It never owns `BLOCKS`,
-   queue, commit, reset, or recovery edges.
+   mounted-view failures which are not attributable to one exact delivery or
+   accepted head. This includes pre-connection startup failures and later
+   owner-wide compaction/export/view incidents. Its real identity is the
+   product run/browser context, evidence-owner incarnation, schema version,
+   storage boundary, and ledger sequence. Product delivery/head/cue identities
+   remain explicitly null; a latest authenticated frontier may appear only as
+   contextual data, never as the incident root. It never owns `BLOCKS`, queue,
+   commit, reset, or recovery edges.
 
 These roots are not interchangeable and cannot be upgraded by inference. A
 delivery-admission incident remains a delivery-admission incident even when a
 later retry accepts the same logical server batch. An accepted-head incident
 must cite the exact production-issued token; matching cursors or cue payloads
-are not a substitute. An evidence-owner incident cannot later acquire delivery
-identity. Retry/replacement creates a new root linked by a typed `RECOVERY_OF`
-edge, preserving both attempts. Root event IDs are unique within the evidence-
-owner incarnation; exact duplicate events are idempotent, while a conflicting
-reuse is a typed schema incident and qualification failure.
+are not a substitute, including when its only fault is observational. An
+evidence-owner incident cannot later acquire delivery identity.
+Retry/replacement creates a new root linked by a typed `RECOVERY_OF` edge,
+preserving both attempts. Root event IDs are unique within the evidence-owner
+incarnation; exact duplicate events are idempotent, while a conflicting reuse
+is a typed schema incident and qualification failure.
 
 For every accepted presentation head, the maintained evidence model records an
 immutable identity containing only facts actually issued by the production
@@ -1458,6 +1558,156 @@ stale, or unavailable, the ledger records
 was omitted. The mounted view may report “upstream authorized cue omission; no
 client transaction issued” only from the authenticated safe fact, never by
 inference.
+
+One `PresentationExpectationAcquisitionOwner` (or reviewed equivalent) owns
+this diagnostic lifecycle for each authenticated live attachment/evidence-
+owner incarnation. The mounted view, ledger reducer, and product runner never
+fetch diagnostics themselves. After the production transport admits an exact
+subjective delivery, it publishes that delivery's generated read-only
+`diagnostic_target`. The server issues one monotonic diagnostic cursor per
+source/generation/perspective. The target contains that cursor plus session,
+source, generation, perspective epoch, attachment, delivery identity/digest,
+captured observation frontier, and an opaque bound token. Equal observation
+frontiers on distinct deliveries receive distinct diagnostic cursors; cursor
+orders acquisition while delivery digest authenticates identity.
+
+The generated SDK operation requests the interval after the last installed
+diagnostic cursor through one immutable target. Every bounded page repeats the
+target and returns first/last diagnostic cursor, next-page cursor, exact
+`examined_through`, and zero or more safe facts. The final page must prove
+complete coverage through the frozen target. It does not write the journal or
+wait for presentation settlement.
+
+The owner state is closed: `IDLE(installed_frontier)`,
+`REQUESTING(active_target, optional_pending_target)`,
+`PAUSED_FOR_LOCAL_FENCE(required_fence_sequence, optional_resume_target)`, or terminal
+`FENCED(reason)`. A local fence is only an ordinary same-incarnation
+presentation RESET or a transport reconnect which preserves the exact
+attachment, source, generation, perspective, and evidence-owner credential.
+It is not player bootstrap or identity replacement. `INSTALLED`,
+`UNAVAILABLE`, `PAUSED_BY_LOCAL_FENCE`, and `FENCED_BY_OWNER_CHANGE` are
+attempt outcomes, not ambiguous owner states. The production composition owner
+issues one monotonic local-fence sequence per evidence-owner incarnation; a
+bounded scalar therefore coalesces RESET/reconnect interleavings without an
+unbounded set of pending fences.
+
+Target authentication and installed-frontier coverage are a state-independent
+first step before the state branches below. The generated target must match the
+owner identity and bound token. In every nonterminal state, a valid target at
+or below the installed frontier is immediately
+`COVERED_BY_INSTALLED_FRONTIER`; it does not start a request, inherit a later
+attempt's outcome, or change active, pending, or resume state. The owner retains
+the installed-frontier bound identity; reuse of that cursor with a different
+bound identity is a typed conflict. Any equal cursor already represented by an
+active, pending, or resume target must likewise have the same bound identity.
+An authenticated lower cursor is otherwise an already examined obligation.
+The total transition table after that precheck is:
+
+1. In `IDLE`, a higher target becomes active and starts `REQUESTING` from the
+   installed frontier.
+2. In `REQUESTING`, a target above the installed frontier and at or below the
+   active target is registered as `COVERED_BY_ACTIVE_INTERVAL`; its final
+   outcome follows that interval attempt. A target above active and at or below
+   the pending maximum is `COVERED_BY_PENDING_INTERVAL`. A target higher than
+   both replaces the single pending maximum. The total server cursor order
+   makes every case deterministic without retaining an unbounded target list.
+3. In `PAUSED_FOR_LOCAL_FENCE`, no request may run. A higher target at or below
+   the resume maximum is `COVERED_BY_RESUME_INTERVAL`; a higher target replaces
+   that single maximum. Thus a delivery admitted during the local fence cannot
+   be dropped or start an out-of-order request.
+4. Successful request completion validates every page/fact, appends
+   observational facts, and atomically advances the installed frontier through
+   the active target. If a higher pending target exists it immediately becomes
+   active and requests the remaining interval; otherwise the owner returns to
+   `IDLE`.
+5. Transient/typed unavailability records one `UNAVAILABLE` attempt and does
+   not advance the installed frontier. If a pending target exists, that target
+   came from a later admitted delivery and starts one new bounded attempt which
+   covers the still-unexamined interval; otherwise the owner returns to `IDLE`
+   with an unhealthy gap. No timer or generic stream event retries it.
+6. An ordinary same-incarnation RESET or same-attachment transport reconnect
+   snapshots the maximum unexamined active, pending, and triggering-delivery
+   target; aborts and joins the request; marks the interrupted attempt
+   `PAUSED_BY_LOCAL_FENCE`; and enters or updates
+   `PAUSED_FOR_LOCAL_FENCE(required_fence_sequence, resume_target)`. A further
+   local fence raises the required sequence and coalesces only the maximum
+   unexamined target. A terminal below that required sequence cannot resume
+   acquisition. Once the exact production owner reports completed-through the
+   required RESET/reconnect sequence, the same evidence owner uses its existing
+   authenticated diagnostic credential to start one request from the installed
+   frontier through that frozen resume target, even when no later delivery
+   arrives. If the target is already installed it returns to `IDLE`. The
+   evidence owner observes that canonical terminal but never invokes, waits
+   for, or mutates player bootstrap, journal/head recovery, command authority,
+   or scene settlement.
+7. Actual source, generation, perspective, or attachment replacement, plus
+   unmount/final teardown, aborts and joins any active request and terminally
+   fences the old owner; all old late pages/callbacks are inert. When an
+   authenticated bootstrap installs a new attachment for the same
+   source/generation/perspective, the replacement owner receives the prior
+   installed frontier and one bootstrap-correlated resume target covering the
+   maximum unexamined old obligation, even if no later frame arrives. A changed
+   source/generation/perspective or final teardown lawfully fences the old
+   obligation rather than pretending it installed. The diagnostic owner does
+   not initiate that player attachment/bootstrap transition.
+8. `FENCED` accepts no new target, page, frontier advance, or retry. Only an
+   authenticated replacement acquisition-owner incarnation can return to
+   `IDLE`.
+
+All target, request-terminal, local-fence, owner-replacement, and teardown
+transitions are serialized by that one acquisition owner. The RESET delivery's
+target is admitted before its local-fence transition in the same production
+delivery order. If request completion linearizes first, its installed frontier
+is used when computing the remaining resume interval; if the local fence
+linearizes first, the joined request's later callback is inert. Evidence
+collection cannot choose or reorder these outcomes.
+
+Page count, bytes, and deadline are explicit. The state snapshot records
+active/pending/resume targets, required/completed local-fence sequence, and
+every attempt outcome so owner idle and coverage are mechanically decidable.
+
+Every page and fact must match the request's session, source, generation,
+perspective, attachment, captured target, and generated contract hash before it
+can append an observational node. Exact duplicate fact IDs are idempotent;
+conflicting reuse is a typed evidence-schema incident; responses beyond the
+target, with a gap/overlap, or below the installed frontier reject atomically.
+A replacement owner may seed an installed frontier only from the authenticated
+bootstrap plus the prior snapshot when all bound identities match exactly.
+Otherwise it starts fresh. These operations never alter admission, head
+settlement, recovery, or command authority.
+
+Installation always attaches the upstream omission fact to its authenticated
+trigger delivery's `DELIVERY_ADMISSION_INCIDENT` in observational-only form.
+It may add read-only `RELATES_TO_HEAD` edges only to exact heads which production
+had already issued; a later-issued head does not change or upgrade the root.
+Evidence subscriber/view/persistence faults which occur for an accepted head
+use that head's observational-only `ACCEPTED_HEAD_PRESENTATION_INCIDENT`
+instead. Neither path creates `EVIDENCE_OWNER_INCIDENT`, a causal failure, a
+presentation head, or a transaction merely to hold diagnostic data.
+
+A mandatory owned-product positive case installs a versioned trusted test
+content pack before server startup through the normal content boundary. Its
+publicly disclosed action root deliberately has one server-authored
+presentation expectation with no emitted cue, so the real server diagnostic
+owner—not the browser or runner—produces a player-safe omission fact. Through
+the ordinary SDK/client acquisition state machine, the mounted reconciliation
+view must render that exact fact against the real delivery identity with no
+route interception, private fault hook, or objective lineage. This fixture
+tests the diagnostic product feature; it does not count as proof that shipped
+gameplay is correct. Separate cases cover a zero-fact successful page,
+unavailable service, stale and duplicate pages, same-incarnation RESET and
+same-attachment reconnect rearming, actual attachment/identity replacement,
+cross-perspective replay, and teardown with a request in flight.
+In canonical/recovery/release product cases, every admitted target frontier
+must either reach a successful installed zero-or-more-facts result or a lawful
+`FENCED_BY_OWNER_CHANGE` terminal. Same-identity replacement must install a
+resume target covering the complete unexamined old interval before the new
+owner is declared idle. Same-incarnation RESET and same-attachment reconnect
+must instead rearm the existing owner after their exact terminal without
+requiring player rebootstrap. Changed-identity/final-teardown fencing is
+recorded but requires no impossible old installation. `UNAVAILABLE` is
+accepted only in its explicitly named negative case and otherwise fails
+qualification.
 
 Cross-perspective cases prove that a player cannot correlate another
 perspective's expectation IDs or learn an undisclosed spell/target. Forged but
@@ -1577,11 +1827,24 @@ Ledger acceptance invariants are closed and data-driven:
 - the global incident budget also reserves one
   `GLOBAL_CAPTURE_SATURATED` accumulator. If all retained incidents are active
   or unresolved and no completed victim exists, a new root is not partially
-  constructed: the accumulator records root kind, first/last rejected ledger
-  sequence, count, and rolling digest. It also has one fixed optional slot for
-  the first real causal production failure observed among rejected roots,
+  constructed. That first saturation atomically installs a sticky
+  `NEW_ROOT_ADMISSION_FENCED` state for the remainder of the evidence-owner
+  incarnation. A fixed membership table, sized to the declared maximum number
+  of roots and populated only with roots admitted before the fence, retains
+  root ID plus active/terminal/compacted status even if one of those incidents
+  later completes or is compacted. Existing
+  admitted active roots may finish. Events for a compacted admitted root are
+  summarized as late-to-compacted and never reopen it. Every event whose root
+  is absent from the fixed pre-fence table—including the initially rejected R
+  and every later new S—remains rejected and summarized even if capacity later
+  frees. Only teardown and a new evidence-owner incarnation clear the fence;
+  generation/reset/reconnect alone do not.
+
+  The accumulator records root kind, first/last rejected ledger sequence,
+  count, and rolling digest. It also has one fixed optional slot for the first
+  real causal production failure observed among all fenced/unrecognized roots,
   retaining only its strongest authenticated issued identity, stage, outcome,
-  and sequence. It never creates the rejected incident or descendants. Capture
+  and sequence. It never creates a rejected incident or descendants. Capture
   health becomes incomplete. Gameplay proceeds, but the evidence run cannot
   qualify;
 - the tombstone budget reserves one deterministic `TOMBSTONE_ROLLUP`. When the
@@ -1603,7 +1866,8 @@ Ledger acceptance invariants are closed and data-driven:
 The versioned schema declares explicit per-root/per-incident byte and node
 budgets, global active/unresolved/completed incident counts, individual
 tombstone count, reserved overflow/first-failure/terminal/rollup capacity, and fixed
-accumulator widths. Tests fill every boundary exactly and one over. They cover
+accumulator widths, plus the fixed pre-saturation admitted-root membership
+table. Tests fill every boundary exactly and one over. They cover
 a single oversized active incident, multiple unresolved incidents with no
 victim, an observational storm, persistence failure during overflow, a full
 tombstone ring/rollup, dual durability+view degradation, triple
@@ -1616,21 +1880,25 @@ markers/summaries cannot fit its per-incident cap, or whose global/tombstone
 accumulators are not reserved inside their own caps; overflow behavior must
 remain executable without attempting another unbudgeted allocation.
 
-`product.reconciliation_fireball_blocked_chain` runs the stored
+`pipeline.reconciliation_fireball_pre_fix_chain` runs the preserved stored
 Fireball -> Haste Potion -> Fireball -> Invisibility removal -> death -> Turn
-End trace. The ledger and mounted UI must agree exactly on which heads, cues,
-transactions, clips, assets, and stateSync operations completed, which first
-failed, which were blocked, and whether an earlier upstream cue omission was an
-observed divergence rather than a client node failure. The preserved pre-fix
-trace's privileged pipeline artifact must prove the objective/subjection
-omission directly. Its mounted product view may render
-`EXPECTED_CUE_NOT_EMITTED` with no invented transaction/clip only when the real
-server supplies the authenticated perspective-safe diagnostic; otherwise it
-truthfully renders `PRESENTATION_DIAGNOSTIC_UNAVAILABLE`. The corrected lawful
-trace must not report an omission. It has one successful canonical branch in
-which all expected visuals complete and one naturally triggerable failure
-branch using a versioned product content/media fixture through normal backend,
-catalog, UI, and renderer paths. It does not call private stage-fault hooks.
+End trace. Its privileged artifact must prove the objective/subjective omission
+directly, and its normalized reconciliation model identifies which real heads,
+cues, transactions, clips, assets, and stateSync operations completed, failed,
+or were blocked. Because the historical bytes predate the player-safe
+diagnostic contract, an imported UI/view-model fixture may truthfully render
+`PRESENTATION_DIAGNOSTIC_UNAVAILABLE`; it is not the release product-positive
+diagnostic case and cannot satisfy one.
+
+`product.reconciliation_fireball_corrected_and_blocked_chain` uses the corrected
+real producer/consumer chain. Its successful branch emits every authorized cue,
+completes every expected visual, and reports no omission. Its naturally
+triggerable failure branch uses a versioned product content/media fixture
+through normal backend, catalog, UI, and renderer paths; the real ledger and
+mounted UI agree exactly on the first causal failure plus completed, blocked,
+and unmaterialized descendants. It does not call private stage-fault hooks.
+The separate mandatory safe-omission fixture above is the positive acquisition
+proof and cannot be replaced by either Fireball branch.
 
 Stage injection is split by real test boundary. SDK/pipeline cases inject
 delivery/decode/follower/journal/preview and pre-render production-composition
@@ -1678,7 +1946,7 @@ test caused the defect.
 | Escaped feature | Nearest maintained pre-surface test/command | Exact old input and oracle | Why the green result was vacuous; severity | First red replacement |
 | --- | --- | --- | --- | --- |
 | Remembered corpse prefix parity | `uv run pytest tests/manual/test_120_subjective_world_projection.py` and `npm run render-parity-live:smoke` | The Python case projected one already-known corpse through visibility loss; the live parity gate compared its selected/final diagnostic snapshot. | Neither drove real multi-target damage/death through every W_i nor compared the independent oracle, emitted patches, SDK authoritative frontier, and drained presentation frontier at the same prefixes. The faulty independent manifest could omit the corpse while canonical memory remained lawful. **P0 diagnostic false alarm.** | `pipeline.multi_target_death_corpse_memory_prefix_parity` |
-| Fireball -> Haste -> Fireball -> death head liveness | `npm run presentation-head-drain-live:smoke`, `npm run replay-presentation-head-drain:smoke`, and per-family mapper tests | Synthetic isolated heads exercised selected NORMAL/RESET/terminal and recovery outcomes; each fixture ended at its own expected token/cursor, while mapper cases classified already-present spell cues. | No real server-produced cross-family chain tested both production and consumption. Exact captured objective events 1058..1100 disclosed the second Fireball, but the fatal subjective frame omitted its root cue after the observer died; separately, the first Fireball cue existed while its FX/popup did not settle. Per-family green cases caught neither producer omission nor the first blocked consumer node. **P0 playable presentation stall and projection omission.** | producer-disclosure and consumer-ledger branches of `pipeline.enemy_fireball_haste_fireball_death_head_liveness` plus `product.reconciliation_fireball_blocked_chain` |
+| Fireball -> Haste -> Fireball -> death head liveness | `npm run presentation-head-drain-live:smoke`, `npm run replay-presentation-head-drain:smoke`, and per-family mapper tests | Synthetic isolated heads exercised selected NORMAL/RESET/terminal and recovery outcomes; each fixture ended at its own expected token/cursor, while mapper cases classified already-present spell cues. | No real server-produced cross-family chain tested both production and consumption. Exact captured objective events 1058..1100 disclosed the second Fireball, but the fatal subjective frame omitted its root cue after the observer died; separately, the first Fireball cue existed while its FX/popup did not settle. Per-family green cases caught neither producer omission nor the first blocked consumer node. **P0 playable presentation stall and projection omission.** | producer-disclosure and consumer-ledger branches of `pipeline.enemy_fireball_haste_fireball_death_head_liveness`, `pipeline.reconciliation_fireball_pre_fix_chain`, and `product.reconciliation_fireball_corrected_and_blocked_chain` |
 | Haste-potion semantic visual | `npm run potion-animation:smoke` | A constructed Drink Haste cue plus Haste child cue was mapped; the old fixture explicitly accepted `actor_clip = Taunt` and observed generic transaction/body/effect callbacks. | Cue mapping and callback presence did not require a recognizable potion prop/feedback and condition-gain visual in the mounted scene. **P1 semantic feedback loss.** | `ui.haste_potion_semantic_visual` |
 | Continuous multi-tile walking | `npm run movement-animation:smoke` and `npm run locomotion-presentation:smoke` | One authored path intent and a family table asserted Walking start/end, anchors, profile, and terminal behavior. | Production emits adjacent two-anchor per-Step cues with distinct presentation IDs, and the old owner deleted its session in each intent's `finally`; MoveClip therefore forced Walking -> Idle per tile. A single path fixture never proved a presentation-owned body-cycle lease across obs4/5/6/7 or obs63/64/65 without hidden-route inference. **P1 visible animation regression.** | `pipeline.multi_tile_walk_continuous_cycle` plus its mounted motion representative |
 | Fire Bolt atlas/device limit | `npm run presentation-asset-service:smoke`, `npm run animation-readiness:smoke`, and `npm run icons:validate` | Small fixture assets/catalog references were resolved and declared media was checked for catalog/readiness properties. | No gate compiled the shipped Fire Bolt atlas dimensions against a real browser's `MAX_TEXTURE_SIZE`, uploaded the actual media, or required recognizable FX and a committed head. The 9216-wide atlas reached an 8192 device; the later recovery microtask could reset/destroy the committed scene before replacement catch-up, producing black output. **P0 renderer loss.** | Both branches and real recovery-microtask assertion of `ui.fire_bolt_atlas_policy_and_authored_visual` |
@@ -1702,10 +1970,10 @@ ledger which cannot identify the first fault is itself a product failure:
 | Accepted-head causal chain | `npm run presentation-head-drain-live:smoke`, `npm run clip-queue-liveness:smoke`, and replay drain smoke | Individual fixtures asserted drain/queue terminal, token behavior, or a diagnostic callback. | The tests did not require one immutable production-issued chain spanning head/cue/recipe/asset/transaction/clip/stage/stateSync identities or preserve the first failure across reset/terminal. **P0 diagnosis loss.** | `ACCEPTED_HEAD_PRESENTATION_INCIDENT` stage matrix |
 | Materialized versus never-created descendants | `npm run presentation-head-drain-live:smoke` and `npm run replay-presentation-head-drain:smoke` | The fixtures stopped at a selected failed head and asserted that later presentation did not complete or that the drain stopped. | Absence did not say whether a real node was queued then blocked or never planned at all. A proposed diagnostic could have invented transaction/clip IDs by running a second planner. **P0 misleading evidence.** | `NOT_STARTED_BLOCKED_BY` and `NOT_MATERIALIZED_DUE_TO` reconciliation cases |
 | Causal product fault versus evidence fault | Throwing diagnostic-callback cases in lease/replay/render isolation smokes | A selected subscriber threw and the narrow operation still returned its expected result. | There was no closed two-track vocabulary proving a real asset/GPU/clip/scene fault controls normal settlement while parity/subscriber/persistence/debug-view faults never do. **P0 authority inversion risk.** | causal-stage matrix plus observational-incident matrix |
-| Omitted-cue privacy and wire identity trust | SDK malformed-envelope tests, render parity diagnostics, and mapper disposition smokes | A malformed delivery was rejected, or a privileged parity mismatch was printed, while independently constructed cues were classified. | No player-safe generated diagnostic contract distinguished authenticated perspective identity from attacker-asserted wire fields or privileged objective lineage. A client could only infer an omitted cue or leak/join private facts. **P0 privacy/diagnosis conflict.** | player-safe diagnostic authorization/non-joinability/unavailable cases plus rejected-wire quarantine cases |
+| Omitted-cue privacy, acquisition, and wire identity trust | SDK malformed-envelope tests, render parity diagnostics, and mapper disposition smokes | A malformed delivery was rejected, or a privileged parity mismatch was printed, while independently constructed cues were classified. | No player-safe generated diagnostic contract or bounded client acquisition owner distinguished authenticated perspective identity from attacker-asserted wire fields or privileged objective lineage. A client could only infer an omitted cue, leak/join private facts, or remain permanently unavailable while server-only tests passed. **P0 privacy/diagnosis conflict.** | player-safe diagnostic authorization/non-joinability/fixed-target acquisition cases, mandatory mounted positive product fixture, and rejected-wire quarantine cases |
 | Core evidence append failure | Throwing diagnostics-subscriber smokes | A downstream observer threw and the selected production operation continued. | Nothing proved that failure of the dependency-minimal in-memory ledger itself reached a separate bounded health channel; a dead evidence core could silently report no incident. **P0 false diagnostic success.** | `EVIDENCE_CAPTURE_FAILED` fallback/qualification cases |
-| Ledger durability, bounded overflow, and orthogonal health | `npm run presentation-persistence-cut:smoke` and `npm run studio-document-history:smoke` | Selected current/malformed records were retained or cleared. | No total active-incident/global/tombstone overflow policy, reserved post-overflow first-failure fact, deterministic victim order, truthful non-durability, or simultaneous capture/durability/view state existed. “Survives” could be claimed after a denied write, and an evidence storm had no bounded truthful result. **P1 postmortem loss/startup risk.** | `check_reconciliation_case` exact-limit/one-over/storm/retention/quota/migration/compound-health pack |
-| Mounted JSON/debug-UI equality | `npm run live-subjective-actions:smoke`, `npm run studio-evidence-import:smoke`, and `npm run studio-coverage-workspace:smoke` | Tests inspected either a programmatic diagnostics snapshot or a Studio UI fragment for selected fields. | They did not render the same versioned chain from the same copy-isolated snapshot or forbid `unknown` when typed identities existed. **P1 misleading UI.** | mounted reconciliation view cases plus `product.reconciliation_fireball_blocked_chain` |
+| Ledger durability, bounded overflow, and orthogonal health | `npm run presentation-persistence-cut:smoke` and `npm run studio-document-history:smoke` | Selected current/malformed records were retained or cleared. | No total active-incident/global/tombstone overflow policy, sticky post-saturation admission fence, reserved post-overflow first-failure fact, deterministic victim order, truthful non-durability, or simultaneous capture/durability/view state existed. “Survives” could be claimed after a denied write, and an evidence storm or late rejected-root suffix had no bounded truthful result. **P1 postmortem loss/startup risk.** | `check_reconciliation_case` exact-limit/one-over/storm/saturate-R-late-R-new-S/retention/quota/migration/compound-health pack |
+| Mounted JSON/debug-UI equality | `npm run live-subjective-actions:smoke`, `npm run studio-evidence-import:smoke`, and `npm run studio-coverage-workspace:smoke` | Tests inspected either a programmatic diagnostics snapshot or a Studio UI fragment for selected fields. | They did not render the same versioned chain from the same copy-isolated snapshot or forbid `unknown` when typed identities existed. **P1 misleading UI.** | mounted reconciliation view cases plus `product.reconciliation_fireball_corrected_and_blocked_chain` and the positive safe-omission product fixture |
 | Exhaustive fault injection versus product truth | No single lawful owner; prior smokes injected private fixtures independently. | Layer-specific fake frames/callbacks produced the intended local error. | Combining every failpoint into one no-mock product journey is impossible, while treating isolated injections as product proof is false. **P0 test-ownership error.** | split SDK/pipeline/UI stage matrices plus one naturally triggerable owned product representative |
 
 The table itself is checked by the inventory runner: every row needs one
@@ -1877,6 +2145,12 @@ called accepted.
 
 ## 11. Command and CI topology
 
+Before these commands are implemented, the §4.3 owner publishes one bounded
+`test:stabilization:current` (or reviewed equivalent) command and immutable
+manifest over the existing test/product tooling. It remains green throughout
+the migration and is retired only after every claim is owned by the new command
+surface with explicit case mapping.
+
 Define a small command surface rather than another hundred top-level scripts:
 
 ```text
@@ -1937,7 +2211,11 @@ not replaced by all lower layers passing.
 catch-up, resync, RESET, lawful live generation replacement, replay isolation,
 the complete browser-persistence startup pack from §8.10, and the stored
 Fireball -> Haste Potion -> Fireball -> death/Turn End cluster from §8.11,
-including the reconciliation JSON/debug-UI chain from §8.12. At least one
+including the reconciliation JSON/debug-UI chain from §8.12. It also runs the
+mandatory no-interception diagnostic-fixture product case through the real
+generated-client acquisition owner and requires one positively installed and
+mounted player-safe omission fact; `PRESENTATION_DIAGNOSTIC_UNAVAILABLE` cannot
+satisfy that case. At least one
 browser-persistence case continues from cleanup through authenticated
 bootstrap and a playable scene in the production-build mode. It accepts no
 ambient browser profile, route interception, or startup exception suppression.
@@ -1956,6 +2234,10 @@ environment. It writes one machine-readable manifest containing:
 - timings;
 - process/environment identities;
 - artifact links;
+- presentation-expectation diagnostic targets/install frontiers, lawful fence
+  reasons, same-incarnation RESET/reconnect rearm coverage, attachment-
+  replacement bootstrap handoff coverage, and an unavailable count of zero
+  outside the named negative case;
 - no-skips/no-retries statement.
 
 Reviewers rerun this command rather than reconstructing an undocumented order
@@ -2015,6 +2297,23 @@ Retire or relabel tests which pass for the wrong reason, including:
 
 ## 13. Implementation checkpoints
 
+### Entry gate — current gameplay stabilization (before testing-surface code)
+
+Deliver the accepted `CURRENT_GAMEPLAY_STABILIZATION_MANIFEST` from §4.3 with:
+
+- every confirmed current bug assigned to one implementation owner;
+- deterministic red-first and focused fixed-green evidence;
+- the appropriate exact production-root and owned-product representatives;
+- zero open/xfail/skip disposition for the cluster;
+- immutable pre-fix artifacts and current fixed-source hashes;
+- fresh internal, engine-external, and NeuroClient-external verdicts on the same
+  current product cutoff.
+
+Gate: all §4.3 rows are fixed and the real game journeys are playable before
+any Checkpoint 0 runner/harness/schema/migration implementation begins. Plan
+writing, artifact preservation, and review may proceed in parallel; production
+testing-surface implementation may not.
+
 ### Checkpoint 0 — inventory and baseline
 
 Deliver:
@@ -2025,6 +2324,8 @@ Deliver:
 - mocked/ambient/sleep classification;
 - P0 journey gap report;
 - exact migration map for unique assertions.
+- imported stabilization manifest and immutable mapping from every pre-fix
+  artifact/current-green representative to its future case owner.
 
 Gate: reviewers can trace every current feature claim to a future case or an
 explicit retained test.
@@ -2036,8 +2337,13 @@ Deliver:
 - version-1 case/result schemas;
 - version-1 reconciliation event/snapshot/view schemas and explicit retention
   budgets;
+- generated player-safe expectation-diagnostic DTO/page contract plus the
+  public fixed-target SDK client/acquisition state-machine cases;
 - common loader/normalizer/diff/artifact package;
 - one smoke case for every layer;
+- at least one preserved stabilization pre-fix/current-green pair proving the
+  same data surface rejects the historical input at its intended boundary and
+  accepts the fixed branch without production rollback;
 - the version-1 replication trace schema, deterministic sequence runner, and
   one server-produced trace consumed through the exact production live
   composition root plus the separate isolated replay root, with explicit
@@ -2102,6 +2408,9 @@ representatives for:
   plus legacy device-limit handling, Acid Splash one-of-two input/cast with two
   lawful choices and with one discoverable choice, water material, default
   sorcerer content, and every adjacent audit case;
+- every §4.3 stabilization row imported as a paired historical-negative and
+  current-fixed case, with the former failing at the intended typed boundary
+  and the latter reaching its positive semantic/product terminal;
 - the decorative-resource lifecycle matrix across live, replay, and Studio,
   including BannerClip, FloatingText, and every inventoried RAF/timer/deferred
   child through stateSync, terminal, reset, seek, destroy, and generation
@@ -2112,7 +2421,10 @@ representatives for:
   the UI owner, and one naturally triggerable no-interception product
   representative; all prove first-causal-node retention, typed blocked versus
   unmaterialized descendants, JSON/debug-UI equality, reset/death/terminal
-  retention, and bounded quota-safe persistence with truthful non-durability;
+  retention, bounded quota-safe persistence with truthful non-durability, and
+  the generated-client diagnostic acquisition lifecycle. The maintained
+  trusted-content product fixture must positively install and mount one
+  authenticated player-safe omission fact; unavailable-only coverage fails;
 - lawful live generation A -> B with reset/fault, stale-live-A injection, and
   an independently retained replay-A session;
 - separate replay-A retirement/replay-B installation and reciprocal
@@ -2163,6 +2475,10 @@ The testing system itself must prove that it fails when it should.
 
 Required self-tests include:
 
+- every §4.3 preserved pre-fix artifact is rejected or diverges at its declared
+  first-red boundary while the paired fixed-current case reaches its positive
+  terminal; accepting a historical escape or rejecting the fixed pair fails
+  the harness qualification;
 - schema rejects unknown/ill-typed fields;
 - a server case which omits application lifespan cannot emit startup/teardown
   coverage marks or satisfy a lifespan-owned feature claim;
@@ -2210,11 +2526,44 @@ Required self-tests include:
 - evidence-root self-tests cover malformed startup migration, denied first
   write, and mounted-view failure before any delivery/head, proving exact null
   product identities, idempotent duplicates, and conflicting event-ID
-  rejection without synthesizing a delivery root;
+  rejection without synthesizing a delivery root. They also cover a later
+  owner-wide compaction/export/view fault with no exact head attribution, plus
+  a successful accepted head whose only failure is a subscriber/view/
+  persistence observation; neither case fabricates a causal failure or
+  `BLOCKS` edge;
 - identity/privacy self-tests feed forged but well-formed source/generation/
   perspective fields and prove they remain quarantined, then compare two
   perspectives for non-joinable expectation IDs and no undisclosed objective
   lineage/content. Diagnostic-unavailable cases never infer an omitted cue;
+- presentation-expectation acquisition self-tests exercise zero-fact and
+  positive multi-page fixed-target results, one coalesced pending target,
+  lower targets covered by installed/active/pending cursor intervals,
+  and an active target A plus pending B while an exact duplicate installed
+  target and a lower installed target are replayed. Both are immediately
+  covered without changing A, B, request count, or either outcome; equal
+  installed cursor with conflicting bound identity rejects atomically. A then
+  independently succeeds or fails;
+  deadline/page/byte limits, exact duplicates and conflicting reuse, stale and
+  beyond-target/gapped/overlapping pages, equal observation frontier with
+  distinct server diagnostic cursors, and teardown while in flight. Exact
+  lifecycle cases stall the only/latest request, then separately perform a
+  same-incarnation RESET with no later frame, a same-attachment reconnect with
+  no later frame, an attachment replacement which preserves source/generation/
+  perspective, and an identity-changing replacement. The first two abort/join,
+  pause, and rearm the same owner after the exact local terminal without any
+  player bootstrap; the third transfers one bootstrap-correlated resume target
+  to the new owner; the fourth lawfully fences the old obligation. Another case
+  issues RESET then reconnect before the RESET terminal and proves the bounded
+  required-fence sequence prevents early resume. Request-completion-versus-
+  local-fence cases execute both linearized orders and preserve the same exact
+  installed/resume interval without accepting a late callback. Another case
+  stalls active A while coalescing B and then replaces the attachment; late old
+  pages arrive only after the new owner installs its resume target. These prove
+  complete unexamined-interval coverage or an explicitly lawful changed-
+  identity/teardown fence, old callbacks are inert, no hot retry occurs without
+  a new admitted delivery, local-fence terminal, or authenticated replacement
+  resume target, and the mounted positive product fixture cannot pass with
+  `PRESENTATION_DIAGNOSTIC_UNAVAILABLE`;
 - reconciliation capacity self-tests cover exact-limit and one-over writes,
   one oversized active incident, multiple unresolved incidents with no victim,
   observational storms, reserved final summaries, persistence failure during
@@ -2223,7 +2572,11 @@ Required self-tests include:
   when the first failure occurs only after detail overflow, the global
   saturation first-failure slot when no root can be admitted, no fabricated
   nodes, deterministic completed-victim order, invalid reserve-configuration
-  rejection, and no effect on gameplay;
+  rejection, and no effect on gameplay. The required interleaving is:
+  saturate, reject root R, complete/compact an admitted victim so capacity
+  frees, deliver a late R descendant/failure, then deliver new root S; the
+  sticky fence admits neither R nor S, reopens nothing, and updates only the
+  fixed accumulator/first-failure fields;
 - reconciliation health self-tests inject durability and view degradation
   together, then capture overflow/failure as a third dimension. Current and
   sticky states, recovery, JSON, health channel, and mounted fallback preserve
@@ -2247,6 +2600,9 @@ Required self-tests include:
 
 At every checkpoint, submit:
 
+- the accepted stabilization-manifest identity and a green rerun of its current
+  product representatives on the checkpoint source; any regression suspends
+  testing-surface acceptance and returns to the failure-to-fix loop;
 - exact source and fixture hashes;
 - feature-case, trace, and reconciliation schema versions plus declared
   reconciliation retention budgets;
@@ -2277,6 +2633,12 @@ becomes or strengthens a permanent automated case before refreeze.
 
 This plan is complete only when all of the following are true:
 
+- the pre-implementation `CURRENT_GAMEPLAY_STABILIZATION_MANIFEST` was accepted
+  before testing-surface production code began, with every §4.3 bug fixed on
+  the real product and no open/xfail/skip disposition;
+- every preserved stabilization artifact now runs through the new surface as
+  an intended historical-negative case, while its current fixed counterpart is
+  green at the same or higher public boundary without rolling source back;
 - a developer or CI worker can run the canonical player journey with one
   command and no prestarted services;
 - the run begins from a fresh temporary profile and uses the real UI, Vite
@@ -2318,9 +2680,22 @@ This plan is complete only when all of the following are true:
   promising post-teardown survival; expose capture, durability, and view health
   as simultaneous dimensions; preserve whole-incident/tombstone/rollup
   invariants when durable storage succeeds; and report explicit incomplete
-  overflow rather than silent truncation. They never use generic/unknown
+  overflow rather than silent truncation. After global saturation, the sticky
+  new-root fence and fixed pre-fence membership prevent rejected or later roots
+  from being fabricated/reopened even if capacity frees. They never use generic/unknown
   evidence when authenticated typed delivery/head/cue identity exists and never
   promote quarantined wire/objective-private fields into subjective identity;
+- the sole generated-client presentation-expectation acquisition owner is
+  bounded and identity-fenced across reconnect, RESET, replacement, and
+  teardown; one no-interception owned-product case positively receives and
+  mounts an authenticated player-safe omission fact from the real diagnostic
+  owner, so unavailable-only behavior cannot qualify release. All other
+  release-tagged product targets reach a successful installed diagnostic
+  frontier or an exact lawful changed-identity/teardown fence. Same-incarnation
+  RESET and same-attachment reconnect resume the frozen unexamined interval on
+  the existing owner without player rebootstrap; attachment replacement
+  installs one bootstrap-correlated resume target on the new owner; and
+  `UNAVAILABLE` is confined to its explicit negative case;
 - every classified engine/server presentation family has a real lawful trace
   that reaches generated decoding, the journal/reducer, render projection, and
   its expected presentation disposition without manual play;

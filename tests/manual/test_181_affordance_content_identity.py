@@ -226,7 +226,7 @@ def test_weapon_attack_affordance_names_its_exact_equipped_item_provider() -> No
         ).entries
         if entry.ref.identity_key == "core.rules:action:action.attack@1"
     )
-    assert attack_catalog_entry.presentation.icon_key is None
+    assert attack_catalog_entry.presentation.icon_key == "ui.filter-attacks"
 
     actor = create_goblin(
         name="Armed Affordance Probe",
