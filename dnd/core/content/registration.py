@@ -5,7 +5,6 @@ from __future__ import annotations
 import inspect
 from collections.abc import Callable
 from enum import Enum
-from types import ModuleType
 from typing import TypeVar
 
 from pydantic import BaseModel, ConfigDict, SerializeAsAny, model_validator
@@ -720,24 +719,3 @@ def _direct_content_declaration(
         if isinstance(declaration, ContentDeclaration)
         else None
     )
-
-
-def scan_module_content_declarations(
-    module: ModuleType,
-) -> tuple[ContentDeclaration, ...]:
-    """Return declarations defined locally by one already-imported module."""
-    declarations: dict[str, ContentDeclaration] = {}
-    for value in vars(module).values():
-        if getattr(value, "__module__", None) != module.__name__:
-            continue
-        declaration = _direct_content_declaration(value)
-        if not isinstance(declaration, ContentDeclaration):
-            continue
-        existing = declarations.get(declaration.ref.identity_key)
-        if existing is not None and existing is not declaration:
-            raise ValueError(
-                "Multiple local declarations use "
-                f"{declaration.ref.identity_key}",
-            )
-        declarations[declaration.ref.identity_key] = declaration
-    return tuple(declarations[key] for key in sorted(declarations))

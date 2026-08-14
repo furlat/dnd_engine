@@ -105,7 +105,7 @@ def test_automated_turns_advance_until_the_human_actor_needs_input(capsys) -> No
     """The encounter can run automated turns until a human turn begins."""
     scenario = create_gatehouse_scenario()
 
-    result = scenario.encounter.advance_until_player()
+    result = scenario.encounter.advance_until_external_boundary()
 
     assert result.status == "waiting_for_human"
     assert result.entity_uuid == scenario.hero.uuid
@@ -155,7 +155,7 @@ def test_automated_turns_advance_until_the_human_actor_needs_input(capsys) -> No
 def test_human_action_execution_uses_indexed_discovery_and_captures_combat_log(capsys) -> None:
     """A scenario can execute a selected action and capture its combat log."""
     scenario = create_gatehouse_scenario()
-    scenario.encounter.advance_until_player()
+    scenario.encounter.advance_until_external_boundary()
     hp_before = scenario.monster.get_hp()
     modifier_uuid = add_melee_auto_hit(scenario.hero)
 

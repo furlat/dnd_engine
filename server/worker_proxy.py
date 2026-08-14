@@ -30,7 +30,6 @@ class ProxyRouteKind(str, Enum):
     OBSERVE = "observe"
     SUBJECTIVE = "subjective"
     COMMAND = "command"
-    AGENT = "agent"
     ADMINISTER = "administer"
     DENIED = "denied"
 
@@ -121,21 +120,6 @@ def classify_worker_route(method: str, path: str) -> ProxyRouteKind:
         and path_parts[2] in _CONTROLLED_ENTITY_READ_SUFFIXES
     ):
         return ProxyRouteKind.COMMAND
-    if normalized == "ai/sessions":
-        return ProxyRouteKind.DENIED
-    if normalized.startswith("ai/sessions/"):
-        return ProxyRouteKind.AGENT
-    if normalized == "ai/policy/source" and upper_method in {"GET", "HEAD"}:
-        return ProxyRouteKind.AGENT
-    if (
-        upper_method == "POST"
-        and len(path_parts) == 4
-        and path_parts[:2] == ["ai", "takeover"]
-        and path_parts[3] == "heartbeat"
-    ):
-        return ProxyRouteKind.AGENT
-    if normalized.startswith("ai/takeover"):
-        return ProxyRouteKind.DENIED
     if normalized.startswith("action/"):
         return ProxyRouteKind.COMMAND
     if upper_method in {"POST", "PUT", "PATCH", "DELETE"} and (
@@ -169,7 +153,6 @@ async def proxy_runtime_request(
         ProxyRouteKind.OBSERVE: RuntimeScope.OBSERVE,
         ProxyRouteKind.SUBJECTIVE: RuntimeScope.SUBJECTIVE_OBSERVE,
         ProxyRouteKind.COMMAND: RuntimeScope.CONTROL,
-        ProxyRouteKind.AGENT: RuntimeScope.AGENT,
         ProxyRouteKind.ADMINISTER: RuntimeScope.ADMINISTER,
     }[route_kind]
     try:

@@ -1,0 +1,1385 @@
+{
+  "audit_gaps": [
+    "At least one audit surface is NOT_SCANNED; the default command fails rather than pretending the report is exhaustive."
+  ],
+  "client_root": "/home/tommaso/Dev/NeuroClient",
+  "engine_root": "/mnt/c/Users/tommaso/Documents/Dev/dnd_engine",
+  "facts": {
+    "deterministic_identity_frame_blocking_entry_points": 13,
+    "deterministic_zero_application_spell_entry_points": 4,
+    "known_deterministic_frame_blocking_entry_points": 17,
+    "privacy_variant_frame_blocking_spells": 67,
+    "public_action_and_reaction_rows": 91,
+    "public_content_rows": 671,
+    "public_dependency_closure_rows": 699,
+    "public_reachable_presentation_runtime_identities": 340,
+    "public_runtime_condition_rows": 141,
+    "public_spell_rows": 116,
+    "public_spells_with_known_frame_blocking_variant": 71,
+    "reachable_runtime_identities_without_frontend_binding": 2,
+    "runtime_intent_kinds": 25,
+    "server_cue_kinds": 18
+  },
+  "findings": [
+    {
+      "affected_ids": [],
+      "category": "systemic",
+      "detail": "18 canonical cue kinds; registry missing/extra=[]/[]; mapper missing/extra=[]/[]; extraction_ready=True",
+      "evidence": [
+        {
+          "detail": "canonical cue union",
+          "file": "/mnt/c/Users/tommaso/Documents/Dev/dnd_engine/server/player_replication_contract.py",
+          "line": 1609
+        },
+        {
+          "detail": "exhaustive client mapper",
+          "file": "/home/tommaso/Dev/NeuroClient/app/src/render/subjectivePresentationMapper.ts",
+          "line": 914
+        }
+      ],
+      "id": "structure.cue_to_mapper",
+      "impact": "structural",
+      "status": "CONNECTED"
+    },
+    {
+      "affected_ids": [],
+      "category": "systemic",
+      "detail": "25 ClipIntent discriminants; executor missing/extra=[]/[]; extraction_ready=True",
+      "evidence": [
+        {
+          "detail": "runtime intent union",
+          "file": "/home/tommaso/Dev/NeuroClient/app/src/render/types.ts",
+          "line": 774
+        },
+        {
+          "detail": "intent executor switch",
+          "file": "/home/tommaso/Dev/NeuroClient/app/src/render/dispatcher.ts",
+          "line": 61
+        }
+      ],
+      "id": "structure.intent_to_executor",
+      "impact": "structural",
+      "status": "CONNECTED"
+    },
+    {
+      "affected_ids": [],
+      "category": "systemic",
+      "detail": "The real bundle compiler validated all 91 exact public action/reaction definitions with one recipe or explicit movement disposition. Runtime identity propagation is audited separately.",
+      "evidence": [
+        {
+          "detail": "exact action recipes",
+          "file": "/home/tommaso/Dev/NeuroClient/app/src/render/data/animation/contentActionPresentationRecipes.json",
+          "line": 4
+        },
+        {
+          "detail": "explicit movement dispositions",
+          "file": "/home/tommaso/Dev/NeuroClient/app/src/render/data/animation/actionPresentationDispositions.json",
+          "line": 4
+        }
+      ],
+      "id": "definitions.action_recipe_closure",
+      "impact": "structural",
+      "status": "CONNECTED"
+    },
+    {
+      "affected_ids": [],
+      "category": "spells",
+      "detail": "NeuroClient's real compiler materialized structurally valid data-driven recipes for all 116 backend spell rows without warnings (statuses={'authored': 2, 'generated': 114}); generated Pixi geometry is a first-class route and a spritesheet is not required. Global spell cue and CastIntent dispatcher closure is audited separately.",
+      "evidence": [
+        {
+          "detail": "catalog row -> generated recipe",
+          "file": "/home/tommaso/Dev/NeuroClient/app/src/render/spellAuthoring/generatedBaseline.ts",
+          "line": 31
+        },
+        {
+          "detail": "recipe -> runtime presentation",
+          "file": "/home/tommaso/Dev/NeuroClient/app/src/render/spellAuthoring/runtimeResolver.ts",
+          "line": 16
+        }
+      ],
+      "id": "spells.generated_geometry_route",
+      "impact": "structural",
+      "status": "CONNECTED"
+    },
+    {
+      "affected_ids": [
+        "content.neurodragon:spell:spell.acid_flask@1#e4d439f0a982",
+        "content.srd_5_1_cc:action:action.monster.multiattack@1#b348fe0a75aa"
+      ],
+      "category": "systemic",
+      "detail": "Dependency traversal from all 671 public declarations reaches 340 action/reaction/spell/condition runtime identities. Exact frontend bindings are missing for 2: ['content.neurodragon:spell:spell.acid_flask@1#e4d439f0a982', 'content.srd_5_1_cc:action:action.monster.multiattack@1#b348fe0a75aa'].",
+      "evidence": [],
+      "id": "definitions.reachable_runtime_identity_gap",
+      "impact": "frame_blocking",
+      "status": "BROKEN"
+    },
+    {
+      "affected_ids": [
+        "action.monster.multiattack.bandit_captain.melee",
+        "action.monster.multiattack.bandit_captain.ranged",
+        "action.monster.multiattack.cult_fanatic",
+        "action.monster.multiattack.knight",
+        "action.monster.multiattack.scout.longbow",
+        "action.monster.multiattack.scout.shortsword",
+        "action.monster.multiattack.spy",
+        "action.monster.multiattack.thug",
+        "action.monster.multiattack.veteran.melee",
+        "action.monster.multiattack.veteran.ranged"
+      ],
+      "category": "monster_trait_and_configured_actions",
+      "detail": "All configured Multiattacks lose their public configured_action_ref; the root exposes an internal implementation ref with no frontend binding, and nested Attacks are unattributed.",
+      "evidence": [
+        {
+          "detail": "identity exists on action discovery model",
+          "file": "/mnt/c/Users/tommaso/Documents/Dev/dnd_engine/dnd/core/base_actions.py",
+          "line": 795
+        },
+        {
+          "detail": "composite runtime action",
+          "file": "/mnt/c/Users/tommaso/Documents/Dev/dnd_engine/dnd/monsters/traits.py",
+          "line": 552
+        },
+        {
+          "detail": "projection reads behavior binding only",
+          "file": "/mnt/c/Users/tommaso/Documents/Dev/dnd_engine/server/player_replication/mapper.py",
+          "line": 2620
+        }
+      ],
+      "id": "monster.multiattack_identity",
+      "impact": "frame_blocking",
+      "status": "BROKEN"
+    },
+    {
+      "affected_ids": [],
+      "category": "systemic",
+      "detail": "AST discovery found 192 BaseAction descendants and 10 direct constructor-to-apply sites; the checked disposition ledger has exact set equality=True.",
+      "evidence": [],
+      "id": "actions.direct_apply_site_discovery",
+      "impact": "audit_authority",
+      "status": "CONNECTED"
+    },
+    {
+      "affected_ids": [
+        "action.core.drop"
+      ],
+      "category": "universal_and_base_actions",
+      "detail": "The direct Drop instance is not admitted through the binding gateway.",
+      "evidence": [
+        {
+          "detail": "source-discovered dnd.actions.Drop constructor -> apply",
+          "file": "/mnt/c/Users/tommaso/Documents/Dev/dnd_engine/dnd/actions_functional.py",
+          "line": 571
+        }
+      ],
+      "id": "direct_apply_site.execute.drop",
+      "impact": "semantic_omission",
+      "status": "BROKEN"
+    },
+    {
+      "affected_ids": [
+        "reaction.class_feature.barbarian.retaliation"
+      ],
+      "category": "reactions",
+      "detail": "The emitted nested Attack has no exact authored reaction attribution.",
+      "evidence": [
+        {
+          "detail": "source-discovered dnd.actions.Attack constructor -> apply",
+          "file": "/mnt/c/Users/tommaso/Documents/Dev/dnd_engine/dnd/classes/barbarian.py",
+          "line": 494
+        }
+      ],
+      "id": "direct_apply_site.retaliation.processor",
+      "impact": "frame_blocking",
+      "status": "BROKEN"
+    },
+    {
+      "affected_ids": [
+        "action.monster.multiattack.bandit_captain.melee",
+        "action.monster.multiattack.bandit_captain.ranged",
+        "action.monster.multiattack.cult_fanatic",
+        "action.monster.multiattack.knight",
+        "action.monster.multiattack.scout.longbow",
+        "action.monster.multiattack.scout.shortsword",
+        "action.monster.multiattack.spy",
+        "action.monster.multiattack.thug",
+        "action.monster.multiattack.veteran.melee",
+        "action.monster.multiattack.veteran.ranged"
+      ],
+      "category": "monster_trait_and_configured_actions",
+      "detail": "The emitted child Attack loses the selected configured Multiattack identity.",
+      "evidence": [
+        {
+          "detail": "source-discovered dnd.actions.Attack constructor -> apply",
+          "file": "/mnt/c/Users/tommaso/Documents/Dev/dnd_engine/dnd/monsters/traits.py",
+          "line": 604
+        }
+      ],
+      "id": "direct_apply_site.multiattackaction.apply",
+      "impact": "frame_blocking",
+      "status": "BROKEN"
+    },
+    {
+      "affected_ids": [
+        "reaction.opportunity_attack"
+      ],
+      "category": "reactions",
+      "detail": "The processor explicitly copies the active reaction binding before apply.",
+      "evidence": [
+        {
+          "detail": "source-discovered dnd.actions.Attack constructor -> apply",
+          "file": "/mnt/c/Users/tommaso/Documents/Dev/dnd_engine/dnd/reactions.py",
+          "line": 79
+        }
+      ],
+      "id": "direct_apply_site.opportunity.attack.processor",
+      "impact": "connected",
+      "status": "CONNECTED"
+    },
+    {
+      "affected_ids": [
+        "spell.command"
+      ],
+      "category": "movement",
+      "detail": "Movement still renders through its context-owned route, but the authored Command cause identity is omitted.",
+      "evidence": [
+        {
+          "detail": "source-discovered dnd.actions.Move constructor -> apply",
+          "file": "/mnt/c/Users/tommaso/Documents/Dev/dnd_engine/dnd/spells/enchantment.py",
+          "line": 1708
+        }
+      ],
+      "id": "direct_apply_site.commandfleeeffect.activate.commanded.turn",
+      "impact": "semantic_omission",
+      "status": "BROKEN"
+    },
+    {
+      "affected_ids": [
+        "action.spell.sunbeam.strike"
+      ],
+      "category": "spell_followup_actions",
+      "detail": "The initial follow-up action is directly applied without its action binding.",
+      "evidence": [
+        {
+          "detail": "source-discovered dnd.spells.evocation.SunbeamStrike constructor -> apply",
+          "file": "/mnt/c/Users/tommaso/Documents/Dev/dnd_engine/dnd/spells/evocation.py",
+          "line": 3100
+        }
+      ],
+      "id": "direct_apply_site.sunbeam.apply",
+      "impact": "semantic_omission",
+      "status": "BROKEN"
+    },
+    {
+      "affected_ids": [
+        "spell.true_strike"
+      ],
+      "category": "spells",
+      "detail": "The nested Attack emits without the enclosing True Strike attribution.",
+      "evidence": [
+        {
+          "detail": "source-discovered dnd.actions.Attack constructor -> apply",
+          "file": "/mnt/c/Users/tommaso/Documents/Dev/dnd_engine/dnd/spells/evocation.py",
+          "line": 3516
+        }
+      ],
+      "id": "direct_apply_site.truestrike.apply",
+      "impact": "frame_blocking",
+      "status": "BROKEN"
+    },
+    {
+      "affected_ids": [
+        "spell.eyebite"
+      ],
+      "category": "movement",
+      "detail": "Dash state survives, but the authored Eyebite cause identity is omitted.",
+      "evidence": [
+        {
+          "detail": "source-discovered dnd.actions.Dash constructor -> apply",
+          "file": "/mnt/c/Users/tommaso/Documents/Dev/dnd_engine/dnd/spells/necromancy.py",
+          "line": 1272
+        }
+      ],
+      "id": "direct_apply_site.eyebitepanickedeffect.create.flee.handler.processor",
+      "impact": "semantic_omission",
+      "status": "BROKEN"
+    },
+    {
+      "affected_ids": [
+        "action.spell.eyebite.strike"
+      ],
+      "category": "spell_followup_actions",
+      "detail": "The initial follow-up action is directly applied without its action binding.",
+      "evidence": [
+        {
+          "detail": "source-discovered dnd.spells.necromancy.EyebiteStrike constructor -> apply",
+          "file": "/mnt/c/Users/tommaso/Documents/Dev/dnd_engine/dnd/spells/necromancy.py",
+          "line": 1544
+        }
+      ],
+      "id": "direct_apply_site.eyebite.apply",
+      "impact": "semantic_omission",
+      "status": "BROKEN"
+    },
+    {
+      "affected_ids": [
+        "action.spell.telekinesis.grab"
+      ],
+      "category": "spell_followup_actions",
+      "detail": "The initial follow-up action is directly applied without its action binding.",
+      "evidence": [
+        {
+          "detail": "source-discovered dnd.spells.transmutation.TelekinesisGrab constructor -> apply",
+          "file": "/mnt/c/Users/tommaso/Documents/Dev/dnd_engine/dnd/spells/transmutation.py",
+          "line": 1855
+        }
+      ],
+      "id": "direct_apply_site.telekinesis.apply",
+      "impact": "semantic_omission",
+      "status": "BROKEN"
+    },
+    {
+      "affected_ids": [
+        "consumable.acid_flask"
+      ],
+      "category": "item_owned_spell_routes",
+      "detail": "Acid Flask emits a private/OBSERVED spell behavior absent from the frontend spell definitions, so no draft can be resolved.",
+      "evidence": [
+        {
+          "detail": "private item spell",
+          "file": "/mnt/c/Users/tommaso/Documents/Dev/dnd_engine/dnd/items/spell_items.py",
+          "line": 204
+        },
+        {
+          "detail": "exact frontend catalog join",
+          "file": "/home/tommaso/Dev/NeuroClient/app/src/render/spellAuthoring/runtimeResolver.ts",
+          "line": 27
+        }
+      ],
+      "id": "item.acid_flask_spell_surface",
+      "impact": "frame_blocking",
+      "status": "BROKEN"
+    },
+    {
+      "affected_ids": [
+        "spell.acid_splash",
+        "spell.blight",
+        "spell.call_lightning",
+        "spell.chain_lightning",
+        "spell.chill_touch",
+        "spell.disintegrate",
+        "spell.eldritch_blast",
+        "spell.finger_of_death",
+        "spell.fire_bolt",
+        "spell.guiding_bolt",
+        "spell.harm",
+        "spell.magic_missile",
+        "spell.poison_spray",
+        "spell.ray_of_frost",
+        "spell.sacred_flame",
+        "spell.scorching_ray",
+        "spell.telekinesis"
+      ],
+      "category": "spells",
+      "detail": "The server contract/projector permit 17 projectile spell definitions to reach an observer with caster identity but targets=[] after per-target privacy filtering; this is a source-derived conditional variant set, not 17 replayed executions. The real client mapper probe returned {'accepted': False, 'error': '[subjectivePresentationMapper] probe:projectile:fire_bolt has no entity target supported by CastIntent'}.",
+      "evidence": [
+        {
+          "detail": "target applications projected independently",
+          "file": "/mnt/c/Users/tommaso/Documents/Dev/dnd_engine/server/player_replication/mapper.py",
+          "line": 2284
+        },
+        {
+          "detail": "per-target privacy filter",
+          "file": "/mnt/c/Users/tommaso/Documents/Dev/dnd_engine/server/player_replication/mapper.py",
+          "line": 2290
+        },
+        {
+          "detail": "real zero-target projectile mapper probe",
+          "file": "/home/tommaso/Dev/NeuroClient/app/src/render/subjectivePresentationMapper.ts",
+          "line": 1692
+        }
+      ],
+      "id": "spells.redacted_target_cardinality.projectile",
+      "impact": "conditional_frame_blocking",
+      "status": "BROKEN"
+    },
+    {
+      "affected_ids": [
+        "spell.bestow_curse",
+        "spell.cure_wounds",
+        "spell.darkvision",
+        "spell.death_ward",
+        "spell.enhance_ability",
+        "spell.freedom_of_movement",
+        "spell.greater_invisibility",
+        "spell.greater_restoration",
+        "spell.guidance",
+        "spell.inflict_wounds",
+        "spell.invisibility",
+        "spell.jump",
+        "spell.lesser_restoration",
+        "spell.light",
+        "spell.mage_armor",
+        "spell.protection_from_energy",
+        "spell.protection_from_poison",
+        "spell.regenerate",
+        "spell.remove_curse",
+        "spell.resistance",
+        "spell.shocking_grasp",
+        "spell.stoneskin",
+        "spell.true_seeing",
+        "spell.true_strike"
+      ],
+      "category": "spells",
+      "detail": "The server contract/projector permit 24 touch spell definitions to reach an observer with caster identity but targets=[] after per-target privacy filtering; this is a source-derived conditional variant set, not 24 replayed executions. The real client mapper probe returned {'accepted': False, 'error': '[subjectivePresentationMapper] probe:touch:cure_wounds touch delivery has no entity target'}.",
+      "evidence": [
+        {
+          "detail": "target applications projected independently",
+          "file": "/mnt/c/Users/tommaso/Documents/Dev/dnd_engine/server/player_replication/mapper.py",
+          "line": 2284
+        },
+        {
+          "detail": "per-target privacy filter",
+          "file": "/mnt/c/Users/tommaso/Documents/Dev/dnd_engine/server/player_replication/mapper.py",
+          "line": 2290
+        },
+        {
+          "detail": "real zero-target touch mapper probe",
+          "file": "/home/tommaso/Dev/NeuroClient/app/src/render/subjectivePresentationMapper.ts",
+          "line": 1692
+        }
+      ],
+      "id": "spells.redacted_target_cardinality.touch",
+      "impact": "conditional_frame_blocking",
+      "status": "BROKEN"
+    },
+    {
+      "affected_ids": [
+        "spell.aegis_spark",
+        "spell.aid",
+        "spell.bane",
+        "spell.banishment",
+        "spell.beacon_of_hope",
+        "spell.bless",
+        "spell.blindness_deafness",
+        "spell.charm_person",
+        "spell.command",
+        "spell.counterspell",
+        "spell.divine_word",
+        "spell.enlarge_reduce",
+        "spell.haste",
+        "spell.heal",
+        "spell.healing_word",
+        "spell.hellish_rebuke",
+        "spell.hold_monster",
+        "spell.hold_person",
+        "spell.mass_heal",
+        "spell.mass_healing_word",
+        "spell.necrotic_bless",
+        "spell.power_word_kill",
+        "spell.power_word_stun",
+        "spell.prayer_of_healing",
+        "spell.sanctuary",
+        "spell.shield_of_faith"
+      ],
+      "category": "spells",
+      "detail": "The server contract/projector permit 26 direct spell definitions to reach an observer with caster identity but targets=[] after per-target privacy filtering; this is a source-derived conditional variant set, not 26 replayed executions. The real client mapper probe returned {'accepted': False, 'error': '[subjectivePresentationMapper] probe:direct:healing_word direct delivery has no application'}.",
+      "evidence": [
+        {
+          "detail": "target applications projected independently",
+          "file": "/mnt/c/Users/tommaso/Documents/Dev/dnd_engine/server/player_replication/mapper.py",
+          "line": 2284
+        },
+        {
+          "detail": "per-target privacy filter",
+          "file": "/mnt/c/Users/tommaso/Documents/Dev/dnd_engine/server/player_replication/mapper.py",
+          "line": 2290
+        },
+        {
+          "detail": "real zero-target direct mapper probe",
+          "file": "/home/tommaso/Dev/NeuroClient/app/src/render/subjectivePresentationMapper.ts",
+          "line": 1692
+        }
+      ],
+      "id": "spells.redacted_target_cardinality.direct",
+      "impact": "conditional_frame_blocking",
+      "status": "BROKEN"
+    },
+    {
+      "affected_ids": [
+        "spell.delivery.missile_volley:position",
+        "spell.delivery.projectile:position",
+        "spell.delivery.touch:position"
+      ],
+      "category": "spells",
+      "detail": "SpellTargetPresentation permits entity-or-position applications and the server can synthesize a position application from an owned spatial effect. Real client mapper probes={'touch': {'accepted': False, 'error': '[subjectivePresentationMapper] probe:touch:cure_wounds touch delivery has no entity target'}, 'projectile': {'accepted': False, 'error': '[subjectivePresentationMapper] probe:projectile:fire_bolt has no entity target supported by CastIntent'}, 'missile_volley': {'accepted': False, 'error': '[subjectivePresentationMapper] probe:missile_volley:magic_missile has a position-only missile application unsupported by CastIntent'}, 'direct': {'accepted': True, 'intentTypes': ['cast'], 'deliveries': ['position']}}; rejected routes=['missile_volley', 'projectile', 'touch'].",
+      "evidence": [
+        {
+          "detail": "entity-or-position application contract",
+          "file": "/mnt/c/Users/tommaso/Documents/Dev/dnd_engine/server/player_replication_contract.py",
+          "line": 1120
+        },
+        {
+          "detail": "spatial-effect position application synthesis",
+          "file": "/mnt/c/Users/tommaso/Documents/Dev/dnd_engine/server/player_replication/mapper.py",
+          "line": 3293
+        },
+        {
+          "detail": "real position-application mapper probes",
+          "file": "/home/tommaso/Dev/NeuroClient/app/src/render/subjectivePresentationMapper.ts",
+          "line": 1692
+        }
+      ],
+      "id": "spells.position_application_routes",
+      "impact": "contract_variant_frame_blocking",
+      "status": "BROKEN"
+    },
+    {
+      "affected_ids": [
+        "spell.continual_flame",
+        "spell.dimension_door",
+        "spell.heroes_feast",
+        "spell.thaumaturgy"
+      ],
+      "category": "spells",
+      "detail": "The source-derived non-entity/non-self route set is executed through canonical projection. catalog_routes=['spell.continual_flame', 'spell.dimension_door', 'spell.heroes_feast', 'spell.thaumaturgy']; probe={'spell.thaumaturgy': [('direct', 0)], 'spell.continual_flame': [('touch', 0)], 'spell.dimension_door': [('direct', 0)], 'spell.heroes_feast': [('direct', 0)]}; route_set_drift=[]; client_mapper_probes={'spell.thaumaturgy': [{'accepted': False, 'error': '[subjectivePresentationMapper] probe:direct:healing_word direct delivery has no application'}], 'spell.continual_flame': [{'accepted': False, 'error': '[subjectivePresentationMapper] probe:touch:cure_wounds touch delivery has no entity target'}], 'spell.dimension_door': [{'accepted': False, 'error': '[subjectivePresentationMapper] probe:direct:healing_word direct delivery has no application'}], 'spell.heroes_feast': [{'accepted': False, 'error': '[subjectivePresentationMapper] probe:direct:healing_word direct delivery has no application'}]}; client_probe_drift=[]. The client rejects these ordinary successful zero-application frames.",
+      "evidence": [
+        {
+          "detail": "real EventQueue -> canonical projection",
+          "file": "/mnt/c/Users/tommaso/Documents/Dev/dnd_engine/tests/manual/test_121_canonical_presentation_mapper.py",
+          "line": 318
+        },
+        {
+          "detail": "real client mapper probes",
+          "file": "/home/tommaso/Dev/NeuroClient/app/src/render/subjectivePresentationMapper.ts",
+          "line": 1692
+        }
+      ],
+      "id": "spells.successful_zero_application",
+      "impact": "frame_blocking",
+      "status": "BROKEN"
+    },
+    {
+      "affected_ids": [
+        "spell.burning_hands",
+        "spell.color_spray",
+        "spell.cone_of_cold",
+        "spell.fear",
+        "spell.prismatic_spray"
+      ],
+      "category": "spells",
+      "detail": "cone AoE executes, but authoritative angle_degrees is not closed contract -> mapper -> CastIntent -> AoeFx; missing=['mapper', 'CastIntent', 'AoeFx options', 'AoeFx consumption'].",
+      "evidence": [
+        {
+          "detail": "authoritative cone field",
+          "file": "/mnt/c/Users/tommaso/Documents/Dev/dnd_engine/server/player_replication_contract.py",
+          "line": 1047
+        },
+        {
+          "detail": "client projection",
+          "file": "/home/tommaso/Dev/NeuroClient/app/src/render/subjectivePresentationMapper.ts",
+          "line": 2649
+        },
+        {
+          "detail": "renderer intent",
+          "file": "/home/tommaso/Dev/NeuroClient/app/src/render/types.ts",
+          "line": 556
+        },
+        {
+          "detail": "renderer input",
+          "file": "/home/tommaso/Dev/NeuroClient/app/src/render/clips/AoeFx.ts",
+          "line": 33
+        }
+      ],
+      "id": "spells.aoe_geometry_fidelity.cone",
+      "impact": "authoritative_data_dropped",
+      "status": "BROKEN"
+    },
+    {
+      "affected_ids": [
+        "spell.gust_of_wind",
+        "spell.lightning_bolt",
+        "spell.sunbeam"
+      ],
+      "category": "spells",
+      "detail": "line AoE executes, but authoritative width_feet is not closed contract -> mapper -> CastIntent -> AoeFx; missing=['mapper', 'CastIntent', 'AoeFx options', 'AoeFx consumption'].",
+      "evidence": [
+        {
+          "detail": "authoritative line field",
+          "file": "/mnt/c/Users/tommaso/Documents/Dev/dnd_engine/server/player_replication_contract.py",
+          "line": 1061
+        },
+        {
+          "detail": "client projection",
+          "file": "/home/tommaso/Dev/NeuroClient/app/src/render/subjectivePresentationMapper.ts",
+          "line": 2649
+        },
+        {
+          "detail": "renderer intent",
+          "file": "/home/tommaso/Dev/NeuroClient/app/src/render/types.ts",
+          "line": 556
+        },
+        {
+          "detail": "renderer input",
+          "file": "/home/tommaso/Dev/NeuroClient/app/src/render/clips/AoeFx.ts",
+          "line": 33
+        }
+      ],
+      "id": "spells.aoe_geometry_fidelity.line",
+      "impact": "authoritative_data_dropped",
+      "status": "BROKEN"
+    },
+    {
+      "affected_ids": [
+        "spell.flame_strike",
+        "spell.ice_storm",
+        "spell.sleet_storm"
+      ],
+      "category": "spells",
+      "detail": "cylinder AoE executes, but authoritative height_feet is not closed contract -> mapper -> CastIntent -> AoeFx; missing=['mapper', 'CastIntent', 'AoeFx options', 'AoeFx consumption'].",
+      "evidence": [
+        {
+          "detail": "authoritative cylinder field",
+          "file": "/mnt/c/Users/tommaso/Documents/Dev/dnd_engine/server/player_replication_contract.py",
+          "line": 1092
+        },
+        {
+          "detail": "client projection",
+          "file": "/home/tommaso/Dev/NeuroClient/app/src/render/subjectivePresentationMapper.ts",
+          "line": 2649
+        },
+        {
+          "detail": "renderer intent",
+          "file": "/home/tommaso/Dev/NeuroClient/app/src/render/types.ts",
+          "line": 556
+        },
+        {
+          "detail": "renderer input",
+          "file": "/home/tommaso/Dev/NeuroClient/app/src/render/clips/AoeFx.ts",
+          "line": 33
+        }
+      ],
+      "id": "spells.aoe_geometry_fidelity.cylinder",
+      "impact": "authoritative_data_dropped",
+      "status": "BROKEN"
+    },
+    {
+      "affected_ids": [
+        "true_strike_melee",
+        "true_strike_ranged"
+      ],
+      "category": "spells",
+      "detail": "True Strike variants emit spell_id=true_strike_melee/true_strike_ranged instead of catalog ID true_strike. Current client mapping survives only because it selects by behavior ContentRef.",
+      "evidence": [
+        {
+          "detail": "wire ID derived from display name",
+          "file": "/mnt/c/Users/tommaso/Documents/Dev/dnd_engine/dnd/actions.py",
+          "line": 6407
+        },
+        {
+          "detail": "variant display names",
+          "file": "/mnt/c/Users/tommaso/Documents/Dev/dnd_engine/dnd/spells/evocation.py",
+          "line": 3543
+        }
+      ],
+      "id": "spells.true_strike_wire_id",
+      "impact": "transport_identity_drift",
+      "status": "BROKEN"
+    },
+    {
+      "affected_ids": [
+        "action.shove"
+      ],
+      "category": "universal_and_base_actions",
+      "detail": "Shove transports actor/timing fields that the client ignores in favor of the exact ContentRef recipe; ignored fields=['actor_clip', 'contact_frame', 'playback_speed'].",
+      "evidence": [
+        {
+          "detail": "transported shove fields",
+          "file": "/mnt/c/Users/tommaso/Documents/Dev/dnd_engine/server/player_replication_contract.py",
+          "line": 1260
+        },
+        {
+          "detail": "client recipe selection",
+          "file": "/home/tommaso/Dev/NeuroClient/app/src/render/subjectivePresentationMapper.ts",
+          "line": 1379
+        }
+      ],
+      "id": "actions.shove_contract_authority",
+      "impact": "contract_authority_drift",
+      "status": "BROKEN"
+    },
+    {
+      "affected_ids": [
+        "action.item.potion_greater_invisibility.drink",
+        "action.item.potion_haste.drink",
+        "action.item.potion_healing.drink"
+      ],
+      "category": "item_actions",
+      "detail": "Item Action transports actor/timing/visibility fields that the client ignores in favor of the exact ContentRef recipe; ignored fields=['actor_clip', 'effect_frame', 'hidden_slots', 'playback_speed'].",
+      "evidence": [
+        {
+          "detail": "transported item fields",
+          "file": "/mnt/c/Users/tommaso/Documents/Dev/dnd_engine/server/player_replication_contract.py",
+          "line": 1197
+        },
+        {
+          "detail": "client recipe selection",
+          "file": "/home/tommaso/Dev/NeuroClient/app/src/render/subjectivePresentationMapper.ts",
+          "line": 1426
+        }
+      ],
+      "id": "items.item_action_contract_authority",
+      "impact": "contract_authority_drift",
+      "status": "BROKEN"
+    },
+    {
+      "affected_ids": [
+        "movement.connector.presentation_key"
+      ],
+      "category": "movement",
+      "detail": "Connector identity reaches MoveIntent but the locomotion executor consumes no connector presentation key/kind/revision; it executes as ordinary planar movement.",
+      "evidence": [
+        {
+          "detail": "server identity",
+          "file": "/mnt/c/Users/tommaso/Documents/Dev/dnd_engine/server/player_replication_contract.py",
+          "line": 794
+        },
+        {
+          "detail": "movement executor",
+          "file": "/home/tommaso/Dev/NeuroClient/app/src/render/clips/MoveClip.ts",
+          "line": 11
+        }
+      ],
+      "id": "movement.connector_identity",
+      "impact": "authoritative_data_dropped",
+      "status": "BROKEN"
+    },
+    {
+      "affected_ids": [
+        "movement.anchor.elevation_feet"
+      ],
+      "category": "movement",
+      "detail": "Elevation reaches locomotion anchors but neither path movement nor JumpClip consumes it; vertical motion is not bridged from the backend anchor data.",
+      "evidence": [
+        {
+          "detail": "client carries elevation",
+          "file": "/home/tommaso/Dev/NeuroClient/app/src/render/types.ts",
+          "line": 288
+        },
+        {
+          "detail": "jump executor",
+          "file": "/home/tommaso/Dev/NeuroClient/app/src/render/clips/JumpClip.ts",
+          "line": 20
+        }
+      ],
+      "id": "movement.anchor_elevation",
+      "impact": "authoritative_data_dropped",
+      "status": "BROKEN"
+    },
+    {
+      "affected_ids": [
+        "movement.multi_step_across_observation_heads"
+      ],
+      "category": "movement",
+      "detail": "One server move can arrive as independent observation heads; each head ends Walking and deletes the locomotion session, so the client restarts the body cycle.",
+      "evidence": [
+        {
+          "detail": "one move is delivered as three observation heads",
+          "file": "/mnt/c/Users/tommaso/Documents/Dev/dnd_engine/tests/manual/test_122_canonical_replication_runtime.py",
+          "line": 494
+        },
+        {
+          "detail": "per-head walking settlement",
+          "file": "/home/tommaso/Dev/NeuroClient/app/src/render/clips/MoveClip.ts",
+          "line": 70
+        },
+        {
+          "detail": "per-head session retirement",
+          "file": "/home/tommaso/Dev/NeuroClient/app/src/render/LocomotionSessionExecutor.ts",
+          "line": 62
+        }
+      ],
+      "id": "movement.cross_head_body_continuity",
+      "impact": "runtime_continuity",
+      "status": "BROKEN"
+    },
+    {
+      "affected_ids": [
+        "equipment_transition"
+      ],
+      "category": "environment_and_equipment",
+      "detail": "SwitchWeapon executes from the authored equipment_transition context, but bundle coverage omits that context and reports equipment.structural instead.",
+      "evidence": [
+        {
+          "detail": "authored runtime context",
+          "file": "/home/tommaso/Dev/NeuroClient/app/src/render/actionContextPresentation.ts",
+          "line": 25
+        },
+        {
+          "detail": "compiled context coverage",
+          "file": "/home/tommaso/Dev/NeuroClient/app/src/render/presentationBundle.ts",
+          "line": 202
+        },
+        {
+          "detail": "reported provenance",
+          "file": "/home/tommaso/Dev/NeuroClient/app/src/render/subjectivePresentationMapper.ts",
+          "line": 2809
+        }
+      ],
+      "id": "equipment.transition_coverage",
+      "impact": "coverage_gate",
+      "status": "BROKEN"
+    },
+    {
+      "affected_ids": [],
+      "category": "class_and_monster_passive_procs",
+      "detail": "The catalog does not identify which class-feature/trait handlers produce gameplay activations, and HandlerDispatchEvidence omits the handler's existing BehaviorBinding. A static list would be a handwritten guess, so this tool refuses to claim exhaustive passive-proc bridge coverage. Add the existing binding snapshot to dispatch evidence, then this audit can join effected handlers to projected attribution without a new subsystem.",
+      "evidence": [
+        {
+          "detail": "effective presentation retained only for reactions",
+          "file": "/mnt/c/Users/tommaso/Documents/Dev/dnd_engine/dnd/core/events.py",
+          "line": 1545
+        },
+        {
+          "detail": "handler evidence projection",
+          "file": "/mnt/c/Users/tommaso/Documents/Dev/dnd_engine/server/player_replication/mapper.py",
+          "line": 2927
+        }
+      ],
+      "id": "passive_proc.identity",
+      "impact": "audit_boundary",
+      "status": "NOT_SCANNED"
+    },
+    {
+      "affected_ids": [],
+      "category": "conditions",
+      "detail": "All 141 public runtime condition identities have exact client dispositions; 32 are explicitly state-only.",
+      "evidence": [
+        {
+          "detail": "condition disposition registry",
+          "file": "/home/tommaso/Dev/NeuroClient/app/src/render/data/animation/conditionPresentation.json",
+          "line": 4
+        }
+      ],
+      "id": "conditions.explicit_dispositions",
+      "impact": "structural",
+      "status": "CONNECTED"
+    },
+    {
+      "affected_ids": [
+        "door",
+        "light",
+        "spatial_effect",
+        "equipment:none",
+        "encounter:structural"
+      ],
+      "category": "environment_and_encounter",
+      "detail": "The real shared semantic classifier marks door, light, spatial-effect lifecycle, equipment-none, and non-visual encounter transitions as reducer/replica-owned; probes={'door': 'door_reducer_state', 'light': 'light_reducer_state', 'spatial_effect': 'spatial_effect_reducer_state', 'equipment_none': 'unequipped_loadout_replacement', 'encounter_start': 'encounter_reducer_transition', 'encounter_turn_start': None}.",
+      "evidence": [
+        {
+          "detail": "state-only mapper branch",
+          "file": "/home/tommaso/Dev/NeuroClient/app/src/render/subjectivePresentationMapper.ts",
+          "line": 947
+        },
+        {
+          "detail": "state-only mapper branch",
+          "file": "/home/tommaso/Dev/NeuroClient/app/src/render/subjectivePresentationMapper.ts",
+          "line": 956
+        }
+      ],
+      "id": "world.reducer_owned_cues",
+      "impact": "structural",
+      "status": "INTENTIONAL_STATE_ONLY"
+    },
+    {
+      "affected_ids": [],
+      "category": "systemic",
+      "detail": "Entity-position settlement is limited to cue-empty state-only frames; a nonempty state-only cue plus position patch can leave the scene stale.",
+      "evidence": [
+        {
+          "detail": "over-narrow settlement predicate",
+          "file": "/home/tommaso/Dev/NeuroClient/app/src/engine/eventIngestion.ts",
+          "line": 417
+        }
+      ],
+      "id": "state_only.position_settlement",
+      "impact": "render_state_divergence",
+      "status": "BROKEN"
+    },
+    {
+      "affected_ids": [],
+      "category": "audit_authority",
+      "detail": "The bundle computes missingDefinitionRefs and bootstrap reports a control-plane diagnostic, but the bundle is still published when every cue kind has some binding. Missing exact definition ownership is diagnosed without being enforced as an authoring/install gate.",
+      "evidence": [
+        {
+          "detail": "exact missing rows computed",
+          "file": "/home/tommaso/Dev/NeuroClient/app/src/render/presentationBundle.ts",
+          "line": 465
+        },
+        {
+          "detail": "aggregate-only compile gate",
+          "file": "/home/tommaso/Dev/NeuroClient/app/src/render/presentationBundle.ts",
+          "line": 473
+        },
+        {
+          "detail": "diagnostic-only bootstrap handling",
+          "file": "/home/tommaso/Dev/NeuroClient/app/src/render/presentationBundleBootstrap.ts",
+          "line": 247
+        }
+      ],
+      "id": "authoring.missing_definition_gate",
+      "impact": "coverage_gate",
+      "status": "BROKEN"
+    }
+  ],
+  "inventories": [
+    {
+      "category": "class_and_subclass_actions",
+      "counts": {
+        "CONNECTED": 19
+      },
+      "members": {
+        "content.srd_5_1_cc:action:action.class.barbarian.end_rage@1#b348fe0a75aa": "CONNECTED",
+        "content.srd_5_1_cc:action:action.class.barbarian.extend_intimidating_presence@1#b348fe0a75aa": "CONNECTED",
+        "content.srd_5_1_cc:action:action.class.barbarian.frenzied_strike@1#b348fe0a75aa": "CONNECTED",
+        "content.srd_5_1_cc:action:action.class.barbarian.frenzy@1#b348fe0a75aa": "CONNECTED",
+        "content.srd_5_1_cc:action:action.class.barbarian.intimidating_presence@1#b348fe0a75aa": "CONNECTED",
+        "content.srd_5_1_cc:action:action.class.barbarian.rage@1#b348fe0a75aa": "CONNECTED",
+        "content.srd_5_1_cc:action:action.class.barbarian.reckless_attack@1#b348fe0a75aa": "CONNECTED",
+        "content.srd_5_1_cc:action:action.class.fighter.action_surge@1#b348fe0a75aa": "CONNECTED",
+        "content.srd_5_1_cc:action:action.class.fighter.second_wind@1#b348fe0a75aa": "CONNECTED",
+        "content.srd_5_1_cc:action:action.class.sorcerer.convert_slot_to_sorcery_points@1#b348fe0a75aa": "CONNECTED",
+        "content.srd_5_1_cc:action:action.class.sorcerer.convert_sorcery_points_to_slot@1#b348fe0a75aa": "CONNECTED",
+        "content.srd_5_1_cc:action:action.class.sorcerer.distant_spell@1#b348fe0a75aa": "CONNECTED",
+        "content.srd_5_1_cc:action:action.class.sorcerer.draconic_presence@1#b348fe0a75aa": "CONNECTED",
+        "content.srd_5_1_cc:action:action.class.sorcerer.dragon_wings.fly@1#b348fe0a75aa": "CONNECTED",
+        "content.srd_5_1_cc:action:action.class.sorcerer.dragon_wings.toggle@1#b348fe0a75aa": "CONNECTED",
+        "content.srd_5_1_cc:action:action.class.sorcerer.elemental_affinity.resistance@1#b348fe0a75aa": "CONNECTED",
+        "content.srd_5_1_cc:action:action.class.sorcerer.quickened_spell@1#b348fe0a75aa": "CONNECTED",
+        "content.srd_5_1_cc:action:action.class.sorcerer.twinned_spell@1#b348fe0a75aa": "CONNECTED",
+        "content.srd_5_1_cc:action:action.feature.extra_attack@1#b348fe0a75aa": "CONNECTED"
+      },
+      "total": 19
+    },
+    {
+      "category": "conditions",
+      "counts": {
+        "CONNECTED": 109,
+        "INTENTIONAL_STATE_ONLY": 32
+      },
+      "members": {
+        "content.neurodragon:condition:condition.aegis_spark@1#230bf50e0612": "CONNECTED",
+        "content.neurodragon:condition:condition.consumable.weapon_coat.concentration_fire@1#230bf50e0612": "CONNECTED",
+        "content.neurodragon:condition:condition.consumable.weapon_coat.fire@1#230bf50e0612": "CONNECTED",
+        "content.neurodragon:condition:condition.consumable.weapon_coat.lightning@1#230bf50e0612": "CONNECTED",
+        "content.neurodragon:condition:condition.consumable.weapon_coat.timed_fire@1#230bf50e0612": "CONNECTED",
+        "content.neurodragon:condition:condition.environment.wet@1#230bf50e0612": "CONNECTED",
+        "content.neurodragon:condition:condition.field_focus@1#230bf50e0612": "CONNECTED",
+        "content.neurodragon:trait:trait.circus_dual_wielder@1#8b81685f804e": "INTENTIONAL_STATE_ONLY",
+        "content.neurodragon:trait:trait.circus_elemental_affinity@1#8b81685f804e": "INTENTIONAL_STATE_ONLY",
+        "content.neurodragon:trait:trait.circus_elemental_weapon_mastery@1#8b81685f804e": "INTENTIONAL_STATE_ONLY",
+        "content.neurodragon:trait:trait.circus_performer@1#8b81685f804e": "INTENTIONAL_STATE_ONLY",
+        "content.neurodragon:trait:trait.circus_tired@1#8b81685f804e": "INTENTIONAL_STATE_ONLY",
+        "content.neurodragon:trait:trait.skeleton_archer_marked@1#8b81685f804e": "INTENTIONAL_STATE_ONLY",
+        "content.srd_5_1_cc:class_feature:class_feature.barbarian.frenzied@1#2687590eedb3": "CONNECTED",
+        "content.srd_5_1_cc:class_feature:class_feature.barbarian.intimidating_presence_immunity@1#2687590eedb3": "INTENTIONAL_STATE_ONLY",
+        "content.srd_5_1_cc:class_feature:class_feature.barbarian.raging@1#2687590eedb3": "CONNECTED",
+        "content.srd_5_1_cc:class_feature:class_feature.barbarian.reckless_attacking@1#2687590eedb3": "INTENTIONAL_STATE_ONLY",
+        "content.srd_5_1_cc:class_feature:class_feature.sorcerer.draconic_presence.aura@1#2687590eedb3": "INTENTIONAL_STATE_ONLY",
+        "content.srd_5_1_cc:class_feature:class_feature.sorcerer.draconic_presence.immunity@1#2687590eedb3": "INTENTIONAL_STATE_ONLY",
+        "content.srd_5_1_cc:class_feature:class_feature.sorcerer.dragon_wings.active@1#2687590eedb3": "CONNECTED",
+        "content.srd_5_1_cc:class_feature:class_feature.sorcerer.elemental_affinity.resistance@1#2687590eedb3": "INTENTIONAL_STATE_ONLY",
+        "content.srd_5_1_cc:class_feature:class_feature.sorcerer.metamagic_active@1#2687590eedb3": "INTENTIONAL_STATE_ONLY",
+        "content.srd_5_1_cc:condition:condition.spell.aid@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.antimagic_field.zone@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.bane@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.banishment@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.beacon_of_hope@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.bestow_curse.ability@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.bestow_curse.attack@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.bestow_curse.damage@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.bestow_curse.inaction@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.bless@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.blindness_deafness@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.blur@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.chill_touch@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.cloudkill.zone@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.color_spray@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.command.flee@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.command.grovel@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.command.halt@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.darkness.zone@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.darkvision@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.daylight.zone@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.death_ward@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.divine_word@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.enhance_ability@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.enlarge_reduce@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.expeditious_retreat@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.eyebite.asleep@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.eyebite.panicked@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.eyebite.sickened@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.fear@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.fog_cloud.zone@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.freedom_of_movement@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.globe_of_invulnerability.zone@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.grease.zone@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.greater_invisibility@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.guidance@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.guiding_bolt.marked@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.gust_of_wind.zone@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.haste.lethargy@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.haste@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.heroes_feast@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.hold_monster@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.hold_person@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.hypnotic_pattern@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.ice_storm.terrain@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.incendiary_cloud.zone@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.insect_plague.zone@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.invisibility@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.jump@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.light@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.mage_armor@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.mirror_image@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.no_healing@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.power_word_stun@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.prismatic_spray.restrained@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.protection_from_energy@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.protection_from_poison@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.ray_of_frost@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.regenerate@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.resistance@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.sanctuary@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.see_invisibility@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.shield@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.shield_of_faith@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.silence.deafened@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.silence.zone@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.sleep@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.sleet_storm.zone@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.slow@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.spike_growth.zone@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.spirit_guardians.slowed@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.spirit_guardians.zone@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.stinking_cloud.nauseated@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.stinking_cloud.zone@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.stoneskin@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.sunburst.blinded@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:condition:condition.spell.true_seeing@1#230bf50e0612": "CONNECTED",
+        "content.srd_5_1_cc:trait:trait.brave@1#8b81685f804e": "INTENTIONAL_STATE_ONLY",
+        "content.srd_5_1_cc:trait:trait.brute@1#8b81685f804e": "INTENTIONAL_STATE_ONLY",
+        "content.srd_5_1_cc:trait:trait.dark_devotion@1#8b81685f804e": "INTENTIONAL_STATE_ONLY",
+        "content.srd_5_1_cc:trait:trait.dire_wolf_bite_prone@1#8b81685f804e": "INTENTIONAL_STATE_ONLY",
+        "content.srd_5_1_cc:trait:trait.divine_eminence_active@1#8b81685f804e": "INTENTIONAL_STATE_ONLY",
+        "content.srd_5_1_cc:trait:trait.ghoul_claws_paralysis@1#8b81685f804e": "INTENTIONAL_STATE_ONLY",
+        "content.srd_5_1_cc:trait:trait.ghoul_paralysis@1#8b81685f804e": "INTENTIONAL_STATE_ONLY",
+        "content.srd_5_1_cc:trait:trait.keen_hearing_and_sight@1#8b81685f804e": "INTENTIONAL_STATE_ONLY",
+        "content.srd_5_1_cc:trait:trait.keen_hearing_and_smell@1#8b81685f804e": "INTENTIONAL_STATE_ONLY",
+        "content.srd_5_1_cc:trait:trait.leadership_aura@1#8b81685f804e": "INTENTIONAL_STATE_ONLY",
+        "content.srd_5_1_cc:trait:trait.martial_advantage@1#8b81685f804e": "INTENTIONAL_STATE_ONLY",
+        "content.srd_5_1_cc:trait:trait.pack_tactics@1#8b81685f804e": "INTENTIONAL_STATE_ONLY",
+        "content.srd_5_1_cc:trait:trait.parry@1#8b81685f804e": "INTENTIONAL_STATE_ONLY",
+        "content.srd_5_1_cc:trait:trait.rampage@1#8b81685f804e": "INTENTIONAL_STATE_ONLY",
+        "content.srd_5_1_cc:trait:trait.rampage_available@1#8b81685f804e": "INTENTIONAL_STATE_ONLY",
+        "content.srd_5_1_cc:trait:trait.sneak_attack@1#8b81685f804e": "INTENTIONAL_STATE_ONLY",
+        "content.srd_5_1_cc:trait:trait.sunlight_sensitivity@1#8b81685f804e": "INTENTIONAL_STATE_ONLY",
+        "content.srd_5_1_cc:trait:trait.surprise_attack@1#8b81685f804e": "INTENTIONAL_STATE_ONLY",
+        "content.srd_5_1_cc:trait:trait.undead_fortitude@1#8b81685f804e": "INTENTIONAL_STATE_ONLY",
+        "content.srd_5_1_cc:trait:trait.wolf_bite_prone@1#8b81685f804e": "INTENTIONAL_STATE_ONLY",
+        "core.rules:condition:condition.blinded@1#230bf50e0612": "CONNECTED",
+        "core.rules:condition:condition.charmed@1#230bf50e0612": "CONNECTED",
+        "core.rules:condition:condition.concentrating@1#230bf50e0612": "CONNECTED",
+        "core.rules:condition:condition.dashing@1#230bf50e0612": "CONNECTED",
+        "core.rules:condition:condition.deafened@1#230bf50e0612": "CONNECTED",
+        "core.rules:condition:condition.disengaging@1#230bf50e0612": "CONNECTED",
+        "core.rules:condition:condition.dodging@1#230bf50e0612": "CONNECTED",
+        "core.rules:condition:condition.exhaustion@1#230bf50e0612": "CONNECTED",
+        "core.rules:condition:condition.frightened@1#230bf50e0612": "CONNECTED",
+        "core.rules:condition:condition.grappled@1#230bf50e0612": "CONNECTED",
+        "core.rules:condition:condition.hidden@1#230bf50e0612": "CONNECTED",
+        "core.rules:condition:condition.incapacitated@1#230bf50e0612": "CONNECTED",
+        "core.rules:condition:condition.invisible@1#230bf50e0612": "CONNECTED",
+        "core.rules:condition:condition.no_reactions@1#230bf50e0612": "CONNECTED",
+        "core.rules:condition:condition.paralyzed@1#230bf50e0612": "CONNECTED",
+        "core.rules:condition:condition.petrified@1#230bf50e0612": "CONNECTED",
+        "core.rules:condition:condition.poisoned@1#230bf50e0612": "CONNECTED",
+        "core.rules:condition:condition.prone@1#230bf50e0612": "CONNECTED",
+        "core.rules:condition:condition.restrained@1#230bf50e0612": "CONNECTED",
+        "core.rules:condition:condition.stunned@1#230bf50e0612": "CONNECTED",
+        "core.rules:condition:condition.unconscious@1#230bf50e0612": "CONNECTED",
+        "core.rules:condition:condition.underwater@1#230bf50e0612": "CONNECTED"
+      },
+      "total": 141
+    },
+    {
+      "category": "environment_actions",
+      "counts": {
+        "CONNECTED": 12
+      },
+      "members": {
+        "content.neurodragon:action:action.environment.arcane_device.activate@1#b348fe0a75aa": "CONNECTED",
+        "content.neurodragon:action:action.environment.campfire.cook@1#b348fe0a75aa": "CONNECTED",
+        "content.neurodragon:action:action.environment.campfire.rest@1#b348fe0a75aa": "CONNECTED",
+        "content.neurodragon:action:action.environment.directional_door.close@1#b348fe0a75aa": "CONNECTED",
+        "content.neurodragon:action:action.environment.directional_door.open@1#b348fe0a75aa": "CONNECTED",
+        "content.neurodragon:action:action.environment.door.close@1#b348fe0a75aa": "CONNECTED",
+        "content.neurodragon:action:action.environment.door.open@1#b348fe0a75aa": "CONNECTED",
+        "content.neurodragon:action:action.environment.storage_chest.loot_all@1#b348fe0a75aa": "CONNECTED",
+        "content.neurodragon:action:action.environment.trap_lever.pull@1#b348fe0a75aa": "CONNECTED",
+        "content.neurodragon:action:action.environment.wall_torch.extinguish@1#b348fe0a75aa": "CONNECTED",
+        "content.neurodragon:action:action.environment.wall_torch.ignite@1#b348fe0a75aa": "CONNECTED",
+        "content.srd_5_1_cc:action:action.environment.heroes_feast.eat@1#b348fe0a75aa": "CONNECTED"
+      },
+      "total": 12
+    },
+    {
+      "category": "item_actions",
+      "counts": {
+        "CONNECTED": 7
+      },
+      "members": {
+        "content.neurodragon:action:action.item.field_kit.deploy@1#b348fe0a75aa": "CONNECTED",
+        "content.neurodragon:action:action.item.potion_greater_invisibility.drink@1#b348fe0a75aa": "CONNECTED",
+        "content.neurodragon:action:action.item.potion_haste.drink@1#b348fe0a75aa": "CONNECTED",
+        "content.neurodragon:action:action.item.potion_healing.drink@1#b348fe0a75aa": "CONNECTED",
+        "content.neurodragon:action:action.item.torch.extinguish@1#b348fe0a75aa": "CONNECTED",
+        "content.neurodragon:action:action.item.torch.ignite@1#b348fe0a75aa": "CONNECTED",
+        "content.neurodragon:action:action.item.weapon_coat.apply@1#b348fe0a75aa": "CONNECTED"
+      },
+      "total": 7
+    },
+    {
+      "category": "monster_trait_and_configured_actions",
+      "counts": {
+        "CONNECTED": 15
+      },
+      "members": {
+        "content.neurodragon:action:action.creature.skeleton_archer.mark_target@1#b348fe0a75aa": "CONNECTED",
+        "content.srd_5_1_cc:action:action.monster.multiattack.bandit_captain.melee@1#55eb3a13d620": "CONNECTED",
+        "content.srd_5_1_cc:action:action.monster.multiattack.bandit_captain.ranged@1#55eb3a13d620": "CONNECTED",
+        "content.srd_5_1_cc:action:action.monster.multiattack.cult_fanatic@1#55eb3a13d620": "CONNECTED",
+        "content.srd_5_1_cc:action:action.monster.multiattack.knight@1#55eb3a13d620": "CONNECTED",
+        "content.srd_5_1_cc:action:action.monster.multiattack.scout.longbow@1#55eb3a13d620": "CONNECTED",
+        "content.srd_5_1_cc:action:action.monster.multiattack.scout.shortsword@1#55eb3a13d620": "CONNECTED",
+        "content.srd_5_1_cc:action:action.monster.multiattack.spy@1#55eb3a13d620": "CONNECTED",
+        "content.srd_5_1_cc:action:action.monster.multiattack.thug@1#55eb3a13d620": "CONNECTED",
+        "content.srd_5_1_cc:action:action.monster.multiattack.veteran.melee@1#55eb3a13d620": "CONNECTED",
+        "content.srd_5_1_cc:action:action.monster.multiattack.veteran.ranged@1#55eb3a13d620": "CONNECTED",
+        "content.srd_5_1_cc:action:action.monster.natural_attack@1#b348fe0a75aa": "CONNECTED",
+        "content.srd_5_1_cc:action:action.trait.aggressive@1#b348fe0a75aa": "CONNECTED",
+        "content.srd_5_1_cc:action:action.trait.divine_eminence@1#b348fe0a75aa": "CONNECTED",
+        "content.srd_5_1_cc:action:action.trait.leadership@1#b348fe0a75aa": "CONNECTED"
+      },
+      "total": 15
+    },
+    {
+      "category": "movement",
+      "counts": {
+        "CONNECTED": 4
+      },
+      "members": {
+        "core.rules:action:action.jump@1#b348fe0a75aa": "CONNECTED",
+        "core.rules:action:action.move@1#b348fe0a75aa": "CONNECTED",
+        "core.rules:action:action.swim@1#b348fe0a75aa": "CONNECTED",
+        "core.rules:action:action.traverse_connector@1#b348fe0a75aa": "CONNECTED"
+      },
+      "total": 4
+    },
+    {
+      "category": "origin_actions",
+      "counts": {
+        "CONNECTED": 1
+      },
+      "members": {
+        "content.srd_5_1_cc:action:action.origin.dragonborn.breath_weapon@1#b348fe0a75aa": "CONNECTED"
+      },
+      "total": 1
+    },
+    {
+      "category": "reactions",
+      "counts": {
+        "CONNECTED": 8
+      },
+      "members": {
+        "content.srd_5_1_cc:reaction:reaction.class_feature.barbarian.retaliation@1#636ffe03ecf4": "CONNECTED",
+        "content.srd_5_1_cc:reaction:reaction.class_feature.fighter.protection@1#636ffe03ecf4": "CONNECTED",
+        "content.srd_5_1_cc:reaction:reaction.class_feature.paladin.divine_smite@1#636ffe03ecf4": "CONNECTED",
+        "content.srd_5_1_cc:reaction:reaction.monster.parry@1#636ffe03ecf4": "CONNECTED",
+        "content.srd_5_1_cc:reaction:reaction.spell.counterspell@1#636ffe03ecf4": "CONNECTED",
+        "content.srd_5_1_cc:reaction:reaction.spell.hellish_rebuke@1#636ffe03ecf4": "CONNECTED",
+        "content.srd_5_1_cc:reaction:reaction.spell.shield@1#636ffe03ecf4": "CONNECTED",
+        "core.rules:reaction:reaction.opportunity_attack@1#636ffe03ecf4": "CONNECTED"
+      },
+      "total": 8
+    },
+    {
+      "category": "spell_followup_actions",
+      "counts": {
+        "CONNECTED": 12
+      },
+      "members": {
+        "content.srd_5_1_cc:action:action.spell.call_lightning.strike@1#b348fe0a75aa": "CONNECTED",
+        "content.srd_5_1_cc:action:action.spell.entangle.escape@1#b348fe0a75aa": "CONNECTED",
+        "content.srd_5_1_cc:action:action.spell.evards_black_tentacles.escape_dexterity@1#b348fe0a75aa": "CONNECTED",
+        "content.srd_5_1_cc:action:action.spell.evards_black_tentacles.escape_strength@1#b348fe0a75aa": "CONNECTED",
+        "content.srd_5_1_cc:action:action.spell.expeditious_retreat.dash@1#b348fe0a75aa": "CONNECTED",
+        "content.srd_5_1_cc:action:action.spell.eyebite.strike@1#b348fe0a75aa": "CONNECTED",
+        "content.srd_5_1_cc:action:action.spell.freedom_of_movement.escape@1#b348fe0a75aa": "CONNECTED",
+        "content.srd_5_1_cc:action:action.spell.sunbeam.strike@1#b348fe0a75aa": "CONNECTED",
+        "content.srd_5_1_cc:action:action.spell.telekinesis.grab@1#b348fe0a75aa": "CONNECTED",
+        "content.srd_5_1_cc:action:action.spell.telekinesis.move@1#b348fe0a75aa": "CONNECTED",
+        "content.srd_5_1_cc:action:action.spell.telekinesis.restrain@1#b348fe0a75aa": "CONNECTED",
+        "content.srd_5_1_cc:action:action.spell.web.escape@1#b348fe0a75aa": "CONNECTED"
+      },
+      "total": 12
+    },
+    {
+      "category": "spells",
+      "counts": {
+        "CONNECTED": 116
+      },
+      "members": {
+        "content.neurodragon:spell:spell.aegis_spark@1#e4d439f0a982": "CONNECTED",
+        "content.neurodragon:spell:spell.necrotic_bless@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.acid_splash@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.aid@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.antimagic_field@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.bane@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.banishment@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.beacon_of_hope@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.bestow_curse@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.bless@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.blight@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.blindness_deafness@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.blur@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.burning_hands@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.call_lightning@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.chain_lightning@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.charm_person@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.chill_touch@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.circle_of_death@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.cloudkill@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.color_spray@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.command@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.cone_of_cold@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.continual_flame@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.counterspell@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.cure_wounds@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.darkness@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.darkvision@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.daylight@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.death_ward@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.dimension_door@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.disintegrate@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.divine_word@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.eldritch_blast@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.enhance_ability@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.enlarge_reduce@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.entangle@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.evards_black_tentacles@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.expeditious_retreat@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.eyebite@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.false_life@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.fear@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.finger_of_death@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.fire_bolt@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.fireball@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.flame_strike@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.fog_cloud@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.freedom_of_movement@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.globe_of_invulnerability@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.grease@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.greater_invisibility@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.greater_restoration@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.guardian_of_faith@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.guidance@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.guiding_bolt@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.gust_of_wind@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.harm@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.haste@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.heal@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.healing_word@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.hellish_rebuke@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.heroes_feast@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.hold_monster@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.hold_person@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.hypnotic_pattern@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.ice_storm@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.incendiary_cloud@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.inflict_wounds@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.insect_plague@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.invisibility@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.jump@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.lesser_restoration@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.light@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.lightning_bolt@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.mage_armor@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.magic_missile@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.mass_cure_wounds@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.mass_heal@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.mass_healing_word@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.mirror_image@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.misty_step@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.poison_spray@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.power_word_kill@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.power_word_stun@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.prayer_of_healing@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.prismatic_spray@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.protection_from_energy@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.protection_from_poison@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.ray_of_frost@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.regenerate@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.remove_curse@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.resistance@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.sacred_flame@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.sanctuary@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.scorching_ray@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.see_invisibility@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.shatter@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.shield@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.shield_of_faith@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.shocking_grasp@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.silence@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.sleep@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.sleet_storm@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.slow@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.spike_growth@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.spirit_guardians@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.stinking_cloud@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.stoneskin@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.sunbeam@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.sunburst@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.telekinesis@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.thaumaturgy@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.thunderwave@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.true_seeing@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.true_strike@1#e4d439f0a982": "CONNECTED",
+        "content.srd_5_1_cc:spell:spell.web@1#e4d439f0a982": "CONNECTED"
+      },
+      "total": 116
+    },
+    {
+      "category": "universal_and_base_actions",
+      "counts": {
+        "CONNECTED": 13
+      },
+      "members": {
+        "content.srd_5_1_cc:action:action.core.drop@1#b348fe0a75aa": "CONNECTED",
+        "content.srd_5_1_cc:action:action.core.drop_prone@1#b348fe0a75aa": "CONNECTED",
+        "content.srd_5_1_cc:action:action.core.stand_up@1#b348fe0a75aa": "CONNECTED",
+        "core.rules:action:action.attack@1#b348fe0a75aa": "CONNECTED",
+        "core.rules:action:action.attack_object@1#b348fe0a75aa": "CONNECTED",
+        "core.rules:action:action.dash@1#b348fe0a75aa": "CONNECTED",
+        "core.rules:action:action.disengage@1#b348fe0a75aa": "CONNECTED",
+        "core.rules:action:action.dodge@1#b348fe0a75aa": "CONNECTED",
+        "core.rules:action:action.drop_concentration@1#b348fe0a75aa": "CONNECTED",
+        "core.rules:action:action.hide@1#b348fe0a75aa": "CONNECTED",
+        "core.rules:action:action.pick_up@1#b348fe0a75aa": "CONNECTED",
+        "core.rules:action:action.shake_awake@1#b348fe0a75aa": "CONNECTED",
+        "core.rules:action:action.shove@1#b348fe0a75aa": "CONNECTED"
+      },
+      "total": 13
+    }
+  ],
+  "scanner_errors": []
+}

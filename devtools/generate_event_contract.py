@@ -193,7 +193,7 @@ def build_manifest() -> Dict[str, Any]:
         builder.add_model(model)
 
     manifest: Dict[str, Any] = {
-        "contract_version": 1,
+        "contract_version": 2,
         "event_types": [event_type.value for event_type in EventType],
         "event_classes": {
             qualified_name(model): {

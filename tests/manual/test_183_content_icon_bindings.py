@@ -494,7 +494,7 @@ def test_runtime_selection_uses_only_exact_generated_identity_rows() -> None:
 def test_original_declaration_identity_survives_runtime_binding_and_item_build() -> None:
     """Descriptor binding never replaces decorated declaration objects."""
     reset_engine_runtime(grid_size=(4, 4))
-    loaded = bootstrap_content_system(pack_roots=())
+    loaded = bootstrap_content_system()
     binder = BehaviorBinder(loaded.registry)
     owner_uuid = uuid4()
 

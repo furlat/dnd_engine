@@ -23,7 +23,6 @@ from dnd.core.content.provenance import (
     ContentProvenanceRelation,
     ContentReviewStatus,
 )
-from dnd.core.content.registration import scan_module_content_declarations
 from dnd.core.equipment_types import WeaponProperty, WeaponSlot
 from dnd.core.events import EventHandler, EventQueue, RangeType
 from dnd.core.creature_types import DamageType
@@ -58,13 +57,11 @@ def test_neurodragon_weapon_declarations_are_exact_original_content() -> None:
         "weapon.arcane_staff",
     )
 
-    discovered = scan_module_content_declarations(weapon_definitions)
     icon_rows = {
         row.content_ref.identity_key: row
         for row in BUILT_IN_CONTENT_ICON_BINDING_LEDGER.definitions
     }
     for declaration in declarations:
-        assert declaration in discovered
         assert declaration.ref.pack_id == "content.neurodragon"
         assert declaration.ref.content_version == 1
         assert declaration.descriptor.ref == declaration.ref

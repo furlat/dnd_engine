@@ -687,7 +687,7 @@ def test_pyproject_defines_uv_pytest_contract() -> None:
 
 
 def test_active_runtime_sources_do_not_reference_claude() -> None:
-    """Active runtime code should use the Codex CLI surface, not Claude."""
+    """Active runtime code must not retain the retired Claude integration."""
     offenders: list[str] = []
 
     for root in RUNTIME_SOURCE_ROOTS:

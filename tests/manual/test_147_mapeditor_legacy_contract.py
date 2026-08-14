@@ -302,6 +302,7 @@ def test_mapeditor_scratch_layers_are_visible_on_every_objective_surface() -> No
     )
     sim.encounter = encounter
     Encounter._active_encounter = encounter
+    event_stream.install_prepared_source(encounter)
     event_stream.ensure_attached()
     try:
         objective_response = client.get(

@@ -16,7 +16,7 @@ def test_content_bootstrap_and_composed_spell_catalog_cold_start() -> None:
     script = """
 from dnd.content_system.bootstrap import bootstrap_content_system
 from server.spell_catalog import build_spell_catalog
-loaded = bootstrap_content_system(pack_roots=())
+loaded = bootstrap_content_system()
 catalog = build_spell_catalog()
 assert len(loaded.registry.declarations) > 0
 assert any(row.id == "aegis_spark" for row in catalog.spells)

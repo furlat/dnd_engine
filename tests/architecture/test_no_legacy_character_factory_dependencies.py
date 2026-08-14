@@ -8,7 +8,6 @@ from pathlib import Path
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 MAINTAINED_ROOTS = (
-    REPOSITORY_ROOT / "ai",
     REPOSITORY_ROOT / "dnd",
     REPOSITORY_ROOT / "server",
     REPOSITORY_ROOT / "tests",

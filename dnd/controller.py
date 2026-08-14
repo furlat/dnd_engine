@@ -15,7 +15,6 @@ __all__ = [
     "Controller",
     "PassController",
     "HumanController",
-    "CodexController",
 ]
 from uuid import UUID
 from pydantic import Field
@@ -30,7 +29,6 @@ class ControllerExecutionMode(str, Enum):
     """Whether the encounter executes decisions or waits for external input."""
 
     AUTONOMOUS = "autonomous"
-    DEFERRED_AUTONOMOUS = "deferred_autonomous"
     EXTERNAL = "external"
 
 
@@ -178,9 +176,8 @@ class Controller(BaseObject):
     ) -> ControllerStepResult:
         """Execute one decision using the controller's authoritative path.
 
-        Ordinary controllers retain the historical ``BaseAction`` path.
-        Native policy controllers override this method so they can validate
-        and dispatch the exact affordance binding they selected.
+        Controllers may override this method when they need to execute a
+        decision without returning a ``BaseAction`` instance.
         """
         action = self.get_next_action(entity, context)
         if action is None:
@@ -271,34 +268,6 @@ class HumanController(Controller):
 
     name: str = Field(default="Human Player", description="Display name of this controller.")
     controller_type: str = Field(default="human", description="Stable controller type identifier.")
-
-    def get_next_action(
-        self,
-        entity: Entity,
-        context: TurnContext
-    ) -> Optional[BaseAction]:
-        return None
-
-    def can_continue_turn(self, entity: Entity, context: TurnContext) -> bool:
-        return False
-
-
-class CodexController(Controller):
-    """Controller for Codex-controlled entities.
-
-    Like HumanController, actions come via external API calls.
-    Has its own controller_type for proper identification and debugging.
-
-    Attributes:
-        name: Display name of this controller.
-        controller_type: Stable controller type identifier.
-    """
-
-    _execution_mode: ClassVar[ControllerExecutionMode] = ControllerExecutionMode.EXTERNAL
-    _external_boundary_status: ClassVar[str] = "waiting_for_codex"
-
-    name: str = Field(default="Codex Controller", description="Display name of this controller.")
-    controller_type: str = Field(default="codex", description="Stable controller type identifier.")
 
     def get_next_action(
         self,

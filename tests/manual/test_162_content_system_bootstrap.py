@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import pytest
@@ -19,29 +18,22 @@ from dnd.content_system.builtin import (
     BUILT_IN_DATA_ARTIFACT_PATHS,
     BUILT_IN_DECLARATIONS,
     BUILT_IN_IMPLEMENTATION_ROOT_MODULES,
-    BUILT_IN_PACK_DEPENDENCIES,
-    BUILT_IN_PACK_VERSIONS,
     BUILT_IN_PYTHON_ARTIFACT_PATHS,
     BUILT_IN_SOURCES,
 )
 from dnd.content_system.builtin_inventory import (
     BUILT_IN_DECLARATION_INVENTORY,
 )
-from dnd.content_system.configuration import (
-    DEFAULT_CONTENT_PACK_ROOT,
-    configured_content_pack_roots,
-)
 from dnd.content_system.runtime import ContentSystemRuntime
 from dnd.core.content.provenance import ContentSourceFamily, RulesBaseline
 
 
 def test_default_bootstrap_freezes_exact_builtin_identity() -> None:
-    """The repository pack root and built-ins produce one immutable identity."""
-    loaded = bootstrap_content_system(pack_roots=(DEFAULT_CONTENT_PACK_ROOT,))
+    """Trusted built-ins produce one immutable content identity."""
+    loaded = bootstrap_content_system()
 
     assert len(loaded.content_set_digest) == 64
     assert loaded.built_in_artifact_digest == BUILT_IN_ARTIFACT_DIGEST
-    assert loaded.packs == ()
     assert loaded.registry.declarations == {
         declaration.ref.identity_key: declaration
         for declaration in BUILT_IN_DECLARATIONS
@@ -57,19 +49,6 @@ def test_default_bootstrap_freezes_exact_builtin_identity() -> None:
         "wotc.srd_5_1_cc",
         "neurodragon.original_b2b3930",
     )
-    assert BUILT_IN_PACK_VERSIONS == {
-        "content.neurodragon": "1.0.0",
-        "content.srd_5_1_cc": "1.0.0",
-        "core.rules": "1.0.0",
-    }
-    assert BUILT_IN_PACK_DEPENDENCIES == {
-        "content.neurodragon": frozenset({
-            "content.srd_5_1_cc",
-            "core.rules",
-        }),
-        "content.srd_5_1_cc": frozenset({"core.rules"}),
-        "core.rules": frozenset(),
-    }
     assert tuple(source.source_id for source in BUILT_IN_SOURCES) == (
         "wotc.srd_5_1_cc",
         "neurodragon.original_b2b3930",
@@ -82,40 +61,13 @@ def test_default_bootstrap_freezes_exact_builtin_identity() -> None:
     assert neurodragon_source.license_id == "Neurodragon-Original"
 
 
-def test_configured_roots_are_default_plus_sorted_absolute_additions(
-    tmp_path: Path,
-) -> None:
-    """Deployment configuration cannot hide or ambiguously relativize roots."""
-    first = tmp_path / "zeta"
-    second = tmp_path / "alpha"
-    first.mkdir()
-    second.mkdir()
-    configured = configured_content_pack_roots(
-        {
-            "DND_CONTENT_PACK_ROOTS": os.pathsep.join(
-                (str(first), str(second), str(first)),
-            ),
-        },
-    )
-
-    assert configured == (
-        DEFAULT_CONTENT_PACK_ROOT,
-        second.resolve(),
-        first.resolve(),
-    )
-
-    with pytest.raises(ValueError, match="absolute"):
-        configured_content_pack_roots(
-            {"DND_CONTENT_PACK_ROOTS": "relative/content-packs"},
-        )
-
-
 def test_builtin_artifact_digest_is_required_and_stable() -> None:
     """Built-in source and data close over one authenticated identity."""
     assert len(BUILT_IN_ARTIFACT_DIGEST) == 64
-    assert BUILT_IN_ARTIFACT_DIGEST == bootstrap_content_system(
-        pack_roots=(DEFAULT_CONTENT_PACK_ROOT,),
-    ).built_in_artifact_digest
+    assert (
+        BUILT_IN_ARTIFACT_DIGEST
+        == bootstrap_content_system().built_in_artifact_digest
+    )
     relative_paths = {
         path.relative_to(Path(__file__).resolve().parents[2]).as_posix()
         for path in BUILT_IN_ARTIFACT_PATHS
@@ -277,20 +229,17 @@ def test_runtime_installs_one_digest_and_never_rebinds() -> None:
     with pytest.raises(RuntimeError, match="not installed"):
         runtime.require()
 
-    loaded = bootstrap_content_system(pack_roots=(DEFAULT_CONTENT_PACK_ROOT,))
+    loaded = bootstrap_content_system()
     assert runtime.install(loaded) is loaded
     assert runtime.require() is loaded
     assert runtime.install(loaded) is loaded
-    equivalent = bootstrap_content_system(
-        pack_roots=(DEFAULT_CONTENT_PACK_ROOT,),
-    )
+    equivalent = bootstrap_content_system()
     assert equivalent is not loaded
     assert runtime.install(equivalent) is loaded
     assert runtime.materialization_count == 0
 
     incompatible = loaded.__class__(
         registry=loaded.registry,
-        packs=loaded.packs,
         built_in_artifact_digest="f" * 64,
         content_set_digest="e" * 64,
     )

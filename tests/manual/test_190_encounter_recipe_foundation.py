@@ -18,8 +18,6 @@ from dnd.core.content.encounters import (
     FixedRosterOpeningPolicy,
     InitiativeOpeningPolicy,
     OwnedCharacterRosterSource,
-    RosterControllerDefaults,
-    RosterControllerKind,
 )
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.content.recipes import ContentRecipe
@@ -102,21 +100,14 @@ def test_roster_and_encounter_digests_authenticate_every_nested_fact() -> None:
                 roster=first,
                 faction_id="first",
                 deployment_zone_id="west",
-                controller_defaults=RosterControllerDefaults(
-                    controller=RosterControllerKind.HUMAN,
-                    participant_name="First",
-                ),
+                participant_name="First",
             ),
             EncounterRosterSlot(
                 roster_slot_id="second_party",
                 roster=second,
                 faction_id="second",
                 deployment_zone_id="east",
-                controller_defaults=RosterControllerDefaults(
-                    controller=RosterControllerKind.AI,
-                    participant_name="Second",
-                    policy_id="builtin.basic",
-                ),
+                participant_name="Second",
             ),
         ),
         battlefield_id="battlefield.test_room",
@@ -164,21 +155,14 @@ def test_encounter_validates_slot_zone_and_opening_references() -> None:
                     roster=first,
                     faction_id="first",
                     deployment_zone_id="missing",
-                    controller_defaults=RosterControllerDefaults(
-                        controller=RosterControllerKind.HUMAN,
-                        participant_name="First",
-                    ),
+                    participant_name="First",
                 ),
                 EncounterRosterSlot(
                     roster_slot_id="opposition",
                     roster=second,
                     faction_id="second",
                     deployment_zone_id="east",
-                    controller_defaults=RosterControllerDefaults(
-                        controller=RosterControllerKind.AI,
-                        participant_name="Second",
-                        policy_id="builtin.basic",
-                    ),
+                    participant_name="Second",
                 ),
             ),
             battlefield_id=deployment.battlefield_id,
@@ -196,21 +180,14 @@ def test_encounter_validates_slot_zone_and_opening_references() -> None:
                     roster=first,
                     faction_id="first",
                     deployment_zone_id="west",
-                    controller_defaults=RosterControllerDefaults(
-                        controller=RosterControllerKind.HUMAN,
-                        participant_name="First",
-                    ),
+                    participant_name="First",
                 ),
                 EncounterRosterSlot(
                     roster_slot_id="opposition",
                     roster=second,
                     faction_id="second",
                     deployment_zone_id="east",
-                    controller_defaults=RosterControllerDefaults(
-                        controller=RosterControllerKind.AI,
-                        participant_name="Second",
-                        policy_id="builtin.basic",
-                    ),
+                    participant_name="Second",
                 ),
             ),
             battlefield_id=deployment.battlefield_id,

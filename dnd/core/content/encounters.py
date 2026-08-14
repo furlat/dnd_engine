@@ -65,14 +65,6 @@ def _validate_trimmed(value: str, field_name: str) -> str:
     return value
 
 
-class RosterControllerKind(str, Enum):
-    """Supported controller ownership modes for one roster or member."""
-
-    HUMAN = "human"
-    AI = "ai"
-    CODEX = "codex"
-
-
 class RosterItemPlacement(str, Enum):
     """Encounter-local placement for an exact item grant."""
 
@@ -666,62 +658,6 @@ class EncounterDeploymentSpec(BaseModel):
         return self
 
 
-class RosterMemberControllerOverride(BaseModel):
-    """Per-member override of a roster controller default."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    member_id: str
-    controller: RosterControllerKind
-    policy_id: str | None = None
-
-    @field_validator("member_id")
-    @classmethod
-    def _validate_member_id(cls, value: str) -> str:
-        return _validate_local_id(value, "member_id")
-
-    @model_validator(mode="after")
-    def _validate_policy(self) -> Self:
-        if self.controller is RosterControllerKind.AI:
-            if self.policy_id is None:
-                raise ValueError("AI controller override requires policy_id")
-        elif self.policy_id is not None:
-            raise ValueError(
-                "non-AI controller overrides forbid policy_id",
-            )
-        return self
-
-
-class RosterControllerDefaults(BaseModel):
-    """Default controller and exact optional member overrides."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    controller: RosterControllerKind
-    participant_name: str
-    policy_id: str | None = None
-    member_overrides: tuple[RosterMemberControllerOverride, ...] = ()
-
-    @field_validator("participant_name")
-    @classmethod
-    def _validate_participant_name(cls, value: str) -> str:
-        return _validate_trimmed(value, "participant_name")
-
-    @model_validator(mode="after")
-    def _validate_controller_defaults(self) -> Self:
-        if self.controller is RosterControllerKind.AI:
-            if self.policy_id is None:
-                raise ValueError("AI roster controller requires policy_id")
-        elif self.policy_id is not None:
-            raise ValueError(
-                "non-AI roster controllers forbid policy_id",
-            )
-        member_ids = [row.member_id for row in self.member_overrides]
-        if len(member_ids) != len(set(member_ids)):
-            raise ValueError("member controller overrides must be unique")
-        return self
-
-
 class EncounterMemberPresentation(BaseModel):
     """Encounter-specific display override for one roster member."""
 
@@ -742,7 +678,7 @@ class EncounterMemberPresentation(BaseModel):
 
 
 class EncounterRosterSlot(BaseModel):
-    """One roster assigned to a faction, deployment zone, and controllers."""
+    """One human participant roster assigned to a faction and deployment zone."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -750,7 +686,7 @@ class EncounterRosterSlot(BaseModel):
     roster: EncounterRosterRecipe
     faction_id: str
     deployment_zone_id: str
-    controller_defaults: RosterControllerDefaults
+    participant_name: str
     member_presentations: tuple[EncounterMemberPresentation, ...] = ()
 
     @field_validator(
@@ -761,6 +697,11 @@ class EncounterRosterSlot(BaseModel):
     @classmethod
     def _validate_ids(cls, value: str, info) -> str:
         return _validate_local_id(value, info.field_name)
+
+    @field_validator("participant_name")
+    @classmethod
+    def _validate_participant_name(cls, value: str) -> str:
+        return _validate_trimmed(value, "participant_name")
 
     @model_validator(mode="after")
     def _validate_member_references(self) -> Self:
@@ -776,14 +717,6 @@ class EncounterRosterSlot(BaseModel):
         if not set(presentation_ids) <= roster_member_ids:
             raise ValueError(
                 "member presentation must reference this roster",
-            )
-        override_ids = {
-            override.member_id
-            for override in self.controller_defaults.member_overrides
-        }
-        if not override_ids <= roster_member_ids:
-            raise ValueError(
-                "controller override must reference this roster",
             )
         return self
 
@@ -1029,12 +962,9 @@ __all__ = [
     "InitiativeOpeningPolicy",
     "OwnedCharacterRosterSource",
     "RosterBehaviorGrant",
-    "RosterControllerDefaults",
-    "RosterControllerKind",
     "RosterDamageAffinity",
     "RosterItemGrant",
     "RosterItemPlacement",
-    "RosterMemberControllerOverride",
     "RosterResourceState",
     "RosterSpellGrant",
     "RosterStartingCondition",

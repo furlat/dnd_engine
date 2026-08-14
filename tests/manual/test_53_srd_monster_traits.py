@@ -231,7 +231,7 @@ def test_gnoll_keeps_shield_and_gets_natural_bite_action() -> None:
 
 
 def test_natural_bite_discloses_natural_attack_outcome_profile() -> None:
-    """Natural attacks should not inherit the equipped weapon's AI profile."""
+    """Natural attacks keep an outcome profile distinct from equipped weapons."""
     reset_srd_trait_state()
     gnoll = _materialize_srd_fixture("gnoll", position=(1, 1), faction="monsters")
     _target = _materialize_srd_fixture("commoner", position=(2, 1), faction="heroes")

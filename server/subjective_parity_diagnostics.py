@@ -20,7 +20,7 @@ from uuid import UUID
 from dnd.blocks.base_item import BaseItem
 from dnd.core.base_block import BaseBlock
 from dnd.core.gridmap import GridMap
-from server.agent_protocol.objective_diagnostics import (
+from server.objective_diagnostics_contracts import (
     SubjectiveParityMismatch,
     SubjectiveRenderParityDiagnosticsResponse,
 )

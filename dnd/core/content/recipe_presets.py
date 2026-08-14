@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from types import ModuleType
 from typing import Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -12,9 +11,6 @@ from dnd.core.content.descriptors import ContentDescriptorSpec
 from dnd.core.content.identities import validate_namespaced_id, validate_sha256
 from dnd.core.content.provenance import ContentProvenance
 from dnd.core.content.recipes import ContentRecipe
-
-
-CONTENT_RECIPE_PRESETS_EXPORT = "CONTENT_RECIPE_PRESETS"
 
 
 class ContentRecipePresetRef(BaseModel):
@@ -124,28 +120,3 @@ class ContentRecipePreset(BaseModel):
                 "preset_contract_hash does not authenticate the recipe preset",
             )
         return self
-
-
-def scan_module_content_recipe_presets(
-    module: ModuleType,
-) -> tuple[ContentRecipePreset, ...]:
-    """Read one module's explicit preset export without scanning imports."""
-    exported = vars(module).get(CONTENT_RECIPE_PRESETS_EXPORT, ())
-    if not isinstance(exported, tuple):
-        raise ValueError(
-            f"{module.__name__}.{CONTENT_RECIPE_PRESETS_EXPORT} must be a tuple",
-        )
-    presets: dict[str, ContentRecipePreset] = {}
-    for value in exported:
-        if not isinstance(value, ContentRecipePreset):
-            raise ValueError(
-                f"{module.__name__}.{CONTENT_RECIPE_PRESETS_EXPORT} contains "
-                f"non-preset value {value!r}",
-            )
-        key = value.ref.identity_key
-        if key in presets:
-            raise ValueError(
-                f"{module.__name__} exports duplicate recipe preset {key}",
-            )
-        presets[key] = value
-    return tuple(presets[key] for key in sorted(presets))

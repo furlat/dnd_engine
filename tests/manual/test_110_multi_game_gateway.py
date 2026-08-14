@@ -12,7 +12,6 @@ from uuid import UUID, uuid4
 from fastapi.testclient import TestClient
 import pytest
 
-from ai.remote_connection import redeem_remote_agent_grant
 from dnd.content_system.bootstrap import bootstrap_content_system
 from dnd.content_system.builtin_character_builds import (
     DEFAULT_CHARACTER_RULESET_DIGEST,
@@ -21,8 +20,6 @@ from dnd.core.base_object import BaseObject
 from dnd.core.content.encounters import (
     EncounterRecipe,
     EncounterRosterRecipe,
-    RosterControllerDefaults,
-    RosterControllerKind,
 )
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.encounter_catalog import (
@@ -30,7 +27,6 @@ from dnd.scenarios.encounter_catalog import (
     AUTHORED_ROSTER_RECIPES_BY_ID,
 )
 from server.event_stream import event_stream
-from server.ai_policy_composition import server_native_ai_policy_options
 from server.game_artifact_store import GameArtifactStore
 from server.game_creation_catalog import build_game_creation_catalog
 from server.game_directory.security import hash_capability
@@ -49,7 +45,6 @@ from server.game_gateway import ENGINE_VERSION, GameGatewayService, create_gatew
 from server.game_summary_store import WorkerGameSummaryStore
 from server.hosted_worker import HostedWorkerManager
 from tests.manual.live_replication_support import create_stream_scene, execute_stream_attack
-from server.objective_replay import ObjectiveReplayBundle
 from server.player_replay import SubjectivePlayerReplayArchive
 from server.runtime_authority import RuntimeAuthorityCache
 from server.worker_replay import build_worker_objective_replay
@@ -60,49 +55,15 @@ PEPPER = b"gateway-test-capability-pepper"
 
 
 def _gateway_creation_catalog():
-    """Build the exact native-only controller surface hosted workers execute."""
-    return build_game_creation_catalog(
-        controllers=("human", "ai", "codex"),
-        ai_policies=server_native_ai_policy_options(),
-    )
+    """Build the exact shared creation surface hosted workers execute."""
+    return build_game_creation_catalog()
 
 
 def _configured_recipe(
     *,
     encounter_id: str = "encounter.standard_skeleton_doors",
-    first_controller: RosterControllerKind = RosterControllerKind.HUMAN,
-    second_controller: RosterControllerKind = RosterControllerKind.AI,
 ) -> EncounterRecipe:
-    source = AUTHORED_ENCOUNTER_RECIPES_BY_ID[encounter_id]
-    controllers = (first_controller, second_controller)
-    slots = tuple(
-        slot.model_copy(update={
-            "controller_defaults": RosterControllerDefaults(
-                controller=controller,
-                participant_name=f"{slot.roster.title} Controller",
-                policy_id=(
-                    "builtin.basic"
-                    if controller is RosterControllerKind.AI
-                    else None
-                ),
-            ),
-        })
-        for slot, controller in zip(
-            source.roster_slots,
-            controllers,
-            strict=True,
-        )
-    )
-    return EncounterRecipe.create(
-        encounter_id=source.encounter_id,
-        title=source.title,
-        roster_slots=slots,
-        battlefield_id=source.battlefield_id,
-        deployment=source.deployment,
-        opening_policy=source.opening_policy,
-        notable_positions=source.notable_positions,
-        tags=source.tags,
-    )
+    return AUTHORED_ENCOUNTER_RECIPES_BY_ID[encounter_id]
 
 
 def _creation_body(
@@ -111,7 +72,7 @@ def _creation_body(
     recipe: EncounterRecipe | None = None,
     owner_roster_slot_id: str | None = "roster_1",
 ) -> dict[str, Any]:
-    """Return one deterministic human-versus-AI hosted-game request."""
+    """Return one deterministic hosted-game request."""
     selected_recipe = recipe or _configured_recipe()
     return {
         "principal_id": principal["principal"]["principal_id"],
@@ -184,14 +145,7 @@ def _compose_two_character_roster(
     principal: dict[str, Any],
     *,
     character_ids: tuple[UUID, UUID],
-    second_controller: str,
 ) -> dict[str, Any]:
-    override: dict[str, object] = {
-        "character_id": str(character_ids[1]),
-        "controller": second_controller,
-    }
-    if second_controller == "ai":
-        override["policy_id"] = "builtin.basic"
     response = client.post(
         "/game-creation/compose",
         headers=_principal_headers(principal),
@@ -207,16 +161,10 @@ def _compose_two_character_roster(
                             str(character_id)
                             for character_id in character_ids
                         ],
-                        "member_controller_overrides": [override],
                     },
                     "faction_id": "players",
                     "deployment_zone_id": "zone_1",
-                    "controller_defaults": {
-                        "controller": "human",
-                        "participant_name": "Owner",
-                        "policy_id": None,
-                        "member_overrides": [],
-                    },
+                    "participant_name": "Owner",
                 },
                 {
                     "roster_slot_id": "opposition",
@@ -226,12 +174,7 @@ def _compose_two_character_roster(
                     },
                     "faction_id": "opposition",
                     "deployment_zone_id": "zone_2",
-                    "controller_defaults": {
-                        "controller": "ai",
-                        "participant_name": "Opposition",
-                        "policy_id": "builtin.basic",
-                        "member_overrides": [],
-                    },
+                    "participant_name": "Opposition",
                 },
             ],
             "battlefield_id": "battlefield.open_floor_bright",
@@ -372,10 +315,10 @@ def test_gateway_exposes_shared_read_only_creation_and_spell_catalogs(
     repository.close()
 
 
-def test_core_gateway_exposes_native_ai_without_spawning_worker(
+def test_core_gateway_exposes_creation_catalog_without_spawning_worker(
     tmp_path: Path,
 ) -> None:
-    """Native AI belongs to the core catalog without a service composition."""
+    """The shared creation catalog requires neither a game nor a worker."""
     repository = GameDirectoryRepository(
         tmp_path / "directory.sqlite3",
         capability_pepper=PEPPER,
@@ -495,12 +438,7 @@ def test_gateway_composes_owner_saved_roster_at_exact_revision_and_digest(
                     },
                     "faction_id": "players",
                     "deployment_zone_id": "zone_1",
-                    "controller_defaults": {
-                        "controller": "human",
-                        "participant_name": "Saved Party",
-                        "policy_id": None,
-                        "member_overrides": [],
-                    },
+                    "participant_name": "Saved Party",
                 },
                 {
                     "roster_slot_id": "opposition",
@@ -510,12 +448,7 @@ def test_gateway_composes_owner_saved_roster_at_exact_revision_and_digest(
                     },
                     "faction_id": "opposition",
                     "deployment_zone_id": "zone_2",
-                    "controller_defaults": {
-                        "controller": "ai",
-                        "participant_name": "Opposition",
-                        "policy_id": "builtin.basic",
-                        "member_overrides": [],
-                    },
+                    "participant_name": "Opposition",
                 },
             ],
             "battlefield_id": "battlefield.open_floor_bright",
@@ -702,10 +635,8 @@ def test_gateway_creates_reconnects_observes_and_stops_isolated_game(tmp_path: P
     repository.close()
 
 
-@pytest.mark.parametrize("second_controller", ["ai", "codex"])
-def test_hosted_two_owned_characters_preserve_sources_and_member_controllers(
+def test_hosted_two_owned_characters_preserve_sources_and_owner_authority(
     tmp_path: Path,
-    second_controller: str,
 ) -> None:
     """Hosted normalization, launch, authority, and pinning use one recipe."""
     repository = GameDirectoryRepository(
@@ -744,7 +675,6 @@ def test_hosted_two_owned_characters_preserve_sources_and_member_controllers(
             client,
             owner,
             character_ids=character_ids,
-            second_controller=second_controller,
         )
         created_response = client.post(
             "/games",
@@ -763,9 +693,7 @@ def test_hosted_two_owned_characters_preserve_sources_and_member_controllers(
                 "visibility_policy": "private",
                 "observer_policy": "disabled",
                 "client_kind": "neuroclient",
-                "client_instance_id": (
-                    f"two-character-{second_controller}"
-                ),
+                "client_instance_id": "two-character-owner",
             },
         )
         assert created_response.status_code == 200, created_response.text
@@ -777,19 +705,13 @@ def test_hosted_two_owned_characters_preserve_sources_and_member_controllers(
         assert [UUID(row["character_id"]) for row in assignments] == list(
             character_ids,
         )
-        assert [row["controller"] for row in assignments] == [
-            "human",
-            second_controller,
-        ]
         assert created["connection"]["controlled_entity_uuids"] == [
-            assignments[0]["entity_uuid"],
+            assignment["entity_uuid"] for assignment in assignments
         ]
-        if second_controller == "ai":
-            assert assignments[1]["policy_id"] == "builtin.basic"
-            assert assignments[1]["codex_session_id"] is None
-        else:
-            assert assignments[1]["policy_id"] is None
-            assert assignments[1]["codex_session_id"] is not None
+        assert all(
+            assignment["participant_name"] == "Owner"
+            for assignment in assignments
+        )
         for character_id, assignment in zip(
             character_ids,
             assignments,
@@ -826,10 +748,10 @@ def test_hosted_two_owned_characters_preserve_sources_and_member_controllers(
     repository.close()
 
 
-def test_gateway_preserves_automatic_roster_and_attaches_owner_as_observer(
+def test_gateway_preserves_unclaimed_roster_and_attaches_owner_as_observer(
     tmp_path: Path,
 ) -> None:
-    """Changing a controller never swaps combatants or grants false control."""
+    """An unclaimed roster keeps its combatants without granting false control."""
     repository = GameDirectoryRepository(
         tmp_path / "directory.sqlite3",
         capability_pepper=PEPPER,
@@ -845,10 +767,12 @@ def test_gateway_preserves_automatic_roster_and_attaches_owner_as_observer(
             "/directory/principals/guest",
             json={"display_name": "Owner"},
         ).json()
-        recipe = _configured_recipe(
-            first_controller=RosterControllerKind.AI,
+        recipe = _configured_recipe()
+        body = _creation_body(
+            owner,
+            recipe=recipe,
+            owner_roster_slot_id=None,
         )
-        body = _creation_body(owner, recipe=recipe)
         response = client.post("/games", json=body)
         assert response.status_code == 200, response.text
         payload = response.json()
@@ -872,109 +796,6 @@ def test_gateway_preserves_automatic_roster_and_attaches_owner_as_observer(
             },
         )
         assert stopped.status_code == 200
-    repository.close()
-
-
-def test_ai_match_publishes_canonical_terminal_evidence_from_terminal_event(
-    tmp_path: Path,
-) -> None:
-    """A real worker publishes summary and both replays only after encounter end."""
-    repository = GameDirectoryRepository(
-        tmp_path / "directory.sqlite3",
-        capability_pepper=PEPPER,
-    )
-    workers = HostedWorkerManager(tmp_path / "runtime")
-    app = create_gateway_app(
-        repository=repository,
-        worker_manager=workers,
-        capability_pepper=PEPPER,
-        artifact_root=tmp_path / "artifacts",
-    )
-    with TestClient(app) as client:
-        owner = client.post(
-            "/directory/principals/guest",
-            json={"display_name": "Tournament Observer"},
-        ).json()
-        body = _creation_body(
-            owner,
-            recipe=_configured_recipe(
-                encounter_id="encounter.sorcerer_barbarian_duel",
-                first_controller=RosterControllerKind.AI,
-                second_controller=RosterControllerKind.AI,
-            ),
-            owner_roster_slot_id=None,
-        )
-        body["client_instance_id"] = "tournament-watcher"
-        body["visibility_policy"] = "private"
-        created = client.post("/games", json=body)
-        assert created.status_code == 200, created.text
-        game_id = UUID(created.json()["game"]["game_id"])
-
-        assert client.get(f"/games/{game_id}/summary").status_code == 404
-
-        deadline = time.monotonic() + 30.0
-        owner_auth = {
-            "X-Dnd-Principal-Id": owner["principal"]["principal_id"],
-            "X-Dnd-Principal-Capability": owner["principal_capability"],
-        }
-        summary_response = client.get(f"/games/{game_id}/summary", headers=owner_auth)
-        while summary_response.status_code == 404 and time.monotonic() < deadline:
-            time.sleep(0.05)
-            summary_response = client.get(f"/games/{game_id}/summary", headers=owner_auth)
-
-        assert summary_response.status_code == 200, summary_response.text
-        summary_record = summary_response.json()
-        assert summary_record["summary"]["schema_name"] == "dnd.game-summary"
-        assert summary_record["summary"]["outcome"]["terminal_event_observed"] is True
-        assert summary_record["summary_digest"] == summary_record["summary"]["canonical_sha256"]
-        assert client.get(f"/games/{game_id}/summary").status_code == 404
-        game = repository.get_game(game_id)
-        assert game.lifecycle_state.value == "ended"
-        assert game.current_summary_digest == summary_record["summary_digest"]
-        assert any(
-            event.event_type == "summary_ready"
-            for event in repository.list_directory_events(game_id=game_id, limit=100)
-        )
-        artifacts = {
-            artifact.artifact_kind: artifact
-            for artifact in repository.list_artifacts(game_id)
-        }
-        assert {
-            ArtifactKind.REPLAY_BUNDLE,
-            ArtifactKind.SUBJECTIVE_REPLAY_BUNDLE,
-        } <= artifacts.keys()
-        artifact_store = GameArtifactStore(tmp_path / "artifacts")
-        objective = ObjectiveReplayBundle.model_validate_json(
-            artifact_store.read_bytes(
-                artifacts[ArtifactKind.REPLAY_BUNDLE].content_digest
-            )
-        )
-        subjective = SubjectivePlayerReplayArchive.model_validate_json(
-            artifact_store.read_bytes(
-                artifacts[ArtifactKind.SUBJECTIVE_REPLAY_BUNDLE].content_digest
-            )
-        )
-        assert objective.terminal_event_cursor == game.final_event_cursor
-        assert objective.terminal_combat_log_cursor == (
-            game.final_combat_log_cursor
-        )
-        assert subjective.terminal_source_event_cursor == (
-            game.final_event_cursor
-        )
-        assert subjective.terminal_combat_log_cursor == (
-            game.final_combat_log_cursor
-        )
-
-        stopped = client.post(
-            f"/games/{game_id}/stop",
-            json={
-                "principal_id": owner["principal"]["principal_id"],
-                "principal_capability": owner["principal_capability"],
-            },
-        )
-        assert stopped.status_code == 200
-        assert stopped.json()["stopped"] is True
-
     repository.close()
 
 
@@ -1111,118 +932,3 @@ def test_small_terminal_evidence_archival_persists_within_half_second(
         repository.close()
         event_stream.stop()
         reset_engine_runtime()
-
-
-def test_codex_grant_uses_public_subjective_runtime_over_native_fallback(
-    tmp_path: Path,
-) -> None:
-    """A remote Codex process attaches without replacing native fallback."""
-    repository = GameDirectoryRepository(
-        tmp_path / "directory.sqlite3",
-        capability_pepper=PEPPER,
-    )
-    workers = HostedWorkerManager(tmp_path / "runtime")
-    app = create_gateway_app(
-        repository=repository,
-        worker_manager=workers,
-        capability_pepper=PEPPER,
-    )
-    with TestClient(app) as client:
-        owner = client.post(
-            "/directory/principals/guest",
-            json={"display_name": "Human Host"},
-        ).json()
-        body = _creation_body(
-            owner,
-            recipe=_configured_recipe(
-                second_controller=RosterControllerKind.CODEX,
-            ),
-        )
-        created_response = client.post("/games", json=body)
-        assert created_response.status_code == 200, created_response.text
-        created = created_response.json()
-        game_id = UUID(created["game"]["game_id"])
-        codex_assignment = created["creation"]["rosters"][1][
-            "entity_assignments"
-        ][0]
-        codex_session_id = codex_assignment["codex_session_id"]
-        assert codex_assignment["policy_id"] is None
-        assert codex_assignment["policy_execution"] is None
-        assert codex_assignment["provider_id"] is None
-        assert codex_session_id
-
-        remote_identity = client.post(
-            "/directory/principals/guest",
-            json={"display_name": "Remote Policy"},
-        ).json()
-        grant_response = client.post(
-            f"/games/{game_id}/agent-grants",
-            json={
-                "principal_id": owner["principal"]["principal_id"],
-                "principal_capability": owner["principal_capability"],
-                "agent_principal_id": remote_identity["principal"]["principal_id"],
-                "roster_slot_id": "roster_2",
-                "member_id": codex_assignment["member_id"],
-            },
-        )
-        assert grant_response.status_code == 200, grant_response.text
-        grant = grant_response.json()
-        assert grant["runtime_session_id"] == codex_session_id
-
-        connection_model = redeem_remote_agent_grant(
-            gateway_url=str(client.base_url),
-            game_id=game_id,
-            grant_id=UUID(grant["grant_id"]),
-            grant_capability=grant["grant_capability"],
-            client_instance_id="remote-policy-process",
-            client=client,
-        )
-        connection = connection_model.model_dump(mode="json")
-        assert connection["access_mode"] == "agent"
-        assert connection["runtime_session_id"] == grant["runtime_session_id"]
-        assert connection["controlled_entity_uuids"] == grant["controlled_entity_uuids"]
-        assert connection["takeover_claim_uuids"] == [grant["takeover_claim_id"]]
-
-        heartbeat = client.post(
-            f"/games/{game_id}/runtime/ai/takeover/{grant['takeover_claim_id']}/heartbeat",
-            headers={"Authorization": f"Bearer {connection['runtime_token']}"},
-        )
-        assert heartbeat.status_code == 200, heartbeat.text
-        wrong_heartbeat = client.post(
-            f"/games/{game_id}/runtime/ai/takeover/{uuid4()}/heartbeat",
-            headers={"Authorization": f"Bearer {connection['runtime_token']}"},
-        )
-        assert wrong_heartbeat.status_code == 403
-
-        snapshot = client.get(
-            f"/games/{game_id}/runtime/ai/sessions/{connection['runtime_session_id']}/observation/snapshot",
-            headers={"Authorization": f"Bearer {connection['runtime_token']}"},
-        )
-        assert snapshot.status_code == 200, snapshot.text
-        assert snapshot.json()["session"]["session_id"] == connection["runtime_session_id"]
-        objective_state = client.get(
-            f"/games/{game_id}/runtime/state",
-            headers={"Authorization": f"Bearer {connection['runtime_token']}"},
-        )
-        assert objective_state.status_code == 403
-        session_directory = client.get(
-            f"/games/{game_id}/runtime/ai/sessions",
-            headers={"Authorization": f"Bearer {connection['runtime_token']}"},
-        )
-        assert session_directory.status_code == 403
-        cross_session = client.get(
-            f"/games/{game_id}/runtime/ai/sessions/{uuid4()}/observation/snapshot",
-            headers={"Authorization": f"Bearer {connection['runtime_token']}"},
-        )
-        assert cross_session.status_code == 403
-
-        stopped = client.post(
-            f"/games/{game_id}/stop",
-            json={
-                "principal_id": owner["principal"]["principal_id"],
-                "principal_capability": owner["principal_capability"],
-            },
-        )
-        assert stopped.status_code == 200
-
-    repository.close()

@@ -10,7 +10,6 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from devtools.generate_event_contract import build_manifest
 from dnd.actions import JumpEvent, Move, MovementEvent
 from dnd.core.base_conditions import (
     ConditionApplicationEvent,
@@ -53,7 +52,24 @@ _REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
 def test_generated_contract_covers_every_semantic_and_concrete_event() -> None:
     """The checked-in manifest equals a fresh scan of the runtime model graph."""
-    assert build_manifest() == EVENT_CONTRACT
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import json; "
+                "from devtools.generate_event_contract import build_manifest; "
+                "print(json.dumps(build_manifest()))"
+            ),
+        ],
+        cwd=_REPOSITORY_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=30.0,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert json.loads(completed.stdout) == EVENT_CONTRACT
     assert set(EVENT_CONTRACT["event_types"]) == {
         event_type.value for event_type in EventType
     }

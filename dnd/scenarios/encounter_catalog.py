@@ -19,7 +19,7 @@ from dnd.core.content.encounters import (
 )
 
 
-_CATALOG_SCHEMA_VERSION = 1
+_CATALOG_SCHEMA_VERSION = 2
 _CATALOG_PATH = Path(__file__).with_name("authored_catalog.json")
 
 

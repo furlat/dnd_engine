@@ -1,7 +1,7 @@
 """Canonical route-free transport values for subjective player replication.
 
 This module is the player-facing boundary.  It deliberately carries neither
-engine ``Event`` objects nor the AI/controller observation protocol.  Producers
+engine ``Event`` objects nor any controller-specific observation protocol. Producers
 project engine state into typed world patches and typed presentation cues before
 constructing these values.
 

@@ -32,7 +32,7 @@ def test_hot_path_guard_blocks_database_access_before_sqlite(tmp_path: Path) -> 
 
     repository = _open(tmp_path / "directory.sqlite3")
     principal = repository.create_principal(
-        PrincipalCreate(principal_kind=PrincipalKind.SYSTEM_AI, display_name="Runtime")
+        PrincipalCreate(principal_kind=PrincipalKind.SERVICE, display_name="Runtime")
     )
     repository.reset_metrics()
 
@@ -64,7 +64,7 @@ def test_repository_fail_injection_leaves_hot_state_independent(tmp_path: Path) 
 
     repository = _open(tmp_path / "directory.sqlite3")
     principal = repository.create_principal(
-        PrincipalCreate(principal_kind=PrincipalKind.CODEX, display_name="Codex")
+        PrincipalCreate(principal_kind=PrincipalKind.HUMAN, display_name="Runtime User")
     )
     repository.reset_metrics()
 

@@ -22,7 +22,7 @@ dev = [
 ]
 
 [tool.pyright]
-include = ["ai", "dnd", "server"]
+include = ["dnd", "server"]
 exclude = ["**/__pycache__", ".venv", "game_logs", "to_archive"]
 pythonVersion = "3.12"
 typeCheckingMode = "basic"

@@ -1,7 +1,7 @@
 """SRD-derived monster and NPC roster for validation play.
 
 The factories in this module prioritize mechanically useful SRD coverage for
-AI evaluation. Each creature preserves the SRD stat identity that the current
+encounter evaluation. Each creature preserves the SRD stat identity that the current
 engine can represent directly: ability scores, hit dice, armor, movement,
 creature type, senses, weapons, basic spellcasting, and condition immunities.
 Special traits that require dedicated handlers are recorded in metadata instead

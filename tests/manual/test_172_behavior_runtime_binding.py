@@ -13,7 +13,7 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 
 from dnd.content_system.behavior_bindings import BehaviorBinder
 from dnd.content_system.bootstrap import bootstrap_content_system
-from dnd.content_system.pack_loader import LoadedContentSystem
+from dnd.content_system.system import LoadedContentSystem
 from dnd.content_system.runtime import (
     ContentSystemRuntime,
     SERVER_CONTENT_SYSTEM_RUNTIME,
@@ -338,7 +338,7 @@ def _registry():
         _ClockworkTrainingFeature,
     ):
         builder.add_declaration(get_content_declaration(declaration_source))
-    return builder.freeze(pack_dependencies={_PACK_ID: frozenset()})
+    return builder.freeze()
 
 
 def _processor(event: Event, source_entity_uuid: UUID) -> Event:
@@ -570,7 +570,6 @@ def test_content_runtime_exposes_structural_provider_binding() -> None:
     runtime = ContentSystemRuntime()
     runtime.install(LoadedContentSystem(
         registry=_registry(),
-        packs=(),
         built_in_artifact_digest="a" * 64,
         content_set_digest="b" * 64,
     ))

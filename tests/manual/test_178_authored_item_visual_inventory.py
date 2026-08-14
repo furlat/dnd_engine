@@ -9,17 +9,12 @@ from uuid import uuid4
 import pytest
 from pydantic import ValidationError
 
-import dnd.items.apparel_presets as apparel_preset_module
-import dnd.items.authored_variant_presets as authored_preset_module
 from dnd.content_system.bootstrap import bootstrap_content_system
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
 from dnd.core.content.descriptors import (
     ContentPresentation,
     EquipmentSpritePresentation,
-)
-from dnd.core.content.recipe_presets import (
-    scan_module_content_recipe_presets,
 )
 from dnd.core.equipment_types import EquipmentRenderLayer, VisualLoadoutSlot
 from dnd.items.authored_variant_inventory import (
@@ -549,7 +544,7 @@ def test_supported_rows_have_one_unique_pack_owned_preset_and_recipe() -> None:
         )
 
 
-def test_all_rows_use_one_builder_and_one_explicit_pack_export() -> None:
+def test_all_rows_use_one_builder_and_one_explicit_inventory() -> None:
     repository_root = Path(__file__).resolve().parents[2]
     authored_path = (
         repository_root / "dnd" / "items" / "authored_variant_presets.py"
@@ -581,15 +576,11 @@ def test_all_rows_use_one_builder_and_one_explicit_pack_export() -> None:
 
     assert len(authored_build_calls) == 1
     assert apparel_build_calls == []
-    exported = scan_module_content_recipe_presets(authored_preset_module)
-    exported_refs = tuple(preset.ref.identity_key for preset in exported)
-    expected_exported_refs = tuple(
+    inventory_refs = tuple(
         preset.ref.identity_key
         for preset in NEURODRAGON_AUTHORED_ITEM_RECIPE_PRESETS
     )
-    assert len(exported_refs) == len(set(exported_refs))
-    assert set(exported_refs) == set(expected_exported_refs)
-    assert scan_module_content_recipe_presets(apparel_preset_module) == ()
+    assert len(inventory_refs) == len(set(inventory_refs))
     assert all(
         preset.provenance.notes
         == (

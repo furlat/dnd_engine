@@ -43,7 +43,7 @@ from dnd.content_system.starting_apparel_definitions import (
     STARTING_APPAREL_CHOICE_ID,
     STARTING_APPAREL_PACKAGE_DECLARATIONS_BY_ID,
 )
-from dnd.content_system.pack_loader import LoadedContentSystem
+from dnd.content_system.system import LoadedContentSystem
 from dnd.content_system.spell_catalog_composition import (
     SPELL_CATALOG_COMPOSITION_BY_NAME,
 )

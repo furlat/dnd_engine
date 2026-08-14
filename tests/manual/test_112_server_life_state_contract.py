@@ -3,7 +3,6 @@
 from fastapi.testclient import TestClient
 
 from dnd.controller import HumanController, PassController
-from dnd.core.events import EventType
 from dnd.core.gridmap import get_map
 from dnd.core.life_types import LifeState
 from dnd.encounter import Encounter
@@ -13,15 +12,6 @@ from dnd.monsters.bestiary_content import (
     BESTIARY_CREATURE_DECLARATIONS_BY_ID,
 )
 from server import event_server
-from dnd.ai.contracts.observation import SubjectiveWorldState
-from dnd.ai.contracts.observation_replay import (
-    apply_observation_frame,
-    materialize_snapshot,
-)
-from server.agent_runtime.observation_journal import (
-    _event_should_patch_entity_hit_points,
-    _event_should_patch_referenced_entities,
-)
 from server.player_replication_contract import SubjectiveReplicationBootstrap
 from server.world_projection import (
     project_encounter,
@@ -63,32 +53,45 @@ def _create_life_state_game() -> tuple[TestClient, str, Entity, Entity, Encounte
 
     game = event_server.sim.create_game_session(encounter)
     session = event_server.sim.get_session_manager().create_session(
-        PlayerType.AI,
-        "Lifecycle Observer",
+        PlayerType.HUMAN,
+        "Lifecycle Player",
     )
     game.add_player(session)
     game.assign_entity(hero.uuid, session.session_id)
     return TestClient(event_server.app), str(session.session_id), hero, monster, encounter
 
 
-def _apply_new_frames(
+def _replicated_entity_after(
     client: TestClient,
     session_id: str,
-    world: SubjectiveWorldState,
-) -> tuple[SubjectiveWorldState, set[str]]:
-    """Apply every subjective frame after the supplied materialized cursor."""
-    payload = client.get(
-        f"/ai/sessions/{session_id}/observation/frames",
-        params={"since": world.observation_cursor, "limit": 0},
-    ).json()
-    event_types = {
-        frame["event_type"]
+    bootstrap: dict,
+    from_cursor: int,
+    entity_uuid: str,
+) -> tuple[dict, int]:
+    """Return the latest public entity projection after one reducer cursor."""
+    response = client.get(
+        "/replication/frames",
+        params={
+            "session_id": session_id,
+            "expected_source_stream_id": bootstrap["protocol"]["source_stream_id"],
+            "expected_generation_id": bootstrap["protocol"]["generation_id"],
+            "expected_perspective_epoch_id": bootstrap["perspective"][
+                "perspective_epoch_id"
+            ],
+            "from_observation_cursor": from_cursor,
+        },
+    )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    entities = [
+        patch["entity"]
         for frame in payload["frames"]
-        if frame.get("event_type") is not None
-    }
-    for frame in payload["frames"]:
-        world = apply_observation_frame(world, frame)
-    return world, event_types
+        for patch in frame["patches"]
+        if patch["kind"] == "entity_upsert"
+        and patch["entity"]["uuid"] == entity_uuid
+    ]
+    assert entities
+    return entities[-1], payload["through_watermarks"]["observation_cursor"]
 
 
 def test_player_replica_exposes_life_state_and_does_not_treat_zero_hp_as_dead() -> None:
@@ -120,45 +123,55 @@ def test_player_replica_exposes_life_state_and_does_not_treat_zero_hp_as_dead() 
     assert replica_row.life_state is LifeState.DYING
 
 
-def test_subjective_lifecycle_patches_follow_life_state_change_and_revive() -> None:
-    """Lifecycle events patch typed state without inferring death from HP."""
+def test_player_replication_follows_life_state_change_and_revive() -> None:
+    """Lifecycle changes reach the player reducer without inferring death from HP."""
     client, session_id, hero, monster, _encounter = _create_life_state_game()
-    world = materialize_snapshot(
-        client.get(f"/ai/sessions/{session_id}/observation/snapshot").json()
+    bootstrap_response = client.get(
+        "/replication/bootstrap",
+        params={"session_id": session_id},
     )
-
-    assert _event_should_patch_entity_hit_points(EventType.LIFE_STATE_CHANGE)
-    assert _event_should_patch_entity_hit_points(EventType.REVIVE)
-    assert _event_should_patch_referenced_entities(EventType.LIFE_STATE_CHANGE)
-    assert _event_should_patch_referenced_entities(EventType.REVIVE)
+    assert bootstrap_response.status_code == 200
+    bootstrap = bootstrap_response.json()
+    cursor = bootstrap["watermarks"]["observation_cursor"]
 
     hero.enter_dying_state()
-    world, event_types = _apply_new_frames(client, session_id, world)
-    fact = world.known_entities[str(hero.uuid)]
-    assert EventType.LIFE_STATE_CHANGE.value in event_types
-    assert fact.normal_hp == 0
-    assert fact.life_state is LifeState.DYING
-    assert fact.is_dead is False
+    fact, cursor = _replicated_entity_after(
+        client,
+        session_id,
+        bootstrap,
+        cursor,
+        str(hero.uuid),
+    )
+    assert fact["hp"] == 0
+    assert fact["life_state"] == LifeState.DYING.value
 
     assert hero.stabilize()
-    world, event_types = _apply_new_frames(client, session_id, world)
-    fact = world.known_entities[str(hero.uuid)]
-    assert EventType.LIFE_STATE_CHANGE.value in event_types
-    assert fact.life_state is LifeState.STABLE
-    assert fact.is_dead is False
+    fact, cursor = _replicated_entity_after(
+        client,
+        session_id,
+        bootstrap,
+        cursor,
+        str(hero.uuid),
+    )
+    assert fact["life_state"] == LifeState.STABLE.value
 
     hero.receive_instant_death(monster.uuid, source_description="contract test")
-    world, event_types = _apply_new_frames(client, session_id, world)
-    fact = world.known_entities[str(hero.uuid)]
-    assert EventType.LIFE_STATE_CHANGE.value in event_types
-    assert fact.life_state is LifeState.DEAD
-    assert fact.is_dead is True
+    fact, cursor = _replicated_entity_after(
+        client,
+        session_id,
+        bootstrap,
+        cursor,
+        str(hero.uuid),
+    )
+    assert fact["life_state"] == LifeState.DEAD.value
 
     assert hero.revive(hit_points=1)
-    world, event_types = _apply_new_frames(client, session_id, world)
-    fact = world.known_entities[str(hero.uuid)]
-    assert EventType.LIFE_STATE_CHANGE.value in event_types
-    assert EventType.REVIVE.value in event_types
-    assert fact.normal_hp == 1
-    assert fact.life_state is LifeState.ALIVE
-    assert fact.is_dead is False
+    fact, _cursor = _replicated_entity_after(
+        client,
+        session_id,
+        bootstrap,
+        cursor,
+        str(hero.uuid),
+    )
+    assert fact["hp"] == 1
+    assert fact["life_state"] == LifeState.ALIVE.value

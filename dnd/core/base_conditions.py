@@ -210,7 +210,8 @@ class ConditionApplicationEvent(Event):
             type(result) is not ConditionApplicationEvent
             or not isinstance(result, ConditionApplicationEvent)
             or not self.handler_result_preserves_lifecycle(result)
-            or result.condition is not self.condition
+            or type(result.condition) is not type(self.condition)
+            or result.condition != self.condition
             or type(result.condition_content_identity)
             is not type(self.condition_content_identity)
             or result.condition_content_identity
@@ -227,7 +228,7 @@ class ConditionApplicationEvent(Event):
                     "after declaration."
                 ),
             )
-        return result
+        return result.model_copy(update={"condition": self.condition})
 
     def get_effect_origin(self) -> Optional[EffectOrigin]:
         """Return the immutable origin inherited by the applied condition."""
@@ -337,7 +338,8 @@ class ConditionRemovalEvent(Event):
             type(result) is not ConditionRemovalEvent
             or not isinstance(result, ConditionRemovalEvent)
             or not self.handler_result_preserves_lifecycle(result)
-            or result.condition is not self.condition
+            or type(result.condition) is not type(self.condition)
+            or result.condition != self.condition
             or type(result.condition_content_identity)
             is not type(self.condition_content_identity)
             or result.condition_content_identity
@@ -350,7 +352,7 @@ class ConditionRemovalEvent(Event):
                     "declaration."
                 ),
             )
-        return result
+        return result.model_copy(update={"condition": self.condition})
 
     resulting_ac: Optional[int] = Field(default=None, description="Entity AC after condition removal for frontend reducers.")
     resulting_max_hp: Optional[int] = Field(default=None, description="Entity max HP after condition removal for frontend reducers.")

@@ -8,6 +8,7 @@ from dnd.content_system.item_bindings import ITEM_RUNTIME_BINDINGS
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import SpellProtectionRegistry
 from dnd.core.base_object import BaseObject
+from dnd.core.dice import Dice, DiceRoll
 from dnd.core.events import EventQueue
 from dnd.core.gridmap import GridMap, get_map
 from dnd.core.values import BaseValue
@@ -48,6 +49,8 @@ def reset_engine_runtime(
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
     BaseValue._registry.clear()
+    Dice._registry.clear()
+    DiceRoll._registry.clear()
     Entity._entity_registry.clear()
     Entity._entity_by_position.clear()
     SpatialEffect._effect_registry.clear()

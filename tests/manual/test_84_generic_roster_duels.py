@@ -10,8 +10,6 @@ from dnd.core.content.encounters import (
     EncounterRosterSlot,
     FixedRosterOpeningPolicy,
     InitiativeOpeningPolicy,
-    RosterControllerDefaults,
-    RosterControllerKind,
 )
 from dnd.entity import Entity
 from dnd.items.apparel_presets import (
@@ -56,22 +54,14 @@ def _assemble_duel(
                     roster=first,
                     faction_id="faction_1",
                     deployment_zone_id="zone_1",
-                    controller_defaults=RosterControllerDefaults(
-                        controller=RosterControllerKind.AI,
-                        participant_name=first.title,
-                        policy_id="builtin.basic",
-                    ),
+                    participant_name=first.title,
                 ),
                 EncounterRosterSlot(
                     roster_slot_id="roster_2",
                     roster=second,
                     faction_id="faction_2",
                     deployment_zone_id="zone_2",
-                    controller_defaults=RosterControllerDefaults(
-                        controller=RosterControllerKind.AI,
-                        participant_name=second.title,
-                        policy_id="builtin.basic",
-                    ),
+                    participant_name=second.title,
                 ),
             ),
             battlefield_id=deployment.battlefield_id,
@@ -155,4 +145,3 @@ def test_character_style_and_creature_rosters_share_one_assembler() -> None:
     assert all(
         Entity.get(actor.uuid) is actor for actor in (*first, *second)
     )
-

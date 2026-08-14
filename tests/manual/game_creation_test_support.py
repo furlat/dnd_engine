@@ -14,27 +14,24 @@ from dnd.scenarios.encounter_catalog import (
 def authored_compose_request(
     *,
     encounter_id: str = "encounter.standard_skeleton_doors",
-    controllers: Sequence[str] = ("human", "ai"),
-    policy_ids: Sequence[str | None] | None = None,
+    participant_names: Sequence[str] | None = None,
     opening_roster_index: int | None = 0,
 ) -> dict[str, object]:
-    """Select one authored encounter through the public roster composition DTO."""
+    """Select one authored encounter through the public composition DTO."""
     source = AUTHORED_ENCOUNTER_RECIPES_BY_ID[encounter_id]
     deployment = AUTHORED_DEPLOYMENTS_BY_ID[
         f"neutral.{source.battlefield_id}"
     ]
-    if len(controllers) != len(source.roster_slots):
-        raise ValueError("controller count must match authored roster slots")
-    selected_policy_ids = (
-        tuple(policy_ids)
-        if policy_ids is not None
+    selected_participant_names = (
+        tuple(participant_names)
+        if participant_names is not None
         else tuple(
-            "builtin.basic" if controller == "ai" else None
-            for controller in controllers
+            f"{slot.roster.title} Participant"
+            for slot in source.roster_slots
         )
     )
-    if len(selected_policy_ids) != len(source.roster_slots):
-        raise ValueError("policy count must match authored roster slots")
+    if len(selected_participant_names) != len(source.roster_slots):
+        raise ValueError("participant count must match authored roster slots")
     opening_policy = (
         source.opening_policy
         if opening_roster_index is None
@@ -55,17 +52,11 @@ def authored_compose_request(
                 },
                 "faction_id": slot.faction_id,
                 "deployment_zone_id": slot.deployment_zone_id,
-                "controller_defaults": {
-                    "controller": controller,
-                    "participant_name": f"{slot.roster.title} Controller",
-                    "policy_id": policy_id,
-                    "member_overrides": [],
-                },
+                "participant_name": participant_name,
             }
-            for slot, controller, policy_id in zip(
+            for slot, participant_name in zip(
                 source.roster_slots,
-                controllers,
-                selected_policy_ids,
+                selected_participant_names,
                 strict=True,
             )
         ],
@@ -80,8 +71,7 @@ def compose_and_preview(
     *,
     compose_request: Mapping[str, object] | None = None,
     encounter_id: str = "encounter.standard_skeleton_doors",
-    controllers: Sequence[str] = ("human", "ai"),
-    policy_ids: Sequence[str | None] | None = None,
+    participant_names: Sequence[str] | None = None,
     opening_roster_index: int | None = 0,
     request_kwargs: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -91,8 +81,7 @@ def compose_and_preview(
         if compose_request is not None
         else authored_compose_request(
             encounter_id=encounter_id,
-            controllers=controllers,
-            policy_ids=policy_ids,
+            participant_names=participant_names,
             opening_roster_index=opening_roster_index,
         )
     )
@@ -131,8 +120,7 @@ def start_composed_game(
     *,
     compose_request: Mapping[str, object] | None = None,
     encounter_id: str = "encounter.standard_skeleton_doors",
-    controllers: Sequence[str] = ("human", "ai"),
-    policy_ids: Sequence[str | None] | None = None,
+    participant_names: Sequence[str] | None = None,
     opening_roster_index: int | None = 0,
     request_kwargs: Mapping[str, Any] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -141,8 +129,7 @@ def start_composed_game(
         client,
         compose_request=compose_request,
         encounter_id=encounter_id,
-        controllers=controllers,
-        policy_ids=policy_ids,
+        participant_names=participant_names,
         opening_roster_index=opening_roster_index,
         request_kwargs=request_kwargs,
     )

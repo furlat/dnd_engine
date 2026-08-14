@@ -27,6 +27,7 @@ from dnd.core.content.materialization import (
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import Event, EventPhase, EventQueue, EventType
 from dnd.actions_functional import get_available_actions
+from dnd.controller import PassController
 from dnd.entity import Entity
 from dnd.encounter import Encounter
 from dnd.items.environment import DirectionalDoor
@@ -684,6 +685,10 @@ def test_authority_mutation_immediately_closes_existing_partition(
     )
     second.senses.visible = {(0, 0): True, (1, 0): True}
     second.senses.seen = {(0, 0), (1, 0)}
+    canonical_route_scene.encounter.add_combatant(
+        second,
+        PassController(source_entity_uuid=second.uuid),
+    )
     response = asyncio.run(join_game(JoinGameRequest(
         session_id=str(canonical_route_scene.session.session_id),
         entity_uuids=[str(second.uuid)],
@@ -826,14 +831,7 @@ def test_command_ack_models_do_not_duplicate_replica_or_diagnostics_facts() -> N
         "entity_name",
         "faction",
         "character_id",
-        "controller",
         "participant_name",
-        "policy_id",
-        "policy_execution",
-        "provider_id",
-        "codex_session_id",
-        "takeover_claim_id",
-        "takeover_expires_at",
     }
 
 

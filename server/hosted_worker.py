@@ -20,7 +20,6 @@ from pydantic import BaseModel, Field
 from dnd.content_system.bootstrap import bootstrap_content_system
 from dnd.core.content.character_deployment import CharacterDeploymentSnapshot
 from dnd.core.content.identities import validate_sha256
-from dnd.content_system.pack_loader import ENGINE_CONTENT_API_VERSION
 
 
 class HostedWorkerError(RuntimeError):
@@ -84,15 +83,12 @@ class HostedWorkerReadiness(BaseModel):
     """Private worker identity checked before admission to the warm pool."""
 
     status: Literal["ready", "content_mismatch"] = "ready"
-    content_api_version: int = Field(ge=1)
     content_set_digest: str = Field(min_length=64, max_length=64)
-    built_in_artifact_digest: str = Field(min_length=64, max_length=64)
     expected_content_set_digest: str | None = Field(
         default=None,
         min_length=64,
         max_length=64,
     )
-    external_pack_ids: tuple[str, ...] = ()
 
 
 @dataclass
@@ -521,15 +517,6 @@ class HostedWorkerManager:
                                 "Worker content set mismatch: expected "
                                 f"{self._expected_content_set_digest}, "
                                 f"received {readiness.content_set_digest}",
-                            )
-                        if (
-                            readiness.content_api_version
-                            != ENGINE_CONTENT_API_VERSION
-                        ):
-                            raise HostedWorkerError(
-                                "Worker content API mismatch: expected "
-                                f"{ENGINE_CONTENT_API_VERSION}, received "
-                                f"{readiness.content_api_version}",
                             )
                         if (
                             readiness.content_set_digest

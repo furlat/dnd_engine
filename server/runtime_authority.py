@@ -23,7 +23,6 @@ class RuntimeScope(str, Enum):
     OBSERVE = "observe"
     SUBJECTIVE_OBSERVE = "subjective_observe"
     CONTROL = "control"
-    AGENT = "agent"
     ADMINISTER = "administer"
 
 
@@ -48,10 +47,6 @@ class RuntimeAuthority(BaseModel):
     active_observer_uuid: UUID | None = Field(
         default=None,
         description="Authorized observer selected for observer-relative presentation choices.",
-    )
-    takeover_claim_uuids: frozenset[UUID] = Field(
-        default_factory=frozenset,
-        description="Takeover leases this authority may keep alive.",
     )
     authority_epoch: int = Field(ge=1, description="Revocation/version epoch installed in memory.")
     issued_at: float = Field(description="Unix timestamp when the runtime token was issued.")
@@ -120,7 +115,6 @@ class RuntimeAuthorityCache:
         controlled_entity_uuids: Iterable[UUID] = (),
         observer_entity_uuids: Iterable[UUID] | None = None,
         active_observer_uuid: UUID | None = None,
-        takeover_claim_uuids: Iterable[UUID] = (),
         authority_epoch: int = 1,
         ttl_seconds: float = 3600.0,
         now: float | None = None,
@@ -137,7 +131,6 @@ class RuntimeAuthorityCache:
             controlled_entity_uuids=controlled_entity_uuids,
             observer_entity_uuids=observer_entity_uuids,
             active_observer_uuid=active_observer_uuid,
-            takeover_claim_uuids=takeover_claim_uuids,
             authority_epoch=authority_epoch,
             expires_at=issued_at + ttl_seconds,
             issued_at=issued_at,
@@ -154,7 +147,6 @@ class RuntimeAuthorityCache:
         controlled_entity_uuids: Iterable[UUID] = (),
         observer_entity_uuids: Iterable[UUID] | None = None,
         active_observer_uuid: UUID | None = None,
-        takeover_claim_uuids: Iterable[UUID] = (),
         authority_epoch: int = 1,
         expires_at: float,
         issued_at: float | None = None,
@@ -182,7 +174,6 @@ class RuntimeAuthorityCache:
             controlled_entity_uuids=controlled,
             observer_entity_uuids=observers,
             active_observer_uuid=active_observer,
-            takeover_claim_uuids=frozenset(takeover_claim_uuids),
             authority_epoch=authority_epoch,
             issued_at=installed_at,
             expires_at=expires_at,
@@ -298,13 +289,6 @@ def validate_session_binding(
         controlled = {str(entity_uuid) for entity_uuid in authority.controlled_entity_uuids}
         if any(value not in controlled for value in entity_values):
             raise RuntimeAuthorityError("Request references an uncontrolled entity")
-
-    if path_parts[:2] == ["ai", "takeover"] and len(path_parts) >= 4:
-        claim_value = path_parts[2]
-        allowed_claims = {str(claim_uuid) for claim_uuid in authority.takeover_claim_uuids}
-        if claim_value not in allowed_claims:
-            raise RuntimeAuthorityError("Request references an unauthorized takeover claim")
-
 
 def runtime_projection_headers(authority: RuntimeAuthority) -> dict[str, str]:
     """Serialize validated non-secret claims for the private gateway-worker hop."""

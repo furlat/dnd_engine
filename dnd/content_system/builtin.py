@@ -1,10 +1,9 @@
-"""Static composition of the engine's trusted built-in content packs."""
+"""Static composition of the engine's trusted built-in content."""
 
 from __future__ import annotations
 
 import hashlib
 from pathlib import Path
-from types import MappingProxyType
 
 from dnd.content_system.artifact_digest import (
     digest_artifact_paths,
@@ -53,10 +52,6 @@ if (
         "content-source contract",
     )
 
-CORE_RULES_PACK_ID = "core.rules"
-SRD_5_1_PACK_ID = "content.srd_5_1_cc"
-NEURODRAGON_PACK_ID = "content.neurodragon"
-
 BUILT_IN_SOURCES: tuple[ContentSource, ...] = (
     ContentSource.model_validate_json(
         SRD_5_1_SOURCE_PATH.read_text(encoding="utf-8"),
@@ -74,24 +69,6 @@ UNBOUND_BUILT_IN_RECIPE_PRESETS = BUILT_IN_RECIPE_PRESET_INVENTORY
     ledger=BUILT_IN_CONTENT_ICON_BINDING_LEDGER,
     asset_index=NEUROCLIENT_GAME_ICON_ASSET_INDEX,
 )
-BUILT_IN_PACK_VERSIONS = MappingProxyType(
-    {
-        CORE_RULES_PACK_ID: "1.0.0",
-        NEURODRAGON_PACK_ID: "1.0.0",
-        SRD_5_1_PACK_ID: "1.0.0",
-    },
-)
-BUILT_IN_PACK_DEPENDENCIES = MappingProxyType(
-    {
-        CORE_RULES_PACK_ID: frozenset(),
-        NEURODRAGON_PACK_ID: frozenset({
-            CORE_RULES_PACK_ID,
-            SRD_5_1_PACK_ID,
-        }),
-        SRD_5_1_PACK_ID: frozenset({CORE_RULES_PACK_ID}),
-    },
-)
-
 # The composition module is the sole Python root. Its imports necessarily name
 # every declaration owner aggregated below, and the static closure follows all
 # local dnd.* helpers without importing them dynamically.

@@ -29,7 +29,7 @@ from dnd.monsters.bestiary_content import (
     BESTIARY_CREATURE_DECLARATIONS_BY_ID,
 )
 from tests.engine.support import force_attack_hit, get_hp, remove_attack_modifier, reset_combat_state, set_hp
-from server.event_server import _available_actions_cache, app, sim
+from server.event_server import app, sim
 from server.event_stream import event_stream
 
 
@@ -99,16 +99,7 @@ def reset_runtime_tutorial_state(width: int = 16, height: int = 10) -> None:
     Encounter._combat_log_listeners.clear()
     event_stream.ensure_attached()
     event_stream._clear_source_journal()
-    _available_actions_cache.clear()
-
-    manager = sim.get_session_manager()
-    manager.sessions.clear()
-    manager.games.clear()
-    manager.active_game = None
-    sim.encounter = None
-    sim._game_session = None
-    sim.combat_task = None
-    sim.paused = True
+    sim.reset()
 
     get_map().create_rectangle(0, 0, width, height)
 
@@ -307,8 +298,8 @@ def test_turn_lifecycle_builds_controller_context_and_advances_rounds() -> None:
     assert not encounter.combatants[monster.uuid].has_acted_this_round
 
 
-def test_advance_until_player_runs_automated_turns_and_stops_for_input() -> None:
-    """Automated controllers run until a human-controlled turn needs input."""
+def test_advance_until_external_boundary_runs_autonomous_turns() -> None:
+    """Autonomous controllers run until an external turn needs input."""
     reset_runtime_tutorial_state()
     hero, monster = create_runtime_pair()
     encounter = start_ordered_encounter(
@@ -319,7 +310,7 @@ def test_advance_until_player_runs_automated_turns_and_stops_for_input() -> None
         monster,
     )
 
-    result = encounter.advance_until_player()
+    result = encounter.advance_until_external_boundary()
 
     assert result.status == "waiting_for_human"
     assert result.entity_uuid == hero.uuid
@@ -576,14 +567,17 @@ def test_lethal_multi_entity_command_reports_causal_death_and_primary_hp() -> No
     assert life_cues[-1]["causing_effect_presentation_id"] in {
         cue["presentation_id"] for cue in damage_cues
     }
-    assert {
-        "kind": "entity_remove",
-        "entity_uuid": str(monster.uuid),
-    } in patches
-    assert all(
-        row["uuid"] != str(monster.uuid)
-        for row in current["world"]["state"]["entities"]
+    assert not any(
+        patch["kind"] == "entity_remove"
+        and patch["entity_uuid"] == str(monster.uuid)
+        for patch in patches
     )
+    replicated_corpse = next(
+        row
+        for row in current["world"]["state"]["entities"]
+        if row["uuid"] == str(monster.uuid)
+    )
+    assert replicated_corpse["life_state"] == LifeState.DEAD.value
     assert frame_window["frames"]
     assert payload["encounter_ended"] is True
     death_entries = [

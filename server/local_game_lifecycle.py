@@ -182,7 +182,6 @@ class StandaloneLocalGameCoordinator:
                     principal_id=self.owner_principal_id,
                     role=MembershipRole.OWNER,
                     side_id=membership_roster_slot_id,
-                    controller_kind="local_profile",
                     capabilities=MembershipCapabilities(
                         may_connect=True,
                         may_observe_public_state=True,

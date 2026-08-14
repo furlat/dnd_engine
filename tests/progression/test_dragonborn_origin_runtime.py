@@ -35,7 +35,7 @@ from dnd.content_system.dragonborn_origin_definitions import (
 from dnd.content_system.fighter_character_grant_appliers import (
     FIGHTING_STYLE_ARCHERY_REF,
 )
-from dnd.content_system.pack_loader import LoadedContentSystem
+from dnd.content_system.system import LoadedContentSystem
 from dnd.content_system.runtime import ContentSystemRuntime
 from dnd.content_system.starting_equipment_definitions import (
     STARTING_EQUIPMENT_PACKAGE_DECLARATIONS_BY_PRESET,
@@ -119,7 +119,6 @@ def dragonborn_runtime() -> ContentSystemRuntime:
                 recipe_presets={},
                 sources={},
             ),
-            packs=(),
             built_in_artifact_digest="a" * 64,
             content_set_digest="b" * 64,
         ),
@@ -497,7 +496,6 @@ def test_builtin_dragonborn_choice_validates_materializes_and_removes() -> None:
             },
             sources={},
         ),
-        packs=(),
         built_in_artifact_digest="c" * 64,
         content_set_digest="d" * 64,
     )

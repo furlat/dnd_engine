@@ -30,6 +30,8 @@ from dnd.core.base_tiles import (
     Tile,
     difficult_terrain_factory,
     validate_elevation_surface_tuple,
+    wall_factory,
+    water_factory,
 )
 from dnd.core.content.descriptors import (
     ContentOrdering,
@@ -270,7 +272,22 @@ def save_current_editor_map(request: MapEditorSaveMapRequest) -> MapEditorSavedM
     """Persist the current entity-free editor map snapshot to a local JSON file."""
     snapshot = get_editor_snapshot()
     object_placements = _saved_object_placements(snapshot.floor_objects)
-    durable_snapshot = snapshot.model_copy(update={"floor_objects": []})
+    grid = get_map()
+    durable_tiles = []
+    for tile_snapshot in snapshot.tiles:
+        tile = grid.get_tile(tile_snapshot.x, tile_snapshot.y)
+        if tile is None:
+            raise ValueError(
+                "mapeditor snapshot contains a tile missing from GridMap",
+            )
+        durable_tiles.append(
+            tile_snapshot.model_copy(
+                update={"light_level": tile.default_light.value},
+            ),
+        )
+    durable_snapshot = snapshot.model_copy(
+        update={"tiles": durable_tiles, "floor_objects": []},
+    )
     map_id = _save_id(request.id) if request.id else _unique_save_id(request.name)
     now = _utc_now()
     path = _save_path(map_id)
@@ -1127,8 +1144,33 @@ def _load_editor_snapshot(
         position = (tile_data.x, tile_data.y)
         if _tile_has_spike_trap_effect(tile_data):
             spike_light[position] = tile_data.light_level
-        if tile_data.walking_cost > 1 or _normalize_id(tile_data.name) == "difficult_terrain":
+        normalized_tile_name = _normalize_id(tile_data.name)
+        if tile_data.walking_cost > 1 or normalized_tile_name == "difficult_terrain":
             tile = difficult_terrain_factory(position)
+            tile.default_light = _light_level(tile_data.light_level)
+            grid.set_tile(tile_data.x, tile_data.y, tile=tile, fire_event=False)
+            grid.set_tile_elevation(
+                position,
+                height=tile_data.elevation_steps,
+                surface_kind=tile_data.elevation_surface_kind,
+                slope_axis=tile_data.slope_axis,
+            )
+            _restore_directional_tile_state(grid, tile_data)
+            continue
+        if normalized_tile_name == "water":
+            tile = water_factory(position)
+            tile.default_light = _light_level(tile_data.light_level)
+            grid.set_tile(tile_data.x, tile_data.y, tile=tile, fire_event=False)
+            grid.set_tile_elevation(
+                position,
+                height=tile_data.elevation_steps,
+                surface_kind=tile_data.elevation_surface_kind,
+                slope_axis=tile_data.slope_axis,
+            )
+            _restore_directional_tile_state(grid, tile_data)
+            continue
+        if normalized_tile_name == "wall":
+            tile = wall_factory(position)
             tile.default_light = _light_level(tile_data.light_level)
             grid.set_tile(tile_data.x, tile_data.y, tile=tile, fire_event=False)
             grid.set_tile_elevation(
@@ -1145,6 +1187,7 @@ def _load_editor_snapshot(
             walkable=tile_data.walkable,
             visible=tile_data.visible,
             name=tile_data.name,
+            sprite_name=tile_data.visual_key,
             fire_event=False,
         )
         tile.default_light = _light_level(tile_data.light_level)

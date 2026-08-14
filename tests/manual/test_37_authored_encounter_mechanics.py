@@ -163,6 +163,7 @@ def test_authored_encounter_catalog_has_complete_stable_inventory() -> None:
         "srd_goblinoid_warband",
         "srd_divine_cult_cell",
         "srd_elite_mercenary_contract",
+        "elevation_proving_ground",
     ]
     assert len(ids) == len(set(ids))
     assert all(recipe.tags == ("authored",) for recipe in AUTHORED_ENCOUNTER_RECIPES)
@@ -391,7 +392,7 @@ def test_skeleton_mark_focus_fire_has_support_marker_and_durable_target() -> Non
 
 
 def test_buff_consumable_ambush_surfaces_buff_items_and_scrolls() -> None:
-    """The ambush arena gives monster AI visible self-buff and scroll pressure."""
+    """The ambush arena exposes self-buff items and scroll pressure."""
     arena = create_authored_encounter("buff_consumable_ambush")
     mage = next(monster for monster in arena.monsters if monster.name == "Validation Ambush Mage")
     goblin_archer = next(monster for monster in arena.monsters if monster.name == "Validation Ambush Goblin Archer")

@@ -17,7 +17,6 @@ from dnd.core.content.item_definitions import ItemPersistencePolicy
 from dnd.core.content.registration import ContentDeclarationMode
 from server.content_catalog import (
     ContentCatalogResponse,
-    ContentPackOrigin,
     build_content_manifest,
     build_public_content_catalog,
     content_response_etag,
@@ -44,20 +43,13 @@ _EXPECTED_FRONTEND_ICON_KEYS = {
 }
 
 
-def test_content_manifest_exposes_exact_packs_sources_and_deployment_digest() -> None:
-    """Standalone, gateway, and workers can publish one authenticated identity."""
+def test_content_manifest_exposes_sources_and_deployment_digest() -> None:
+    """Standalone, gateway, and workers publish one built-in identity."""
     loaded = bootstrap_content_system()
     manifest = build_content_manifest(loaded)
 
-    assert manifest.engine_content_api == 2
     assert manifest.content_set_digest == loaded.content_set_digest
     assert manifest.built_in_artifact_digest == loaded.built_in_artifact_digest
-    assert tuple(pack.pack_id for pack in manifest.packs) == (
-        "content.neurodragon",
-        "content.srd_5_1_cc",
-        "core.rules",
-    )
-    assert all(pack.origin == ContentPackOrigin.BUILT_IN for pack in manifest.packs)
     assert tuple(source.source_id for source in manifest.sources) == (
         "neurodragon.original_b2b3930",
         "wotc.srd_5_1_cc",

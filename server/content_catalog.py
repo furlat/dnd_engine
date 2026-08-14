@@ -4,26 +4,17 @@ from __future__ import annotations
 
 import hashlib
 import json
-from enum import Enum
 from typing import Literal, Self
 
 from pydantic import (
     BaseModel,
     ConfigDict,
-    Field,
     JsonValue,
     field_validator,
     model_validator,
 )
 
-from dnd.content_system.builtin import (
-    BUILT_IN_PACK_DEPENDENCIES,
-    BUILT_IN_PACK_VERSIONS,
-)
-from dnd.content_system.pack_loader import (
-    ENGINE_CONTENT_API_VERSION,
-    LoadedContentSystem,
-)
+from dnd.content_system.system import LoadedContentSystem
 from dnd.core.content.dependencies import ContentDependency
 from dnd.core.content.descriptors import (
     ContentOrdering,
@@ -34,7 +25,6 @@ from dnd.core.content.descriptors import (
 from dnd.core.content.identities import (
     ContentDefinitionKind,
     ContentRef,
-    validate_namespaced_id,
     validate_sha256,
 )
 from dnd.core.content.effects import (
@@ -67,52 +57,14 @@ def safe_content_presentation_ref(
     )
 
 
-class ContentPackOrigin(str, Enum):
-    """Whether a pack ships with the engine or was discovered at startup."""
-
-    BUILT_IN = "built_in"
-    EXTERNAL = "external"
-
-
-class ContentPackManifestEntry(BaseModel):
-    """Cold pack identity safe for clients and deployment diagnostics."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    pack_id: str
-    pack_version: str = Field(min_length=1)
-    origin: ContentPackOrigin
-    dependencies: tuple[str, ...] = ()
-    manifest_contract_digest: str | None = None
-    pack_digest: str | None = None
-
-    @field_validator("pack_id")
-    @classmethod
-    def _validate_pack_id(cls, value: str) -> str:
-        return validate_namespaced_id(value, "pack_id")
-
-    @field_validator("manifest_contract_digest", "pack_digest")
-    @classmethod
-    def _validate_optional_digest(
-        cls,
-        value: str | None,
-        info,
-    ) -> str | None:
-        if value is None:
-            return None
-        return validate_sha256(value, info.field_name)
-
-
 class ContentManifestResponse(BaseModel):
-    """Exact installed pack/source identity for cache and replay selection."""
+    """Exact built-in content identity for cache and replay selection."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: Literal[2] = CONTENT_MANIFEST_SCHEMA_VERSION
-    engine_content_api: int
     content_set_digest: str
     built_in_artifact_digest: str
-    packs: tuple[ContentPackManifestEntry, ...]
     sources: tuple[ContentSource, ...]
 
     @field_validator("content_set_digest", "built_in_artifact_digest")
@@ -380,32 +332,10 @@ def compute_content_catalog_digest(
 def build_content_manifest(
     loaded: LoadedContentSystem,
 ) -> ContentManifestResponse:
-    """Project one frozen runtime into an exact code-free manifest."""
-    packs = [
-        ContentPackManifestEntry(
-            pack_id=pack_id,
-            pack_version=version,
-            origin=ContentPackOrigin.BUILT_IN,
-            dependencies=tuple(sorted(BUILT_IN_PACK_DEPENDENCIES[pack_id])),
-        )
-        for pack_id, version in BUILT_IN_PACK_VERSIONS.items()
-    ]
-    packs.extend(
-        ContentPackManifestEntry(
-            pack_id=pack.manifest.pack_id,
-            pack_version=pack.manifest.pack_version,
-            origin=ContentPackOrigin.EXTERNAL,
-            dependencies=pack.manifest.dependency_pack_ids,
-            manifest_contract_digest=pack.manifest.contract_digest,
-            pack_digest=pack.discovery_pack_digest,
-        )
-        for pack in loaded.packs
-    )
+    """Project the frozen built-in runtime into a code-free manifest."""
     return ContentManifestResponse(
-        engine_content_api=ENGINE_CONTENT_API_VERSION,
         content_set_digest=loaded.content_set_digest,
         built_in_artifact_digest=loaded.built_in_artifact_digest,
-        packs=tuple(sorted(packs, key=lambda pack: pack.pack_id)),
         sources=tuple(sorted(
             loaded.registry.sources.values(),
             key=lambda source: source.source_id,

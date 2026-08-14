@@ -19,7 +19,7 @@ from dnd.content_system.character_appearance import FIGHTER_HUMAN_APPEARANCE
 from dnd.content_system.extra_attack_character_grant_appliers import (
     EXTRA_ATTACK_FEATURE_REF,
 )
-from dnd.content_system.pack_loader import LoadedContentSystem
+from dnd.content_system.system import LoadedContentSystem
 from dnd.content_system.runtime import ContentSystemRuntime
 from dnd.controller import PassController
 from dnd.classes.structural_feature_definitions import (
@@ -189,7 +189,6 @@ def _runtime_with(
     runtime.install(
         LoadedContentSystem(
             registry=registry,
-            packs=(),
             built_in_artifact_digest="a" * 64,
             content_set_digest=_CONTENT_SET_DIGEST,
         ),

@@ -13,7 +13,7 @@ from typing import TypeVar, cast
 
 from pydantic import BaseModel, ValidationError
 
-from dnd.content_system.pack_loader import LoadedContentSystem
+from dnd.content_system.system import LoadedContentSystem
 from dnd.content_system.character_appearance import (
     resolve_player_character_appearance,
 )

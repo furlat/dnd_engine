@@ -144,7 +144,7 @@ def test_gateway_restart_adopts_ready_manifest_before_orphan_interrupt(
     )
     principal = repository.create_principal(
         PrincipalCreate(
-            principal_kind=PrincipalKind.SYSTEM_AI,
+            principal_kind=PrincipalKind.SERVICE,
             display_name="Ready Worker",
         ),
     )

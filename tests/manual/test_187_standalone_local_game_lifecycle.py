@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable
 from pathlib import Path
-import random
 import time
 from types import SimpleNamespace
 from typing import Any
@@ -21,7 +20,6 @@ from dnd.core.content.durable_characters import (
 )
 from dnd.core.content.encounters import EncounterRosterRecipe
 from dnd.core.events import EventQueue
-from dnd.core.life_types import LifeState
 from dnd.encounter import TurnState
 from dnd.entity import Entity
 from dnd.scenarios.encounter_catalog import AUTHORED_ROSTER_RECIPES_BY_ID
@@ -113,33 +111,10 @@ def _compose_start_payload(
     *,
     character_ids: tuple[UUID, ...] = (),
     player_roster_selection: dict[str, Any] | None = None,
-    player_controller: str = "human",
-    second_character_controller: str | None = None,
-    opponent_controller: str = "human",
     opponent_roster_id: str = "monsters.skeleton_trio",
     battlefield_id: str = "battlefield.open_floor_bright",
     deployment_id: str = "neutral.battlefield.open_floor_bright",
 ) -> dict[str, Any]:
-    def controller(kind: str, name: str) -> dict[str, object]:
-        row: dict[str, object] = {
-            "controller": kind,
-            "participant_name": name,
-            "member_overrides": [],
-        }
-        if kind == "ai":
-            row["policy_id"] = "builtin.basic"
-        return row
-
-    character_overrides: list[dict[str, object]] = []
-    if second_character_controller is not None:
-        assert len(character_ids) >= 2
-        override: dict[str, object] = {
-            "character_id": str(character_ids[1]),
-            "controller": second_character_controller,
-        }
-        if second_character_controller == "ai":
-            override["policy_id"] = "builtin.basic"
-        character_overrides.append(override)
     player_roster: dict[str, object]
     if player_roster_selection is not None:
         player_roster = player_roster_selection
@@ -148,7 +123,6 @@ def _compose_start_payload(
             "kind": "owned_characters",
             "title": "Owned Party",
             "character_ids": [str(value) for value in character_ids],
-            "member_controller_overrides": character_overrides,
         }
     else:
         player_roster = {
@@ -165,10 +139,7 @@ def _compose_start_payload(
                     "roster": player_roster,
                     "faction_id": "players",
                     "deployment_zone_id": "zone_1",
-                    "controller_defaults": controller(
-                        player_controller,
-                        "Players",
-                    ),
+                    "participant_name": "Players",
                 },
                 {
                     "roster_slot_id": "opposition",
@@ -178,10 +149,7 @@ def _compose_start_payload(
                     },
                     "faction_id": "opposition",
                     "deployment_zone_id": "zone_2",
-                    "controller_defaults": controller(
-                        opponent_controller,
-                        "Opposition",
-                    ),
+                    "participant_name": "Opposition",
                 },
             ],
             "battlefield_id": battlefield_id,
@@ -298,13 +266,13 @@ def test_local_lifecycle_notifies_after_each_durable_boundary(
     assert len(set(notifications)) == 3
 
 
-def _drive_ai_game_to_terminal_boundary(
+def _wait_for_terminal_persistence_boundary(
     coordinator: StandaloneLocalGameCoordinator,
     game_id: UUID,
     *,
     expect_staged_intent: bool,
 ) -> None:
-    """Wait for the canonical automatic AI executor to reach persistence."""
+    """Wait for asynchronous terminal publication to reach persistence."""
 
     deadline = time.monotonic() + 60.0
     while time.monotonic() < deadline:
@@ -321,7 +289,7 @@ def _drive_ai_game_to_terminal_boundary(
             return
         time.sleep(0.05)
     pytest.fail(
-        "AI game did not reach its terminal persistence boundary within "
+        "Game did not reach its terminal persistence boundary within "
         "60 seconds",
     )
 
@@ -563,7 +531,6 @@ def test_terminal_publication_retries_once_when_subjective_replay_becomes_ready(
 
     coordinator = FakeCoordinator()
     subjective_attempts = 0
-    cleanup_calls = 0
 
     def build_subjective(_capture: object) -> object:
         nonlocal subjective_attempts
@@ -573,10 +540,6 @@ def test_terminal_publication_retries_once_when_subjective_replay_becomes_ready(
                 "canonical player replay segments are still being finalized"
             )
         return object()
-
-    async def close_registered_ai(_encounter: object) -> None:
-        nonlocal cleanup_calls
-        cleanup_calls += 1
 
     monkeypatch.setattr(
         event_server,
@@ -614,12 +577,6 @@ def test_terminal_publication_retries_once_when_subjective_replay_becomes_ready(
         "build_worker_subjective_replays",
         build_subjective,
     )
-    monkeypatch.setattr(
-        event_server,
-        "_close_registered_ai_after_terminal",
-        close_registered_ai,
-    )
-
     async def exercise() -> None:
         assert event_server._publish_local_terminal_game(encounter_uuid) is False
         assert coordinator.complete_calls == 0
@@ -628,7 +585,6 @@ def test_terminal_publication_retries_once_when_subjective_replay_becomes_ready(
         await asyncio.sleep(0)
         assert coordinator.complete_calls == 1
         assert subjective_attempts == 2
-        assert cleanup_calls == 1
 
         event_server._on_subjective_replay_source_closed(str(encounter_uuid))
         assert coordinator.complete_calls == 1
@@ -862,13 +818,11 @@ def test_standalone_compose_rebases_prior_content_character_before_start(
         assert started.status_code == 200, started.text
 
 
-@pytest.mark.parametrize("second_controller", ["ai", "codex"])
-def test_standalone_two_owned_characters_preserve_member_controllers(
+def test_standalone_two_owned_characters_preserve_sources_and_leases(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    second_controller: str,
 ) -> None:
-    """Standalone start keeps ordered character sources across control kinds."""
+    """Standalone start keeps ordered character sources and durable leases."""
     monkeypatch.setenv(
         "DND_LOCAL_PROFILE_RUNTIME_ROOT",
         str(tmp_path / "runtime"),
@@ -921,8 +875,6 @@ def test_standalone_two_owned_characters_preserve_member_controllers(
             json=_compose_start_payload(
                 client,
                 character_ids=tuple(character_ids),
-                player_controller="human",
-                second_character_controller=second_controller,
             ),
         )
         assert started.status_code == 200, started.text
@@ -931,10 +883,16 @@ def test_standalone_two_owned_characters_preserve_member_controllers(
         assert [UUID(row["character_id"]) for row in assignments] == (
             character_ids
         )
-        assert [row["controller"] for row in assignments] == [
-            "human",
-            second_controller,
-        ]
+        assert all(row["participant_name"] == "Players" for row in assignments)
+        assert all(
+            {
+                "controller",
+                "policy_id",
+                "provider_id",
+                "codex_session_id",
+            }.isdisjoint(row)
+            for row in assignments
+        )
         coordinator = event_server._active_local_game_coordinator()
         assert coordinator is not None
         current = coordinator.current
@@ -959,14 +917,6 @@ def test_standalone_two_owned_characters_preserve_member_controllers(
             assert str(deployments[-1].entity_uuid) == assignment[
                 "entity_uuid"
             ]
-        if second_controller == "ai":
-            assert assignments[1]["policy_id"] == "builtin.basic"
-            assert assignments[1]["codex_session_id"] is None
-        else:
-            assert assignments[1]["policy_id"] is None
-            assert assignments[1]["codex_session_id"] is not None
-
-
 def test_standalone_two_owned_humans_both_wait_for_player_commands(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -1024,17 +974,12 @@ def test_standalone_two_owned_humans_both_wait_for_player_commands(
             json=_compose_start_payload(
                 client,
                 character_ids=tuple(character_ids),
-                player_controller="human",
-                opponent_controller="ai",
                 opponent_roster_id="monsters.goblin_water_cell",
             ),
         )
         assert started.status_code == 200, started.text
         assignments = started.json()["rosters"][0]["entity_assignments"]
-        assert [row["controller"] for row in assignments] == [
-            "human",
-            "human",
-        ]
+        assert all(row["participant_name"] == "Players" for row in assignments)
         first_uuid, second_uuid = (
             UUID(row["entity_uuid"]) for row in assignments
         )
@@ -1174,15 +1119,11 @@ def test_standalone_two_owned_humans_both_wait_for_player_commands(
         assert moved.status_code == 200, moved.text
 
 
-def test_ai_match_publishes_local_terminal_replays_and_game_history(
+def test_terminal_game_publishes_local_replays_and_game_history(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # This test owns terminal persistence and replay publication, not the
-    # statistical duration of an arbitrary AI matchup.  Freeze its dice stream
-    # so the canonical autonomous match reaches the same terminal boundary on
-    # every run.
-    random.seed(20260730)
+    """A deterministic terminal boundary publishes replays and history."""
     monkeypatch.setenv(
         "DND_LOCAL_PROFILE_RUNTIME_ROOT",
         str(tmp_path / "runtime"),
@@ -1230,8 +1171,6 @@ def test_ai_match_publishes_local_terminal_replays_and_game_history(
             json=_compose_start_payload(
                 client,
                 character_ids=(character_id,),
-                player_controller="ai",
-                opponent_controller="ai",
                 opponent_roster_id="monsters.berserker_duelist",
             ),
         )
@@ -1253,18 +1192,19 @@ def test_ai_match_publishes_local_terminal_replays_and_game_history(
             for entity in materialized_combatants
             if entity is not None
         )
+        controlled_entity_uuid = payload["rosters"][0][
+            "entity_assignments"
+        ][0]["entity_uuid"]
         session = client.post(
             "/session/create",
-            json={"player_type": "observer", "name": "Local Observer"},
+            json={"player_type": "human", "name": "Local Player"},
         ).json()
         session_id = session["session_id"]
         joined = client.post(
             "/game/join",
             json={
                 "session_id": session_id,
-                "entity_uuids": [],
-                "observer_entity_uuids": observer_uuids,
-                "active_observer_uuid": observer_uuids[0],
+                "entity_uuids": [controlled_entity_uuid],
             },
         )
         assert joined.status_code == 200, joined.text
@@ -1296,7 +1236,20 @@ def test_ai_match_publishes_local_terminal_replays_and_game_history(
         assert current.characters[0].deployment_id is not None
         membership_id = current.membership.membership_id
         deployment_id = current.characters[0].deployment_id
-        _drive_ai_game_to_terminal_boundary(
+
+        async def finish_activated_encounter() -> None:
+            combat_task = event_server.sim.combat_task
+            if combat_task is not None:
+                await combat_task
+            encounter = event_server.sim.encounter
+            assert encounter is not None
+            encounter.end_encounter(
+                "deterministic terminal publication fixture",
+            )
+
+        assert client.portal is not None
+        client.portal.call(finish_activated_encounter)
+        _wait_for_terminal_persistence_boundary(
             coordinator,
             game_id,
             expect_staged_intent=False,
@@ -1341,14 +1294,9 @@ def test_ai_match_publishes_local_terminal_replays_and_game_history(
             headers=headers,
         )
         assert summary_read.status_code == 200, summary_read.text
-        final_life_states = {
-            entity["final"]["life_state"]
-            for entity in summary_read.json()["summary"]["entities"]
-            if entity["final"] is not None
-        }
-        assert LifeState.DEAD.value in final_life_states
-        assert LifeState.DYING.value not in final_life_states
-        assert LifeState.STABLE.value not in final_life_states
+        summarized_entities = summary_read.json()["summary"]["entities"]
+        assert summarized_entities
+        assert all(entity["final"] is not None for entity in summarized_entities)
         objective_read = client.get(
             f"/games/{game_id}/diagnostics/objective-replay",
             headers=headers,
@@ -1421,34 +1369,28 @@ def test_staged_character_terminal_recovers_after_finalize_failure_and_restart(
                 json=_compose_start_payload(
                     client,
                     character_ids=(character_id,),
-                    player_controller="human",
-                    opponent_controller="human",
                 ),
             )
             assert started.status_code == 200, started.text
             payload = started.json()
             game_id = UUID(payload["game_id"])
-            observer_uuids = [
-                row["entity_uuid"]
-                for roster in payload["rosters"]
-                for row in roster["entity_assignments"]
-            ]
+            controlled_entity_uuid = payload["rosters"][0][
+                "entity_assignments"
+            ][0]["entity_uuid"]
             session = client.post(
                 "/session/create",
                 json={
-                    "player_type": "observer",
-                    "name": "Recovery Observer",
+                    "player_type": "human",
+                    "name": "Recovery Player",
                 },
             ).json()
             session_id = session["session_id"]
             joined = client.post(
                 "/game/join",
                 json={
-                    "session_id": session_id,
-                    "entity_uuids": [],
-                    "observer_entity_uuids": observer_uuids,
-                    "active_observer_uuid": observer_uuids[0],
-                },
+                        "session_id": session_id,
+                        "entity_uuids": [controlled_entity_uuid],
+                    },
             )
             assert joined.status_code == 200, joined.text
             bootstrap = client.get(
@@ -1500,7 +1442,7 @@ def test_staged_character_terminal_recovers_after_finalize_failure_and_restart(
 
             assert client.portal is not None
             client.portal.call(finish_activated_encounter)
-            _drive_ai_game_to_terminal_boundary(
+            _wait_for_terminal_persistence_boundary(
                 coordinator,
                 game_id,
                 expect_staged_intent=True,

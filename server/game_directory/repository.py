@@ -570,7 +570,6 @@ def _membership_from_row(row: sqlite3.Row) -> MembershipRecord:
         may_observe_public_state=bool(row["may_observe_public_state"]),
         may_observe_subjective_state=bool(row["may_observe_subjective_state"]),
         may_control_entities=bool(row["may_control_entities"]),
-        may_view_agent_telemetry=bool(row["may_view_agent_telemetry"]),
         may_manage_members=bool(row["may_manage_members"]),
         may_manage_game=bool(row["may_manage_game"]),
         may_view_objective_replay=bool(row["may_view_objective_replay"]),
@@ -581,7 +580,6 @@ def _membership_from_row(row: sqlite3.Row) -> MembershipRecord:
         principal_id=row["principal_id"],
         role=row["role"],
         side_id=row["side_id"],
-        controller_kind=row["controller_kind"],
         membership_state=row["membership_state"],
         capabilities=capabilities,
         subjective_source_membership_id=row["subjective_source_membership_id"],
@@ -604,7 +602,6 @@ def _assignment_from_row(row: sqlite3.Row) -> EntityAssignmentRecord:
         entity_name=row["entity_name"],
         faction=row["faction"],
         side_id=row["side_id"],
-        controller_kind=row["controller_kind"],
         authority_epoch=row["authority_epoch"],
         assigned_at=row["assigned_at"],
         released_at=row["released_at"],
@@ -3344,13 +3341,12 @@ class GameDirectoryRepository:
                     """
                     INSERT INTO game_memberships(
                         membership_id, game_id, principal_id, role, side_id,
-                        controller_kind, membership_state, may_connect,
+                        membership_state, may_connect,
                         may_observe_public_state, may_observe_subjective_state,
-                        may_control_entities, may_view_agent_telemetry,
-                        may_manage_members, may_manage_game,
+                        may_control_entities, may_manage_members, may_manage_game,
                         may_view_objective_replay, subjective_source_membership_id,
                         authority_epoch, joined_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         str(request.membership_id),
@@ -3358,13 +3354,11 @@ class GameDirectoryRepository:
                         str(request.principal_id),
                         request.role.value,
                         request.side_id,
-                        request.controller_kind,
                         request.membership_state.value,
                         int(caps.may_connect),
                         int(caps.may_observe_public_state),
                         int(caps.may_observe_subjective_state),
                         int(caps.may_control_entities),
-                        int(caps.may_view_agent_telemetry),
                         int(caps.may_manage_members),
                         int(caps.may_manage_game),
                         int(caps.may_view_objective_replay),
@@ -3468,8 +3462,7 @@ class GameDirectoryRepository:
                 UPDATE game_memberships
                 SET membership_state = ?, may_connect = ?,
                     may_observe_public_state = ?, may_observe_subjective_state = ?,
-                    may_control_entities = ?, may_view_agent_telemetry = ?,
-                    may_manage_members = ?, may_manage_game = ?,
+                    may_control_entities = ?, may_manage_members = ?, may_manage_game = ?,
                     may_view_objective_replay = ?, authority_epoch = authority_epoch + 1,
                     disconnected_at = ?, revoked_at = ?, left_at = ?
                 WHERE membership_id = ? AND authority_epoch = ?
@@ -3480,7 +3473,6 @@ class GameDirectoryRepository:
                     int(capabilities.may_observe_public_state),
                     int(capabilities.may_observe_subjective_state),
                     int(capabilities.may_control_entities),
-                    int(capabilities.may_view_agent_telemetry),
                     int(capabilities.may_manage_members),
                     int(capabilities.may_manage_game),
                     int(capabilities.may_view_objective_replay),
@@ -3534,9 +3526,9 @@ class GameDirectoryRepository:
                     """
                     INSERT INTO entity_assignments(
                         assignment_id, game_id, membership_id, entity_uuid,
-                        entity_name, faction, side_id, controller_kind,
+                        entity_name, faction, side_id,
                         assigned_at, authority_epoch
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         str(request.assignment_id),
@@ -3546,7 +3538,6 @@ class GameDirectoryRepository:
                         request.entity_name,
                         request.faction,
                         request.side_id,
-                        request.controller_kind,
                         datetime_to_text(now),
                         request.authority_epoch,
                     ),

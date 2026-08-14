@@ -18,8 +18,6 @@ from dnd.core.content.encounters import (
     EncounterRosterRecipe,
     EncounterRosterSlot,
     OwnedCharacterRosterSource,
-    RosterControllerKind,
-    RosterMemberControllerOverride,
 )
 from dnd.scenarios.encounter_catalog import (
     AUTHORED_DEPLOYMENTS_BY_ID,
@@ -180,9 +178,8 @@ def _owned_member_id(character_id: UUID) -> str:
 def _owned_roster(
     selection: GameCreationOwnedCharacterRosterSelection,
     snapshots: Mapping[UUID, CharacterDeploymentSnapshot],
-) -> tuple[EncounterRosterRecipe, tuple[RosterMemberControllerOverride, ...]]:
+) -> EncounterRosterRecipe:
     members: list[EncounterRosterMember] = []
-    member_ids: dict[UUID, str] = {}
     for character_id in selection.character_ids:
         snapshot = snapshots.get(character_id)
         if snapshot is None:
@@ -190,21 +187,12 @@ def _owned_roster(
                 f"owned character {character_id} was not resolved",
             )
         member_id = _owned_member_id(character_id)
-        member_ids[character_id] = member_id
         members.append(EncounterRosterMember(
             member_id=member_id,
             display_name=snapshot.display_name,
             deployment_role=member_id,
             source=owned_character_source(snapshot),
         ))
-    overrides = tuple(
-        RosterMemberControllerOverride(
-            member_id=member_ids[override.character_id],
-            controller=RosterControllerKind(override.controller),
-            policy_id=override.policy_id,
-        )
-        for override in selection.member_controller_overrides
-    )
     identity_payload = [
         member.source.model_dump(mode="json")
         for member in members
@@ -218,14 +206,11 @@ def _owned_roster(
             sort_keys=True,
         ).encode("utf-8"),
     ).hexdigest()
-    return (
-        EncounterRosterRecipe.create(
-            roster_id=f"roster.owned.{identity_digest[:24]}",
-            title=selection.title,
-            members=tuple(members),
-            tags=("owned_characters",),
-        ),
-        overrides,
+    return EncounterRosterRecipe.create(
+        roster_id=f"roster.owned.{identity_digest[:24]}",
+        title=selection.title,
+        members=tuple(members),
+        tags=("owned_characters",),
     )
 
 
@@ -267,10 +252,6 @@ def normalize_encounter_recipe(
     roster_slots: list[EncounterRosterSlot] = []
     for selection in request.roster_slots:
         roster_selection = selection.roster
-        translated_overrides: tuple[
-            RosterMemberControllerOverride,
-            ...,
-        ] = ()
         if isinstance(
             roster_selection,
             GameCreationAuthoredRosterSelection,
@@ -287,12 +268,7 @@ def normalize_encounter_recipe(
             roster_selection,
             GameCreationOwnedCharacterRosterSelection,
         ):
-            if selection.controller_defaults.member_overrides:
-                raise GameCreationCompositionError(
-                    "owned rosters address controller overrides by "
-                    "character_id, not generated member_id",
-                )
-            roster, translated_overrides = _owned_roster(
+            roster = _owned_roster(
                 roster_selection,
                 deployments,
             )
@@ -320,18 +296,12 @@ def normalize_encounter_recipe(
                         "saved roster character heads changed during "
                         "composition"
                     )
-        defaults = selection.controller_defaults.model_copy(update={
-            "member_overrides": (
-                selection.controller_defaults.member_overrides
-                or translated_overrides
-            ),
-        })
         roster_slots.append(EncounterRosterSlot(
             roster_slot_id=selection.roster_slot_id,
             roster=roster,
             faction_id=selection.faction_id,
             deployment_zone_id=selection.deployment_zone_id,
-            controller_defaults=defaults,
+            participant_name=selection.participant_name,
         ))
 
     request_identity = request.model_dump(mode="json")

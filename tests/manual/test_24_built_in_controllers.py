@@ -3,7 +3,6 @@
 from uuid import uuid4
 
 from dnd.controller import (
-    CodexController,
     ControllerExecutionMode,
     HumanController,
     PassController,
@@ -22,17 +21,14 @@ def test_controller_catalogue_exposes_controller_and_scene_surfaces(capsys) -> N
     reset_controller_catalogue_state()
     controllers = [
         HumanController(source_entity_uuid=uuid4()),
-        CodexController(source_entity_uuid=uuid4()),
         PassController(source_entity_uuid=uuid4()),
     ]
 
     assert [controller.controller_type for controller in controllers] == [
         "human",
-        "codex",
         "pass",
     ]
     assert [controller.execution_mode for controller in controllers] == [
-        ControllerExecutionMode.EXTERNAL,
         ControllerExecutionMode.EXTERNAL,
         ControllerExecutionMode.AUTONOMOUS,
     ]
@@ -50,7 +46,7 @@ def test_controller_catalogue_exposes_controller_and_scene_surfaces(capsys) -> N
         ),
     ]
     expected_lines = [
-        "controllers: ['human', 'codex', 'pass']",
+        "controllers: ['human', 'pass']",
         "catalogue functions: pair=True, context=True, encounter=True",
     ]
 
@@ -59,8 +55,8 @@ def test_controller_catalogue_exposes_controller_and_scene_surfaces(capsys) -> N
     assert readout_lines == expected_lines
     assert capsys.readouterr().out == "\n".join(expected_lines) + "\n"
 
-def test_external_input_controllers_stop_the_automatic_loop(capsys) -> None:
-    """Human and Codex controllers mark turns that need outside decisions."""
+def test_external_input_controller_stops_the_automatic_loop(capsys) -> None:
+    """The human controller marks a turn that needs outside decisions."""
     reset_controller_catalogue_state()
     hero, monster = create_controller_pair()
     human_controller = HumanController(source_entity_uuid=hero.uuid)
@@ -72,7 +68,7 @@ def test_external_input_controllers_stop_the_automatic_loop(capsys) -> None:
         first_actor=hero,
     )
 
-    human_result = encounter.advance_until_player()
+    human_result = encounter.advance_until_external_boundary()
     human_context = make_turn_context(hero)
 
     assert human_result.status == "waiting_for_human"
@@ -95,46 +91,10 @@ def test_external_input_controllers_stop_the_automatic_loop(capsys) -> None:
         f"human action: {human_controller.get_next_action(hero, human_context)}",
     ]
 
-    reset_controller_catalogue_state()
-    hero, monster = create_controller_pair()
-    codex_controller = CodexController(source_entity_uuid=hero.uuid)
-    encounter = start_ordered_controller_encounter(
-        hero,
-        monster,
-        codex_controller,
-        PassController(source_entity_uuid=monster.uuid),
-        first_actor=hero,
-    )
-
-    codex_result = encounter.advance_until_player()
-    codex_context = make_turn_context(hero)
-
-    assert codex_result.status == "waiting_for_codex"
-    assert codex_result.entity_uuid == hero.uuid
-    assert encounter.get_current_entity() is hero
-    assert encounter.turn_state == TurnState.IN_PROGRESS
-    assert not codex_controller.can_continue_turn(hero, codex_context)
-    assert codex_controller.get_next_action(hero, codex_context) is None
-    codex_current = encounter.get_current_entity()
-    assert codex_current is not None
-
-    readout_lines = [
-        *human_readout,
-        (
-            "codex wait: "
-            f"status={codex_result.status}, "
-            f"entity={codex_result.entity_name}, "
-            f"current={codex_current.name}, "
-            f"turn_state={encounter.turn_state.value}, "
-            f"can_continue={codex_controller.can_continue_turn(hero, codex_context)}"
-        ),
-        f"codex action: {codex_controller.get_next_action(hero, codex_context)}",
-    ]
+    readout_lines = human_readout
     expected_lines = [
         "human wait: status=waiting_for_human, entity=Controller Hero, current=Controller Hero, turn_state=in_progress, can_continue=False",
         "human action: None",
-        "codex wait: status=waiting_for_codex, entity=Controller Hero, current=Controller Hero, turn_state=in_progress, can_continue=False",
-        "codex action: None",
     ]
 
     print("\n".join(readout_lines))
@@ -155,7 +115,7 @@ def test_pass_controller_finishes_an_automated_turn_immediately(capsys) -> None:
         first_actor=monster,
     )
 
-    result = encounter.advance_until_player()
+    result = encounter.advance_until_external_boundary()
 
     assert result.status == "waiting_for_human"
     assert result.entity_uuid == hero.uuid

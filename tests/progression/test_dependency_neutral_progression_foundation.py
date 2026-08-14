@@ -418,9 +418,7 @@ def test_typed_definitions_use_the_existing_frozen_registry() -> None:
     builder = ContentRegistryBuilder()
     builder.add_source(_SOURCE)
     builder.add_declaration(declaration)
-    registry = builder.freeze(
-        pack_dependencies={"fixture.progression": frozenset()},
-    )
+    registry = builder.freeze()
     resolved = registry.resolve_typed_definition(
         declaration.ref,
         ClassDefinition,

@@ -38,9 +38,7 @@ class PrincipalKind(str, Enum):
     """Kinds of durable identities recognized by the directory."""
 
     HUMAN = "human"
-    CODEX = "codex"
     SERVICE = "service"
-    SYSTEM_AI = "system_ai"
 
 
 class CharacterStatus(str, Enum):
@@ -135,7 +133,6 @@ class MembershipRole(str, Enum):
     OWNER = "owner"
     PLAYER = "player"
     OBSERVER = "observer"
-    AGENT = "agent"
     REFEREE = "referee"
     ADMINISTRATOR = "administrator"
 
@@ -156,7 +153,6 @@ class GrantKind(str, Enum):
     INVITE = "invite"
     RECONNECT = "reconnect"
     OBSERVE = "observe"
-    AGENT_ATTACH = "agent_attach"
     ADMIN = "admin"
 
 
@@ -164,8 +160,6 @@ class ClientKind(str, Enum):
     """Client kinds retained in attachment history."""
 
     NEUROCLIENT = "neuroclient"
-    CODEX_CLI = "codex_cli"
-    EXTERNAL_AI = "external_ai"
     OBSERVER_TOOL = "observer_tool"
 
 
@@ -185,7 +179,6 @@ class ArtifactKind(str, Enum):
     OBJECTIVE_EVENT_HISTORY = "objective_event_history"
     COMBAT_LOG = "combat_log"
     SUBJECTIVE_TRANSCRIPT = "subjective_transcript"
-    AGENT_TELEMETRY = "agent_telemetry"
     TERMINAL_SUMMARY = "terminal_summary"
     REPLAY_BUNDLE = "replay_bundle"
     SUBJECTIVE_REPLAY_BUNDLE = "subjective_replay_bundle"
@@ -917,7 +910,6 @@ class MembershipCapabilities(DirectoryModel):
     may_observe_public_state: bool = Field(default=False, description="Whether public game state may be observed.")
     may_observe_subjective_state: bool = Field(default=False, description="Whether a subjective participant view may be observed.")
     may_control_entities: bool = Field(default=False, description="Whether the member may control assigned entities.")
-    may_view_agent_telemetry: bool = Field(default=False, description="Whether agent telemetry may be observed.")
     may_manage_members: bool = Field(default=False, description="Whether memberships may be administered.")
     may_manage_game: bool = Field(default=False, description="Whether game lifecycle may be administered.")
     may_view_objective_replay: bool = Field(default=False, description="Whether objective replay evidence may be read.")
@@ -931,7 +923,6 @@ class MembershipCreate(DirectoryModel):
     principal_id: UUID = Field(description="Principal receiving the membership.")
     role: MembershipRole = Field(description="Role of the principal in the game.")
     side_id: str | None = Field(default=None, description="Controlled or observed side identity.")
-    controller_kind: str | None = Field(default=None, description="Controller implementation associated with the member.")
     membership_state: MembershipState = Field(default=MembershipState.ACTIVE, description="Initial membership lifecycle state.")
     capabilities: MembershipCapabilities = Field(description="Explicit authority flags.")
     subjective_source_membership_id: UUID | None = Field(default=None, description="Membership whose subjective view is followed.")
@@ -957,7 +948,6 @@ class EntityAssignmentCreate(DirectoryModel):
     entity_name: str = Field(min_length=1, description="Entity display name retained for history.")
     faction: str | None = Field(default=None, description="Entity faction identity.")
     side_id: str | None = Field(default=None, description="Entity side identity.")
-    controller_kind: str = Field(min_length=1, description="Controller kind installed for the entity.")
     authority_epoch: int = Field(default=1, ge=1, description="Authority epoch of this assignment.")
 
 

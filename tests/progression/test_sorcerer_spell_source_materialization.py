@@ -23,7 +23,7 @@ from dnd.content_system.character_materialization import (
     remove_character_composition,
 )
 from dnd.content_system.character_appearance import SORCERER_HUMAN_APPEARANCE
-from dnd.content_system.pack_loader import LoadedContentSystem
+from dnd.content_system.system import LoadedContentSystem
 from dnd.content_system.runtime import ContentSystemRuntime
 from dnd.content_system.spell_catalog_composition import (
     SPELL_CATALOG_COMPOSITION_BY_CLASS,
@@ -264,7 +264,6 @@ def _loaded_with_classes(
                 recipe_presets=built_in.registry.recipe_presets,
                 sources=built_in.registry.sources,
             ),
-            packs=(),
             built_in_artifact_digest="7" * 64,
             content_set_digest=_CONTENT_SET_DIGEST,
         ),

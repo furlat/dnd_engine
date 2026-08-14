@@ -100,7 +100,6 @@ def test_full_control_plane_round_trip_survives_restart_without_plaintext_secret
             principal_id=principal.principal_id,
             role=MembershipRole.PLAYER,
             side_id="heroes",
-            controller_kind="human",
             capabilities=MembershipCapabilities(
                 may_connect=True,
                 may_observe_public_state=True,
@@ -117,7 +116,6 @@ def test_full_control_plane_round_trip_survives_restart_without_plaintext_secret
             entity_name="Hero",
             faction="heroes",
             side_id="heroes",
-            controller_kind="human",
             authority_epoch=membership.authority_epoch,
         )
     )
@@ -383,7 +381,6 @@ def test_cross_game_entity_assignment_is_rejected(tmp_path: Path) -> None:
                 membership_id=membership.membership_id,
                 entity_uuid=uuid4(),
                 entity_name="Wrong World Hero",
-                controller_kind="human",
                 authority_epoch=membership.authority_epoch,
             )
         )

@@ -22,8 +22,6 @@ from dnd.core.content.character_deployment import (
 from dnd.core.content.encounters import (
     FixedRosterOpeningPolicy,
     OwnedCharacterRosterSource,
-    RosterControllerDefaults,
-    RosterControllerKind,
 )
 from dnd.core.progression import MulticlassSlotRoundingPolicy
 from dnd.scenarios.encounter_assembler import prepare_encounter_recipe
@@ -34,7 +32,6 @@ from dnd.scenarios.encounter_compatibility import (
 from server.api_models import (
     GameCreationAuthoredRosterSelection,
     GameCreationComposeRequest,
-    GameCreationOwnedCharacterControllerOverride,
     GameCreationOwnedCharacterRosterSelection,
     GameCreationRosterSlotSelection,
     GameCreationSavedRosterSelection,
@@ -84,13 +81,8 @@ def _request(
     first_id: UUID,
     second_id: UUID,
     *,
-    default_controller: RosterControllerKind,
+    participant_name: str = "Local Party",
 ) -> GameCreationComposeRequest:
-    default_policy = (
-        "builtin.basic"
-        if default_controller is RosterControllerKind.AI
-        else None
-    )
     return GameCreationComposeRequest(
         title="Two Character Test",
         roster_slots=(
@@ -99,21 +91,10 @@ def _request(
                 roster=GameCreationOwnedCharacterRosterSelection(
                     title="Owned Party",
                     character_ids=(first_id, second_id),
-                    member_controller_overrides=(
-                        GameCreationOwnedCharacterControllerOverride(
-                            character_id=second_id,
-                            controller="ai",
-                            policy_id="builtin.basic",
-                        ),
-                    ),
                 ),
                 faction_id="players",
                 deployment_zone_id="zone_1",
-                controller_defaults=RosterControllerDefaults(
-                    controller=default_controller,
-                    participant_name="Local Party",
-                    policy_id=default_policy,
-                ),
+                participant_name=participant_name,
             ),
             GameCreationRosterSlotSelection(
                 roster_slot_id="opposition",
@@ -122,11 +103,7 @@ def _request(
                 ),
                 faction_id="opposition",
                 deployment_zone_id="zone_2",
-                controller_defaults=RosterControllerDefaults(
-                    controller=RosterControllerKind.AI,
-                    participant_name="Opposition",
-                    policy_id="builtin.basic",
-                ),
+                participant_name="Opposition",
             ),
         ),
         battlefield_id="battlefield.open_floor_bright",
@@ -137,7 +114,7 @@ def _request(
     )
 
 
-def test_normalization_preserves_two_owned_sources_across_controller_changes(
+def test_normalization_preserves_two_owned_sources_across_participant_changes(
 ) -> None:
     first_id = uuid4()
     second_id = uuid4()
@@ -145,43 +122,37 @@ def test_normalization_preserves_two_owned_sources_across_controller_changes(
         first_id: _snapshot(first_id, "First"),
         second_id: _snapshot(second_id, "Second"),
     }
-    human_recipe, human_report = normalize_encounter_recipe(
+    local_recipe, local_report = normalize_encounter_recipe(
         _request(
             first_id,
             second_id,
-            default_controller=RosterControllerKind.HUMAN,
+            participant_name="Local Party",
         ),
         character_deployments=deployments,
     )
-    codex_recipe, codex_report = normalize_encounter_recipe(
+    remote_recipe, remote_report = normalize_encounter_recipe(
         _request(
             first_id,
             second_id,
-            default_controller=RosterControllerKind.CODEX,
+            participant_name="Remote Party",
         ),
         character_deployments=deployments,
     )
 
-    assert human_report.admitted
-    assert codex_report.admitted
-    human_roster = human_recipe.roster_slots[0].roster
-    codex_roster = codex_recipe.roster_slots[0].roster
-    assert human_roster == codex_roster
-    assert human_roster.recipe_digest == codex_roster.recipe_digest
+    assert local_report.admitted
+    assert remote_report.admitted
+    local_roster = local_recipe.roster_slots[0].roster
+    remote_roster = remote_recipe.roster_slots[0].roster
+    assert local_roster == remote_roster
+    assert local_roster.recipe_digest == remote_roster.recipe_digest
     assert tuple(
         member.source.character_id
-        for member in human_roster.members
+        for member in local_roster.members
         if isinstance(member.source, OwnedCharacterRosterSource)
     ) == (first_id, second_id)
-    assert (
-        human_recipe.roster_slots[0].controller_defaults.controller
-        is RosterControllerKind.HUMAN
-    )
-    assert (
-        codex_recipe.roster_slots[0].controller_defaults.controller
-        is RosterControllerKind.CODEX
-    )
-    assert human_recipe.recipe_digest != codex_recipe.recipe_digest
+    assert local_recipe.roster_slots[0].participant_name == "Local Party"
+    assert remote_recipe.roster_slots[0].participant_name == "Remote Party"
+    assert local_recipe.recipe_digest != remote_recipe.recipe_digest
 
 
 def test_two_owned_characters_materialize_and_preview_from_the_same_recipe(
@@ -196,7 +167,6 @@ def test_two_owned_characters_materialize_and_preview_from_the_same_recipe(
         _request(
             first_id,
             second_id,
-            default_controller=RosterControllerKind.HUMAN,
         ),
         character_deployments=deployments,
     )
@@ -263,7 +233,6 @@ def test_saved_roster_selection_reuses_exact_recipe_and_rejects_stale_identity(
     source_request = _request(
         uuid4(),
         uuid4(),
-        default_controller=RosterControllerKind.HUMAN,
     )
     saved_selection = GameCreationSavedRosterSelection(
         saved_roster_id=record.saved_roster_id,
@@ -315,7 +284,6 @@ def test_portable_closed_hazard_deployment_admits_owned_character_vs_goblins(
     source_request = _request(
         character_id,
         uuid4(),
-        default_controller=RosterControllerKind.HUMAN,
     )
     request = source_request.model_copy(update={
         "title": "Portable Hero vs Goblins",

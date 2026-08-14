@@ -22,7 +22,6 @@ from dnd.core.content.provenance import (
     ContentReviewStatus,
 )
 from dnd.core.content.recipes import ContentRecipe
-from dnd.core.content.registration import scan_module_content_declarations
 from dnd.core.equipment_types import ArmorType, BodyPart
 from dnd.items.apparel_presets import (
     NEURODRAGON_APPAREL_RECIPE_PRESETS,
@@ -438,12 +437,9 @@ def test_neurodragon_apparel_declarations_are_exact_original_possessions() -> No
     assert tuple(
         declaration.ref.content_id for declaration in declarations
     ) == _EXPECTED_CONTENT_IDS
-    discovered = scan_module_content_declarations(armor_definitions)
-
     # Authenticated icon completeness has one owner:
     # test_183_content_icon_bindings.py::test_every_public_builtin_has_no_unresolved_icon_assets.
     for declaration in declarations:
-        assert declaration in discovered
         assert declaration.ref.pack_id == "content.neurodragon"
         assert declaration.ref.content_version == 1
         assert declaration.descriptor.ref == declaration.ref

@@ -21,7 +21,6 @@ from dnd.blocks.equipment import Weapon
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
 from dnd.controller import (
-    CodexController,
     Controller,
     HumanController,
     PassController,
@@ -32,6 +31,7 @@ from dnd.core.base_block import BaseBlock
 from dnd.core.base_object import BaseObject
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.content.recipes import ContentRecipe
+from dnd.core.dice import fixed_dice_faces
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import EventQueue, EventType
 from dnd.core.gridmap import get_map
@@ -125,15 +125,7 @@ def reset_chapter_18_state(width: int = 16, height: int = 10) -> None:
     Encounter._combat_log_listeners.clear()
     event_stream.ensure_attached()
     event_stream._clear_source_journal()
-    _available_actions_cache.clear()
-    session_manager = sim.get_session_manager()
-    session_manager.sessions.clear()
-    session_manager.games.clear()
-    session_manager.active_game = None
-    sim.encounter = None
-    sim._game_session = None
-    sim.combat_task = None
-    sim.paused = True
+    sim.reset()
     get_map().create_rectangle(0, 0, width, height)
 
 
@@ -390,15 +382,15 @@ def test_eb_18_002_turn_lifecycle_builds_context_and_advances_rounds() -> None:
     assert not encounter.combatants[monster.uuid].has_acted_this_round
 
 
-def test_eb_18_003_run_turn_and_advance_until_player_respect_controller_types() -> None:
-    """EB-18-003: controller types drive autonomous turns and player stops."""
+def test_eb_18_003_run_turn_and_advance_until_external_boundary() -> None:
+    """EB-18-003: autonomous turns stop at the external input boundary."""
     reset_chapter_18_state()
     hero, monster = create_book_pair()
     human_controller = HumanController(source_entity_uuid=hero.uuid)
     pass_controller = PassController(source_entity_uuid=monster.uuid)
     encounter = start_ordered_encounter(hero, monster, human_controller, pass_controller, monster)
 
-    result = encounter.advance_until_player()
+    result = encounter.advance_until_external_boundary()
 
     assert result.status == "waiting_for_human"
     assert result.entity_uuid == hero.uuid
@@ -444,32 +436,11 @@ def test_eb_18_019_surprise_blocks_reactions_until_skipped_turn_ends() -> None:
     assert monster.action_economy.reactions.normalized_score == 1
 
 
-def test_eb_18_020_codex_controller_stops_as_external_input_turn() -> None:
-    """EB-18-020: Codex-controlled turns stop for external input."""
-    reset_chapter_18_state()
-    hero, monster = create_book_pair()
-    codex_controller = CodexController(source_entity_uuid=hero.uuid)
-    pass_controller = PassController(source_entity_uuid=monster.uuid)
-    encounter = start_ordered_encounter(hero, monster, codex_controller, pass_controller, monster)
-
-    result = encounter.advance_until_player()
-    context = encounter._build_turn_context(hero)
-
-    assert result.status == "waiting_for_codex"
-    assert result.entity_uuid == hero.uuid
-    assert result.entity_name == "Book Hero"
-    assert encounter.get_current_entity() is hero
-    assert encounter.turn_state == TurnState.IN_PROGRESS
-    assert encounter.combatants[monster.uuid].turn_count == 1
-    assert not codex_controller.can_continue_turn(hero, context)
-    assert codex_controller.get_next_action(hero, context) is None
-
-
 def test_eb_18_034_available_move_paths_preserve_directional_blockers() -> None:
     """EB-18-034: Available Move rows carry legal paths around directional blockers."""
     reset_chapter_18_state(width=8, height=5)
     grid = get_map()
-    melee_actor = create_melee_only_skeleton(name="Book AI Skeleton", position=(1, 1), faction="monsters")
+    melee_actor = create_melee_only_skeleton(name="Book Skeleton", position=(1, 1), faction="monsters")
     distant_target = create_goblin(
         name="Distant Hero",
         position=(5, 1),
@@ -661,6 +632,7 @@ def test_eb_18_007_objective_event_frames_preserve_directional_spatial_fields() 
     encounter = Encounter(name="Objective Frame Encounter", source_entity_uuid=uuid4())
     sim.encounter = encounter
     event_stream.ensure_attached()
+    event_stream.install_prepared_source(encounter)
     cursor = EventQueue.event_cursor()
     changed = get_map().set_tile_directional_border((1, 1), "vision", "east", False)
 
@@ -1265,12 +1237,12 @@ def test_eb_18_013_session_and_game_errors_report_valid_sessions_and_entities() 
         "/session/create",
         json={"player_type": "dragon", "name": "Wrong Door"},
     )
-    assert invalid_player_response.status_code == 400
+    assert invalid_player_response.status_code == 422
     invalid_player = invalid_player_response.json()["detail"]
-    assert invalid_player["code"] == "invalid_player_type"
-    assert invalid_player["player_type"] == "dragon"
-    assert {"human", "codex", "ai"} <= set(invalid_player["valid_player_types"])
-    assert "known_entities" not in invalid_player
+    assert len(invalid_player) == 1
+    assert invalid_player[0]["type"] == "literal_error"
+    assert invalid_player[0]["loc"] == ["body", "player_type"]
+    assert invalid_player[0]["input"] == "dragon"
 
     session_response = client.post(
         "/session/create",
@@ -1317,14 +1289,14 @@ def test_eb_18_032_session_create_ping_and_delete_are_stateful() -> None:
 
     create_response = client.post(
         "/session/create",
-        json={"player_type": "codex"},
+        json={"player_type": "human"},
     )
 
     assert create_response.status_code == 200
     created = create_response.json()
     session_id = created["session_id"]
-    assert created["player_type"] == "codex"
-    assert created["name"] == "Codex"
+    assert created["player_type"] == "human"
+    assert created["name"] == "Human"
 
     ping_response = client.post(f"/session/{session_id}/ping")
     assert ping_response.status_code == 200
@@ -1383,7 +1355,7 @@ def test_eb_18_033_game_join_status_and_session_entities_are_stateful() -> None:
 
     monster_session_response = client.post(
         "/session/create",
-        json={"player_type": "codex", "name": "Monster Player"},
+        json={"player_type": "human", "name": "Monster Player"},
     )
     assert monster_session_response.status_code == 200
     monster_session_id = monster_session_response.json()["session_id"]
@@ -2265,7 +2237,8 @@ def test_downed_external_combatant_does_not_hold_the_turn() -> None:
     assert downed_state.can_take_controlled_turn is False
     assert encounter.combatants[standing.uuid].can_take_controlled_turn is True
 
-    result = encounter.advance_until_player()
+    with fixed_dice_faces(10):
+        result = encounter.advance_until_external_boundary()
 
     assert result.status == "waiting_for_human"
     current = encounter.get_current_entity()

@@ -1,15 +1,10 @@
 """Focused engine contracts for Counterspell and committed spell costs."""
 
-import json
 from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
 
-from server.agent_runtime.observation_journal import (
-    build_observation_snapshot,
-    iter_observation_frames,
-)
 from dnd.actions import SpellAction, SpellEvent
 from dnd.actions_functional import register_spell
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
@@ -26,12 +21,9 @@ from dnd.core.combat_log import (
 from dnd.core.events import Event, EventHandler, EventPhase, EventQueue, EventType, Trigger
 from dnd.core.gridmap import get_map
 from dnd.core.values import BaseValue
-from dnd.conditions import Invisible
 from dnd.classes.sorcerer import QuickenedSpell
 from dnd.blocks.action_economy import RechargeType
-from dnd.controller import PassController
 from dnd.entity import Entity, EntityConfig
-from dnd.encounter import Encounter
 from tests.spell_test_exports import Fireball, FireBolt, MagicMissile
 from dnd.spells.abjuration import (
     CounterspellReactionEvent,
@@ -42,9 +34,6 @@ from dnd.spells.effect_ids import (
     COUNTERSPELL_INTERRUPTION_OUTCOME_CODE,
 )
 from tests.engine.support import reset_combat_state
-from server.event_server import sim
-from server.session import PlayerType
-from tests.manual.test_28_subjective_observation_stream import reset_observation_state
 
 
 def reset_counterspell_state(*, width: int = 40, height: int = 8) -> None:
@@ -797,104 +786,3 @@ def test_handler_model_copy_becomes_a_stored_event_version() -> None:
     assert downstream_messages == ["handler changed it"]
     assert callback_messages == ["declared", "handler changed it"]
     assert len(EventQueue._all_events) == len({row.uuid for row in EventQueue._all_events})
-
-
-def test_subjective_counterspell_log_redacts_an_unseen_reactor() -> None:
-    """Interruption logs preserve visibility without leaking a hidden reactor."""
-    reset_observation_state(width=40, height=10)
-    caster = create_counterspell_caster("Visible Caster", (3, 3), "heroes", {1: 1})
-    spell_target = create_counterspell_caster("Visible Target", (7, 3), "monsters", {})
-    counterspeller = create_counterspell_caster("Hidden Abjurer", (6, 4), "monsters", {3: 1})
-    witness = create_counterspell_caster("Visible Witness", (4, 4), "witnesses", {})
-    unrelated = create_counterspell_caster("Distant Observer", (35, 8), "outsiders", {})
-    counterspeller.add_condition(
-        Invisible(
-            source_entity_uuid=counterspeller.uuid,
-            target_entity_uuid=counterspeller.uuid,
-        ),
-    )
-    register_counterspell_reaction(counterspeller)
-    Entity.update_all_entities_senses(max_distance=10)
-
-    assert counterspeller.uuid not in caster.senses.entities
-    assert caster.uuid in counterspeller.senses.entities
-    assert counterspeller.uuid not in witness.senses.entities
-    assert caster.uuid in witness.senses.entities
-
-    encounter = Encounter(name="Subjective Counterspell", source_entity_uuid=uuid4())
-    for entity in (caster, spell_target, counterspeller, witness, unrelated):
-        encounter.add_combatant(entity, PassController(source_entity_uuid=entity.uuid))
-    encounter.roll_initiative()
-    encounter.initiative_order = [
-        caster.uuid,
-        spell_target.uuid,
-        counterspeller.uuid,
-        witness.uuid,
-        unrelated.uuid,
-    ]
-    encounter.current_turn_index = 0
-    encounter.start_encounter()
-    encounter.start_turn()
-    sim.encounter = encounter
-    game = sim.create_game_session(encounter)
-    manager = sim.get_session_manager()
-
-    session_ids: dict[str, str] = {}
-    for label, entity in (
-        ("caster", caster),
-        ("counterspeller", counterspeller),
-        ("witness", witness),
-        ("unrelated", unrelated),
-    ):
-        session = manager.create_session(PlayerType.AI, f"{label} session")
-        game.add_player(session)
-        game.assign_entity(entity.uuid, session.session_id)
-        session_ids[label] = str(session.session_id)
-
-    snapshots = {
-        label: build_observation_snapshot(session_id, session_manager=manager)
-        for label, session_id in session_ids.items()
-    }
-    assert str(counterspeller.uuid) not in {
-        fact.uuid for fact in snapshots["caster"].known_entities
-    }
-
-    event = MagicMissile(
-        source_entity_uuid=caster.uuid,
-        target_entity_uuid=spell_target.uuid,
-        template=False,
-    ).apply()
-    assert isinstance(event, SpellEvent)
-    assert event.canceled
-
-    interruption_logs: dict[str, list[dict]] = {}
-    for label, session_id in session_ids.items():
-        response = iter_observation_frames(
-            session_id,
-            since=snapshots[label].observation_cursor,
-            limit=0,
-            session_manager=manager,
-        )
-        interruption_logs[label] = [
-            frame.combat_log
-            for frame in response.frames
-            if frame.combat_log is not None
-            and frame.combat_log.get("entry_type") == CombatLogEntryType.SPELL_INTERRUPTION.value
-        ]
-
-    assert len(interruption_logs["caster"]) == 1
-    assert len(interruption_logs["counterspeller"]) == 1
-    assert len(interruption_logs["witness"]) == 1
-    assert interruption_logs["unrelated"] == []
-
-    for label in ("caster", "witness"):
-        serialized = json.dumps(interruption_logs[label])
-        assert counterspeller.name not in serialized
-        assert str(counterspeller.uuid) not in serialized
-        assert interruption_logs[label][0]["source_name"] == "Unknown"
-        assert interruption_logs[label][0]["source_uuid"] == ""
-        assert interruption_logs[label][0]["data"]["outcome_code"] == COUNTERSPELL_INTERRUPTION_OUTCOME_CODE
-
-    own_log = interruption_logs["counterspeller"][0]
-    assert own_log["source_name"] == counterspeller.name
-    assert own_log["source_uuid"] == str(counterspeller.uuid)

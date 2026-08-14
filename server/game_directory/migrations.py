@@ -1929,6 +1929,438 @@ REMOVE_ABANDONED_RATING_STORAGE = Migration(
     ),
 )
 
+REMOVE_AUTOMATION_DIRECTORY_SCHEMA = Migration(
+    version=15,
+    name="remove_automation_directory_schema",
+    requires_foreign_keys_disabled=True,
+    requires_legacy_alter_table=True,
+    statements=(
+        "ALTER TABLE principals RENAME TO principals_with_automation",
+        """
+        CREATE TABLE principals (
+            principal_id TEXT PRIMARY KEY,
+            principal_kind TEXT NOT NULL
+                CHECK (principal_kind IN ('human', 'service')),
+            display_name TEXT NOT NULL CHECK (length(display_name) > 0),
+            credential_hash TEXT,
+            created_at TEXT NOT NULL,
+            last_seen_at TEXT,
+            disabled_at TEXT,
+            metadata_json TEXT NOT NULL,
+            metadata_digest TEXT NOT NULL
+        )
+        """,
+        """
+        INSERT INTO principals
+        SELECT * FROM principals_with_automation
+        """,
+        "DROP TABLE principals_with_automation",
+        "ALTER TABLE game_memberships RENAME TO game_memberships_with_automation",
+        """
+        CREATE TABLE game_memberships (
+            membership_id TEXT PRIMARY KEY,
+            game_id TEXT NOT NULL REFERENCES games(game_id) ON DELETE CASCADE,
+            principal_id TEXT NOT NULL REFERENCES principals(principal_id),
+            role TEXT NOT NULL
+                CHECK (
+                    role IN (
+                        'owner',
+                        'player',
+                        'observer',
+                        'referee',
+                        'administrator'
+                    )
+                ),
+            side_id TEXT,
+            controller_kind TEXT,
+            membership_state TEXT NOT NULL
+                CHECK (
+                    membership_state IN (
+                        'invited',
+                        'active',
+                        'disconnected',
+                        'revoked',
+                        'left'
+                    )
+                ),
+            may_connect INTEGER NOT NULL CHECK (may_connect IN (0, 1)),
+            may_observe_public_state INTEGER NOT NULL
+                CHECK (may_observe_public_state IN (0, 1)),
+            may_observe_subjective_state INTEGER NOT NULL
+                CHECK (may_observe_subjective_state IN (0, 1)),
+            may_control_entities INTEGER NOT NULL
+                CHECK (may_control_entities IN (0, 1)),
+            may_manage_members INTEGER NOT NULL
+                CHECK (may_manage_members IN (0, 1)),
+            may_manage_game INTEGER NOT NULL
+                CHECK (may_manage_game IN (0, 1)),
+            may_view_objective_replay INTEGER NOT NULL
+                CHECK (may_view_objective_replay IN (0, 1)),
+            subjective_source_membership_id TEXT
+                REFERENCES game_memberships(membership_id),
+            authority_epoch INTEGER NOT NULL CHECK (authority_epoch >= 1),
+            joined_at TEXT NOT NULL,
+            disconnected_at TEXT,
+            revoked_at TEXT,
+            left_at TEXT
+        )
+        """,
+        """
+        INSERT INTO game_memberships(
+            membership_id,
+            game_id,
+            principal_id,
+            role,
+            side_id,
+            controller_kind,
+            membership_state,
+            may_connect,
+            may_observe_public_state,
+            may_observe_subjective_state,
+            may_control_entities,
+            may_manage_members,
+            may_manage_game,
+            may_view_objective_replay,
+            subjective_source_membership_id,
+            authority_epoch,
+            joined_at,
+            disconnected_at,
+            revoked_at,
+            left_at
+        )
+        SELECT
+            membership_id,
+            game_id,
+            principal_id,
+            role,
+            side_id,
+            controller_kind,
+            membership_state,
+            may_connect,
+            may_observe_public_state,
+            may_observe_subjective_state,
+            may_control_entities,
+            may_manage_members,
+            may_manage_game,
+            may_view_objective_replay,
+            subjective_source_membership_id,
+            authority_epoch,
+            joined_at,
+            disconnected_at,
+            revoked_at,
+            left_at
+        FROM game_memberships_with_automation
+        """,
+        "DROP TABLE game_memberships_with_automation",
+        """
+        CREATE UNIQUE INDEX active_membership_identity_idx
+        ON game_memberships(game_id, principal_id, role, COALESCE(side_id, ''))
+        WHERE membership_state IN ('invited', 'active', 'disconnected')
+        """,
+        """
+        CREATE INDEX memberships_game_idx
+        ON game_memberships(game_id, membership_state)
+        """,
+        "ALTER TABLE access_grants RENAME TO access_grants_with_automation",
+        """
+        CREATE TABLE access_grants (
+            grant_id TEXT PRIMARY KEY,
+            game_id TEXT NOT NULL REFERENCES games(game_id) ON DELETE CASCADE,
+            membership_id TEXT
+                REFERENCES game_memberships(membership_id) ON DELETE CASCADE,
+            issued_to_principal_id TEXT REFERENCES principals(principal_id),
+            grant_kind TEXT NOT NULL
+                CHECK (
+                    grant_kind IN (
+                        'invite',
+                        'reconnect',
+                        'observe',
+                        'admin'
+                    )
+                ),
+            secret_hash TEXT NOT NULL,
+            scope_json TEXT NOT NULL,
+            scope_digest TEXT NOT NULL,
+            issued_at TEXT NOT NULL,
+            expires_at TEXT,
+            revoked_at TEXT,
+            max_uses INTEGER CHECK (max_uses IS NULL OR max_uses >= 1),
+            uses INTEGER NOT NULL DEFAULT 0 CHECK (uses >= 0),
+            issued_by_principal_id TEXT NOT NULL REFERENCES principals(principal_id)
+        )
+        """,
+        "INSERT INTO access_grants SELECT * FROM access_grants_with_automation",
+        "DROP TABLE access_grants_with_automation",
+        """
+        CREATE INDEX grants_game_kind_idx
+        ON access_grants(game_id, grant_kind, revoked_at)
+        """,
+        "ALTER TABLE attachments RENAME TO attachments_with_automation",
+        """
+        CREATE TABLE attachments (
+            attachment_id TEXT PRIMARY KEY,
+            runtime_session_id TEXT NOT NULL,
+            game_id TEXT NOT NULL REFERENCES games(game_id) ON DELETE CASCADE,
+            membership_id TEXT NOT NULL
+                REFERENCES game_memberships(membership_id) ON DELETE CASCADE,
+            worker_id TEXT NOT NULL REFERENCES workers(worker_id),
+            worker_generation INTEGER NOT NULL CHECK (worker_generation >= 1),
+            client_kind TEXT NOT NULL
+                CHECK (client_kind IN ('neuroclient', 'observer_tool')),
+            client_instance_id TEXT NOT NULL,
+            state TEXT NOT NULL
+                CHECK (
+                    state IN (
+                        'connected',
+                        'disconnected',
+                        'expired',
+                        'revoked'
+                    )
+                ),
+            runtime_token_hash TEXT NOT NULL,
+            connected_at TEXT NOT NULL,
+            last_seen_at TEXT,
+            disconnected_at TEXT,
+            disconnect_reason TEXT,
+            expires_at TEXT,
+            last_event_cursor INTEGER
+                CHECK (last_event_cursor IS NULL OR last_event_cursor >= 0),
+            last_combat_log_cursor INTEGER
+                CHECK (
+                    last_combat_log_cursor IS NULL
+                    OR last_combat_log_cursor >= 0
+                ),
+            authority_epoch INTEGER NOT NULL CHECK (authority_epoch >= 1),
+            UNIQUE (attachment_id, game_id)
+        )
+        """,
+        "INSERT INTO attachments SELECT * FROM attachments_with_automation",
+        "DROP TABLE attachments_with_automation",
+        """
+        CREATE INDEX attachments_membership_idx
+        ON attachments(membership_id, state)
+        """,
+        """
+        CREATE INDEX attachments_reconnect_idx
+        ON attachments(membership_id, connected_at DESC)
+        """,
+        "ALTER TABLE game_artifacts RENAME TO game_artifacts_with_automation",
+        """
+        CREATE TABLE game_artifacts (
+            artifact_id TEXT PRIMARY KEY,
+            game_id TEXT REFERENCES games(game_id) ON DELETE CASCADE,
+            artifact_kind TEXT NOT NULL
+                CHECK (
+                    artifact_kind IN (
+                        'creation_manifest',
+                        'objective_event_history',
+                        'combat_log',
+                        'subjective_transcript',
+                        'terminal_summary',
+                        'replay_bundle',
+                        'subjective_replay_bundle',
+                        'rating_output'
+                    )
+                ),
+            schema_version TEXT NOT NULL,
+            media_type TEXT NOT NULL,
+            uri TEXT NOT NULL,
+            byte_size INTEGER NOT NULL CHECK (byte_size >= 0),
+            content_digest TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            producer_kind TEXT NOT NULL
+                CHECK (
+                    producer_kind IN (
+                        'directory',
+                        'worker',
+                        'evaluator',
+                        'importer'
+                    )
+                ),
+            producer_version TEXT NOT NULL
+        )
+        """,
+        """
+        INSERT INTO game_artifacts
+        SELECT * FROM game_artifacts_with_automation
+        """,
+        "DROP TABLE game_artifacts_with_automation",
+        """
+        CREATE UNIQUE INDEX artifact_content_identity_idx
+        ON game_artifacts(COALESCE(game_id, ''), artifact_kind, content_digest)
+        """,
+        """
+        CREATE UNIQUE INDEX terminal_replay_artifact_kind_idx
+        ON game_artifacts(game_id, artifact_kind)
+        WHERE artifact_kind IN ('replay_bundle', 'subjective_replay_bundle')
+        """,
+    ),
+)
+
+REMOVE_CONTROLLER_DIRECTORY_SCHEMA = Migration(
+    version=16,
+    name="remove_controller_directory_schema",
+    requires_foreign_keys_disabled=True,
+    requires_legacy_alter_table=True,
+    statements=(
+        "ALTER TABLE game_memberships RENAME TO game_memberships_with_controller",
+        """
+        CREATE TABLE game_memberships (
+            membership_id TEXT PRIMARY KEY,
+            game_id TEXT NOT NULL REFERENCES games(game_id) ON DELETE CASCADE,
+            principal_id TEXT NOT NULL REFERENCES principals(principal_id),
+            role TEXT NOT NULL
+                CHECK (
+                    role IN (
+                        'owner',
+                        'player',
+                        'observer',
+                        'referee',
+                        'administrator'
+                    )
+                ),
+            side_id TEXT,
+            membership_state TEXT NOT NULL
+                CHECK (
+                    membership_state IN (
+                        'invited',
+                        'active',
+                        'disconnected',
+                        'revoked',
+                        'left'
+                    )
+                ),
+            may_connect INTEGER NOT NULL CHECK (may_connect IN (0, 1)),
+            may_observe_public_state INTEGER NOT NULL
+                CHECK (may_observe_public_state IN (0, 1)),
+            may_observe_subjective_state INTEGER NOT NULL
+                CHECK (may_observe_subjective_state IN (0, 1)),
+            may_control_entities INTEGER NOT NULL
+                CHECK (may_control_entities IN (0, 1)),
+            may_manage_members INTEGER NOT NULL
+                CHECK (may_manage_members IN (0, 1)),
+            may_manage_game INTEGER NOT NULL
+                CHECK (may_manage_game IN (0, 1)),
+            may_view_objective_replay INTEGER NOT NULL
+                CHECK (may_view_objective_replay IN (0, 1)),
+            subjective_source_membership_id TEXT
+                REFERENCES game_memberships(membership_id),
+            authority_epoch INTEGER NOT NULL CHECK (authority_epoch >= 1),
+            joined_at TEXT NOT NULL,
+            disconnected_at TEXT,
+            revoked_at TEXT,
+            left_at TEXT
+        )
+        """,
+        """
+        INSERT INTO game_memberships(
+            membership_id,
+            game_id,
+            principal_id,
+            role,
+            side_id,
+            membership_state,
+            may_connect,
+            may_observe_public_state,
+            may_observe_subjective_state,
+            may_control_entities,
+            may_manage_members,
+            may_manage_game,
+            may_view_objective_replay,
+            subjective_source_membership_id,
+            authority_epoch,
+            joined_at,
+            disconnected_at,
+            revoked_at,
+            left_at
+        )
+        SELECT
+            membership_id,
+            game_id,
+            principal_id,
+            role,
+            side_id,
+            membership_state,
+            may_connect,
+            may_observe_public_state,
+            may_observe_subjective_state,
+            may_control_entities,
+            may_manage_members,
+            may_manage_game,
+            may_view_objective_replay,
+            subjective_source_membership_id,
+            authority_epoch,
+            joined_at,
+            disconnected_at,
+            revoked_at,
+            left_at
+        FROM game_memberships_with_controller
+        """,
+        "DROP TABLE game_memberships_with_controller",
+        """
+        CREATE UNIQUE INDEX active_membership_identity_idx
+        ON game_memberships(game_id, principal_id, role, COALESCE(side_id, ''))
+        WHERE membership_state IN ('invited', 'active', 'disconnected')
+        """,
+        """
+        CREATE INDEX memberships_game_idx
+        ON game_memberships(game_id, membership_state)
+        """,
+        "ALTER TABLE entity_assignments RENAME TO entity_assignments_with_controller",
+        """
+        CREATE TABLE entity_assignments (
+            assignment_id TEXT PRIMARY KEY,
+            game_id TEXT NOT NULL REFERENCES games(game_id) ON DELETE CASCADE,
+            membership_id TEXT NOT NULL
+                REFERENCES game_memberships(membership_id) ON DELETE CASCADE,
+            entity_uuid TEXT NOT NULL,
+            entity_name TEXT NOT NULL,
+            faction TEXT,
+            side_id TEXT,
+            assigned_at TEXT NOT NULL,
+            released_at TEXT,
+            authority_epoch INTEGER NOT NULL CHECK (authority_epoch >= 1)
+        )
+        """,
+        """
+        INSERT INTO entity_assignments(
+            assignment_id,
+            game_id,
+            membership_id,
+            entity_uuid,
+            entity_name,
+            faction,
+            side_id,
+            assigned_at,
+            released_at,
+            authority_epoch
+        )
+        SELECT
+            assignment_id,
+            game_id,
+            membership_id,
+            entity_uuid,
+            entity_name,
+            faction,
+            side_id,
+            assigned_at,
+            released_at,
+            authority_epoch
+        FROM entity_assignments_with_controller
+        """,
+        "DROP TABLE entity_assignments_with_controller",
+        """
+        CREATE UNIQUE INDEX active_entity_assignment_idx
+        ON entity_assignments(game_id, entity_uuid)
+        WHERE released_at IS NULL
+        """,
+        """
+        CREATE INDEX assignments_membership_idx
+        ON entity_assignments(membership_id, released_at)
+        """,
+    ),
+)
+
 MIGRATIONS: tuple[Migration, ...] = (
     INITIAL_SCHEMA,
     PLAYER_IDENTITIES_AND_CHARACTERS,
@@ -1944,6 +2376,8 @@ MIGRATIONS: tuple[Migration, ...] = (
     ROSTERS_ENCOUNTERS_AND_PLURAL_DEPLOYMENTS,
     STABLE_SAVED_RESOURCE_IDENTITIES,
     REMOVE_ABANDONED_RATING_STORAGE,
+    REMOVE_AUTOMATION_DIRECTORY_SCHEMA,
+    REMOVE_CONTROLLER_DIRECTORY_SCHEMA,
 )
 LATEST_SCHEMA_VERSION = MIGRATIONS[-1].version
 

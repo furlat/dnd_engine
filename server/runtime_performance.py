@@ -1,4 +1,4 @@
-"""Process-level performance policy for latency-sensitive agent runtimes."""
+"""Process-level performance policy for latency-sensitive server runtimes."""
 
 from __future__ import annotations
 
