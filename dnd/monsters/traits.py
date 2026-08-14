@@ -1209,7 +1209,7 @@ class DivineEminenceAction(BaseAction):
         ]
 
     def get_self_setup_profile(self, actor: object) -> Optional[ActionSelfSetupProfile]:
-        """Describe the short-lived radiant weapon setup for AI policy."""
+        """Describe the short-lived radiant weapon setup for decision consumers."""
         if not isinstance(actor, Entity) or actor.get_lowest_spell_slot(1) is None:
             return None
         return ActionSelfSetupProfile(

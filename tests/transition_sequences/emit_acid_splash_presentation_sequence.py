@@ -94,7 +94,7 @@ def _build_production_models() -> tuple[object, object, object, object]:
         )
 
     grid = reset_engine_runtime(grid_size=(4, 2))
-    loaded = bootstrap_content_system(pack_roots=())
+    loaded = bootstrap_content_system()
     installed = SERVER_CONTENT_SYSTEM_RUNTIME.install(loaded)
     _require(
         installed is loaded,

@@ -297,7 +297,7 @@ def test_spell_refs_resolve_in_frozen_registry_and_public_content_catalog() -> N
 
 def test_public_registered_spell_definitions_are_exactly_the_spell_catalog() -> None:
     """A public independent spell cannot exist outside the authored catalog."""
-    loaded = bootstrap_content_system(pack_roots=())
+    loaded = bootstrap_content_system()
     registered_public_spell_refs = {
         declaration.ref.model_dump_json()
         for declaration in loaded.registry.declarations.values()

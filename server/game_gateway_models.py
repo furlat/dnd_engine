@@ -121,11 +121,7 @@ class HostedGameConnection(GatewayModel):
     active_observer_uuid: UUID = Field(
         description="Observer selected for focus within the authorized subjective union.",
     )
-    takeover_claim_uuids: list[UUID] = Field(
-        default_factory=list,
-        description="Controller leases this runtime may keep alive.",
-    )
-    access_mode: Literal["participant", "observer", "agent"] = Field(
+    access_mode: Literal["participant", "observer"] = Field(
         description="Client access mode.",
     )
     authority_epoch: int = Field(ge=1, description="Authority version installed in gateway memory.")
@@ -216,25 +212,3 @@ class ObserveHostedGameResponse(GatewayModel):
     connection: HostedGameConnection = Field(description="Fresh observer runtime connection.")
     reconnect_grant_id: UUID = Field(description="Durable reconnect-grant identity.")
     reconnect_capability: str = Field(description="Reconnect capability returned once.")
-
-
-class CreateAgentGrantRequest(GatewayModel):
-    """Authorize one remote agent for one configured Codex roster member."""
-
-    principal_id: UUID = Field(description="Game administrator issuing the grant.")
-    principal_capability: str = Field(min_length=32, description="Administrator identity capability.")
-    agent_principal_id: UUID = Field(description="Remote agent identity receiving the grant.")
-    roster_slot_id: str = Field(min_length=1)
-    member_id: str = Field(min_length=1)
-
-
-class CreateAgentGrantResponse(GatewayModel):
-    """Remote-agent membership and one-time attachment capability."""
-
-    game: GameRecord = Field(description="Target game.")
-    membership: MembershipRecord = Field(description="Durable remote-agent authority.")
-    runtime_session_id: UUID = Field(description="Existing worker session assigned to the side.")
-    controlled_entity_uuids: list[UUID] = Field(description="Entities assigned to the remote agent.")
-    takeover_claim_id: UUID = Field(description="Controller lease assigned to the remote agent.")
-    grant_id: UUID = Field(description="Agent attachment grant identity.")
-    grant_capability: str = Field(description="Secret redeemed through the normal attachment endpoint.")

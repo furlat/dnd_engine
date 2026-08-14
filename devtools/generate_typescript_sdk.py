@@ -49,6 +49,7 @@ from server.agent_protocol.objective_diagnostics import (
     ObjectiveDiagnosticsSync,
     SubjectiveRenderParityDiagnosticsResponse,
 )
+from server.action_disclosure import ActionBindingSubject
 from server.objective_replay import (
     OBJECTIVE_REPLAY_CONTRACT_HASH,
     OBJECTIVE_REPLAY_CONTRACT_VERSION,
@@ -118,6 +119,7 @@ REPLAY_MODELS = (
 )
 GAME_HISTORY_MODELS = (FinalSummaryRecord,)
 PLAYER_REPLICATION_ALIASES = {
+    "ActionBindingSubject": ActionBindingSubject,
     "SubjectiveWorldPatch": SubjectiveWorldPatch,
     "SubjectivePresentationCue": SubjectivePresentationCue,
     "SubjectiveStreamDelivery": SubjectiveStreamDelivery,

@@ -20,10 +20,7 @@ from dnd.core.content.dependencies import ContentDependencyRelation
 from dnd.core.content.runtime import BehaviorBinding
 from dnd.core.content.item_definitions import ItemPersistencePolicy
 from dnd.core.content.provenance import ContentReviewStatus
-from dnd.core.content.registration import (
-    get_content_declaration,
-    scan_module_content_declarations,
-)
+from dnd.core.content.registration import get_content_declaration
 from dnd.entity import Entity
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.spells.abjuration import MageArmor
@@ -84,9 +81,6 @@ def test_spell_item_declarations_and_recipes_are_exact() -> None:
     )
     assert tuple(recipe.ref for recipe in recipes) == tuple(
         declaration.ref for declaration in declarations
-    )
-    assert set(declarations).issubset(
-        set(scan_module_content_declarations(spell_items)),
     )
     for declaration, recipe in zip(declarations, recipes, strict=True):
         assert declaration.ref.pack_id == "content.neurodragon"
@@ -372,7 +366,7 @@ def test_spell_granting_item_is_a_mechanism_not_a_content_root() -> None:
     assert all(
         declaration.construction is None
         or declaration.construction.factory is not spell_items.SpellGrantingItem
-        for declaration in scan_module_content_declarations(spell_items)
+        for declaration in spell_items.NEURODRAGON_SPELL_ITEM_DECLARATIONS
     )
 
 

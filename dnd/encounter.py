@@ -36,7 +36,6 @@ from dnd.entity import Entity
 from dnd.controller import (
     Controller,
     ControllerExecutionMode,
-    ControllerStepResult,
     TurnContext,
 )
 from dnd.actions_functional import execute_by_index
@@ -1062,15 +1061,11 @@ class Encounter(BaseObject):
         self._advance_turn_slot()
         return end_event
 
-    def advance_until_player(self) -> AdvanceResult:
+    def advance_until_external_boundary(self) -> AdvanceResult:
         """
-        Run AI turns until human/codex turn or encounter ends.
+        Run autonomous turns until external input or encounter completion.
 
-        This method runs through the turn order, executing AI turns
-        automatically and stopping when it reaches a player-controlled
-        entity (human or codex) or when the encounter ends.
-
-        Combat log entries are auto-captured during AI turns via run_turn().
+        Combat log entries are captured by the ordinary encounter event path.
 
         Returns:
             AdvanceResult with status and context for the caller
@@ -1151,10 +1146,7 @@ class Encounter(BaseObject):
                 log_start_index=log_start,
             )
 
-        if controller.execution_mode in {
-            ControllerExecutionMode.EXTERNAL,
-            ControllerExecutionMode.DEFERRED_AUTONOMOUS,
-        }:
+        if controller.execution_mode is ControllerExecutionMode.EXTERNAL:
             actor_uuid = entity.uuid
             if self.turn_state is not TurnState.IN_PROGRESS:
                 self.start_turn()
@@ -1171,10 +1163,6 @@ class Encounter(BaseObject):
                 current_combatant is not None
                 and not current_combatant.can_take_controlled_turn
             ):
-                # The turn-start death save has already resolved above.  A
-                # combatant left dying, stable, or dead owns no decidable turn,
-                # so end it here instead of parking the encounter on an
-                # external controller that can never answer.
                 self.complete_current_turn()
                 status = (
                     "encounter_ended"
@@ -1304,71 +1292,6 @@ class Encounter(BaseObject):
         if entity is None:
             raise ValueError("encounter has no current actor")
         return self._build_turn_context(entity)
-
-    def resolve_deferred_controller_step(
-        self,
-        *,
-        entity_uuid: UUID,
-        controller_uuid: UUID,
-        step: ControllerStepResult,
-    ) -> AdvanceResult:
-        """Commit one already-executed deferred AI step against exact ownership."""
-        log_start = len(self.combat_log)
-        entity = self.get_current_entity()
-        controller = self.get_current_controller()
-        if self.state is not EncounterState.ACTIVE:
-            raise ValueError("encounter is not active")
-        if self.turn_state is not TurnState.IN_PROGRESS:
-            raise ValueError("deferred controller turn is not in progress")
-        if entity is None or entity.uuid != entity_uuid:
-            raise ValueError("deferred controller actor fence changed")
-        if controller is None or controller.uuid != controller_uuid:
-            raise ValueError("deferred controller ownership fence changed")
-        if (
-            controller.execution_mode
-            is not ControllerExecutionMode.DEFERRED_AUTONOMOUS
-        ):
-            raise ValueError("controller is not deferred autonomous")
-
-        if step.event is not None:
-            deaths = self.check_deaths()
-            if deaths and self.state is not EncounterState.ACTIVE:
-                return AdvanceResult(
-                    source_entity_uuid=self.uuid,
-                    status="encounter_ended",
-                    round_number=self.round_number,
-                    turn_index=self.current_turn_index,
-                    log_start_index=log_start,
-                )
-
-        context = self._build_turn_context(entity)
-        should_end = (
-            step.end_turn
-            or not self.can_continue_turn()
-            or not controller.can_continue_turn(entity, context)
-        )
-        if should_end:
-            self.complete_current_turn()
-            return AdvanceResult(
-                source_entity_uuid=self.uuid,
-                status=(
-                    "encounter_ended"
-                    if self.state is EncounterState.ENDED
-                    else "advanced_autonomous"
-                ),
-                round_number=self.round_number,
-                turn_index=self.current_turn_index,
-                log_start_index=log_start,
-            )
-        return AdvanceResult(
-            source_entity_uuid=self.uuid,
-            status="deferred_action_completed",
-            entity_uuid=entity.uuid,
-            entity_name=entity.name,
-            round_number=self.round_number,
-            turn_index=self.current_turn_index,
-            log_start_index=log_start,
-        )
 
     def execute_action(
         self,

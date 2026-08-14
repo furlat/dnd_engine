@@ -93,7 +93,7 @@ import dnd.spells.transmutation as transmutation
 def _installed_content_system() -> None:
     """Install the exact built-in registry used by material transition tests."""
     SERVER_CONTENT_SYSTEM_RUNTIME.install(
-        bootstrap_content_system(pack_roots=()),
+        bootstrap_content_system(),
     )
 
 

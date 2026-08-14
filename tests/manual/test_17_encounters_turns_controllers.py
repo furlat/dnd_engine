@@ -434,7 +434,7 @@ def test_turn_lifecycle_builds_context_and_advances_rounds(capsys) -> None:
 
 
 def test_automated_advance_stops_for_human_controller(capsys) -> None:
-    """AI/pass turns can run forward until an external-input turn begins."""
+    """Pass turns run forward until an external-input turn begins."""
     reset_encounter_tutorial_state()
     hero, monster = create_encounter_pair()
     encounter = start_ordered_encounter(
@@ -445,7 +445,7 @@ def test_automated_advance_stops_for_human_controller(capsys) -> None:
         first_actor=monster,
     )
 
-    result = encounter.advance_until_player()
+    result = encounter.advance_until_external_boundary()
 
     assert result.status == "waiting_for_human"
     assert result.entity_uuid == hero.uuid

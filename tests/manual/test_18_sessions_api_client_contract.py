@@ -255,35 +255,20 @@ def test_player_session_activity_disconnect_and_ping_reconnect() -> None:
     assert session.connection_status is ConnectionStatus.CONNECTED
 
 
-def test_invalid_session_player_type_returns_structured_400() -> None:
-    """Invalid session input remains a client error with correction metadata."""
+def test_invalid_session_player_type_returns_structured_validation_error() -> None:
+    """The narrowed public request rejects retired player kinds at validation."""
     reset_client_api_state()
     response = ApiClient().post(
         "/session/create",
         json={"player_type": "dragon", "name": "Wrong Door"},
     )
 
-    assert response.status_code == 400
-    detail = response.json()["detail"]
-    assert set(detail) == {
-        "code",
-        "message",
-        "session_id",
-        "player_type",
-        "valid_player_types",
-        "known_sessions",
-        "active_game_id",
-        "active_entity_uuid",
-    }
-    assert detail["code"] == "invalid_player_type"
-    assert detail["player_type"] == "dragon"
-    assert detail["session_id"] is None
-    assert set(detail["valid_player_types"]) == {
-        player_type.value for player_type in PlayerType
-    }
-    assert detail["known_sessions"] == []
-    assert detail["active_game_id"] is None
-    assert detail["active_entity_uuid"] is None
+    assert response.status_code == 422
+    errors = response.json()["detail"]
+    assert len(errors) == 1
+    assert errors[0]["type"] == "literal_error"
+    assert errors[0]["loc"] == ["body", "player_type"]
+    assert errors[0]["input"] == "dragon"
 
 
 def make_melee_attack_auto_hit(entity: Entity) -> UUID:
@@ -800,9 +785,13 @@ def test_execute_movement_delivers_typed_trajectory_through_replication() -> Non
     )
     assert payload["success"]
     assert "event_data" not in payload
-    assert movement["trajectory"][0] == [1, 1]
-    assert movement["trajectory"][-1] == target["position"]
-    assert all(isinstance(position, list) for position in movement["trajectory"])
+    assert movement["locomotion_family"] == "walk"
+    assert movement["trajectory_family"] == "path"
+    positions = [anchor["position"] for anchor in movement["anchors"]]
+    assert positions[0] == [1, 1]
+    assert positions[-1] == target["position"]
+    assert all(isinstance(position, list) for position in positions)
+    assert movement["endpoint_outcome"] == "committed"
 
 
 def test_replication_bootstrap_is_one_typed_cursor_aligned_base() -> None:

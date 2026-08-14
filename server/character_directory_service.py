@@ -25,7 +25,7 @@ from dnd.content_system.character_appearance import (
 from dnd.content_system.builtin_character_builds import (
     compose_character_creation_plans,
 )
-from dnd.content_system.pack_loader import LoadedContentSystem
+from dnd.content_system.system import LoadedContentSystem
 from dnd.content_system.starting_apparel_definitions import (
     STARTING_APPAREL_CHOICE_ID,
 )

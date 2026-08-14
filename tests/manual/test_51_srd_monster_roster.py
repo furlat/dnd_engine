@@ -7,6 +7,7 @@ from dnd.core.content.materialization import (
     CreatureDeploymentRole,
     CreaturePossessionMode,
 )
+from dnd.core.gridmap import get_map
 from dnd.monsters.srd_roster import (
     SRD_CREATURE_DECLARATIONS_BY_ID,
     SRD_CREATURE_RECIPES_BY_ID,
@@ -67,6 +68,7 @@ def test_each_srd_monster_builds_with_legal_actions() -> None:
     """Every SRD roster row should create a live entity with action rows."""
     for monster_id in SRD_CREATURE_RECIPES_BY_ID:
         reset_authored_encounter_state()
+        get_map().create_rectangle(0, 0, 3, 3)
         monster = _materialize_roster_fixture(
             monster_id,
             name=f"Roster {monster_id}",

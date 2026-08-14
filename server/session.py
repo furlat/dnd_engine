@@ -14,8 +14,6 @@ class PlayerType(str, Enum):
     """Type of player controlling entities."""
 
     HUMAN = "human"
-    CODEX = "codex"
-    AI = "ai"
     OBSERVER = "observer"
 
 
@@ -280,7 +278,7 @@ class SessionManager:
         Create a new player session.
 
         Args:
-            player_type: HUMAN, CODEX, or AI
+            player_type: HUMAN or OBSERVER
             name: Display name (defaults to player_type if not provided)
 
         Returns:

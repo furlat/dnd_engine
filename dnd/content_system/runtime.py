@@ -5,7 +5,7 @@ from __future__ import annotations
 from uuid import UUID
 
 from dnd.content_system.behavior_bindings import BehaviorBinder
-from dnd.content_system.pack_loader import LoadedContentSystem
+from dnd.content_system.system import LoadedContentSystem
 from dnd.content_system.spatial_effect_transitions import (
     FrozenSpatialEffectInteractionGateway,
 )

@@ -42,7 +42,7 @@ from server.content_catalog import build_public_content_catalog
 @pytest.fixture(scope="module")
 def loaded_content():
     """Return one frozen built-in content system for this contract suite."""
-    return bootstrap_content_system(pack_roots=())
+    return bootstrap_content_system()
 
 
 def _applied_refs(

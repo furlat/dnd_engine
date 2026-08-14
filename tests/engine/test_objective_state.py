@@ -90,6 +90,7 @@ def test_objective_game_state_preserves_entities_tiles_and_floor_object_state(
         "min_y": 0,
         "max_x": 2,
         "max_y": 1,
+        "connectors": [],
     }
     assert {(tile.x, tile.y) for tile in state.grid.tiles} == {
         (0, 0),

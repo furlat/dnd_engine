@@ -64,7 +64,7 @@ def _materialize_field_kit(
     )
 
 
-def test_content_pack_module_exposes_expected_surfaces(capsys) -> None:
+def test_builtin_extension_module_exposes_expected_surfaces(capsys) -> None:
     """The extension module exposes behavior and canonical recipe surfaces."""
     source_uuid = uuid4()
     condition = FieldFocus(source_entity_uuid=source_uuid, target_entity_uuid=source_uuid)
@@ -365,7 +365,7 @@ def test_floor_object_use_action_comes_from_nearby_sensed_item(capsys) -> None:
     assert capsys.readouterr().out == "\n".join(expected_lines) + "\n"
 
 
-def test_actor_and_scene_factories_compose_the_content_pack(capsys) -> None:
+def test_actor_and_scene_factories_compose_the_builtin_extension(capsys) -> None:
     """Factory functions can assemble custom content into playable scenes."""
     reset_content_extension_state()
     medic, ally, floor_kit = create_field_training_scene()

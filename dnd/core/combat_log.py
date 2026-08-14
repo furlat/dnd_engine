@@ -303,6 +303,7 @@ class MovementLogData(BaseModel):
     """Structured movement data for programmatic access.
 
     Attributes:
+        movement_type: Authored movement-root family.
         entity_name: Display name of the moving entity.
         entity_uuid: UUID string of the moving entity.
         start_position: Starting grid position.
@@ -310,11 +311,24 @@ class MovementLogData(BaseModel):
         path: Path cells traversed by the movement.
         distance_feet: Movement distance in feet.
         movement_cost: Action-economy movement cost in feet.
+        start_elevation_feet: Support elevation at the voluntary start.
+        requested_end_elevation_feet: Accepted elevation at a requested landing.
+        end_elevation_feet: Support elevation at the voluntary endpoint.
         requested_end_position: Destination requested before partial termination.
         objective_end_position: Actual position after synchronous child displacement.
         termination_reason: Machine-readable reason movement ended.
         controller_revalidation: Whether a committed step required a new decision.
         controller_revalidation_reason: Subjective change requiring that decision.
+        connector_uuid: Encounter-local connector identity.
+        connector_authored_id: Stable authored connector identity.
+        connector_kind: Authored connector presentation family.
+        connector_presentation_key: Authored semantic presentation key.
+        connector_revision: Accepted connector revision.
+        connector_digest: Digest authenticating the accepted connector facts.
+        connector_provocation_policy: Accepted source-exit reaction policy.
+        connector_action_cost_type: Optional nonmovement cost channel.
+        connector_action_cost_amount: Amount debited from the action channel.
+        connector_bidirectional: Accepted connector directionality.
     """
 
     movement_type: Literal["move", "jump", "connector"] = Field(
@@ -376,11 +390,28 @@ class MovementLogData(BaseModel):
         default=None,
         description="Authored semantic presentation key.",
     )
-    connector_revision: Optional[int] = Field(default=None, ge=1)
-    connector_digest: Optional[str] = Field(default=None)
-    connector_provocation_policy: Optional[str] = Field(default=None)
-    connector_action_cost_type: Optional[str] = Field(default=None)
-    connector_action_cost_amount: int = Field(default=0, ge=0)
+    connector_revision: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Accepted connector revision.",
+    )
+    connector_digest: Optional[str] = Field(
+        default=None,
+        description="Digest authenticating the accepted connector facts.",
+    )
+    connector_provocation_policy: Optional[str] = Field(
+        default=None,
+        description="Accepted source-exit reaction policy.",
+    )
+    connector_action_cost_type: Optional[str] = Field(
+        default=None,
+        description="Optional actions or bonus-actions debit channel.",
+    )
+    connector_action_cost_amount: int = Field(
+        default=0,
+        ge=0,
+        description="Amount debited from the optional action channel.",
+    )
     connector_bidirectional: Optional[bool] = Field(
         default=None,
         description="Accepted connector directionality at declaration.",

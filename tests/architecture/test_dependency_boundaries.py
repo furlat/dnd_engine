@@ -18,7 +18,7 @@ from typing import Iterable
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
-PRODUCTION_ROOT_NAMES = ("dnd", "server", "ai")
+PRODUCTION_ROOT_NAMES = ("dnd", "server")
 SUPPLEMENTAL_SOURCE_ROOT_NAMES = ("tests", "devtools")
 PROJECT_PACKAGE_NAMES = frozenset(PRODUCTION_ROOT_NAMES)
 
@@ -124,15 +124,15 @@ CONTENT_CONTRACT_ALLOWED_NEUTRAL_DEPENDENCIES = frozenset({
     "dnd.core.saving_throw_types",
     "dnd.core.senses",
     "dnd.core.spatial_effect_types",
+    "dnd.core.traversal_connectors",
+    "dnd.core.world_edges",
 })
-CONTENT_PACK_LOADER_MODULE = "dnd.content_system.pack_loader"
-CONTENT_PACK_IMPORT_BOUNDARY_MODULE = "dnd.content_system.import_boundary"
-CONTENT_PACK_IMPORT_FUNCTION = "import_content_pack_module"
-
 WORLD_CONTRACT_ALLOWED_PROJECT_DEPENDENCIES = frozenset({
     "dnd.core.equipment_types",
     "dnd.core.life_types",
     "dnd.core.senses",
+    "dnd.core.traversal_connectors",
+    "dnd.core.world_edges",
 })
 
 MECHANISM_MODULES = frozenset({
@@ -722,34 +722,7 @@ def test_production_has_no_function_local_or_dynamic_project_imports() -> None:
         for reference in _import_references()
         if reference.function_local and not reference.dynamic
     ]
-    boundary = _source_modules().get(CONTENT_PACK_IMPORT_BOUNDARY_MODULE)
-    approved_dynamic_finding = (
-        (
-            boundary.path,
-            next(
-                node.lineno
-                for node in ast.walk(boundary.tree)
-                if isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Attribute)
-                and isinstance(node.func.value, ast.Name)
-                and node.func.value.id == "importlib"
-                and node.func.attr == "import_module"
-            ),
-            "importlib.import_module target is not a string literal and "
-            "cannot be proven external",
-        )
-        if boundary is not None
-        else None
-    )
-    dynamic_violations = [
-        violation
-        for violation in _dynamic_import_violations()
-        if (
-            violation.path,
-            violation.line,
-            violation.detail,
-        ) != approved_dynamic_finding
-    ]
+    dynamic_violations = list(_dynamic_import_violations())
     messages: list[str] = []
     if local_imports:
         messages.append(
@@ -768,118 +741,6 @@ def test_production_has_no_function_local_or_dynamic_project_imports() -> None:
             )
         )
     assert not messages, "\n\n".join(messages)
-
-
-def test_content_pack_import_boundary_is_one_exact_function_and_caller() -> None:
-    """One tiny audited function is the sole dynamic import primitive."""
-    modules = _source_modules()
-    assert CONTENT_PACK_IMPORT_BOUNDARY_MODULE in modules
-    boundary = modules[CONTENT_PACK_IMPORT_BOUNDARY_MODULE]
-    loader = modules[CONTENT_PACK_LOADER_MODULE]
-
-    non_docstring_body = [
-        node
-        for node in boundary.tree.body
-        if not (
-            isinstance(node, ast.Expr)
-            and isinstance(node.value, ast.Constant)
-            and isinstance(node.value.value, str)
-        )
-    ]
-    assert len(non_docstring_body) == 4
-    assert (
-        isinstance(non_docstring_body[0], ast.ImportFrom)
-        and non_docstring_body[0].module == "__future__"
-        and [alias.name for alias in non_docstring_body[0].names]
-        == ["annotations"]
-    )
-    assert (
-        isinstance(non_docstring_body[1], ast.Import)
-        and [alias.name for alias in non_docstring_body[1].names]
-        == ["importlib"]
-    )
-    assert (
-        isinstance(non_docstring_body[2], ast.ImportFrom)
-        and non_docstring_body[2].module == "types"
-        and [alias.name for alias in non_docstring_body[2].names]
-        == ["ModuleType"]
-    )
-    function = non_docstring_body[3]
-    assert isinstance(function, ast.FunctionDef)
-    assert function.name == CONTENT_PACK_IMPORT_FUNCTION
-    assert [argument.arg for argument in function.args.args] == ["module_name"]
-    assert function.args.posonlyargs == []
-    assert function.args.kwonlyargs == []
-    assert function.args.vararg is None
-    assert function.args.kwarg is None
-    assert len(function.body) == 1
-    returned = function.body[0]
-    assert isinstance(returned, ast.Return)
-    assert isinstance(returned.value, ast.Call)
-    assert (
-        isinstance(returned.value.func, ast.Attribute)
-        and isinstance(returned.value.func.value, ast.Name)
-        and returned.value.func.value.id == "importlib"
-        and returned.value.func.attr == "import_module"
-    )
-    assert (
-        len(returned.value.args) == 1
-        and isinstance(returned.value.args[0], ast.Name)
-        and returned.value.args[0].id == "module_name"
-        and returned.value.keywords == []
-    )
-
-    boundary_imports = [
-        (source_module.name, node)
-        for source_module in modules.values()
-        for node in source_module.tree.body
-        if isinstance(node, ast.ImportFrom)
-        and node.module == CONTENT_PACK_IMPORT_BOUNDARY_MODULE
-    ]
-    assert len(boundary_imports) == 1
-    importer_name, boundary_import = boundary_imports[0]
-    assert importer_name == CONTENT_PACK_LOADER_MODULE
-    assert [
-        (alias.name, alias.asname)
-        for alias in boundary_import.names
-    ] == [(CONTENT_PACK_IMPORT_FUNCTION, None)]
-
-    callers = [
-        (source_module.name, node)
-        for source_module in modules.values()
-        for node in ast.walk(source_module.tree)
-        if isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Name)
-        and node.func.id == CONTENT_PACK_IMPORT_FUNCTION
-    ]
-    assert len(callers) == 1
-    assert callers[0][0] == CONTENT_PACK_LOADER_MODULE
-
-    loader_importlib_imports = [
-        node
-        for node in loader.tree.body
-        if (
-            isinstance(node, ast.Import)
-            and any(alias.name == "importlib" for alias in node.names)
-        )
-        or (
-            isinstance(node, ast.ImportFrom)
-            and node.module == "importlib"
-            and any(alias.name == "import_module" for alias in node.names)
-        )
-    ]
-    assert loader_importlib_imports == []
-
-    references, violations = _dynamic_import_findings(boundary)
-    assert references == []
-    assert len(violations) == 1
-    assert violations[0].line == returned.lineno
-    assert violations[0].detail == (
-        "importlib.import_module target is not a string literal and cannot be "
-        "proven external"
-    )
-
-    assert list(_dynamic_import_violations()) == violations
 
 
 def test_active_python_has_no_function_local_imports() -> None:
@@ -961,10 +822,7 @@ def test_dependency_direction_is_respected() -> None:
     for reference in _import_references():
         importer_root = _project_root_name(reference.importer)
         target_root = _project_root_name(reference.target)
-        if importer_root == "dnd" and target_root in {"server", "ai"}:
-            violations.append(reference)
-            continue
-        if importer_root == "server" and target_root == "ai":
+        if importer_root == "dnd" and target_root == "server":
             violations.append(reference)
             continue
         if reference.importer == "dnd.entity" and any(
@@ -974,50 +832,6 @@ def test_dependency_direction_is_respected() -> None:
             violations.append(reference)
     assert not violations, (
         "Dependency direction violations:\n" + _format_import_references(violations)
-    )
-
-
-def test_event_server_import_does_not_load_client_facing_ai_package() -> None:
-    """Importing the server in a fresh process must not import any ``ai`` module."""
-    marker = "__DND_ARCH_AI_MODULES__="
-    script = (
-        "import json, sys\n"
-        "import server.event_server\n"
-        "loaded = sorted(name for name in sys.modules "
-        "if name == 'ai' or name.startswith('ai.'))\n"
-        f"print({marker!r} + json.dumps(loaded))\n"
-    )
-    try:
-        completed = subprocess.run(
-            [sys.executable, "-c", script],
-            cwd=REPOSITORY_ROOT,
-            capture_output=True,
-            text=True,
-            timeout=30,
-            check=False,
-        )
-    except subprocess.TimeoutExpired as error:
-        raise AssertionError(
-            "Fresh import of server.event_server exceeded the 30-second isolation timeout"
-        ) from error
-
-    assert completed.returncode == 0, (
-        "Fresh import of server.event_server failed before isolation could be checked:\n"
-        f"stdout:\n{completed.stdout}\n"
-        f"stderr:\n{completed.stderr}"
-    )
-    marker_lines = [
-        line for line in completed.stdout.splitlines() if line.startswith(marker)
-    ]
-    assert len(marker_lines) == 1, (
-        "Fresh import did not emit exactly one AI isolation result:\n"
-        f"stdout:\n{completed.stdout}\n"
-        f"stderr:\n{completed.stderr}"
-    )
-    loaded_ai_modules = json.loads(marker_lines[0][len(marker):])
-    assert loaded_ai_modules == [], (
-        "Importing server.event_server loaded client-facing ai modules:\n- "
-        + "\n- ".join(loaded_ai_modules)
     )
 
 
@@ -1173,7 +987,7 @@ def test_cold_content_contract_imports_do_not_load_gameplay_or_server_layers() -
         "import dnd.core.content.origin_support\n"
         "import dnd.core.content.runtime\n"
         "import dnd.core.content.durable_characters\n"
-        "forbidden = ('ai', 'server', 'dnd.entity', 'dnd.items', "
+        "forbidden = ('server', 'dnd.entity', 'dnd.items', "
         "'dnd.monsters', 'dnd.actions', 'dnd.conditions', 'dnd.spells')\n"
         "loaded = sorted(name for name in sys.modules if any("
         "name == prefix or name.startswith(prefix + '.') for prefix in forbidden))\n"

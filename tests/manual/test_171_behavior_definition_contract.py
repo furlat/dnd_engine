@@ -2,14 +2,11 @@
 
 from __future__ import annotations
 
-import sys
-from types import ModuleType
-
 import pytest
 from pydantic import BaseModel, ConfigDict
 
 import dnd.conditions as condition_module
-from dnd.content_system.pack_loader import LoadedContentSystem
+from dnd.content_system.system import LoadedContentSystem
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.content.dependencies import (
     ContentDependency,
@@ -42,7 +39,6 @@ from dnd.core.content.registration import (
     content_factory,
     get_content_declaration,
     item_factory,
-    scan_module_content_declarations,
 )
 from dnd.core.content.registry import (
     ContentRegistryBuilder,
@@ -142,12 +138,7 @@ def _registry(*definitions: object):
     builder.add_source(_SOURCE)
     for definition in definitions:
         builder.add_declaration(get_content_declaration(definition))
-    return builder.freeze(
-        pack_dependencies={
-            "fixture.behaviors": frozenset({"fixture.items"}),
-            "fixture.items": frozenset({"fixture.behaviors"}),
-        },
-    )
+    return builder.freeze()
 
 
 def test_behavior_identity_resolves_but_is_not_materializable() -> None:
@@ -241,55 +232,7 @@ def test_construction_dependency_cannot_target_metadata_only_definition() -> Non
     builder.add_declaration(behavior)
 
     with pytest.raises(ValueError, match="metadata-only"):
-        builder.freeze(
-            pack_dependencies={
-                "fixture.items": frozenset({"fixture.behaviors"}),
-                "fixture.behaviors": frozenset(),
-            },
-        )
-
-
-def test_cross_pack_behavior_dependency_requires_manifest_edge() -> None:
-    item = get_content_declaration(_build_clockwork_flask)
-    behavior = get_content_declaration(_DrinkClockworkFlask).model_copy(
-        update={
-            "dependencies": (
-                ContentDependency(
-                    relation=ContentDependencyRelation.CREATES_ITEM,
-                    target_ref=item.ref,
-                ),
-            ),
-        },
-    )
-    builder = ContentRegistryBuilder()
-    builder.add_source(_SOURCE)
-    builder.add_declaration(item)
-    builder.add_declaration(behavior)
-
-    with pytest.raises(ValueError, match="without a declared pack dependency"):
-        builder.freeze(
-            pack_dependencies={
-                "fixture.items": frozenset(),
-                "fixture.behaviors": frozenset(),
-            },
-        )
-
-
-def test_scanner_discovers_local_behavior_declarations_only() -> None:
-    fixture_module = ModuleType("fixture_imported_behavior")
-    setattr(fixture_module, "imported_behavior", _DrinkClockworkFlask)
-    sys.modules[fixture_module.__name__] = fixture_module
-    try:
-        assert scan_module_content_declarations(fixture_module) == ()
-    finally:
-        del sys.modules[fixture_module.__name__]
-
-    local = scan_module_content_declarations(sys.modules[__name__])
-    assert {row.ref.identity_key for row in local} == {
-        get_content_declaration(_DrinkClockworkFlask).ref.identity_key,
-        get_content_declaration(_ClockworkFlaskConsumed).ref.identity_key,
-        get_content_declaration(_build_clockwork_flask).ref.identity_key,
-    }
+        builder.freeze()
 
 
 def test_public_behavior_catalog_is_code_free_and_has_no_parameter_schema() -> None:
@@ -300,7 +243,6 @@ def test_public_behavior_catalog_is_code_free_and_has_no_parameter_schema() -> N
     )
     loaded = LoadedContentSystem(
         registry=registry,
-        packs=(),
         built_in_artifact_digest="a" * 64,
         content_set_digest="b" * 64,
     )

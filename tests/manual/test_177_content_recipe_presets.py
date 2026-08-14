@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import ast
-import sys
 from pathlib import Path
-from types import ModuleType
 from uuid import uuid4
 
 import pytest
@@ -20,11 +18,7 @@ from dnd.core.content.descriptors import (
     ContentPresentation,
     ContentVisibility,
 )
-from dnd.core.content.recipe_presets import (
-    CONTENT_RECIPE_PRESETS_EXPORT,
-    ContentRecipePreset,
-    scan_module_content_recipe_presets,
-)
+from dnd.core.content.recipe_presets import ContentRecipePreset
 from dnd.core.content.recipes import ContentRecipe
 from dnd.core.content.registry import ContentRegistryBuilder
 from dnd.items.armors import ROBES_DECLARATION, ROBES_REF
@@ -105,9 +99,7 @@ def test_registry_resolves_one_preset_and_validates_typed_parameters() -> None:
     builder = _builder()
     builder.add_recipe_preset(preset)
 
-    registry = builder.freeze(
-        pack_dependencies={"content.neurodragon": frozenset()},
-    )
+    registry = builder.freeze()
 
     assert registry.resolve_recipe_preset(preset.ref) == preset
     assert registry.recipe_presets[preset.ref.identity_key] == preset
@@ -121,9 +113,7 @@ def test_registry_rejects_unknown_parameters_and_recipe_aliases() -> None:
     builder = _builder()
     builder.add_recipe_preset(_red_robe_preset(recipe=invalid_recipe))
     with pytest.raises(ValidationError, match="unknown_visual_switch"):
-        builder.freeze(
-            pack_dependencies={"content.neurodragon": frozenset()},
-        )
+        builder.freeze()
 
     first = _red_robe_preset()
     alias = _red_robe_preset(
@@ -134,31 +124,14 @@ def test_registry_rejects_unknown_parameters_and_recipe_aliases() -> None:
     builder.add_recipe_preset(first)
     builder.add_recipe_preset(alias)
     with pytest.raises(ValueError, match="are aliases"):
-        builder.freeze(
-            pack_dependencies={"content.neurodragon": frozenset()},
-        )
+        builder.freeze()
 
 
-def test_cross_pack_preset_requires_dependency_and_cannot_widen_visibility() -> None:
+def test_preset_namespace_is_independent_and_cannot_widen_visibility() -> None:
     cross_pack = _red_robe_preset(pack_id="custom.flavor")
     builder = _builder()
     builder.add_recipe_preset(cross_pack)
-    with pytest.raises(ValueError, match="without a declared pack dependency"):
-        builder.freeze(
-            pack_dependencies={
-                "content.neurodragon": frozenset(),
-                "custom.flavor": frozenset(),
-            },
-        )
-
-    builder = _builder()
-    builder.add_recipe_preset(cross_pack)
-    registry = builder.freeze(
-        pack_dependencies={
-            "content.neurodragon": frozenset(),
-            "custom.flavor": frozenset({"content.neurodragon"}),
-        },
-    )
+    registry = builder.freeze()
     assert registry.resolve_recipe_preset(cross_pack.ref) == cross_pack
 
     hidden_target = ROBES_DECLARATION.model_copy(
@@ -178,26 +151,7 @@ def test_cross_pack_preset_requires_dependency_and_cannot_widen_visibility() -> 
     builder.add_declaration(hidden_target)
     builder.add_recipe_preset(_red_robe_preset())
     with pytest.raises(ValueError, match="more visible"):
-        builder.freeze(
-            pack_dependencies={"content.neurodragon": frozenset()},
-        )
-
-
-def test_pack_scanner_reads_only_the_explicit_preset_tuple() -> None:
-    preset = _red_robe_preset()
-    fixture_module = ModuleType("fixture_recipe_presets")
-    setattr(fixture_module, "imported_but_not_exported", preset)
-    sys.modules[fixture_module.__name__] = fixture_module
-    try:
-        assert scan_module_content_recipe_presets(fixture_module) == ()
-        setattr(
-            fixture_module,
-            CONTENT_RECIPE_PRESETS_EXPORT,
-            (preset,),
-        )
-        assert scan_module_content_recipe_presets(fixture_module) == (preset,)
-    finally:
-        del sys.modules[fixture_module.__name__]
+        builder.freeze()
 
 
 def test_builtin_apparel_preset_inventory_is_exact_and_cataloged() -> None:

@@ -54,8 +54,6 @@ _ROOT = Path(__file__).resolve().parents[2]
 _PRODUCTION_ROOTS = (
     _ROOT / "dnd",
     _ROOT / "server",
-    _ROOT / "ai",
-    _ROOT / "custom_ai",
 )
 
 

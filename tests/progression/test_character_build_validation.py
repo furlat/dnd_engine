@@ -14,7 +14,7 @@ from dnd.content_system.character_build_validation import (
     CharacterBuildValidator,
 )
 from dnd.content_system.character_appearance import FIGHTER_HUMAN_APPEARANCE
-from dnd.content_system.pack_loader import LoadedContentSystem
+from dnd.content_system.system import LoadedContentSystem
 from dnd.core.content.descriptors import (
     ContentDescriptor,
     ContentDescriptorSpec,
@@ -445,7 +445,6 @@ def _fixture() -> _Fixture:
     return _Fixture(
         loaded=LoadedContentSystem(
             registry=registry,
-            packs=(),
             built_in_artifact_digest="b" * 64,
             content_set_digest=_CONTENT_SET_DIGEST,
         ),
@@ -473,7 +472,6 @@ def _replace_loaded_declaration(
             recipe_presets=fixture.loaded.registry.recipe_presets,
             sources=fixture.loaded.registry.sources,
         ),
-        packs=fixture.loaded.packs,
         built_in_artifact_digest=fixture.loaded.built_in_artifact_digest,
         content_set_digest=fixture.loaded.content_set_digest,
     )
@@ -586,7 +584,6 @@ def _with_sorcerer_prerequisite(
             recipe_presets={},
             sources={},
         ),
-        packs=(),
         built_in_artifact_digest="b" * 64,
         content_set_digest=_CONTENT_SET_DIGEST,
     )
@@ -914,7 +911,6 @@ def test_spell_replacement_schedule_derives_the_final_ordered_spell_state() -> N
             recipe_presets={},
             sources={},
         ),
-        packs=(),
         built_in_artifact_digest="b" * 64,
         content_set_digest=_CONTENT_SET_DIGEST,
     )
@@ -1052,7 +1048,6 @@ def test_schedule_keeps_subclass_selected_ref_and_asi_sources_distinct() -> None
             recipe_presets={},
             sources={},
         ),
-        packs=(),
         built_in_artifact_digest="b" * 64,
         content_set_digest=_CONTENT_SET_DIGEST,
     )
@@ -1195,7 +1190,6 @@ def test_fighting_style_choices_must_be_unique_across_class_levels() -> None:
             recipe_presets={},
             sources={},
         ),
-        packs=(),
         built_in_artifact_digest="b" * 64,
         content_set_digest=_CONTENT_SET_DIGEST,
     )
@@ -1305,7 +1299,6 @@ def test_one_advancement_slot_accepts_exactly_one_asi_or_feat_choice() -> None:
             recipe_presets={},
             sources={},
         ),
-        packs=(),
         built_in_artifact_digest="b" * 64,
         content_set_digest=_CONTENT_SET_DIGEST,
     )
@@ -1419,7 +1412,6 @@ def test_variant_parent_and_subclass_parent_are_exact() -> None:
             recipe_presets={},
             sources={},
         ),
-        packs=(),
         built_in_artifact_digest="b" * 64,
         content_set_digest=_CONTENT_SET_DIGEST,
     )
@@ -1455,7 +1447,6 @@ def test_required_unexpected_and_disallowed_choices_are_reported() -> None:
             recipe_presets={},
             sources={},
         ),
-        packs=(),
         built_in_artifact_digest="b" * 64,
         content_set_digest=_CONTENT_SET_DIGEST,
     )
@@ -1618,7 +1609,6 @@ def test_prepared_spell_rank_is_bounded_by_its_own_class_source() -> None:
             recipe_presets={},
             sources={},
         ),
-        packs=(),
         built_in_artifact_digest="b" * 64,
         content_set_digest=_CONTENT_SET_DIGEST,
     )

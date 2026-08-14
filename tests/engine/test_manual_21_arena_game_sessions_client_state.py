@@ -35,12 +35,7 @@ STANDARD_ROSTER_SLOTS: list[dict[str, object]] = [
         },
         "faction_id": "heroes",
         "deployment_zone_id": "zone_1",
-        "controller_defaults": {
-            "controller": "human",
-            "participant_name": "Tutorial Player",
-            "policy_id": None,
-            "member_overrides": [],
-        },
+        "participant_name": "Tutorial Player",
     },
     {
         "roster_slot_id": "opposition",
@@ -50,12 +45,7 @@ STANDARD_ROSTER_SLOTS: list[dict[str, object]] = [
         },
         "faction_id": "monsters",
         "deployment_zone_id": "zone_2",
-        "controller_defaults": {
-            "controller": "ai",
-            "participant_name": "Native AI",
-            "policy_id": "builtin.basic",
-            "member_overrides": [],
-        },
+        "participant_name": "Opposition",
     },
 ]
 
@@ -263,7 +253,7 @@ def start_joined_human_arena(
     return client, session_id, hero_uuid
 
 
-def test_standard_arena_composes_map_hero_monsters_environment_and_controllers() -> None:
+def test_standard_arena_composes_map_hero_monsters_and_environment() -> None:
     """Canonical creation composes the detailed standard playable scene."""
     reset_live_game_tutorial_state()
     client = TestClient(app)
@@ -304,10 +294,10 @@ def test_standard_arena_composes_map_hero_monsters_environment_and_controllers()
     assert warrior_controller is not None
     assert archer_controller is not None
     assert warlock_controller is not None
-    assert hero_controller.controller_type == "human"
-    assert warrior_controller.controller_type == "native_ai"
-    assert archer_controller.controller_type == "native_ai"
-    assert warlock_controller.controller_type == "native_ai"
+    assert hero_controller.controller_type == "pass"
+    assert warrior_controller.controller_type == "pass"
+    assert archer_controller.controller_type == "pass"
+    assert warlock_controller.controller_type == "pass"
 
     assert equipped_item_name(hero, WeaponSlot.MELEE_MAIN) == "Shortsword"
     assert equipped_item_name(hero, WeaponSlot.RANGED_MAIN) == "Longbow"
@@ -629,24 +619,13 @@ def test_jump_executes_through_canonical_action_and_replication_routes() -> None
         if cue["kind"] == "movement"
         and cue["entity_uuid"] == hero_uuid
     ]
-    assert [
-        cue["path_start_index"]
-        for cue in movement_cues
-    ] == list(range(len(movement_cues)))
-    assert all(
-        cue["path_total_steps"] == len(movement_cues)
-        and len(cue["trajectory"]) == 2
-        for cue in movement_cues
-    )
-    assert movement_cues[0]["trajectory"][0] == list(initial_position)
-    assert movement_cues[-1]["trajectory"][-1] == target["position"]
-    assert all(
-        previous["trajectory"][-1] == current["trajectory"][0]
-        for previous, current in zip(
-            movement_cues,
-            movement_cues[1:],
-            strict=False,
-        )
-    )
+    assert len(movement_cues) == 1
+    assert movement_cues[0]["locomotion_family"] == "jump"
+    assert movement_cues[0]["trajectory_family"] == "direct_arc"
+    assert [anchor["position"] for anchor in movement_cues[0]["anchors"]] == [
+        list(initial_position),
+        target["position"],
+    ]
+    assert movement_cues[0]["endpoint_outcome"] == "committed"
     assert len(logs) == 1
     assert logs[0]["entry_type"] == "movement"

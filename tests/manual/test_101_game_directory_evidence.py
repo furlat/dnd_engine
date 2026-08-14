@@ -73,7 +73,7 @@ def _create_game(repository: GameDirectoryRepository) -> UUID:
     """Create the minimum durable identity needed for a final summary."""
 
     principal = repository.create_principal(
-        PrincipalCreate(principal_kind=PrincipalKind.SYSTEM_AI, display_name="Evaluator")
+        PrincipalCreate(principal_kind=PrincipalKind.SERVICE, display_name="Evaluator")
     )
     game = repository.create_game(
         GameCreate(

@@ -38,9 +38,9 @@ def _with_opening_roster(
     )
 
 
-def test_all_38_authored_encounters_have_complete_canonical_recipes() -> None:
-    assert len(AUTHORED_ENCOUNTER_RECIPES) == 38
-    assert len(set(ENCOUNTER_IDS)) == 38
+def test_all_39_authored_encounters_have_complete_canonical_recipes() -> None:
+    assert len(AUTHORED_ENCOUNTER_RECIPES) == 39
+    assert len(set(ENCOUNTER_IDS)) == 39
     for recipe in AUTHORED_ENCOUNTER_RECIPES:
         assert len(recipe.roster_slots) == 2
         assert all(slot.roster.members for slot in recipe.roster_slots)

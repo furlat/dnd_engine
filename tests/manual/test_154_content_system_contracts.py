@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import sys
 from collections.abc import Callable
-from types import ModuleType
 from typing import cast
 
 import pytest
@@ -43,7 +41,6 @@ from dnd.core.content.registration import (
     ContentDeclarationMode,
     get_content_declaration,
     item_factory,
-    scan_module_content_declarations,
 )
 from dnd.core.content.registry import ContentRegistryBuilder
 from dnd.core.content.runtime import HandlerDispatchOutcome, RuntimeBehaviorKind
@@ -153,7 +150,7 @@ def test_materialization_rejects_mutated_validated_recipe_parameters() -> None:
     builder = ContentRegistryBuilder()
     builder.add_source(_SRD_SOURCE)
     builder.add_declaration(declaration)
-    registry = builder.freeze(pack_dependencies={"fixture.core": frozenset()})
+    registry = builder.freeze()
 
     top_level = ContentRecipe.create(
         ref=declaration.ref,
@@ -189,8 +186,8 @@ def test_provenance_keeps_rules_source_separate_from_runtime_origin() -> None:
         ContentSource.model_validate(invalid_source)
 
 
-def test_factory_decorator_is_pure_and_scanner_ignores_imported_aliases() -> None:
-    """Declarations attach to definitions without mutating a process-global registry."""
+def test_factory_decorator_is_pure() -> None:
+    """Declarations attach without mutating a process-global registry."""
     declaration = get_content_declaration(_create_test_item)
     assert declaration.mode == ContentDeclarationMode.FACTORY
     assert declaration.construction is not None
@@ -198,25 +195,13 @@ def test_factory_decorator_is_pure_and_scanner_ignores_imported_aliases() -> Non
     assert declaration.descriptor.ref == declaration.ref
     assert declaration.provenance == _SRD_PROVENANCE
 
-    fixture_module = ModuleType("fixture_importing_module")
-    setattr(fixture_module, "imported_alias", _create_test_item)
-    sys.modules[fixture_module.__name__] = fixture_module
-    try:
-        assert scan_module_content_declarations(fixture_module) == ()
-    finally:
-        del sys.modules[fixture_module.__name__]
-
-    local_declarations = scan_module_content_declarations(sys.modules[__name__])
-    assert tuple(row.ref for row in local_declarations) == (declaration.ref,)
-
-
 def test_frozen_registry_validates_dependencies_and_materializes_typed_parameters() -> None:
     """One immutable registry resolves recipes in O(1) after complete validation."""
     declaration = get_content_declaration(_create_test_item)
     builder = ContentRegistryBuilder()
     builder.add_source(_SRD_SOURCE)
     builder.add_declaration(declaration)
-    registry = builder.freeze(pack_dependencies={"fixture.core": frozenset()})
+    registry = builder.freeze()
 
     recipe = ContentRecipe.create(ref=declaration.ref, parameters={"charges": 5})
     context = object()
@@ -291,8 +276,8 @@ def test_item_declaration_requires_explicit_persistence_semantics() -> None:
         )
 
 
-def test_registry_rejects_missing_cross_pack_dependencies_and_construction_cycles() -> None:
-    """A pack cannot become ready with a broken or cyclic construction closure."""
+def test_registry_rejects_missing_dependencies_and_construction_cycles() -> None:
+    """A registry cannot freeze with a broken or cyclic construction closure."""
     first = get_content_declaration(_create_test_item)
     missing_ref = first.ref.model_copy(
         update={
@@ -316,9 +301,7 @@ def test_registry_rejects_missing_cross_pack_dependencies_and_construction_cycle
     missing_builder.add_source(_SRD_SOURCE)
     missing_builder.add_declaration(dependent)
     with pytest.raises(ValueError, match="Missing content dependency"):
-        missing_builder.freeze(
-            pack_dependencies={"fixture.core": frozenset({"fixture.missing"})},
-        )
+        missing_builder.freeze()
 
     second = first.model_copy(
         update={
@@ -358,7 +341,7 @@ def test_registry_rejects_missing_cross_pack_dependencies_and_construction_cycle
     cycle_builder.add_declaration(first_to_second)
     cycle_builder.add_declaration(second_to_first)
     with pytest.raises(ValueError, match="construction dependency cycle"):
-        cycle_builder.freeze(pack_dependencies={"fixture.core": frozenset()})
+        cycle_builder.freeze()
 
 
 def test_installed_optional_construction_dependencies_still_cannot_cycle() -> None:
@@ -405,12 +388,10 @@ def test_installed_optional_construction_dependencies_still_cannot_cycle() -> No
     builder.add_declaration(first_to_second)
     builder.add_declaration(second_to_first)
     with pytest.raises(ValueError, match="construction dependency cycle"):
-        builder.freeze(pack_dependencies={"fixture.core": frozenset()})
+        builder.freeze()
 
     absent_builder = ContentRegistryBuilder()
     absent_builder.add_source(_SRD_SOURCE)
     absent_builder.add_declaration(first_to_second)
-    absent_registry = absent_builder.freeze(
-        pack_dependencies={"fixture.core": frozenset()},
-    )
+    absent_registry = absent_builder.freeze()
     assert absent_registry.resolve_definition(first.ref) is first_to_second

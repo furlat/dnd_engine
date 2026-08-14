@@ -30,7 +30,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from dnd.content_system.bootstrap import bootstrap_content_system
-from dnd.content_system.pack_loader import LoadedContentSystem
+from dnd.content_system.system import LoadedContentSystem
 from dnd.core.content.character_deployment import CharacterDeploymentSnapshot
 from dnd.core.content.encounters import (
     EncounterRosterSlot,
@@ -121,8 +121,6 @@ from server.game_gateway_models import (
     AttachmentPolicy,
     AttachHostedGameRequest,
     AttachHostedGameResponse,
-    CreateAgentGrantRequest,
-    CreateAgentGrantResponse,
     CreateHostedGameRequest,
     CreateHostedGameResponse,
     GuestPrincipalRequest,
@@ -143,7 +141,6 @@ from server.game_history import (
     create_game_history_router,
 )
 from server.game_history_contracts import GameHistoryListResponse
-from server.ai_policy_composition import server_native_ai_policy_options
 from server.game_creation_catalog import build_game_creation_catalog
 from server.game_creation_composition import (
     CharacterRulesetMismatchError,
@@ -834,7 +831,6 @@ class GameGatewayService:
                     game,
                     membership,
                     roster,
-                    controller="human",
                 )
             assignment_by_character_id = {
                 assignment.character_id: assignment
@@ -954,7 +950,6 @@ class GameGatewayService:
                     membership,
                     controlled_entities,
                 ),
-                takeover_claim_uuids=(),
                 client_kind=request.client_kind,
                 client_instance_id=request.client_instance_id,
                 runtime_base_url=runtime_base_url,
@@ -1022,7 +1017,6 @@ class GameGatewayService:
             GrantKind.RECONNECT,
             GrantKind.INVITE,
             GrantKind.OBSERVE,
-            GrantKind.AGENT_ATTACH,
         }:
             raise GatewayError(403, "grant_kind_rejected", "Grant cannot open a runtime attachment")
         game = self.repository.get_game(game_id)
@@ -1060,7 +1054,6 @@ class GameGatewayService:
                 membership,
                 controlled,
             ),
-            takeover_claim_uuids=self._takeover_claims_for_membership(game, membership),
             client_kind=request.client_kind,
             client_instance_id=request.client_instance_id,
             runtime_base_url=runtime_base_url,
@@ -1130,7 +1123,6 @@ class GameGatewayService:
                 membership,
                 controlled,
             ),
-            takeover_claim_uuids=self._takeover_claims_for_membership(game, membership),
             client_kind=request.client_kind,
             client_instance_id=request.client_instance_id,
             runtime_base_url=runtime_base_url,
@@ -1140,136 +1132,6 @@ class GameGatewayService:
             game=game,
             connection=connection,
             replaced_attachment_ids=replaced,
-        )
-
-    def create_remote_agent_grant(
-        self,
-        game_id: UUID,
-        request: CreateAgentGrantRequest,
-    ) -> CreateAgentGrantResponse:
-        """Bind a remote agent to one exact configured Codex member."""
-        self._authenticate_principal(request.principal_id, request.principal_capability)
-        agent_principal = self.repository.get_principal(request.agent_principal_id)
-        game = self.repository.get_game(game_id)
-        self._require_live_game(game)
-        if not any(
-            membership.principal_id == request.principal_id
-            and membership.membership_state is MembershipState.ACTIVE
-            and membership.capabilities.may_manage_members
-            for membership in self.repository.list_memberships(game_id)
-        ):
-            raise GatewayError(403, "member_management_denied", "Principal may not attach agents")
-
-        creation_payload = game.creation_manifest.get("response")
-        if not isinstance(creation_payload, dict):
-            raise GatewayError(500, "creation_manifest_invalid", "Game has no resolved creation response")
-        creation = GameCreationStartResponse.model_validate(creation_payload)
-        roster = _selected_roster_result(
-            creation,
-            request.roster_slot_id,
-        )
-        member = (
-            next(
-                (
-                    assignment
-                    for assignment in roster.entity_assignments
-                    if assignment.member_id == request.member_id
-                ),
-                None,
-            )
-            if roster is not None
-            else None
-        )
-        if (
-            member is None
-            or member.controller != "codex"
-            or member.codex_session_id is None
-            or member.takeover_claim_id is None
-        ):
-            raise GatewayError(
-                409,
-                "member_not_external",
-                "Remote agents require one exact Codex roster member",
-            )
-        member_entity_uuid = UUID(member.entity_uuid)
-        if any(
-            assignment.entity_uuid == member_entity_uuid
-            and assignment.released_at is None
-            for assignment in self.repository.list_entity_assignments(game_id)
-        ):
-            raise GatewayError(
-                409,
-                "member_already_assigned",
-                "The requested roster member already has directory authority",
-            )
-
-        membership: MembershipRecord | None = None
-        assignments: tuple[EntityAssignmentRecord, ...] = ()
-        try:
-            membership = self.repository.create_membership(
-                MembershipCreate(
-                    game_id=game_id,
-                    principal_id=agent_principal.principal_id,
-                    role=MembershipRole.AGENT,
-                    side_id=request.roster_slot_id,
-                    controller_kind="remote_agent",
-                    membership_state=MembershipState.ACTIVE,
-                    capabilities=_agent_capabilities(),
-                )
-            )
-            assignments = (
-                self.repository.assign_entity(
-                    EntityAssignmentCreate(
-                        game_id=game.game_id,
-                        membership_id=membership.membership_id,
-                        entity_uuid=member_entity_uuid,
-                        entity_name=member.entity_name,
-                        faction=member.faction,
-                        side_id=request.roster_slot_id,
-                        controller_kind="codex",
-                        authority_epoch=membership.authority_epoch,
-                    )
-                ),
-            )
-            runtime_session_id = UUID(member.codex_session_id)
-            controlled = [member_entity_uuid]
-            issued = self.repository.issue_access_grant(
-                AccessGrantCreate(
-                    game_id=game_id,
-                    membership_id=membership.membership_id,
-                    issued_to_principal_id=agent_principal.principal_id,
-                    grant_kind=GrantKind.AGENT_ATTACH,
-                    scope={
-                        "membership_id": str(membership.membership_id),
-                        "runtime_session_id": str(runtime_session_id),
-                        "roster_slot_id": request.roster_slot_id,
-                        "member_id": request.member_id,
-                        "takeover_claim_id": member.takeover_claim_id,
-                    },
-                    issued_by_principal_id=request.principal_id,
-                )
-            )
-        except BaseException:
-            for assignment in assignments:
-                self.repository.release_entity(assignment.assignment_id)
-            if membership is not None:
-                self.repository.update_membership_authority(
-                    membership.membership_id,
-                    expected_authority_epoch=membership.authority_epoch,
-                    membership_state=MembershipState.REVOKED,
-                    capabilities=MembershipCapabilities(),
-                )
-            self._publish_new_directory_events()
-            raise
-        self._publish_new_directory_events()
-        return CreateAgentGrantResponse(
-            game=game,
-            membership=membership,
-            runtime_session_id=runtime_session_id,
-            controlled_entity_uuids=controlled,
-            takeover_claim_id=UUID(member.takeover_claim_id),
-            grant_id=issued.grant.grant_id,
-            grant_capability=issued.capability,
         )
 
     async def observe_game(
@@ -1329,7 +1191,6 @@ class GameGatewayService:
             runtime_session_id=runtime_session_id,
             controlled_entity_uuids=(),
             observer_entity_uuids=observer_entities,
-            takeover_claim_uuids=(),
             client_kind=request.client_kind,
             client_instance_id=request.client_instance_id,
             runtime_base_url=runtime_base_url,
@@ -1572,34 +1433,15 @@ class GameGatewayService:
         owner_roster_slot_id: str | None,
         roster: GameCreationRosterResult | None,
     ) -> MembershipRecord:
-        controls_entities = (
-            roster is not None
-            and any(
-                assignment.controller == "human"
-                for assignment in roster.entity_assignments
-            )
-        )
+        controls_entities = roster is not None
         return self.repository.create_membership(
             MembershipCreate(
                 game_id=game.game_id,
                 principal_id=principal.principal_id,
                 role=MembershipRole.OWNER,
                 side_id=owner_roster_slot_id,
-                controller_kind=(
-                    "human" if controls_entities else None
-                ),
                 membership_state=MembershipState.ACTIVE,
-                capabilities=_owner_capabilities(
-                    controls_entities,
-                    any(
-                        assignment.controller == "codex"
-                        for assignment in (
-                            roster.entity_assignments
-                            if roster is not None
-                            else ()
-                        )
-                    ),
-                ),
+                capabilities=_owner_capabilities(controls_entities),
             )
         )
 
@@ -1615,7 +1457,6 @@ class GameGatewayService:
             for assignment in (
                 roster.entity_assignments if roster is not None else ()
             )
-            if assignment.controller == "human"
         )
         if not controlled:
             observers = self._observer_entities_for_membership(game, membership, ())
@@ -1731,17 +1572,10 @@ class GameGatewayService:
         game: GameRecord,
         membership: MembershipRecord,
         roster: GameCreationRosterResult,
-        *,
-        controller: str | None = None,
     ) -> tuple[EntityAssignmentRecord, ...]:
         assignments: list[EntityAssignmentRecord] = []
         try:
             for assignment in roster.entity_assignments:
-                if (
-                    controller is not None
-                    and assignment.controller != controller
-                ):
-                    continue
                 assignments.append(
                     self.repository.assign_entity(
                         EntityAssignmentCreate(
@@ -1751,7 +1585,6 @@ class GameGatewayService:
                             entity_name=assignment.entity_name,
                             faction=assignment.faction,
                             side_id=roster.roster_slot_id,
-                            controller_kind=assignment.controller,
                             authority_epoch=membership.authority_epoch,
                         )
                     )
@@ -1770,7 +1603,6 @@ class GameGatewayService:
         runtime_session_id: UUID,
         controlled_entity_uuids: Iterable[UUID],
         observer_entity_uuids: Iterable[UUID],
-        takeover_claim_uuids: Iterable[UUID],
         client_kind: ClientKind,
         client_instance_id: str,
         runtime_base_url: str,
@@ -1779,7 +1611,6 @@ class GameGatewayService:
             raise GatewayError(409, "game_has_no_worker", "Game has no active worker placement")
         controlled = tuple(controlled_entity_uuids)
         observers = tuple(observer_entity_uuids)
-        takeover_claims = tuple(takeover_claim_uuids)
         expires_at = datetime.now(UTC) + timedelta(seconds=self.runtime_ttl_seconds)
         issued = self.repository.open_attachment(
             AttachmentCreate(
@@ -1803,7 +1634,6 @@ class GameGatewayService:
             scopes=scopes,
             controlled_entity_uuids=controlled,
             observer_entity_uuids=observers,
-            takeover_claim_uuids=takeover_claims,
             authority_epoch=membership.authority_epoch,
             expires_at=expires_at.timestamp(),
         ).authority
@@ -1823,49 +1653,13 @@ class GameGatewayService:
             controlled_entity_uuids=list(controlled),
             observer_entity_uuids=list(observers),
             active_observer_uuid=authority.active_observer_uuid,
-            takeover_claim_uuids=list(takeover_claims),
             access_mode=(
-                "agent"
-                if RuntimeScope.AGENT in scopes
-                else "participant"
+                "participant"
                 if RuntimeScope.CONTROL in scopes
                 else "observer"
             ),
             authority_epoch=authority.authority_epoch,
             expires_at=authority.expires_at,
-        )
-
-    def _takeover_claims_for_membership(
-        self,
-        game: GameRecord,
-        membership: MembershipRecord,
-    ) -> tuple[UUID, ...]:
-        """Return claim leases associated with one persisted side membership."""
-        if membership.side_id is None:
-            return ()
-        creation_payload = game.creation_manifest.get("response")
-        if not isinstance(creation_payload, dict):
-            return ()
-        creation = GameCreationStartResponse.model_validate(creation_payload)
-        assigned_entities = {
-            assignment.entity_uuid
-            for assignment in self.repository.list_entity_assignments(
-                game.game_id,
-            )
-            if (
-                assignment.membership_id == membership.membership_id
-                and assignment.released_at is None
-            )
-        }
-        return tuple(
-            UUID(assignment.takeover_claim_id)
-            for roster in creation.rosters
-            if roster.roster_slot_id == membership.side_id
-            for assignment in roster.entity_assignments
-            if (
-                UUID(assignment.entity_uuid) in assigned_entities
-                and assignment.takeover_claim_id is not None
-            )
         )
 
     def _observer_entities_for_membership(
@@ -2285,10 +2079,7 @@ def create_gateway_app(
     )
     async def get_game_creation_catalog() -> GameCreationCatalogResponse:
         """Return the shared canonical hosted-game creation catalog."""
-        return build_game_creation_catalog(
-            controllers=("human", "ai", "codex"),
-            ai_policies=server_native_ai_policy_options(),
-        )
+        return build_game_creation_catalog()
 
     @gateway_app.post(
         "/game-creation/compose",
@@ -2492,14 +2283,6 @@ def create_gateway_app(
             public_gateway_base_url=str(request.base_url).rstrip("/"),
         )
 
-    @gateway_app.post("/games/{game_id}/agent-grants", response_model=CreateAgentGrantResponse)
-    async def create_agent_grant(
-        game_id: UUID,
-        request: Request,
-        body: CreateAgentGrantRequest,
-    ) -> CreateAgentGrantResponse:
-        return service(request).create_remote_agent_grant(game_id, body)
-
     @gateway_app.post("/games/{game_id}/observers", response_model=ObserveHostedGameResponse)
     async def observe_game(
         game_id: UUID,
@@ -2608,28 +2391,11 @@ def _validate_worker_creation_result(
                 "worker_roster_identity_mismatch",
                 "Worker returned another roster identity or order",
             )
-        overrides = {
-            override.member_id: override
-            for override in (
-                expected_slot.controller_defaults.member_overrides
-            )
-        }
         for expected_member, actual_assignment in zip(
             expected_members,
             actual_assignments,
             strict=True,
         ):
-            override = overrides.get(expected_member.member_id)
-            expected_controller = (
-                override.controller
-                if override is not None
-                else expected_slot.controller_defaults.controller
-            )
-            expected_policy_id = (
-                override.policy_id
-                if override is not None
-                else expected_slot.controller_defaults.policy_id
-            )
             expected_character_id = (
                 expected_member.source.character_id
                 if isinstance(
@@ -2641,14 +2407,11 @@ def _validate_worker_creation_result(
             if (
                 actual_assignment.member_id != expected_member.member_id
                 or actual_assignment.character_id != expected_character_id
-                or actual_assignment.controller
-                != expected_controller.value
-                or actual_assignment.policy_id != expected_policy_id
             ):
                 raise GatewayError(
                     502,
                     "worker_member_identity_mismatch",
-                    "Worker swapped a roster member, source, or controller",
+                    "Worker swapped a roster member or source",
                 )
 
 
@@ -2676,13 +2439,12 @@ def _character_matches_deployment_snapshot(
     )
 
 
-def _owner_capabilities(controls_entities: bool, agent: bool) -> MembershipCapabilities:
+def _owner_capabilities(controls_entities: bool) -> MembershipCapabilities:
     return MembershipCapabilities(
         may_connect=True,
         may_observe_public_state=True,
         may_observe_subjective_state=True,
         may_control_entities=controls_entities,
-        may_view_agent_telemetry=agent,
         may_manage_members=True,
         may_manage_game=True,
         may_view_objective_replay=True,
@@ -2698,32 +2460,12 @@ def _observer_capabilities() -> MembershipCapabilities:
     )
 
 
-def _agent_capabilities() -> MembershipCapabilities:
-    return MembershipCapabilities(
-        may_connect=True,
-        may_observe_public_state=True,
-        may_observe_subjective_state=True,
-        may_control_entities=True,
-        may_view_agent_telemetry=True,
-        may_view_objective_replay=False,
-    )
-
-
 def _runtime_scopes(membership: MembershipRecord) -> frozenset[RuntimeScope]:
-    scopes: set[RuntimeScope]
-    if (
-        membership.role is MembershipRole.AGENT
-        or membership.controller_kind == "codex"
-    ):
-        scopes = {RuntimeScope.AGENT}
-    else:
-        scopes = {RuntimeScope.OBSERVE}
+    scopes: set[RuntimeScope] = {RuntimeScope.OBSERVE}
     if membership.capabilities.may_observe_subjective_state:
         scopes.add(RuntimeScope.SUBJECTIVE_OBSERVE)
     if membership.capabilities.may_control_entities:
         scopes.add(RuntimeScope.CONTROL)
-    if membership.capabilities.may_view_agent_telemetry or membership.role is MembershipRole.AGENT:
-        scopes.add(RuntimeScope.AGENT)
     if membership.capabilities.may_manage_game:
         scopes.add(RuntimeScope.ADMINISTER)
     return frozenset(scopes)

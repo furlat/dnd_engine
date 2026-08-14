@@ -20,7 +20,6 @@ from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
 from dnd.core.content.item_definitions import ItemPersistencePolicy
 from dnd.core.content.recipes import ContentRecipe
-from dnd.core.content.registration import scan_module_content_declarations
 from dnd.core.events import RangeType
 from dnd.core.creature_types import DamageType
 from dnd.core.equipment_types import WeaponProperty
@@ -366,15 +365,6 @@ def test_srd_weapon_declarations_are_exact_frozen_content() -> None:
         declaration.ref.content_id.removeprefix("weapon.")
         for declaration in declarations
     ) == tuple(_EXPECTED)
-    discovered_srd = tuple(
-        declaration
-        for declaration in scan_module_content_declarations(weapon_definitions)
-        if declaration.ref.pack_id == "content.srd_5_1_cc"
-    )
-    assert discovered_srd == tuple(
-        sorted(declarations, key=lambda declaration: declaration.ref.identity_key),
-    )
-
     icon_rows = {
         row.content_ref.identity_key: row
         for row in BUILT_IN_CONTENT_ICON_BINDING_LEDGER.definitions

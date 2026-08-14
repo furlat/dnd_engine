@@ -15,11 +15,7 @@ from dnd.content_system.character_appearance import (
 )
 from dnd.core.content.durable_characters import AbilityScoreName
 from dnd.core.content.character_deployment import CharacterDeploymentSnapshot
-from dnd.core.content.encounters import (
-    FixedRosterOpeningPolicy,
-    RosterControllerDefaults,
-    RosterControllerKind,
-)
+from dnd.core.content.encounters import FixedRosterOpeningPolicy
 from dnd.core.progression import MulticlassSlotRoundingPolicy
 from dnd.entity import Entity
 from dnd.scenarios.encounter_assembler import prepare_encounter_recipe
@@ -83,10 +79,7 @@ def test_composed_scenario_materializes_the_pinned_character_not_the_catalog_her
                 ),
                 faction_id="heroes",
                 deployment_zone_id="zone_1",
-                controller_defaults=RosterControllerDefaults(
-                    controller=RosterControllerKind.HUMAN,
-                    participant_name="Local Player",
-                ),
+                participant_name="Local Player",
             ),
             GameCreationRosterSlotSelection(
                 roster_slot_id="opposition",
@@ -95,11 +88,7 @@ def test_composed_scenario_materializes_the_pinned_character_not_the_catalog_her
                 ),
                 faction_id="monsters",
                 deployment_zone_id="zone_2",
-                controller_defaults=RosterControllerDefaults(
-                    controller=RosterControllerKind.AI,
-                    participant_name="Opposition",
-                    policy_id="builtin.basic",
-                ),
+                participant_name="Opposition",
             ),
         ),
         battlefield_id="battlefield.open_floor_bright",
@@ -193,7 +182,6 @@ def test_standalone_game_creation_resolves_character_from_local_profile_sql(
                 "kind": "owned_characters",
                 "title": "Owned Party",
                 "character_ids": [str(character_id)],
-                "member_controller_overrides": [],
             },
             "faction_id": "heroes",
         })

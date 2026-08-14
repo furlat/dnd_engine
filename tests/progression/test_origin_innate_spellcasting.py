@@ -42,7 +42,7 @@ from dnd.content_system.origin_innate_spellcasting import (
     innate_spell_resource_name,
     install_origin_innate_spellcasting,
 )
-from dnd.content_system.pack_loader import LoadedContentSystem
+from dnd.content_system.system import LoadedContentSystem
 from dnd.content_system.runtime import ContentSystemRuntime
 from dnd.content_system.spell_catalog_composition import (
     SPELL_CATALOG_COMPOSITION_BY_ID,
@@ -197,7 +197,6 @@ def _loaded_builtin() -> LoadedContentSystem:
             },
             sources={},
         ),
-        packs=(),
         built_in_artifact_digest="c" * 64,
         content_set_digest="d" * 64,
     )

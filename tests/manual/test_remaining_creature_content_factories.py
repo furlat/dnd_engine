@@ -64,7 +64,7 @@ EXPECTED_PLAYER_CLASS_IDS = ("barbarian", "fighter", "sorcerer")
 @pytest.fixture(scope="module", autouse=True)
 def _install_complete_content_system() -> None:
     SERVER_CONTENT_SYSTEM_RUNTIME.install(
-        bootstrap_content_system(pack_roots=()),
+        bootstrap_content_system(),
     )
 
 
@@ -218,7 +218,7 @@ def test_registry_maps_are_exact_immutable_and_context_free() -> None:
 
 def test_bootstrap_closes_every_recipe_and_dependency_without_lazy_imports() -> None:
     """Hosted startup sees all declarations before any creature is built."""
-    loaded = bootstrap_content_system(pack_roots=())
+    loaded = bootstrap_content_system()
     registry = loaded.registry
     declarations = (
         ARMOR_SCRAPS_DECLARATION,

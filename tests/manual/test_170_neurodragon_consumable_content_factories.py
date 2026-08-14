@@ -27,10 +27,7 @@ from dnd.core.content.provenance import (
     ContentProvenanceRelation,
     ContentReviewStatus,
 )
-from dnd.core.content.registration import (
-    get_content_declaration,
-    scan_module_content_declarations,
-)
+from dnd.core.content.registration import get_content_declaration
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import EventPhase, EventQueue, EventType
 from dnd.core.creature_types import DamageType
@@ -76,8 +73,6 @@ def test_consumable_declarations_are_exact_reviewed_original_content() -> None:
         "consumable.potion_haste",
     )
 
-    discovered = scan_module_content_declarations(consumable_definitions)
-    assert set(declarations).issubset(set(discovered))
     icon_rows = {
         row.content_ref.identity_key: row
         for row in BUILT_IN_CONTENT_ICON_BINDING_LEDGER.definitions
@@ -391,7 +386,7 @@ def test_legacy_consumable_constructor_and_class_surface_is_absent() -> None:
         assert not hasattr(item_exports, symbol)
 
     violations: list[str] = []
-    roots = ("ai", "custom_ai", "devtools", "dnd", "server", "tests")
+    roots = ("devtools", "dnd", "server", "tests")
     for root_name in roots:
         for path in (_ROOT / root_name).rglob("*.py"):
             if "to_archive" in path.parts or path == Path(__file__):

@@ -17,7 +17,7 @@ from dnd.content_system.character_materialization import (
     remove_character_composition,
 )
 from dnd.content_system.character_appearance import SORCERER_HUMAN_APPEARANCE
-from dnd.content_system.pack_loader import LoadedContentSystem
+from dnd.content_system.system import LoadedContentSystem
 from dnd.content_system.runtime import ContentSystemRuntime
 from dnd.content_system.starting_equipment_definitions import (
     STARTING_EQUIPMENT_PACKAGE_DECLARATIONS_BY_PRESET,
@@ -168,7 +168,6 @@ def _runtime_with_neutral_origins() -> tuple[
                 recipe_presets=loaded.registry.recipe_presets,
                 sources=loaded.registry.sources,
             ),
-            packs=loaded.packs,
             built_in_artifact_digest=loaded.built_in_artifact_digest,
             content_set_digest=loaded.content_set_digest,
         ),

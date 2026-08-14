@@ -24,7 +24,7 @@ from dnd.content_system.character_materialization import (
 from dnd.content_system.origin_runtime_character_grant_appliers import (
     ORIGIN_RUNTIME_CHARACTER_GRANT_APPLIERS,
 )
-from dnd.content_system.pack_loader import LoadedContentSystem
+from dnd.content_system.system import LoadedContentSystem
 from dnd.content_system.runtime import ContentSystemRuntime
 from dnd.core.base_actions import ActionEvent
 from dnd.core.content.origin_features import OriginCapability
@@ -61,7 +61,6 @@ def _runtime() -> ContentSystemRuntime:
                 recipe_presets={},
                 sources={},
             ),
-            packs=(),
             built_in_artifact_digest="a" * 64,
             content_set_digest="b" * 64,
         ),

@@ -7,7 +7,6 @@ from uuid import UUID, uuid4
 from pydantic import Field
 
 from dnd.actions import Attack, AttackEvent, SpellEvent, Swim
-from dnd.ai.runtime.subjective_projection import project_visible_tile_fact
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.equipment import Weapon
@@ -43,6 +42,7 @@ from dnd.core.spatial_effect_types import (
     SpatialEffectInteractionOperation,
 )
 from dnd.core.gridmap import get_map
+from server.world_projection import project_observed_tile
 from dnd.core.life_types import LifeState
 from dnd.core.creature_types import CreatureType, DamageType
 from dnd.core.modifiers import (
@@ -2268,26 +2268,25 @@ def test_eb_15_021_zone_spell_family_entry_turn_start_and_cleanup_edges() -> Non
     assert len(grease_effect_uuids) == 1
     grease_effect = SpatialEffect.get_effect(next(iter(grease_effect_uuids)))
     assert isinstance(grease_effect, GroundEffect)
-    ai_tile = project_visible_tile_fact(
+    observed_tile = project_observed_tile(
+        get_map(),
         (5, 5),
-        (str(caster.uuid),),
+        (caster.uuid,),
     )
     assert [
         (
-            fact.runtime_uuid,
-            fact.content_ref,
-            fact.layer.value,
-            fact.anchor_kind.value,
-            tuple(trigger.value for trigger in fact.trigger_kinds),
+            fact.uuid,
+            fact.content_ref.model_dump(),
+            fact.layer,
+            fact.anchor_kind,
         )
-        for fact in ai_tile.spatial_effects
+        for fact in observed_tile.spatial_effects
     ] == [
         (
             str(grease_effect.uuid),
-            grease_effect.content_ref,
+            grease_effect.content_ref.model_dump(),
             "ground_surface",
             "fixed_position",
-            ("appear", "enter", "turn_end"),
         ),
     ]
     grease_zone = cast(

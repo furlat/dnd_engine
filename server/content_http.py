@@ -4,7 +4,7 @@ from typing import TypeVar
 
 from fastapi import Request, Response
 
-from dnd.content_system.pack_loader import LoadedContentSystem
+from dnd.content_system.system import LoadedContentSystem
 from server.content_catalog import (
     ContentCatalogResponse,
     ContentManifestResponse,

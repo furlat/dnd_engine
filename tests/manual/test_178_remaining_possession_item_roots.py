@@ -19,7 +19,6 @@ from dnd.content_system.item_bindings import (
 )
 from dnd.content_system.item_materialization import materialize_item
 from dnd.core.content.item_definitions import ItemPersistencePolicy
-from dnd.core.content.registration import scan_module_content_declarations
 from dnd.core.equipment_types import (
     ArmorType,
     BodyPart,
@@ -59,11 +58,9 @@ def test_six_possession_roots_are_exact_public_registry_definitions() -> None:
         "weapon.circus.soul_draining_morningstar",
     )
 
-    assert field_focus.FIELD_KIT_DECLARATION in (
-        scan_module_content_declarations(field_focus)
-    )
+    assert field_focus.FIELD_KIT_DECLARATION in declarations
     assert set(circus_items.NEURODRAGON_CIRCUS_ITEM_DECLARATIONS) <= set(
-        scan_module_content_declarations(circus_items),
+        declarations,
     )
     for declaration in declarations:
         assert (

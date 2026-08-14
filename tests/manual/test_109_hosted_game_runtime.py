@@ -350,7 +350,7 @@ def test_public_runtime_route_classifier_blocks_worker_administration() -> None:
             is ProxyRouteKind.DENIED
         )
     assert classify_worker_route("POST", "action/execute") is ProxyRouteKind.COMMAND
-    assert classify_worker_route("GET", "ai/sessions/abc/observation/subscribe") is ProxyRouteKind.AGENT
+    assert classify_worker_route("GET", "ai/sessions/abc/observation/subscribe") is ProxyRouteKind.DENIED
     assert classify_worker_route("POST", "game-creation/start") is ProxyRouteKind.DENIED
     assert classify_worker_route("POST", "simulation/reset") is ProxyRouteKind.DENIED
     assert classify_worker_route("POST", "simulation/pause") is ProxyRouteKind.DENIED
@@ -512,7 +512,7 @@ def test_runtime_stream_stops_after_hot_capability_revocation() -> None:
         hosted_game_id=game_id,
         runtime_session_id=session_id,
         membership_id=membership_id,
-        scopes={RuntimeScope.AGENT},
+        scopes={RuntimeScope.OBSERVE},
     )
 
     class TwoChunkStream(httpx.AsyncByteStream):
@@ -530,7 +530,7 @@ def test_runtime_stream_stops_after_hot_capability_revocation() -> None:
             authority_cache=cache,
             runtime_token=issued.token,
             hosted_game_id=game_id,
-            required_scope=RuntimeScope.AGENT,
+            required_scope=RuntimeScope.OBSERVE,
         )
         assert await anext(relay) == b"first"
         cache.revoke(issued.token)
@@ -548,6 +548,12 @@ def test_direct_single_game_server_never_requires_sqlite(
     def reject_sqlite(*_args: object, **_kwargs: object) -> None:
         raise AssertionError("direct event_server attempted to open SQLite")
 
+    monkeypatch.setattr(
+        event_server.app.state,
+        "local_game_coordinator",
+        None,
+        raising=False,
+    )
     monkeypatch.setattr(sqlite3, "connect", reject_sqlite)
 
     with ServerTestClient() as client:
@@ -564,12 +570,7 @@ def test_direct_single_game_server_never_requires_sqlite(
                         },
                         "faction_id": "players",
                         "deployment_zone_id": "zone_1",
-                        "controller_defaults": {
-                            "controller": "human",
-                            "participant_name": "Human",
-                            "policy_id": None,
-                            "member_overrides": [],
-                        },
+                        "participant_name": "Human",
                     },
                     {
                         "roster_slot_id": "opposition",
@@ -579,12 +580,7 @@ def test_direct_single_game_server_never_requires_sqlite(
                         },
                         "faction_id": "opposition",
                         "deployment_zone_id": "zone_2",
-                        "controller_defaults": {
-                            "controller": "ai",
-                            "participant_name": "AI",
-                            "policy_id": "builtin.basic",
-                            "member_overrides": [],
-                        },
+                        "participant_name": "Opposition",
                     },
                 ],
                 "battlefield_id": "battlefield.open_floor_bright",
@@ -615,9 +611,12 @@ def test_direct_single_game_server_never_requires_sqlite(
     assert start.status_code == 200
     assert start.json()["status"] == "prepared"
     opposition = start.json()["rosters"][1]["entity_assignments"]
-    assert all(row["policy_id"] == "builtin.basic" for row in opposition)
-    assert all(row["policy_execution"] == "in_process" for row in opposition)
-    assert all(row["provider_id"] is None for row in opposition)
+    assert opposition
+    assert all(row["participant_name"] == "Opposition" for row in opposition)
+    assert all(
+        {"controller", "policy_id", "policy_execution", "provider_id"}.isdisjoint(row)
+        for row in opposition
+    )
     assert events.status_code == 200
     assert events.json()["generation_id"]
     assert events.json()["source_stream_id"]

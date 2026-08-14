@@ -13,7 +13,7 @@ from dnd.content_system.creature_bindings import (
     CreatureRuntimeBindingRegistry,
 )
 from dnd.content_system.creature_materialization import materialize_creature
-from dnd.content_system.pack_loader import LoadedContentSystem
+from dnd.content_system.system import LoadedContentSystem
 from dnd.content_system.runtime import ContentSystemRuntime
 from dnd.core.content.descriptors import (
     ContentDescriptorSpec,
@@ -197,14 +197,11 @@ def _runtime(
     builder.add_source(_SOURCE)
     for declaration in declarations:
         builder.add_declaration(declaration)
-    registry = builder.freeze(
-        pack_dependencies={"fixture.creatures": frozenset()},
-    )
+    registry = builder.freeze()
     runtime = ContentSystemRuntime()
     runtime.install(
         LoadedContentSystem(
             registry=registry,
-            packs=(),
             built_in_artifact_digest="b" * 64,
             content_set_digest="c" * 64,
         ),

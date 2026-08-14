@@ -91,24 +91,19 @@ class ContentRegistryBuilder:
             raise ValueError(f"Duplicate recipe preset identity {key} {detail}")
         self._recipe_presets[key] = preset
 
-    def freeze(
-        self,
-        *,
-        pack_dependencies: Mapping[str, frozenset[str]],
-    ) -> "FrozenContentRegistry":
+    def freeze(self) -> "FrozenContentRegistry":
         """Validate complete closure and return an immutable registry."""
         self._ensure_mutable()
         _validate_sources(self._declarations, self._sources)
         _validate_recipe_preset_sources(self._recipe_presets, self._sources)
-        _validate_dependencies(self._declarations, pack_dependencies)
+        _validate_dependencies(self._declarations)
         _validate_spatial_effects(self._declarations)
-        _validate_condition_effects(self._declarations, pack_dependencies)
-        _validate_related_content(self._declarations, pack_dependencies)
+        _validate_condition_effects(self._declarations)
+        _validate_related_content(self._declarations)
         _validate_construction_cycles(self._declarations)
         _validate_recipe_presets(
             self._recipe_presets,
             self._declarations,
-            pack_dependencies,
         )
         self._frozen = True
         return FrozenContentRegistry(
@@ -284,14 +279,8 @@ def _validate_recipe_preset_sources(
 
 def _validate_dependencies(
     declarations: Mapping[str, ContentDeclaration],
-    pack_dependencies: Mapping[str, frozenset[str]],
 ) -> None:
     for key, declaration in declarations.items():
-        if declaration.ref.pack_id not in pack_dependencies:
-            raise ValueError(
-                f"Missing pack dependency declaration for "
-                f"{declaration.ref.pack_id}",
-            )
         dependency_keys = [
             (dependency.relation, dependency.target_ref.identity_key)
             for dependency in declaration.dependencies
@@ -326,16 +315,6 @@ def _validate_dependencies(
                     f"{dependency.target_ref.identity_key} required by {key} "
                     "is metadata-only",
                 )
-            if target.ref.pack_id == declaration.ref.pack_id:
-                continue
-            allowed = pack_dependencies[declaration.ref.pack_id]
-            if target.ref.pack_id not in allowed:
-                raise ValueError(
-                    f"Content {key} references pack {target.ref.pack_id} "
-                    "without a declared pack dependency",
-                )
-
-
 def _validate_spatial_effects(
     declarations: Mapping[str, ContentDeclaration],
 ) -> None:
@@ -408,7 +387,6 @@ def _validate_spatial_effects(
 
 def _validate_condition_effects(
     declarations: Mapping[str, ContentDeclaration],
-    pack_dependencies: Mapping[str, frozenset[str]],
 ) -> None:
     """Validate exact condition-effect closure and dependency equality."""
     for key, declaration in declarations.items():
@@ -554,22 +532,8 @@ def _validate_condition_effects(
                         f"Content {key} condition effect {effect.effect_id} "
                         f"targets non-condition {condition_ref.identity_key}",
                     )
-                if target.ref.pack_id == declaration.ref.pack_id:
-                    continue
-                if (
-                    effect.operation is ConditionEffectOperation.APPLY
-                    and target.ref.pack_id
-                    not in pack_dependencies[declaration.ref.pack_id]
-                ):
-                    raise ValueError(
-                        f"Content {key} applies condition from pack "
-                        f"{target.ref.pack_id} without a declared dependency",
-                    )
-
-
 def _validate_related_content(
     declarations: Mapping[str, ContentDeclaration],
-    pack_dependencies: Mapping[str, frozenset[str]],
 ) -> None:
     """Validate every descriptor relationship against exact installed refs."""
     for key, declaration in declarations.items():
@@ -585,16 +549,6 @@ def _validate_related_content(
                     "Related content definition contract mismatch for "
                     f"{related_ref.identity_key} referenced by {key}",
                 )
-            if target.ref.pack_id == declaration.ref.pack_id:
-                continue
-            allowed = pack_dependencies[declaration.ref.pack_id]
-            if target.ref.pack_id not in allowed:
-                raise ValueError(
-                    f"Content {key} relates to pack {target.ref.pack_id} "
-                    "without a declared pack dependency",
-                )
-
-
 def _validate_construction_cycles(
     declarations: Mapping[str, ContentDeclaration],
 ) -> None:
@@ -641,15 +595,10 @@ _VISIBILITY_RANK = {
 def _validate_recipe_presets(
     presets: Mapping[str, ContentRecipePreset],
     declarations: Mapping[str, ContentDeclaration],
-    pack_dependencies: Mapping[str, frozenset[str]],
 ) -> None:
     """Validate target closure, parameters, visibility, and one-way ownership."""
     recipe_owners: dict[str, str] = {}
     for key, preset in presets.items():
-        if preset.ref.pack_id not in pack_dependencies:
-            raise ValueError(
-                f"Missing pack dependency declaration for {preset.ref.pack_id}",
-            )
         target = declarations.get(preset.recipe.ref.identity_key)
         if target is None:
             raise ValueError(
@@ -672,15 +621,6 @@ def _validate_recipe_presets(
             preset.recipe.parameters,
         )
         if (
-            target.ref.pack_id != preset.ref.pack_id
-            and target.ref.pack_id
-            not in pack_dependencies[preset.ref.pack_id]
-        ):
-            raise ValueError(
-                f"Recipe preset {key} targets pack {target.ref.pack_id} "
-                "without a declared pack dependency",
-            )
-        if (
             _VISIBILITY_RANK[preset.descriptor.visibility]
             > _VISIBILITY_RANK[target.descriptor.visibility]
         ):
@@ -693,15 +633,6 @@ def _validate_recipe_presets(
                 raise ValueError(
                     f"Recipe preset {key} references missing related content "
                     f"{related_ref.identity_key}",
-                )
-            if (
-                related_ref.pack_id != preset.ref.pack_id
-                and related_ref.pack_id
-                not in pack_dependencies[preset.ref.pack_id]
-            ):
-                raise ValueError(
-                    f"Recipe preset {key} relates to pack "
-                    f"{related_ref.pack_id} without a declared pack dependency",
                 )
         existing_owner = recipe_owners.get(preset.recipe.recipe_digest)
         if existing_owner is not None:

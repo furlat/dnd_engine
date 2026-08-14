@@ -888,7 +888,7 @@ class BaseAction(BaseObject):
 
         Authored catalog identity is carried separately by
         ``behavior_binding``.  Keeping the two axes independent prevents
-        content attribution from changing action dispatch or AI policy.
+        content attribution from changing action dispatch or decision support.
         """
         if self.semantic_key is not None:
             return self.semantic_key

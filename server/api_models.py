@@ -11,10 +11,8 @@ from pydantic import (
 )
 from enum import Enum
 from typing import Annotated, Any, Dict, List, Literal, Optional, Tuple, Union
-from urllib.parse import urlsplit
 from uuid import UUID
 
-from dnd.ai.policy import PolicyDescriptor
 from dnd.core.base_actions import AvailableActionsResult, AvailableHandlerInfo
 from dnd.core.content.battlefields import BattlefieldDefinition
 from dnd.core.content.descriptors import ContentOrdering, ContentPresentation
@@ -26,7 +24,6 @@ from dnd.core.content.encounters import (
     EncounterOpeningPolicy,
     EncounterRecipe,
     EncounterRosterRecipe,
-    RosterControllerDefaults,
 )
 from dnd.core.content.recipe_presets import ContentRecipePresetRef
 from dnd.core.content.recipes import ContentRecipe
@@ -168,6 +165,7 @@ class MapEditorMapSnapshot(BaseModel):
         grid_bounds: Inclusive bounds for the serialized map.
         tiles: Serialized tile snapshots.
         floor_objects: Serialized floor objects placed on the map.
+        connectors: Stable authored traversal connector definitions.
     """
 
     grid_bounds: MapEditorGridBounds = Field(description="Inclusive bounds for the serialized map.")
@@ -232,6 +230,8 @@ class MapEditorSavedMapMetadata(BaseModel):
         grid_bounds: Inclusive saved map bounds.
         tile_count: Number of serialized tiles.
         floor_object_count: Number of serialized floor objects.
+        connector_count: Number of serialized connector definitions.
+        connector_digest: Digest of the ordered connector definitions.
     """
 
     id: str = Field(description="Stable saved map identifier.")
@@ -357,6 +357,9 @@ class MapEditorTilePatch(BaseModel):
         y: Tile y-coordinate to patch.
         type: Optional replacement terrain type.
         light_level: Optional replacement light level.
+        elevation_steps: Optional support elevation in five-foot steps.
+        elevation_surface_kind: Optional replacement support-surface kind.
+        slope_axis: Optional progressive support-surface axis.
         directional_channel: Directional blocking channel to patch.
         direction: Directional side to patch.
         passable: Whether the patched directional side is passable.
@@ -851,11 +854,13 @@ class CreateSessionRequest(BaseModel):
     """Request to create a new player session.
 
     Attributes:
-        player_type: Controller type for the session, such as human or codex.
+        player_type: Human participant or read-only observer session.
         name: Optional display name for the session.
     """
 
-    player_type: str = Field(description="Controller type for the session, such as human or codex.")
+    player_type: Literal["human", "observer"] = Field(
+        description="Human participant or read-only observer session.",
+    )
     name: Optional[str] = Field(default=None, description="Optional display name for the session.")
 
 
@@ -966,80 +971,12 @@ class JoinGameResponse(BaseModel):
     message: str = Field(description="Human-readable join result.")
 
 
-GameCreationControllerKind = Literal["human", "ai", "codex"]
-AIExecutionKind = Literal["in_process", "registered_provider"]
-
-
-class GameCreationAIPolicyOption(BaseModel):
-    """One globally unique policy selectable through ``controller='ai'``."""
-
-    descriptor: PolicyDescriptor = Field(
-        description="Stable policy identity and player-facing description.",
-    )
-    execution: AIExecutionKind = Field(
-        description="Whether policy logic runs in process or at a registered provider.",
-    )
-    provider_id: Optional[str] = Field(
-        default=None,
-        description="Owning provider for registered policies; absent for in-process policies.",
-    )
-    capacity: Optional[int] = Field(
-        default=None,
-        ge=1,
-        description="Provider assignment capacity captured at catalog time.",
-    )
-    active_assignments: Optional[int] = Field(
-        default=None,
-        ge=0,
-        description="Provider assignments known active at catalog time.",
-    )
-    available_capacity: Optional[int] = Field(
-        default=None,
-        ge=0,
-        description="Advisory capacity remaining at catalog time.",
-    )
-
-    @model_validator(mode="after")
-    def validate_execution_metadata(self) -> "GameCreationAIPolicyOption":
-        provider_fields = (
-            self.provider_id,
-            self.capacity,
-            self.active_assignments,
-            self.available_capacity,
-        )
-        if self.execution == "in_process":
-            if any(value is not None for value in provider_fields):
-                raise ValueError(
-                    "in-process policies cannot carry provider metadata"
-                )
-            return self
-        if any(value is None for value in provider_fields):
-            raise ValueError(
-                "registered-provider policies require complete provider metadata"
-            )
-        assert self.capacity is not None
-        assert self.active_assignments is not None
-        assert self.available_capacity is not None
-        if self.active_assignments > self.capacity:
-            raise ValueError("active assignments exceed provider capacity")
-        if self.available_capacity != self.capacity - self.active_assignments:
-            raise ValueError("available provider capacity is inconsistent")
-        return self
-
-
 class GameCreationCatalogResponse(BaseModel):
-    """Canonical roster, encounter, formation, and controller catalog."""
+    """Canonical roster, encounter, and formation catalog."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    schema_version: Literal[3] = 3
-    controllers: List[GameCreationControllerKind] = Field(description="Supported side controller kinds.")
-    ai_policies: List[GameCreationAIPolicyOption] = Field(
-        description=(
-            "All globally unique AI policies currently selectable by stable id, "
-            "including in-process and registered-provider implementations."
-        ),
-    )
+    schema_version: Literal[4] = 4
     roster_recipes: tuple[EncounterRosterRecipe, ...] = Field(
         description="Reusable authored creature or champion rosters.",
     )
@@ -1074,28 +1011,6 @@ class GameCreationSavedRosterSelection(BaseModel):
     expected_recipe_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
-class GameCreationOwnedCharacterControllerOverride(BaseModel):
-    """Controller override addressed by durable character identity."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    character_id: UUID
-    controller: GameCreationControllerKind
-    policy_id: str | None = Field(default=None, min_length=1, max_length=160)
-
-    @model_validator(mode="after")
-    def _validate_policy(
-        self,
-    ) -> "GameCreationOwnedCharacterControllerOverride":
-        if self.controller == "ai" and self.policy_id is None:
-            raise ValueError("AI character controller requires policy_id")
-        if self.controller != "ai" and self.policy_id is not None:
-            raise ValueError(
-                "non-AI character controller forbids policy_id",
-            )
-        return self
-
-
 class GameCreationOwnedCharacterRosterSelection(BaseModel):
     """Select an ordered owned-character roster for server normalization."""
 
@@ -1104,10 +1019,6 @@ class GameCreationOwnedCharacterRosterSelection(BaseModel):
     kind: Literal["owned_characters"] = "owned_characters"
     title: str = Field(min_length=1, max_length=120)
     character_ids: tuple[UUID, ...] = Field(min_length=1)
-    member_controller_overrides: tuple[
-        GameCreationOwnedCharacterControllerOverride,
-        ...,
-    ] = ()
 
     @model_validator(mode="after")
     def _validate_character_ids(
@@ -1115,16 +1026,6 @@ class GameCreationOwnedCharacterRosterSelection(BaseModel):
     ) -> "GameCreationOwnedCharacterRosterSelection":
         if len(self.character_ids) != len(set(self.character_ids)):
             raise ValueError("owned-character roster cannot repeat a character")
-        override_ids = [
-            override.character_id
-            for override in self.member_controller_overrides
-        ]
-        if len(override_ids) != len(set(override_ids)):
-            raise ValueError("character controller overrides must be unique")
-        if not set(override_ids) <= set(self.character_ids):
-            raise ValueError(
-                "character controller override must reference this roster",
-            )
         return self
 
 
@@ -1139,7 +1040,7 @@ GameCreationRosterSelection = Annotated[
 
 
 class GameCreationRosterSlotSelection(BaseModel):
-    """One requested roster, faction, formation zone, and controller policy."""
+    """One requested human participant roster, faction, and formation zone."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -1147,7 +1048,7 @@ class GameCreationRosterSlotSelection(BaseModel):
     roster: GameCreationRosterSelection
     faction_id: str = Field(min_length=1)
     deployment_zone_id: str = Field(min_length=1)
-    controller_defaults: RosterControllerDefaults
+    participant_name: str = Field(min_length=1, max_length=120)
 
 
 class GameCreationComposeRequest(BaseModel):
@@ -1212,16 +1113,11 @@ class GameCreationPreviewRequest(BaseModel):
 class GameCreationStartRequest(GameCreationPreviewRequest):
     """Start the exact recipe returned by composition without renormalizing."""
 
-    codex_lease_seconds: float = Field(
-        default=600.0,
-        gt=0,
-        le=86400,
-        description="Takeover lease duration for configured Codex members.",
-    )
+    pass
 
 
 class GameCreationEntityAssignment(BaseModel):
-    """One recipe member bound to its exact runtime entity and controller."""
+    """One recipe member bound to its runtime entity and participant seat."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -1230,61 +1126,7 @@ class GameCreationEntityAssignment(BaseModel):
     entity_name: str
     faction: Optional[str] = None
     character_id: UUID | None = None
-    controller: GameCreationControllerKind
     participant_name: str
-    policy_id: Optional[str] = None
-    policy_execution: Optional[AIExecutionKind] = None
-    provider_id: Optional[str] = None
-    codex_session_id: Optional[str] = None
-    takeover_claim_id: Optional[str] = None
-    takeover_expires_at: Optional[float] = None
-
-    @model_validator(mode="after")
-    def _validate_controller_metadata(
-        self,
-    ) -> "GameCreationEntityAssignment":
-        policy_values = (
-            self.policy_id,
-            self.policy_execution,
-            self.provider_id,
-        )
-        codex_values = (
-            self.codex_session_id,
-            self.takeover_claim_id,
-            self.takeover_expires_at,
-        )
-        if self.controller == "human":
-            if any(value is not None for value in policy_values + codex_values):
-                raise ValueError(
-                    "Human assignments forbid AI and Codex metadata",
-                )
-        elif self.controller == "ai":
-            if self.policy_id is None or self.policy_execution is None:
-                raise ValueError("AI assignments require exact policy metadata")
-            if any(value is not None for value in codex_values):
-                raise ValueError("AI assignments forbid Codex claims")
-            if (
-                self.policy_execution == "registered_provider"
-                and self.provider_id is None
-            ):
-                raise ValueError(
-                    "Registered-provider AI requires provider_id",
-                )
-            if (
-                self.policy_execution == "in_process"
-                and self.provider_id is not None
-            ):
-                raise ValueError(
-                    "In-process AI forbids provider_id",
-                )
-        elif (
-            any(value is not None for value in policy_values)
-            or any(value is None for value in codex_values)
-        ):
-            raise ValueError(
-                "Codex assignments require one claim and forbid AI policy metadata",
-            )
-        return self
 
 
 class GameCreationRosterResult(BaseModel):
@@ -1320,7 +1162,7 @@ class GameCreationStartResponse(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    schema_version: Literal[2] = 2
+    schema_version: Literal[3] = 3
     recipe_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
     encounter_uuid: str = Field(description="Created encounter UUID.")
     game_id: str = Field(description="Created active game UUID.")
@@ -1391,77 +1233,6 @@ class GameCreationActivateResponse(BaseModel):
     encounter_uuid: str = Field(description="Activated encounter identity.")
 
 
-class AIProviderRegistrationRequest(BaseModel):
-    """Deployment-admin request to authenticate one external policy provider."""
-
-    provider_id: str = Field(
-        min_length=1,
-        pattern=r"^[a-z][a-z0-9_.-]*$",
-        description="Expected provider identity; the handshake remains authority.",
-    )
-    base_url: str = Field(
-        min_length=1,
-        description="Root HTTP(S) endpoint exposing the provider protocol.",
-    )
-
-    @field_validator("base_url")
-    @classmethod
-    def validate_base_url(cls, value: str) -> str:
-        parsed = urlsplit(value)
-        if (
-            parsed.scheme not in {"http", "https"}
-            or not parsed.netloc
-            or parsed.username is not None
-            or parsed.password is not None
-            or parsed.query
-            or parsed.fragment
-            or parsed.path not in {"", "/"}
-        ):
-            raise ValueError(
-                "base_url must be a root HTTP(S) URL without credentials, "
-                "query, fragment, or path"
-            )
-        return value.rstrip("/")
-
-
-class AIProviderCatalogEntry(BaseModel):
-    """Authenticated provider identity and current assignment capacity."""
-
-    provider_id: str = Field(description="Handshake-authenticated provider identity.")
-    base_url: str = Field(description="Registered provider root URL.")
-    protocol_version: int = Field(ge=1, description="External AI protocol version.")
-    protocol_hash: str = Field(
-        min_length=64,
-        max_length=64,
-        description="Complete external AI wire-contract hash.",
-    )
-    policies: List[PolicyDescriptor] = Field(
-        description="Handshake-advertised policies owned by this provider.",
-    )
-    capacity: int = Field(ge=1, description="Provider assignment capacity.")
-    active_assignments: int = Field(
-        ge=0,
-        description="Assignments currently owned by this server connection.",
-    )
-    available_capacity: int = Field(
-        ge=0,
-        description="Current remaining assignment capacity.",
-    )
-
-
-class AIProviderCatalogResponse(BaseModel):
-    """Current registered-provider catalog."""
-
-    providers: List[AIProviderCatalogEntry] = Field(
-        description="Providers ordered by stable provider identity.",
-    )
-
-
-class AIProviderDeleteResponse(BaseModel):
-    """Acknowledgement after a provider and its idle client are removed."""
-
-    status: Literal["unregistered"] = "unregistered"
-    provider_id: str = Field(description="Removed provider identity.")
 
 
 class StandaloneGameSessionSummary(BaseModel):
@@ -1495,76 +1266,6 @@ class StandaloneGameStatusResponse(BaseModel):
     )
 
 
-class AgentSessionEntityRow(BaseModel):
-    """Entity label owned by an AI-observable session.
-
-    Attributes:
-        entity_uuid: Controlled entity UUID.
-        entity_name: Controlled entity display name.
-        faction: Controlled entity faction, if any.
-        controller_type: Encounter controller type assigned to the entity.
-        is_active_actor: Whether this entity is currently the active actor.
-    """
-
-    entity_uuid: str = Field(description="Controlled entity UUID.")
-    entity_name: str = Field(description="Controlled entity display name.")
-    faction: Optional[str] = Field(default=None, description="Controlled entity faction, if any.")
-    controller_type: Optional[str] = Field(default=None, description="Encounter controller type assigned to the entity.")
-    is_active_actor: bool = Field(description="Whether this entity is currently the active actor.")
-
-
-class AgentSessionRow(BaseModel):
-    """Read-only AI session row for observer clients.
-
-    Attributes:
-        session_id: Stable session UUID.
-        player_type: Session player type such as ai or codex.
-        name: Session display name.
-        connection_status: Current connection status.
-        is_active_turn: Whether this session controls the active actor.
-        active_controlled_entity_uuid: Active actor UUID when controlled by this session.
-        active_controlled_entity_name: Active actor name when controlled by this session.
-        controlled_entities: Controlled entity labels.
-        agent_cursor: Current telemetry cursor for the session.
-        earliest_agent_cursor: Earliest retained telemetry cursor.
-        observation_cursor: Current subjective observation cursor when available.
-        current_epoch_id: Cached active epoch id when available.
-        takeover_claim_ids: Live takeover claims owned by this session.
-    """
-
-    session_id: str = Field(description="Stable session UUID.")
-    player_type: str = Field(description="Session player type such as ai or codex.")
-    name: str = Field(description="Session display name.")
-    connection_status: str = Field(description="Current connection status.")
-    is_active_turn: bool = Field(description="Whether this session controls the active actor.")
-    active_controlled_entity_uuid: Optional[str] = Field(
-        default=None,
-        description="Active actor UUID when controlled by this session.",
-    )
-    active_controlled_entity_name: Optional[str] = Field(
-        default=None,
-        description="Active actor name when controlled by this session.",
-    )
-    controlled_entities: List[AgentSessionEntityRow] = Field(description="Controlled entity labels.")
-    agent_cursor: int = Field(description="Current telemetry cursor for the session.")
-    earliest_agent_cursor: int = Field(description="Earliest retained telemetry cursor.")
-    observation_cursor: Optional[int] = Field(default=None, description="Current subjective observation cursor when available.")
-    current_epoch_id: Optional[str] = Field(default=None, description="Cached active epoch id when available.")
-    takeover_claim_ids: List[str] = Field(default_factory=list, description="Live takeover claims owned by this session.")
-
-
-class AgentSessionListResponse(BaseModel):
-    """Read-only AI session index for observer clients.
-
-    Attributes:
-        sessions: AI or Codex sessions that can expose agent telemetry.
-        active_game_id: Active game UUID, if any.
-        encounter_active: Whether the active game has an active encounter.
-    """
-
-    sessions: List[AgentSessionRow] = Field(description="AI or Codex sessions that can expose agent telemetry.")
-    active_game_id: Optional[str] = Field(default=None, description="Active game UUID, if any.")
-    encounter_active: bool = Field(description="Whether the active game has an active encounter.")
 
 
 class AoEPreviewResult(BaseModel):
@@ -1774,72 +1475,6 @@ class AdvanceEncounterResult(BaseModel):
     combat_log_cursor_after: Optional[int] = Field(default=None, description="Combat-log cursor after advancement.")
 
 
-class TakeoverRequest(BaseModel):
-    """Request to claim combatants for Codex control.
-
-    Attributes:
-        faction: Faction to claim when explicit entities are not provided.
-        entity_uuids: Explicit entity UUIDs to claim.
-        session_id: Existing Codex session to reuse.
-        name: Display name for a newly created Codex session.
-        force: Whether to replace an overlapping live takeover claim.
-        lease_seconds: Number of seconds before the claim expires without a heartbeat.
-    """
-
-    faction: Optional[str] = Field(default="monsters", description="Faction to claim when explicit entities are not provided.")
-    entity_uuids: Optional[List[str]] = Field(default=None, description="Explicit entity UUIDs to claim.")
-    session_id: Optional[str] = Field(default=None, description="Existing Codex session to reuse.")
-    name: str = Field(default="Codex Monsters", description="Display name for a newly created Codex session.")
-    force: bool = Field(default=False, description="Whether to replace an overlapping live takeover claim.")
-    lease_seconds: float = Field(default=120.0, gt=0, description="Seconds before claim expiry without heartbeat.")
-
-
-class TakeoverEntityRow(BaseModel):
-    """Entity row included in takeover claim responses."""
-
-    entity_uuid: str = Field(description="Claimed entity UUID.")
-    entity_name: str = Field(description="Claimed entity display name.")
-    faction: Optional[str] = Field(default=None, description="Claimed entity faction.")
-    previous_controller_uuid: str = Field(description="Controller UUID to restore on release.")
-    previous_controller_type: Optional[str] = Field(default=None, description="Controller type to restore on release.")
-    current_controller_type: Optional[str] = Field(default=None, description="Controller type currently assigned.")
-    previous_owner_session_id: Optional[str] = Field(default=None, description="Previous owning session UUID.")
-
-
-class TakeoverClaimResponse(BaseModel):
-    """Serialized Codex takeover claim."""
-
-    claim_id: str = Field(description="Takeover claim UUID.")
-    session_id: str = Field(description="Codex session UUID controlling the claim.")
-    name: str = Field(description="Claim display name.")
-    faction: Optional[str] = Field(default=None, description="Faction claimed, when faction-based.")
-    created_at: float = Field(description="Unix timestamp when the claim was created.")
-    last_heartbeat_at: float = Field(description="Unix timestamp of the latest heartbeat.")
-    lease_seconds: float = Field(description="Lease duration in seconds.")
-    expires_at: float = Field(description="Unix timestamp when the claim expires.")
-    is_expired: bool = Field(description="Whether the claim is expired at serialization time.")
-    claimed_entities: List[TakeoverEntityRow] = Field(description="Entities controlled by the claim.")
-
-
-class TakeoverListResponse(BaseModel):
-    """List of active or known takeover claims."""
-
-    claims: List[TakeoverClaimResponse] = Field(description="Takeover claim rows.")
-
-
-class TakeoverHeartbeatResponse(BaseModel):
-    """Response after refreshing a takeover claim."""
-
-    status: str = Field(description="Heartbeat result status.")
-    claim: TakeoverClaimResponse = Field(description="Refreshed claim.")
-
-
-class TakeoverReleaseResponse(BaseModel):
-    """Response after releasing a takeover claim."""
-
-    status: str = Field(description="Release result status.")
-    claim: Optional[TakeoverClaimResponse] = Field(default=None, description="Released claim, if found.")
-    advance_result: Optional[AdvanceEncounterResult] = Field(default=None, description="Advancement result after release.")
 
 
 class EventContractSummary(BaseModel):

@@ -3,7 +3,6 @@
 import pytest
 
 from dnd.core.base_block import BaseBlock, MovementMode
-from dnd.core.content.encounters import RosterControllerKind
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
 from dnd.core.events import EventPhase, EventQueue, EventType
@@ -270,11 +269,9 @@ def test_proving_battlefield_traverses_every_connector_kind_through_one_action()
 
 
 def test_product_proving_encounter_plays_every_vertical_surface_and_terminates() -> None:
-    """The maintained Human/AI composition remains playable through owners."""
+    """The participant-neutral composition remains playable through owners."""
     recipe = encounter_recipe("encounter.elevation_proving_ground")
-    assert [
-        slot.controller_defaults.controller for slot in recipe.roster_slots
-    ] == [RosterControllerKind.HUMAN, RosterControllerKind.AI]
+    assert all(slot.participant_name for slot in recipe.roster_slots)
     assembled = assemble_encounter_recipe(recipe, start_encounter=True)
     encounter = assembled.encounter
     hero = assembled.entities_by_roster_slot["roster_1"][0]

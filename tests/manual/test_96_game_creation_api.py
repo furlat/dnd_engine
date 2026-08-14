@@ -1,4 +1,4 @@
-"""Focused API checks for composed games and controller assignment."""
+"""Focused API checks for composed games and participant assignment."""
 
 import asyncio
 from collections.abc import Iterator
@@ -31,7 +31,7 @@ from tests.manual.server_test_client import (
 
 @pytest.fixture(autouse=True)
 def clean_game_creation_runtime() -> Iterator[None]:
-    """Isolate global engine, claim, controller, and session state per test."""
+    """Isolate global engine, controller, and session state per test."""
     reset_server_test_runtime()
     yield
     reset_server_test_runtime()
@@ -66,23 +66,9 @@ def test_catalog_is_a_lossless_projection_of_canonical_content(
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["schema_version"] == 3
-    assert payload["controllers"] == ["human", "ai", "codex"]
-    assert [
-        row["descriptor"]["policy_id"]
-        for row in payload["ai_policies"]
-    ] == [
-        "builtin.basic",
-        "custom.tactical",
-    ]
-    assert all(
-        row["execution"] == "in_process"
-        and row["provider_id"] is None
-        and row["capacity"] is None
-        and row["active_assignments"] is None
-        and row["available_capacity"] is None
-        for row in payload["ai_policies"]
-    )
+    assert payload["schema_version"] == 4
+    assert "controllers" not in payload
+    assert "ai_policies" not in payload
     assert payload["roster_recipes"] == [
         recipe.model_dump(mode="json")
         for recipe in AUTHORED_ROSTER_RECIPES
@@ -110,7 +96,7 @@ def test_catalog_is_a_lossless_projection_of_canonical_content(
     ]
 
 
-def test_openapi_has_one_game_creation_and_native_ai_path(
+def test_openapi_has_one_game_creation_path_and_no_automation_routes(
     client: ServerTestClient,
 ) -> None:
     """Deleted managed-service and scenario-start aliases cannot return."""
@@ -130,8 +116,7 @@ def test_openapi_has_one_game_creation_and_native_ai_path(
         path.startswith("/game-creation/preview/configurations/")
         for path in paths
     )
-    assert "/ai/service" not in paths
-    assert "/ai/sessions/{session_id}/service-ready" not in paths
+    assert not any(path.startswith("/ai/") for path in paths)
     assert not {
         "/simulation/start-human",
         "/simulation/start-ai-validation",
@@ -158,7 +143,6 @@ def test_compose_rejects_an_explicit_empty_owned_character_roster(
         "kind": "owned_characters",
         "title": "Empty owned party",
         "character_ids": [],
-        "member_controller_overrides": [],
     }
 
     response = client.post("/game-creation/compose", json=request)
@@ -189,10 +173,10 @@ def test_compose_and_preview_are_pure_and_preserve_the_live_game(
     assert tuple(entity.uuid for entity in Entity.get_all_entities()) == entities_before
 
 
-def test_human_vs_ai_start_wires_exact_sides_and_join_authority(
+def test_prepared_start_wires_exact_rosters_and_join_authority(
     client: ServerTestClient,
 ) -> None:
-    """Preparation wires native controllers without manufacturing AI sessions."""
+    """Preparation is passive until a human claims one exact roster."""
     composition, payload = start_composed_game(client)
     player_roster = roster_result(payload, "roster_1")
     opposition_roster = roster_result(payload, "roster_2")
@@ -200,25 +184,20 @@ def test_human_vs_ai_start_wires_exact_sides_and_join_authority(
     opposition_assignments = opposition_roster["entity_assignments"]
     human_entity_uuids = [row["entity_uuid"] for row in player_assignments]
     assert payload["status"] == "prepared"
-    assert _controller_types(player_assignments) == {"human"}
-    assert _controller_types(opposition_assignments) == {"native_ai"}
-    assert {
-        row["controller"] for row in player_assignments
-    } == {"human"}
+    assert _controller_types(player_assignments) == {"pass"}
+    assert _controller_types(opposition_assignments) == {"pass"}
+    retired_assignment_fields = {
+        "controller",
+        "policy_id",
+        "policy_execution",
+        "provider_id",
+        "codex_session_id",
+        "takeover_claim_id",
+    }
     assert all(
-        row["policy_id"] is None
-        and row["policy_execution"] is None
-        and row["provider_id"] is None
-        for row in player_assignments
+        retired_assignment_fields.isdisjoint(assignment)
+        for assignment in player_assignments + opposition_assignments
     )
-    assert {
-        (
-            row["policy_id"],
-            row["policy_execution"],
-            row["provider_id"],
-        )
-        for row in opposition_assignments
-    } == {("builtin.basic", "in_process", None)}
     assert event_server.sim.get_session_manager().sessions == {}
     objective_entities = client.get("/diagnostics/objective/bootstrap").json()["world"]["state"]["entities"]
     objective_by_uuid = {row["uuid"]: row for row in objective_entities}
@@ -247,6 +226,8 @@ def test_human_vs_ai_start_wires_exact_sides_and_join_authority(
     assert session.status_code == 200
     assert join.status_code == 200
     assert join.json()["controlled_entities"] == human_entity_uuids
+    assert _controller_types(player_assignments) == {"human"}
+    assert _controller_types(opposition_assignments) == {"pass"}
 
 
 def test_live_stream_preserves_cursor_order_during_recursive_movement(
@@ -329,58 +310,11 @@ def test_live_stream_preserves_cursor_order_during_recursive_movement(
     )
 
 
-def test_codex_side_claims_exact_entities_over_native_ai_fallback(
-    client: ServerTestClient,
-) -> None:
-    """Configured Codex play is an exact-side lease with deterministic recovery."""
-    _composition, payload = start_composed_game(
-        client,
-        controllers=("codex", "ai"),
-    )
-    player_roster = roster_result(payload, "roster_1")
-    opposition_roster = roster_result(payload, "roster_2")
-    player_assignments = player_roster["entity_assignments"]
-    opposition_assignments = opposition_roster["entity_assignments"]
-    player_assignment = player_assignments[0]
-    assert payload["status"] == "prepared"
-    assert player_assignment["codex_session_id"] is not None
-    assert player_assignment["takeover_claim_id"] is not None
-    assert player_assignment["policy_id"] is None
-    assert player_assignment["policy_execution"] is None
-    assert player_assignment["provider_id"] is None
-    assert _controller_types(player_assignments) == {"codex"}
-    assert _controller_types(opposition_assignments) == {"native_ai"}
-    assert len(event_server.sim.native_ai_controllers) == (
-        len(player_assignments) + len(opposition_assignments)
-    )
-    assert event_server.sim.get_session_manager().sessions.keys() == {
-        UUID(player_assignment["codex_session_id"])
-    }
-
-    claim = event_server.ai_takeover_manager.get_claim(
-        UUID(player_assignment["takeover_claim_id"]),
-    )
-    assert claim is not None
-    assert {str(entity_uuid) for entity_uuid in claim.entity_uuids} == {
-        row["entity_uuid"] for row in player_assignments
-    }
-    released = client.post(
-        f"/ai/takeover/{player_assignment['takeover_claim_id']}/release",
-    )
-    assert released.status_code == 200
-    assert _controller_types(player_assignments) == {
-        "native_ai"
-    }
-
-
 def test_observer_join_has_no_entity_authority(
     client: ServerTestClient,
 ) -> None:
     """Spectator identity can join the game but can never claim a combatant."""
-    _composition, payload = start_composed_game(
-        client,
-        controllers=("ai", "ai"),
-    )
+    _composition, payload = start_composed_game(client)
     entity_uuid = roster_result(
         payload,
         "roster_1",

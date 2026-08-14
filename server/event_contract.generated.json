@@ -1,6 +1,6 @@
 {
-  "contract_hash": "c9a6e51b3718d8c89ea0446db95ee19ca3edf4d5edb7dd854daa521dee691169",
-  "contract_version": 1,
+  "contract_hash": "8865b545f23aee1ae8f7fd2e1454101996cd693365049428cfddddd3a313f8c2",
+  "contract_version": 2,
   "enums": {
     "dnd.core.action_execution.MovementProvocationPolicy": {
       "python": "dnd.core.action_execution.MovementProvocationPolicy",

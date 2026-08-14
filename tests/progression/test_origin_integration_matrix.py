@@ -39,7 +39,7 @@ from dnd.content_system.character_origin_definitions import (
     ROCK_GNOME_VARIANT_DECLARATION,
     TIEFLING_SPECIES_DECLARATION,
 )
-from dnd.content_system.pack_loader import LoadedContentSystem
+from dnd.content_system.system import LoadedContentSystem
 from dnd.content_system.runtime import ContentSystemRuntime
 from dnd.core.content.durable_characters import (
     BackgroundDefinition,
@@ -103,7 +103,6 @@ def _loaded_builtin() -> LoadedContentSystem:
             },
             sources={},
         ),
-        packs=(),
         built_in_artifact_digest="c" * 64,
         content_set_digest="d" * 64,
     )

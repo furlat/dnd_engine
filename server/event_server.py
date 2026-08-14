@@ -31,7 +31,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Sequence
 from uuid import UUID
-from contextlib import asynccontextmanager, nullcontext
+from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
@@ -49,36 +49,20 @@ from dnd.core.events import (
 )
 from dnd.core.gridmap import get_map
 from dnd.content_system.bootstrap import bootstrap_content_system
-from dnd.content_system.pack_loader import (
-    ENGINE_CONTENT_API_VERSION,
-    LoadedContentSystem,
-)
+from dnd.content_system.system import LoadedContentSystem
 from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.entity import Entity
 from dnd.encounter import Encounter, EncounterState, TurnState
 from dnd.core.content.encounters import (
-    EncounterRosterSlot,
     OwnedCharacterRosterSource,
-    RosterControllerKind,
 )
 from dnd.scenarios.encounter_assembler import (
     AssembledEncounter,
     IncompatibleEncounterError,
     prepare_encounter_recipe,
 )
-from dnd.ai.instrumentation import (
-    AIInstrumentation,
-    BoundedAIInstrumentationSink,
-)
-from dnd.ai.policy import PolicyDescriptor
-from dnd.ai.registry import UnknownPolicyError
-from dnd.ai.runtime.controller import NativeAIController
-from dnd.controller import (
-    Controller,
-    ControllerStepResult,
-    HumanController,
-)
+from dnd.controller import HumanController, PassController
 from dnd.action_dispatch import dispatch_available_action
 from dnd.actions_functional import get_available_actions
 from server.runtime_performance import latency_sensitive_gc
@@ -87,17 +71,11 @@ from dnd.core.base_actions import (
     AvailableHandlerInfo,
     TargetType,
 )
-from dnd.core.action_execution import movement_continuation_scope
-
 from server.api_models import (
     APIAvailableActions, APIServerTiming, ActionExecutionAuthorization,
     SimpleActionRequest, ActionResult, AoEPreviewResult,
     CreateSessionRequest, CreateSessionResponse, SessionPingResponse,
     JoinGameRequest, JoinGameResponse,
-    AIExecutionKind,
-    AIProviderCatalogEntry, AIProviderCatalogResponse,
-    AIProviderDeleteResponse, AIProviderRegistrationRequest,
-    GameCreationAIPolicyOption,
     GameCreationCatalogResponse,
     GameCreationComposeRequest, GameCreationComposeResponse,
     GameCreationPreviewRequest,
@@ -110,9 +88,6 @@ from server.api_models import (
     APIEquippableItems, APIEntityHandlersResponse,
     EquipRequest, UnequipRequest, EquipmentMutationResult, ToggleHandlerResponse,
     AdvanceEncounterResult,
-    AgentSessionEntityRow, AgentSessionListResponse, AgentSessionRow,
-    TakeoverClaimResponse, TakeoverEntityRow, TakeoverHeartbeatResponse, TakeoverListResponse,
-    TakeoverReleaseResponse, TakeoverRequest,
     SpellCatalogResponse,
     MapEditorCatalog, MapEditorCreateMapRequest, MapEditorLightResponse, MapEditorMapSnapshot,
     MapEditorConnectorDeleteRequest, MapEditorConnectorEnabledRequest, MapEditorConnectorMutationResponse, MapEditorConnectorUpsertRequest,
@@ -121,11 +96,6 @@ from server.api_models import (
     MapEditorSavedMapList, MapEditorSavedMapMetadata,
     ServerCapabilitiesResponse,
     StandaloneGameSessionSummary, StandaloneGameStatusResponse,
-)
-from server.ai_policy_composition import (
-    DEFAULT_NATIVE_POLICY_ID,
-    SERVER_NATIVE_POLICY_REGISTRY,
-    server_native_ai_policy_options,
 )
 from server.content_catalog import (
     ContentCatalogResponse,
@@ -164,22 +134,6 @@ from server.game_history import (
 from server.directory_event_stream import (
     DirectoryEventStream,
     create_directory_event_stream_router,
-)
-from server.external_ai_protocol import (
-    EXTERNAL_AI_PROTOCOL_HASH,
-    EXTERNAL_AI_PROTOCOL_VERSION,
-)
-from server.registered_ai_controller import RegisteredAIController
-from server.registered_ai_provider import (
-    RegisteredAIProviderBusyError,
-    RegisteredAIProviderCapacityError,
-    RegisteredAIProviderCatalog,
-    RegisteredAIProviderCollisionError,
-    RegisteredAIProviderError,
-    RegisteredAIProviderInfo,
-    RegisteredAIProviderNotFoundError,
-    RegisteredAIProviderProtocolError,
-    RegisteredAIProviderTransportError,
 )
 from server.world_contracts import APIFloorObject
 from server.mapeditor_support import (
@@ -227,8 +181,6 @@ from server.game_creation_preview_contracts import (
     GameCreationEncounterVisualPreviewResponse,
 )
 from server.event_stream import (
-    BoundedSubscription,
-    EvictedPayload,
     ObjectiveSourceSnapshot,
     event_stream,
     format_sse,
@@ -237,7 +189,6 @@ from server.event_stream import (
 from server.event_contract import (
     event_contract_summary,
 )
-from server.agent_event_stream import agent_event_stream
 from server.game_summary_store import WorkerSummaryEvidence, game_summary_store
 from server.objective_replay import ObjectiveReplayBundle
 from server.player_replay import SubjectivePlayerReplayArchive
@@ -255,7 +206,7 @@ from server.session import (
     PlayerSession, PlayerType, get_session_manager
 )
 from server.replication_perspective import perspective_epoch_registry
-from server.agent_protocol.objective_diagnostics import (
+from server.objective_diagnostics_contracts import (
     ObjectiveDiagnosticsBootstrap,
     ObjectiveDiagnosticsSync,
     SubjectiveRenderParityDiagnosticsResponse,
@@ -312,64 +263,12 @@ from server.player_replication_contract import (
     SubjectiveReplicationBootstrap,
     SubjectiveSyncDelivery,
 )
-from server.ai_takeover_manager import AITakeoverManager, TakeoverClaim, TakeoverError
-from dnd.ai.contracts.observation import (
-    ObservationFrame,
-    ObservationFramesResponse,
-    ObservationSnapshot,
-)
-from server.agent_runtime.observation_journal import (
-    ObservationAccessError,
-    ObservationOwnershipBoundary,
-    append_command_result_frame,
-    append_decision_epoch_frame,
-    append_epoch_clear_frame,
-    build_observation_snapshot,
-    clear_observation_projection_cache,
-    get_observation_cursor,
-    get_materialized_observation_world,
-    iter_observation_frames,
-    observation_wakeup_stream,
-    prepare_observation_ownership_change,
-    publish_observation_ownership_changes,
-)
-from server.agent_protocol.telemetry import PolicySourceManifest
-from dnd.ai.contracts.control import (
-    ActionAffordance,
-    ActionResolutionStatus,
-    AgentEndTurnCommandRequest,
-    AgentExecuteCommandRequest,
-    CommandResult,
-    CommandResultStatus,
-    DecisionEpoch,
-    DecisionEpochReason,
-    END_TURN_ROW_ID,
-)
-from dnd.ai.contracts.semantics import ActionTag
-from server.agent_runtime.movement_revalidation import (
-    SessionMovementContinuationGuard,
-)
-from dnd.ai.runtime.decision_epoch import (
-    ActionExecutionBinding,
-    DecisionEpochExecutionAuthority,
-    build_decision_epoch as build_subjective_decision_epoch,
-    clear_epoch_value_caches,
-)
-from server.agent_protocol.telemetry import (
-    AgentEventHistoryResponse,
-    AgentEventIngestRequest,
-)
-
 _available_actions_cache: Dict[str, AvailableActionsResult] = {}
-_last_published_epoch_by_session: Dict[str, str] = {}
-_current_epoch_by_session: Dict[str, DecisionEpoch] = {}
-_execution_authority_by_epoch_id: Dict[str, DecisionEpochExecutionAuthority] = {}
-ai_takeover_manager = AITakeoverManager()
 
 
 @dataclass
 class _ServerCommandTiming:
-    """Low-overhead phase timing for one server-side AI command."""
+    """Low-overhead phase timing for one server-side command."""
 
     command_type: str
     diagnostics_enabled: bool = False
@@ -415,54 +314,13 @@ class _ActionExecutionResult:
     movement_revalidation_reason: Optional[str] = None
 
 
-def _prefixed_timing_recorder(
-    timing: Optional[_ServerCommandTiming],
-    prefix: str,
-) -> Optional[Callable[[str, float], None]]:
-    """Return a timing callback that records observation subphases."""
-    if timing is None or not timing.diagnostics_enabled:
-        return None
-
-    def record(phase: str, started_at: float) -> None:
-        timing.add(f"{prefix}.{phase}", started_at)
-
-    return record
-
-
-async def _first_subscription_envelope(
-    subscriptions: list[BoundedSubscription],
-    *,
-    timeout: float,
-) -> Optional[dict[str, Any]]:
-    """Return the first live SSE envelope while cleaning up losing wait tasks."""
-    tasks = [asyncio.create_task(subscription.get()) for subscription in subscriptions]
-    try:
-        done, _pending = await asyncio.wait(
-            set(tasks),
-            timeout=timeout,
-            return_when=asyncio.FIRST_COMPLETED,
-        )
-        if not done:
-            return None
-        return next(iter(done)).result()
-    finally:
-        for task in tasks:
-            if not task.done():
-                task.cancel()
-        if tasks:
-            await asyncio.gather(*tasks, return_exceptions=True)
 
 
 def clear_subjective_projection_state() -> None:
     """Clear all process-local subjective projection and replay identity state."""
-    clear_observation_projection_cache()
-    clear_epoch_value_caches()
     perspective_epoch_registry.clear_all()
     canonical_subjective_replication_runtime.clear_all()
     subjective_replay_capture_store.clear()
-    _last_published_epoch_by_session.clear()
-    _current_epoch_by_session.clear()
-    _execution_authority_by_epoch_id.clear()
 
 
 @dataclass(frozen=True)
@@ -476,20 +334,6 @@ class _GameActivationIdentity:
     perspective_epoch_id: str
 
 
-def _store_current_epoch(session_id: str, epoch: DecisionEpoch) -> None:
-    """Store one active epoch and release superseded private authority."""
-    previous = _current_epoch_by_session.get(session_id)
-    _current_epoch_by_session[session_id] = epoch
-    if previous is not None and previous.epoch_id != epoch.epoch_id:
-        _execution_authority_by_epoch_id.pop(previous.epoch_id, None)
-
-
-def _forget_current_epoch(session_id: str) -> Optional[DecisionEpoch]:
-    """Forget one active epoch and its private execution bindings."""
-    epoch = _current_epoch_by_session.pop(session_id, None)
-    if epoch is not None:
-        _execution_authority_by_epoch_id.pop(epoch.epoch_id, None)
-    return epoch
 
 
 class StandaloneGameState:
@@ -497,9 +341,8 @@ class StandaloneGameState:
 
     Attributes:
         encounter: Active encounter, if one has been created.
-        combat_task: Background task advancing AI combat, if running.
+        combat_task: Background task advancing autonomous turns, if running.
         paused: Whether automatic game advancement is inactive.
-        auto_run_ai: Whether AI turns should advance automatically.
         _session_manager: Session registry backing game/player sessions.
         _game_session: Active game session for the current encounter.
     """
@@ -508,14 +351,10 @@ class StandaloneGameState:
         self.encounter: Optional[Encounter] = None
         self.combat_task: Optional[asyncio.Task] = None
         self.paused: bool = True
-        self.auto_run_ai: bool = True
         self._session_manager = get_session_manager()
         self._game_session: Optional[GameSession] = None
         self.current_creation: Optional[GameCreationStartResponse] = None
         self.activation_identity: Optional[_GameActivationIdentity] = None
-        self.native_ai_controllers: list[NativeAIController] = []
-        self.registered_ai_controllers: list[RegisteredAIController] = []
-        self.native_ai_instrumentation = BoundedAIInstrumentationSink()
 
     @property
     def game(self) -> Optional[GameSession]:
@@ -524,17 +363,17 @@ class StandaloneGameState:
 
     @property
     def waiting_for_human(self) -> bool:
-        """Check if waiting for a human/codex player (derived from session state)."""
+        """Check if waiting for a human player (derived from session state)."""
         if not self._game_session or not self.encounter:
             return False
         active_player = self._game_session.active_player
         if not active_player:
             return False
-        return active_player.player_type in (PlayerType.HUMAN, PlayerType.CODEX)
+        return active_player.player_type is PlayerType.HUMAN
 
     @property
     def human_entity_uuid(self) -> Optional[UUID]:
-        """Get the active entity UUID if it's a human/codex turn."""
+        """Get the active entity UUID if it is a human turn."""
         if not self._game_session:
             return None
         return self._game_session.active_entity_uuid
@@ -560,16 +399,7 @@ class StandaloneGameState:
         """Reset mutable server session state for a fresh game scene."""
         if self.combat_task is not None and not self.combat_task.done():
             self.combat_task.cancel()
-        if self.registered_ai_controllers:
-            raise RuntimeError(
-                "registered AI controllers require asynchronous teardown "
-                "before synchronous game reset"
-            )
-        self.close_native_ai_controllers()
-        self.native_ai_instrumentation = BoundedAIInstrumentationSink()
-        ai_takeover_manager.clear(self.encounter, self._game_session)
         clear_subjective_projection_state()
-        agent_event_stream.clear_all()
         self.encounter = None
         self._game_session = None
         self.current_creation = None
@@ -582,61 +412,9 @@ class StandaloneGameState:
         _available_actions_cache.clear()
         event_stream.ensure_attached()
 
-    def close_native_ai_controllers(self) -> None:
-        """Close every side assignment once, including prepared games."""
-        for controller in self.native_ai_controllers:
-            controller.close()
-        self.native_ai_controllers.clear()
-
-    async def close_registered_ai_controllers(self) -> None:
-        """Close every remote assignment before releasing engine ownership."""
-        controllers = tuple(self.registered_ai_controllers)
-        self.registered_ai_controllers.clear()
-        first_error: BaseException | None = None
-        for controller in controllers:
-            try:
-                await controller.close()
-            except BaseException as error:
-                if first_error is None:
-                    first_error = error
-        if first_error is not None:
-            raise RuntimeError(
-                "registered AI controller teardown failed"
-            ) from first_error
-
 sim = StandaloneGameState()
 
-native_policy_registry = SERVER_NATIVE_POLICY_REGISTRY
 
-
-def _new_registered_ai_provider_catalog() -> RegisteredAIProviderCatalog:
-    """Create one process-lifetime provider catalog with native IDs reserved."""
-    return RegisteredAIProviderCatalog(
-        reserved_policy_ids={
-            descriptor.policy_id
-            for descriptor in native_policy_registry.descriptors()
-        },
-    )
-
-
-registered_ai_provider_catalog = _new_registered_ai_provider_catalog()
-_ai_provider_admin_token: Optional[str] = os.getenv(
-    "DND_AI_PROVIDER_ADMIN_TOKEN"
-)
-
-
-def configure_ai_provider_admin_token(token: Optional[str]) -> None:
-    """Configure the deployment-only bearer used by provider admin routes."""
-    global _ai_provider_admin_token
-    _ai_provider_admin_token = token
-
-
-def _active_registered_ai_provider_catalog() -> RegisteredAIProviderCatalog:
-    """Return an open catalog, recreating it after a completed app lifespan."""
-    global registered_ai_provider_catalog
-    if registered_ai_provider_catalog.closed:
-        registered_ai_provider_catalog = _new_registered_ai_provider_catalog()
-    return registered_ai_provider_catalog
 
 
 @dataclass(frozen=True)
@@ -681,26 +459,6 @@ def _retire_changed_subjective_sessions(
     for session_id in set(before) | set(after):
         if before.get(session_id) != after.get(session_id):
             canonical_subjective_replication_runtime.retire_session(session_id)
-
-_policy_source_manifest: Optional[PolicySourceManifest] = None
-_local_terminal_tasks: set[asyncio.Task[None]] = set()
-
-
-def configure_policy_source_manifest(
-    manifest: Optional[PolicySourceManifest],
-) -> None:
-    """Install opaque client-owned policy diagnostics for the read-only API.
-
-    The server deliberately does not discover or read client source files. A
-    composition root that includes an AI client may build this manifest and
-    supply it explicitly; a server-only deployment leaves it unset.
-
-    Args:
-        manifest: Validated client manifest, or ``None`` to remove it.
-    """
-    global _policy_source_manifest
-    _policy_source_manifest = manifest
-
 
 def _active_local_game_coordinator(
 ) -> StandaloneLocalGameCoordinator | None:
@@ -824,12 +582,6 @@ def _publish_local_terminal_game(encounter_uuid: UUID) -> bool:
         objective_replay=objective_replay,
         subjective_replay=subjective_replay,
     )
-    task = asyncio.create_task(
-        _close_registered_ai_after_terminal(encounter),
-        name=f"local-game-terminal-cleanup-{encounter_uuid}",
-    )
-    _local_terminal_tasks.add(task)
-    task.add_done_callback(_local_terminal_tasks.discard)
     return True
 
 
@@ -888,7 +640,7 @@ def _publish_hosted_terminal_ready(encounter_uuid: UUID) -> bool:
 
 
 async def prepare_new_game_start() -> None:
-    """Stop active automation and clear session-side projection state."""
+    """Stop active gameplay and clear session-side projection state."""
     if sim.combat_task and not sim.combat_task.done():
         sim.combat_task.cancel()
         try:
@@ -899,12 +651,7 @@ async def prepare_new_game_start() -> None:
     local_game = _active_local_game_coordinator()
     if local_game is not None:
         local_game.interrupt("local_game_replaced")
-    await sim.close_registered_ai_controllers()
-    sim.close_native_ai_controllers()
-    sim.native_ai_instrumentation = BoundedAIInstrumentationSink()
-    ai_takeover_manager.clear(sim.encounter, sim.game)
     clear_subjective_projection_state()
-    agent_event_stream.clear_all()
     sim._game_session = None
     sim._session_manager.sessions.clear()
     sim._session_manager.games.clear()
@@ -928,12 +675,7 @@ async def _abort_failed_game_start() -> None:
     local_game = _active_local_game_coordinator()
     if local_game is not None:
         local_game.fail("local_game_start_failed")
-    await sim.close_registered_ai_controllers()
-    sim.close_native_ai_controllers()
-    sim.native_ai_instrumentation = BoundedAIInstrumentationSink()
-    ai_takeover_manager.clear(sim.encounter, sim.game)
     clear_subjective_projection_state()
-    agent_event_stream.clear_all()
     manager = sim.get_session_manager()
     manager.sessions.clear()
     manager.games.clear()
@@ -951,43 +693,21 @@ async def _abort_failed_game_start() -> None:
     _ensure_local_terminal_callback()
 
 
-async def _close_registered_ai_after_terminal(
-    encounter: Encounter,
-) -> None:
-    """Release remote assignments without rewriting a committed game result."""
-    if encounter.state is not EncounterState.ENDED:
-        return
-    try:
-        await sim.close_registered_ai_controllers()
-    except BaseException:
-        logger.exception(
-            "Registered AI teardown failed after encounter %s ended",
-            encounter.uuid,
-        )
 
 
 async def advance_encounter(
     timing: Optional[_ServerCommandTiming] = None,
-    *,
-    publish_decision_epoch: bool = True,
 ) -> AdvanceEncounterResult:
-    """Advance the encounter until a player-controlled turn or terminal state.
+    """Advance the encounter until an external-control boundary or terminal state.
 
     Args:
         timing: Optional phase recorder for command diagnostics.
-        publish_decision_epoch: Whether to publish the resulting AI decision epoch.
-
     Returns:
         Control acknowledgement with the resulting turn boundary and canonical
         replication cursor barriers.
     """
     if sim.encounter is None:
         return AdvanceEncounterResult(status="no_encounter")
-
-    started = time.perf_counter()
-    restore_expired_takeovers()
-    if timing is not None:
-        timing.add("advance.restore_expired_takeovers_ms", started)
 
     if sim.encounter.state == EncounterState.NOT_STARTED:
         if not sim.encounter.initiative_order:
@@ -1001,18 +721,9 @@ async def advance_encounter(
         )
 
     started = time.perf_counter()
-    result = sim.encounter.advance_until_player()
+    result = sim.encounter.advance_until_external_boundary()
     if timing is not None:
-        timing.add("advance.advance_until_player_ms", started)
-
-    if publish_decision_epoch:
-        started = time.perf_counter()
-        _publish_decision_epoch_for_active_session(
-            DecisionEpochReason.TURN_START,
-            timing=timing,
-        )
-        if timing is not None:
-            timing.add("advance.publish_active_epoch_ms", started)
+        timing.add("advance.external_boundary_ms", started)
 
     return AdvanceEncounterResult(
         status=result.status,
@@ -1039,7 +750,7 @@ def _schedule_activated_game_coordinator() -> bool:
         return True
     sim.combat_task = asyncio.create_task(
         _run_activated_game(),
-        name=f"native-ai-game-{sim.activation_identity.game_id}",
+        name=f"game-coordinator-{sim.activation_identity.game_id}",
     )
     return True
 
@@ -1078,8 +789,7 @@ async def _run_activated_game() -> None:
             and encounter.state == EncounterState.ACTIVE
             and not sim.paused
         ):
-            controller = encounter.get_current_controller()
-            if controller is None:
+            if encounter.get_current_controller() is None:
                 logger.error(
                     "Activated encounter %s has no controller for its current actor",
                     encounter.uuid,
@@ -1093,66 +803,12 @@ async def _run_activated_game() -> None:
             ):
                 return
             result = encounter.advance_one_controller_action_boundary()
-            if (
-                result.status == "waiting_for_ai_provider"
-                and isinstance(controller, RegisteredAIController)
-            ):
-                entity = encounter.get_current_entity()
-                if entity is None:
-                    raise RuntimeError(
-                        "registered AI boundary has no current actor"
-                    )
-                controller_uuid = controller.uuid
-                actor_uuid = entity.uuid
-                frozen_context = encounter.build_current_turn_context()
-                pending = await controller.request_intent(
-                    entity,
-                    frozen_context,
-                )
-                if (
-                    sim.encounter is not encounter
-                    or sim.activation_identity != activation
-                    or sim.paused
-                    or encounter.state is not EncounterState.ACTIVE
-                    or encounter.get_current_entity() is not entity
-                    or encounter.get_current_controller() is not controller
-                ):
-                    return
-                current_context = encounter.build_current_turn_context()
-                if (
-                    current_context.round_number
-                    != frozen_context.round_number
-                    or current_context.turn_index != frozen_context.turn_index
-                    or current_context.entity_uuid
-                    != frozen_context.entity_uuid
-                ):
-                    return
-                with EventQueue.batch_on_event_callbacks():
-                    if isinstance(pending, ControllerStepResult):
-                        step = pending
-                    else:
-                        step = controller.resolve_pending_intent(
-                            entity,
-                            current_context,
-                            pending,
-                        )
-                    result = encounter.resolve_deferred_controller_step(
-                        entity_uuid=actor_uuid,
-                        controller_uuid=controller_uuid,
-                        step=step,
-                    )
-            elif result.status == "waiting_for_ai_provider":
-                raise RuntimeError(
-                    "only RegisteredAIController may expose the external "
-                    "provider boundary"
-                )
             if result.status in {
                 "autonomous_action_completed",
                 "advanced_autonomous",
-                "deferred_action_completed",
             }:
                 # A zero-delay sleep immediately requeues this always-ready
-                # task.  Long AI-vs-AI matches can then make an HTTP request
+                # task. Long autonomous sequences can make an HTTP request
                 # wait behind several projection-heavy action boundaries.
                 # One millisecond is a scheduler fairness checkpoint, not a
                 # gameplay/turn delay: it gives already-ready HTTP and SSE
@@ -1160,13 +816,6 @@ async def _run_activated_game() -> None:
                 # millisecond per autonomous decision.
                 await asyncio.sleep(0.001)
                 continue
-            if result.status in {
-                "waiting_for_human",
-                "waiting_for_codex",
-            }:
-                _publish_decision_epoch_for_active_session(
-                    DecisionEpochReason.TURN_START,
-                )
             return
     except asyncio.CancelledError:
         raise
@@ -1176,12 +825,6 @@ async def _run_activated_game() -> None:
             "Activated encounter coordinator failed for %s",
             encounter.uuid,
         )
-    finally:
-        if (
-            sim.encounter is encounter
-            and encounter.state is EncounterState.ENDED
-        ):
-            await _close_registered_ai_after_terminal(encounter)
 
 
 def action_cursor_fields() -> dict:
@@ -1196,95 +839,6 @@ def action_cursor_fields() -> dict:
     }
 
 
-def serialize_takeover_claim(claim: TakeoverClaim) -> TakeoverClaimResponse:
-    """Serialize a takeover claim with current entity/controller context."""
-    rows = []
-    for entity_uuid in claim.entity_uuids:
-        state = claim.entity_states[entity_uuid]
-        entity = Entity.get(entity_uuid)
-        previous_controller = Controller.get(state.previous_controller_uuid)
-        current_controller = sim.encounter.get_controller_for(entity_uuid) if sim.encounter else None
-        rows.append(TakeoverEntityRow(
-            entity_uuid=str(entity_uuid),
-            entity_name=entity.name if entity else "Unknown",
-            faction=entity.faction if entity else None,
-            previous_controller_uuid=str(state.previous_controller_uuid),
-            previous_controller_type=previous_controller.controller_type if previous_controller else None,
-            current_controller_type=current_controller.controller_type if current_controller else None,
-            previous_owner_session_id=(
-                str(state.previous_owner_session_id)
-                if state.previous_owner_session_id else None
-            ),
-        ))
-    return TakeoverClaimResponse(
-        claim_id=str(claim.claim_id),
-        session_id=str(claim.session_id),
-        name=claim.name,
-        faction=claim.faction,
-        created_at=claim.created_at,
-        last_heartbeat_at=claim.last_heartbeat_at,
-        lease_seconds=claim.lease_seconds,
-        expires_at=claim.expires_at,
-        is_expired=claim.is_expired(),
-        claimed_entities=rows,
-    )
-
-
-def restore_expired_takeovers() -> list[TakeoverClaim]:
-    """Restore expired claims while preserving append-only subjective history."""
-    manager = sim.get_session_manager()
-    subjective_authority_before = _capture_subjective_session_authority(manager)
-    boundary = prepare_observation_ownership_change(manager)
-    expired = ai_takeover_manager.restore_expired(sim.encounter, sim.game)
-    if expired:
-        _publish_takeover_ownership_changes(
-            boundary,
-            "takeover_expired",
-            subjective_authority_before=subjective_authority_before,
-        )
-    return expired
-
-
-def _publish_takeover_ownership_changes(
-    boundary: ObservationOwnershipBoundary,
-    reason: str,
-    *,
-    subjective_authority_before: dict[
-        str,
-        _SubjectiveSessionAuthorityFingerprint,
-    ],
-) -> list[str]:
-    """Publish ownership replacements and reconcile affected decision epochs."""
-    _retire_changed_subjective_sessions(
-        sim.get_session_manager(),
-        subjective_authority_before,
-    )
-    changed_session_ids = publish_observation_ownership_changes(
-        boundary,
-        reason=reason,
-        session_manager=sim.get_session_manager(),
-    )
-    for session_id in changed_session_ids:
-        current = _forget_current_epoch(session_id)
-        _last_published_epoch_by_session.pop(session_id, None)
-        if current is not None:
-            append_epoch_clear_frame(
-                session_id,
-                reason=reason,
-                session_manager=sim.get_session_manager(),
-            )
-    _publish_decision_epoch_for_active_session(DecisionEpochReason.RESYNC)
-    return changed_session_ids
-
-
-def _takeover_http_exception(error: TakeoverError, **context: Any) -> HTTPException:
-    """Convert a takeover manager error to a structured HTTP exception."""
-    return _api_http_exception(
-        status_code=error.status_code,
-        code=error.code,
-        message=error.message,
-        **context,
-    )
 
 
 def _parse_optional_uuid(value: Optional[str], field_name: str) -> Optional[UUID]:
@@ -1302,16 +856,6 @@ def _parse_optional_uuid(value: Optional[str], field_name: str) -> Optional[UUID
         )
 
 
-def _parse_uuid_list(values: Optional[list[str]], field_name: str) -> Optional[list[UUID]]:
-    """Parse an optional list of UUID request fields."""
-    if values is None:
-        return None
-    parsed = []
-    for value in values:
-        parsed_uuid = _parse_optional_uuid(value, field_name)
-        if parsed_uuid is not None:
-            parsed.append(parsed_uuid)
-    return parsed
 
 
 def _api_http_exception(
@@ -1863,18 +1407,6 @@ def _objective_backfill_deliveries(
     )
 
 
-def _observation_http_exception(
-    error: ObservationAccessError,
-    session_id: Optional[str] = None,
-) -> HTTPException:
-    """Convert observation access errors into structured session errors."""
-    status_code = 400 if error.code == "invalid_session_uuid" else 404
-    return _session_http_exception(
-        status_code=status_code,
-        code=error.code,
-        message=error.message,
-        session_id=session_id,
-    )
 
 
 def _encounter_context() -> dict:
@@ -2001,7 +1533,6 @@ def validate_session_action(session_id_str: str, entity_uuid_str: str) -> Entity
         session_id_str,
         entity_uuid_str,
     )
-    restore_expired_takeovers()
     mgr = sim.get_session_manager()
     _, _ = mgr.validate_action(session_id, entity_uuid)
     return _require_runtime_entity(entity_uuid)
@@ -2016,7 +1547,6 @@ def validate_session_entity_inspection(
         session_id_str,
         entity_uuid_str,
     )
-    restore_expired_takeovers()
     manager = sim.get_session_manager()
     _, game = manager.validate_controlled_entity(session_id, entity_uuid)
     return _require_runtime_entity(entity_uuid), game
@@ -2135,37 +1665,36 @@ async def lifespan(app: FastAPI):
                     await sim.combat_task
                 except asyncio.CancelledError:
                     pass
+            coordinator = _active_local_game_coordinator()
+            if coordinator is not None:
+                coordinator.interrupt("local_game_server_shutdown")
             try:
-                coordinator = _active_local_game_coordinator()
-                if coordinator is not None:
-                    coordinator.interrupt("local_game_server_shutdown")
-                await sim.close_registered_ai_controllers()
+                canonical_subjective_replication_runtime.stop()
             finally:
-                sim.close_native_ai_controllers()
                 try:
-                    await _active_registered_ai_provider_catalog().close()
+                    event_stream.stop()
                 finally:
                     try:
-                        canonical_subjective_replication_runtime.stop()
+                        sim.reset()
                     finally:
+                        reset_hosted_worker_assignment()
                         try:
-                            event_stream.stop()
+                            reset_engine_runtime()
                         finally:
                             try:
-                                sim.reset()
+                                if local_profile is not None:
+                                    local_profile.close()
                             finally:
-                                reset_hosted_worker_assignment()
-                                try:
-                                    reset_engine_runtime()
-                                finally:
-                                    try:
-                                        if local_profile is not None:
-                                            local_profile.close()
-                                    finally:
-                                        if owns_preview_worker:
-                                            await asyncio.to_thread(
-                                                close_game_creation_preview_worker,
-                                            )
+                                app.state.local_profile_manager = None
+                                app.state.local_profile_handle = None
+                                app.state.character_directory = None
+                                app.state.local_game_coordinator = None
+                                app.state.game_history = None
+                                app.state.directory_stream = None
+                                if owns_preview_worker:
+                                    await asyncio.to_thread(
+                                        close_game_creation_preview_worker,
+                                    )
 
 app = FastAPI(
     title="D&D Engine Event Server",
@@ -2504,13 +2033,8 @@ async def hosted_worker_readiness() -> HostedWorkerReadiness:
             and expected_content_set_digest != content_system.content_set_digest
             else "ready"
         ),
-        content_api_version=ENGINE_CONTENT_API_VERSION,
         content_set_digest=content_system.content_set_digest,
-        built_in_artifact_digest=content_system.built_in_artifact_digest,
         expected_content_set_digest=expected_content_set_digest,
-        external_pack_ids=tuple(
-            sorted(pack.manifest.pack_id for pack in content_system.packs)
-        ),
     )
 
 
@@ -3171,8 +2695,16 @@ async def delete_session(session_id: str):
         )
 
     canonical_subjective_replication_runtime.retire_session(session_id)
+    controlled_entities = tuple(session.controlled_entities)
     mgr.remove_session(sid)
     perspective_epoch_registry.clear_session(session_id)
+    if sim.encounter is not None:
+        for entity_uuid in controlled_entities:
+            if entity_uuid in sim.encounter.combatants:
+                sim.encounter.set_controller_for(
+                    entity_uuid,
+                    PassController(source_entity_uuid=entity_uuid),
+                )
 
     return {"status": "deleted", "session_id": session_id}
 
@@ -3333,17 +2865,16 @@ async def join_game(request: JoinGameRequest):
     subjective_authority_before = _capture_subjective_session_authority(mgr)
     if session.session_id not in game.players:
         game.add_player(session)
-    ownership_boundary = prepare_observation_ownership_change(mgr)
     assigned = []
     for entity_uuid in controlled_entity_uuids:
         if game.assign_entity(entity_uuid, session.session_id):
             assigned.append(str(entity_uuid))
-
-    _publish_takeover_ownership_changes(
-        ownership_boundary,
-        "game_join_assignment",
-        subjective_authority_before=subjective_authority_before,
-    )
+            if sim.encounter is not None:
+                sim.encounter.set_controller_for(
+                    entity_uuid,
+                    HumanController(source_entity_uuid=entity_uuid),
+                )
+    _retire_changed_subjective_sessions(mgr, subjective_authority_before)
 
     observer_join = session.player_type == PlayerType.OBSERVER
     return JoinGameResponse(
@@ -4005,416 +3536,6 @@ async def subscribe_replication(
     )
 
 
-def _build_decision_epoch(
-    session_id: str,
-    reason: DecisionEpochReason = DecisionEpochReason.SNAPSHOT,
-    *,
-    reuse_current: bool = True,
-    timing: Optional[_ServerCommandTiming] = None,
-    phase_prefix: str = "epoch",
-) -> Optional[DecisionEpoch]:
-    """Build a decision epoch when the session controls the active actor."""
-    if sim.encounter is None or sim.game is None:
-        return None
-
-    started = time.perf_counter()
-    try:
-        parsed_session_id = UUID(session_id)
-    except ValueError:
-        return None
-    if timing is not None:
-        timing.add(f"{phase_prefix}.parse_session_id_ms", started)
-
-    started = time.perf_counter()
-    session = sim.get_session_manager().get_session(parsed_session_id)
-    if session is None:
-        return None
-    if timing is not None:
-        timing.add(f"{phase_prefix}.resolve_session_ms", started)
-
-    if reuse_current:
-        started = time.perf_counter()
-        cached = _current_decision_epoch(session_id, session)
-        if timing is not None:
-            timing.add(f"{phase_prefix}.current_epoch_cache_check_ms", started)
-        if cached is not None:
-            return cached
-
-    started = time.perf_counter()
-    active_uuid = sim.game.active_entity_uuid
-    if (
-        sim.encounter.turn_state is not TurnState.IN_PROGRESS
-        or active_uuid is None
-        or active_uuid not in session.controlled_entities
-    ):
-        return None
-    if timing is not None:
-        timing.add(f"{phase_prefix}.resolve_active_actor_ms", started)
-    actor = Entity.get(active_uuid)
-    if actor is None or not actor.has_hp:
-        return None
-
-    try:
-        started = time.perf_counter()
-        observation_cursor = get_observation_cursor(
-            session_id,
-            session_manager=sim.get_session_manager(),
-            record_timing=_prefixed_timing_recorder(timing, f"{phase_prefix}.observation_cursor")
-            if timing is not None
-            else None,
-        )
-        if timing is not None:
-            timing.add(f"{phase_prefix}.get_observation_cursor_ms", started)
-    except ObservationAccessError:
-        return None
-
-    build = build_subjective_decision_epoch(
-        actor,
-        epoch_namespace=session_id,
-        round_number=sim.encounter.round_number,
-        turn_index=sim.encounter.current_turn_index,
-        observation_cursor=observation_cursor,
-        reason=reason,
-    )
-    if build is None:
-        return None
-    _available_actions_cache[build.epoch.actor_uuid] = build.available_actions
-    _execution_authority_by_epoch_id[build.epoch.epoch_id] = build.execution_authority
-    if reason == DecisionEpochReason.SNAPSHOT:
-        _store_current_epoch(session_id, build.epoch)
-    return build.epoch
-
-
-def _current_decision_epoch(session_id: str, session: Any) -> Optional[DecisionEpoch]:
-    """Return the published active epoch while it still describes the turn."""
-    epoch = _current_epoch_by_session.get(session_id)
-    if epoch is None or sim.encounter is None or sim.game is None:
-        return None
-    active_uuid = sim.game.active_entity_uuid
-    if (
-        sim.encounter.turn_state != TurnState.IN_PROGRESS
-        or active_uuid is None
-        or str(active_uuid) != epoch.actor_uuid
-        or active_uuid not in session.controlled_entities
-        or sim.encounter.round_number != epoch.round_number
-        or sim.encounter.current_turn_index != epoch.turn_index
-    ):
-        _forget_current_epoch(session_id)
-        return None
-    return epoch
-
-
-def _snapshot_with_epoch(session_id: str) -> ObservationSnapshot:
-    """Build a subjective snapshot and attach the current epoch when present."""
-    snapshot = build_observation_snapshot(session_id, session_manager=sim.get_session_manager())
-    epoch = _build_decision_epoch(
-        session_id,
-        DecisionEpochReason.SNAPSHOT,
-        phase_prefix="build.current_epoch",
-    )
-    return snapshot.model_copy(update={"current_epoch": epoch})
-
-
-def _find_affordance(epoch: DecisionEpoch, row_id: str) -> Optional[ActionAffordance]:
-    """Return the affordance row selected by row id."""
-    return epoch.affordances.row_by_id(row_id)
-
-
-def _find_execution_binding(
-    epoch: DecisionEpoch,
-    affordance: ActionAffordance,
-) -> Optional[ActionExecutionBinding]:
-    """Return private exact engine authority for one current epoch row."""
-    authority = _execution_authority_by_epoch_id.get(epoch.epoch_id)
-    return authority.binding_for(affordance) if authority is not None else None
-
-
-def _command_result(
-    status: CommandResultStatus,
-    session_id: str,
-    *,
-    command_id: Optional[str] = None,
-    actor_uuid: Optional[str] = None,
-    requested_epoch_id: Optional[str] = None,
-    current_epoch_id: Optional[str] = None,
-    row_id: Optional[str] = None,
-    action_resolution: Optional[ActionResolutionStatus] = None,
-    outcome_code: Optional[str] = None,
-    revalidation_required: bool = False,
-    revalidation_reason: Optional[str] = None,
-    message: str = "",
-    payload: Optional[dict[str, Any]] = None,
-    resync_required: bool = False,
-) -> CommandResult:
-    """Create a command result payload."""
-    return CommandResult(
-        status=status,
-        command_id=command_id,
-        session_id=session_id,
-        actor_uuid=actor_uuid,
-        requested_epoch_id=requested_epoch_id,
-        current_epoch_id=current_epoch_id,
-        row_id=row_id,
-        action_resolution=action_resolution,
-        outcome_code=outcome_code,
-        revalidation_required=revalidation_required,
-        revalidation_reason=revalidation_reason,
-        message=message,
-        payload=payload or {},
-        resync_required=resync_required,
-    )
-
-
-def _with_server_timing(
-    result: CommandResult,
-    timing: _ServerCommandTiming,
-) -> CommandResult:
-    """Return a command result with current server timing attached."""
-    payload = dict(result.payload)
-    payload["server_timing"] = timing.payload()
-    return result.model_copy(update={"payload": payload})
-
-
-def _publish_command_result(
-    session_id: str,
-    result: CommandResult,
-    *,
-    record_timing: Optional[Callable[[str, float], None]] = None,
-) -> CommandResult:
-    """Append a command result to the subjective observation stream."""
-    frame = append_command_result_frame(
-        session_id,
-        result,
-        session_manager=sim.get_session_manager(),
-        record_timing=record_timing,
-    )
-    return frame.command_result or result
-
-
-def _publish_command_result_timed(
-    session_id: str,
-    result: CommandResult,
-    timing: _ServerCommandTiming,
-) -> CommandResult:
-    """Publish a command result and account for publication time."""
-    started = time.perf_counter()
-    published = _publish_command_result(
-        session_id,
-        _with_server_timing(result, timing),
-        record_timing=_prefixed_timing_recorder(timing, "publish.command_result"),
-    )
-    timing.add("publish.command_result_ms", started)
-    return _with_server_timing(published, timing)
-
-
-def _command_ack(result: CommandResult) -> CommandResult:
-    """Return the small HTTP acknowledgement form of a command result."""
-    payload: dict[str, Any] = {}
-    if result.status != CommandResultStatus.ACCEPTED:
-        return result.model_copy(update={"payload": _compact_command_failure_payload(result)})
-    if "server_timing" in result.payload:
-        payload["server_timing"] = result.payload["server_timing"]
-    if "success" in result.payload:
-        payload["success"] = result.payload["success"]
-    if "turn_continues" in result.payload:
-        payload["turn_continues"] = result.payload["turn_continues"]
-    if "encounter_ended" in result.payload:
-        payload["encounter_ended"] = result.payload["encounter_ended"]
-    elif result.payload.get("status") == "encounter_ended":
-        payload["encounter_ended"] = True
-    return result.model_copy(update={"payload": payload})
-
-
-def _compact_command_failure_payload(result: CommandResult) -> dict[str, Any]:
-    """Return actionable failure details without objective game state."""
-    payload: dict[str, Any] = {"message": result.message}
-    source = result.payload if isinstance(result.payload, dict) else {}
-    for key in ("code", "reason", "engine_message"):
-        if key in source:
-            payload[key] = source[key]
-    if "server_timing" in source:
-        payload["server_timing"] = source["server_timing"]
-    detail = source.get("detail")
-    if isinstance(detail, dict):
-        payload["detail"] = {
-            key: value
-            for key, value in detail.items()
-            if key != "available_actions"
-        }
-    elif detail is not None:
-        payload["detail"] = detail
-    action_result = source.get("action_result")
-    if isinstance(action_result, dict):
-        payload["action_result"] = {
-            key: action_result.get(key)
-            for key in (
-                "success",
-                "message",
-                "event_type",
-                "outcome_code",
-                "turn_continues",
-                "encounter_ended",
-                "event_cursor_after",
-                "combat_log_cursor_after",
-            )
-            if key in action_result
-        }
-    return payload
-
-
-def _command_ack_with_timing(
-    result: CommandResult,
-    timing: _ServerCommandTiming,
-) -> CommandResult:
-    """Return a compact command ack with final server timing attached."""
-    return _command_ack(_with_server_timing(result, timing))
-
-
-def _publish_decision_epoch_for_session(
-    session_id: str,
-    reason: DecisionEpochReason,
-    *,
-    source_command_id: Optional[str] = None,
-    timing: Optional[_ServerCommandTiming] = None,
-    phase_prefix: str = "publish.followup_epoch",
-) -> Optional[DecisionEpoch]:
-    """Append a current decision epoch frame for a session when one exists."""
-    started = time.perf_counter()
-    epoch = _build_decision_epoch(
-        session_id,
-        reason,
-        reuse_current=False,
-        timing=timing,
-        phase_prefix=phase_prefix,
-    )
-    if timing is not None:
-        timing.add(f"{phase_prefix}.build_decision_epoch_total_ms", started)
-    if epoch is None:
-        return None
-    started = time.perf_counter()
-    last_key = f"{epoch.epoch_id}|cmd={source_command_id or ''}"
-    if _last_published_epoch_by_session.get(session_id) == last_key:
-        _store_current_epoch(session_id, epoch)
-        if timing is not None:
-            timing.add(f"{phase_prefix}.duplicate_epoch_cache_ms", started)
-        return epoch
-    if timing is not None:
-        timing.add(f"{phase_prefix}.duplicate_epoch_check_ms", started)
-    started = time.perf_counter()
-    append_decision_epoch_frame(
-        session_id,
-        epoch,
-        source_command_id=source_command_id,
-        session_manager=sim.get_session_manager(),
-        record_timing=_prefixed_timing_recorder(timing, phase_prefix),
-    )
-    if timing is not None:
-        timing.add(f"{phase_prefix}.append_decision_epoch_total_ms", started)
-    started = time.perf_counter()
-    _last_published_epoch_by_session[session_id] = last_key
-    _store_current_epoch(session_id, epoch)
-    if timing is not None:
-        timing.add(f"{phase_prefix}.store_current_epoch_ms", started)
-    return epoch
-
-
-def _publish_epoch_clear_for_session(
-    session_id: str,
-    reason: str,
-    *,
-    source_command_id: Optional[str] = None,
-    actor_uuid: Optional[str] = None,
-) -> None:
-    """Append an epoch-clear frame and forget the matching active epoch."""
-    current = _current_epoch_by_session.get(session_id)
-    if actor_uuid is not None and current is not None and current.actor_uuid != actor_uuid:
-        return
-    append_epoch_clear_frame(
-        session_id,
-        reason=reason,
-        source_command_id=source_command_id,
-        session_manager=sim.get_session_manager(),
-    )
-    if actor_uuid is None or current is None or current.actor_uuid == actor_uuid:
-        _last_published_epoch_by_session.pop(session_id, None)
-        _forget_current_epoch(session_id)
-
-
-def _publish_post_command_control(
-    session_id: str,
-    *,
-    command_id: Optional[str],
-    actor_uuid: str,
-    next_epoch_reason: DecisionEpochReason,
-    clear_reason: str,
-    timing: Optional[_ServerCommandTiming] = None,
-) -> Optional[DecisionEpoch]:
-    """Publish exactly one correlated control boundary after a command result."""
-    next_epoch = _publish_decision_epoch_for_session(
-        session_id,
-        next_epoch_reason,
-        source_command_id=command_id,
-        timing=timing,
-        phase_prefix="publish.followup_epoch",
-    )
-    if next_epoch is not None:
-        return next_epoch
-    _publish_epoch_clear_for_session(
-        session_id,
-        clear_reason,
-        source_command_id=command_id,
-        actor_uuid=actor_uuid,
-    )
-    _publish_decision_epoch_for_active_session(
-        DecisionEpochReason.TURN_START,
-        timing=timing,
-    )
-    return None
-
-
-def _publish_decision_epoch_for_active_session(
-    reason: DecisionEpochReason,
-    *,
-    timing: Optional[_ServerCommandTiming] = None,
-) -> Optional[DecisionEpoch]:
-    """Append a decision epoch for the currently active session when possible."""
-    started = time.perf_counter()
-    game = sim.game
-    if timing is not None:
-        timing.add("advance.publish_active_epoch.resolve_game_ms", started)
-    if game is None:
-        return None
-    started = time.perf_counter()
-    active_player = game.active_player
-    if timing is not None:
-        timing.add("advance.publish_active_epoch.resolve_active_player_ms", started)
-    if active_player is None:
-        return None
-    if active_player.player_type == PlayerType.HUMAN:
-        started = time.perf_counter()
-        if timing is not None:
-            timing.add("advance.publish_active_epoch.skip_human_session_ms", started)
-        return None
-    session_id = str(active_player.session_id)
-    if (
-        active_player.player_type == PlayerType.CODEX
-        and not observation_wakeup_stream.has_subscribers(session_id)
-        and not ai_takeover_manager.has_active_session_claim(active_player.session_id)
-    ):
-        started = time.perf_counter()
-        if timing is not None:
-            timing.add("advance.publish_active_epoch.skip_unwatched_codex_session_ms", started)
-        return None
-    started = time.perf_counter()
-    epoch = _publish_decision_epoch_for_session(
-        session_id,
-        reason,
-        timing=timing,
-        phase_prefix="advance.publish_active_epoch",
-    )
-    if timing is not None:
-        timing.add("advance.publish_active_epoch.publish_session_total_ms", started)
-    return epoch
 
 
 def _action_error_detail(
@@ -4472,1085 +3593,6 @@ async def get_entity_available_actions(entity_uuid: str, session_id: str):
     )
 
 
-@app.post("/ai/takeover", response_model=TakeoverClaimResponse)
-async def create_ai_takeover(request: TakeoverRequest):
-    """Claim combatants for Codex control without spawning a subprocess."""
-    if sim.encounter is None or sim.game is None:
-        raise _api_http_exception(
-            status_code=400,
-            code="no_active_game",
-            message="No active game is available for takeover",
-        )
-
-    session_id = _parse_optional_uuid(request.session_id, "session_id")
-    entity_uuids = _parse_uuid_list(request.entity_uuids, "entity_uuid")
-    manager = sim.get_session_manager()
-    subjective_authority_before = _capture_subjective_session_authority(manager)
-    ownership_boundary = prepare_observation_ownership_change(manager)
-    try:
-        claim = ai_takeover_manager.claim(
-            encounter=sim.encounter,
-            game=sim.game,
-            session_manager=sim.get_session_manager(),
-            faction=request.faction,
-            entity_uuids=entity_uuids,
-            session_id=session_id,
-            name=request.name,
-            force=request.force,
-            lease_seconds=request.lease_seconds,
-        )
-    except TakeoverError as error:
-        raise _takeover_http_exception(error, faction=request.faction, entity_uuids=request.entity_uuids)
-
-    _publish_takeover_ownership_changes(
-        ownership_boundary,
-        "takeover_claimed",
-        subjective_authority_before=subjective_authority_before,
-    )
-    return serialize_takeover_claim(claim)
-
-
-@app.get("/ai/takeover", response_model=TakeoverListResponse)
-async def list_ai_takeovers():
-    """List active Codex takeover claims."""
-    restore_expired_takeovers()
-    return TakeoverListResponse(
-        claims=[
-            serialize_takeover_claim(claim)
-            for claim in ai_takeover_manager.active_claims()
-        ],
-    )
-
-
-@app.get("/ai/policy/source", response_model=PolicySourceManifest)
-async def get_policy_source():
-    """Return explicitly supplied client policy diagnostics."""
-    if _policy_source_manifest is None:
-        raise _api_http_exception(
-            status_code=503,
-            code="policy_source_unavailable",
-            message="No client policy source manifest is configured",
-        )
-    return _policy_source_manifest
-
-
-@app.post("/ai/takeover/{claim_id}/heartbeat", response_model=TakeoverHeartbeatResponse)
-async def heartbeat_ai_takeover(claim_id: str):
-    """Refresh a takeover claim lease."""
-    parsed_claim_id = _parse_optional_uuid(claim_id, "claim_id")
-    if parsed_claim_id is None:
-        raise _api_http_exception(status_code=400, code="invalid_claim_id", message="Invalid claim UUID")
-    restore_expired_takeovers()
-    claim = ai_takeover_manager.heartbeat(parsed_claim_id)
-    if claim is None:
-        raise _api_http_exception(
-            status_code=404,
-            code="takeover_not_found",
-            message="Takeover claim not found",
-            claim_id=claim_id,
-        )
-    return TakeoverHeartbeatResponse(status="heartbeat", claim=serialize_takeover_claim(claim))
-
-
-@app.post("/ai/takeover/{claim_id}/release", response_model=TakeoverReleaseResponse)
-async def release_ai_takeover(claim_id: str):
-    """Release a takeover claim and restore previous controllers."""
-    parsed_claim_id = _parse_optional_uuid(claim_id, "claim_id")
-    if parsed_claim_id is None:
-        raise _api_http_exception(status_code=400, code="invalid_claim_id", message="Invalid claim UUID")
-    manager = sim.get_session_manager()
-    subjective_authority_before = _capture_subjective_session_authority(manager)
-    ownership_boundary = prepare_observation_ownership_change(manager)
-    claim = ai_takeover_manager.release(parsed_claim_id, sim.encounter, sim.game)
-    if claim is None:
-        raise _api_http_exception(
-            status_code=404,
-            code="takeover_not_found",
-            message="Takeover claim not found",
-            claim_id=claim_id,
-        )
-    _publish_takeover_ownership_changes(
-        ownership_boundary,
-        "takeover_released",
-        subjective_authority_before=subjective_authority_before,
-    )
-    advance_result = await advance_encounter() if sim.encounter is not None else None
-    return TakeoverReleaseResponse(
-        status="released",
-        claim=serialize_takeover_claim(claim),
-        advance_result=advance_result,
-    )
-
-
-@app.get("/ai/sessions", response_model=AgentSessionListResponse)
-async def list_ai_observer_sessions(include_empty: bool = False):
-    """List AI/Codex sessions available to telemetry observers.
-
-    Args:
-        include_empty: Whether to include sessions with no controlled entities
-            and no live takeover claim.
-
-    Returns:
-        Read-only session rows containing telemetry cursors and owned entity
-        labels. The payload intentionally omits objective state, visibility,
-        HP, positions, legal actions, and enemy facts.
-    """
-    restore_expired_takeovers()
-    manager = sim.get_session_manager()
-    game = sim.game
-    claim_ids_by_session: dict[UUID, list[str]] = {}
-    for claim in ai_takeover_manager.active_claims():
-        claim_ids_by_session.setdefault(claim.session_id, []).append(str(claim.claim_id))
-
-    rows = []
-    for session in sorted(manager.sessions.values(), key=lambda row: (row.player_type.value, row.name, str(row.session_id))):
-        if session.player_type not in (PlayerType.AI, PlayerType.CODEX):
-            continue
-        claim_ids = sorted(claim_ids_by_session.get(session.session_id, []))
-        if not include_empty and not session.controlled_entities and not claim_ids:
-            continue
-        rows.append(_serialize_agent_session_row(str(session.session_id), claim_ids))
-
-    return AgentSessionListResponse(
-        sessions=rows,
-        active_game_id=str(game.game_id) if game else None,
-        encounter_active=bool(game and game.encounter is not None and game.encounter.state.value == "active"),
-    )
-
-
-@app.get(
-    "/ai/sessions/{session_id}/observation/snapshot",
-    response_model=ObservationSnapshot,
-)
-async def get_ai_observation_snapshot(session_id: str):
-    """Return a strict session-subjective observation snapshot."""
-    try:
-        return _snapshot_with_epoch(session_id)
-    except ObservationAccessError as error:
-        raise _observation_http_exception(error, session_id=session_id)
-
-
-@app.get(
-    "/ai/sessions/{session_id}/observation/frames",
-    response_model=ObservationFramesResponse,
-)
-async def get_ai_observation_frames(
-    session_id: str,
-    since: int = 0,
-    limit: int = 50,
-):
-    """Return replayable strict session-subjective observation frames."""
-    try:
-        return iter_observation_frames(
-            session_id,
-            since=since,
-            limit=limit,
-            session_manager=sim.get_session_manager(),
-        )
-    except ObservationAccessError as error:
-        raise _observation_http_exception(error, session_id=session_id)
-
-
-@app.get("/ai/sessions/{session_id}/observation/subscribe")
-async def subscribe_ai_observation(
-    request: Request,
-    session_id: str,
-    since: int = 0,
-):
-    """Subscribe to strict session-subjective observation frames."""
-
-    async def event_generator():
-        cursor = max(0, since)
-        subjective_subscription = observation_wakeup_stream.subscribe(session_id)
-        try:
-            snapshot = _snapshot_with_epoch(session_id)
-        except ObservationAccessError as error:
-            observation_wakeup_stream.unsubscribe(session_id, subjective_subscription)
-            yield format_sse(
-                "error",
-                {"code": error.code, "message": error.message},
-            )
-            return
-
-        try:
-            if cursor > snapshot.observation_cursor:
-                yield format_sse(
-                    "error",
-                    {
-                        "code": "observation_cursor_ahead",
-                        "message": (
-                            f"Requested cursor {cursor} is ahead of current "
-                            f"cursor {snapshot.observation_cursor}."
-                        ),
-                    },
-                )
-                return
-            yield format_sse(
-                "sync",
-                {
-                    "observation_cursor": snapshot.observation_cursor,
-                    "source_event_cursor": snapshot.source_event_cursor,
-                    "source_combat_log_cursor": snapshot.source_combat_log_cursor,
-                    "current_epoch_id": snapshot.current_epoch.epoch_id if snapshot.current_epoch else None,
-                },
-                f"o={snapshot.observation_cursor}",
-            )
-
-            try:
-                replay = iter_observation_frames(
-                    session_id,
-                    since=cursor,
-                    limit=0,
-                    session_manager=sim.get_session_manager(),
-                )
-            except ObservationAccessError as error:
-                yield format_sse(
-                    "error",
-                    {"code": error.code, "message": error.message},
-                )
-                return
-            for frame in replay.frames:
-                cursor = frame.observation_cursor
-                yield format_sse(
-                    "observation_frame",
-                    frame,
-                    f"o={frame.observation_cursor}",
-                )
-            while True:
-                if await request.is_disconnected():
-                    break
-                envelope = await _first_subscription_envelope(
-                    [subjective_subscription],
-                    timeout=10.0,
-                )
-                if envelope is None:
-                    current_snapshot = _snapshot_with_epoch(session_id)
-                    yield format_sse(
-                        "heartbeat",
-                        {
-                            "server_time": time.time(),
-                            "observation_cursor": current_snapshot.observation_cursor,
-                            "source_event_cursor": current_snapshot.source_event_cursor,
-                            "source_combat_log_cursor": current_snapshot.source_combat_log_cursor,
-                            "current_epoch_id": (
-                                current_snapshot.current_epoch.epoch_id
-                                if current_snapshot.current_epoch is not None
-                                else None
-                            ),
-                        },
-                        f"o={current_snapshot.observation_cursor}",
-                    )
-                    continue
-
-                if envelope["event"] == "evicted":
-                    yield format_sse(
-                        "evicted",
-                        envelope["data"],
-                        envelope.get("id"),
-                    )
-                    break
-
-                frame_data = envelope.get("data")
-                frame = (
-                    frame_data
-                    if isinstance(frame_data, ObservationFrame)
-                    else ObservationFrame.model_validate(frame_data)
-                )
-                if frame.observation_cursor <= cursor:
-                    continue
-                if frame.observation_cursor == cursor + 1:
-                    cursor = frame.observation_cursor
-                    yield format_sse(
-                        "observation_frame",
-                        frame,
-                        f"o={frame.observation_cursor}",
-                    )
-                    continue
-
-                try:
-                    response = iter_observation_frames(
-                        session_id,
-                        since=cursor,
-                        limit=0,
-                        session_manager=sim.get_session_manager(),
-                    )
-                except ObservationAccessError as error:
-                    yield format_sse(
-                        "error",
-                        {"code": error.code, "message": error.message},
-                    )
-                    break
-                for frame in response.frames:
-                    cursor = frame.observation_cursor
-                    yield format_sse(
-                        "observation_frame",
-                        frame,
-                        f"o={frame.observation_cursor}",
-                    )
-        finally:
-            observation_wakeup_stream.unsubscribe(session_id, subjective_subscription)
-
-    return StreamingResponse(
-        event_generator(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        },
-    )
-
-
-@app.post(
-    "/ai/sessions/{session_id}/commands/execute",
-    response_model=CommandResult,
-)
-async def execute_ai_session_command(
-    session_id: str,
-    request: AgentExecuteCommandRequest,
-):
-    """Execute one row from the session's current decision epoch."""
-    timing = _ServerCommandTiming(
-        "execute",
-        diagnostics_enabled=request.include_diagnostics,
-    )
-    started = time.perf_counter()
-    epoch = _build_decision_epoch(session_id, DecisionEpochReason.SNAPSHOT)
-    timing.add("build.current_epoch_ms", started)
-    if epoch is None:
-        result = _command_result(
-            CommandResultStatus.REJECTED,
-            session_id,
-            command_id=request.command_id,
-            actor_uuid=request.actor_uuid,
-            requested_epoch_id=request.basis_epoch_id,
-            row_id=request.row_id,
-            message="Session does not currently control an active actor.",
-            resync_required=False,
-        )
-        published = _publish_command_result_timed(session_id, result, timing)
-        started = time.perf_counter()
-        _publish_epoch_clear_for_session(
-            session_id,
-            "no_active_actor",
-            source_command_id=request.command_id,
-            actor_uuid=request.actor_uuid,
-        )
-        timing.add("publish.epoch_clear_ms", started)
-        return _command_ack_with_timing(published, timing)
-
-    if epoch.epoch_id != request.basis_epoch_id or epoch.actor_uuid != request.actor_uuid:
-        result = _command_result(
-            CommandResultStatus.STALE,
-            session_id,
-            command_id=request.command_id,
-            actor_uuid=request.actor_uuid,
-            requested_epoch_id=request.basis_epoch_id,
-            current_epoch_id=epoch.epoch_id,
-            row_id=request.row_id,
-            message="Command was based on a stale decision epoch.",
-            resync_required=False,
-        )
-        published = _publish_command_result_timed(session_id, result, timing)
-        started = time.perf_counter()
-        _publish_decision_epoch_for_session(
-            session_id,
-            DecisionEpochReason.ACTION_STALE,
-            source_command_id=request.command_id,
-            timing=timing,
-            phase_prefix="publish.followup_epoch",
-        )
-        timing.add("publish.followup_epoch_ms", started)
-        return _command_ack_with_timing(published, timing)
-
-    started = time.perf_counter()
-    affordance = _find_affordance(epoch, request.row_id)
-    timing.add("validate.find_affordance_ms", started)
-    if affordance is None:
-        result = _command_result(
-            CommandResultStatus.REJECTED,
-            session_id,
-            command_id=request.command_id,
-            actor_uuid=request.actor_uuid,
-            requested_epoch_id=request.basis_epoch_id,
-            current_epoch_id=epoch.epoch_id,
-            row_id=request.row_id,
-            message="Decision epoch row id is not available.",
-            resync_required=False,
-        )
-        published = _publish_command_result_timed(session_id, result, timing)
-        started = time.perf_counter()
-        _publish_decision_epoch_for_session(
-            session_id,
-            DecisionEpochReason.ACTION_REJECTED,
-            source_command_id=request.command_id,
-            timing=timing,
-            phase_prefix="publish.followup_epoch",
-        )
-        timing.add("publish.followup_epoch_ms", started)
-        return _command_ack_with_timing(published, timing)
-
-    if affordance.bucket == "special_commands":
-        return await _end_ai_session_turn_from_epoch(
-            session_id,
-            request.actor_uuid,
-            request.basis_epoch_id,
-            command_id=request.command_id,
-            include_diagnostics=request.include_diagnostics,
-        )
-
-    if not affordance.can_afford or not affordance.targets:
-        reason = "Decision epoch row is not affordable." if not affordance.can_afford else "Decision epoch row has no legal target."
-        result = _command_result(
-            CommandResultStatus.REJECTED,
-            session_id,
-            command_id=request.command_id,
-            actor_uuid=request.actor_uuid,
-            requested_epoch_id=request.basis_epoch_id,
-            current_epoch_id=epoch.epoch_id,
-            row_id=request.row_id,
-            message=reason,
-            payload={
-                "code": "row_not_executable",
-                "reason": reason,
-            },
-            resync_required=False,
-        )
-        published = _publish_command_result_timed(session_id, result, timing)
-        started = time.perf_counter()
-        _publish_decision_epoch_for_session(
-            session_id,
-            DecisionEpochReason.ACTION_REJECTED,
-            source_command_id=request.command_id,
-            timing=timing,
-            phase_prefix="publish.followup_epoch",
-        )
-        timing.add("publish.followup_epoch_ms", started)
-        return _command_ack_with_timing(published, timing)
-
-    try:
-        extra_target_uuids = affordance.validated_extra_target_uuids(
-            request.extra_target_uuids or (),
-        )
-    except ValueError as exc:
-        result = _command_result(
-            CommandResultStatus.REJECTED,
-            session_id,
-            command_id=request.command_id,
-            actor_uuid=request.actor_uuid,
-            requested_epoch_id=request.basis_epoch_id,
-            current_epoch_id=epoch.epoch_id,
-            row_id=request.row_id,
-            message="Command target allocation is not authorized by the decision epoch.",
-            payload={
-                "code": "invalid_target_allocation",
-                "reason": str(exc),
-            },
-            resync_required=False,
-        )
-        published = _publish_command_result_timed(session_id, result, timing)
-        started = time.perf_counter()
-        _publish_decision_epoch_for_session(
-            session_id,
-            DecisionEpochReason.ACTION_REJECTED,
-            source_command_id=request.command_id,
-            timing=timing,
-            phase_prefix="publish.followup_epoch",
-        )
-        timing.add("publish.followup_epoch_ms", started)
-        return _command_ack_with_timing(published, timing)
-
-    execution_binding = _find_execution_binding(epoch, affordance)
-    if execution_binding is None:
-        result = _command_result(
-            CommandResultStatus.STALE,
-            session_id,
-            command_id=request.command_id,
-            actor_uuid=request.actor_uuid,
-            requested_epoch_id=request.basis_epoch_id,
-            current_epoch_id=epoch.epoch_id,
-            row_id=request.row_id,
-            message="Decision epoch execution authority is no longer available.",
-            payload={"code": "execution_authority_unavailable"},
-            resync_required=True,
-        )
-        published = _publish_command_result_timed(session_id, result, timing)
-        return _command_ack_with_timing(published, timing)
-
-    target = affordance.targets[0]
-    started = time.perf_counter()
-    semantics = epoch.affordances.semantics_for(affordance)
-    movement_guard = None
-    if ActionTag.MOVEMENT_VOLUNTARY in semantics.tags:
-        movement_guard = SessionMovementContinuationGuard.from_world(
-            get_materialized_observation_world(
-                session_id,
-                session_manager=sim.get_session_manager(),
-            ),
-            request.actor_uuid,
-        )
-    timing.add("execute.build_movement_guard_ms", started)
-    try:
-        started = time.perf_counter()
-        execution_scope = (
-            movement_continuation_scope(movement_guard)
-            if movement_guard is not None
-            else nullcontext()
-        )
-        with execution_scope:
-            execution = await _execute_action_by_index_impl(
-                ExecuteByIndexRequest(
-                    session_id=session_id,
-                    entity_uuid=request.actor_uuid,
-                    template_name=affordance.template_name,
-                    target_index=target.index,
-                    extra_target_uuids=list(extra_target_uuids)
-                    if extra_target_uuids
-                    else None,
-                    prefer_safe=request.prefer_safe,
-                    return_available_actions=False,
-                    include_timing=request.include_diagnostics,
-                ),
-                execution_binding=execution_binding,
-            )
-            result = execution.response
-        if movement_guard is not None:
-            for sample_ms in movement_guard.processing_samples_ms:
-                timing.add_elapsed(
-                    "execute.movement_revalidation_ms",
-                    sample_ms,
-                )
-        timing.add("execute.action_by_index_ms", started)
-    except HTTPException as exc:
-        timing.add("execute.action_by_index_ms", started)
-        result = _command_result(
-            CommandResultStatus.REJECTED,
-            session_id,
-            command_id=request.command_id,
-            actor_uuid=request.actor_uuid,
-            requested_epoch_id=request.basis_epoch_id,
-            current_epoch_id=epoch.epoch_id,
-            row_id=request.row_id,
-            message="Command was rejected by the engine.",
-            payload={"detail": exc.detail},
-            resync_required=False,
-        )
-        published = _publish_command_result_timed(session_id, result, timing)
-        started = time.perf_counter()
-        _publish_decision_epoch_for_session(
-            session_id,
-            DecisionEpochReason.ACTION_REJECTED,
-            source_command_id=request.command_id,
-            timing=timing,
-            phase_prefix="publish.followup_epoch",
-        )
-        timing.add("publish.followup_epoch_ms", started)
-        return _command_ack_with_timing(published, timing)
-
-    started = time.perf_counter()
-    result_payload = _safe_action_result_payload(result)
-    timing.add("serialize.safe_action_result_ms", started)
-    if _action_result_ends_actor_turn(result_payload):
-        started = time.perf_counter()
-        advance_result = await _advance_after_non_continuing_action(
-            request.actor_uuid,
-            publish_decision_epoch=False,
-        )
-        timing.add("advance.after_non_continuing_action_ms", started)
-        if advance_result is not None:
-            result_payload["encounter_ended"] = advance_result.status == "encounter_ended"
-
-    action_resolution = _command_action_resolution(execution)
-    revalidation_reason = _command_revalidation_reason(execution)
-    result = _command_result(
-        CommandResultStatus.ACCEPTED,
-        session_id,
-        command_id=request.command_id,
-        actor_uuid=request.actor_uuid,
-        requested_epoch_id=request.basis_epoch_id,
-        current_epoch_id=None,
-        row_id=request.row_id,
-        action_resolution=action_resolution,
-        outcome_code=result.outcome_code,
-        revalidation_required=revalidation_reason is not None,
-        revalidation_reason=revalidation_reason,
-        message=result.message,
-        payload=result_payload,
-        resync_required=False,
-    )
-    published = _publish_command_result_timed(session_id, result, timing)
-    started = time.perf_counter()
-    next_epoch = _publish_post_command_control(
-        session_id,
-        command_id=request.command_id,
-        actor_uuid=request.actor_uuid,
-        next_epoch_reason=(
-            DecisionEpochReason.TURN_START
-            if _action_result_ends_actor_turn(result_payload)
-            else _followup_epoch_reason(
-                result.action_resolution,
-                revalidation_required=result.revalidation_required,
-            )
-        ),
-        clear_reason=(
-            result.action_resolution.value
-            if result.action_resolution is not None
-            else "action_completed"
-        ),
-        timing=timing,
-    )
-    timing.add("publish.post_command_control_ms", started)
-    if published.current_epoch_id is None and next_epoch is not None:
-        published = published.model_copy(update={"current_epoch_id": next_epoch.epoch_id})
-    return _command_ack_with_timing(published, timing)
-
-
-def _command_action_resolution(execution: _ActionExecutionResult) -> ActionResolutionStatus:
-    """Map one engine action response to the controller protocol result."""
-    result = execution.response
-    if result.outcome_code == "movement.subjective_revalidation":
-        if execution.movement_termination_reason == "completed":
-            return ActionResolutionStatus.COMPLETED
-        return ActionResolutionStatus.INTERRUPTED
-    if result.success:
-        return ActionResolutionStatus.COMPLETED
-    return ActionResolutionStatus.CANCELED
-
-
-def _followup_epoch_reason(
-    resolution: ActionResolutionStatus | None,
-    *,
-    revalidation_required: bool = False,
-) -> DecisionEpochReason:
-    """Return the epoch reason corresponding to an accepted action result."""
-    if revalidation_required:
-        return DecisionEpochReason.MOVEMENT_REVALIDATION
-    if resolution is ActionResolutionStatus.INTERRUPTED:
-        return DecisionEpochReason.MOVEMENT_REVALIDATION
-    if resolution is ActionResolutionStatus.CANCELED:
-        return DecisionEpochReason.ACTION_CANCELED
-    return DecisionEpochReason.ACTION_COMPLETED
-
-
-def _command_revalidation_reason(execution: _ActionExecutionResult) -> Optional[str]:
-    """Return the typed controller revalidation cause from movement data."""
-    result = execution.response
-    if result.outcome_code != "movement.subjective_revalidation":
-        return None
-    reason = execution.movement_revalidation_reason
-    return reason if isinstance(reason, str) and reason else None
-
-
-def _action_result_ends_actor_turn(payload: dict[str, Any]) -> bool:
-    """Return whether an accepted action result says the actor cannot continue."""
-    return payload.get("turn_continues") is False and payload.get("encounter_ended") is not True
-
-
-async def _advance_after_non_continuing_action(
-    actor_uuid: str,
-    *,
-    publish_decision_epoch: bool = True,
-) -> Optional[AdvanceEncounterResult]:
-    """Advance when the active actor died or otherwise cannot continue after a command."""
-    if sim.encounter is None or sim.game is None or sim.encounter.state != EncounterState.ACTIVE:
-        return None
-    active_uuid = sim.game.active_entity_uuid
-    if active_uuid is None or str(active_uuid) != actor_uuid:
-        return None
-
-    _available_actions_cache.clear()
-    sim.encounter.complete_current_turn()
-    if sim.activation_identity is not None:
-        result = _scheduled_advance_result()
-        _schedule_activated_game_coordinator()
-        return result
-    return await advance_encounter(
-        publish_decision_epoch=publish_decision_epoch,
-    )
-
-
-@app.post(
-    "/ai/sessions/{session_id}/commands/end-turn",
-    response_model=CommandResult,
-)
-async def end_ai_session_turn(
-    session_id: str,
-    request: AgentEndTurnCommandRequest,
-):
-    """End the actor turn from the session's current decision epoch."""
-    return await _end_ai_session_turn_from_epoch(
-        session_id,
-        request.actor_uuid,
-        request.basis_epoch_id,
-        command_id=request.command_id,
-        include_diagnostics=request.include_diagnostics,
-    )
-
-
-async def _end_ai_session_turn_from_epoch(
-    session_id: str,
-    actor_uuid: str,
-    basis_epoch_id: str,
-    *,
-    command_id: Optional[str] = None,
-    include_diagnostics: bool = False,
-) -> CommandResult:
-    """Validate an epoch and end the active actor turn."""
-    timing = _ServerCommandTiming(
-        "end_turn",
-        diagnostics_enabled=include_diagnostics,
-    )
-    started = time.perf_counter()
-    epoch = _build_decision_epoch(
-        session_id,
-        DecisionEpochReason.SNAPSHOT,
-        timing=timing,
-        phase_prefix="build.current_epoch",
-    )
-    timing.add("build.current_epoch_ms", started)
-    if epoch is None:
-        result = _command_result(
-            CommandResultStatus.REJECTED,
-            session_id,
-            command_id=command_id,
-            actor_uuid=actor_uuid,
-            requested_epoch_id=basis_epoch_id,
-            row_id=END_TURN_ROW_ID,
-            message="Session does not currently control an active actor.",
-            resync_required=False,
-        )
-        published = _publish_command_result_timed(session_id, result, timing)
-        started = time.perf_counter()
-        _publish_epoch_clear_for_session(
-            session_id,
-            "no_active_actor",
-            source_command_id=command_id,
-            actor_uuid=actor_uuid,
-        )
-        timing.add("publish.epoch_clear_ms", started)
-        return _command_ack_with_timing(published, timing)
-    if epoch.epoch_id != basis_epoch_id or epoch.actor_uuid != actor_uuid:
-        result = _command_result(
-            CommandResultStatus.STALE,
-            session_id,
-            command_id=command_id,
-            actor_uuid=actor_uuid,
-            requested_epoch_id=basis_epoch_id,
-            current_epoch_id=epoch.epoch_id,
-            row_id=END_TURN_ROW_ID,
-            message="End-turn command was based on a stale decision epoch.",
-            resync_required=False,
-        )
-        published = _publish_command_result_timed(session_id, result, timing)
-        started = time.perf_counter()
-        _publish_decision_epoch_for_session(
-            session_id,
-            DecisionEpochReason.ACTION_STALE,
-            source_command_id=command_id,
-            timing=timing,
-            phase_prefix="publish.followup_epoch",
-        )
-        timing.add("publish.followup_epoch_ms", started)
-        return _command_ack_with_timing(published, timing)
-    try:
-        started = time.perf_counter()
-        result = await _end_turn_and_advance(
-            session_id,
-            actor_uuid,
-            timing=timing,
-            publish_decision_epoch=False,
-        )
-        timing.add("end_turn.total_route_ms", started)
-    except HTTPException as exc:
-        command_result = _command_result(
-            CommandResultStatus.REJECTED,
-            session_id,
-            command_id=command_id,
-            actor_uuid=actor_uuid,
-            requested_epoch_id=basis_epoch_id,
-            current_epoch_id=epoch.epoch_id,
-            row_id=END_TURN_ROW_ID,
-            message="End-turn command was rejected by the engine.",
-            payload={"detail": exc.detail},
-            resync_required=False,
-        )
-        published = _publish_command_result_timed(session_id, command_result, timing)
-        started = time.perf_counter()
-        _publish_decision_epoch_for_session(
-            session_id,
-            DecisionEpochReason.ACTION_REJECTED,
-            source_command_id=command_id,
-            timing=timing,
-            phase_prefix="publish.followup_epoch",
-        )
-        timing.add("publish.followup_epoch_ms", started)
-        return _command_ack_with_timing(published, timing)
-
-    started = time.perf_counter()
-    payload = _safe_advance_result_payload(result)
-    timing.add("serialize.advance_result_ms", started)
-    command_result = _command_result(
-        CommandResultStatus.ACCEPTED,
-        session_id,
-        command_id=command_id,
-        actor_uuid=actor_uuid,
-        requested_epoch_id=basis_epoch_id,
-        current_epoch_id=None,
-        row_id=END_TURN_ROW_ID,
-        message="Turn ended.",
-        payload=payload,
-        resync_required=False,
-    )
-    published = _publish_command_result_timed(session_id, command_result, timing)
-    started = time.perf_counter()
-    next_epoch = _publish_post_command_control(
-        session_id,
-        command_id=command_id,
-        actor_uuid=actor_uuid,
-        next_epoch_reason=DecisionEpochReason.TURN_START,
-        clear_reason="turn_ended",
-        timing=timing,
-    )
-    timing.add("publish.post_command_control_ms", started)
-    if published.current_epoch_id is None and next_epoch is not None:
-        published = published.model_copy(update={"current_epoch_id": next_epoch.epoch_id})
-    return _command_ack_with_timing(published, timing)
-
-
-def _safe_action_result_payload(result: ActionResult) -> dict[str, Any]:
-    """Return protocol outcome metadata while gameplay arrives through events."""
-    payload: dict[str, Any] = {
-        "success": result.success,
-        "turn_continues": result.turn_continues,
-        "encounter_ended": result.encounter_ended,
-    }
-    action_timing = result.server_timing
-    if action_timing is not None:
-        payload["action_server_timing"] = action_timing
-    return payload
-
-
-def _safe_advance_result_payload(result: AdvanceEncounterResult) -> dict[str, Any]:
-    """Return advancement protocol state without raw automated-controller facts."""
-    return {
-        "status": result.status,
-        "encounter_ended": result.status == "encounter_ended",
-    }
-
-
-@app.post("/ai/sessions/{session_id}/agent-events")
-async def post_agent_events(
-    session_id: str,
-    request: AgentEventIngestRequest,
-):
-    """Append agent telemetry events to the per-session stream."""
-    session = _require_agent_stream_session(session_id)
-    rows = []
-    for event in request.events:
-        actor_uuid = None
-        if event.actor_uuid is not None:
-            try:
-                actor_uuid = UUID(event.actor_uuid)
-            except ValueError:
-                raise _api_http_exception(
-                    status_code=400,
-                    code="invalid_agent_event_actor_uuid",
-                    message="Agent event actor UUID is invalid.",
-                    session_id=session_id,
-                    actor_uuid=event.actor_uuid,
-                )
-        if actor_uuid is not None and actor_uuid not in session.controlled_entities:
-            raise _api_http_exception(
-                status_code=403,
-                code="agent_event_actor_not_controlled",
-                message="Agent event actor is not controlled by this session.",
-                session_id=session_id,
-                actor_uuid=event.actor_uuid,
-            )
-        rows.append(agent_event_stream.publish(session_id, event))
-    return {
-        "events": [row.model_dump(mode="json") for row in rows],
-        "count": len(rows),
-        "total": agent_event_stream.current_agent_cursor(session_id),
-        "next_agent_cursor": rows[-1].agent_cursor if rows else agent_event_stream.current_agent_cursor(session_id),
-    }
-
-
-@app.get(
-    "/ai/sessions/{session_id}/agent-events",
-    response_model=AgentEventHistoryResponse,
-)
-async def get_agent_events(
-    session_id: str,
-    since: int = 0,
-    limit: int = 100,
-):
-    """Return agent telemetry events after a session-local cursor."""
-    _require_agent_stream_session(session_id)
-    rows = agent_event_stream.iter_agent_events_since(session_id, since, limit)
-    return AgentEventHistoryResponse(
-        events=rows,
-        count=len(rows),
-        total=agent_event_stream.current_agent_cursor(session_id),
-        next_agent_cursor=rows[-1].agent_cursor if rows else max(0, since),
-        earliest_agent_cursor=agent_event_stream.earliest_agent_cursor(session_id),
-        resync_required=agent_event_stream.is_cursor_evicted(session_id, since),
-    )
-
-
-@app.get("/ai/sessions/{session_id}/agent-events/subscribe")
-async def subscribe_agent_events(
-    request: Request,
-    session_id: str,
-    since: int = 0,
-):
-    """Subscribe to per-session agent telemetry events."""
-    _require_agent_stream_session(session_id)
-
-    async def event_generator():
-        cursor = max(0, since)
-        subscription = agent_event_stream.subscribe(session_id)
-        try:
-            observation_cursor = _safe_observation_cursor(session_id)
-            if agent_event_stream.is_cursor_evicted(session_id, cursor):
-                yield format_sse(
-                    "evicted",
-                    EvictedPayload(reason="agent_history_evicted"),
-                    agent_event_stream.current_stream_id(session_id, observation_cursor),
-                )
-                return
-            epoch = _build_decision_epoch(session_id, DecisionEpochReason.SNAPSHOT)
-            yield format_sse(
-                "sync",
-                agent_event_stream.sync_payload(
-                    session_id,
-                    observation_cursor=observation_cursor,
-                    epoch_id=epoch.epoch_id if epoch else None,
-                    session=_agent_stream_session_payload(session_id),
-                ),
-                agent_event_stream.current_stream_id(session_id, observation_cursor),
-            )
-
-            for payload in agent_event_stream.iter_agent_events_since(session_id, cursor, 500):
-                cursor = payload.agent_cursor
-                yield format_sse(
-                    "agent_event",
-                    payload,
-                    agent_event_stream.current_stream_id(session_id, payload.observation_cursor),
-                )
-
-            while True:
-                if await request.is_disconnected():
-                    break
-                try:
-                    envelope = await asyncio.wait_for(subscription.get(), timeout=10.0)
-                except asyncio.TimeoutError:
-                    observation_cursor = _safe_observation_cursor(session_id)
-                    epoch = _build_decision_epoch(session_id, DecisionEpochReason.SNAPSHOT)
-                    yield format_sse(
-                        "heartbeat",
-                        agent_event_stream.heartbeat_payload(
-                            session_id,
-                            observation_cursor=observation_cursor,
-                            epoch_id=epoch.epoch_id if epoch else None,
-                            session=_agent_stream_session_payload(session_id),
-                        ),
-                        agent_event_stream.current_stream_id(session_id, observation_cursor),
-                    )
-                    continue
-
-                if envelope["event"] == "evicted":
-                    yield format_sse("evicted", envelope["data"], envelope.get("id"))
-                    break
-                payload = envelope["data"]
-                if isinstance(payload, dict):
-                    cursor = int(payload.get("agent_cursor", cursor))
-                else:
-                    cursor = getattr(payload, "agent_cursor", cursor)
-                yield format_sse(envelope["event"], payload, envelope.get("id"))
-        finally:
-            agent_event_stream.unsubscribe(session_id, subscription)
-
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
-
-
-def _serialize_agent_session_row(session_id: str, takeover_claim_ids: list[str]) -> AgentSessionRow:
-    """Serialize one AI/Codex session for the observer index."""
-    session = _require_agent_stream_session(session_id)
-    game = sim.game
-    active_uuid = game.active_entity_uuid if game else None
-    is_active_turn = bool(active_uuid is not None and active_uuid in session.controlled_entities)
-    active_entity = Entity.get(active_uuid) if is_active_turn and active_uuid is not None else None
-    epoch = _current_decision_epoch(session_id, session)
-
-    return AgentSessionRow(
-        session_id=str(session.session_id),
-        player_type=session.player_type.value,
-        name=session.name,
-        connection_status=session.connection_status.value,
-        is_active_turn=is_active_turn,
-        active_controlled_entity_uuid=str(active_uuid) if is_active_turn and active_uuid is not None else None,
-        active_controlled_entity_name=active_entity.name if active_entity else None,
-        controlled_entities=[
-            _serialize_agent_session_entity(entity_uuid)
-            for entity_uuid in sorted(session.controlled_entities, key=str)
-        ],
-        agent_cursor=agent_event_stream.current_agent_cursor(session_id),
-        earliest_agent_cursor=agent_event_stream.earliest_agent_cursor(session_id),
-        observation_cursor=_safe_observation_cursor(session_id),
-        current_epoch_id=epoch.epoch_id if epoch is not None else None,
-        takeover_claim_ids=takeover_claim_ids,
-    )
-
-
-def _serialize_agent_session_entity(entity_uuid: UUID) -> AgentSessionEntityRow:
-    """Serialize a controlled entity label without tactical state."""
-    entity = Entity.get(entity_uuid)
-    controller_type = None
-    if sim.encounter is not None and entity_uuid in sim.encounter.combatants:
-        controller = sim.encounter.get_controller_for(entity_uuid)
-        controller_type = controller.controller_type if controller is not None else None
-    active_uuid = sim.game.active_entity_uuid if sim.game else None
-    return AgentSessionEntityRow(
-        entity_uuid=str(entity_uuid),
-        entity_name=entity.name if entity is not None else str(entity_uuid),
-        faction=entity.faction if entity is not None else None,
-        controller_type=controller_type,
-        is_active_actor=active_uuid == entity_uuid,
-    )
-
-
-def _require_agent_stream_session(session_id: str):
-    """Resolve an agent-stream session or raise a structured error."""
-    parsed = _parse_optional_uuid(session_id, "session_id")
-    if parsed is None:
-        raise _api_http_exception(status_code=400, code="invalid_session_id", message="Invalid session UUID")
-    session = sim.get_session_manager().get_session(parsed)
-    if session is None:
-        raise _api_http_exception(
-            status_code=404,
-            code="session_not_found",
-            message="Session not found",
-            session_id=session_id,
-        )
-    return session
-
-
-def _safe_observation_cursor(session_id: str) -> Optional[int]:
-    """Return the current observation cursor, if the session is resolvable."""
-    try:
-        return get_observation_cursor(session_id, session_manager=sim.get_session_manager())
-    except ObservationAccessError:
-        return None
-
-
-def _agent_stream_session_payload(session_id: str) -> Optional[dict[str, Any]]:
-    """Return serialized session context for agent-event stream sync frames."""
-    parsed = _parse_optional_uuid(session_id, "session_id")
-    if parsed is None:
-        return None
-    session = sim.get_session_manager().get_session(parsed)
-    return session.to_dict() if session else None
 
 
 @app.get("/entity/{entity_uuid}/handlers", response_model=APIEntityHandlersResponse)
@@ -5719,7 +3761,7 @@ async def unequip_item(entity_uuid: str, request: UnequipRequest):
 
 @app.post("/action/end-turn", response_model=AdvanceEncounterResult)
 async def end_human_turn(request: SimpleActionRequest):
-    """End the session's entity turn and advance through AI turns."""
+    """End the session's entity turn and advance through autonomous turns."""
     return await _end_turn_and_advance(request.session_id, request.entity_uuid)
 
 
@@ -5728,7 +3770,6 @@ async def _end_turn_and_advance(
     entity_uuid: str,
     *,
     timing: Optional[_ServerCommandTiming] = None,
-    publish_decision_epoch: bool = True,
 ) -> AdvanceEncounterResult:
     """End one validated actor turn and advance to the next controller boundary."""
     started = time.perf_counter()
@@ -5761,10 +3802,7 @@ async def _end_turn_and_advance(
         return result
 
     started = time.perf_counter()
-    result = await advance_encounter(
-        timing=timing,
-        publish_decision_epoch=publish_decision_epoch,
-    )
+    result = await advance_encounter(timing=timing)
     if timing is not None:
         timing.add("end_turn.advance_encounter_ms", started)
 
@@ -5779,7 +3817,6 @@ async def execute_action_by_index(request: ExecuteByIndexRequest):
 
 async def _execute_action_by_index_impl(
     request: ExecuteByIndexRequest,
-    execution_binding: Optional[ActionExecutionBinding] = None,
 ) -> _ActionExecutionResult:
     """Execute action by template name and target index.
 
@@ -5803,13 +3840,9 @@ async def _execute_action_by_index_impl(
             timing.add("get_available_actions_on_miss_ms", started)
 
     started = time.perf_counter()
-    action_info = (
-        execution_binding.action_info
-        if execution_binding is not None
-        else next(
-            (a for a in available.all_actions if a.template_name == request.template_name),
-            None,
-        )
+    action_info = next(
+        (a for a in available.all_actions if a.template_name == request.template_name),
+        None,
     )
     if timing is not None:
         timing.add("find_action_info_ms", started)
@@ -5824,7 +3857,7 @@ async def _execute_action_by_index_impl(
             ),
         )
 
-    selected_target = execution_binding.target if execution_binding is not None else next(
+    selected_target = next(
         (
             target
             for target in action_info.valid_targets
@@ -5891,9 +3924,6 @@ async def _execute_action_by_index_impl(
         timing.add("check_deaths_ms", started)
 
     encounter_ended = sim.encounter.state != EncounterState.ACTIVE if sim.encounter else True
-    if encounter_ended and sim.encounter is not None:
-        await _close_registered_ai_after_terminal(sim.encounter)
-
     updated_actions = None
     if request.return_available_actions and not encounter_ended and entity.has_hp:
         started = time.perf_counter()
@@ -6065,167 +4095,32 @@ def _game_creation_character_deployments(
     return deployments
 
 
-@dataclass(frozen=True)
-class _ResolvedAIPolicy:
-    """Cold policy resolution completed before engine replacement."""
-
-    descriptor: PolicyDescriptor
-    execution: AIExecutionKind
-    provider_id: Optional[str] = None
 
 
-def _member_controller(
-    roster_slot: EncounterRosterSlot,
-    member_id: str,
-) -> tuple[RosterControllerKind, str | None]:
-    override = next(
-        (
-            row
-            for row in roster_slot.controller_defaults.member_overrides
-            if row.member_id == member_id
-        ),
-        None,
-    )
-    if override is not None:
-        return override.controller, override.policy_id
-    defaults = roster_slot.controller_defaults
-    return defaults.controller, defaults.policy_id
-
-
-async def _set_game_creation_member_controller(
+def _set_game_creation_member_controller(
     encounter: Encounter,
-    game: GameSession,
     entity: Entity,
-    *,
-    member_address: tuple[str, str],
-    controller_kind: RosterControllerKind,
-    resolved_policy: Optional[_ResolvedAIPolicy],
 ) -> None:
-    """Install one isolated controller assignment for one exact member."""
-    if controller_kind is RosterControllerKind.HUMAN:
-        encounter.set_controller_for(
-            entity.uuid,
-            HumanController(source_entity_uuid=entity.uuid),
-        )
-        return None
-
-    if resolved_policy is None:
-        raise ValueError(
-            f"{member_address!r} cannot create automation without a policy",
-        )
-    assignment_id = (
-        f"{game.game_id}:{member_address[0]}:{member_address[1]}"
+    """Install the deterministic unclaimed controller for one exact member."""
+    encounter.set_controller_for(
+        entity.uuid,
+        PassController(source_entity_uuid=entity.uuid),
     )
-    instrumentation = AIInstrumentation(
-        sink=sim.native_ai_instrumentation,
-    )
-    if resolved_policy.execution == "in_process":
-        controller = NativeAIController.create(
-            source_entity_uuid=entity.uuid,
-            game_id=str(game.game_id),
-            assignment_id=assignment_id,
-            controlled_entity_uuids=(entity.uuid,),
-            policy_id=resolved_policy.descriptor.policy_id,
-            registry=native_policy_registry,
-            instrumentation=instrumentation,
-        )
-        controller.start([entity])
-        encounter.set_controller_for(entity.uuid, controller)
-        sim.native_ai_controllers.append(controller)
-        return None
-
-    controller = await RegisteredAIController.create(
-        source_entity_uuid=entity.uuid,
-        game_id=str(game.game_id),
-        assignment_id=assignment_id,
-        controlled_entity_uuids=(entity.uuid,),
-        policy_id=resolved_policy.descriptor.policy_id,
-        provider_catalog=_active_registered_ai_provider_catalog(),
-        instrumentation=instrumentation,
-    )
-    try:
-        controller.start([entity])
-        encounter.set_controller_for(entity.uuid, controller)
-    except BaseException:
-        await controller.close()
-        raise
-    sim.registered_ai_controllers.append(controller)
     return None
 
 
-def _resolve_game_creation_policies(
-    creation: GameCreationStartRequest,
-) -> dict[tuple[str, str], Optional[_ResolvedAIPolicy]]:
-    """Validate all policy selections before replacing live engine state."""
-    resolved: dict[
-        tuple[str, str],
-        Optional[_ResolvedAIPolicy],
-    ] = {}
-    provider_catalog = _active_registered_ai_provider_catalog()
-    for roster_slot in creation.recipe.roster_slots:
-        for member in roster_slot.roster.members:
-            address = (roster_slot.roster_slot_id, member.member_id)
-            controller_kind, configured_policy_id = _member_controller(
-                roster_slot,
-                member.member_id,
-            )
-            if controller_kind is RosterControllerKind.HUMAN:
-                resolved[address] = None
-                continue
-            policy_id = configured_policy_id or DEFAULT_NATIVE_POLICY_ID
-            try:
-                descriptor = native_policy_registry.require_descriptor(
-                    policy_id,
-                )
-            except UnknownPolicyError:
-                try:
-                    descriptor = provider_catalog.policy_descriptor(policy_id)
-                    provider = provider_catalog.provider_for_policy(policy_id)
-                except RegisteredAIProviderNotFoundError as exc:
-                    valid_policy_ids = [
-                        option.descriptor.policy_id
-                        for option in _game_creation_ai_policy_options()
-                    ]
-                    raise _api_http_exception(
-                        status_code=400,
-                        code="ai_policy_not_registered",
-                        message="Requested AI policy is not registered",
-                        roster_slot_id=address[0],
-                        member_id=address[1],
-                        policy_id=policy_id,
-                        valid_policy_ids=valid_policy_ids,
-                    ) from exc
-                resolved[address] = _ResolvedAIPolicy(
-                    descriptor=descriptor,
-                    execution="registered_provider",
-                    provider_id=provider.provider_id,
-                )
-                continue
-            resolved[address] = _ResolvedAIPolicy(
-                descriptor=descriptor,
-                execution="in_process",
-            )
-    return resolved
 
 
 def _game_creation_roster_results(
     assembled: AssembledEncounter,
-    policies: dict[tuple[str, str], Optional[_ResolvedAIPolicy]],
-    claims: dict[tuple[str, str], TakeoverClaim],
 ) -> tuple[GameCreationRosterResult, ...]:
-    """Serialize exact member sources, controllers, and runtime identities."""
+    """Serialize exact member sources and runtime identities."""
     results: list[GameCreationRosterResult] = []
     for roster_slot in assembled.recipe.roster_slots:
         assignments: list[GameCreationEntityAssignment] = []
         for member in roster_slot.roster.members:
             address = (roster_slot.roster_slot_id, member.member_id)
             entity = assembled.entities_by_member_address[address]
-            controller_kind, _ = _member_controller(
-                roster_slot,
-                member.member_id,
-            )
-            resolved_policy = policies[address]
-            claim = claims.get(address)
             assignments.append(GameCreationEntityAssignment(
                 member_id=member.member_id,
                 entity_uuid=str(entity.uuid),
@@ -6239,43 +4134,7 @@ def _game_creation_roster_results(
                     )
                     else None
                 ),
-                controller=controller_kind.value,
-                participant_name=(
-                    roster_slot.controller_defaults.participant_name
-                ),
-                policy_id=(
-                    resolved_policy.descriptor.policy_id
-                    if (
-                        controller_kind is RosterControllerKind.AI
-                        and resolved_policy is not None
-                    )
-                    else None
-                ),
-                policy_execution=(
-                    resolved_policy.execution
-                    if (
-                        controller_kind is RosterControllerKind.AI
-                        and resolved_policy is not None
-                    )
-                    else None
-                ),
-                provider_id=(
-                    resolved_policy.provider_id
-                    if (
-                        controller_kind is RosterControllerKind.AI
-                        and resolved_policy is not None
-                    )
-                    else None
-                ),
-                codex_session_id=(
-                    str(claim.session_id) if claim is not None else None
-                ),
-                takeover_claim_id=(
-                    str(claim.claim_id) if claim is not None else None
-                ),
-                takeover_expires_at=(
-                    claim.expires_at if claim is not None else None
-                ),
+                participant_name=roster_slot.participant_name,
             ))
         results.append(GameCreationRosterResult(
             roster_slot_id=roster_slot.roster_slot_id,
@@ -6287,161 +4146,12 @@ def _game_creation_roster_results(
     return tuple(results)
 
 
-def _require_ai_provider_admin(
-    authorization: Optional[str] = Header(default=None),
-) -> None:
-    """Require the deployment bearer; player/session credentials never apply."""
-    configured = _ai_provider_admin_token
-    if configured is None:
-        raise _api_http_exception(
-            status_code=503,
-            code="ai_provider_admin_disabled",
-            message=(
-                "External AI provider administration requires "
-                "DND_AI_PROVIDER_ADMIN_TOKEN"
-            ),
-        )
-    scheme, separator, credential = (authorization or "").partition(" ")
-    if (
-        not separator
-        or scheme.lower() != "bearer"
-        or not hmac.compare_digest(credential, configured)
-    ):
-        raise _api_http_exception(
-            status_code=403,
-            code="ai_provider_admin_forbidden",
-            message="A valid deployment AI-provider bearer is required",
-        )
-
-
-def _provider_catalog_entry(
-    info: RegisteredAIProviderInfo,
-) -> AIProviderCatalogEntry:
-    """Serialize one provider without exposing assignment capabilities."""
-    return AIProviderCatalogEntry(
-        provider_id=info.provider_id,
-        base_url=info.base_url,
-        protocol_version=EXTERNAL_AI_PROTOCOL_VERSION,
-        protocol_hash=EXTERNAL_AI_PROTOCOL_HASH,
-        policies=list(info.policies),
-        capacity=info.capacity,
-        active_assignments=info.active_assignments,
-        available_capacity=info.available_capacity,
-    )
-
-
-def _game_creation_ai_policy_options() -> tuple[GameCreationAIPolicyOption, ...]:
-    """Merge native and authenticated provider policies by global identity."""
-    options = list(server_native_ai_policy_options())
-    for provider in _active_registered_ai_provider_catalog().providers():
-        options.extend(
-            GameCreationAIPolicyOption(
-                descriptor=descriptor,
-                execution="registered_provider",
-                provider_id=provider.provider_id,
-                capacity=provider.capacity,
-                active_assignments=provider.active_assignments,
-                available_capacity=provider.available_capacity,
-            )
-            for descriptor in provider.policies
-        )
-    return tuple(
-        sorted(options, key=lambda option: option.descriptor.policy_id)
-    )
-
-
-def _registered_ai_provider_http_exception(
-    error: RegisteredAIProviderError,
-) -> HTTPException:
-    """Map provider ownership and transport failures to stable admin errors."""
-    if isinstance(
-        error,
-        (RegisteredAIProviderCollisionError, RegisteredAIProviderBusyError),
-    ):
-        status_code = 409
-        code = "ai_provider_conflict"
-    elif isinstance(error, RegisteredAIProviderNotFoundError):
-        status_code = 404
-        code = "ai_provider_not_found"
-    elif isinstance(error, RegisteredAIProviderProtocolError):
-        status_code = 502
-        code = "ai_provider_protocol_invalid"
-    elif isinstance(
-        error,
-        (RegisteredAIProviderTransportError, RegisteredAIProviderCapacityError),
-    ):
-        status_code = 503
-        code = "ai_provider_unavailable"
-    else:
-        status_code = 500
-        code = "ai_provider_error"
-    return _api_http_exception(
-        status_code=status_code,
-        code=code,
-        message=str(error),
-    )
-
-
-@app.get(
-    "/admin/ai/providers",
-    response_model=AIProviderCatalogResponse,
-    dependencies=[Depends(_require_ai_provider_admin)],
-)
-async def list_registered_ai_providers() -> AIProviderCatalogResponse:
-    """List authenticated external policy providers for deployment tooling."""
-    return AIProviderCatalogResponse(
-        providers=[
-            _provider_catalog_entry(info)
-            for info in _active_registered_ai_provider_catalog().providers()
-        ],
-    )
-
-
-@app.post(
-    "/admin/ai/providers",
-    response_model=AIProviderCatalogEntry,
-    dependencies=[Depends(_require_ai_provider_admin)],
-)
-async def register_ai_provider(
-    registration: AIProviderRegistrationRequest,
-) -> AIProviderCatalogEntry:
-    """Handshake with and register one external policy provider."""
-    try:
-        info = await _active_registered_ai_provider_catalog().register(
-            provider_id=registration.provider_id,
-            base_url=registration.base_url,
-        )
-    except RegisteredAIProviderError as error:
-        raise _registered_ai_provider_http_exception(error) from error
-    return _provider_catalog_entry(info)
-
-
-@app.delete(
-    "/admin/ai/providers/{provider_id}",
-    response_model=AIProviderDeleteResponse,
-    dependencies=[
-        Depends(_require_ai_provider_admin),
-        Depends(_serialize_world_replacement),
-    ],
-)
-async def unregister_ai_provider(
-    provider_id: str,
-) -> AIProviderDeleteResponse:
-    """Remove an idle provider; live game assignments reject the mutation."""
-    try:
-        await _active_registered_ai_provider_catalog().unregister(provider_id)
-    except RegisteredAIProviderError as error:
-        raise _registered_ai_provider_http_exception(error) from error
-    return AIProviderDeleteResponse(provider_id=provider_id)
 
 
 @app.get("/game-creation/catalog", response_model=GameCreationCatalogResponse)
 async def get_game_creation_catalog() -> GameCreationCatalogResponse:
-    """Return canonical scenarios, formations, and controller choices."""
-    return build_game_creation_catalog(
-        controllers=("human", "ai", "codex"),
-        ai_policies=_game_creation_ai_policy_options(),
-    )
+    """Return canonical scenarios and formations."""
+    return build_game_creation_catalog()
 
 
 def _validate_game_creation_protocol_identity(
@@ -6608,7 +4318,6 @@ async def start_created_game(
         creation,
         character_deployments,
     )
-    policies = _resolve_game_creation_policies(creation)
     await prepare_new_game_start()
     try:
         local_game = _active_local_game_coordinator()
@@ -6711,49 +4420,10 @@ async def start_created_game(
         for roster_slot in creation.recipe.roster_slots:
             for member in roster_slot.roster.members:
                 address = (roster_slot.roster_slot_id, member.member_id)
-                controller_kind, _ = _member_controller(
-                    roster_slot,
-                    member.member_id,
-                )
-                await _set_game_creation_member_controller(
+                _set_game_creation_member_controller(
                     sim.encounter,
-                    game,
                     assembled.entities_by_member_address[address],
-                    member_address=address,
-                    controller_kind=controller_kind,
-                    resolved_policy=policies[address],
                 )
-
-        claims: dict[tuple[str, str], TakeoverClaim] = {}
-        manager = sim.get_session_manager()
-        subjective_authority_before = _capture_subjective_session_authority(manager)
-        ownership_boundary = prepare_observation_ownership_change(manager)
-        for roster_slot in creation.recipe.roster_slots:
-            for member in roster_slot.roster.members:
-                controller_kind, _ = _member_controller(
-                    roster_slot,
-                    member.member_id,
-                )
-                if controller_kind is not RosterControllerKind.CODEX:
-                    continue
-                address = (roster_slot.roster_slot_id, member.member_id)
-                entity = assembled.entities_by_member_address[address]
-                claims[address] = ai_takeover_manager.claim(
-                    encounter=sim.encounter,
-                    game=game,
-                    session_manager=sim.get_session_manager(),
-                    faction=None,
-                    entity_uuids=[entity.uuid],
-                    name=(
-                        roster_slot.controller_defaults.participant_name
-                    ),
-                    lease_seconds=creation.codex_lease_seconds,
-                )
-        _publish_takeover_ownership_changes(
-            ownership_boundary,
-            "game_creation_claimed",
-            subjective_authority_before=subjective_authority_before,
-        )
 
         response = GameCreationStartResponse(
             recipe_digest=creation.recipe.recipe_digest,
@@ -6761,11 +4431,7 @@ async def start_created_game(
             game_id=str(game.game_id),
             encounter_name=sim.encounter.name,
             compatibility=assembled.compatibility,
-            rosters=_game_creation_roster_results(
-                assembled,
-                policies,
-                claims,
-            ),
+            rosters=_game_creation_roster_results(assembled),
         )
         sim.current_creation = response
         return response
@@ -6777,12 +4443,6 @@ async def start_created_game(
             message=str(exc),
             recipe_digest=creation.recipe.recipe_digest,
         ) from exc
-    except TakeoverError as exc:
-        await _abort_failed_game_start()
-        raise _takeover_http_exception(exc, faction=None) from exc
-    except RegisteredAIProviderError as exc:
-        await _abort_failed_game_start()
-        raise _registered_ai_provider_http_exception(exc) from exc
     except BaseException:
         await _abort_failed_game_start()
         raise
@@ -6940,7 +4600,7 @@ def kill_process_on_port(port: int) -> bool:
     if remaining:
         raise RuntimeError(
             "Listener did not shut down gracefully; refusing to orphan owned "
-            f"agent processes for PID(s): {sorted(remaining)}"
+            f"server processes for PID(s): {sorted(remaining)}"
         )
     print(f"Stopped listener(s) {sorted(pids)} on port {port}")
     return True

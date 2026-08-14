@@ -1,0 +1,570 @@
+import { assertCombatLogWindow, assertSubjectiveReplicationBootstrap, assertSubjectiveFramesPage, } from "./subjectiveJournal.js";
+import { SubjectiveSseDecoder, SubjectiveStreamFollower, } from "./subjectiveSse.js";
+import { ContractValidationError, decodeModel, parseJson } from "./validation.js";
+export const SUBJECTIVE_REPLICATION_ROUTES = Object.freeze({
+    bootstrap: "/replication/bootstrap",
+    frames: "/replication/frames",
+    combatLog: "/replication/combat-log",
+    subscribe: "/replication/subscribe",
+});
+export class SubjectiveReplicationHttpError extends Error {
+    status;
+    payload;
+    constructor(status, payload) {
+        super(`Subjective replication request failed with HTTP ${status}`);
+        this.name = "SubjectiveReplicationHttpError";
+        this.status = status;
+        this.payload = payload;
+    }
+}
+export class SubjectiveBootstrapUnavailableError extends Error {
+    lastDeferral;
+    constructor(lastDeferral) {
+        super("Subjective replication bootstrap did not become available within the bounded window");
+        this.name = "SubjectiveBootstrapUnavailableError";
+        this.lastDeferral = lastDeferral;
+    }
+}
+const BOOTSTRAP_RETRY_WINDOW_MS = 10_000;
+const BOOTSTRAP_RETRY_DELAY_MS = 250;
+const BOOTSTRAP_DEADLINE_ABORT = Object.freeze({ kind: "subjective_bootstrap_deadline" });
+export class SubjectiveFrameCatchupResyncError extends Error {
+    reason;
+    state;
+    constructor(state) {
+        const reason = state.resyncReason ?? "contract_mismatch";
+        super(`subjective REST catch-up requires journal resynchronization: ${reason}`);
+        this.name = "SubjectiveFrameCatchupResyncError";
+        this.reason = reason;
+        this.state = state;
+    }
+}
+/** HTTP/SSE client for the one canonical player replication surface. */
+export class SubjectiveReplicationClient {
+    baseUrl;
+    fetchImplementation;
+    defaultHeaders;
+    monotonicNow;
+    constructor(baseUrl, options = {}) {
+        this.baseUrl = baseUrl.replace(/\/$/, "");
+        this.fetchImplementation = (options.fetchImplementation ?? globalThis.fetch).bind(globalThis);
+        this.defaultHeaders = Object.freeze({ ...(options.headers ?? {}) });
+        this.monotonicNow = options.monotonicNow ?? defaultMonotonicNow;
+    }
+    async bootstrap(sessionId, signal) {
+        const startedAt = this.readMonotonicNow();
+        const deadlineController = new AbortController();
+        const forwardAbort = () => deadlineController.abort(signal?.reason);
+        if (signal?.aborted)
+            forwardAbort();
+        else
+            signal?.addEventListener("abort", forwardAbort, { once: true });
+        const deadlineTimer = setTimeout(() => deadlineController.abort(BOOTSTRAP_DEADLINE_ABORT), BOOTSTRAP_RETRY_WINDOW_MS);
+        let lastDeferral = null;
+        try {
+            while (true) {
+                if (signal?.aborted)
+                    throw signal.reason ?? abortError();
+                if (this.bootstrapWindowExpired(startedAt)) {
+                    throw new SubjectiveBootstrapUnavailableError(lastDeferral);
+                }
+                let attempt;
+                try {
+                    attempt = await this.bootstrapAttempt(sessionId, deadlineController.signal);
+                }
+                catch (error) {
+                    if (signal?.aborted)
+                        throw signal.reason ?? abortError();
+                    if (deadlineController.signal.aborted
+                        && deadlineController.signal.reason === BOOTSTRAP_DEADLINE_ABORT) {
+                        throw new SubjectiveBootstrapUnavailableError(lastDeferral);
+                    }
+                    throw error;
+                }
+                if (this.bootstrapWindowExpired(startedAt)) {
+                    throw new SubjectiveBootstrapUnavailableError(attempt.status === "deferred" ? attempt.deferral : lastDeferral);
+                }
+                if (signal?.aborted)
+                    throw signal.reason ?? abortError();
+                if (attempt.status === "ready")
+                    return attempt.bootstrap;
+                lastDeferral = attempt.deferral;
+                try {
+                    await waitForBootstrapRetry(BOOTSTRAP_RETRY_DELAY_MS, deadlineController.signal);
+                }
+                catch (error) {
+                    if (signal?.aborted)
+                        throw signal.reason ?? abortError();
+                    if (deadlineController.signal.aborted
+                        && deadlineController.signal.reason === BOOTSTRAP_DEADLINE_ABORT) {
+                        throw new SubjectiveBootstrapUnavailableError(lastDeferral);
+                    }
+                    throw error;
+                }
+            }
+        }
+        finally {
+            clearTimeout(deadlineTimer);
+            signal?.removeEventListener("abort", forwardAbort);
+        }
+    }
+    async bootstrapAttempt(sessionId, signal) {
+        const parameters = new URLSearchParams({ session_id: requireNonEmpty(sessionId, "sessionId") });
+        const response = await this.fetchImplementation(`${this.baseUrl}${SUBJECTIVE_REPLICATION_ROUTES.bootstrap}?${parameters.toString()}`, signal === undefined ? { headers: this.headers() } : { headers: this.headers(), signal });
+        const payload = parseJson(await response.text());
+        if (response.status === 409
+            && isJsonObject(payload)
+            && payload.code === "source_batch_in_flight") {
+            const deferral = decodeModel("SubjectiveBootstrapDeferred", payload);
+            return { status: "deferred", deferral };
+        }
+        if (!response.ok)
+            throw new SubjectiveReplicationHttpError(response.status, payload);
+        const seed = decodeModel("SubjectiveReplicationBootstrap", payload);
+        assertSubjectiveReplicationBootstrap(seed);
+        return { status: "ready", bootstrap: seed };
+    }
+    async frames(sessionId, query, signal) {
+        const parameters = identityParameters(sessionId, query);
+        const fromObservationCursor = requireCursor(query.fromObservationCursor ?? 0, "fromObservationCursor");
+        parameters.set("from_observation_cursor", String(fromObservationCursor));
+        appendLimit(parameters, query.limit);
+        const response = decodeModel("SubjectiveFramesResponse", await this.getJson(`${SUBJECTIVE_REPLICATION_ROUTES.frames}?${parameters.toString()}`, signal));
+        assertResponseIdentity(response, query, "$subjective.frames");
+        assertSubjectiveFramesPage(response);
+        if (response.from_watermarks.observation_cursor !== fromObservationCursor) {
+            throw new ContractValidationError("$subjective.frames.from_watermarks.observation_cursor", "response page does not start at the requested observation cursor");
+        }
+        return response;
+    }
+    /**
+     * Feed one validated REST observation page and only the continuations needed
+     * for its original captured fence through the existing canonical journal.
+     * The operation does not reduce world state itself and never extends the
+     * caller's fixed target when a continuation reports a newer capture.
+     */
+    async ingestFramesThrough(journal, firstPage, options) {
+        firstPage = isolateFramesPage(firstPage);
+        assertSubjectiveFramesPage(firstPage);
+        const position = journal.streamPosition();
+        const identity = identityFromPosition(position);
+        assertResponseIdentity(firstPage, identity, "$subjective.catchup.first_page");
+        requireNonEmpty(options.sessionId, "sessionId");
+        const target = requireCatchupTarget(options.fixedTarget);
+        if (!matchesCatchupTarget(firstPage.captured_watermarks, target)) {
+            throw new ContractValidationError("$subjective.catchup.fixed_target", "fixed target differs from the first page capture");
+        }
+        if (firstPage.from_watermarks.observation_cursor > position.observationCursor) {
+            throw new ContractValidationError("$subjective.catchup.first_page.from_watermarks", "first page starts after the journal cursor");
+        }
+        if (firstPage.from_watermarks.observation_cursor === position.observationCursor
+            && !matchesCatchupTarget(firstPage.from_watermarks, position)) {
+            throw new ContractValidationError("$subjective.catchup.first_page.from_watermarks", "first page start differs from the journal cursor");
+        }
+        if (firstPage.through_watermarks.observation_cursor < position.observationCursor) {
+            throw new ContractValidationError("$subjective.catchup.first_page.through_watermarks", "first page does not cover the journal cursor");
+        }
+        if (options.signal?.aborted)
+            throw options.signal.reason ?? abortError();
+        if (matchesCatchupTarget(position, target))
+            return journal.state();
+        if (catchupTargetPassed(position, target)) {
+            throw new ContractValidationError("$subjective.catchup.fixed_target", "journal already advanced beyond the fixed target");
+        }
+        const maximumPages = target.observationCursor - position.observationCursor + 1;
+        if (maximumPages < 1) {
+            throw new ContractValidationError("$subjective.catchup.fixed_target", "fixed target precedes the journal cursor");
+        }
+        let page = firstPage;
+        let pagesConsumed = 0;
+        while (pagesConsumed < maximumPages) {
+            pagesConsumed += 1;
+            const beforePage = journal.streamPosition();
+            if (page.from_watermarks.observation_cursor > beforePage.observationCursor) {
+                throw new ContractValidationError("$subjective.catchup.page.from_watermarks", "continuation page starts after the journal cursor");
+            }
+            if (page.from_watermarks.observation_cursor === beforePage.observationCursor
+                && !matchesCatchupTarget(page.from_watermarks, beforePage)) {
+                throw new ContractValidationError("$subjective.catchup.page.from_watermarks", "continuation page start differs from the journal cursor");
+            }
+            if (page.through_watermarks.observation_cursor < beforePage.observationCursor) {
+                throw new ContractValidationError("$subjective.catchup.page.through_watermarks", "continuation page does not cover the journal cursor");
+            }
+            for (const frame of page.frames) {
+                if (frame.watermarks.observation_cursor > target.observationCursor)
+                    break;
+                if (options.signal?.aborted)
+                    throw options.signal.reason ?? abortError();
+                const envelope = {
+                    event: "frame",
+                    id: subjectiveFrameEnvelopeId(frame),
+                    data: { kind: "frame", frame },
+                };
+                const result = journal.ingest(envelope);
+                await options.onUpdate?.({ envelope, result });
+                if (options.signal?.aborted)
+                    throw options.signal.reason ?? abortError();
+                if (result.state.health !== "ready") {
+                    throw new SubjectiveFrameCatchupResyncError(result.state);
+                }
+                const current = journal.streamPosition();
+                if (matchesCatchupTarget(current, target))
+                    return journal.state();
+                if (catchupTargetPassed(current, target)) {
+                    throw new ContractValidationError("$subjective.catchup.fixed_target", "journal advanced beyond the fixed target");
+                }
+            }
+            const current = journal.streamPosition();
+            if (matchesCatchupTarget(current, target))
+                return journal.state();
+            if (current.observationCursor >= target.observationCursor) {
+                throw new ContractValidationError("$subjective.catchup.page", "REST catch-up made no exact progress toward its fixed target");
+            }
+            page = await this.frames(options.sessionId, {
+                ...identityFromPosition(current),
+                fromObservationCursor: current.observationCursor,
+            }, options.signal);
+        }
+        throw new ContractValidationError("$subjective.catchup", "REST catch-up exceeded its fixed observation bound");
+    }
+    async combatLog(sessionId, query, signal) {
+        const parameters = identityParameters(sessionId, query);
+        const fromCombatLogCursor = requireCursor(query.fromCombatLogCursor ?? 0, "fromCombatLogCursor");
+        parameters.set("from_combat_log_cursor", String(fromCombatLogCursor));
+        appendLimit(parameters, query.limit);
+        const response = decodeModel("SubjectiveCombatLogFramesResponse", await this.getJson(`${SUBJECTIVE_REPLICATION_ROUTES.combatLog}?${parameters.toString()}`, signal));
+        assertResponseIdentity(response, query, "$subjective.combat_log");
+        assertCombatLogWindow(response);
+        if (response.from_cursor !== fromCombatLogCursor) {
+            throw new ContractValidationError("$subjective.combat_log.from_cursor", "response page does not start at the requested combat-log cursor");
+        }
+        return response;
+    }
+    async *subscribe(options) {
+        const parameters = identityParameters(options.sessionId, options);
+        parameters.set("from_observation_cursor", String(requireCursor(options.fromObservationCursor, "fromObservationCursor")));
+        parameters.set("from_combat_log_cursor", String(requireCursor(options.fromCombatLogCursor, "fromCombatLogCursor")));
+        const response = await this.fetchImplementation(`${this.baseUrl}${SUBJECTIVE_REPLICATION_ROUTES.subscribe}?${parameters.toString()}`, {
+            headers: this.headers({ Accept: "text/event-stream" }),
+            ...(options.signal === undefined ? {} : { signal: options.signal }),
+        });
+        if (!response.ok)
+            throw await this.httpError(response);
+        if (response.body === null)
+            throw new Error("subjective replication stream has no body");
+        const follower = new SubjectiveStreamFollower({
+            sourceStreamId: options.sourceStreamId,
+            generationId: options.generationId,
+            perspectiveEpochId: options.perspectiveEpochId,
+            sourceEventCursor: requireCursor(options.sourceEventCursor, "sourceEventCursor"),
+            observationCursor: requireCursor(options.fromObservationCursor, "fromObservationCursor"),
+            presentationCursor: requireCursor(options.presentationCursor, "presentationCursor"),
+            combatLogCursor: requireCursor(options.fromCombatLogCursor, "fromCombatLogCursor"),
+        });
+        const reader = response.body.getReader();
+        const text = new TextDecoder();
+        const decoder = new SubjectiveSseDecoder();
+        let completed = false;
+        try {
+            while (true) {
+                const chunk = await reader.read();
+                if (chunk.done) {
+                    completed = true;
+                    break;
+                }
+                for (const envelope of decoder.feed(text.decode(chunk.value, { stream: true }))) {
+                    follower.ingest(envelope);
+                    yield envelope;
+                }
+            }
+            for (const envelope of decoder.feed(text.decode())) {
+                follower.ingest(envelope);
+                yield envelope;
+            }
+            for (const envelope of decoder.finish()) {
+                follower.ingest(envelope);
+                yield envelope;
+            }
+        }
+        finally {
+            if (!completed)
+                await reader.cancel().catch(() => undefined);
+            reader.releaseLock();
+        }
+    }
+    async follow(journal, options) {
+        const initialDelay = options.initialReconnectDelayMs ?? 250;
+        const maximumDelay = options.maximumReconnectDelayMs ?? 5_000;
+        if (!Number.isFinite(initialDelay) || initialDelay < 0)
+            throw new RangeError("invalid reconnect delay");
+        if (!Number.isFinite(maximumDelay) || maximumDelay < initialDelay) {
+            throw new RangeError("maximum reconnect delay is below the initial delay");
+        }
+        let delay = initialDelay;
+        let state = journal.state();
+        let initialBootstrap = options.initialBootstrap;
+        if (initialBootstrap !== undefined) {
+            assertSubjectiveReplicationBootstrap(initialBootstrap);
+            if (state.health === "ready") {
+                throw new ContractValidationError("$subjective.follow.initial_bootstrap", "an initial bootstrap cannot replace an already-ready journal");
+            }
+        }
+        let pendingResetReason = state.health === "ready"
+            ? null
+            : state.health === "uninitialized"
+                ? "initial_bootstrap"
+                : state.resyncReason ?? "contract_mismatch";
+        replication: while (!options.signal?.aborted) {
+            if (state.health !== "ready") {
+                let seed;
+                try {
+                    if (initialBootstrap !== undefined) {
+                        seed = initialBootstrap;
+                        initialBootstrap = undefined;
+                    }
+                    else {
+                        seed = await this.bootstrap(options.sessionId, options.signal);
+                    }
+                }
+                catch (error) {
+                    if (options.signal?.aborted)
+                        return;
+                    if (!isRetryable(error))
+                        throw error;
+                    await wait(delay, options.signal);
+                    delay = Math.min(Math.max(delay * 2, 1), maximumDelay);
+                    continue;
+                }
+                state = journal.bootstrap(seed);
+                if (state.health !== "ready") {
+                    throw new ContractValidationError("$subjective.follow.bootstrap", "journal rejected a bootstrap validated by the client");
+                }
+                await options.onReplicaReset?.({
+                    reason: pendingResetReason ?? "contract_mismatch",
+                    bootstrap: seed,
+                    state,
+                });
+                if (options.signal?.aborted)
+                    return;
+                pendingResetReason = null;
+                delay = initialDelay;
+            }
+            const position = journal.streamPosition();
+            const stream = this.subscribe({
+                sessionId: options.sessionId,
+                ...identityFromPosition(position),
+                sourceEventCursor: position.sourceEventCursor,
+                fromObservationCursor: position.observationCursor,
+                presentationCursor: position.presentationCursor,
+                fromCombatLogCursor: position.combatLogCursor,
+                ...(options.signal === undefined ? {} : { signal: options.signal }),
+            });
+            const iterator = stream[Symbol.asyncIterator]();
+            try {
+                while (true) {
+                    let next;
+                    try {
+                        next = await iterator.next();
+                    }
+                    catch (error) {
+                        if (options.signal?.aborted)
+                            return;
+                        const reason = resyncReason(error);
+                        if (reason !== null) {
+                            pendingResetReason = reason;
+                            state = journal.invalidate(reason);
+                            continue replication;
+                        }
+                        if (!isRetryable(error))
+                            throw error;
+                        break;
+                    }
+                    if (next.done)
+                        break;
+                    const envelope = next.value;
+                    delay = initialDelay;
+                    const result = journal.ingest(envelope);
+                    // Consumer callbacks are not transport or decoder operations. Their
+                    // failures must escape rather than reconnect from an advanced cursor.
+                    await options.onUpdate?.({ envelope, result });
+                    if (options.signal?.aborted)
+                        return;
+                    if (result.state.health === "resync_required") {
+                        pendingResetReason = result.state.resyncReason ?? "contract_mismatch";
+                        state = result.state;
+                        continue replication;
+                    }
+                }
+            }
+            finally {
+                await iterator.return?.(undefined);
+            }
+            if (options.signal?.aborted)
+                return;
+            await wait(delay, options.signal);
+            delay = Math.min(Math.max(delay * 2, 1), maximumDelay);
+        }
+    }
+    async getJson(path, signal) {
+        const response = await this.fetchImplementation(`${this.baseUrl}${path}`, signal === undefined ? { headers: this.headers() } : { headers: this.headers(), signal });
+        const payload = parseJson(await response.text());
+        if (!response.ok)
+            throw new SubjectiveReplicationHttpError(response.status, payload);
+        return payload;
+    }
+    async httpError(response) {
+        const body = await response.text();
+        return new SubjectiveReplicationHttpError(response.status, body === "" ? null : parseJson(body));
+    }
+    headers(additional = {}) {
+        return { ...this.defaultHeaders, ...additional };
+    }
+    readMonotonicNow() {
+        const value = this.monotonicNow();
+        if (!Number.isFinite(value))
+            throw new TypeError("monotonic clock returned a non-finite value");
+        return value;
+    }
+    bootstrapWindowExpired(startedAt) {
+        return this.readMonotonicNow() - startedAt >= BOOTSTRAP_RETRY_WINDOW_MS;
+    }
+}
+function identityParameters(sessionId, identity) {
+    return new URLSearchParams({
+        session_id: requireNonEmpty(sessionId, "sessionId"),
+        expected_source_stream_id: requireNonEmpty(identity.sourceStreamId, "sourceStreamId"),
+        expected_generation_id: requireNonEmpty(identity.generationId, "generationId"),
+        expected_perspective_epoch_id: requireNonEmpty(identity.perspectiveEpochId, "perspectiveEpochId"),
+    });
+}
+function assertResponseIdentity(response, expected, path) {
+    if (response.source_stream_id !== expected.sourceStreamId
+        || response.generation_id !== expected.generationId
+        || response.perspective_epoch_id !== expected.perspectiveEpochId) {
+        throw new ContractValidationError(path, "response identity differs from request");
+    }
+}
+function appendLimit(parameters, limit) {
+    if (limit === undefined)
+        return;
+    if (!Number.isSafeInteger(limit) || limit < 1)
+        throw new RangeError("limit must be a positive integer");
+    parameters.set("limit", String(limit));
+}
+function identityFromPosition(position) {
+    return {
+        sourceStreamId: position.sourceStreamId,
+        generationId: position.generationId,
+        perspectiveEpochId: position.perspectiveEpochId,
+    };
+}
+function requireCursor(value, name) {
+    if (!Number.isSafeInteger(value) || value < 0)
+        throw new RangeError(`${name} must be a non-negative cursor`);
+    return value;
+}
+function requireNonEmpty(value, name) {
+    if (value.trim() === "")
+        throw new TypeError(`${name} must be non-empty`);
+    return value;
+}
+function isRetryable(error) {
+    return error instanceof TypeError
+        || (error instanceof SubjectiveReplicationHttpError
+            && (error.status === 408 || error.status === 429 || error.status >= 500));
+}
+function resyncReason(error) {
+    if (error instanceof ContractValidationError || error instanceof SyntaxError)
+        return "contract_mismatch";
+    if (!(error instanceof SubjectiveReplicationHttpError) || error.status !== 409)
+        return null;
+    const code = errorCode(error.payload);
+    if (code === "replication_identity_changed")
+        return "source_stream_changed";
+    if (code === "replication_resync_required")
+        return "observation_cursor_gap";
+    if (code === "replication_source_unavailable" || code === "replication_partition_unavailable") {
+        return "source_stream_changed";
+    }
+    return null;
+}
+function errorCode(payload) {
+    if (!isJsonObject(payload))
+        return null;
+    const detail = payload.detail;
+    if (!isJsonObject(detail))
+        return null;
+    return typeof detail.code === "string" ? detail.code : null;
+}
+function isJsonObject(value) {
+    return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+async function wait(delay, signal) {
+    if (delay <= 0)
+        return;
+    await new Promise((resolve) => {
+        const timeout = setTimeout(done, delay);
+        signal?.addEventListener("abort", done, { once: true });
+        function done() {
+            clearTimeout(timeout);
+            signal?.removeEventListener("abort", done);
+            resolve();
+        }
+    });
+}
+function requireCatchupTarget(value) {
+    return Object.freeze({
+        sourceEventCursor: requireCursor(value.sourceEventCursor, "fixedTarget.sourceEventCursor"),
+        observationCursor: requireCursor(value.observationCursor, "fixedTarget.observationCursor"),
+        presentationCursor: requireCursor(value.presentationCursor, "fixedTarget.presentationCursor"),
+    });
+}
+function matchesCatchupTarget(value, target) {
+    const source = "source_event_cursor" in value
+        ? value.source_event_cursor
+        : value.sourceEventCursor;
+    const observation = "observation_cursor" in value
+        ? value.observation_cursor
+        : value.observationCursor;
+    const presentation = "presentation_cursor" in value
+        ? value.presentation_cursor
+        : value.presentationCursor;
+    return source === target.sourceEventCursor
+        && observation === target.observationCursor
+        && presentation === target.presentationCursor;
+}
+function catchupTargetPassed(position, target) {
+    return position.sourceEventCursor > target.sourceEventCursor
+        || position.observationCursor > target.observationCursor
+        || position.presentationCursor > target.presentationCursor;
+}
+function subjectiveFrameEnvelopeId(frame) {
+    const watermarks = frame.watermarks;
+    return `s=${watermarks.source_event_cursor};o=${watermarks.observation_cursor};p=${watermarks.presentation_cursor};l=${watermarks.combat_log_cursor}`;
+}
+function isolateFramesPage(page) {
+    return decodeModel("SubjectiveFramesResponse", parseJson(JSON.stringify(page)));
+}
+function defaultMonotonicNow() {
+    return globalThis.performance?.now() ?? Date.now();
+}
+function abortError() {
+    return new DOMException("The operation was aborted", "AbortError");
+}
+async function waitForBootstrapRetry(delay, signal) {
+    if (signal.aborted)
+        throw signal.reason ?? abortError();
+    await new Promise((resolve, reject) => {
+        const timeout = setTimeout(done, delay);
+        signal.addEventListener("abort", aborted, { once: true });
+        function done() {
+            signal.removeEventListener("abort", aborted);
+            resolve();
+        }
+        function aborted() {
+            clearTimeout(timeout);
+            reject(signal.reason ?? abortError());
+        }
+    });
+}
+//# sourceMappingURL=subjectiveClient.js.map

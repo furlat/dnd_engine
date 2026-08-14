@@ -468,6 +468,8 @@ def test_every_public_condition_class_declares_name_and_description() -> None:
         if condition_type in seen:
             continue
         seen.add(condition_type)
+        if not condition_type.__module__.startswith("dnd."):
+            continue
         fields = condition_type.model_fields
         category = fields["condition_category"].get_default(
             call_default_factory=True,
