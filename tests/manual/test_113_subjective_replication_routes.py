@@ -110,10 +110,8 @@ def _request(path: str) -> Request:
 
 @pytest.fixture
 def canonical_route_scene(
-    monkeypatch: pytest.MonkeyPatch,
 ) -> Iterator[CanonicalRouteScene]:
     """Install one standalone participant with a renderer-complete perspective."""
-    monkeypatch.delenv("DND_GAME_WORKER", raising=False)
     sim.reset()
     grid = reset_engine_runtime(grid_size=(3, 1))
     event_stream.ensure_attached()
@@ -636,7 +634,7 @@ def test_projection_reset_clears_replay_capture_and_releases_journal_identity(
     context = canonical_subjective_replication_runtime.get(key)
     subscription = context.subscribe()
     asyncio.run(subscription.get())
-    membership_id = f"standalone:{canonical_route_scene.session.session_id}"
+    membership_id = f"game:{canonical_route_scene.session.session_id}"
     assert subjective_replay_capture_store.memberships(
         encounter_uuid=source_stream_id,
     ) == (membership_id,)
@@ -705,24 +703,6 @@ def test_authority_mutation_immediately_closes_existing_partition(
         str(canonical_route_scene.observer.uuid),
         str(second.uuid),
     }
-
-
-def test_hosted_worker_rejects_missing_private_authority(
-    canonical_route_scene: CanonicalRouteScene,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A worker never treats a query-string session as subjective authority."""
-    monkeypatch.setenv("DND_GAME_WORKER", "1")
-
-    with pytest.raises(HTTPException) as rejected:
-        asyncio.run(get_replication_bootstrap(
-            request=_request("/replication/bootstrap"),
-            response=Response(),
-            session_id=str(canonical_route_scene.session.session_id),
-        ))
-    assert rejected.value.status_code == 403
-    rejected_detail = cast(dict[str, object], rejected.value.detail)
-    assert rejected_detail["code"] == "replication_authority_rejected"
 
 
 def test_openapi_has_exactly_one_player_replication_route_family() -> None:
@@ -830,7 +810,6 @@ def test_command_ack_models_do_not_duplicate_replica_or_diagnostics_facts() -> N
         "entity_uuid",
         "entity_name",
         "faction",
-        "character_id",
         "participant_name",
     }
 

@@ -71,7 +71,7 @@ class SubjectiveReplaySegment(PlayerReplayModel):
     )
     membership_id: str = Field(
         min_length=1,
-        description="Durable hosted membership, or the explicit standalone identity.",
+        description="Game-scoped identity of the session perspective.",
     )
     runtime_session_id: str = Field(
         min_length=1,

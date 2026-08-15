@@ -12,7 +12,6 @@ from tests.manual.server_test_client import (
     ServerTestClient,
     reset_server_test_runtime,
 )
-from server.game_gateway import create_gateway_app
 from server.game_creation_preview import (
     clear_game_creation_preview_cache,
     game_creation_preview_worker_pid,
@@ -118,15 +117,6 @@ def test_encounter_preview_is_exact_and_parent_runtime_is_untouched(
         handler_uuid: id(value)
         for handler_uuid, value in EventQueue._event_handlers.items()
     } == event_handlers_before
-
-
-def test_preview_route_is_identical_in_standalone_and_hosted_openapi() -> None:
-    path = "/game-creation/preview"
-
-    assert path in event_server.app.openapi()["paths"]
-    assert path in create_gateway_app().openapi()["paths"]
-    assert "/game-creation/compose" in event_server.app.openapi()["paths"]
-    assert "/game-creation/compose" in create_gateway_app().openapi()["paths"]
 
 
 def test_distinct_previews_reuse_the_lifespan_owned_isolated_worker(

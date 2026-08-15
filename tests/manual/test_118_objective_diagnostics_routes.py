@@ -6,7 +6,7 @@ import asyncio
 import json
 from collections.abc import AsyncGenerator, Iterator, Mapping
 from typing import cast
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import pytest
 from fastapi import HTTPException
@@ -23,18 +23,10 @@ from server.event_server import (
     get_objective_diagnostics_bootstrap,
     get_objective_diagnostics_combat_log,
     get_objective_diagnostics_events,
-    install_hosted_worker_assignment,
-    reset_hosted_worker_assignment,
     sim,
     subscribe_objective_diagnostics,
 )
 from server.event_stream import event_stream
-from server.hosted_worker import HostedWorkerAssignment
-from server.runtime_authority import (
-    RuntimeAuthorityCache,
-    RuntimeScope,
-    runtime_projection_headers,
-)
 from server.timeline_contracts import CombatLogProjection
 
 
@@ -124,8 +116,6 @@ def objective_scene(
     monkeypatch: pytest.MonkeyPatch,
 ) -> Iterator[tuple[Encounter, Event, CombatLogEntry]]:
     """Install one exact completion/log pair in a local objective timeline."""
-    monkeypatch.delenv("DND_GAME_WORKER", raising=False)
-    reset_hosted_worker_assignment()
     sim.reset()
     reset_engine_runtime(grid_size=(3, 3))
     event_stream.ensure_attached()
@@ -158,20 +148,8 @@ def objective_scene(
         yield encounter, completion, entry
     finally:
         sim.reset()
-        reset_hosted_worker_assignment()
         reset_engine_runtime(grid_size=(3, 3))
         event_stream.ensure_attached()
-
-
-def _install_hosted_assignment(game_id: UUID) -> None:
-    """Install the same typed assignment used by a real warm worker."""
-    install_hosted_worker_assignment(HostedWorkerAssignment(
-        hosted_game_id=game_id,
-        public_game_base_url=f"http://gateway/games/{game_id}/runtime",
-        worker_instance_id=uuid4(),
-        worker_generation=1,
-        terminal_runtime_directory="/private/worker/runtime",
-    ))
 
 
 def test_objective_http_routes_share_cold_identity_and_exact_cursors(
@@ -595,98 +573,6 @@ def test_standalone_objective_diagnostics_allow_header_free_access(
     """Direct standalone development can inspect every objective route."""
     for path in _OBJECTIVE_DIAGNOSTICS_PATHS:
         result = asyncio.run(_call_objective_diagnostics_route(path))
-        assert result is not None
-
-
-def test_hosted_objective_diagnostics_reject_header_free_access(
-    objective_scene: tuple[Encounter, Event, CombatLogEntry],
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A private worker never interprets a missing authority claim as local use."""
-    monkeypatch.setenv("DND_GAME_WORKER", "1")
-
-    for path in _OBJECTIVE_DIAGNOSTICS_PATHS:
-        with pytest.raises(HTTPException) as rejected:
-            asyncio.run(_call_objective_diagnostics_route(path))
-        assert rejected.value.status_code == 403
-        rejected_detail = cast(dict[str, object], rejected.value.detail)
-        assert rejected_detail["code"] == "objective_diagnostics_authority_rejected"
-        assert (
-            rejected_detail["message"]
-            == "trusted runtime administration authority is required"
-        )
-
-
-def test_hosted_objective_diagnostics_reject_wrong_game_or_non_admin_authority(
-    objective_scene: tuple[Encounter, Event, CombatLogEntry],
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Hosted objective access is both game-bound and administration-only."""
-    game_id = uuid4()
-    monkeypatch.setenv("DND_GAME_WORKER", "1")
-    _install_hosted_assignment(game_id)
-    cache = RuntimeAuthorityCache()
-
-    observer = cache.issue(
-        hosted_game_id=game_id,
-        runtime_session_id=uuid4(),
-        membership_id=uuid4(),
-        scopes={RuntimeScope.OBSERVE},
-    )
-    wrong_game_administrator = cache.issue(
-        hosted_game_id=uuid4(),
-        runtime_session_id=uuid4(),
-        membership_id=uuid4(),
-        scopes={RuntimeScope.ADMINISTER},
-    )
-
-    rejected_authorities = (
-        (
-            observer.authority,
-            "objective diagnostics require runtime administration authority",
-        ),
-        (
-            wrong_game_administrator.authority,
-            "runtime authority belongs to another hosted game",
-        ),
-    )
-    for authority, expected_message in rejected_authorities:
-        headers = runtime_projection_headers(authority)
-        for path in _OBJECTIVE_DIAGNOSTICS_PATHS:
-            with pytest.raises(HTTPException) as rejected:
-                asyncio.run(
-                    _call_objective_diagnostics_route(path, headers=headers)
-                )
-            assert rejected.value.status_code == 403
-            rejected_detail = cast(dict[str, object], rejected.value.detail)
-            assert (
-                rejected_detail["code"]
-                == "objective_diagnostics_authority_rejected"
-            )
-            assert rejected_detail["message"] == expected_message
-
-
-def test_hosted_objective_diagnostics_accept_matching_admin_authority(
-    objective_scene: tuple[Encounter, Event, CombatLogEntry],
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Every hosted objective route accepts the matching admin projection."""
-    game_id = uuid4()
-    monkeypatch.setenv("DND_GAME_WORKER", "1")
-    _install_hosted_assignment(game_id)
-    cache = RuntimeAuthorityCache()
-    administrator = cache.issue(
-        hosted_game_id=game_id,
-        runtime_session_id=uuid4(),
-        membership_id=uuid4(),
-        scopes={RuntimeScope.ADMINISTER},
-    )
-    headers = runtime_projection_headers(administrator.authority)
-
-    for path in _OBJECTIVE_DIAGNOSTICS_PATHS:
-        result = asyncio.run(
-            _call_objective_diagnostics_route(path, headers=headers)
-        )
         assert result is not None
 
 

@@ -9,13 +9,10 @@ import subprocess
 import sys
 import threading
 from collections import deque
-from collections.abc import Mapping
 from functools import lru_cache
-from uuid import UUID
 
 from pydantic import ValidationError
 
-from dnd.core.content.character_deployment import CharacterDeploymentSnapshot
 from dnd.core.content.encounters import EncounterRecipe
 from server.game_creation_preview_contracts import (
     GameCreationEncounterVisualPreviewResponse,
@@ -258,7 +255,6 @@ atexit.register(close_game_creation_preview_worker)
 @lru_cache(maxsize=256)
 def _build_cached_preview(
     recipe_json: str,
-    deployments_json: str,
     content_set_digest: str,
     ruleset_digest: str,
 ) -> GameCreationEncounterVisualPreviewResponse:
@@ -268,7 +264,6 @@ def _build_cached_preview(
             "expected_content_set_digest": content_set_digest,
             "expected_ruleset_digest": ruleset_digest,
             "recipe": json.loads(recipe_json),
-            "character_deployments": json.loads(deployments_json),
         },
         sort_keys=True,
         separators=(",", ":"),
@@ -322,29 +317,12 @@ def _build_cached_preview(
 def build_game_creation_encounter_visual_preview(
     recipe: EncounterRecipe,
     *,
-    character_deployments: Mapping[
-        UUID,
-        CharacterDeploymentSnapshot,
-    ] | None = None,
     expected_content_set_digest: str,
     expected_ruleset_digest: str,
 ) -> GameCreationEncounterVisualPreviewResponse:
     """Return one cached exact preview without touching parent engine state."""
-    deployments = character_deployments or {}
-    ordered_deployments = tuple(
-        deployments[character_id]
-        for character_id in sorted(deployments, key=lambda value: value.hex)
-    )
     return _build_cached_preview(
         recipe.model_dump_json(),
-        json.dumps(
-            [
-                deployment.model_dump(mode="json")
-                for deployment in ordered_deployments
-            ],
-            sort_keys=True,
-            separators=(",", ":"),
-        ),
         expected_content_set_digest,
         expected_ruleset_digest,
     )

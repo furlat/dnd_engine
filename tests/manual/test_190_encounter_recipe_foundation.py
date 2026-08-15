@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from uuid import uuid4
-
 import pytest
 from pydantic import ValidationError
 
@@ -17,7 +15,6 @@ from dnd.core.content.encounters import (
     EncounterRosterSlot,
     FixedRosterOpeningPolicy,
     InitiativeOpeningPolicy,
-    OwnedCharacterRosterSource,
 )
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.content.recipes import ContentRecipe
@@ -37,24 +34,7 @@ def _creature_recipe(content_id: str = "creature.test_dummy") -> ContentRecipe:
 def _roster(
     roster_id: str,
     member_id: str,
-    *,
-    character: bool = False,
 ) -> EncounterRosterRecipe:
-    source = (
-        OwnedCharacterRosterSource(
-            character_id=uuid4(),
-            expected_character_row_version=1,
-            expected_definition_revision=1,
-            expected_definition_digest="b" * 64,
-            expected_holdings_revision=1,
-            expected_holdings_digest="c" * 64,
-            expected_loadout_revision=1,
-            expected_loadout_digest="d" * 64,
-            expected_ruleset_digest="e" * 64,
-        )
-        if character
-        else AuthoredCreatureRosterSource(recipe=_creature_recipe())
-    )
     return EncounterRosterRecipe.create(
         roster_id=roster_id,
         title=roster_id,
@@ -63,7 +43,9 @@ def _roster(
                 member_id=member_id,
                 display_name=member_id,
                 deployment_role=member_id,
-                source=source,
+                source=AuthoredCreatureRosterSource(
+                    recipe=_creature_recipe(),
+                ),
             ),
         ),
     )
@@ -126,18 +108,6 @@ def test_roster_and_encounter_digests_authenticate_every_nested_fact() -> None:
     tampered["roster_slots"][0]["faction_id"] = "other"
     with pytest.raises(ValidationError, match="recipe_digest"):
         EncounterRecipe.model_validate(tampered)
-
-
-def test_owned_character_is_a_roster_source_not_a_hero_configuration() -> None:
-    roster = _roster("roster.test_owned", "owned", character=True)
-
-    assert isinstance(roster.members[0].source, OwnedCharacterRosterSource)
-    payload = roster.model_dump(mode="json")
-    serialized = repr(payload)
-    assert "hero_configuration" not in serialized
-    assert "monster_configuration" not in serialized
-    assert "side_a" not in serialized
-    assert "side_b" not in serialized
 
 
 def test_encounter_validates_slot_zone_and_opening_references() -> None:

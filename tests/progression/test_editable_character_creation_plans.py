@@ -17,15 +17,9 @@ from dnd.core.content.premade_characters import (
     CharacterCreationPlanKind,
 )
 from dnd.items.torches import TORCH_RECIPE
-from server.character_directory_contracts import (
-    CharacterCreationCatalogResponse,
-)
 
 
 def test_creation_plan_roster_is_one_blank_seed_plus_every_premade() -> None:
-    assert "creation_plans" in CharacterCreationCatalogResponse.model_fields
-    assert "premades" not in CharacterCreationCatalogResponse.model_fields
-
     plans = compose_character_creation_plans()
 
     assert tuple(plan.plan_id for plan in plans) == (

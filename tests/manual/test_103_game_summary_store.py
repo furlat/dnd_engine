@@ -1,4 +1,4 @@
-"""Focused tests for the worker-local terminal game summary store."""
+"""Focused tests for the in-process terminal game summary store."""
 
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ from dnd.core.values import BaseValue
 from dnd.encounter import Encounter
 from dnd.entity import Entity
 from dnd.monsters.bestiary_content import BESTIARY_CREATURE_RECIPES_BY_ID
-from server.game_summary_store import WorkerGameSummaryStore
+from server.game_summary_store import GameSummaryStore
 
 
 @pytest.fixture(autouse=True)
@@ -118,7 +118,7 @@ def _run_empty_encounter(name: str, offset: int) -> Encounter:
 
 def test_reset_reattaches_after_event_queue_reset() -> None:
     """Store reset restores the callback that EventQueue.reset removes."""
-    store = WorkerGameSummaryStore(max_summaries=2)
+    store = GameSummaryStore(max_summaries=2)
     EventQueue.reset()
     store.reset()
     store.ensure_attached()
@@ -148,8 +148,7 @@ def test_reset_reattaches_after_event_queue_reset() -> None:
 def test_terminal_encounter_captures_typed_boundaries_and_summary(
 ) -> None:
     """A real terminal match yields complete typed evidence and a valid digest."""
-    hosted_game_id = uuid4()
-    store = WorkerGameSummaryStore(max_summaries=2)
+    store = GameSummaryStore(max_summaries=2)
 
     hero = _materialize_bestiary_creature(
         "goblin",
@@ -171,7 +170,6 @@ def test_terminal_encounter_captures_typed_boundaries_and_summary(
     )
     monster.grant_temporary_hit_points(3, monster.uuid)
     encounter = _start_encounter(hero=hero, monster=monster, name="Terminal Summary")
-    store.bind_directory_game_id(encounter.uuid, hosted_game_id)
     store.capture_active_encounter(encounter)
 
     initial_event_cursor = EventQueue.event_cursor()
@@ -179,13 +177,13 @@ def test_terminal_encounter_captures_typed_boundaries_and_summary(
     monster.receive_damage(damage, DamageType.FORCE, hero.uuid)
     encounter.end_encounter("one faction remains")
 
-    summary = store.get(hosted_game_id)
+    summary = store.get(encounter.uuid)
     assert summary is not None
-    replay_capture = store.get_replay_capture(hosted_game_id)
+    replay_capture = store.get_replay_capture(encounter.uuid)
     assert replay_capture is not None
     assert store.get(encounter.uuid) == summary
     assert store.get_replay_capture(encounter.uuid) == replay_capture
-    assert summary.game_id == str(hosted_game_id)
+    assert summary.game_id == str(encounter.uuid)
     assert summary.encounter_uuid == encounter.uuid
     assert summary.terminal_cursor.event_cursor > initial_event_cursor
     assert summary.terminal_cursor.combat_log_cursor == len(encounter.combat_log)
@@ -231,7 +229,7 @@ def test_terminal_encounter_captures_typed_boundaries_and_summary(
     caller_view_final = summary.entities[0].final
     assert caller_view_final is not None
     caller_view_final.resources["caller_mutation"] = 999
-    retained = store.get(hosted_game_id)
+    retained = store.get(encounter.uuid)
     assert retained is not None
     assert all(
         "caller_mutation" not in entity.final.resources
@@ -242,8 +240,8 @@ def test_terminal_encounter_captures_typed_boundaries_and_summary(
 
 
 def test_store_is_bounded_and_has_no_database_imports() -> None:
-    """Old summaries are evicted and the worker store has no DB dependency."""
-    store = WorkerGameSummaryStore(max_summaries=2)
+    """Old summaries are evicted and the store has no DB dependency."""
+    store = GameSummaryStore(max_summaries=2)
     first = _run_empty_encounter("First", 1)
     second = _run_empty_encounter("Second", 4)
     third = _run_empty_encounter("Third", 7)

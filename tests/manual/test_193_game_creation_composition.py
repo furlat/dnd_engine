@@ -1,40 +1,20 @@
-"""Exact normalization and preview gates for multi-character rosters."""
+"""Exact authored-roster normalization and preview gates."""
 
 from __future__ import annotations
-
-from datetime import UTC, datetime
-from uuid import UUID, uuid4
 
 import pytest
 
 from dnd.content_system.bootstrap import bootstrap_content_system
 from dnd.content_system.builtin_character_builds import (
     DEFAULT_CHARACTER_RULESET_DIGEST,
-    BuiltinSingleClassBuild,
-    compose_builtin_character_revisions,
 )
-from dnd.content_system.character_appearance import (
-    FIGHTER_HUMAN_APPEARANCE,
-)
-from dnd.core.content.character_deployment import (
-    CharacterDeploymentSnapshot,
-)
-from dnd.core.content.encounters import (
-    FixedRosterOpeningPolicy,
-    OwnedCharacterRosterSource,
-)
-from dnd.core.progression import MulticlassSlotRoundingPolicy
+from dnd.core.content.encounters import FixedRosterOpeningPolicy
 from dnd.scenarios.encounter_assembler import prepare_encounter_recipe
 from dnd.scenarios.encounter_catalog import AUTHORED_ROSTER_RECIPES_BY_ID
-from dnd.scenarios.encounter_compatibility import (
-    resolve_encounter_positions,
-)
 from server.api_models import (
     GameCreationAuthoredRosterSelection,
     GameCreationComposeRequest,
-    GameCreationOwnedCharacterRosterSelection,
     GameCreationRosterSlotSelection,
-    GameCreationSavedRosterSelection,
 )
 from server.game_creation_composition import (
     GameCreationCompositionError,
@@ -43,54 +23,16 @@ from server.game_creation_composition import (
 from server.game_creation_preview import (
     build_game_creation_encounter_visual_preview,
 )
-from server.game_directory.contracts import SavedEncounterRosterRecord
 
 
-def _snapshot(
-    character_id: UUID,
-    display_name: str,
-) -> CharacterDeploymentSnapshot:
-    content_system = bootstrap_content_system()
-    revisions = compose_builtin_character_revisions(
-        character_id=character_id,
-        build=BuiltinSingleClassBuild(
-            class_id="fighter",
-            level=1,
-            equipment_preset="sword_shield",
-            appearance=FIGHTER_HUMAN_APPEARANCE,
-            fighting_style="dueling",
-        ),
-        content_system=content_system,
-    )
-    return CharacterDeploymentSnapshot(
-        character_id=character_id,
-        character_row_version=1,
-        display_name=display_name,
-        definition=revisions.definition,
-        holdings=revisions.holdings,
-        loadout=revisions.loadout,
-        expected_ruleset_digest=DEFAULT_CHARACTER_RULESET_DIGEST,
-        multiclass_slot_rounding_policy=(
-            MulticlassSlotRoundingPolicy.SRD_5_2_ROUND_UP
-        ),
-        permissive_multiclass_prerequisites=True,
-    )
-
-
-def _request(
-    first_id: UUID,
-    second_id: UUID,
-    *,
-    participant_name: str = "Local Party",
-) -> GameCreationComposeRequest:
+def _request(*, participant_name: str = "Local Party") -> GameCreationComposeRequest:
     return GameCreationComposeRequest(
-        title="Two Character Test",
+        title="Authored Composition Test",
         roster_slots=(
             GameCreationRosterSlotSelection(
                 roster_slot_id="players",
-                roster=GameCreationOwnedCharacterRosterSelection(
-                    title="Owned Party",
-                    character_ids=(first_id, second_id),
+                roster=GameCreationAuthoredRosterSelection(
+                    roster_id="hero.fighter_l5_archer_torch",
                 ),
                 faction_id="players",
                 deployment_zone_id="zone_1",
@@ -106,225 +48,65 @@ def _request(
                 participant_name="Opposition",
             ),
         ),
-        battlefield_id="battlefield.open_floor_bright",
-        deployment_id="neutral.battlefield.open_floor_bright",
-        opening_policy=FixedRosterOpeningPolicy(
-            roster_slot_id="players",
-        ),
+        battlefield_id="battlefield.standard_hazards_closed",
+        deployment_id="neutral.battlefield.standard_hazards_closed",
+        opening_policy=FixedRosterOpeningPolicy(roster_slot_id="players"),
     )
 
 
-def test_normalization_preserves_two_owned_sources_across_participant_changes(
-) -> None:
-    first_id = uuid4()
-    second_id = uuid4()
-    deployments = {
-        first_id: _snapshot(first_id, "First"),
-        second_id: _snapshot(second_id, "Second"),
-    }
-    local_recipe, local_report = normalize_encounter_recipe(
-        _request(
-            first_id,
-            second_id,
-            participant_name="Local Party",
-        ),
-        character_deployments=deployments,
-    )
-    remote_recipe, remote_report = normalize_encounter_recipe(
-        _request(
-            first_id,
-            second_id,
-            participant_name="Remote Party",
-        ),
-        character_deployments=deployments,
-    )
+def test_normalization_resolves_exact_authored_rosters() -> None:
+    recipe, report = normalize_encounter_recipe(_request())
 
-    assert local_report.admitted
-    assert remote_report.admitted
-    local_roster = local_recipe.roster_slots[0].roster
-    remote_roster = remote_recipe.roster_slots[0].roster
-    assert local_roster == remote_roster
-    assert local_roster.recipe_digest == remote_roster.recipe_digest
-    assert tuple(
-        member.source.character_id
-        for member in local_roster.members
-        if isinstance(member.source, OwnedCharacterRosterSource)
-    ) == (first_id, second_id)
-    assert local_recipe.roster_slots[0].participant_name == "Local Party"
-    assert remote_recipe.roster_slots[0].participant_name == "Remote Party"
-    assert local_recipe.recipe_digest != remote_recipe.recipe_digest
-
-
-def test_two_owned_characters_materialize_and_preview_from_the_same_recipe(
-) -> None:
-    first_id = uuid4()
-    second_id = uuid4()
-    deployments = {
-        first_id: _snapshot(first_id, "First"),
-        second_id: _snapshot(second_id, "Second"),
-    }
-    recipe, report = normalize_encounter_recipe(
-        _request(
-            first_id,
-            second_id,
-        ),
-        character_deployments=deployments,
-    )
     assert report.admitted
-
-    assembled = prepare_encounter_recipe(
-        recipe,
-        character_deployments=deployments,
-    )
-    assert tuple(
-        entity.name
-        for entity in assembled.entities_by_roster_slot["players"]
-    ) == ("First", "Second")
-
-    content_digest = bootstrap_content_system().content_set_digest
-    preview = build_game_creation_encounter_visual_preview(
-        recipe,
-        character_deployments=deployments,
-        expected_content_set_digest=content_digest,
-        expected_ruleset_digest=DEFAULT_CHARACTER_RULESET_DIGEST,
-    )
-    assert preview.encounter_recipe_digest == recipe.recipe_digest
-    assert tuple(
-        member.entity.name
-        for member in preview.rosters[0].members
-    ) == ("First", "Second")
-    assert tuple(
-        roster.roster_slot_id for roster in preview.rosters
-    ) == ("players", "opposition")
-
-
-def test_saved_roster_selection_reuses_exact_recipe_and_rejects_stale_identity(
-) -> None:
-    source = AUTHORED_ROSTER_RECIPES_BY_ID[
-        "hero.fighter_l5_shield_torch"
+    assert recipe.roster_slots[0].roster is AUTHORED_ROSTER_RECIPES_BY_ID[
+        "hero.fighter_l5_archer_torch"
     ]
-    saved_recipe = source.model_copy(update={
-        "roster_id": "roster.saved.fighter",
-        "title": "Saved Fighter",
-    })
-    saved_recipe = type(source).create(
-        roster_id=saved_recipe.roster_id,
-        title=saved_recipe.title,
-        members=saved_recipe.members,
-        tags=saved_recipe.tags,
-        required_battlefield_capabilities=(
-            saved_recipe.required_battlefield_capabilities
-        ),
-        forbidden_battlefield_capabilities=(
-            saved_recipe.forbidden_battlefield_capabilities
-        ),
+    assert recipe.roster_slots[1].roster is AUTHORED_ROSTER_RECIPES_BY_ID[
+        "monsters.skeleton_trio"
+    ]
+    assert all(
+        member.source.kind == "authored_creature"
+        for slot in recipe.roster_slots
+        for member in slot.roster.members
     )
-    now = datetime(2026, 7, 29, 12, 0, tzinfo=UTC)
-    record = SavedEncounterRosterRecord(
-        saved_roster_id="saved.roster.fighter",
-        owner_principal_id=uuid4(),
-        title=saved_recipe.title,
-        recipe=saved_recipe,
-        recipe_digest=saved_recipe.recipe_digest,
-        revision=3,
-        created_at=now,
-        updated_at=now,
-    )
-    source_request = _request(
-        uuid4(),
-        uuid4(),
-    )
-    saved_selection = GameCreationSavedRosterSelection(
-        saved_roster_id=record.saved_roster_id,
-        expected_revision=record.revision,
-        expected_recipe_digest=record.recipe_digest,
-    )
-    request = source_request.model_copy(update={
-        "roster_slots": (
-            source_request.roster_slots[0].model_copy(update={
-                "roster": saved_selection,
-            }),
-            source_request.roster_slots[1],
+
+
+def test_participant_presentation_changes_only_encounter_identity() -> None:
+    local, _ = normalize_encounter_recipe(_request(participant_name="Local"))
+    remote, _ = normalize_encounter_recipe(_request(participant_name="Remote"))
+
+    assert local.roster_slots[0].roster == remote.roster_slots[0].roster
+    assert local.recipe_digest != remote.recipe_digest
+
+
+def test_unknown_authored_roster_is_rejected() -> None:
+    request = _request().model_copy(deep=True)
+    first = request.roster_slots[0].model_copy(update={
+        "roster": GameCreationAuthoredRosterSelection(
+            roster_id="missing.roster",
         ),
     })
-
-    recipe, compatibility = normalize_encounter_recipe(
-        request,
-        saved_rosters={record.saved_roster_id: record},
-    )
-
-    assert compatibility.admitted
-    assert recipe.roster_slots[0].roster == saved_recipe
-    assert recipe.roster_slots[0].roster.recipe_digest == record.recipe_digest
-
-    stale_request = request.model_copy(update={
-        "roster_slots": (
-            request.roster_slots[0].model_copy(update={
-                "roster": saved_selection.model_copy(update={
-                    "expected_revision": record.revision - 1,
-                }),
-            }),
-            request.roster_slots[1],
-        ),
-    })
-    with pytest.raises(
-        GameCreationCompositionError,
-        match="changed during composition",
-    ):
-        normalize_encounter_recipe(
-            stale_request,
-            saved_rosters={record.saved_roster_id: record},
-        )
-
-
-def test_portable_closed_hazard_deployment_admits_owned_character_vs_goblins(
-) -> None:
-    character_id = uuid4()
-    deployment = _snapshot(character_id, "Portable Hero")
-    source_request = _request(
-        character_id,
-        uuid4(),
-    )
-    request = source_request.model_copy(update={
-        "title": "Portable Hero vs Goblins",
-        "battlefield_id": "battlefield.standard_hazards_closed",
-        "deployment_id": (
-            "neutral.battlefield.standard_hazards_closed"
-        ),
-        "roster_slots": (
-            source_request.roster_slots[0].model_copy(update={
-                "roster": GameCreationOwnedCharacterRosterSelection(
-                    title="Owned Hero",
-                    character_ids=(character_id,),
-                ),
-            }),
-            source_request.roster_slots[1].model_copy(update={
-                "roster": GameCreationAuthoredRosterSelection(
-                    roster_id="monsters.goblin_water_cell",
-                ),
-            }),
-        ),
+    request = request.model_copy(update={
+        "roster_slots": (first, request.roster_slots[1]),
     })
 
-    recipe, compatibility = normalize_encounter_recipe(
-        request,
-        character_deployments={character_id: deployment},
-    )
+    with pytest.raises(GameCreationCompositionError, match="unknown authored roster"):
+        normalize_encounter_recipe(request)
 
-    assert compatibility.admitted
-    positions, issues = resolve_encounter_positions(recipe)
-    assert issues == ()
-    assert tuple(positions["players"].values()) == ((2, 7),)
+
+def test_authored_recipe_materializes_and_previews_without_database() -> None:
+    recipe, report = normalize_encounter_recipe(_request())
+    content_system = bootstrap_content_system()
 
     preview = build_game_creation_encounter_visual_preview(
         recipe,
-        character_deployments={character_id: deployment},
-        expected_content_set_digest=(
-            bootstrap_content_system().content_set_digest
-        ),
+        expected_content_set_digest=content_system.content_set_digest,
         expected_ruleset_digest=DEFAULT_CHARACTER_RULESET_DIGEST,
     )
+    assembled = prepare_encounter_recipe(recipe)
+
+    assert report.admitted
     assert preview.encounter_recipe_digest == recipe.recipe_digest
-    assert tuple(
-        len(roster.members) for roster in preview.rosters
-    ) == (1, 3)
+    assert sum(len(roster.members) for roster in preview.rosters) == len(
+        assembled.entities
+    )

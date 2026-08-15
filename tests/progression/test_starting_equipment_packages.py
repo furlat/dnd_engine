@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from uuid import uuid4
 
 from dnd.classes.barbarian_progression_definitions import (
@@ -18,39 +17,17 @@ from dnd.content_system.builtin_character_builds import (
     compose_builtin_character_revisions,
     starter_holdings_for_build,
 )
-from dnd.content_system.character_appearance import FIGHTER_HUMAN_APPEARANCE
 from dnd.content_system.starting_equipment_definitions import (
     STARTING_EQUIPMENT_PACKAGE_DECLARATIONS,
 )
 from dnd.core.content.durable_characters import (
-    AbilityScoreAllocation,
-    AbilityScoreName,
     ChoiceRequirementKind,
-    ClassLevelEntry,
-    ClassLevelId,
-    ClassSkillChoice,
-    FightingStyleChoice,
-    FlexibleAbilityBonusSelection,
-    StartingApparelPackageChoice,
     StartingEquipmentPackageChoice,
 )
 from dnd.core.content.identities import ContentDefinitionKind
 from dnd.core.content.starting_equipment import (
     StartingEquipmentPackageDefinition,
 )
-from server.character_directory_contracts import (
-    CharacterBuildDraft,
-    CreateCharacterRequest,
-)
-from server.character_directory_service import CharacterDirectoryService
-from server.game_directory.contracts import (
-    PrincipalCreate,
-    PrincipalKind,
-)
-from server.game_directory.repository import GameDirectoryRepository
-
-
-_PEPPER = b"starting-equipment-package-tests"
 
 
 def _package_requirement(class_definition):
@@ -163,146 +140,3 @@ def test_builtin_premades_select_a_package_without_losing_curated_holdings() -> 
             for row in package.entries
         }
         assert package_rows <= set(actual)
-
-
-def test_creator_catalog_and_creation_materialize_selected_package_holdings(
-    tmp_path: Path,
-) -> None:
-    repository = GameDirectoryRepository(
-        tmp_path / "directory.sqlite3",
-        capability_pepper=_PEPPER,
-    )
-    owner = repository.create_principal(
-        PrincipalCreate(
-            principal_kind=PrincipalKind.HUMAN,
-            display_name="Owner",
-        ),
-    )
-    content_system = bootstrap_content_system()
-    service = CharacterDirectoryService(repository, content_system)
-    catalog = service.build_creation_catalog()
-    fighter = next(
-        row for row in catalog.classes
-        if row.ref.content_id == "class.fighter"
-    )
-    style_requirement = next(
-        row
-        for row in fighter.definition.level_definitions[0].choice_requirements
-        if row.choice_id.endswith(".fighting_style")
-    )
-    package_requirement = _package_requirement(fighter.definition)
-    skill_requirement = next(
-        row
-        for row in fighter.definition.first_class_proficiencies.choices
-        if row.choice_kind is ChoiceRequirementKind.CLASS_SKILL
-    )
-    selected_package_ref = package_requirement.allowed_refs[0]
-    package = next(
-        row
-        for row in catalog.starting_equipment_packages
-        if row.ref == selected_package_ref
-    )
-    blank_plan = catalog.creation_plans[0]
-    origin_choices = tuple(
-        choice
-        for choice in blank_plan.build.immutable_origin_choices
-        if not isinstance(choice, StartingApparelPackageChoice)
-    )
-    draft = CharacterBuildDraft(
-        body_recipe=catalog.body_recipes[0],
-        species_ref=next(
-            row.ref
-            for row in catalog.species
-            if row.ref.content_id == "species.human"
-        ),
-        background_ref=next(
-            row.ref
-            for row in catalog.backgrounds
-            if row.ref.content_id == "background.adventurer"
-        ),
-        immutable_origin_choices=tuple(sorted(
-            (
-                *origin_choices,
-                StartingApparelPackageChoice(
-                    choice_id=(
-                        catalog.starting_apparel_requirement.choice_id
-                    ),
-                    selected_ref=(
-                        catalog.starting_apparel_requirement.allowed_refs[0]
-                    ),
-                ),
-            ),
-            key=lambda choice: choice.choice_id,
-        )),
-        appearance=FIGHTER_HUMAN_APPEARANCE,
-        base_ability_scores=AbilityScoreAllocation(
-            strength=15,
-            dexterity=14,
-            constitution=13,
-            intelligence=10,
-            wisdom=12,
-            charisma=8,
-        ),
-        flexible_ability_bonuses=FlexibleAbilityBonusSelection(
-            plus_two=AbilityScoreName.STRENGTH,
-            plus_one=AbilityScoreName.CONSTITUTION,
-        ),
-        class_levels=(
-            ClassLevelEntry(
-                class_level_id=ClassLevelId(value="fighter.level_1"),
-                character_level=1,
-                class_ref=fighter.ref,
-                resulting_class_level=1,
-                choices=tuple(sorted(
-                    (
-                        ClassSkillChoice(
-                            choice_id=skill_requirement.choice_id,
-                            skills=("athletics", "perception"),
-                        ),
-                        FightingStyleChoice(
-                            choice_id=style_requirement.choice_id,
-                            selected_ref=style_requirement.allowed_refs[0],
-                        ),
-                        StartingEquipmentPackageChoice(
-                            choice_id=package_requirement.choice_id,
-                            selected_ref=selected_package_ref,
-                        ),
-                    ),
-                    key=lambda choice: choice.choice_id,
-                )),
-            ),
-        ),
-    )
-    request = CreateCharacterRequest(
-        build=draft,
-        display_name="Package Hero",
-        creation_plan_id=blank_plan.plan_id,
-        creation_plan_digest=blank_plan.plan_digest,
-        expected_content_set_digest=content_system.content_set_digest,
-        expected_ruleset_digest=(
-            service.ensure_profile_settings(owner.principal_id).ruleset_digest
-        ),
-        idempotency_key=uuid4(),
-    )
-
-    created = service.create_character(owner.principal_id, request)
-    replay = service.create_character(owner.principal_id, request)
-
-    expected = tuple(sorted(
-        (
-            row.recipe.recipe_digest,
-            row.quantity,
-            row.equipped_slot,
-        )
-        for row in package.definition.entries
-    ))
-    actual = {
-        (
-            item.recipe.recipe_digest,
-            item.quantity,
-            item.equipped_slot,
-        )
-        for item in created.holdings.holdings.items
-    }
-    assert set(expected) <= actual
-    assert created.holdings == replay.holdings

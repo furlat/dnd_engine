@@ -1647,14 +1647,10 @@ def test_standalone_player_and_spectator_replays_are_session_scoped() -> None:
     registry = PerspectiveEpochRegistry()
     player_authority = resolve_subjective_authority(
         player_session,
-        None,
-        allow_standalone=True,
         registry=registry,
     )
     spectator_authority = resolve_subjective_authority(
         spectator_session,
-        None,
-        allow_standalone=True,
         registry=registry,
     )
     capture_store = SubjectiveReplayCaptureStore()
@@ -1674,10 +1670,10 @@ def test_standalone_player_and_spectator_replays_are_session_scoped() -> None:
 
         assert player.partition_key != spectator.partition_key
         assert player_authority.scope.membership_id == (
-            f"standalone:{player_session.session_id}"
+            f"game:{player_session.session_id}"
         )
         assert spectator_authority.scope.membership_id == (
-            f"standalone:{spectator_session.session_id}"
+            f"game:{spectator_session.session_id}"
         )
         assert (
             player_authority.scope.membership_id
