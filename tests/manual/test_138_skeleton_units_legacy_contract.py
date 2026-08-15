@@ -3,20 +3,27 @@
 from dataclasses import dataclass
 from typing import Literal
 
-from dnd.actions_functional import (
+from dnd.actions.operations import (
     execute_by_index,
     execute_use_action,
     get_available_actions,
 )
-from dnd.blocks.base_item import UsableItem
+from dnd.blocks.base_item import (
+    UsableItem,
+)
 from dnd.conditions import Hidden
-from dnd.core.base_actions import AvailableTarget
+from dnd.core.base_actions import (
+    AvailableTarget,
+)
 from dnd.core.base_block import BaseBlock
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
 from dnd.core.dice import fixed_dice_faces
-from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import Event, EventQueue
-from dnd.core.creature_types import DamageType
+from dnd.types.equipment import WeaponSlot
+from dnd.core.events.events_registry import (
+    Event,
+    EventQueue,
+)
+from dnd.types.damage import DamageType
 from dnd.entity import Entity
 from dnd.monsters.bestiary import (
     create_skeleton,

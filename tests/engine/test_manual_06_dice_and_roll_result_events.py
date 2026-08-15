@@ -4,26 +4,25 @@ from unittest.mock import patch
 from uuid import UUID, uuid4
 
 from dnd.core.base_object import BaseObject
-from dnd.core.dice import AttackOutcome, Dice, DiceRoll, RollType
-from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import (
+from dnd.types.rolls import AttackOutcome, RollType
+from dnd.core.dice import Dice, DiceRoll
+from dnd.types.equipment import WeaponSlot
+from dnd.core.events.resolution_events import (
     D20RollResultEvent,
     Damage,
     DamageRollPacket,
     DamageRollResultEvent,
+)
+from dnd.core.events.events_registry import (
     EventHandler,
     EventPhase,
     EventQueue,
     EventType,
     Trigger,
 )
-from dnd.core.creature_types import DamageType
-from dnd.core.modifiers import (
-    AdvantageModifier,
-    AdvantageStatus,
-    AutoHitStatus,
-    CriticalStatus,
-)
+from dnd.types.damage import DamageType
+from dnd.core.modifiers import AdvantageModifier
+from dnd.types.rolls import AdvantageStatus, AutoHitStatus, CriticalStatus
 from dnd.core.values import BaseValue, ModifiableValue
 from dnd.entity import determine_attack_outcome
 

@@ -23,17 +23,22 @@ from uuid import uuid4
 
 import pytest
 
-from dnd.actions import SpellEvent
+from dnd.actions.standard import (
+    SpellEvent,
+)
 from dnd.conditions import Concentrating
 from dnd.core.dice import fixed_dice_faces
-from dnd.core.events import (
+from dnd.core.events.events_registry import (
     EventPhase,
     EventQueue,
     EventType,
+)
+from dnd.core.events.check_events import (
     SavingThrowEvent,
 )
-from dnd.core.creature_types import CreatureType, DamageType
-from dnd.core.modifiers import AdvantageStatus
+from dnd.types.creatures import CreatureType
+from dnd.types.damage import DamageType
+from dnd.types.rolls import AdvantageStatus
 from dnd.entity import Entity
 from dnd.spells.conjuration import PoisonSpray
 from dnd.spells.enchantment import HoldMonster, HoldPerson

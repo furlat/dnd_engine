@@ -5,7 +5,7 @@ from uuid import uuid4
 
 import pytest
 
-from dnd.actions_functional import execute_by_index, get_available_actions
+from dnd.actions.operations import execute_by_index, get_available_actions
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.content_system.bootstrap import bootstrap_content_system
 from dnd.content_system.builtin_character_builds import BUILTIN_PREMADE_BUILDS
@@ -13,7 +13,9 @@ from tests.progression.materialization_support import (
     materialize_builtin_character,
 )
 from dnd.content_system.runtime import ContentSystemRuntime
-from dnd.core.events import Event
+from dnd.core.events.events_registry import (
+    Event,
+)
 from dnd.entity import Entity, EntityConfig
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.spells.transmutation import HasteEffect

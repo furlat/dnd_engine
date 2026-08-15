@@ -8,20 +8,26 @@ world, visibility, targeting, and lifecycle combinations using current APIs.
 
 from uuid import UUID, uuid4
 
-from dnd.actions_functional import execute_drop, setup_standard_actions
+from dnd.actions.operations import execute_drop, setup_standard_actions
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
-from dnd.blocks.base_item import BaseItem, EquippableItem
-from dnd.blocks.equipment import EquipmentConfig, Weapon
+from dnd.blocks.base_item import (
+    BaseItem,
+    EquippableItem,
+)
+from dnd.blocks.equipment import (
+    EquipmentConfig,
+    Weapon,
+)
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.inventory import Inventory
 from dnd.core.base_block import BaseBlock
-from dnd.core.equipment_types import WeaponSlot
+from dnd.types.equipment import WeaponSlot
 from dnd.core.gridmap import get_map
-from dnd.core.item_types import ItemRarity
-from dnd.core.creature_types import DamageType
+from dnd.types.items import ItemRarity
+from dnd.types.damage import DamageType
 from dnd.entity import Entity, EntityConfig
 from dnd.items.weapons import LONGSWORD_RECIPE
 from tests.engine.support import reset_combat_state

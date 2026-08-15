@@ -3,20 +3,28 @@
 from dataclasses import dataclass
 from uuid import UUID
 
-from dnd.blocks.base_item import BaseItem
-from dnd.core.base_block import BaseBlock, LightLevel
-from dnd.core.base_actions import ActionAvailabilityStatus, TargetType
-from dnd.core.base_tiles import MovementMode
-from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import EventPhase
-from dnd.core.creature_types import DamageType
+from dnd.blocks.base_item import (
+    BaseItem,
+)
+from dnd.core.base_block import BaseBlock
+from dnd.types.world import LightLevel
+from dnd.core.base_actions import (
+    ActionAvailabilityStatus,
+    TargetType,
+)
+from dnd.types.world import MovementMode
+from dnd.types.equipment import WeaponSlot
+from dnd.core.events.events_registry import (
+    EventPhase,
+)
+from dnd.types.damage import DamageType
 from dnd.core.gridmap import get_map
-from dnd.encounter import EncounterState
-from dnd.environmental_effects import SpikeTrapGroundEffect
+from dnd.types.encounter import EncounterState
+from dnd.spatial.environmental_effects import SpikeTrapGroundEffect
 from dnd.entity import Entity
 from dnd.items.environment import DirectionalDoor
 from dnd.items.environment_interactables import StorageChest, TrapLever
-from dnd.actions_functional import execute_by_index
+from dnd.actions.operations import execute_by_index
 from dnd.maps.arena_layout import (
     DIFFICULT_TERRAIN_POSITIONS,
     DOOR_POSITION,
@@ -33,7 +41,7 @@ from dnd.scenarios.encounter_catalog import (
     AUTHORED_ENCOUNTER_RECIPES,
     encounter_recipe,
 )
-from dnd.spatial_effects import SpatialEffect
+from dnd.spatial.effect_base import SpatialEffect
 from server.world_projection import project_grid
 
 

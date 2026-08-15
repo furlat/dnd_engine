@@ -2,7 +2,7 @@
 
 Date: 2026-08-15
 
-Status: agreed first hard-cut scope; production implementation has not started.
+Status: Phase 1 type-package hard cut completed; Phases 2-5 have not started.
 
 ## Overall objective
 
@@ -74,9 +74,11 @@ Create one explicit package:
 ```text
 dnd/types/
     __init__.py
+    abilities.py
     actions.py
     conditions.py
     creatures.py
+    damage.py
     effects.py
     encounter.py
     equipment.py
@@ -87,7 +89,9 @@ dnd/types/
     progression.py
     rolls.py
     saving_throws.py
+    senses.py
     spatial_effects.py
+    world.py
 ```
 
 The starting input is the current set of scattered leaf modules:
@@ -117,6 +121,87 @@ transform protocols that depend on engine objects stay with their behavior.
 
 `dnd/types/__init__.py` must remain intentionally small. It must not eagerly
 import the whole package and recreate import cycles.
+
+### Phase 1 implementation record
+
+Completed on 2026-08-15.
+
+The move was implemented as an ownership correction rather than a directory
+rename:
+
+- all twelve retired `dnd/core/*_types.py` module paths plus
+  `dnd/core/senses.py` were deleted, with no compatibility modules or
+  re-export facades;
+- every active production and test import was rewritten to the canonical
+  owner;
+- `AbilityName`, `SkillName`, and `SavingThrowName` now have one owner in
+  `dnd/types/abilities.py` instead of parallel event, block, and durable-content
+  vocabularies;
+- attack outcomes, roll kinds, advantage, critical, auto-hit, resistance, die
+  size, and hit-die size now have explicit leaf owners;
+- `EncounterState`, `TurnState`, `ControllerExecutionMode`, and the formerly
+  free-text encounter advance result were moved into the type boundary;
+- movement mode, light level, cardinal direction, and world-edge channel now
+  have one world vocabulary;
+- caster progression policy moved out of the progression implementation;
+- Dragonborn save and damage aliases were collapsed onto `AbilityName` and
+  `DamageType`, with Dragonborn-specific subset validation retained;
+- direct callers use enum members rather than leaving string literals behind
+  a nominal enum annotation.
+
+The move deliberately split polluted files instead of legitimizing their
+pollution:
+
+- `ActionPresentationKind`, visual loadout slots, equipment render layers,
+  equipped-visual policy, and the mixed item presentation snapshot live in
+  `dnd/presentation.py`, not `dnd/types`;
+- their original docstrings, field descriptions, validation, and frontend
+  binding information were preserved so the later visual cut does not lose
+  authored knowledge;
+- `SavingThrowEffectTag` is a neutral leaf, while the `ContentRef`-bearing
+  `SavingThrowContext` remains explicitly quarantined at
+  `dnd/core/content/saving_throws.py` until the foundation content cut;
+- `dnd/types/__init__.py` performs no eager re-exports.
+
+Architecture enforcement now discovers every `dnd.types.*` module, requires a
+literal public export surface, proves each exported symbol has one definition,
+forbids the retired module paths and former owner re-exports, and constrains
+both `dnd.types` and `dnd.presentation` to cold leaf dependencies. A fresh
+process imports the complete boundary and verifies that it does not initialize
+Entity, blocks, actions, conditions, Encounter, Controller, content, or server
+layers.
+
+The detailed audits identified several real inconsistencies that are recorded
+but intentionally not changed in Phase 1 because they require mechanical
+behavior migration:
+
+- `CostType`, `ActionEconomyCostType`, and connector action-cost subsets;
+- the unsound `EquipmentSlot` union, `BodyPart.RING`, and concrete ring slots;
+- `WeaponProperty.SIMPLE` and `MARTIAL` acting as categories rather than
+  properties;
+- `UnarmoredAc` competing with the newer source-owned AC formula mechanism;
+- mixed display labels and stable identifiers in enum wire values;
+- duplicate action/content effect-disposition enums;
+- the authored-content `ConditionSaveAbility` subset, retained until the
+  action/condition content pass;
+- the shared draconic ancestry vocabulary used by Dragonborn and Sorcerer;
+- the lowercase Sorcerer draconic damage subset;
+- entity-owned species, variant, background, class, subclass, and level
+  identities, which belong to Phase 3 rather than being copied out of the
+  durable-content schema prematurely.
+
+Verification for this ownership-only cut:
+
+- 21 dependency-boundary and canonical-ownership tests pass;
+- 176 focused engine, event, block, encounter, action-discovery, progression,
+  and manual runtime tests pass;
+- the complete suite still has the same 182 collection errors caused by the
+  already-removed deprecated content system, server, ledgers, and devtools
+  modules; this phase introduced no new collection-error category;
+- Pyright reports no new argument, assignment, return, undefined-name, or
+  unused-import failures in `dnd`; its remaining import failures are the same
+  deprecated-content-system breakage, plus one unrelated optional-member
+  diagnostic.
 
 ### Type cleanup performed during the move
 

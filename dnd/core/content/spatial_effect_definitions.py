@@ -7,7 +7,7 @@ from enum import Enum
 from pydantic import BaseModel, ConfigDict, Field, field_serializer
 
 from dnd.core.content.recipes import ContentRecipe
-from dnd.core.spatial_effect_types import (
+from dnd.types.spatial_effects import (
     SpatialEffectAnchorKind,
     SpatialEffectBlockingPolicy,
     SpatialEffectInteractionIntensity,

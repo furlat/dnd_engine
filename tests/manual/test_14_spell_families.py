@@ -3,32 +3,37 @@
 from typing import cast
 from uuid import uuid4
 
-from dnd.actions import SpellEvent
+from dnd.actions.standard import (
+    SpellEvent,
+)
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
 from dnd.conditions import Concentrating, Poisoned
-from dnd.core.base_actions import TargetType
+from dnd.core.base_actions import (
+    TargetType,
+)
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition, SpellProtectionRegistry
 from dnd.core.base_object import BaseObject
 from dnd.core.dice import fixed_dice_faces
-from dnd.core.events import (
-    AbilityName,
+from dnd.types.abilities import AbilityName
+from dnd.core.events.resolution_events import (
     DamageAppliedEvent,
+    TakeDamageEvent,
+)
+from dnd.core.events.events_registry import (
     EventPhase,
     EventQueue,
     EventType,
-    TakeDamageEvent,
 )
 from dnd.core.gridmap import GridMap, get_map
-from dnd.core.creature_types import CreatureType, DamageType
-from dnd.core.modifiers import (
-    AdvantageStatus,
-    NumericalModifier,
-    ResistanceStatus,
-)
+from dnd.types.creatures import CreatureType
+from dnd.types.damage import DamageType
+from dnd.types.rolls import AdvantageStatus
+from dnd.core.modifiers import NumericalModifier
+from dnd.types.damage import ResistanceStatus
 from dnd.core.values import BaseValue
 from dnd.entity import Entity, EntityConfig
 from tests.spell_test_exports import (
@@ -42,17 +47,24 @@ from tests.spell_test_exports import (
     PowerWordKill,
     SacredFlame,
 )
-from dnd.spells.abjuration import DeathWardEffect, LesserRestoration, MageArmor, ShieldBuff
+from dnd.spells.abjuration import (
+    DeathWardEffect,
+    LesserRestoration,
+    MageArmor,
+    ShieldBuff,
+)
 from dnd.spells.conjuration import MistyStep
 from dnd.spells.enchantment import Sleep
 from dnd.spells.evocation import CureWounds, HealingWord
-from dnd.spells.effect_ids import MAGIC_MISSILE_DAMAGE_EFFECT_ID
+from dnd.spells.effect_ids import (
+    MAGIC_MISSILE_DAMAGE_EFFECT_ID,
+)
 from dnd.spells.illusion import HypnoticPatternEffect, MirrorImage, MirrorImageEffect
 from dnd.spells.necromancy import FalseLife
 from dnd.spells.transmutation import SpikeGrowth
-from dnd.spatial_effect_content import SPIKE_GROWTH_SURFACE_RECIPE
-from dnd.spatial_effects import SpatialEffect
-from dnd.spatial_effect_controllers import AreaSpatialEffectController
+from dnd.content.spatial_effect_recipes import SPIKE_GROWTH_SURFACE_RECIPE
+from dnd.spatial.effect_base import SpatialEffect
+from dnd.spatial.effect_controllers import AreaSpatialEffectController
 
 
 def reset_spell_family_state(width: int = 12, height: int = 8) -> None:

@@ -11,35 +11,48 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from dnd.actions import Attack, Move
-from dnd.actions_functional import (
+from dnd.actions.standard import (
+    Attack,
+    Move,
+)
+from dnd.actions.operations import (
     execute_use_action,
     setup_standard_actions,
 )
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
-from dnd.blocks.equipment import EquipmentConfig, Weapon
+from dnd.blocks.equipment import (
+    EquipmentConfig,
+    Weapon,
+)
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.sensory import spatial_senses_system
 from dnd.conditions import GreaterInvisibilityEffect
-from dnd.core.base_actions import ActionEvent, AvailableTarget
-from dnd.core.condition_types import DurationType
+from dnd.core.events.action_events import (
+    ActionEvent,
+)
+from dnd.core.base_actions import (
+    AvailableTarget,
+)
+from dnd.types.conditions import DurationType
 from dnd.core.dice import fixed_dice_faces
-from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import (
+from dnd.types.equipment import WeaponSlot
+from dnd.core.events.events_registry import (
     Event,
     EventHandler,
     EventPhase,
     EventQueue,
     EventType,
-    SensoryUpdateEvent,
-    StepMovementEvent,
     Trigger,
 )
+from dnd.core.events.world_events import (
+    SensoryUpdateEvent,
+    StepMovementEvent,
+)
 from dnd.core.gridmap import get_map
-from dnd.core.creature_types import DamageType
+from dnd.types.damage import DamageType
 from dnd.core.modifiers import NumericalModifier
 from dnd.entity import Entity, EntityConfig
 from dnd.items.consumables import GREATER_INVISIBILITY_POTION_RECIPE
@@ -55,7 +68,7 @@ from tests.manual.reactive_fixture_support import (
     PrepareIntercept,
 )
 from dnd.monsters.bestiary import create_caster, create_skeleton
-from dnd.reactions import add_opportunity_attack_handler
+from dnd.actions.reactions import add_opportunity_attack_handler
 from dnd.spells.illusion import GreaterInvisibility, Invisibility
 from tests.engine.support import (
     force_attack_hit,

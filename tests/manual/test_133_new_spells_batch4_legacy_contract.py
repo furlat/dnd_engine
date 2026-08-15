@@ -9,18 +9,23 @@ use explicit legal resources and hard assertions.
 
 from uuid import UUID
 
-from dnd.actions import AttackEvent, SpellEvent
-from dnd.actions_functional import (
+from dnd.actions.standard import (
+    AttackEvent,
+    SpellEvent,
+)
+from dnd.actions.operations import (
     execute_by_index,
     get_available_actions,
     setup_standard_actions,
 )
-from dnd.blocks.equipment import Weapon
+from dnd.blocks.equipment import (
+    Weapon,
+)
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
 from dnd.core.dice import fixed_dice_faces
-from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import (
+from dnd.types.equipment import WeaponSlot
+from dnd.core.events.events_registry import (
     Event,
     EventHandler,
     EventPhase,
@@ -28,11 +33,9 @@ from dnd.core.events import (
     EventType,
     Trigger,
 )
-from dnd.core.creature_types import DamageType
-from dnd.core.modifiers import (
-    AutoHitModifier,
-    AutoHitStatus,
-)
+from dnd.types.damage import DamageType
+from dnd.core.modifiers import AutoHitModifier
+from dnd.types.rolls import AutoHitStatus
 from dnd.entity import Entity
 from dnd.items.weapons import DAGGER_RECIPE
 from dnd.spells.abjuration import (
@@ -44,7 +47,7 @@ from dnd.spells.conjuration import Web
 from dnd.spells.evocation import Fireball, FireBolt, register_true_strike
 from dnd.spells.necromancy import FingerOfDeath
 from dnd.spells.transmutation import Telekinesis
-from dnd.spatial_effects import FieldEffect, SpatialEffect
+from dnd.spatial.effect_base import FieldEffect, SpatialEffect
 from tests.engine.support import get_hp, has_condition
 from tests.manual.spell_regression_support import (
     create_spell_regression_actor,

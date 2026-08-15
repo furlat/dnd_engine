@@ -15,22 +15,45 @@ Level 18: Champion - Survivor (DEFERRED)
 
 from typing import Any
 from dnd.core.base_conditions import BaseCondition
-from dnd.core.condition_types import ConditionCategory, DurationType
+from dnd.types.conditions import ConditionCategory, DurationType
 from dnd.core.base_actions import (
-    ActionOutcomeProfile, BaseAction, ActionEvent, Cost, TargetType, ActionCategory
+    ActionOutcomeProfile,
+    BaseAction,
+    Cost,
+    TargetType,
+    ActionCategory,
+)
+from dnd.core.events.action_events import (
+    ActionEvent,
 )
 from dnd.core.content.runtime import RuntimeBehaviorKind
-from dnd.core.events import (
-    Event, EventPhase, EventType, EventQueue,
-    Trigger, EventHandler, DamageRollResultEvent, RangeType, SavingThrowEvent
+from dnd.core.events.events_registry import (
+    Event,
+    EventPhase,
+    EventType,
+    EventQueue,
+    Trigger,
+    EventHandler,
 )
-from dnd.core.equipment_types import ArmorType, WeaponProperty, WeaponSlot
-from dnd.core.dice import DiceRoll, Dice, RollType, AttackOutcome
-from dnd.core.modifiers import NumericalModifier, AdvantageModifier, AdvantageStatus
+from dnd.core.events.resolution_events import (
+    DamageRollResultEvent,
+    RangeType,
+)
+from dnd.core.events.check_events import (
+    SavingThrowEvent,
+)
+from dnd.types.equipment import ArmorType, WeaponProperty, WeaponSlot
+from dnd.core.dice import DiceRoll, Dice
+from dnd.types.rolls import RollType, AttackOutcome
+from dnd.core.modifiers import NumericalModifier, AdvantageModifier
+from dnd.types.rolls import AdvantageStatus
 from dnd.core.values import ModifiableValue
-from dnd.blocks.equipment import Weapon, Shield
+from dnd.blocks.equipment import (
+    Weapon,
+    Shield,
+)
 from dnd.entity import Entity, determine_attack_outcome
-from dnd.actions import (
+from dnd.actions.standard import (
     entity_action_economy_cost_evaluator,
     entity_resource_cost_evaluator,
     AttackEvent,

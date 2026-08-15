@@ -9,8 +9,10 @@ from uuid import UUID
 import pytest
 from fastapi.testclient import TestClient
 
-from dnd.core.events import EventQueue
-from dnd.core.creature_types import DamageType
+from dnd.core.events.events_registry import (
+    EventQueue,
+)
+from dnd.types.damage import DamageType
 from dnd.entity import Entity
 from dnd.scenarios.encounter_catalog import (
     AUTHORED_DEPLOYMENTS,

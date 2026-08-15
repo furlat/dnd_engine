@@ -7,12 +7,25 @@ from uuid import UUID
 
 from pydantic import Field, PrivateAttr
 
-from dnd.actions import Attack, AttackEvent, Dash, Disengage, Hide, IntrinsicAttackSource, Move, MovementEvent, build_weapon_attack_outcome_profile, entity_action_economy_cost_evaluator, validate_line_of_sight
-from dnd.blocks.equipment import Damage
+from dnd.actions.standard import (
+    Attack,
+    AttackEvent,
+    Dash,
+    Disengage,
+    Hide,
+    IntrinsicAttackSource,
+    Move,
+    MovementEvent,
+    build_weapon_attack_outcome_profile,
+    entity_action_economy_cost_evaluator,
+    validate_line_of_sight,
+)
+from dnd.core.events.resolution_events import (
+    Damage,
+)
 from dnd.conditions import Paralyzed, Prone
 from dnd.core.base_actions import (
     ActionCategory,
-    ActionEvent,
     DamageRollProfile,
     ActionOutcomeProfile,
     ActionSelfSetupProfile,
@@ -20,15 +33,19 @@ from dnd.core.base_actions import (
     ActionTargetEffectBranchProfile,
     ActionTargetEffectProfile,
     BaseAction,
-    BaseCost,
     Cost,
     OutcomeResolution,
     TargetEffectDisposition,
     TargetType,
 )
-from dnd.core.action_types import spell_slot_cost_type
+from dnd.core.events.action_events import (
+    ActionEvent,
+    BaseCost,
+)
+from dnd.types.actions import spell_slot_cost_type
+from dnd.types.abilities import AbilityName
 from dnd.core.action_execution import MovementTerminationReason
-from dnd.core.base_block import MovementMode
+from dnd.types.world import MovementMode
 from dnd.core.base_conditions import (
     BaseCondition,
     ConditionApplicationEvent,
@@ -36,49 +53,51 @@ from dnd.core.base_conditions import (
 )
 from dnd.core.content.identities import ContentRef
 from dnd.core.content.runtime import RuntimeBehaviorKind
-from dnd.core.dice import AttackOutcome, Dice, RollType
-from dnd.core.events import (
+from dnd.types.rolls import AttackOutcome, RollType
+from dnd.core.dice import Dice
+from dnd.core.events.resolution_events import (
     DamageRollResultEvent,
     D20RollResultEvent,
+    Range,
+    RangeType,
+    TakeDamageEvent,
+)
+from dnd.core.events.events_registry import (
     Event,
     EventHandler,
     EventPhase,
     EventQueue,
     EventType,
-    LifeStateChangeEvent,
-    Range,
-    RangeType,
-    SpatialChangeEvent,
-    TakeDamageEvent,
     Trigger,
 )
+from dnd.core.events.encounter_events import (
+    LifeStateChangeEvent,
+)
+from dnd.core.events.world_events import (
+    SpatialChangeEvent,
+)
 from dnd.core.gridmap import get_map
-from dnd.core.equipment_types import WeaponSlot
-from dnd.core.creature_types import DamageDieValue, DamageType
+from dnd.types.equipment import WeaponSlot
+from dnd.types.rolls import DieSize
+from dnd.types.damage import DamageType
 from dnd.core.modifiers import (
     AdvantageModifier,
-    AdvantageStatus,
     ContextualAdvantageModifier,
     NumericalModifier,
 )
+from dnd.types.rolls import AdvantageStatus
 from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
 from dnd.classes.barbarian import RecklessAttack
-from dnd.core.condition_types import (
-    ConditionAgencyDenial,
-    ConditionCategory,
-    DurationType,
-)
-from dnd.core.life_types import LifeState
-from dnd.core.spatial_effect_types import (
-    SpatialEffectTriggerKind,
-)
-from dnd.content_system.spatial_effect_materialization import (
+from dnd.types.conditions import ConditionAgencyDenial, ConditionCategory, DurationType
+from dnd.types.life import LifeState
+from dnd.types.spatial_effects import SpatialEffectTriggerKind
+from dnd.content.spatial_effect_materialization import (
     materialize_spatial_effect,
 )
-from dnd.spatial_effect_content import LEADERSHIP_FIELD_RECIPE
-from dnd.spatial_effects import FieldEffect, SpatialEffect
-from dnd.spatial_effect_controllers import AreaSpatialEffectController
+from dnd.content.spatial_effect_recipes import LEADERSHIP_FIELD_RECIPE
+from dnd.spatial.effect_base import FieldEffect, SpatialEffect
+from dnd.spatial.effect_controllers import AreaSpatialEffectController
 
 
 def register_pack_tactics(entity: Entity) -> None:
@@ -618,7 +637,7 @@ class NaturalAttack(Attack):
 
     name: str = Field(default="Natural Attack", description="Natural attack name.")
     weapon_slot: WeaponSlot = Field(default=WeaponSlot.MELEE_MAIN, description="Proxy slot used by attack plumbing.")
-    natural_damage_dice: DamageDieValue = Field(default=4, description="Natural weapon die size.")
+    natural_damage_dice: DieSize = Field(default=4, description="Natural weapon die size.")
     natural_dice_numbers: int = Field(default=1, description="Number of natural weapon dice.")
     natural_damage_type: DamageType = Field(default=DamageType.PIERCING, description="Natural weapon damage type.")
     natural_range: Range = Field(default_factory=lambda: Range(type=RangeType.REACH, normal=5), description="Natural weapon range.")
@@ -723,7 +742,7 @@ class BonusDamageFeature(BaseCondition):
     name: str = Field(default="Bonus Damage", description="Condition name.")
     description: str = Field(default="Adds conditional bonus damage.", description="Rules summary.")
     dice_numbers: int = Field(default=1, description="Extra dice count.")
-    damage_dice: DamageDieValue = Field(default=6, description="Extra die size.")
+    damage_dice: DieSize = Field(default=6, description="Extra die size.")
     damage_type: Optional[DamageType] = Field(default=None, description="Override damage type.")
     requires_adjacent_ally: bool = Field(default=False, description="Whether target must be adjacent to an ally.")
     requires_sneak_condition: bool = Field(default=False, description="Whether Sneak Attack conditions are required.")
@@ -840,7 +859,7 @@ class MartialAdvantageFeature(BonusDamageFeature):
         ),
     )
     dice_numbers: int = Field(default=2)
-    damage_dice: DamageDieValue = Field(default=6)
+    damage_dice: DieSize = Field(default=6)
     requires_adjacent_ally: bool = Field(default=True)
     once_per_turn: bool = Field(default=True)
 
@@ -856,7 +875,7 @@ class SneakAttackFeature(BonusDamageFeature):
         ),
     )
     dice_numbers: int = Field(default=2)
-    damage_dice: DamageDieValue = Field(default=6)
+    damage_dice: DieSize = Field(default=6)
     requires_sneak_condition: bool = Field(default=True)
     once_per_turn: bool = Field(default=True)
 
@@ -868,7 +887,7 @@ class BruteFeature(BonusDamageFeature):
     description: str = Field(
         default="Deals one additional d8 of damage with melee weapon attacks.",
     )
-    damage_dice: DamageDieValue = Field(default=8)
+    damage_dice: DieSize = Field(default=8)
     melee_only: bool = Field(default=True)
 
 
@@ -883,7 +902,7 @@ class SurpriseAttackFeature(BonusDamageFeature):
         ),
     )
     dice_numbers: int = Field(default=2)
-    damage_dice: DamageDieValue = Field(default=6)
+    damage_dice: DieSize = Field(default=6)
     requires_unseen_attacker: bool = Field(default=True)
     once_per_turn: bool = Field(default=True)
 
@@ -1068,7 +1087,7 @@ class GhoulParalysisEffect(BaseCondition):
         source = Entity.get(self.source_entity_uuid)
         if not target or not source:
             return event
-        request = source.create_saving_throw_request(target.uuid, "constitution", self.save_dc, parent_event=event.uuid, condition_context="Ghoul Paralysis")
+        request = source.create_saving_throw_request(target.uuid, AbilityName.CONSTITUTION, self.save_dc, parent_event=event.uuid, condition_context="Ghoul Paralysis")
         _outcome, _roll, success = target.saving_throw(request)
         if success and self.name in target.active_conditions:
             target.remove_condition(self.name, parent_event=event)
@@ -1114,7 +1133,7 @@ class UndeadFortitudeFeature(BaseCondition):
         if current_hp - preview.normal_hit_point_damage > 0:
             return None
         dc = 5 + event.get_effective_damage()
-        request = target.create_saving_throw_request(target.uuid, "constitution", dc, parent_event=event.uuid, condition_context="Undead Fortitude")
+        request = target.create_saving_throw_request(target.uuid, AbilityName.CONSTITUTION, dc, parent_event=event.uuid, condition_context="Undead Fortitude")
         _outcome, _roll, success = target.saving_throw(request)
         if not success:
             return None

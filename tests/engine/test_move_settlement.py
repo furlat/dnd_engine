@@ -9,9 +9,14 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from dnd.actions import Move, MovementEvent
+from dnd.actions.standard import (
+    Move,
+    MovementEvent,
+)
 from dnd.blocks.action_economy import RechargeType, Resource
-from dnd.core.base_actions import Cost
+from dnd.core.base_actions import (
+    Cost,
+)
 from dnd.core.action_execution import (
     MovementContinuationDecision,
     MovementContinuationResult,
@@ -19,28 +24,30 @@ from dnd.core.action_execution import (
     MovementTerminationReason,
     movement_continuation_scope,
 )
-from dnd.core.base_block import MovementMode
-from dnd.core.events import (
+from dnd.types.world import MovementMode
+from dnd.core.events.events_registry import (
     Event,
     EventHandler,
     EventPhase,
     EventQueue,
     EventType,
+    Trigger,
+)
+from dnd.core.events.world_events import (
     ForcedMovementEvent,
     SpatialChangeEvent,
     StepMovementEvent,
-    Trigger,
 )
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.gridmap import get_map
-from dnd.core.life_types import LifeState
+from dnd.types.life import LifeState
 from dnd.core.positioning import PositionCommitError, PositionPublicationError
 from dnd.creature_transforms import (
     apply_opportunity_attack_immunity_transform,
 )
 from dnd.entity import Entity
 from dnd.monsters.traits import AggressiveMoveAction
-from dnd.reactions import add_opportunity_attack_handler
+from dnd.actions.reactions import add_opportunity_attack_handler
 from tests.engine.support import force_attack_crit, force_attack_hit, set_hp
 from tests.engine.test_combat_actions import (
     fixed_dice,

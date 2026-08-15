@@ -2,22 +2,21 @@
 
 from typing import cast
 
-from dnd.actions import SpellEvent
-from dnd.actions_functional import setup_standard_actions
+from dnd.actions.standard import (
+    SpellEvent,
+)
+from dnd.actions.operations import setup_standard_actions
 from dnd.conditions import Prone
-from dnd.core.base_block import LightLevel, MovementMode
-from dnd.core.base_conditions import (
-    BaseCondition,
-    ConditionCategory,
-    HazardFilter,
-)
-from dnd.core.base_tiles import (
-    difficult_terrain_factory,
-    wall_factory,
-    water_factory,
-)
+from dnd.types.world import LightLevel, MovementMode
+from dnd.core.base_conditions import BaseCondition
+from dnd.types.conditions import ConditionCategory, HazardFilter
+from dnd.core.base_tiles import difficult_terrain_factory, wall_factory, water_factory
 from dnd.core.dice import fixed_dice_faces
-from dnd.core.events import EventPhase, EventQueue, EventType
+from dnd.core.events.events_registry import (
+    EventPhase,
+    EventQueue,
+    EventType,
+)
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity
 from dnd.spells.conjuration import (
@@ -34,7 +33,7 @@ from dnd.spells.conjuration import (
 )
 from dnd.spells.evocation import GustOfWind, GustOfWindZone
 from dnd.spells.transmutation import SpikeGrowth, SpikeGrowthZone
-from dnd.spatial_effects import CloudEffect, FieldEffect, GroundEffect, SpatialEffect
+from dnd.spatial.effect_base import CloudEffect, FieldEffect, GroundEffect, SpatialEffect
 from tests.engine.support import get_hp, has_condition
 from tests.manual.spell_regression_support import (
     create_spell_regression_actor,

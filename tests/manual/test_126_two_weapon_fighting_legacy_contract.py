@@ -8,18 +8,25 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from dnd.actions import Attack
+from dnd.actions.standard import (
+    Attack,
+)
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
-from dnd.blocks.equipment import Weapon
+from dnd.blocks.equipment import (
+    Weapon,
+)
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.classes.fighter import (
     twf_off_hand_melee_ability_bonus,
     twf_off_hand_ranged_ability_bonus,
 )
-from dnd.core.equipment_types import WeaponProperty, WeaponSlot
-from dnd.core.events import Range, RangeType
+from dnd.types.equipment import WeaponProperty, WeaponSlot
+from dnd.core.events.resolution_events import (
+    Range,
+    RangeType,
+)
 from dnd.core.gridmap import get_map
-from dnd.core.creature_types import DamageType
+from dnd.types.damage import DamageType
 from dnd.core.modifiers import ContextualNumericalModifier
 from dnd.core.values import ModifiableValue
 from dnd.entity import Entity, EntityConfig

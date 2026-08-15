@@ -13,12 +13,12 @@ from dnd.core.content.battlefields import (
     BattlefieldElevationCell,
     BattlefieldPreview,
     BattlefieldPreviewCell,
-    BattlefieldPreviewDirection,
     BattlefieldPreviewObject,
     BattlefieldPreviewObjectKind,
     BattlefieldPreviewTerrain,
     LightLevelName,
 )
+from dnd.types.world import CardinalDirection
 from dnd.core.world_edges import ElevationSurfaceKind, SlopeAxis
 from dnd.core.traversal_connectors import (
     ConnectorActionCostType,
@@ -26,7 +26,7 @@ from dnd.core.traversal_connectors import (
     TraversalConnectorDefinition,
     TraversalConnectorKind,
 )
-from dnd.environmental_effect_runtime import materialize_spike_trap_effect
+from dnd.content.spike_trap_materialization import materialize_spike_trap_effect
 from dnd.core.gridmap import GridMap, get_map
 from dnd.items.consumables import (
     FIRE_WEAPON_COAT_RECIPE,
@@ -118,7 +118,7 @@ def _preview_object(
     kind: BattlefieldPreviewObjectKind,
     label: str,
     *,
-    blocked_directions: tuple[BattlefieldPreviewDirection, ...] = (),
+    blocked_directions: tuple[CardinalDirection, ...] = (),
     is_open: bool | None = None,
 ) -> BattlefieldPreviewObject:
     """Create one static preview object placement."""
@@ -150,7 +150,7 @@ def _standard_hazards_preview(*, open_door: bool) -> BattlefieldPreview:
                 position,
                 "wall",
                 "Wall",
-                blocked_directions=cast(tuple[BattlefieldPreviewDirection, ...], WALL_DIRECTIONS),
+                blocked_directions=cast(tuple[CardinalDirection, ...], WALL_DIRECTIONS),
             )
             for position in WALL_POSITIONS
         ),
@@ -161,7 +161,7 @@ def _standard_hazards_preview(*, open_door: bool) -> BattlefieldPreview:
             blocked_directions=(
                 ()
                 if open_door
-                else cast(tuple[BattlefieldPreviewDirection, ...], DOOR_DIRECTIONS)
+                else cast(tuple[CardinalDirection, ...], DOOR_DIRECTIONS)
             ),
             is_open=open_door,
         ),
@@ -188,7 +188,7 @@ def _two_barrier_preview(*, first_door_y: int, second_door_y: int) -> Battlefiel
                     (column, y),
                     "door",
                     f"{label} Door",
-                    blocked_directions=("west",),
+                    blocked_directions=(CardinalDirection.WEST,),
                     is_open=False,
                 ))
             else:
@@ -196,7 +196,7 @@ def _two_barrier_preview(*, first_door_y: int, second_door_y: int) -> Battlefiel
                     (column, y),
                     "wall",
                     f"{label} Wall",
-                    blocked_directions=("west",),
+                    blocked_directions=(CardinalDirection.WEST,),
                 ))
     return BattlefieldPreview(objects=tuple(objects))
 
@@ -213,7 +213,7 @@ def _elevation_proving_preview() -> BattlefieldPreview:
                 (4, y),
                 "door" if y == 7 else "wall",
                 "Proving Door" if y == 7 else "Proving Wall",
-                blocked_directions=("west",),
+                blocked_directions=(CardinalDirection.WEST,),
                 is_open=False if y == 7 else None,
             )
             for y in range(3, 12)
@@ -525,7 +525,7 @@ def _place_directional_barrier(
             door = materialize_item(
                 directional_door_recipe(
                     display_name=f"{label} Door",
-                    blocked_directions=("west",),
+                    blocked_directions=(CardinalDirection.WEST,),
                     blocked_channels=STANDARD_BLOCKING_CHANNELS,
                     is_open=False,
                 ),
@@ -538,7 +538,7 @@ def _place_directional_barrier(
             wall = materialize_item(
                 directional_wall_recipe(
                     display_name=f"{label} Wall",
-                    blocked_directions=("west",),
+                    blocked_directions=(CardinalDirection.WEST,),
                     blocked_channels=STANDARD_BLOCKING_CHANNELS,
                 ),
                 uuid4(),

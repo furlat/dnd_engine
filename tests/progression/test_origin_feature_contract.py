@@ -3,8 +3,8 @@
 import pytest
 from pydantic import ValidationError
 
+from dnd.types.abilities import AbilityName
 from dnd.core.content.durable_characters import (
-    AbilityScoreName,
     ProficiencySubject,
     ProficiencySubjectKind,
 )
@@ -13,10 +13,11 @@ from dnd.core.content.origin_features import (
     OriginSavingThrowAdvantageRule,
     OriginStructuralFeatureDefinition,
 )
-from dnd.core.language_types import SrdLanguageId
-from dnd.core.creature_types import DamageType, Size
-from dnd.core.senses import SenseMode, SensesType
-from dnd.core.saving_throw_types import SavingThrowEffectTag
+from dnd.types.languages import SrdLanguageId
+from dnd.types.damage import DamageType
+from dnd.types.creatures import Size
+from dnd.types.senses import SenseMode, SensesType
+from dnd.types.saving_throws import SavingThrowEffectTag
 
 
 def test_origin_structural_feature_canonicalizes_exact_passive_grants() -> None:
@@ -46,8 +47,8 @@ def test_origin_structural_feature_canonicalizes_exact_passive_grants() -> None:
         saving_throw_advantages=(
             OriginSavingThrowAdvantageRule(
                 abilities=(
-                    AbilityScoreName.INTELLIGENCE,
-                    AbilityScoreName.WISDOM,
+                    AbilityName.INTELLIGENCE,
+                    AbilityName.WISDOM,
                 ),
                 requires_magical=True,
             ),

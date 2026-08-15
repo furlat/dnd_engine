@@ -7,14 +7,12 @@ Contains: FireBolt, SacredFlame, MagicMissile, Fireball, BurningHands,
           MassCureWounds, HealSpell, MassHeal
 """
 import random
-import time
-from typing import Any, Literal, Optional, List, Set, Tuple
+from typing import Any, Optional, List, Set, Tuple
 from uuid import UUID
 
 from pydantic import Field, PrivateAttr
 
-from dnd.action_timing import action_timing_enabled, record_action_timing
-from dnd.content_system.spatial_effect_materialization import (
+from dnd.content.spatial_effect_materialization import (
     materialize_spatial_effect,
 )
 from dnd.core.base_actions import (
@@ -34,34 +32,55 @@ from dnd.core.base_actions import (
 )
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition, Duration
-from dnd.core.condition_types import (
+from dnd.types.conditions import (
     ConditionCategory,
     ConditionTag,
     DurationType,
     HazardFilter,
 )
 from dnd.core.values import ModifiableValue
-from dnd.core.dice import AttackOutcome
+from dnd.types.rolls import AttackOutcome
+from dnd.types.rolls import DieSize
 from typing import cast as type_cast
-from dnd.core.equipment_types import ArmorType, WeaponSlot
-from dnd.core.events import EventPhase, RangeType, Range, Damage, Healing, ForcedMovementEvent, EventType, EventHandler, Trigger, Event, EventQueue, SpatialChangeEvent, AbilityName, SpatialEffectInteractionEvent
-from dnd.core.spatial_effect_types import (
+from dnd.types.equipment import ArmorType, WeaponSlot
+from dnd.core.events.events_registry import (
+    EventPhase,
+    EventType,
+    EventHandler,
+    Trigger,
+    Event,
+    EventQueue,
+)
+from dnd.core.events.resolution_events import (
+    RangeType,
+    Range,
+    Damage,
+    Healing,
+)
+from dnd.core.events.world_events import (
+    ForcedMovementEvent,
+    SpatialChangeEvent,
+    SpatialEffectInteractionEvent,
+)
+from dnd.types.abilities import AbilityName
+from dnd.types.spatial_effects import (
     SpatialEffectInteractionIntensity,
     SpatialEffectInteractionOperation,
     SpatialEffectTriggerKind,
 )
-from dnd.core.creature_types import CreatureType, DamageType
-from dnd.core.modifiers import (
-    AdvantageModifier,
-    AdvantageStatus,
-    NumericalModifier,
-)
+from dnd.types.creatures import CreatureType
+from dnd.types.damage import DamageType
+from dnd.core.modifiers import AdvantageModifier, NumericalModifier
+from dnd.types.rolls import AdvantageStatus
 from dnd.core.aoe import AoEShape, Sphere, Cone, Line, Cube, Cylinder
 from dnd.core.gridmap import get_map
-from dnd.blocks.equipment import Weapon as WeaponItem, Shield as ShieldItem
+from dnd.blocks.equipment import (
+    Weapon as WeaponItem,
+    Shield as ShieldItem,
+)
 
 from dnd.entity import Entity
-from dnd.actions import (
+from dnd.actions.standard import (
     Attack,
     AttackDamageContribution,
     SpellAction,
@@ -72,13 +91,15 @@ from dnd.actions import (
 from dnd.conditions import Blinded, Deafened, Stunned, NoReactions, Concentrating, ConcentrationActionMarker, Restrained
 from dnd.spells.content_metadata import srd_action_identity, srd_spell_identity
 from dnd.spells.spell_utils import fire_heal_roll_result
-from dnd.spells.effect_ids import MAGIC_MISSILE_DAMAGE_EFFECT_ID
-from dnd.spatial_effect_content import (
+from dnd.spells.effect_ids import (
+    MAGIC_MISSILE_DAMAGE_EFFECT_ID,
+)
+from dnd.content.spatial_effect_recipes import (
     CONTINUAL_FLAME_FIELD_RECIPE,
     GUST_OF_WIND_FIELD_RECIPE,
     ICE_STORM_SURFACE_RECIPE,
 )
-from dnd.spatial_effects import (
+from dnd.spatial.effect_base import (
     FieldEffect,
     GroundEffect,
     SpatialEffect,
@@ -401,13 +422,13 @@ class SacredFlame(SpellAction):
 
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
-            ability_name="dexterity",
+            ability_name=AbilityName.DEXTERITY,
             dc=dc,
             parent_event=execution_event.uuid
         )
         _, save_roll, success = target.saving_throw(save_request)
 
-        save_bonus = target.saving_throw_bonus(caster.uuid, "dexterity").normalized_score
+        save_bonus = target.saving_throw_bonus(caster.uuid, AbilityName.DEXTERITY).normalized_score
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -781,44 +802,25 @@ class Fireball(SpellAction):
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Apply fireball damage to current target (called once per target by convolution)."""
-        timing = action_timing_enabled()
-
-        def start_phase() -> float:
-            return time.perf_counter() if timing else 0.0
-
-        def record_phase(phase: str, started_at: float) -> None:
-            if timing:
-                record_action_timing(f"spell.fireball.{phase}_ms", started_at)
-
-        started = start_phase()
-
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
 
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
-        record_phase("resolve_entities", started)
 
-        started = start_phase()
         dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
-        record_phase("spell_save_dc", started)
 
-        started = start_phase()
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
-            ability_name="dexterity",
+            ability_name=AbilityName.DEXTERITY,
             dc=dc,
             parent_event=execution_event.uuid
         )
-        record_phase("create_saving_throw_request", started)
 
-        started = start_phase()
         _, save_roll, success = target.saving_throw(save_request)
-        record_phase("saving_throw", started)
 
         save_bonus = save_roll.bonus
 
-        started = start_phase()
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
             save_ability="dexterity",
@@ -829,9 +831,7 @@ class Fireball(SpellAction):
             target_entity_name=target.name,
             status_message=f"DEX save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
-        record_phase("effect_event", started)
 
-        started = start_phase()
         num_dice = self.get_damage_dice_count()
         damage_bonus = caster.get_spell_damage_bonus()
 
@@ -848,20 +848,16 @@ class Fireball(SpellAction):
         damage_roll = damage_dice.roll
 
         final_damage = damage_roll.total // 2 if success else damage_roll.total
-        record_phase("damage_roll", started)
 
         if final_damage > 0:
-            started = start_phase()
             target.receive_damage(
                 amount=final_damage,
                 damage_type=DamageType.FIRE,
                 source_entity_uuid=caster.uuid,
                 parent_event=effect_event.uuid
             )
-            record_phase("receive_damage", started)
 
         save_text = " (saved for half)" if success else ""
-        started = start_phase()
         completion_event = effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
             damages=[fire_damage],
@@ -869,7 +865,6 @@ class Fireball(SpellAction):
             total_damage=final_damage,
             status_message=f"Fireball deals {final_damage} fire damage to {target.name}{save_text}"
         )
-        record_phase("completion_event", started)
         return completion_event
 
 
@@ -953,13 +948,13 @@ class BurningHands(SpellAction):
 
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
-            ability_name="dexterity",
+            ability_name=AbilityName.DEXTERITY,
             dc=dc,
             parent_event=execution_event.uuid
         )
         _, save_roll, success = target.saving_throw(save_request)
 
-        save_bonus = target.saving_throw_bonus(caster.uuid, "dexterity").normalized_score
+        save_bonus = target.saving_throw_bonus(caster.uuid, AbilityName.DEXTERITY).normalized_score
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -1087,13 +1082,13 @@ class LightningBolt(SpellAction):
 
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
-            ability_name="dexterity",
+            ability_name=AbilityName.DEXTERITY,
             dc=dc,
             parent_event=execution_event.uuid
         )
         _, save_roll, success = target.saving_throw(save_request)
 
-        save_bonus = target.saving_throw_bonus(caster.uuid, "dexterity").normalized_score
+        save_bonus = target.saving_throw_bonus(caster.uuid, AbilityName.DEXTERITY).normalized_score
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -1284,13 +1279,13 @@ class Thunderwave(SpellAction):
 
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
-            ability_name="constitution",
+            ability_name=AbilityName.CONSTITUTION,
             dc=dc,
             parent_event=execution_event.uuid
         )
         _, save_roll, success = target.saving_throw(save_request)
 
-        save_bonus = target.saving_throw_bonus(caster.uuid, "constitution").normalized_score
+        save_bonus = target.saving_throw_bonus(caster.uuid, AbilityName.CONSTITUTION).normalized_score
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -1456,13 +1451,13 @@ class Shatter(SpellAction):
 
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
-            ability_name="constitution",
+            ability_name=AbilityName.CONSTITUTION,
             dc=dc,
             parent_event=execution_event.uuid
         )
         _, save_roll, success = target.saving_throw(save_request)
 
-        save_bonus = target.saving_throw_bonus(caster.uuid, "constitution").normalized_score
+        save_bonus = target.saving_throw_bonus(caster.uuid, AbilityName.CONSTITUTION).normalized_score
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -1567,13 +1562,13 @@ class CircleOfDeath(SpellAction):
 
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
-            ability_name="constitution",
+            ability_name=AbilityName.CONSTITUTION,
             dc=dc,
             parent_event=execution_event.uuid
         )
         _, save_roll, success = target.saving_throw(save_request)
 
-        save_bonus = target.saving_throw_bonus(caster.uuid, "constitution").normalized_score
+        save_bonus = target.saving_throw_bonus(caster.uuid, AbilityName.CONSTITUTION).normalized_score
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -1676,13 +1671,13 @@ class ConeOfCold(SpellAction):
 
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
-            ability_name="constitution",
+            ability_name=AbilityName.CONSTITUTION,
             dc=dc,
             parent_event=execution_event.uuid
         )
         _, save_roll, success = target.saving_throw(save_request)
 
-        save_bonus = target.saving_throw_bonus(caster.uuid, "constitution").normalized_score
+        save_bonus = target.saving_throw_bonus(caster.uuid, AbilityName.CONSTITUTION).normalized_score
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -1807,7 +1802,7 @@ class SunburstBlindedEffect(BaseCondition):
 
             save_request = caster.create_saving_throw_request(
                 target_entity_uuid=target.uuid,
-                ability_name="constitution",
+                ability_name=AbilityName.CONSTITUTION,
                 dc=dc,
                 parent_event=event.uuid
             )
@@ -1904,20 +1899,20 @@ class Sunburst(SpellAction):
                 source_entity_uuid=caster.uuid,
                 target_entity_uuid=target.uuid
             )
-            mod_uuid = target.saving_throws.get_saving_throw("constitution").bonus.self_static.add_advantage_modifier(disadv_mod)
+            mod_uuid = target.saving_throws.get_saving_throw(AbilityName.CONSTITUTION).bonus.self_static.add_advantage_modifier(disadv_mod)
 
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
-            ability_name="constitution",
+            ability_name=AbilityName.CONSTITUTION,
             dc=dc,
             parent_event=execution_event.uuid
         )
         _, save_roll, success = target.saving_throw(save_request)
 
         if has_disadvantage and mod_uuid:
-            target.saving_throws.get_saving_throw("constitution").bonus.self_static.remove_modifier(mod_uuid)
+            target.saving_throws.get_saving_throw(AbilityName.CONSTITUTION).bonus.self_static.remove_modifier(mod_uuid)
 
-        save_bonus = target.saving_throw_bonus(caster.uuid, "constitution").normalized_score
+        save_bonus = target.saving_throw_bonus(caster.uuid, AbilityName.CONSTITUTION).normalized_score
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -2468,7 +2463,7 @@ class EldritchBlast(SpellAction):
             status_message=f"{self.name} hit for {damage_roll.total} force damage"
         )
 
-from dnd.spatial_effect_controllers import AreaSpatialEffectController
+from dnd.spatial.effect_controllers import AreaSpatialEffectController
 
 
 class GustOfWindZone(AreaSpatialEffectController):
@@ -2631,7 +2626,7 @@ def _apply_gust_push(entity: Entity, dc: int, caster_pos: Tuple[int, int],
     """STR save or pushed 15ft away from caster."""
     save_request = entity.create_saving_throw_request(
         target_entity_uuid=entity.uuid,
-        ability_name="strength",
+        ability_name=AbilityName.STRENGTH,
         dc=dc,
         parent_event=parent_event.uuid
     )
@@ -2855,7 +2850,7 @@ class IceStorm(SpellAction):
 
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
-            ability_name="dexterity",
+            ability_name=AbilityName.DEXTERITY,
             dc=dc,
             parent_event=execution_event.uuid
         )
@@ -3011,7 +3006,7 @@ class SunbeamStrike(BaseAction):
 
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
-            ability_name="constitution",
+            ability_name=AbilityName.CONSTITUTION,
             dc=self.spell_dc,
             parent_event=execution_event.uuid
         )
@@ -3192,7 +3187,7 @@ class ChainLightning(SpellAction):
         for chain_target in chain_targets:
             save_request = caster.create_saving_throw_request(
                 target_entity_uuid=chain_target.uuid,
-                ability_name="dexterity", dc=dc,
+                ability_name=AbilityName.DEXTERITY, dc=dc,
                 parent_event=effect_event.uuid
             )
             _, _, success = chain_target.saving_throw(save_request)
@@ -3276,7 +3271,7 @@ class PrismaticRestrained(BaseCondition):
 
             save_request = caster.create_saving_throw_request(
                 target_entity_uuid=target.uuid,
-                ability_name="constitution", dc=dc,
+                ability_name=AbilityName.CONSTITUTION, dc=dc,
                 parent_event=event.uuid
             )
             _, _, success = target.saving_throw(save_request)
@@ -3348,7 +3343,11 @@ class PrismaticSpray(SpellAction):
         }
 
         if color in color_damage:
-            save_ability = "constitution" if color == 4 else "dexterity"
+            save_ability = (
+                AbilityName.CONSTITUTION
+                if color == 4
+                else AbilityName.DEXTERITY
+            )
             save_request = caster.create_saving_throw_request(
                 target_entity_uuid=target.uuid,
                 ability_name=save_ability, dc=dc,
@@ -3369,7 +3368,7 @@ class PrismaticSpray(SpellAction):
 
             save_request = caster.create_saving_throw_request(
                 target_entity_uuid=target.uuid,
-                ability_name="constitution", dc=dc,
+                ability_name=AbilityName.CONSTITUTION, dc=dc,
                 parent_event=parent_event.uuid
             )
             _, _, success = target.saving_throw(save_request)
@@ -3387,7 +3386,7 @@ class PrismaticSpray(SpellAction):
 
             save_request = caster.create_saving_throw_request(
                 target_entity_uuid=target.uuid,
-                ability_name="wisdom", dc=dc,
+                ability_name=AbilityName.WISDOM, dc=dc,
                 parent_event=parent_event.uuid
             )
             _, _, success = target.saving_throw(save_request)
@@ -3602,7 +3601,7 @@ class FlameStrike(SpellAction):
 
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
-            ability_name="dexterity",
+            ability_name=AbilityName.DEXTERITY,
             dc=dc,
             parent_event=execution_event.uuid
         )
@@ -3980,7 +3979,7 @@ def _create_healing(
     return Healing(
         name=spell_name,
         source_entity_uuid=caster.uuid,
-        healing_dice=type_cast(Literal[4, 6, 8, 10, 12, 20], die_value),
+        healing_dice=type_cast(DieSize, die_value),
         dice_numbers=num_dice,
         healing_bonus=ModifiableValue.create(
             source_entity_uuid=caster.uuid,

@@ -12,7 +12,7 @@ from dnd.conditions import (
     Prone,
     Restrained,
 )
-from dnd.core.modifiers import AdvantageStatus
+from dnd.types.rolls import AdvantageStatus
 from tests.engine.test_standard_conditions import (
     apply_to_target,
     configured_entity,

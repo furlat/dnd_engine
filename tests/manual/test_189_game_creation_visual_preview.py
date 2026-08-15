@@ -5,7 +5,9 @@ from collections.abc import Iterator
 import pytest
 
 from dnd.core.base_object import BaseObject
-from dnd.core.events import EventQueue
+from dnd.core.events.events_registry import (
+    EventQueue,
+)
 from dnd.entity import Entity
 from server import event_server
 from tests.manual.server_test_client import (

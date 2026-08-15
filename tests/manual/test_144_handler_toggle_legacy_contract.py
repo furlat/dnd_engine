@@ -4,20 +4,27 @@ from dataclasses import dataclass
 from typing import Literal
 from uuid import uuid4
 
-from dnd.actions import Attack, Move
-from dnd.actions_functional import setup_standard_actions
-from dnd.blocks.equipment import Shield
+from dnd.actions.standard import (
+    Attack,
+    Move,
+)
+from dnd.actions.operations import setup_standard_actions
+from dnd.blocks.equipment import (
+    Shield,
+)
 from dnd.classes.fighter import create_protection_handler
 from dnd.conditions import InvisibilityEffect
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
-from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import EventQueue
-from dnd.core.modifiers import AdvantageStatus
+from dnd.types.equipment import WeaponSlot
+from dnd.core.events.events_registry import (
+    EventQueue,
+)
+from dnd.types.rolls import AdvantageStatus
 from dnd.entity import Entity
 from dnd.items.armors import SHIELD_RECIPE
 from dnd.monsters.bestiary import create_goblin, create_skeleton
-from dnd.reactions import add_opportunity_attack_handler
+from dnd.actions.reactions import add_opportunity_attack_handler
 from tests.engine.support import force_attack_miss, get_hp, remove_attack_modifier
 from tests.engine.test_combat_actions import (
     reset_core_action_state,

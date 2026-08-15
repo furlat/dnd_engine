@@ -24,8 +24,8 @@ from pydantic import (
 
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.content.recipes import ContentRecipe
-from dnd.core.creature_types import DamageType
-from dnd.core.equipment_types import EquipmentSlot
+from dnd.types.damage import DamageType
+from dnd.types.equipment import EquipmentSlot
 
 
 _LOCAL_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]*(?:[.-][a-z0-9_]+)*$")

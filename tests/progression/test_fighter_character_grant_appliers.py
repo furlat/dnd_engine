@@ -41,7 +41,12 @@ from dnd.content_system.fighter_character_grant_appliers import (
 )
 from dnd.content_system.runtime import ContentSystemRuntime
 from dnd.core.content.identities import ContentRef
-from dnd.core.events import EventPhase, SavingThrowEvent
+from dnd.core.events.events_registry import (
+    EventPhase,
+)
+from dnd.core.events.check_events import (
+    SavingThrowEvent,
+)
 from dnd.entity import Entity
 from dnd.runtime_reset import reset_engine_runtime
 

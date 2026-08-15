@@ -1,7 +1,7 @@
 """Typed external-assistance removal contracts for control conditions."""
 
-from dnd.actions_functional import setup_standard_actions
-from dnd.core.condition_types import ConditionRemovalTrigger
+from dnd.actions.operations import setup_standard_actions
+from dnd.types.conditions import ConditionRemovalTrigger
 from dnd.entity import Entity
 from dnd.spells.enchantment import SleepEffect
 from dnd.spells.illusion import HypnoticPatternEffect

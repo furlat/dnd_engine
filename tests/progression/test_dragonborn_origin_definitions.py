@@ -18,8 +18,10 @@ from dnd.core.content.durable_characters import (
     OriginTraitChoice,
 )
 from dnd.core.content.identities import ContentDefinitionKind
-from dnd.core.creature_types import DamageType
-from dnd.origins.dragonborn import DRAGONBORN_BREATH_WEAPON_REF
+from dnd.types.damage import DamageType
+from dnd.origins.dragonborn import (
+    DRAGONBORN_BREATH_WEAPON_REF,
+)
 
 
 _EXPECTED_ANCESTRIES = {

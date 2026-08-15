@@ -4,21 +4,26 @@ from typing import Optional
 from uuid import UUID, uuid4
 
 from dnd.core.base_object import BaseObject
-from dnd.core.dice import Dice, DiceRoll, RollType, fixed_dice_faces
-from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import (
+from dnd.core.dice import Dice, DiceRoll, fixed_dice_faces
+from dnd.types.rolls import RollType
+from dnd.types.equipment import WeaponSlot
+from dnd.core.events.resolution_events import (
     AttackD20RollResultEvent,
+)
+from dnd.core.events.events_registry import (
     Event,
     EventHandler,
     EventPhase,
     EventQueue,
     EventType,
+    SpatialHandler,
+    Trigger,
+)
+from dnd.core.events.world_events import (
     ForcedMovementEvent,
     SpatialChangeEvent,
     SpatialChangeType,
-    SpatialHandler,
     StepMovementEvent,
-    Trigger,
 )
 from dnd.core.values import BaseValue, ModifiableValue
 

@@ -12,7 +12,11 @@ import pytest
 from pydantic import ValidationError
 
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
-from dnd.core.events import Event, EventQueue, EventType
+from dnd.core.events.events_registry import (
+    Event,
+    EventQueue,
+    EventType,
+)
 from dnd.core.gridmap import GridMap, get_map
 from dnd.entity import Entity
 from dnd.encounter import Encounter

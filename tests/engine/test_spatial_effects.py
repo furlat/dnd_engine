@@ -12,17 +12,19 @@ from dnd.content_system.bootstrap import bootstrap_content_system
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
 from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
-from dnd.content_system.spatial_effect_materialization import (
+from dnd.content.spatial_effect_materialization import (
     materialize_spatial_effect,
 )
 from dnd.core.base_conditions import BaseCondition
-from dnd.core.creature_types import DamageType
-from dnd.core.modifiers import ResistanceStatus
-from dnd.core.events import (
+from dnd.types.damage import DamageType
+from dnd.types.damage import ResistanceStatus
+from dnd.core.events.events_registry import (
     Event,
     EventPhase,
     EventQueue,
     EventType,
+)
+from dnd.core.events.world_events import (
     SpatialEffectChangeEvent,
     SpatialEffectInteractionEvent,
 )
@@ -32,7 +34,7 @@ from dnd.core.content.recipes import ContentRecipe
 from dnd.core.content.registration import get_content_declaration
 from dnd.core.gridmap import get_map
 from dnd.core.base_tiles import water_factory
-from dnd.core.spatial_effect_types import (
+from dnd.types.spatial_effects import (
     SpatialEffectAnchorKind,
     SpatialEffectInteractionIntensity,
     SpatialEffectInteractionOperation,
@@ -44,7 +46,7 @@ from dnd.items.environment_content import (
     OilBarrel,
 )
 from dnd.runtime_reset import reset_engine_runtime
-from dnd.spatial_effect_content import (
+from dnd.content.spatial_effect_recipes import (
     ANTIMAGIC_FIELD_RECIPE,
     CLOUDKILL_CLOUD_RECIPE,
     CONTINUAL_FLAME_FIELD_RECIPE,
@@ -71,15 +73,17 @@ from dnd.spatial_effect_content import (
     WATER_SURFACE_RECIPE,
     WEB_SURFACE_RECIPE,
 )
-from dnd.spatial_effects import (
+from dnd.spatial.effect_base import (
     CloudEffect,
     FieldEffect,
     GroundEffect,
     SpatialEffect,
 )
 from dnd.entity import Entity, EntityConfig
-from dnd.environmental_effects import IceSurfaceController
-from dnd.spells.abjuration import FreedomOfMovementEffect
+from dnd.spatial.environmental_effects import IceSurfaceController
+from dnd.spells.abjuration import (
+    FreedomOfMovementEffect,
+)
 from dnd.spells.conjuration import GreaseZone
 from server.world_projection import project_spatial_effect_summary
 import dnd.spells.abjuration as abjuration

@@ -18,36 +18,52 @@ from dnd.core.base_actions import (
     TargetEffectDisposition,
     TargetType,
 )
-from dnd.core.base_conditions import (
-    BaseCondition,
-    Duration,
-)
-from dnd.core.condition_types import (
+from dnd.core.base_conditions import BaseCondition, Duration
+from dnd.types.conditions import (
     ConditionAgencyDenial,
     ConditionRemovalTrigger,
     ConditionTag,
     DurationType,
     HazardFilter,
 )
-from dnd.core.events import EventPhase, RangeType, Range, EventType, EventHandler, Trigger, Event, EventQueue
-from dnd.core.spatial_effect_types import SpatialEffectTriggerKind
-from dnd.core.modifiers import AdvantageModifier, AdvantageStatus, NumericalModifier
-from dnd.core.saving_throw_types import SavingThrowEffectTag
-from dnd.core.dice import AttackOutcome
+from dnd.types.abilities import AbilityName
+from dnd.core.events.events_registry import (
+    EventPhase,
+    EventType,
+    EventHandler,
+    Trigger,
+    Event,
+    EventQueue,
+)
+from dnd.core.events.resolution_events import (
+    RangeType,
+    Range,
+)
+from dnd.types.spatial_effects import SpatialEffectTriggerKind
+from dnd.core.modifiers import AdvantageModifier, NumericalModifier
+from dnd.types.rolls import AdvantageStatus
+from dnd.types.saving_throws import SavingThrowEffectTag
+from dnd.types.rolls import AttackOutcome
 from dnd.core.aoe import AoEShape, Cone, Cube
 from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
-from dnd.actions import SpellAction, SpellEvent, AttackEvent
+from dnd.actions.standard import (
+    SpellAction,
+    SpellEvent,
+    AttackEvent,
+)
 from dnd.conditions import Frightened, Charmed, Blinded, Deafened, InvisibilityEffect, GreaterInvisibilityEffect
 from dnd.creature_transforms import apply_incapacitated_transform
-from dnd.content_system.spatial_effect_materialization import (
+from dnd.content.spatial_effect_materialization import (
     materialize_spatial_effect,
 )
-from dnd.spatial_effect_content import SILENCE_FIELD_RECIPE
-from dnd.spatial_effects import FieldEffect
-from dnd.spatial_effect_controllers import AreaSpatialEffectController
+from dnd.content.spatial_effect_recipes import SILENCE_FIELD_RECIPE
+from dnd.spatial.effect_base import FieldEffect
+from dnd.spatial.effect_controllers import AreaSpatialEffectController
 from dnd.core.gridmap import get_map
-from dnd.core.events import SpatialChangeEvent
+from dnd.core.events.world_events import (
+    SpatialChangeEvent,
+)
 from dnd.spells.content_metadata import srd_spell_identity
 
 
@@ -246,7 +262,7 @@ class FearEffect(BaseCondition):
 
             save_request = caster.create_saving_throw_request(
                 target_entity_uuid=target.uuid,
-                ability_name="wisdom",
+                ability_name=AbilityName.WISDOM,
                 dc=dc,
                 parent_event=event.uuid,
                 saving_throw_context=fear_effect.saving_throw_context(
@@ -347,13 +363,13 @@ class Fear(SpellAction):
 
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
-            ability_name="wisdom",
+            ability_name=AbilityName.WISDOM,
             dc=dc,
             parent_event=execution_event.uuid
         )
         _, save_roll, success = target.saving_throw(save_request)
 
-        save_bonus = target.saving_throw_bonus(caster.uuid, "wisdom").normalized_score
+        save_bonus = target.saving_throw_bonus(caster.uuid, AbilityName.WISDOM).normalized_score
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -566,13 +582,13 @@ class HypnoticPattern(SpellAction):
 
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
-            ability_name="wisdom",
+            ability_name=AbilityName.WISDOM,
             dc=dc,
             parent_event=execution_event.uuid
         )
         _, save_roll, success = target.saving_throw(save_request)
 
-        save_bonus = target.saving_throw_bonus(caster.uuid, "wisdom").normalized_score
+        save_bonus = target.saving_throw_bonus(caster.uuid, AbilityName.WISDOM).normalized_score
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,

@@ -5,7 +5,9 @@ from uuid import uuid4
 
 import pytest
 
-from dnd.blocks.equipment import Weapon
+from dnd.blocks.equipment import (
+    Weapon,
+)
 from dnd.content_system.creature_materialization import materialize_creature
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
@@ -13,19 +15,27 @@ from dnd.core.content.materialization import (
     CreatureDeploymentRole,
     CreaturePossessionMode,
 )
-from dnd.core.equipment_types import WeaponSlot
-from dnd.core.base_block import LightLevel
-from dnd.core.events import EventPhase, EventQueue, SpatialChangeEvent
+from dnd.types.equipment import WeaponSlot
+from dnd.types.world import LightLevel
+from dnd.core.events.events_registry import (
+    EventPhase,
+    EventQueue,
+)
+from dnd.core.events.world_events import (
+    SpatialChangeEvent,
+)
 from dnd.core.gridmap import GridMap
-from dnd.core.item_types import EquippedVisualPolicy, ItemDirection
-from dnd.core.life_types import LifeState
+from dnd.presentation import EquippedVisualPolicy
+from dnd.types.world import CardinalDirection
+from dnd.types.life import LifeState
 from dnd.core.traversal_connectors import (
     ConnectorProvocationPolicy,
     TraversalConnectorDefinition,
     TraversalConnectorKind,
 )
 from dnd.core.world_edges import ElevationSurfaceKind
-from dnd.encounter import CombatantState, Encounter, EncounterState
+from dnd.encounter import CombatantState, Encounter
+from dnd.types.encounter import EncounterState
 from dnd.entity import Entity
 from dnd.items.environment_interactables import StorageChest
 from dnd.items.torches import TORCH_RECIPE, Torch
@@ -692,7 +702,7 @@ def test_directional_structure_is_visible_and_remembered_without_senses_object_e
 )
 def test_visible_tile_projects_vision_boundary_owned_by_hidden_neighbor(
     wall_position: tuple[int, int],
-    wall_direction: ItemDirection,
+    wall_direction: CardinalDirection,
     projected_direction: str,
 ) -> None:
     """The visible side owns knowledge of the wall edge that stops its sight."""
@@ -754,7 +764,7 @@ def test_visible_tile_projects_vision_boundary_owned_by_hidden_neighbor(
 )
 def test_distant_closed_door_projects_only_privacy_safe_edge_identity(
     door_position: tuple[int, int],
-    door_direction: ItemDirection,
+    door_direction: CardinalDirection,
     projected_direction: str,
 ) -> None:
     """Every visible boundary direction distinguishes a door without object facts."""

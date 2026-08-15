@@ -11,7 +11,9 @@ from dnd.blocks.skills import SkillConfig, SkillSetConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
 from dnd.core.base_object import BaseObject
 from dnd.core.base_block import BaseBlock
-from dnd.core.events import EventQueue
+from dnd.core.events.events_registry import (
+    EventQueue,
+)
 from dnd.core.gridmap import GridMap, get_map
 from dnd.core.values import BaseValue, ModifiableValue
 from dnd.entity import Entity, EntityConfig

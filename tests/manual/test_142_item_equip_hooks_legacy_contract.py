@@ -6,19 +6,35 @@ from uuid import UUID, uuid4
 
 from pydantic import PrivateAttr
 
-from dnd.blocks.base_item import BaseItem, EquippableItem
-from dnd.blocks.equipment import BodyArmor, Cloak, Shield, Weapon
+from dnd.blocks.base_item import (
+    BaseItem,
+    EquippableItem,
+)
+from dnd.blocks.equipment import (
+    BodyArmor,
+    Cloak,
+    Shield,
+    Weapon,
+)
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
 from dnd.core.base_conditions import BaseCondition
-from dnd.core.equipment_types import (
+from dnd.types.equipment import (
     ArmorType,
     BodyPart,
     EquipmentSlot,
     WeaponSlot,
 )
-from dnd.core.events import AbilityName, Event, EventPhase, Range, RangeType
-from dnd.core.creature_types import DamageType
+from dnd.types.abilities import AbilityName
+from dnd.core.events.events_registry import (
+    Event,
+    EventPhase,
+)
+from dnd.core.events.resolution_events import (
+    Range,
+    RangeType,
+)
+from dnd.types.damage import DamageType
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import ModifiableValue
 from dnd.entity import Entity

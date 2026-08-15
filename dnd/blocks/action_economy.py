@@ -6,7 +6,7 @@ from enum import Enum
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, StrictInt
 from dnd.core.values import ModifiableValue
 from dnd.core.modifiers import NumericalModifier
-from dnd.core.action_types import (
+from dnd.types.actions import (
     CostType,
     HasteActionPolicy,
     RestrictedActionGrant,

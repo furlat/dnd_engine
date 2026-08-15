@@ -4,8 +4,12 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from dnd.actions import Attack, AttackEvent, SpellAction
-from dnd.actions_functional import (
+from dnd.actions.standard import (
+    Attack,
+    AttackEvent,
+    SpellAction,
+)
+from dnd.actions.operations import (
     execute_action,
     execute_by_index,
     get_available_actions,
@@ -17,7 +21,9 @@ from dnd.blocks.action_economy import (
     RechargeType,
     ResourceCapacityPolicy,
 )
-from dnd.blocks.equipment import Weapon
+from dnd.blocks.equipment import (
+    Weapon,
+)
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
@@ -35,15 +41,21 @@ from dnd.core.base_actions import (
     AvailableActionsResult,
     AvailableTarget,
 )
-from dnd.core.condition_types import DurationType
-from dnd.core.dice import AttackOutcome, fixed_dice_faces
-from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import Event, EventPhase, EventQueue, EventType
+from dnd.types.conditions import DurationType
+from dnd.types.rolls import AttackOutcome
+from dnd.core.dice import fixed_dice_faces
+from dnd.types.equipment import WeaponSlot
+from dnd.core.events.events_registry import (
+    Event,
+    EventPhase,
+    EventQueue,
+    EventType,
+)
 from dnd.core.feature_grants import AttackMultiplicityGrant
 from dnd.core.gridmap import get_map
-from dnd.core.creature_types import DamageType
+from dnd.types.damage import DamageType
 from dnd.core.modifiers import NumericalModifier
-from dnd.core.action_types import HasteActionPolicy
+from dnd.types.actions import HasteActionPolicy
 from dnd.entity import Entity, EntityConfig
 from dnd.items.weapons import DAGGER_RECIPE, GREATSWORD_RECIPE
 from dnd.spells.transmutation import HasteEffect

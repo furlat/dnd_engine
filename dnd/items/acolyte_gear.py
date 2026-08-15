@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
-from dnd.blocks.base_item import BaseItem
+from dnd.blocks.base_item import (
+    BaseItem,
+)
 from dnd.core.content.descriptors import (
     ContentDescriptorSpec,
     ContentOrdering,

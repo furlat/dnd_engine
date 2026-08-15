@@ -4,24 +4,36 @@ from uuid import UUID, uuid4
 from typing import Optional, Tuple
 
 from dnd.entity import Entity, EntityConfig
-from dnd.actions_functional import setup_standard_actions
+from dnd.actions.operations import setup_standard_actions
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.equipment import (
-    EquipmentConfig, BodyArmor, Helmet, Shield, Weapon,
+    EquipmentConfig,
+    BodyArmor,
+    Helmet,
+    Shield,
+    Weapon,
 )
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
 from dnd.core.content.identities import ContentRef
 from dnd.core.content.materialization import CreaturePossessionMode
-from dnd.core.equipment_types import WeaponSlot
+from dnd.types.equipment import WeaponSlot
 from dnd.blocks.skills import SkillSetConfig, SkillConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.appearance import AppearanceConfig
-from dnd.core.creature_types import CreatureType, DamageType, Size
-from dnd.core.progression import full_caster_spell_slots_for_level, proficiency_bonus_for_level
-from dnd.core.base_block import SenseMode, SensesType
-from dnd.actions import Hide, Disengage
+from dnd.types.creatures import CreatureType, Size
+from dnd.types.abilities import AbilityName
+from dnd.types.damage import DamageType
+from dnd.core.progression import (
+    full_caster_spell_slots_for_level,
+    proficiency_bonus_for_level,
+)
+from dnd.types.senses import SenseMode, SensesType
+from dnd.actions.standard import (
+    Hide,
+    Disengage,
+)
 
 from dnd.items.armors import (
     CROWN_RECIPE,
@@ -32,7 +44,7 @@ from dnd.blocks.spellcasting import SpellcastingConfig
 from dnd.spells.evocation import (
     FireBolt, Fireball, MagicMissile, BurningHands, LightningBolt, Shatter, Thunderwave
 )
-from dnd.actions_functional import register_spell
+from dnd.actions.operations import register_spell
 from dnd.spells.illusion import Invisibility, GreaterInvisibility
 from dnd.spells.evocation import EldritchBlast
 from dnd.items.consumables import (
@@ -51,7 +63,9 @@ from dnd.items.weapons import (
     SHORTBOW_RECIPE,
     SHORTSWORD_RECIPE,
 )
-from dnd.spells.abjuration import register_shield_reaction
+from dnd.spells.abjuration import (
+    register_shield_reaction,
+)
 from dnd.spells.necromancy import NecroticBless
 from dnd.monsters.skeleton_abilities import MarkTargetAction
 from dnd.monsters.bestiary_items import ARMOR_SCRAPS_RECIPE
@@ -559,7 +573,7 @@ def create_caster(
         health=health_config,
         equipment=equipment_config,
         action_economy=action_economy_config,
-        spellcasting=SpellcastingConfig(spellcasting_ability="charisma"),
+        spellcasting=SpellcastingConfig(spellcasting_ability=AbilityName.CHARISMA),
         proficiency_bonus=proficiency_bonus_for_level(level),
         position=position,
         faction=faction,
@@ -961,7 +975,7 @@ def create_skeleton_warlock(
         health=health_config,
         equipment=equipment_config,
         action_economy=action_economy_config,
-        spellcasting=SpellcastingConfig(spellcasting_ability="charisma"),
+        spellcasting=SpellcastingConfig(spellcasting_ability=AbilityName.CHARISMA),
         proficiency_bonus=2,
         position=position,
         faction=faction,

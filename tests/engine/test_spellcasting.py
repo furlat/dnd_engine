@@ -6,8 +6,12 @@ from uuid import uuid4
 import pytest
 from pydantic import Field
 
-from dnd.actions import DropConcentration, SpellAction, SpellEvent
-from dnd.actions_functional import (
+from dnd.actions.standard import (
+    DropConcentration,
+    SpellAction,
+    SpellEvent,
+)
+from dnd.actions.operations import (
     apply_action_overrides,
     clear_action_overrides,
     execute_by_index,
@@ -23,13 +27,26 @@ from dnd.conditions import Concentrating, Dashing
 from dnd.content_system.spell_catalog_composition import (
     SPELL_CATALOG_COMPOSITION_BY_CLASS,
 )
-from dnd.core.base_actions import TargetType
+from dnd.core.base_actions import (
+    TargetType,
+)
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.base_object import BaseObject
-from dnd.core.events import Damage, DeathEvent, EventPhase, EventQueue, Range, RangeType
+from dnd.core.events.resolution_events import (
+    Damage,
+    Range,
+    RangeType,
+)
+from dnd.core.events.encounter_events import (
+    DeathEvent,
+)
+from dnd.core.events.events_registry import (
+    EventPhase,
+    EventQueue,
+)
 from dnd.core.gridmap import get_map
-from dnd.core.creature_types import DamageType
+from dnd.types.damage import DamageType
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import BaseValue
 from dnd.entity import Entity, EntityConfig

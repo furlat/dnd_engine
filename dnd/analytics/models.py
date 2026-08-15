@@ -11,7 +11,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from dnd.core.life_types import LifeState
+from dnd.types.life import LifeState
 
 
 class FrozenSummaryModel(BaseModel):
@@ -283,7 +283,10 @@ class SummaryProvenanceV1(FrozenSummaryModel):
     """Counts and semantics of evidence consumed by the reducer."""
 
     reducer_id: str = Field(default="dnd.analytics.game_summary.v1", description="Stable reducer implementation identity.")
-    event_model: str = Field(default="dnd.core.events.Event", description="Typed event base consumed by the reducer.")
+    event_model: str = Field(
+        default="dnd.core.events.events_registry.Event",
+        description="Typed event base consumed by the reducer.",
+    )
     combat_log_model: str = Field(
         default="dnd.core.combat_log.CombatLogEntry",
         description="Typed structured combat-log model consumed without prose parsing.",

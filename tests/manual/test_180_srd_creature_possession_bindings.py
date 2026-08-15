@@ -5,8 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from uuid import uuid4
 
-from dnd.blocks.base_item import EquippedVisualPolicy
-from dnd.blocks.equipment import BodyArmor, Weapon
+from dnd.presentation import EquippedVisualPolicy
+from dnd.blocks.equipment import (
+    BodyArmor,
+    Weapon,
+)
 from dnd.content_system.creature_materialization import materialize_creature
 from dnd.content_system.item_bindings import (
     ITEM_RUNTIME_BINDINGS,
@@ -20,8 +23,10 @@ from dnd.core.content.materialization import (
     CreatureDeploymentRole,
     CreaturePossessionMode,
 )
-from dnd.core.events import RangeType
-from dnd.core.creature_types import DamageType
+from dnd.core.events.resolution_events import (
+    RangeType,
+)
+from dnd.types.damage import DamageType
 from dnd.monsters.srd_roster import (
     SRD_CREATURE_DECLARATIONS_BY_ID,
     SRD_CREATURE_POSSESSION_GRANTS_BY_ID,

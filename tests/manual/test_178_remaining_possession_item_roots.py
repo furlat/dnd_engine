@@ -10,8 +10,13 @@ from pydantic import ValidationError
 import dnd.extensions.field_focus as field_focus
 import dnd.monsters.circus_fighter as circus_fighter
 import dnd.monsters.circus_fighter_items as circus_items
-from dnd.blocks.base_item import UsableItem
-from dnd.blocks.equipment import BodyArmor, Weapon
+from dnd.blocks.base_item import (
+    UsableItem,
+)
+from dnd.blocks.equipment import (
+    BodyArmor,
+    Weapon,
+)
 from dnd.content_system.bootstrap import bootstrap_content_system
 from dnd.content_system.item_bindings import (
     ITEM_RUNTIME_BINDINGS,
@@ -19,15 +24,17 @@ from dnd.content_system.item_bindings import (
 )
 from dnd.content_system.item_materialization import materialize_item
 from dnd.core.content.item_definitions import ItemPersistencePolicy
-from dnd.core.equipment_types import (
+from dnd.types.equipment import (
     ArmorType,
     BodyPart,
     WeaponProperty,
     WeaponSlot,
 )
-from dnd.core.events import RangeType
-from dnd.core.creature_types import DamageType
-from dnd.core.modifiers import AdvantageStatus
+from dnd.core.events.resolution_events import (
+    RangeType,
+)
+from dnd.types.damage import DamageType
+from dnd.types.rolls import AdvantageStatus
 from dnd.runtime_reset import reset_engine_runtime
 
 

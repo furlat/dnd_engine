@@ -47,7 +47,6 @@ from dnd.core.content.dragonborn import (
 )
 from dnd.core.content.durable_characters import (
     AbilityScoreAllocation,
-    AbilityScoreName,
     CharacterDefinitionRevisionV2,
     CharacterHoldingsRevision,
     CharacterLoadoutRevisionV1,
@@ -59,19 +58,23 @@ from dnd.core.content.durable_characters import (
     OriginTraitChoice,
     StartingEquipmentPackageChoice,
 )
+from dnd.types.abilities import AbilityName
 from dnd.core.content.materialization import CreatureDeploymentRole
 from dnd.core.content.registry import FrozenContentRegistry
 from dnd.core.dice import fixed_dice_faces
-from dnd.core.events import AbilityName, EventPhase, EventQueue
-from dnd.core.creature_types import DamageType
-from dnd.core.modifiers import (
-    NumericalModifier,
-    ResistanceStatus,
+from dnd.core.events.events_registry import (
+    EventPhase,
+    EventQueue,
 )
+from dnd.types.damage import DamageType
+from dnd.core.modifiers import NumericalModifier
+from dnd.types.damage import ResistanceStatus
 from dnd.entity import Entity, EntityConfig
 from dnd.origins.dragonborn import (
     DRAGONBORN_BREATH_WEAPON_DECLARATION,
     DragonbornBreathWeapon,
+)
+from dnd.core.events.action_events import (
     DragonbornBreathWeaponEvent,
 )
 from dnd.player_character_body import PLAYER_CHARACTER_BODY_RECIPE
@@ -531,8 +534,8 @@ def test_builtin_dragonborn_choice_validates_materializes_and_removes() -> None:
             charisma=13,
         ),
         flexible_ability_bonuses=FlexibleAbilityBonusSelection(
-            plus_two=AbilityScoreName.STRENGTH,
-            plus_one=AbilityScoreName.CONSTITUTION,
+            plus_two=AbilityName.STRENGTH,
+            plus_one=AbilityName.CONSTITUTION,
         ),
         class_levels=(
             ClassLevelEntry(

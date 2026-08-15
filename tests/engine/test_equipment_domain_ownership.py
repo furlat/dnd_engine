@@ -8,18 +8,32 @@ from uuid import uuid4
 
 import pytest
 
-from dnd.blocks.equipment import BodyArmor, Ring, Shield, Weapon
-from dnd.blocks.base_item import BaseItem
+from dnd.blocks.equipment import (
+    BodyArmor,
+    Ring,
+    Shield,
+    Weapon,
+)
+from dnd.blocks.base_item import (
+    BaseItem,
+)
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
 from dnd.classes.rage import Raging
-from dnd.core.equipment_types import (
+from dnd.types.equipment import (
     ArmorType,
     BodyPart,
     RingSlot,
     WeaponSlot,
 )
-from dnd.core.events import Event, EventHandler, EventPhase, EventQueue, EventType, Trigger
+from dnd.core.events.events_registry import (
+    Event,
+    EventHandler,
+    EventPhase,
+    EventQueue,
+    EventType,
+    Trigger,
+)
 from dnd.items.armors import CHAIN_MAIL_RECIPE, SHIELD_RECIPE
 from dnd.items.weapons import (
     GREATSWORD_RECIPE,
@@ -27,7 +41,9 @@ from dnd.items.weapons import (
     SHORTSWORD_RECIPE,
 )
 from dnd.monsters.bestiary import create_skeleton
-from dnd.spells.abjuration import MageArmorCondition
+from dnd.spells.abjuration import (
+    MageArmorCondition,
+)
 from tests.engine.support import reset_combat_state
 
 

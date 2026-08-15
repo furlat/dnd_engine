@@ -15,7 +15,16 @@ from typing import ClassVar, Dict, Any, Optional, Self, Union, List, Tuple, Lite
 from dnd.core.modifiers import ContextAwareCondition
 from dnd.core.base_object import BaseObject
 from dnd.core.values import ModifiableValue
-from dnd.core.events import Event, EventPhase, EventType, SavingThrowEvent, EventHandler, EventQueue
+from dnd.core.events.events_registry import (
+    Event,
+    EventPhase,
+    EventType,
+    EventHandler,
+    EventQueue,
+)
+from dnd.core.events.check_events import (
+    SavingThrowEvent,
+)
 from dnd.core.combat_log import (
     CombatLogEntry,
     CombatLogEntryType,
@@ -27,8 +36,8 @@ from dnd.core.content.runtime import (
     bind_runtime_behavior,
     runtime_behavior_provider,
 )
-from dnd.core.effect_types import EffectOrigin
-from dnd.core.condition_types import (
+from dnd.types.effects import EffectOrigin
+from dnd.types.conditions import (
     ConditionAgencyDenial,
     ConditionApplicationDisposition,
     ConditionApplicationPolicy,
@@ -38,10 +47,8 @@ from dnd.core.condition_types import (
     DurationType,
     HazardFilter,
 )
-from dnd.core.saving_throw_types import (
-    SavingThrowContext,
-    SavingThrowEffectTag,
-)
+from dnd.core.content.saving_throws import SavingThrowContext
+from dnd.types.saving_throws import SavingThrowEffectTag
 
 
 class OutcomeProtection(BaseModel):
@@ -166,6 +173,9 @@ class Duration(BaseObject):
         self.long_rested = True
 
 
+# EVENT-MIGRATION BLOCKER: Move this class to the core event package only
+# after the event-facing condition state no longer requires importing the
+# runtime BaseCondition owner back into the event module.
 class ConditionApplicationEvent(Event):
     """Event payload for a condition application lifecycle."""
 
@@ -299,6 +309,9 @@ class ConditionApplicationEvent(Event):
         )
 
 
+# EVENT-MIGRATION BLOCKER: Move this class to the core event package only
+# after the event-facing condition state no longer requires importing the
+# runtime BaseCondition owner back into the event module.
 class ConditionRemovalEvent(Event):
     """Event payload for a condition removal lifecycle."""
 

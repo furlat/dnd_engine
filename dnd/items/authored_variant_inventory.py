@@ -15,7 +15,7 @@ from pydantic import (
 )
 
 from dnd.core.content.canonical import canonical_content_sha256
-from dnd.core.equipment_types import EquipmentRenderLayer, VisualLoadoutSlot
+from dnd.presentation import EquipmentRenderLayer, VisualLoadoutSlot
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]

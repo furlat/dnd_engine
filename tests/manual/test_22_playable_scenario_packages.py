@@ -3,9 +3,10 @@
 from uuid import uuid4
 
 from dnd.core.dice import fixed_dice_faces
-from dnd.core.life_types import LifeState
-from dnd.core.creature_types import DamageType
-from dnd.encounter import Encounter, EncounterState, TurnState
+from dnd.types.life import LifeState
+from dnd.types.damage import DamageType
+from dnd.encounter import Encounter
+from dnd.types.encounter import EncounterState, TurnState
 from tests.manual.gatehouse_test_support import (
     ScenarioHumanController,
     ScenarioPassController,

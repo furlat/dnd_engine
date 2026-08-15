@@ -11,7 +11,7 @@ from dnd.blocks.spellcasting import SpellcastingConfig
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_object import BaseObject
 from dnd.core.gridmap import get_map
-from dnd.core.creature_types import CreatureType, Size
+from dnd.types.creatures import CreatureType, Size
 from dnd.core.values import BaseValue
 from dnd.entity import Entity, EntityConfig
 from tests.engine.support import reset_combat_state

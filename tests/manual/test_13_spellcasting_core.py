@@ -2,8 +2,11 @@
 
 from uuid import uuid4
 
-from dnd.actions import SpellAction, SpellEvent
-from dnd.actions_functional import (
+from dnd.actions.standard import (
+    SpellAction,
+    SpellEvent,
+)
+from dnd.actions.operations import (
     execute_by_index,
     get_available_actions,
     register_spell,
@@ -23,10 +26,14 @@ from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.base_object import BaseObject
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType, MultiEntityLogData
-from dnd.core.dice import AttackOutcome, fixed_dice_faces
-from dnd.core.events import EventQueue, _enrich_multi_entity_log_from_children
+from dnd.types.rolls import AttackOutcome
+from dnd.core.dice import fixed_dice_faces
+from dnd.core.events.events_registry import (
+    EventQueue,
+    _enrich_multi_entity_log_from_children,
+)
 from dnd.core.gridmap import GridMap, get_map
-from dnd.core.creature_types import CreatureType
+from dnd.types.creatures import CreatureType
 from dnd.core.values import BaseValue
 from dnd.entity import Entity, EntityConfig
 from tests.spell_test_exports import (

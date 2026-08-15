@@ -5,14 +5,22 @@ Contains: Divine Smite (per-level handlers that add radiant damage on melee hit)
 from typing import Optional
 from uuid import UUID
 
-from dnd.core.action_types import spell_slot_cost_type
-from dnd.core.events import (
-    Event, EventPhase, EventType, EventHandler, Trigger,
-    Damage, DamageRollResultEvent,
+from dnd.types.actions import spell_slot_cost_type
+from dnd.core.events.events_registry import (
+    Event,
+    EventPhase,
+    EventType,
+    EventHandler,
+    Trigger,
 )
-from dnd.core.equipment_types import WeaponSlot
-from dnd.core.dice import AttackOutcome
-from dnd.core.creature_types import CreatureType, DamageType
+from dnd.core.events.resolution_events import (
+    Damage,
+    DamageRollResultEvent,
+)
+from dnd.types.equipment import WeaponSlot
+from dnd.types.rolls import AttackOutcome
+from dnd.types.creatures import CreatureType
+from dnd.types.damage import DamageType
 from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.core.values import ModifiableValue
 

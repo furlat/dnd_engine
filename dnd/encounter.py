@@ -7,38 +7,42 @@ coordination, combat-log capture, and end-of-combat detection.
 from typing import Any, Optional, Dict, List, ClassVar, Set, Tuple, Callable
 
 __all__ = [
-    "EncounterState",
-    "TurnState",
     "AdvanceResult",
     "Encounter",
 ]
 from uuid import UUID
 from datetime import UTC, datetime
 from pydantic import Field, computed_field
-from enum import Enum
 import logging
 
 from dnd.core.base_object import BaseObject
-from dnd.core.dice import Dice, RollType
-from dnd.core.events import (
-    Event, EventPhase, EventQueue,
-    EncounterStartEvent, EncounterEndEvent,
-    RoundStartEvent, RoundEndEvent,
-    TurnStartEvent, TurnEndEvent,
+from dnd.core.dice import Dice
+from dnd.types.rolls import RollType
+from dnd.core.events.events_registry import (
+    Event,
+    EventPhase,
+    EventQueue,
+)
+from dnd.core.events.encounter_events import (
+    EncounterStartEvent,
+    EncounterEndEvent,
+    RoundStartEvent,
+    RoundEndEvent,
+    TurnStartEvent,
+    TurnEndEvent,
     DeathEvent,
+)
+from dnd.core.events.world_events import (
     SensoryUpdateReason,
 )
 from dnd.blocks.sensory import capture_senses_snapshot, emit_sensory_update_delta
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
 from dnd.core.gridmap import get_map
-from dnd.core.life_types import LifeState, LifeStateChangeReason
+from dnd.types.life import LifeState, LifeStateChangeReason
 from dnd.entity import Entity
-from dnd.controller import (
-    Controller,
-    ControllerExecutionMode,
-    TurnContext,
-)
-from dnd.actions_functional import execute_by_index
+from dnd.controller import Controller, TurnContext
+from dnd.types import encounter as encounter_types
+from dnd.actions.operations import execute_by_index
 
 logger = logging.getLogger(__name__)
 
@@ -118,21 +122,6 @@ def _compute_identified_entity_observers(event: Event) -> Dict[str, Set[str]]:
     return grants
 
 
-class EncounterState(str, Enum):
-    """Current state of the encounter."""
-    NOT_STARTED = "not_started"
-    ACTIVE = "active"
-    PAUSED = "paused"
-    ENDED = "ended"
-
-
-class TurnState(str, Enum):
-    """Current state of a turn."""
-    NOT_STARTED = "not_started"
-    IN_PROGRESS = "in_progress"
-    ENDED = "ended"
-
-
 class AdvanceResult(BaseObject):
     """Result of advancing automated turns until external input is needed.
 
@@ -145,7 +134,9 @@ class AdvanceResult(BaseObject):
         log_start_index: Combat-log index before automated turns ran.
     """
 
-    status: str = Field(description="Result status for the advancement attempt.")
+    status: encounter_types.AdvanceStatus = Field(
+        description="Result status for the advancement attempt."
+    )
     entity_uuid: Optional[UUID] = Field(
         default=None,
         description="UUID of the entity waiting for input, when applicable.",
@@ -267,12 +258,12 @@ class Encounter(BaseObject):
     )
     current_turn_index: int = Field(default=0, description="Index into the initiative order.")
     round_number: int = Field(default=0, description="Current one-indexed round number while active.")
-    state: EncounterState = Field(
-        default=EncounterState.NOT_STARTED,
+    state: encounter_types.EncounterState = Field(
+        default=encounter_types.EncounterState.NOT_STARTED,
         description="Current encounter lifecycle state.",
     )
-    turn_state: TurnState = Field(
-        default=TurnState.NOT_STARTED,
+    turn_state: encounter_types.TurnState = Field(
+        default=encounter_types.TurnState.NOT_STARTED,
         description="Current turn lifecycle state.",
     )
     started_at: Optional[datetime] = Field(
@@ -428,14 +419,14 @@ class Encounter(BaseObject):
 
     def get_current_entity(self) -> Optional[Entity]:
         """Get the entity whose turn it is."""
-        if not self.initiative_order or self.state != EncounterState.ACTIVE:
+        if not self.initiative_order or self.state != encounter_types.EncounterState.ACTIVE:
             return None
         entity_uuid = self.initiative_order[self.current_turn_index]
         return Entity.get(entity_uuid)
 
     def get_current_combatant(self) -> Optional[CombatantState]:
         """Get the combatant state for current turn."""
-        if not self.initiative_order or self.state != EncounterState.ACTIVE:
+        if not self.initiative_order or self.state != encounter_types.EncounterState.ACTIVE:
             return None
         entity_uuid = self.initiative_order[self.current_turn_index]
         return self.combatants.get(entity_uuid)
@@ -452,7 +443,7 @@ class Encounter(BaseObject):
         Rolls initiative if not already done, notifies controllers,
         and fires EncounterStartEvent.
         """
-        if self.state != EncounterState.NOT_STARTED:
+        if self.state != encounter_types.EncounterState.NOT_STARTED:
             raise ValueError(f"Cannot start encounter in state {self.state}")
 
         if not self.combatants:
@@ -461,7 +452,7 @@ class Encounter(BaseObject):
         if not self.initiative_order:
             self.roll_initiative()
 
-        self.state = EncounterState.ACTIVE
+        self.state = encounter_types.EncounterState.ACTIVE
         self.started_at = datetime.now(UTC)
         self.round_number = 1
 
@@ -498,13 +489,13 @@ class Encounter(BaseObject):
         Returns:
             EncounterEndEvent
         """
-        if self.state == EncounterState.ENDED:
+        if self.state == encounter_types.EncounterState.ENDED:
             raise ValueError("Encounter already ended")
 
-        if self.turn_state == TurnState.IN_PROGRESS:
+        if self.turn_state == encounter_types.TurnState.IN_PROGRESS:
             self.end_turn()
 
-        self.state = EncounterState.ENDED
+        self.state = encounter_types.EncounterState.ENDED
         self.ended_at = datetime.now(UTC)
 
         if Encounter._active_encounter is self:
@@ -592,7 +583,7 @@ class Encounter(BaseObject):
         controller: Optional[Controller],
     ) -> Optional[TurnStartEvent]:
         """Run turn boundary hooks for a surprised combatant without allowing actions."""
-        self.turn_state = TurnState.IN_PROGRESS
+        self.turn_state = encounter_types.TurnState.IN_PROGRESS
         self._begin_turn_execution()
 
         try:
@@ -618,7 +609,7 @@ class Encounter(BaseObject):
 
             combatant.has_acted_this_round = True
             combatant.turn_count += 1
-            self.turn_state = TurnState.ENDED
+            self.turn_state = encounter_types.TurnState.ENDED
         finally:
             self._end_turn_execution()
         return self._skip_to_next_turn()
@@ -650,10 +641,10 @@ class Encounter(BaseObject):
         2. Update senses
         3. Notify controller
         """
-        if self.state != EncounterState.ACTIVE:
+        if self.state != encounter_types.EncounterState.ACTIVE:
             return None
 
-        if self.turn_state == TurnState.IN_PROGRESS:
+        if self.turn_state == encounter_types.TurnState.IN_PROGRESS:
             raise ValueError("Turn already in progress, call end_turn first")
 
         entity = self.get_current_entity()
@@ -670,7 +661,7 @@ class Encounter(BaseObject):
             combatant.has_acted_this_round = True
             return self._skip_to_next_turn()
 
-        self.turn_state = TurnState.IN_PROGRESS
+        self.turn_state = encounter_types.TurnState.IN_PROGRESS
         self._begin_turn_execution()
 
         try:
@@ -688,7 +679,7 @@ class Encounter(BaseObject):
                 controller.on_turn_start(entity, context)
         except Exception:
             self._end_turn_execution()
-            self.turn_state = TurnState.NOT_STARTED
+            self.turn_state = encounter_types.TurnState.NOT_STARTED
             raise
 
         return event
@@ -727,10 +718,10 @@ class Encounter(BaseObject):
         2. Notify controller
         3. Update combatant state
         """
-        if self.state != EncounterState.ACTIVE:
+        if self.state != encounter_types.EncounterState.ACTIVE:
             return None
 
-        if self.turn_state != TurnState.IN_PROGRESS:
+        if self.turn_state != encounter_types.TurnState.IN_PROGRESS:
             return None
 
         entity = self.get_current_entity()
@@ -753,7 +744,7 @@ class Encounter(BaseObject):
 
             combatant.has_acted_this_round = True
             combatant.turn_count += 1
-            self.turn_state = TurnState.ENDED
+            self.turn_state = encounter_types.TurnState.ENDED
         finally:
             self._end_turn_execution()
 
@@ -766,10 +757,10 @@ class Encounter(BaseObject):
         Ends current turn if in progress, then starts the next one.
         May advance to next round if all entities have acted.
         """
-        if self.state != EncounterState.ACTIVE:
+        if self.state != encounter_types.EncounterState.ACTIVE:
             return None
 
-        if self.turn_state == TurnState.IN_PROGRESS:
+        if self.turn_state == encounter_types.TurnState.IN_PROGRESS:
             self.end_turn()
 
         self._advance_turn_slot()
@@ -787,7 +778,7 @@ class Encounter(BaseObject):
         if self.current_turn_index >= len(self.initiative_order):
             self._advance_round()
 
-        self.turn_state = TurnState.NOT_STARTED
+        self.turn_state = encounter_types.TurnState.NOT_STARTED
 
     def can_continue_turn(self) -> bool:
         """
@@ -823,7 +814,7 @@ class Encounter(BaseObject):
             visible_allies=entity.get_visible_allies(),
             encounter_uuid=self.uuid,
             encounter_name=self.name,
-            encounter_state=self.state.value,
+            encounter_state=self.state,
             initiative_order=self.initiative_order.copy(),
             initiative_totals={
                 entity_uuid: combatant.initiative_total
@@ -918,7 +909,7 @@ class Encounter(BaseObject):
                 if event:
                     death_events.append(event)
 
-        if self.state is EncounterState.ACTIVE:
+        if self.state is encounter_types.EncounterState.ACTIVE:
             self._check_encounter_end()
 
         return death_events
@@ -1018,10 +1009,10 @@ class Encounter(BaseObject):
         Returns:
             TurnEndEvent when turn is complete
         """
-        if self.state != EncounterState.ACTIVE:
+        if self.state != encounter_types.EncounterState.ACTIVE:
             raise ValueError(f"Cannot run turn in state {self.state}")
 
-        if self.turn_state != TurnState.IN_PROGRESS:
+        if self.turn_state != encounter_types.TurnState.IN_PROGRESS:
             turn_start = self.start_turn()
             if turn_start is None:
                 return None
@@ -1045,7 +1036,7 @@ class Encounter(BaseObject):
 
             deaths = self.check_deaths()
 
-            if deaths and self.state != EncounterState.ACTIVE:
+            if deaths and self.state != encounter_types.EncounterState.ACTIVE:
                 return None
 
         return self.complete_current_turn()
@@ -1074,7 +1065,7 @@ class Encounter(BaseObject):
 
         while True:
             result = self.advance_one_controller_boundary()
-            if result.status == "advanced_autonomous":
+            if result.status == encounter_types.AdvanceStatus.ADVANCED_AUTONOMOUS:
                 continue
             return result.model_copy(update={"log_start_index": log_start})
 
@@ -1088,7 +1079,7 @@ class Encounter(BaseObject):
         log_start = len(self.combat_log)
         while True:
             result = self.advance_one_controller_action_boundary()
-            if result.status != "autonomous_action_completed":
+            if result.status != encounter_types.AdvanceStatus.AUTONOMOUS_ACTION_COMPLETED:
                 return result.model_copy(update={"log_start_index": log_start})
 
     def advance_one_controller_action_boundary(self) -> AdvanceResult:
@@ -1106,18 +1097,18 @@ class Encounter(BaseObject):
     def _advance_one_controller_action_boundary(self) -> AdvanceResult:
         """Implement one autonomous decision or expose a wait boundary."""
         log_start = len(self.combat_log)
-        if self.state is EncounterState.ENDED:
+        if self.state is encounter_types.EncounterState.ENDED:
             return AdvanceResult(
                 source_entity_uuid=self.uuid,
-                status="encounter_ended",
+                status=encounter_types.AdvanceStatus.ENCOUNTER_ENDED,
                 round_number=self.round_number,
                 turn_index=self.current_turn_index,
                 log_start_index=log_start,
             )
-        if self.state is not EncounterState.ACTIVE:
+        if self.state is not encounter_types.EncounterState.ACTIVE:
             return AdvanceResult(
                 source_entity_uuid=self.uuid,
-                status="error",
+                status=encounter_types.AdvanceStatus.ERROR,
                 round_number=self.round_number,
                 turn_index=self.current_turn_index,
                 log_start_index=log_start,
@@ -1129,7 +1120,7 @@ class Encounter(BaseObject):
         if entity is None or combatant is None or controller is None:
             return AdvanceResult(
                 source_entity_uuid=self.uuid,
-                status="error",
+                status=encounter_types.AdvanceStatus.ERROR,
                 round_number=self.round_number,
                 turn_index=self.current_turn_index,
                 log_start_index=log_start,
@@ -1140,37 +1131,37 @@ class Encounter(BaseObject):
             self._advance_turn_slot()
             return AdvanceResult(
                 source_entity_uuid=self.uuid,
-                status="advanced_autonomous",
+                status=encounter_types.AdvanceStatus.ADVANCED_AUTONOMOUS,
                 round_number=self.round_number,
                 turn_index=self.current_turn_index,
                 log_start_index=log_start,
             )
 
-        if controller.execution_mode is ControllerExecutionMode.EXTERNAL:
+        if controller.execution_mode is encounter_types.ControllerExecutionMode.EXTERNAL:
             actor_uuid = entity.uuid
-            if self.turn_state is not TurnState.IN_PROGRESS:
+            if self.turn_state is not encounter_types.TurnState.IN_PROGRESS:
                 self.start_turn()
             current_entity = self.get_current_entity()
             current_combatant = self.get_current_combatant()
-            if self.state is EncounterState.ENDED:
-                status = "encounter_ended"
+            if self.state is encounter_types.EncounterState.ENDED:
+                status = encounter_types.AdvanceStatus.ENCOUNTER_ENDED
             elif (
                 current_entity is None
                 or current_entity.uuid != actor_uuid
             ):
-                status = "advanced_autonomous"
+                status = encounter_types.AdvanceStatus.ADVANCED_AUTONOMOUS
             elif (
                 current_combatant is not None
                 and not current_combatant.can_take_controlled_turn
             ):
                 self.complete_current_turn()
                 status = (
-                    "encounter_ended"
-                    if self.state is EncounterState.ENDED
-                    else "advanced_autonomous"
+                    encounter_types.AdvanceStatus.ENCOUNTER_ENDED
+                    if self.state is encounter_types.EncounterState.ENDED
+                    else encounter_types.AdvanceStatus.ADVANCED_AUTONOMOUS
                 )
             else:
-                status = controller.external_boundary_status or "waiting_for_external"
+                status = controller.external_boundary_status or encounter_types.AdvanceStatus.WAITING_FOR_EXTERNAL
             current = self.get_current_entity()
             return AdvanceResult(
                 source_entity_uuid=self.uuid,
@@ -1183,12 +1174,12 @@ class Encounter(BaseObject):
             )
 
         actor_uuid = entity.uuid
-        if self.turn_state is not TurnState.IN_PROGRESS:
+        if self.turn_state is not encounter_types.TurnState.IN_PROGRESS:
             self.start_turn()
-            if self.state is EncounterState.ENDED:
+            if self.state is encounter_types.EncounterState.ENDED:
                 return AdvanceResult(
                     source_entity_uuid=self.uuid,
-                    status="encounter_ended",
+                    status=encounter_types.AdvanceStatus.ENCOUNTER_ENDED,
                     round_number=self.round_number,
                     turn_index=self.current_turn_index,
                     log_start_index=log_start,
@@ -1204,7 +1195,7 @@ class Encounter(BaseObject):
             ):
                 return AdvanceResult(
                     source_entity_uuid=self.uuid,
-                    status="advanced_autonomous",
+                    status=encounter_types.AdvanceStatus.ADVANCED_AUTONOMOUS,
                     round_number=self.round_number,
                     turn_index=self.current_turn_index,
                     log_start_index=log_start,
@@ -1219,9 +1210,9 @@ class Encounter(BaseObject):
             return AdvanceResult(
                 source_entity_uuid=self.uuid,
                 status=(
-                    "encounter_ended"
-                    if self.state is EncounterState.ENDED
-                    else "advanced_autonomous"
+                    encounter_types.AdvanceStatus.ENCOUNTER_ENDED
+                    if self.state is encounter_types.EncounterState.ENDED
+                    else encounter_types.AdvanceStatus.ADVANCED_AUTONOMOUS
                 ),
                 round_number=self.round_number,
                 turn_index=self.current_turn_index,
@@ -1231,10 +1222,10 @@ class Encounter(BaseObject):
         step = controller.execute_next_action(entity, context)
         if step.event is not None:
             deaths = self.check_deaths()
-            if deaths and self.state is not EncounterState.ACTIVE:
+            if deaths and self.state is not encounter_types.EncounterState.ACTIVE:
                 return AdvanceResult(
                     source_entity_uuid=self.uuid,
-                    status="encounter_ended",
+                    status=encounter_types.AdvanceStatus.ENCOUNTER_ENDED,
                     round_number=self.round_number,
                     turn_index=self.current_turn_index,
                     log_start_index=log_start,
@@ -1255,8 +1246,8 @@ class Encounter(BaseObject):
         )
         if should_end:
             if (
-                self.state is EncounterState.ACTIVE
-                and self.turn_state is TurnState.IN_PROGRESS
+                self.state is encounter_types.EncounterState.ACTIVE
+                and self.turn_state is encounter_types.TurnState.IN_PROGRESS
                 and current is not None
                 and current.uuid == actor_uuid
             ):
@@ -1264,9 +1255,9 @@ class Encounter(BaseObject):
             return AdvanceResult(
                 source_entity_uuid=self.uuid,
                 status=(
-                    "encounter_ended"
-                    if self.state is EncounterState.ENDED
-                    else "advanced_autonomous"
+                    encounter_types.AdvanceStatus.ENCOUNTER_ENDED
+                    if self.state is encounter_types.EncounterState.ENDED
+                    else encounter_types.AdvanceStatus.ADVANCED_AUTONOMOUS
                 ),
                 round_number=self.round_number,
                 turn_index=self.current_turn_index,
@@ -1274,7 +1265,7 @@ class Encounter(BaseObject):
             )
         return AdvanceResult(
             source_entity_uuid=self.uuid,
-            status="autonomous_action_completed",
+            status=encounter_types.AdvanceStatus.AUTONOMOUS_ACTION_COMPLETED,
             entity_uuid=entity.uuid,
             entity_name=entity.name,
             round_number=self.round_number,
@@ -1284,9 +1275,9 @@ class Encounter(BaseObject):
 
     def build_current_turn_context(self) -> TurnContext:
         """Return the exact live context for the current in-progress actor."""
-        if self.state is not EncounterState.ACTIVE:
+        if self.state is not encounter_types.EncounterState.ACTIVE:
             raise ValueError("encounter is not active")
-        if self.turn_state is not TurnState.IN_PROGRESS:
+        if self.turn_state is not encounter_types.TurnState.IN_PROGRESS:
             raise ValueError("encounter turn is not in progress")
         entity = self.get_current_entity()
         if entity is None:

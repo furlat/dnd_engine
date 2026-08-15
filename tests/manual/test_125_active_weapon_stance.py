@@ -4,8 +4,12 @@ from uuid import uuid4
 
 import pytest
 
-from dnd.actions import Attack
-from dnd.blocks.equipment import Weapon
+from dnd.actions.standard import (
+    Attack,
+)
+from dnd.blocks.equipment import (
+    Weapon,
+)
 from dnd.content_system.creature_materialization import materialize_creature
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
@@ -14,7 +18,7 @@ from dnd.core.content.materialization import (
     CreatureDeploymentRole,
     CreaturePossessionMode,
 )
-from dnd.core.equipment_types import WeaponSet, WeaponSlot
+from dnd.types.equipment import WeaponSet, WeaponSlot
 from dnd.entity import Entity
 from dnd.items.weapons import DAGGER_RECIPE, SHORTBOW_RECIPE
 from dnd.monsters.bestiary_content import BESTIARY_CREATURE_RECIPES_BY_ID

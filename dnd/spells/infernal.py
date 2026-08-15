@@ -7,9 +7,17 @@ from uuid import UUID
 
 from pydantic import Field
 
-from dnd.actions import SpellAction
-from dnd.core.action_types import spell_slot_cost_type
-from dnd.core.base_actions import ActionEvent, TargetType
+from dnd.actions.standard import (
+    SpellAction,
+)
+from dnd.types.actions import spell_slot_cost_type
+from dnd.types.abilities import AbilityName
+from dnd.core.events.action_events import (
+    ActionEvent,
+)
+from dnd.core.base_actions import (
+    TargetType,
+)
 from dnd.core.content.dependencies import (
     ContentDependency,
     ContentDependencyPhase,
@@ -18,20 +26,23 @@ from dnd.core.content.dependencies import (
 from dnd.core.content.identities import ContentRef
 from dnd.core.content.registration import get_content_declaration
 from dnd.core.content.runtime import RuntimeBehaviorKind
-from dnd.core.dice import AttackOutcome, Dice, RollType
-from dnd.core.events import (
+from dnd.types.rolls import AttackOutcome, RollType
+from dnd.core.dice import Dice
+from dnd.core.events.events_registry import (
     Event,
     EventHandler,
     EventPhase,
     EventQueue,
     EventType,
+    Trigger,
+)
+from dnd.core.events.resolution_events import (
     Range,
     RangeType,
     TakeDamageEvent,
-    Trigger,
 )
-from dnd.core.creature_types import DamageType
-from dnd.core.saving_throw_types import SavingThrowContext
+from dnd.types.damage import DamageType
+from dnd.core.content.saving_throws import SavingThrowContext
 from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
 from dnd.spells.content_metadata import (
@@ -195,7 +206,7 @@ def _rebuke_processor(
         caster.action_economy.consume(spell_slot_cost_type(cast_rank), 1)
     save_request = caster.create_saving_throw_request(
         attacker.uuid,
-        "dexterity",
+        AbilityName.DEXTERITY,
         caster.spell_save_dc(
             spellcasting_source_id=resolved_source_id,
         ),

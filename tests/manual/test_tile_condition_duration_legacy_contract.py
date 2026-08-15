@@ -2,7 +2,8 @@
 
 from uuid import uuid4
 
-from dnd.core.base_conditions import BaseCondition, Duration, DurationType
+from dnd.core.base_conditions import BaseCondition, Duration
+from dnd.types.conditions import DurationType
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity
 from dnd.monsters.bestiary import create_skeleton

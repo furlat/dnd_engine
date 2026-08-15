@@ -2,7 +2,7 @@
 
 import pytest
 
-from dnd.core.creature_types import Size
+from dnd.types.creatures import Size
 from dnd.core.world_edges import ElevationSurfaceKind
 from dnd.core.gridmap import get_map
 from dnd.core.elevation import (

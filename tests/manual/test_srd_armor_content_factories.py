@@ -10,7 +10,10 @@ import pytest
 from pydantic import ValidationError
 
 import dnd.items
-from dnd.blocks.equipment import BodyArmor, Shield
+from dnd.blocks.equipment import (
+    BodyArmor,
+    Shield,
+)
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
 from dnd.content_system.creature_materialization import materialize_creature
@@ -24,7 +27,7 @@ from dnd.core.content.provenance import (
     ContentReviewStatus,
 )
 from dnd.core.content.recipes import ContentRecipe
-from dnd.core.equipment_types import ArmorType
+from dnd.types.equipment import ArmorType
 from dnd.items.armors import (
     BREASTPLATE_RECIPE,
     CHAIN_MAIL_RECIPE,

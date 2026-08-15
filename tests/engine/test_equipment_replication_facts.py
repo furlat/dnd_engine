@@ -2,27 +2,39 @@
 
 from uuid import uuid4
 
-from dnd.actions_functional import execute_use_action
+from dnd.actions.operations import execute_use_action
 from dnd.blocks.base_item import (
     BaseItem,
+)
+from dnd.core.events.item_events import (
     ItemChargeConsumptionEvent,
     ItemLocationStateEvent,
 )
-from dnd.blocks.equipment import (
+from dnd.core.events.item_events import (
     EquipmentEvent,
-    Shield,
     ShieldUnequipEvent,
-    Weapon,
     WeaponEquipEvent,
+)
+from dnd.blocks.equipment import (
+    Shield,
+    Weapon,
 )
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
 from dnd.core.base_block import BaseBlock
-from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import Event, EventHandler, EventPhase, EventQueue, EventType, Trigger
+from dnd.types.equipment import WeaponSlot
+from dnd.core.events.events_registry import (
+    Event,
+    EventHandler,
+    EventPhase,
+    EventQueue,
+    EventType,
+    Trigger,
+)
 from dnd.core.gridmap import get_map
-from dnd.core.item_types import ItemLocation, ItemPresentationKind
-from dnd.core.creature_types import DamageType
+from dnd.types.items import ItemLocation
+from dnd.presentation import ItemPresentationKind
+from dnd.types.damage import DamageType
 from dnd.entity import Entity
 from dnd.items.armors import SHIELD_RECIPE
 from dnd.items.consumables import (

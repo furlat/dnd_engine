@@ -23,7 +23,7 @@ from dnd.core.content.provenance import (
     ContentFidelity,
     ContentReviewStatus,
 )
-from dnd.core.equipment_types import WeaponSlot
+from dnd.types.equipment import WeaponSlot
 from dnd.monsters import srd_roster
 from dnd.monsters.srd_roster import (
     SRD_CREATURE_DECLARATIONS,

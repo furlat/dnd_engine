@@ -7,8 +7,10 @@ from uuid import uuid4
 
 import pytest
 
-from dnd.actions import SpellAction
-from dnd.actions_functional import get_available_actions
+from dnd.actions.standard import (
+    SpellAction,
+)
+from dnd.actions.operations import get_available_actions
 from dnd.content_system.bootstrap import bootstrap_content_system
 from dnd.content_system.builtin_character_builds import (
     BuiltinSingleClassBuild,
@@ -20,9 +22,11 @@ from dnd.content_system.character_appearance import (
     SORCERER_HUMAN_APPEARANCE,
 )
 from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
-from dnd.core.action_types import spell_slot_cost_type
-from dnd.core.base_actions import ActionSelectionParameterKind
-from dnd.core.content.durable_characters import AbilityScoreName
+from dnd.types.actions import spell_slot_cost_type
+from dnd.core.base_actions import (
+    ActionSelectionParameterKind,
+)
+from dnd.types.abilities import AbilityName
 from dnd.entity import Entity, EntityConfig
 from dnd.runtime_reset import reset_engine_runtime
 
@@ -43,7 +47,7 @@ def _sorcerer(*metamagic: str) -> Entity:
             equipment_preset="dagger",
             appearance=SORCERER_HUMAN_APPEARANCE,
             asi_by_level=(
-                (4, ((AbilityScoreName.CHARISMA, 2),)),
+                (4, ((AbilityName.CHARISMA, 2),)),
             ),
             metamagic_choices=metamagic,
             spell_names=(

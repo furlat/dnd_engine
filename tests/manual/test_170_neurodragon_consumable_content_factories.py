@@ -12,9 +12,13 @@ from pydantic import ValidationError
 import dnd.items as item_exports
 import dnd.items.consumables as consumable_definitions
 import dnd.items.environment_interactables as fixture_items
-from dnd.actions_functional import execute_use_action
-from dnd.blocks.base_item import UsableItem
-from dnd.blocks.equipment import Weapon
+from dnd.actions.operations import execute_use_action
+from dnd.blocks.base_item import (
+    UsableItem,
+)
+from dnd.blocks.equipment import (
+    Weapon,
+)
 from dnd.content_system.icon_bindings import (
     BUILT_IN_CONTENT_ICON_BINDING_LEDGER,
 )
@@ -28,9 +32,13 @@ from dnd.core.content.provenance import (
     ContentReviewStatus,
 )
 from dnd.core.content.registration import get_content_declaration
-from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import EventPhase, EventQueue, EventType
-from dnd.core.creature_types import DamageType
+from dnd.types.equipment import WeaponSlot
+from dnd.core.events.events_registry import (
+    EventPhase,
+    EventQueue,
+    EventType,
+)
+from dnd.types.damage import DamageType
 from dnd.entity import Entity
 from dnd.items.weapons import SHORTSWORD_RECIPE
 from dnd.runtime_reset import reset_engine_runtime

@@ -5,82 +5,59 @@ EquippableItem adds equip/unequip lifecycle hooks.
 UsableItem provides actions via get_use_actions() with charge tracking.
 """
 
-from typing import Iterable, Optional, List, Literal, Tuple, cast
+from typing import Iterable, Optional, List, Tuple, cast
 from uuid import UUID, uuid4
 from pydantic import Field
 
-from dnd.core.base_block import BaseBlock, MovementMode
-from dnd.core.creature_types import DamageType
+from dnd.core.base_block import BaseBlock
+from dnd.types.world import MovementMode
+from dnd.types.damage import DamageType
 from dnd.core.gridmap import get_map
-from dnd.core.events import (
+from dnd.core.events.resolution_events import (
     Damage,
+    TakeDamageEvent,
+)
+from dnd.core.events.events_registry import (
     Event,
     EventPhase,
     EventQueue,
     EventType,
-    SpatialChangeEvent,
-    TakeDamageEvent,
 )
-from dnd.core.equipment_types import EquipmentSlot
-from dnd.core.item_types import (
+from dnd.core.events.world_events import (
+    SpatialChangeEvent,
+)
+from dnd.core.events.item_events import (
+    ItemChargeConsumptionEvent,
+    ItemLocationStateEvent,
+)
+from dnd.types.equipment import EquipmentSlot
+from dnd.types.rolls import HitDieSize
+from dnd.presentation import (
     EquippedVisualPolicy,
-    ItemChargeState,
     ItemContentRefSnapshot,
+    ItemPresentationKind,
+    ItemPresentationState,
+)
+from dnd.types.items import (
+    ItemChargeState,
     ItemDirectionalStructureState,
     ItemLightSourceState,
     ItemLocation,
     ItemObservationState,
-    ItemPresentationKind,
-    ItemPresentationState,
     ItemRarity,
 )
 from dnd.blocks.health import Health, HealthConfig, HitDiceConfig
-from dnd.core.base_actions import ActionEvent, BaseAction
+from dnd.core.events.action_events import (
+    ActionEvent,
+)
+from dnd.core.base_actions import (
+    BaseAction,
+)
 from dnd.core.content.identities import ContentRef
 from dnd.core.content.runtime import (
     RuntimeBehaviorKind,
     bind_runtime_behavior_child,
 )
-
-
-class ItemLocationStateEvent(Event):
-    """Post-commit, idempotent item placement and presentation fact."""
-
-    name: str = Field(default="Item Location State", description="Item location-state fact label.")
-    event_type: EventType = Field(
-        default=EventType.ITEM_LOCATION_STATE,
-        description="Event category for authoritative item location snapshots.",
-    )
-    item_state: ItemPresentationState = Field(
-        description="Cold item presentation/state required to materialize this item."
-    )
-    location: ItemLocation = Field(description="Authoritative item placement after the mutation.")
-    owner_uuid: Optional[UUID] = Field(
-        default=None,
-        description="Owning entity or container item UUID after the mutation.",
-    )
-    container_uuid: Optional[UUID] = Field(
-        default=None,
-        description="Inventory or equipment block UUID after the mutation.",
-    )
-    tile_uuid: Optional[UUID] = Field(default=None, description="Floor tile UUID after the mutation.")
-    position: Optional[Tuple[int, int]] = Field(
-        default=None,
-        description="Floor position after the mutation.",
-    )
-    equipment_slot: Optional[EquipmentSlot] = Field(
-        default=None,
-        description="Occupied equipment slot when location is equipment.",
-    )
-    merged_into_item_uuid: Optional[UUID] = Field(
-        default=None,
-        description="Surviving stack UUID when this item was fully merged.",
-    )
-    entity_armor_class_after: Optional[int] = Field(
-        default=None,
-        ge=0,
-        description="Exact aggregate owner AC after an entity-owned mutation.",
-    )
 
 
 class BaseItem(BaseBlock):
@@ -755,7 +732,7 @@ class BaseItem(BaseBlock):
         if immunities is None:
             immunities = [DamageType.POISON, DamageType.PSYCHIC]
         hit_dice_count = max(1, hp // hit_dice_value)
-        dice_val = cast(Literal[4, 6, 8, 10, 12], hit_dice_value)
+        dice_val = cast(HitDieSize, hit_dice_value)
         config = HealthConfig(
             hit_dices=[HitDiceConfig(
                 hit_dice_value=dice_val,
@@ -1041,34 +1018,6 @@ class UsableItem(BaseItem):
             stack_count_after=self.stack_count,
             item_destroyed=BaseBlock.get(self.uuid) is None,
         )
-
-
-class ItemChargeConsumptionEvent(Event):
-    """Finite usable-item resource consumption owned by the item domain."""
-
-    name: str = Field(
-        default="Item Charge Consumption",
-        description="Human-readable item-resource event label.",
-    )
-    event_type: EventType = Field(
-        default=EventType.ITEM_CHARGE_CONSUMPTION,
-        description="Event category for finite item-resource consumption.",
-    )
-    item_uuid: UUID = Field(description="Usable item whose finite resource changes.")
-    item_semantic_key: str = Field(
-        default="item.unclassified",
-        description="Stable semantic identity of the consumed item.",
-    )
-    item_name: str = Field(default="Item", description="Human-readable consumed item name.")
-    amount: int = Field(default=1, ge=1, description="Number of charges consumed.")
-    charges_before: int = Field(ge=0, description="Active-item charges before consumption.")
-    charges_after: int = Field(ge=0, description="Active-item charges after consumption.")
-    stack_count_before: int = Field(ge=1, description="Represented item copies before consumption.")
-    stack_count_after: int = Field(ge=1, description="Represented item copies after consumption.")
-    item_destroyed: bool = Field(
-        default=False,
-        description="Whether consumption removed the final item from engine registries.",
-    )
 
 
 def consume_item_charge_before_action_completion(event: Event) -> None:

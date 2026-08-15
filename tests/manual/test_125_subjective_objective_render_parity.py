@@ -24,7 +24,9 @@ from uuid import uuid4
 
 import pytest
 
-from dnd.blocks.equipment import Weapon
+from dnd.blocks.equipment import (
+    Weapon,
+)
 from dnd.content_system.creature_materialization import materialize_creature
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
@@ -32,11 +34,14 @@ from dnd.core.content.materialization import (
     CreatureDeploymentRole,
     CreaturePossessionMode,
 )
-from dnd.core.equipment_types import WeaponSlot
+from dnd.types.equipment import WeaponSlot
 from dnd.core.dice import fixed_dice_faces
-from dnd.core.events import EventPhase
+from dnd.core.events.events_registry import (
+    EventPhase,
+)
 from dnd.entity import Entity
-from dnd.encounter import CombatantState, Encounter, EncounterState
+from dnd.encounter import CombatantState, Encounter
+from dnd.types.encounter import EncounterState
 from dnd.items.environment import DirectionalDoor
 from dnd.items.environment_content import directional_door_recipe
 from dnd.items.torches import TORCH_RECIPE, Torch

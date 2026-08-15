@@ -8,11 +8,15 @@ from dnd.core.base_block import BaseBlock
 from dnd.core.content.durable_characters import RitualPreparationPolicy
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.values import ModifiableValue
-from dnd.core.creature_types import DamageType
+from dnd.types.damage import DamageType
 from dnd.core.modifiers import NumericalModifier
-from dnd.core.events import AbilityName, Damage
+from dnd.types.abilities import AbilityName
+from dnd.core.events.resolution_events import (
+    Damage,
+)
+from dnd.types.progression import CasterProgression
+from dnd.types.rolls import DieSize
 from dnd.core.progression import (
-    CasterProgression,
     SpellcastingClassContribution,
     maximum_spell_rank_for_contribution,
 )
@@ -31,7 +35,7 @@ class SpellcastingConfig(BaseModel):
     """
 
     spellcasting_ability: AbilityName = Field(
-        default="charisma",
+        default=AbilityName.CHARISMA,
         description="The ability used for spellcasting"
     )
     spell_attack_modifiers: List[Tuple[str, int]] = Field(
@@ -54,7 +58,7 @@ class SpellcastingConfig(BaseModel):
         default_factory=list,
         description="(name, value) pairs for spell-specific crit extra dice modifiers"
     )
-    extra_spell_damage_dices: List[Literal[4, 6, 8, 10, 12, 20]] = Field(
+    extra_spell_damage_dices: List[DieSize] = Field(
         default_factory=list,
         description="Dice sides for extra spell damage (e.g., [6] for 1d6)"
     )
@@ -193,7 +197,7 @@ class SpellcastingBlock(BaseBlock):
 
     name: str = Field(default="Spellcasting", description="Display name for this spellcasting block.")
     spellcasting_ability: AbilityName = Field(
-        default="charisma",
+        default=AbilityName.CHARISMA,
         description="The ability used for spellcasting (charisma, intelligence, wisdom)"
     )
     sources: Dict[UUID, SpellcastingSource] = Field(
@@ -263,7 +267,7 @@ class SpellcastingBlock(BaseBlock):
         description="Spell-specific extra dice on critical hits (stacks with Equipment.crit_extra_dice)"
     )
 
-    extra_spell_damage_dices: List[Literal[4, 6, 8, 10, 12, 20]] = Field(
+    extra_spell_damage_dices: List[DieSize] = Field(
         default_factory=list,
         description="Dice sides for extra spell damage"
     )

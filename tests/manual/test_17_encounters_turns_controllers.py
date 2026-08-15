@@ -4,21 +4,33 @@ from uuid import UUID, uuid4
 
 from pydantic import Field
 
-from dnd.controller import Controller, HumanController, PassController, TurnContext
+from dnd.controller import (
+    Controller,
+    HumanController,
+    PassController,
+    TurnContext,
+)
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition, SpellProtectionRegistry
 from dnd.core.base_object import BaseObject
 from dnd.core.dice import fixed_dice_faces
-from dnd.core.events import EventPhase, EventQueue, EventType, SensoryUpdateEvent, SensoryUpdateReason
-from dnd.core.gridmap import GridMap, get_map
-from dnd.core.life_types import LifeState
-from dnd.core.creature_types import DamageType
-from dnd.core.modifiers import (
-    AutoHitModifier,
-    AutoHitStatus,
+from dnd.core.events.events_registry import (
+    EventPhase,
+    EventQueue,
+    EventType,
 )
+from dnd.core.events.world_events import (
+    SensoryUpdateEvent,
+    SensoryUpdateReason,
+)
+from dnd.core.gridmap import GridMap, get_map
+from dnd.types.life import LifeState
+from dnd.types.damage import DamageType
+from dnd.core.modifiers import AutoHitModifier
+from dnd.types.rolls import AutoHitStatus
 from dnd.core.values import BaseValue
-from dnd.encounter import Encounter, EncounterState, TurnState
+from dnd.encounter import Encounter
+from dnd.types.encounter import EncounterState, TurnState
 from dnd.entity import Entity
 from dnd.monsters.bestiary import create_goblin, create_skeleton
 

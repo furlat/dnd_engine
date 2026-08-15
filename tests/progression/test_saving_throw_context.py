@@ -12,12 +12,10 @@ from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.content.origin_features import OriginCapability
 from dnd.core.content.runtime import BehaviorBinding
 from dnd.core.base_conditions import BaseCondition
-from dnd.core.modifiers import AdvantageModifier, AdvantageStatus
-from dnd.core.saving_throw_types import (
-    SAVING_THROW_CONTEXT_KEY,
-    SavingThrowContext,
-    SavingThrowEffectTag,
-)
+from dnd.core.modifiers import AdvantageModifier
+from dnd.types.rolls import AdvantageStatus
+from dnd.types.saving_throws import SAVING_THROW_CONTEXT_KEY, SavingThrowEffectTag
+from dnd.core.content.saving_throws import SavingThrowContext
 from dnd.core.spell_execution import spell_execution_scope
 from dnd.core.values import ContextualAdvantageModifier
 from dnd.entity import Entity, EntityConfig

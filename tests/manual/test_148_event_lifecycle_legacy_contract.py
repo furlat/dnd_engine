@@ -6,14 +6,16 @@ from unittest.mock import patch
 from uuid import UUID
 
 from dnd.core.combat_log import CombatLogEntryType
-from dnd.core.events import (
+from dnd.core.events.events_registry import (
     Event,
     EventHandler,
     EventPhase,
     EventQueue,
     EventType,
-    SavingThrowEvent,
     Trigger,
+)
+from dnd.core.events.check_events import (
+    SavingThrowEvent,
 )
 from dnd.entity import Entity
 from dnd.spells.evocation import Fireball

@@ -7,18 +7,26 @@ from pydantic import Field
 
 from dnd.core.base_actions import (
     BaseAction,
-    ActionEvent,
     TargetType,
     Cost,
 )
+from dnd.core.events.action_events import (
+    ActionEvent,
+)
 from dnd.core.base_block import BaseBlock
-from dnd.core.events import Event, EventPhase, SkillName
+from dnd.core.events.events_registry import (
+    Event,
+    EventPhase,
+)
+from dnd.types.abilities import SkillName
 from dnd.core.gridmap import get_map
-from dnd.blocks.base_item import UsableItem
+from dnd.blocks.base_item import (
+    UsableItem,
+)
 from dnd.blocks.inventory import Inventory
-from dnd.environmental_effects import SpikeTrapGroundEffect
+from dnd.spatial.environmental_effects import SpikeTrapGroundEffect
 from dnd.entity import Entity
-from dnd.spatial_effects import SpatialEffect
+from dnd.spatial.effect_base import SpatialEffect
 
 
 class OpenDoorAction(BaseAction):

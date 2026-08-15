@@ -14,7 +14,7 @@ from dnd.core.content.identities import (
 from dnd.core.content.icon_bindings_generated import (
     BUILT_IN_CONTENT_ICON_BINDINGS,
 )
-from dnd.core.equipment_types import EquipmentRenderLayer, VisualLoadoutSlot
+from dnd.presentation import EquipmentRenderLayer, VisualLoadoutSlot
 
 
 class ContentVisibility(str, Enum):

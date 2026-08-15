@@ -29,7 +29,6 @@ from dnd.core.content.descriptors import (
 )
 from dnd.core.content.durable_characters import (
     AbilityScoreAllocation,
-    AbilityScoreName,
     BackgroundDefinition,
     BuildChoiceSelection,
     CantripChoice,
@@ -46,6 +45,7 @@ from dnd.core.content.durable_characters import (
     StartingEquipmentPackageChoice,
     SubclassChoice,
 )
+from dnd.types.abilities import AbilityName
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.content.origin_support import OriginRuntimeSupport
 from dnd.core.content.materialization import CreatureDeploymentRole
@@ -61,7 +61,7 @@ from dnd.core.content.registration import (
     compute_definition_contract_hash,
 )
 from dnd.core.content.registry import FrozenContentRegistry
-from dnd.core.equipment_types import WeaponProperty
+from dnd.types.equipment import WeaponProperty
 from dnd.items.weapons import (
     CLUB_REF,
     DAGGER_REF,
@@ -256,8 +256,8 @@ def test_level_one_sorcerer_installs_and_removes_all_exact_weapon_refs() -> None
             charisma=15,
         ),
         flexible_ability_bonuses=FlexibleAbilityBonusSelection(
-            plus_two=AbilityScoreName.CHARISMA,
-            plus_one=AbilityScoreName.CONSTITUTION,
+            plus_two=AbilityName.CHARISMA,
+            plus_one=AbilityName.CONSTITUTION,
         ),
         class_levels=(
             ClassLevelEntry(

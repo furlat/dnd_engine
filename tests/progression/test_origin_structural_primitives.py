@@ -17,13 +17,11 @@ from dnd.core.content.durable_characters import (
     ProficiencySubjectKind,
 )
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
-from dnd.core.language_types import SrdLanguageId
-from dnd.core.creature_types import DamageType
-from dnd.core.modifiers import (
-    ResistanceModifier,
-    ResistanceStatus,
-)
-from dnd.core.senses import SenseMode, SensesType
+from dnd.types.languages import SrdLanguageId
+from dnd.types.damage import DamageType
+from dnd.core.modifiers import ResistanceModifier
+from dnd.types.damage import ResistanceStatus
+from dnd.types.senses import SenseMode, SensesType
 from dnd.entity import Entity
 from server.world_projection import project_entity_summary
 

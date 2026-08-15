@@ -7,23 +7,25 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from dnd.content_system.spatial_effect_materialization import (
+from dnd.content.spatial_effect_materialization import (
     materialize_spatial_effect,
 )
-from dnd.core.events import (
+from dnd.core.events.events_registry import (
     Event,
     EventHandler,
     EventPhase,
     EventQueue,
     EventType,
-    SpatialEffectChangeEvent,
     Trigger,
 )
-from dnd.core.spatial_effect_types import SpatialEffectChangeOperation
-from dnd.environmental_effect_runtime import materialize_spike_trap_effect
-from dnd.environmental_effects import SpikeTrapGroundEffect
+from dnd.core.events.world_events import (
+    SpatialEffectChangeEvent,
+)
+from dnd.types.spatial_effects import SpatialEffectChangeOperation
+from dnd.content.spike_trap_materialization import materialize_spike_trap_effect
+from dnd.spatial.environmental_effects import SpikeTrapGroundEffect
 from dnd.runtime_reset import reset_engine_runtime
-from dnd.spatial_effect_content import spike_trap_effect_recipe
+from dnd.content.spatial_effect_recipes import spike_trap_effect_recipe
 
 
 def _begin_parent_effect(source_entity_uuid: UUID) -> Event:

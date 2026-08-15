@@ -12,22 +12,28 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from types import MappingProxyType
-from typing import Literal, Optional, TypeVar
+from typing import Optional, TypeVar
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
-from dnd.actions_functional import register_spell, setup_standard_actions
+from dnd.actions.operations import register_spell, setup_standard_actions
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.appearance import AppearanceConfig
-from dnd.blocks.base_item import BaseItem
-from dnd.blocks.equipment import BodyArmor, Shield, Weapon
-from dnd.core.equipment_types import BodyPart, EquipmentSlot, WeaponSlot
+from dnd.blocks.base_item import (
+    BaseItem,
+)
+from dnd.blocks.equipment import (
+    BodyArmor,
+    Shield,
+    Weapon,
+)
+from dnd.types.equipment import BodyPart, EquipmentSlot, WeaponSlot
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.skills import SkillConfig, SkillSetConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
-from dnd.core.base_block import SenseMode, SensesType
+from dnd.types.senses import SenseMode, SensesType
 from dnd.classes.barbarian import RecklessAttack
 from dnd.core.content.dependencies import (
     ContentDependency,
@@ -56,8 +62,10 @@ from dnd.core.content.registration import (
     creature_factory,
     get_content_declaration,
 )
-from dnd.core.events import AbilityName
-from dnd.core.creature_types import CreatureType, DamageType, Size
+from dnd.types.abilities import AbilityName
+from dnd.types.creatures import CreatureType, Size
+from dnd.types.damage import DamageType
+from dnd.types.rolls import HitDieSize
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.action_definitions import (
     ACTION_BEHAVIOR_DECLARATIONS_BY_CLASS,
@@ -155,8 +163,6 @@ from dnd.spells.illusion import GreaterInvisibility
 from dnd.spells.necromancy import InflictWounds
 
 
-HitDieValue = Literal[4, 6, 8, 10, 12]
-WeaponDieValue = Literal[4, 6, 8, 10, 12, 20]
 _ItemT = TypeVar("_ItemT", bound=BaseItem)
 
 
@@ -413,7 +419,7 @@ def _configure_acolyte(context: CreatureBuildContext) -> Entity:
         hit_die_value=8,
         hit_die_count=2,
         proficiency_bonus=2,
-        spellcasting_ability="wisdom",
+        spellcasting_ability=AbilityName.WISDOM,
         spell_slots={1: 3},
         skills={"medicine": True, "religion": True},
     )
@@ -655,7 +661,7 @@ def _configure_priest(context: CreatureBuildContext) -> Entity:
         hit_die_value=8,
         hit_die_count=5,
         proficiency_bonus=2,
-        spellcasting_ability="wisdom",
+        spellcasting_ability=AbilityName.WISDOM,
         spell_slots={1: 4, 2: 3, 3: 2},
         skills={"medicine": True, "persuasion": True, "religion": True},
     )
@@ -698,7 +704,7 @@ def _configure_cult_fanatic(context: CreatureBuildContext) -> Entity:
         hit_die_value=8,
         hit_die_count=6,
         proficiency_bonus=2,
-        spellcasting_ability="wisdom",
+        spellcasting_ability=AbilityName.WISDOM,
         spell_slots={1: 4, 2: 3},
         skills={"deception": True, "persuasion": True, "religion": True},
     )
@@ -841,7 +847,7 @@ def _configure_mage(context: CreatureBuildContext) -> Entity:
         hit_die_value=8,
         hit_die_count=9,
         proficiency_bonus=3,
-        spellcasting_ability="intelligence",
+        spellcasting_ability=AbilityName.INTELLIGENCE,
         spell_slots={1: 4, 2: 3, 3: 3, 4: 3, 5: 1},
         skills={"arcana": True, "history": True},
     )
@@ -1664,7 +1670,7 @@ def _create_srd_entity(
     context: CreatureBuildContext,
     description: str,
     abilities: tuple[int, int, int, int, int, int],
-    hit_die_value: HitDieValue,
+    hit_die_value: HitDieSize,
     hit_die_count: int,
     proficiency_bonus: int,
     skills: Optional[dict[str, bool]] = None,

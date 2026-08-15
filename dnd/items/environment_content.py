@@ -13,14 +13,19 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from dnd.blocks.base_item import BaseItem, UsableItem
+from dnd.blocks.base_item import (
+    BaseItem,
+    UsableItem,
+)
 from dnd.content_system.action_definitions import (
     ACTION_BEHAVIOR_DECLARATIONS_BY_CLASS,
 )
-from dnd.content_system.spatial_effect_materialization import (
+from dnd.content.spatial_effect_materialization import (
     materialize_spatial_effect,
 )
-from dnd.core.base_actions import BaseAction
+from dnd.core.base_actions import (
+    BaseAction,
+)
 from dnd.core.content.dependencies import (
     ContentDependency,
     ContentDependencyPhase,
@@ -50,16 +55,20 @@ from dnd.core.content.registration import (
     environment_object_factory,
     get_content_declaration,
 )
-from dnd.core.creature_types import DamageType
-from dnd.core.events import (
+from dnd.types.damage import DamageType
+from dnd.core.events.events_registry import (
     Event,
     EventPhase,
     EventQueue,
+)
+from dnd.core.events.world_events import (
     SpatialEffectInteractionEvent,
+)
+from dnd.core.events.resolution_events import (
     TakeDamageEvent,
 )
-from dnd.core.item_types import ItemBlockingChannel, ItemDirection
-from dnd.core.spatial_effect_types import (
+from dnd.types.world import WorldEdgeChannel, CardinalDirection
+from dnd.types.spatial_effects import (
     SpatialEffectInteractionIntensity,
     SpatialEffectInteractionOperation,
 )
@@ -90,7 +99,7 @@ from dnd.items.torches import (
     IgniteWallTorchAction,
     WallTorch,
 )
-from dnd.spatial_effect_content import OIL_SURFACE_RECIPE
+from dnd.content.spatial_effect_recipes import OIL_SURFACE_RECIPE
 from dnd.spells.catalog_content import SPELL_CONTENT_DECLARATIONS_BY_NAME
 from dnd.spells.evocation import Fireball, MagicMissile
 
@@ -116,10 +125,10 @@ class DirectionalWallParameters(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     display_name: str = Field(default="Directional Wall", min_length=1)
-    blocked_directions: tuple[ItemDirection, ...] = Field(
+    blocked_directions: tuple[CardinalDirection, ...] = Field(
         default_factory=lambda: DIRECTIONS,
     )
-    blocked_channels: tuple[ItemBlockingChannel, ...] = Field(
+    blocked_channels: tuple[WorldEdgeChannel, ...] = Field(
         default_factory=lambda: DIRECTIONAL_CHANNELS,
     )
 
@@ -872,8 +881,8 @@ FIREBALL_CANNON_REF = FIREBALL_CANNON_DECLARATION.ref
 def directional_wall_recipe(
     *,
     display_name: str = "Directional Wall",
-    blocked_directions: tuple[ItemDirection, ...] = DIRECTIONS,
-    blocked_channels: tuple[ItemBlockingChannel, ...] = DIRECTIONAL_CHANNELS,
+    blocked_directions: tuple[CardinalDirection, ...] = DIRECTIONS,
+    blocked_channels: tuple[WorldEdgeChannel, ...] = DIRECTIONAL_CHANNELS,
 ) -> ContentRecipe:
     parameters = DirectionalWallParameters(
         display_name=display_name,
@@ -889,8 +898,8 @@ def directional_wall_recipe(
 def directional_door_recipe(
     *,
     display_name: str = "Directional Door",
-    blocked_directions: tuple[ItemDirection, ...] = DIRECTIONS,
-    blocked_channels: tuple[ItemBlockingChannel, ...] = DIRECTIONAL_CHANNELS,
+    blocked_directions: tuple[CardinalDirection, ...] = DIRECTIONS,
+    blocked_channels: tuple[WorldEdgeChannel, ...] = DIRECTIONAL_CHANNELS,
     is_open: bool = False,
 ) -> ContentRecipe:
     parameters = DirectionalDoorParameters(

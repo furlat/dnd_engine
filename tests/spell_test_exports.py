@@ -5,7 +5,9 @@ directly.  Tests that exercise broad spell families may use this module
 without turning ``dnd.spells`` into an eager re-export façade.
 """
 
-from dnd.spells.abjuration import MageArmor
+from dnd.spells.abjuration import (
+    MageArmor,
+)
 from dnd.spells.catalog_content import (
     SPELL_CATALOG_METADATA_BY_CLASS,
     SPELL_CATALOG_METADATA_BY_ID,

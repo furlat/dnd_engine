@@ -4,19 +4,17 @@ from typing import Optional
 from uuid import UUID, uuid4
 
 from dnd.core.base_object import BaseObject
-from dnd.core.creature_types import DamageType
+from dnd.types.damage import DamageType
 from dnd.core.modifiers import (
     AdvantageModifier,
-    AdvantageStatus,
     AutoHitModifier,
-    AutoHitStatus,
     ContextualNumericalModifier,
     CriticalModifier,
-    CriticalStatus,
     NumericalModifier,
     ResistanceModifier,
-    ResistanceStatus,
 )
+from dnd.types.rolls import AdvantageStatus, AutoHitStatus, CriticalStatus
+from dnd.types.damage import ResistanceStatus
 from dnd.core.values import BaseValue, ModifiableValue
 
 

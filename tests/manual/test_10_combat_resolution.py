@@ -4,31 +4,44 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from dnd.actions import Attack, Move, Shove, ShoveEvent
-from dnd.actions_functional import setup_standard_actions
+from dnd.actions.standard import (
+    Attack,
+    Move,
+    Shove,
+)
+from dnd.core.events.action_events import (
+    ShoveEvent,
+)
+from dnd.actions.operations import setup_standard_actions
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
-from dnd.blocks.equipment import EquipmentConfig
+from dnd.blocks.equipment import (
+    EquipmentConfig,
+)
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.base_object import BaseObject
 from dnd.core.dice import fixed_dice_faces
-from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import EventPhase, EventQueue, EventType, Range, RangeType
-from dnd.core.gridmap import GridMap, get_map
-from dnd.core.creature_types import Size
-from dnd.core.modifiers import (
-    AutoHitModifier,
-    AutoHitStatus,
-    CriticalModifier,
-    CriticalStatus,
+from dnd.types.equipment import WeaponSlot
+from dnd.core.events.events_registry import (
+    EventPhase,
+    EventQueue,
+    EventType,
 )
+from dnd.core.events.resolution_events import (
+    Range,
+    RangeType,
+)
+from dnd.core.gridmap import GridMap, get_map
+from dnd.types.creatures import Size
+from dnd.core.modifiers import AutoHitModifier, CriticalModifier
+from dnd.types.rolls import AutoHitStatus, CriticalStatus
 from dnd.core.values import BaseValue
 from dnd.conditions import Incapacitated, Prone
 from dnd.entity import Entity, EntityConfig
 from dnd.monsters.bestiary import create_goblin, create_skeleton
-from dnd.reactions import add_opportunity_attack_handler
+from dnd.actions.reactions import add_opportunity_attack_handler
 
 
 def reset_combat_tutorial_state() -> None:

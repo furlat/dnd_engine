@@ -11,10 +11,14 @@ from typing import Literal
 from uuid import uuid4
 
 from dnd.conditions import Hidden
-from dnd.core.base_actions import ActionEvent
+from dnd.core.events.action_events import (
+    ActionEvent,
+)
 from dnd.core.base_conditions import ConditionRemovalEvent
 from dnd.core.combat_log import CombatLogEntryType
-from dnd.core.events import EventPhase
+from dnd.core.events.events_registry import (
+    EventPhase,
+)
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity
 from dnd.monsters.bestiary import create_caster, create_skeleton

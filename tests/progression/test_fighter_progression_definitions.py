@@ -22,8 +22,8 @@ from dnd.classes.permanent_feature_definitions import (
 from dnd.classes.structural_feature_definitions import (
     REMARKABLE_ATHLETE_DECLARATION,
 )
+from dnd.types.abilities import AbilityName
 from dnd.core.content.durable_characters import (
-    AbilityScoreName,
     AbilityScorePrerequisite,
     AnyOfPrerequisite,
     ChoiceRequirementKind,
@@ -33,7 +33,7 @@ from dnd.core.content.durable_characters import (
 )
 from dnd.core.content.identities import ContentDefinitionKind
 from dnd.core.content.registration import ContentDeclarationMode
-from dnd.core.progression import CasterProgression
+from dnd.types.progression import CasterProgression
 def _level(definition: ClassDefinition | SubclassDefinition, level: int):
     return next(
         row for row in definition.level_definitions if row.class_level == level
@@ -88,8 +88,8 @@ def test_fighter_entry_modes_and_saves_are_authored_exactly() -> None:
     assert definition.hit_die == 10
     assert definition.caster_progression is CasterProgression.NON_CASTER
     assert definition.saving_throw_proficiencies == (
-        AbilityScoreName.CONSTITUTION,
-        AbilityScoreName.STRENGTH,
+        AbilityName.CONSTITUTION,
+        AbilityName.STRENGTH,
     )
 
     assert tuple(
@@ -158,8 +158,8 @@ def test_fighter_entry_modes_and_saves_are_authored_exactly() -> None:
         for row in definition.multiclass_prerequisite.prerequisites
         if isinstance(row, AbilityScorePrerequisite)
     ) == (
-        (AbilityScoreName.DEXTERITY, 13),
-        (AbilityScoreName.STRENGTH, 13),
+        (AbilityName.DEXTERITY, 13),
+        (AbilityName.STRENGTH, 13),
     )
 
 

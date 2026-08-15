@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
-from dnd.actions import CORE_STANDARD_ACTION_DECLARATIONS
-from dnd.actions_functional import setup_standard_actions
+from dnd.actions.standard import (
+    CORE_STANDARD_ACTION_DECLARATIONS,
+)
+from dnd.actions.operations import setup_standard_actions
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.creature_proficiencies import CreatureProficienciesConfig
 from dnd.blocks.health import HealthConfig

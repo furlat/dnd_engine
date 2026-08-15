@@ -3,20 +3,26 @@ from uuid import UUID
 
 from pydantic import Field
 
-from dnd.blocks.equipment import Weapon
-from dnd.core.equipment_types import WeaponProperty
+from dnd.blocks.equipment import (
+    Weapon,
+)
+from dnd.types.equipment import WeaponProperty
+from dnd.types.abilities import AbilityName, SkillName
 from dnd.core.base_conditions import BaseCondition
-from dnd.core.events import Event, EventPhase
-from dnd.core.creature_types import DamageType
+from dnd.core.events.events_registry import (
+    Event,
+    EventPhase,
+)
+from dnd.types.damage import DamageType
 from dnd.core.modifiers import (
     AdvantageModifier,
-    AdvantageStatus,
     ContextualAdvantageModifier,
     ContextualNumericalModifier,
     NumericalModifier,
     ResistanceModifier,
-    ResistanceStatus,
 )
+from dnd.types.rolls import AdvantageStatus
+from dnd.types.damage import ResistanceStatus
 from dnd.entity import Entity
 
 
@@ -342,7 +348,7 @@ class CircusPerformer(BaseCondition):
         if isinstance(target_entity, Entity):
             outs = []
 
-            acrobatics = target_entity.skill_set.get_skill("acrobatics")
+            acrobatics = target_entity.skill_set.get_skill(SkillName.ACROBATICS)
             acro_mod_uuid = acrobatics.skill_bonus.self_static.add_value_modifier(
                 NumericalModifier(
                     name="Circus Training",
@@ -353,7 +359,7 @@ class CircusPerformer(BaseCondition):
             )
             outs.append((acrobatics.skill_bonus.uuid, acro_mod_uuid))
 
-            history = target_entity.skill_set.get_skill("history")
+            history = target_entity.skill_set.get_skill(SkillName.HISTORY)
             hist_mod_uuid = history.skill_bonus.self_static.add_value_modifier(
                 NumericalModifier(
                     name="Circus Training",
@@ -364,7 +370,7 @@ class CircusPerformer(BaseCondition):
             )
             outs.append((history.skill_bonus.uuid, hist_mod_uuid))
 
-            strength_save = target_entity.saving_throws.get_saving_throw("strength")
+            strength_save = target_entity.saving_throws.get_saving_throw(AbilityName.STRENGTH)
             strength_mod_uuid = strength_save.bonus.self_static.add_value_modifier(
                 NumericalModifier(
                     name="Circus Training",
@@ -375,7 +381,7 @@ class CircusPerformer(BaseCondition):
             )
             outs.append((strength_save.bonus.uuid, strength_mod_uuid))
 
-            intelligence_save = target_entity.saving_throws.get_saving_throw("intelligence")
+            intelligence_save = target_entity.saving_throws.get_saving_throw(AbilityName.INTELLIGENCE)
             intelligence_mod_uuid = intelligence_save.bonus.self_static.add_value_modifier(
                 NumericalModifier(
                     name="Circus Training",
@@ -511,7 +517,7 @@ class Tired(BaseCondition):
             )
             outs.append((target_entity.action_economy.reactions.uuid, reactions_mod_uuid))
 
-            strength_save = target_entity.saving_throws.get_saving_throw("strength")
+            strength_save = target_entity.saving_throws.get_saving_throw(AbilityName.STRENGTH)
             strength_advantage_uuid = strength_save.bonus.self_static.add_advantage_modifier(
                 AdvantageModifier(
                     name="Tired",
@@ -522,7 +528,7 @@ class Tired(BaseCondition):
             )
             outs.append((strength_save.bonus.uuid, strength_advantage_uuid))
 
-            dexterity_save = target_entity.saving_throws.get_saving_throw("dexterity")
+            dexterity_save = target_entity.saving_throws.get_saving_throw(AbilityName.DEXTERITY)
             dexterity_advantage_uuid = dexterity_save.bonus.self_static.add_advantage_modifier(
                 AdvantageModifier(
                     name="Tired",

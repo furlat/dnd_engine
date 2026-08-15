@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from enum import Enum
 from uuid import UUID
 
+from dnd.types import world as world_types
+
 
 class ElevationSurfaceKind(str, Enum):
     """Authored support-surface behavior for ordinary walking."""
@@ -19,15 +21,6 @@ class SlopeAxis(str, Enum):
 
     NORTH_SOUTH = "north_south"
     EAST_WEST = "east_west"
-
-
-class WorldEdgeChannel(str, Enum):
-    """Objective structural channel blocked by one contribution."""
-
-    MOVEMENT = "movement"
-    VISION = "vision"
-    LIGHT = "light"
-    PROPAGATION = "propagation"
 
 
 def _exact_position(position: tuple[int, int]) -> tuple[int, int]:
@@ -73,7 +66,7 @@ class WorldEdgeStructuralContribution:
     """One stable provider's objective blocked channels at an edge."""
 
     provider_uuid: UUID
-    blocked_channels: tuple[WorldEdgeChannel, ...]
+    blocked_channels: tuple[world_types.WorldEdgeChannel, ...]
 
 
 @dataclass(frozen=True, slots=True)

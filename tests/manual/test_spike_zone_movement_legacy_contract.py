@@ -1,22 +1,24 @@
 """Deterministic spatial-effect spike-trap movement regressions."""
 
-from dnd.actions_functional import execute_action, get_available_actions
+from dnd.actions.operations import execute_action, get_available_actions
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
 from dnd.core.dice import fixed_dice_faces
-from dnd.core.events import (
+from dnd.core.events.events_registry import (
     EventPhase,
     EventQueue,
     EventType,
+)
+from dnd.core.events.world_events import (
     SpatialEffectChangeEvent,
 )
-from dnd.core.life_types import LifeState
+from dnd.types.life import LifeState
 from dnd.core.gridmap import get_map
-from dnd.core.spatial_effect_types import SpatialEffectChangeOperation
-from dnd.environmental_effect_runtime import materialize_spike_trap_effect
-from dnd.environmental_effects import SpikeTrapController, SpikeTrapGroundEffect
+from dnd.types.spatial_effects import SpatialEffectChangeOperation
+from dnd.content.spike_trap_materialization import materialize_spike_trap_effect
+from dnd.spatial.environmental_effects import SpikeTrapController, SpikeTrapGroundEffect
 from dnd.entity import Entity
 from dnd.monsters.bestiary import create_skeleton
-from dnd.spatial_effects import SpatialEffect
+from dnd.spatial.effect_base import SpatialEffect
 from tests.engine.support import get_hp, reset_combat_state, set_hp
 
 

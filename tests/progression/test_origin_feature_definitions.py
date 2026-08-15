@@ -58,8 +58,8 @@ from dnd.content_system.builtin_character_builds import (
 from dnd.content_system.builtin_inventory import (
     BUILT_IN_DECLARATION_INVENTORY,
 )
+from dnd.types.abilities import AbilityName
 from dnd.core.content.durable_characters import (
-    AbilityScoreName,
     BackgroundDefinition,
     ChoiceRequirementKind,
     ProficiencySubjectKind,
@@ -78,10 +78,11 @@ from dnd.core.content.provenance import (
 )
 from dnd.core.content.origin_support import OriginRuntimeSupportStatus
 from dnd.core.content.registration import ContentDeclarationMode
-from dnd.core.language_types import SrdLanguageId
-from dnd.core.creature_types import DamageType, Size
-from dnd.core.saving_throw_types import SavingThrowEffectTag
-from dnd.core.senses import SensesType
+from dnd.types.languages import SrdLanguageId
+from dnd.types.damage import DamageType
+from dnd.types.creatures import Size
+from dnd.types.saving_throws import SavingThrowEffectTag
+from dnd.types.senses import SensesType
 from dnd.items.weapons import (
     BATTLEAXE_REF,
     HANDAXE_REF,
@@ -343,9 +344,9 @@ def test_passive_trait_payloads_claim_only_installed_structural_facts() -> None:
     )
     gnome_cunning = _payload(GNOME_CUNNING_DECLARATION)
     assert gnome_cunning.saving_throw_advantages[0].abilities == (
-        AbilityScoreName.INTELLIGENCE,
-        AbilityScoreName.WISDOM,
-        AbilityScoreName.CHARISMA,
+        AbilityName.INTELLIGENCE,
+        AbilityName.WISDOM,
+        AbilityName.CHARISMA,
     )
     assert gnome_cunning.saving_throw_advantages[0].requires_magical is True
     assert _payload(

@@ -15,7 +15,9 @@ from fastapi import HTTPException
 from fastapi.responses import JSONResponse, Response
 from starlette.requests import Request
 
-from dnd.blocks.equipment import Weapon
+from dnd.blocks.equipment import (
+    Weapon,
+)
 from dnd.content_system.creature_materialization import materialize_creature
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
@@ -24,9 +26,14 @@ from dnd.core.content.materialization import (
     CreatureDeploymentRole,
     CreaturePossessionMode,
 )
-from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import Event, EventPhase, EventQueue, EventType
-from dnd.actions_functional import get_available_actions
+from dnd.types.equipment import WeaponSlot
+from dnd.core.events.events_registry import (
+    Event,
+    EventPhase,
+    EventQueue,
+    EventType,
+)
+from dnd.actions.operations import get_available_actions
 from dnd.controller import PassController
 from dnd.entity import Entity
 from dnd.encounter import Encounter

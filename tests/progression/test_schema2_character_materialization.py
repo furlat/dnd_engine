@@ -32,7 +32,6 @@ from dnd.core.content.descriptors import (
 )
 from dnd.core.content.durable_characters import (
     AbilityScoreAllocation,
-    AbilityScoreName,
     CharacterDefinitionRevisionV2,
     CharacterHoldingsRevision,
     CharacterItemV1,
@@ -49,6 +48,7 @@ from dnd.core.content.durable_characters import (
     BackgroundDefinition,
     SpellcastingSourceId,
 )
+from dnd.types.abilities import AbilityName
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.content.origin_support import OriginRuntimeSupport
 from dnd.core.content.materialization import CreatureDeploymentRole
@@ -66,13 +66,18 @@ from dnd.core.content.registration import (
 )
 from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.core.content.registry import FrozenContentRegistry
-from dnd.core.equipment_types import ArmorType, WeaponProperty, WeaponSlot
-from dnd.core.events import EventPhase, EventQueue, EventType
+from dnd.types.equipment import ArmorType, WeaponProperty, WeaponSlot
+from dnd.core.events.events_registry import (
+    EventPhase,
+    EventQueue,
+    EventType,
+)
 from dnd.core.gridmap import get_map
-from dnd.core.life_types import LifeState
-from dnd.core.creature_types import DamageType
-from dnd.core.progression import CasterProgression
-from dnd.encounter import Encounter, EncounterState
+from dnd.types.life import LifeState
+from dnd.types.damage import DamageType
+from dnd.types.progression import CasterProgression
+from dnd.encounter import Encounter
+from dnd.types.encounter import EncounterState
 from dnd.entity import Entity
 from dnd.items.consumables import HEALING_POTION_RECIPE
 from dnd.items.torches import TORCH_RECIPE, Torch
@@ -220,8 +225,8 @@ def _definition(
             charisma=8,
         ),
         flexible_ability_bonuses=FlexibleAbilityBonusSelection(
-            plus_two=AbilityScoreName.STRENGTH,
-            plus_one=AbilityScoreName.CONSTITUTION,
+            plus_two=AbilityName.STRENGTH,
+            plus_one=AbilityName.CONSTITUTION,
         ),
         class_levels=tuple(
             ClassLevelEntry(
@@ -305,8 +310,8 @@ def test_schema2_materializer_applies_and_removes_neutral_structure() -> None:
                 ),
             ),
             saving_throw_proficiencies=(
-                AbilityScoreName.CONSTITUTION,
-                AbilityScoreName.STRENGTH,
+                AbilityName.CONSTITUTION,
+                AbilityName.STRENGTH,
             ),
             level_definitions=(
                 ClassLevelDefinition(class_level=1),
@@ -594,7 +599,7 @@ def test_schema2_materializer_installs_one_shared_normal_slot_table() -> None:
             spellcasting_source_id=SpellcastingSourceId(
                 value="spellcasting.fixture",
             ),
-            spellcasting_ability=AbilityScoreName.CHARISMA,
+            spellcasting_ability=AbilityName.CHARISMA,
             level_definitions=(
                 ClassLevelDefinition(class_level=1),
                 ClassLevelDefinition(class_level=2),

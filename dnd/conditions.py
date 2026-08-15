@@ -6,12 +6,13 @@ from dnd.core.base_conditions import (
     ConditionApplicationEvent,
     MostPotentCondition,
 )
-from dnd.core.condition_types import (
+from dnd.types.conditions import (
     ConditionAgencyDenial,
     ConditionCategory,
     ConditionTag,
     DurationType,
 )
+from dnd.types.abilities import AbilityName, SkillName
 from dnd.core.content.descriptors import (
     ContentDescriptorSpec,
     ContentOrdering,
@@ -32,13 +33,11 @@ from dnd.core.content.registration import (
 from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.entity import Entity
 from typing import Callable, Dict, Any, Optional, List, Literal, Tuple, TypeVar
-from dnd.core.creature_types import DamageType
+from dnd.types.damage import DamageType
 from dnd.core.modifiers import (
     AdvantageModifier,
     ContextAwareAdvantage,
     AutoHitModifier,
-    AdvantageStatus,
-    AutoHitStatus,
     ContextualNumericalModifier,
     NumericalModifier,
     ContextAwareNumerical,
@@ -46,27 +45,39 @@ from dnd.core.modifiers import (
     ContextualAutoHitModifier,
     ContextualAdvantageModifier,
     ResistanceModifier,
-    ResistanceStatus,
 )
+from dnd.types.rolls import AdvantageStatus, AutoHitStatus
+from dnd.types.damage import ResistanceStatus
 from dnd.blocks.skills import all_skills, skills_requiring_sight, skills_requiring_hearing, skills_social
-from dnd.core.base_block import SenseMode, SensesType, LightLevel
+from dnd.types.senses import SenseMode, SensesType
+from dnd.types.world import LightLevel
 from dnd.core.gridmap import get_map
 from uuid import UUID
 from functools import partial
-from dnd.core.events import (
+from dnd.core.events.resolution_events import (
     DamageAppliedEvent,
+)
+from dnd.core.events.encounter_events import (
     DeathEvent,
+    ReviveEvent,
+)
+from dnd.core.events.events_registry import (
     Event,
     EventPhase,
     EventType,
     EventHandler,
-    ReviveEvent,
-    SavingThrowEvent,
-    SpatialChangeEvent,
     Trigger,
     EventQueue,
 )
-from dnd.core.base_actions import ActionEvent
+from dnd.core.events.check_events import (
+    SavingThrowEvent,
+)
+from dnd.core.events.world_events import (
+    SpatialChangeEvent,
+)
+from dnd.core.events.action_events import (
+    ActionEvent,
+)
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_object import BaseObject
 from dnd.creature_transforms import (
@@ -979,7 +990,7 @@ class Exhaustion(BaseCondition):
                     )
                 )
                 outs.append((target_entity.equipment.attack_bonus.uuid, attack_uuid))
-                for ability_name in ("strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"):
+                for ability_name in AbilityName:
                     saving_throw = target_entity.saving_throws.get_saving_throw(ability_name)
                     save_uuid = saving_throw.bonus.self_static.add_advantage_modifier(
                         AdvantageModifier(
@@ -995,7 +1006,7 @@ class Exhaustion(BaseCondition):
                 )
 
             if self.level >= 4:
-                constitution_modifier = target_entity.ability_scores.get_ability("constitution").get_combined_values().normalized_score
+                constitution_modifier = target_entity.ability_scores.get_ability(AbilityName.CONSTITUTION).get_combined_values().normalized_score
                 current_max_hp = (
                     target_entity.health.get_max_hit_dices_points(constitution_modifier)
                     + target_entity.health.max_hit_points_bonus.normalized_score
@@ -1080,7 +1091,7 @@ class Dodging(BaseCondition):
             to_target_static_condition_uuid =target_entity.equipment.ac_bonus.to_target_static.add_advantage_modifier(AdvantageModifier(name="Dodging",value=AdvantageStatus.DISADVANTAGE,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
             outs.append((target_entity.equipment.ac_bonus.uuid,to_target_static_condition_uuid))
             effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Dodging self to others advantage modifier to {target_entity.name}")
-            dex_save = target_entity.saving_throws.get_saving_throw("dexterity")
+            dex_save = target_entity.saving_throws.get_saving_throw(AbilityName.DEXTERITY)
             dex_save_modifier_uuid = dex_save.bonus.self_static.add_advantage_modifier(AdvantageModifier(name="Dodging",value=AdvantageStatus.ADVANTAGE,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
             outs.append((dex_save.bonus.uuid,dex_save_modifier_uuid))
             effect_event = effect_event.with_updates(
@@ -1691,7 +1702,7 @@ class Restrained(MostPotentCondition):
             effect_event = effect_event.with_updates(
                 status_message=f"Applied Restrained to self disadvantage modifier to {target_entity.name}",
             )
-            dex_save = target_entity.saving_throws.get_saving_throw("dexterity")
+            dex_save = target_entity.saving_throws.get_saving_throw(AbilityName.DEXTERITY)
             dex_save_disadvantage_uuid = dex_save.bonus.self_static.add_advantage_modifier(AdvantageModifier(name="Restrained",value=AdvantageStatus.DISADVANTAGE,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
             outs.append((dex_save.bonus.uuid,dex_save_disadvantage_uuid))
             effect_event = effect_event.with_updates(
@@ -1968,7 +1979,7 @@ class Concentrating(BaseCondition):
             save_request = SavingThrowEvent(
                 source_entity_uuid=source_entity_uuid,
                 target_entity_uuid=source_entity_uuid,
-                ability_name="constitution",
+                ability_name=AbilityName.CONSTITUTION,
                 dc=dc,
                 source_entity_name=entity.name,
                 target_entity_name=entity.name,
@@ -2470,7 +2481,7 @@ def greater_invisibility_check_processor(event: Event, source_entity_uuid: UUID)
     dc = condition.base_dc + condition.check_count
     check_request = entity.create_skill_check_request(
         entity.uuid,
-        "stealth",
+        SkillName.STEALTH,
         dc,
         parent_event=event.uuid,
     )

@@ -2,13 +2,16 @@
 
 from uuid import uuid4
 
-from dnd.core.base_block import BaseBlock, MovementMode
+from dnd.core.base_block import BaseBlock
+from dnd.types.world import MovementMode
 from dnd.core.base_object import BaseObject
 from dnd.core.base_tiles import Tile, difficult_terrain_factory
-from dnd.core.events import (
+from dnd.core.events.events_registry import (
     EventPhase,
     EventQueue,
     EventType,
+)
+from dnd.core.events.world_events import (
     ForcedMovementEvent,
     SpatialChangeEvent,
     StepMovementEvent,

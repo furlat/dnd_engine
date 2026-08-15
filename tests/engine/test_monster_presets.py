@@ -2,20 +2,26 @@
 
 from uuid import uuid4
 
-from dnd.actions_functional import execute_use_action, get_available_actions
-from dnd.blocks.base_item import UsableItem
-from dnd.blocks.equipment import Weapon
-from dnd.conditions import Exhaustion, Hidden, InvisibilityEffect, Invisible, Poisoned
-from dnd.core.base_block import BaseBlock, SenseMode, SensesType
-from dnd.core.base_object import BaseObject
-from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import EventQueue
-from dnd.core.gridmap import get_map
-from dnd.core.creature_types import CreatureType, DamageType
-from dnd.core.modifiers import (
-    AdvantageStatus,
-    ResistanceStatus,
+from dnd.actions.operations import execute_use_action, get_available_actions
+from dnd.blocks.base_item import (
+    UsableItem,
 )
+from dnd.blocks.equipment import (
+    Weapon,
+)
+from dnd.conditions import Exhaustion, Hidden, InvisibilityEffect, Invisible, Poisoned
+from dnd.core.base_block import BaseBlock
+from dnd.types.senses import SenseMode, SensesType
+from dnd.core.base_object import BaseObject
+from dnd.types.equipment import WeaponSlot
+from dnd.core.events.events_registry import (
+    EventQueue,
+)
+from dnd.core.gridmap import get_map
+from dnd.types.creatures import CreatureType
+from dnd.types.damage import DamageType
+from dnd.types.rolls import AdvantageStatus
+from dnd.types.damage import ResistanceStatus
 from dnd.core.values import BaseValue
 from dnd.entity import Entity
 from dnd.items.consumables import (

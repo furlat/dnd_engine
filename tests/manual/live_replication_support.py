@@ -7,8 +7,11 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from dnd.controller import HumanController, PassController
-from dnd.core.events import EventQueue
-from dnd.core.modifiers import AutoHitModifier, AutoHitStatus
+from dnd.core.events.events_registry import (
+    EventQueue,
+)
+from dnd.core.modifiers import AutoHitModifier
+from dnd.types.rolls import AutoHitStatus
 from dnd.encounter import Encounter
 from dnd.entity import Entity
 from dnd.monsters.bestiary import create_goblin, create_skeleton

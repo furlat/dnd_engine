@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 
 from dnd.controller import HumanController, PassController
 from dnd.core.gridmap import get_map
-from dnd.core.life_types import LifeState
+from dnd.types.life import LifeState
 from dnd.encounter import Encounter
 from dnd.entity import Entity
 from dnd.monsters.bestiary import create_goblin, create_skeleton

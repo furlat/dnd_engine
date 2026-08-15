@@ -3,10 +3,17 @@
 from typing import Dict, Optional, Tuple
 from uuid import UUID, uuid4
 from pydantic import Field, PrivateAttr, StrictInt, model_validator
-from dnd.core.base_block import BaseBlock, MovementMode, LightLevel, SensesType
+from dnd.core.base_block import BaseBlock
+from dnd.types.world import MovementMode, LightLevel
+from dnd.types.senses import SensesType
 from dnd.core.values import ModifiableValue
 from dnd.core.modifiers import NumericalModifier
-from dnd.core.events import SpatialChangeEvent, EventQueue
+from dnd.core.events.world_events import (
+    SpatialChangeEvent,
+)
+from dnd.core.events.events_registry import (
+    EventQueue,
+)
 from dnd.core.geometry import grid_distance_feet
 from dnd.core.world_edges import ElevationSurfaceKind, SlopeAxis
 

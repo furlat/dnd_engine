@@ -12,12 +12,16 @@ from dnd.core.base_conditions import (
     Duration,
     MostPotentCondition,
 )
-from dnd.core.condition_types import (
-    ConditionApplicationDisposition,
-    DurationType,
-)
+from dnd.types.conditions import ConditionApplicationDisposition, DurationType
 from dnd.core.base_object import BaseObject
-from dnd.core.events import Event, EventHandler, EventPhase, EventQueue, EventType, Trigger
+from dnd.core.events.events_registry import (
+    Event,
+    EventHandler,
+    EventPhase,
+    EventQueue,
+    EventType,
+    Trigger,
+)
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import BaseValue, ModifiableValue
 

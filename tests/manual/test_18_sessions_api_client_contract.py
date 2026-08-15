@@ -6,11 +6,13 @@ from uuid import UUID, uuid4
 
 import httpx
 
-from dnd.action_dispatch import (
+from dnd.actions.dispatch import (
     ActionDispatchResult,
     dispatch_available_action as canonical_dispatch_available_action,
 )
-from dnd.blocks.equipment import Weapon
+from dnd.blocks.equipment import (
+    Weapon,
+)
 from dnd.content_system.creature_materialization import materialize_creature
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
@@ -22,20 +24,23 @@ from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition, SpellProtectionRegistry
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.base_object import BaseObject
-from dnd.core.events import EventQueue
+from dnd.core.events.events_registry import (
+    EventQueue,
+)
 from dnd.core.gridmap import GridMap, get_map
 from dnd.core.content.materialization import (
     CreatureDeploymentRole,
     CreaturePossessionMode,
 )
-from dnd.core.equipment_types import WeaponSlot
-from dnd.core.modifiers import AutoHitModifier, AutoHitStatus
+from dnd.types.equipment import WeaponSlot
+from dnd.core.modifiers import AutoHitModifier
+from dnd.types.rolls import AutoHitStatus
 from dnd.core.values import BaseValue
 from dnd.encounter import Encounter
 from dnd.entity import Entity
 from dnd.items.weapons import SCIMITAR_RECIPE, SHORTSWORD_RECIPE
 from dnd.monsters.bestiary_content import BESTIARY_CREATURE_RECIPES_BY_ID
-from dnd.reactions import add_opportunity_attack_handler
+from dnd.actions.reactions import add_opportunity_attack_handler
 from server import event_server
 from server.event_server import app, sim
 from server.player_replication_contract import SubjectiveReplicationBootstrap
@@ -703,7 +708,6 @@ def test_execute_action_http_route_uses_the_canonical_dispatcher(
         extra_target_uuids=(),
         prefer_safe=True,
         movement_guard=None,
-        record_timing=None,
     ) -> ActionDispatchResult:
         received.append((entity, action_info, target))
         assert action_info is expected_action
@@ -711,7 +715,6 @@ def test_execute_action_http_route_uses_the_canonical_dispatcher(
         assert extra_target_uuids == ()
         assert prefer_safe is True
         assert movement_guard is None
-        assert record_timing is None
         return canonical_dispatch_available_action(
             entity,
             action_info=action_info,
@@ -719,7 +722,6 @@ def test_execute_action_http_route_uses_the_canonical_dispatcher(
             extra_target_uuids=extra_target_uuids,
             prefer_safe=prefer_safe,
             movement_guard=movement_guard,
-            record_timing=record_timing,
         )
 
     monkeypatch.setattr(

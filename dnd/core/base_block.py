@@ -1,51 +1,34 @@
 from typing import Dict, Optional, Any, List, Self, Set, ClassVar, Callable, Tuple
 from uuid import UUID, uuid4
-from enum import Enum
 from pydantic import BaseModel, Field, PrivateAttr, model_validator, computed_field, ConfigDict
 from dnd.core.values import ModifiableValue
 from dnd.core.base_conditions import BaseCondition, MostPotentCondition
-from dnd.core.condition_types import (
+from dnd.types.conditions import (
     ConditionApplicationDisposition,
     ConditionApplicationPolicy,
     HazardFilter,
 )
-from dnd.core.action_types import CostType
+from dnd.types.actions import CostType
 from dnd.core.content.runtime import (
     bind_runtime_behavior,
     bind_runtime_handler_before_admission,
 )
-from dnd.core.events import EventHandler, EventQueue, Trigger, Event, SpatialChangeEvent
-from dnd.core.senses import (
-    SenseMode as SenseMode,
-    SensesType as SensesType,
-    SensesView,
+from dnd.core.events.events_registry import (
+    EventHandler,
+    EventQueue,
+    Trigger,
+    Event,
 )
+from dnd.core.events.world_events import (
+    SpatialChangeEvent,
+)
+from dnd.types import senses as sense_types
+from dnd.types import world as world_types
 
 from collections import defaultdict
 
 ContextualConditionImmunity = Callable[['BaseBlock', Optional['BaseBlock'], Optional[dict]], bool]
 
-
-class MovementMode(str, Enum):
-    """Movement modes for entities."""
-    WALKING = "walking"
-    FLYING = "flying"
-    SWIMMING = "swimming"
-    BURROWING = "burrowing"
-
-
-class LightLevel(int, Enum):
-    """Tile light levels ordered from most obscuring to brightest.
-
-    The integer values support ordering comparisons. Darkvision uses explicit
-    mapping rules rather than arithmetic over these enum values.
-    """
-
-    MAGICAL_DARKNESS = 0
-    DARKNESS = 1
-    DIM_LIGHT = 2
-    BRIGHT_LIGHT = 3
-    VERY_BRIGHT = 4
 
 class BaseBlock(BaseModel):
     """UUID-addressable container for engine components.
@@ -348,7 +331,7 @@ class BaseBlock(BaseModel):
             block.set_position(position)
 
     def blocks_walking(self, requesting_entity_uuid: Optional[UUID] = None,
-                       mode: 'MovementMode' = MovementMode.WALKING) -> bool:
+                       mode: 'world_types.MovementMode' = world_types.MovementMode.WALKING) -> bool:
         """Whether this block prevents walking through its position.
         Non-spatial blocks (Equipment, Health, etc.) inherit this default."""
         return False
@@ -357,7 +340,7 @@ class BaseBlock(BaseModel):
         self,
         position: Tuple[int, int],
         requesting_entity_uuid: Optional[UUID] = None,
-        mode: 'MovementMode' = MovementMode.WALKING,
+        mode: 'world_types.MovementMode' = world_types.MovementMode.WALKING,
     ) -> bool:
         """Whether this block prevents traversal at one indexed position.
 
@@ -375,7 +358,7 @@ class BaseBlock(BaseModel):
 
     def blocks_directional_movement(self, direction: str,
                                     requesting_entity_uuid: Optional[UUID] = None,
-                                    mode: 'MovementMode' = MovementMode.WALKING,
+                                    mode: 'world_types.MovementMode' = world_types.MovementMode.WALKING,
                                     subjective: bool = False) -> bool:
         """Whether this block prevents movement out of its tile in a direction."""
         return False
@@ -429,11 +412,11 @@ class BaseBlock(BaseModel):
         """Return whether this block can see through magical darkness."""
         return False
 
-    def get_sense_modes(self) -> List[SenseMode]:
+    def get_sense_modes(self) -> List[sense_types.SenseMode]:
         """Return sense modes for this block as an observer."""
         return []
 
-    def get_senses(self) -> Optional[SensesView]:
+    def get_senses(self) -> Optional[sense_types.SensesView]:
         """Override in Entity to return Senses block for subjective perception."""
         return None
 

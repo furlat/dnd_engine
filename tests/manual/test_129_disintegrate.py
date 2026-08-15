@@ -9,10 +9,12 @@ from uuid import uuid4
 
 import pytest
 
-from dnd.actions import SpellEvent
+from dnd.actions.standard import (
+    SpellEvent,
+)
 from dnd.core.dice import fixed_dice_faces
-from dnd.core.life_types import LifeState
-from dnd.core.creature_types import DamageType
+from dnd.types.life import LifeState
+from dnd.types.damage import DamageType
 from dnd.entity import Entity
 from dnd.spells.transmutation import Disintegrate
 from tests.engine.support import has_condition, set_hp

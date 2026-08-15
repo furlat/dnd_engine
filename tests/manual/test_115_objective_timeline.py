@@ -5,10 +5,18 @@ from uuid import uuid4
 
 import pytest
 
-from dnd.actions import AttackEvent, MovementEvent
+from dnd.actions.standard import (
+    AttackEvent,
+    MovementEvent,
+)
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
-from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import Event, EventPhase, EventQueue, EventType
+from dnd.types.equipment import WeaponSlot
+from dnd.core.events.events_registry import (
+    Event,
+    EventPhase,
+    EventQueue,
+    EventType,
+)
 from dnd.core.modifiers import ContextualNumericalModifier, NumericalModifier
 from dnd.core.values import ModifiableValue
 from server.combat_log_source import CombatLogSourceSlot, CombatLogSourceWindow
@@ -199,7 +207,7 @@ def test_all_phase_diagnostics_are_contiguous_cold_and_use_exact_log_barriers() 
     ]
 
     movement = response.frames[1].event.model_dump(mode="json")
-    assert movement["wire_type"] == "dnd.actions.MovementEvent"
+    assert movement["wire_type"] == "dnd.actions.standard.MovementEvent"
     assert movement["path"] == [[2, 7], [3, 7], [4, 7]]
     assert movement["requested_end_position"] == [5, 7]
     assert movement["termination_reason"] == "completed"
@@ -236,7 +244,7 @@ def test_one_hot_record_becomes_one_cold_frame() -> None:
     assert restored.event_index == 1
     assert restored.event_cursor == 2
     assert restored.combat_log_cursor == 2
-    assert restored.event.model_dump(mode="json")["wire_type"] == "dnd.actions.MovementEvent"
+    assert restored.event.model_dump(mode="json")["wire_type"] == "dnd.actions.standard.MovementEvent"
 
 
 def test_freezing_contextual_event_is_once_only_stable_and_nonmutating(

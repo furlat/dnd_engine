@@ -17,11 +17,25 @@ from dnd.core.base_actions import (
     TargetType,
 )
 from dnd.core.base_conditions import BaseCondition
-from dnd.core.condition_types import ConditionTag, DurationType
-from dnd.core.base_block import SensesType
-from dnd.core.events import Event, EventPhase, Range, RangeType, EventType, EventHandler, Trigger, D20RollResultEvent
+from dnd.types.conditions import ConditionTag, DurationType
+from dnd.types.senses import SensesType
+from dnd.core.events.events_registry import (
+    Event,
+    EventPhase,
+    EventType,
+    EventHandler,
+    Trigger,
+)
+from dnd.core.events.resolution_events import (
+    Range,
+    RangeType,
+    D20RollResultEvent,
+)
 from dnd.entity import Entity
-from dnd.actions import SpellAction, SpellEvent
+from dnd.actions.standard import (
+    SpellAction,
+    SpellEvent,
+)
 from dnd.conditions import GrantedSenseModeCondition
 
 

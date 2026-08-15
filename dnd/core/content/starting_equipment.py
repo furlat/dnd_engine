@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from dnd.core.content.identities import ContentDefinitionKind
 from dnd.core.content.recipes import ContentRecipe
-from dnd.core.equipment_types import EquipmentSlot
+from dnd.types.equipment import EquipmentSlot
 
 
 class StartingEquipmentPackageEntry(BaseModel):

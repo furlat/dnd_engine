@@ -6,15 +6,21 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from dnd.actions import (
+from dnd.actions.standard import (
     entity_action_economy_cost_evaluator,
 )
-from dnd.blocks.base_item import UsableItem
-from dnd.blocks.equipment import Weapon
+from dnd.blocks.base_item import (
+    UsableItem,
+)
+from dnd.blocks.equipment import (
+    Weapon,
+)
 from dnd.conditions import Concentrating, GreaterInvisibilityEffect
-from dnd.core.action_types import ActionPresentationKind
-from dnd.core.base_actions import (
+from dnd.presentation import ActionPresentationKind
+from dnd.core.events.action_events import (
     ActionEvent,
+)
+from dnd.core.base_actions import (
     ActionSelfSetupProfile,
     ActionSetupDuration,
     ActionSetupMaintenanceFailure,
@@ -26,11 +32,7 @@ from dnd.core.base_actions import (
 )
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition, Duration
-from dnd.core.condition_types import (
-    ConditionCategory,
-    ConditionTag,
-    DurationType,
-)
+from dnd.types.conditions import ConditionCategory, ConditionTag, DurationType
 from dnd.core.content.descriptors import (
     ContentDescriptorSpec,
     ContentOrdering,
@@ -65,9 +67,12 @@ from dnd.core.content.runtime import (
     RuntimeBehaviorKind,
     bind_runtime_behavior_child,
 )
-from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import Event, EventPhase
-from dnd.core.creature_types import DamageType
+from dnd.types.equipment import WeaponSlot
+from dnd.core.events.events_registry import (
+    Event,
+    EventPhase,
+)
+from dnd.types.damage import DamageType
 from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
 from dnd.spells.transmutation import HasteEffect

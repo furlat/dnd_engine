@@ -6,36 +6,52 @@ from uuid import UUID, uuid4
 
 from pydantic import Field
 
-from dnd.actions import Attack, AttackEvent, SpellEvent, Swim
+from dnd.actions.standard import (
+    Attack,
+    AttackEvent,
+    SpellEvent,
+    Swim,
+)
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
-from dnd.blocks.equipment import Weapon
+from dnd.blocks.equipment import (
+    Weapon,
+)
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
 from dnd.conditions import Blinded, Concentrating, Exhaustion, Grappled, Paralyzed, Petrified, Poisoned, Restrained, Stunned, Underwater, Unconscious
-from dnd.core.base_actions import ActionAvailabilityStatus, TargetType
-from dnd.core.base_block import BaseBlock, LightLevel, SenseMode, SensesType
+from dnd.core.base_actions import (
+    ActionAvailabilityStatus,
+    TargetType,
+)
+from dnd.core.base_block import BaseBlock
+from dnd.types.world import LightLevel
+from dnd.types.senses import SenseMode, SensesType
 from dnd.core.base_conditions import BaseCondition
-from dnd.core.condition_types import ConditionTag, DurationType
+from dnd.types.conditions import ConditionTag, DurationType
 from dnd.core.base_object import BaseObject
 from dnd.core.base_tiles import water_factory
 from dnd.core.aoe import Sphere
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
-from dnd.core.dice import AttackOutcome, RollType
-from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import (
-    AbilityName,
+from dnd.types.rolls import AttackOutcome, RollType
+from dnd.types.equipment import WeaponSlot
+from dnd.types.abilities import AbilityName
+from dnd.core.events.events_registry import (
     Event,
     EventHandler,
     EventPhase,
     EventQueue,
     EventType,
-    RangeType,
-    SpatialEffectChangeEvent,
-    SpatialEffectInteractionEvent,
     Trigger,
 )
-from dnd.core.spatial_effect_types import (
+from dnd.core.events.resolution_events import (
+    RangeType,
+)
+from dnd.core.events.world_events import (
+    SpatialEffectChangeEvent,
+    SpatialEffectInteractionEvent,
+)
+from dnd.types.spatial_effects import (
     SpatialEffectAnchorKind,
     SpatialEffectChangeOperation,
     SpatialEffectInteractionIntensity,
@@ -43,18 +59,15 @@ from dnd.core.spatial_effect_types import (
 )
 from dnd.core.gridmap import get_map
 from server.world_projection import project_observed_tile
-from dnd.core.life_types import LifeState
-from dnd.core.creature_types import CreatureType, DamageType
-from dnd.core.modifiers import (
-    AdvantageStatus,
-    AutoHitStatus,
-    NumericalModifier,
-    ResistanceModifier,
-    ResistanceStatus,
-)
+from dnd.types.life import LifeState
+from dnd.types.creatures import CreatureType
+from dnd.types.damage import DamageType
+from dnd.types.rolls import AdvantageStatus, AutoHitStatus
+from dnd.core.modifiers import NumericalModifier, ResistanceModifier
+from dnd.types.damage import ResistanceStatus
 from dnd.core.values import BaseValue
 from dnd.entity import Entity, EntityConfig
-from dnd.actions_functional import execute_by_index, setup_standard_actions
+from dnd.actions.operations import execute_by_index, setup_standard_actions
 from dnd.items.environment_content import (
     OIL_BARREL_RECIPE,
     WALL_TORCH_RECIPE,
@@ -109,18 +122,18 @@ from dnd.spells.illusion import MirrorImageEffect
 from dnd.spells.necromancy import AbilityCurseEffect, Eyebite, FalseLife
 from dnd.spells.transmutation import Haste, Slow, SlowedEffect, SpikeGrowth
 from dnd.spells.enchantment import Bane, Bless, HoldMonster, HoldPerson, PowerWordKill, Sleep
-from dnd.spatial_effects import (
+from dnd.spatial.effect_base import (
     CloudEffect,
     FieldEffect,
     GroundEffect,
     SpatialEffect,
 )
-from dnd.spatial_effect_content import (
+from dnd.content.spatial_effect_recipes import (
     BURNING_WEB_FIRE_RECIPE,
     GREASE_SURFACE_RECIPE,
     WEB_SURFACE_RECIPE,
 )
-from dnd.spatial_effect_controllers import AreaSpatialEffectController
+from dnd.spatial.effect_controllers import AreaSpatialEffectController
 from tests.engine.support import (
     deal_damage_to,
     force_attack_hit,

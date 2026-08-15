@@ -23,7 +23,6 @@ from dnd.core.content.descriptors import (
 from dnd.core.content.durable_characters import (
     AbilityScoreAllocation,
     AbilityScoreImprovementChoice,
-    AbilityScoreName,
     AbilityScorePrerequisite,
     AllOfPrerequisite,
     AnyOfPrerequisite,
@@ -62,6 +61,7 @@ from dnd.core.content.durable_characters import (
     StartingProficiencyChoice,
     TotalCharacterLevelPrerequisite,
 )
+from dnd.types.abilities import AbilityName
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.content.origin_support import OriginRuntimeSupport
 from dnd.core.content.provenance import (
@@ -79,10 +79,7 @@ from dnd.core.content.registration import (
 )
 from dnd.core.content.registry import FrozenContentRegistry
 from dnd.core.content.runtime import RuntimeBehaviorKind
-from dnd.core.progression import (
-    CasterProgression,
-    MulticlassSlotRoundingPolicy,
-)
+from dnd.types.progression import CasterProgression, MulticlassSlotRoundingPolicy
 
 
 _PACK_ID = "fixture.character_validation"
@@ -302,7 +299,7 @@ def _fixture() -> _Fixture:
             hit_die=10,
             caster_progression=CasterProgression.NON_CASTER,
             multiclass_prerequisite=AbilityScorePrerequisite(
-                ability=AbilityScoreName.STRENGTH,
+                ability=AbilityName.STRENGTH,
                 minimum=13,
             ),
             first_class_proficiencies=ClassProficiencyPackage(
@@ -344,8 +341,8 @@ def _fixture() -> _Fixture:
                 ),
             ),
             saving_throw_proficiencies=(
-                AbilityScoreName.CONSTITUTION,
-                AbilityScoreName.STRENGTH,
+                AbilityName.CONSTITUTION,
+                AbilityName.STRENGTH,
             ),
             level_definitions=(
                 ClassLevelDefinition(
@@ -384,7 +381,7 @@ def _fixture() -> _Fixture:
             spellcasting_source_id=SpellcastingSourceId(
                 value="class.sorcerer",
             ),
-            spellcasting_ability=AbilityScoreName.CHARISMA,
+            spellcasting_ability=AbilityName.CHARISMA,
             spell_entitlements=(
                 ClassSpellEntitlement(
                     spell_ref=spell.ref,
@@ -392,7 +389,7 @@ def _fixture() -> _Fixture:
                 ),
             ),
             multiclass_prerequisite=AbilityScorePrerequisite(
-                ability=AbilityScoreName.CHARISMA,
+                ability=AbilityName.CHARISMA,
                 minimum=13,
             ),
             multiclass_proficiencies=ClassProficiencyPackage(
@@ -543,8 +540,8 @@ def _definition(
             charisma=8,
         ),
         flexible_ability_bonuses=FlexibleAbilityBonusSelection(
-            plus_two=AbilityScoreName.STRENGTH,
-            plus_one=AbilityScoreName.CONSTITUTION,
+            plus_two=AbilityName.STRENGTH,
+            plus_one=AbilityName.CONSTITUTION,
         ),
         class_levels=levels,
         earned_character_level=len(levels),
@@ -1063,8 +1060,8 @@ def test_schedule_keeps_subclass_selected_ref_and_asi_sources_distinct() -> None
                 AbilityScoreImprovementChoice(
                     choice_id="fighter.asi",
                     increases=(
-                        (AbilityScoreName.DEXTERITY, 1),
-                        (AbilityScoreName.STRENGTH, 1),
+                        (AbilityName.DEXTERITY, 1),
+                        (AbilityName.STRENGTH, 1),
                     ),
                 ),
                 FightingStyleChoice(
@@ -1102,8 +1099,8 @@ def test_schedule_keeps_subclass_selected_ref_and_asi_sources_distinct() -> None
         if row.kind == CharacterGrantScheduleKind.ABILITY_SCORE_INCREASE
     )
     assert tuple((row.ability, row.amount) for row in asi_rows) == (
-        (AbilityScoreName.DEXTERITY, 1),
-        (AbilityScoreName.STRENGTH, 1),
+        (AbilityName.DEXTERITY, 1),
+        (AbilityName.STRENGTH, 1),
     )
     style_row = next(
         row
@@ -1313,7 +1310,7 @@ def test_one_advancement_slot_accepts_exactly_one_asi_or_feat_choice() -> None:
             choices=(
                 AbilityScoreImprovementChoice(
                     choice_id="fighter.advancement.two",
-                    increases=((AbilityScoreName.STRENGTH, 2),),
+                    increases=((AbilityName.STRENGTH, 2),),
                 ),
             ),
         ),
@@ -1667,7 +1664,7 @@ def test_closed_prerequisite_tree_uses_prior_ledger_facts() -> None:
                 ),
                 TotalCharacterLevelPrerequisite(minimum=1),
                 AbilityScorePrerequisite(
-                    ability=AbilityScoreName.STRENGTH,
+                    ability=AbilityName.STRENGTH,
                     minimum=13,
                 ),
                 HasFeaturePrerequisite(
@@ -1676,7 +1673,7 @@ def test_closed_prerequisite_tree_uses_prior_ledger_facts() -> None:
                 AnyOfPrerequisite(
                     prerequisites=(
                         AbilityScorePrerequisite(
-                            ability=AbilityScoreName.CHARISMA,
+                            ability=AbilityName.CHARISMA,
                             minimum=30,
                         ),
                         TotalCharacterLevelPrerequisite(minimum=1),

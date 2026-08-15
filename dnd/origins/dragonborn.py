@@ -7,22 +7,25 @@ from uuid import UUID
 
 from pydantic import Field
 
-from dnd.actions import (
+from dnd.actions.standard import (
     entity_action_economy_cost_evaluator,
     entity_resource_cost_evaluator,
 )
 from dnd.core.aoe import Cone, Line
 from dnd.core.base_actions import (
     ActionCategory,
-    ActionEvent,
     ActionOutcomeProfile,
     BaseAction,
-    BaseCost,
     Cost,
     DamageRollProfile,
     OutcomeApplicationScope,
     OutcomeResolution,
     TargetType,
+)
+from dnd.core.events.action_events import (
+    ActionEvent,
+    BaseCost,
+    DragonbornBreathWeaponEvent,
 )
 from dnd.core.content.descriptors import (
     ContentDescriptorSpec,
@@ -34,7 +37,6 @@ from dnd.core.content.dragonborn import (
     DragonbornAncestry,
     DragonbornAncestryFeatureDefinition,
     DragonbornBreathGeometry,
-    DragonbornSaveAbility,
 )
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.content.provenance import (
@@ -48,30 +50,22 @@ from dnd.core.content.registration import (
     get_content_declaration,
 )
 from dnd.core.content.runtime import RuntimeBehaviorKind
-from dnd.core.dice import AttackOutcome, DiceRoll
-from dnd.core.events import Damage, Event, EventPhase
-from dnd.core.creature_types import DamageType
+from dnd.types.rolls import AttackOutcome
+from dnd.core.dice import DiceRoll
+from dnd.core.events.resolution_events import (
+    Damage,
+)
+from dnd.core.events.events_registry import (
+    Event,
+    EventPhase,
+)
+from dnd.types.damage import DamageType
+from dnd.types.abilities import AbilityName
 from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
 
 
 DRAGONBORN_BREATH_RESOURCE = "dragonborn_breath_weapon"
-
-
-class DragonbornBreathWeaponEvent(ActionEvent):
-    """Cold typed facts produced by one Dragonborn Breath Weapon use."""
-
-    ancestry_ref: ContentRef
-    ancestry: DragonbornAncestry
-    damage_type: DamageType
-    breath_geometry: DragonbornBreathGeometry
-    save_ability: DragonbornSaveAbility
-    save_dc: int = Field(ge=0)
-    save_success: bool | None = None
-    save_roll: DiceRoll | None = None
-    damage_dice_count: int = Field(ge=1)
-    damages: list[Damage] = Field(default_factory=list)
-    damage_rolls: list[DiceRoll] = Field(default_factory=list)
 
 
 @behavior_identity(
@@ -132,7 +126,7 @@ class DragonbornBreathWeapon(BaseAction):
     ancestry: DragonbornAncestry
     damage_type: DamageType
     breath_geometry: DragonbornBreathGeometry
-    save_ability: DragonbornSaveAbility
+    save_ability: AbilityName
     character_level: int = Field(ge=1, le=20)
     costs: list[Cost] = Field(default_factory=list)
 

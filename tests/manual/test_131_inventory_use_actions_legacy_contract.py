@@ -10,8 +10,10 @@ lifecycle cleanup.
 
 from uuid import UUID, uuid4
 
-from dnd.actions import SpellAction
-from dnd.actions_functional import (
+from dnd.actions.standard import (
+    SpellAction,
+)
+from dnd.actions.operations import (
     execute_action,
     execute_by_index,
     execute_use_action,
@@ -20,20 +22,29 @@ from dnd.actions_functional import (
 )
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
-from dnd.blocks.base_item import BaseItem
-from dnd.blocks.equipment import EquipmentConfig, Weapon
+from dnd.blocks.base_item import (
+    BaseItem,
+)
+from dnd.blocks.equipment import (
+    EquipmentConfig,
+    Weapon,
+)
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.skills import SkillConfig, SkillSetConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
-from dnd.core.base_actions import AvailableActionInfo, AvailableTarget, TargetType
+from dnd.core.base_actions import (
+    AvailableActionInfo,
+    AvailableTarget,
+    TargetType,
+)
 from dnd.core.base_block import BaseBlock
 from dnd.core.dice import fixed_dice_faces
-from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import AbilityName
+from dnd.types.equipment import WeaponSlot
+from dnd.types.abilities import AbilityName
 from dnd.core.gridmap import get_map
-from dnd.core.creature_types import DamageType
+from dnd.types.damage import DamageType
 from dnd.core.modifiers import NumericalModifier
 from dnd.entity import Entity, EntityConfig
 from dnd.items.consumables import (
@@ -61,8 +72,8 @@ from dnd.items.spell_items import (
 )
 from dnd.items.environment_interactables import ArcaneDevice
 from dnd.items.weapons import SHORTSWORD_RECIPE
-from dnd.spatial_effect_controllers import AreaSpatialEffectController
-from dnd.spatial_effects import SpatialEffect
+from dnd.spatial.effect_controllers import AreaSpatialEffectController
+from dnd.spatial.effect_base import SpatialEffect
 from dnd.spells.evocation import Fireball
 from tests.engine.support import (
     force_attack_hit,

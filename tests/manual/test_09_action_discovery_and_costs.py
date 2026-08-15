@@ -5,14 +5,14 @@ from uuid import uuid4
 
 from pytest import MonkeyPatch, mark
 
-from dnd.actions import (
+from dnd.actions.standard import (
     Attack,
     Dash,
     Jump,
     MovementEvent,
     entity_action_economy_cost_evaluator,
 )
-from dnd.actions_functional import (
+from dnd.actions.operations import (
     apply_action_overrides,
     clear_action_overrides,
     execute_by_index,
@@ -21,21 +21,34 @@ from dnd.actions_functional import (
 )
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
-from dnd.blocks.equipment import EquipmentConfig
+from dnd.blocks.equipment import (
+    EquipmentConfig,
+)
 from dnd.blocks.health import HealthConfig, HitDiceConfig
-from dnd.blocks.base_item import ItemChargeConsumptionEvent
+from dnd.core.events.item_events import (
+    ItemChargeConsumptionEvent,
+)
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
-from dnd.core.base_actions import ActionCategory, BaseAction, Cost, TargetType
+from dnd.core.base_actions import (
+    ActionCategory,
+    BaseAction,
+    Cost,
+    TargetType,
+)
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition
-from dnd.core.condition_types import HazardFilter
+from dnd.types.conditions import HazardFilter
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.content.runtime import BehaviorBinding
 from dnd.core.base_object import BaseObject
-from dnd.core.events import EventPhase, EventQueue, EventType
+from dnd.core.events.events_registry import (
+    EventPhase,
+    EventQueue,
+    EventType,
+)
 from dnd.core.gridmap import GridMap, get_map
-from dnd.core.creature_types import DamageType
+from dnd.types.damage import DamageType
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import BaseValue
 from dnd.entity import Entity, EntityConfig

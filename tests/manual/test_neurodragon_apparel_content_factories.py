@@ -11,7 +11,13 @@ from pydantic import ValidationError
 
 import dnd.items as item_exports
 import dnd.items.armors as armor_definitions
-from dnd.blocks.equipment import BodyArmor, Boots, Gauntlets, Helmet, Shield
+from dnd.blocks.equipment import (
+    BodyArmor,
+    Boots,
+    Gauntlets,
+    Helmet,
+    Shield,
+)
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
 from dnd.core.content.descriptors import ContentVisibility
@@ -22,7 +28,7 @@ from dnd.core.content.provenance import (
     ContentReviewStatus,
 )
 from dnd.core.content.recipes import ContentRecipe
-from dnd.core.equipment_types import ArmorType, BodyPart
+from dnd.types.equipment import ArmorType, BodyPart
 from dnd.items.apparel_presets import (
     NEURODRAGON_APPAREL_RECIPE_PRESETS,
 )

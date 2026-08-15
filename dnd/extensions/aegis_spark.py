@@ -4,11 +4,23 @@ from typing import Optional
 
 from pydantic import Field
 
-from dnd.actions import SpellAction, SpellEvent
-from dnd.core.base_actions import TargetType
+from dnd.actions.standard import (
+    SpellAction,
+    SpellEvent,
+)
+from dnd.core.base_actions import (
+    TargetType,
+)
 from dnd.core.base_conditions import BaseCondition
-from dnd.core.condition_types import ConditionCategory
-from dnd.core.events import Event, EventPhase, Range, RangeType
+from dnd.types.conditions import ConditionCategory
+from dnd.core.events.events_registry import (
+    Event,
+    EventPhase,
+)
+from dnd.core.events.resolution_events import (
+    Range,
+    RangeType,
+)
 from dnd.core.modifiers import NumericalModifier
 from dnd.entity import Entity
 

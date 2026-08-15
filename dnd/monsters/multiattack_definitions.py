@@ -26,7 +26,7 @@ from dnd.core.content.registration import (
     ContentDeclarationMode,
     compute_definition_contract_hash,
 )
-from dnd.core.equipment_types import WeaponSlot
+from dnd.types.equipment import WeaponSlot
 
 
 _PACK_ID = "content.srd_5_1_cc"

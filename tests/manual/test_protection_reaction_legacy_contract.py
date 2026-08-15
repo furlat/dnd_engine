@@ -4,15 +4,20 @@ from dataclasses import dataclass
 
 import pytest
 
-from dnd.actions import Attack, AttackEvent
-from dnd.actions_functional import setup_standard_actions
-from dnd.blocks.equipment import Shield
+from dnd.actions.standard import (
+    Attack,
+    AttackEvent,
+)
+from dnd.actions.operations import setup_standard_actions
+from dnd.blocks.equipment import (
+    Shield,
+)
 from dnd.classes.fighter import create_protection_handler
 from dnd.conditions import Invisible
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
-from dnd.core.equipment_types import WeaponSlot
-from dnd.core.modifiers import AdvantageStatus
+from dnd.types.equipment import WeaponSlot
+from dnd.types.rolls import AdvantageStatus
 from dnd.entity import Entity
 from dnd.items.armors import SHIELD_RECIPE
 from dnd.monsters.bestiary import create_goblin, create_skeleton

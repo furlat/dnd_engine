@@ -2,7 +2,9 @@
 
 from dnd.entity import Entity
 from typing import Optional
-from dnd.core.events import D20RollResultEvent
+from dnd.core.events.resolution_events import (
+    D20RollResultEvent,
+)
 from dnd.core.dice import Dice
 from uuid import UUID
 

@@ -6,17 +6,22 @@ level-5 caster for an eighth-level spell, so every rule assertion ran after a
 pre-cost ``None`` result. These actors declare the eighth-level slot directly.
 """
 
-from dnd.actions import SpellEvent
+from dnd.actions.standard import (
+    SpellEvent,
+)
 from dnd.conditions import Blinded, Frightened, Poisoned
-from dnd.core.condition_types import ConditionTag
+from dnd.types.conditions import ConditionTag
 from dnd.core.gridmap import get_map
-from dnd.core.spatial_effect_types import SpatialEffectAnchorKind
+from dnd.types.spatial_effects import SpatialEffectAnchorKind
 from dnd.entity import Entity
-from dnd.spells.abjuration import AntimagicField, AntimagicFieldZone
+from dnd.spells.abjuration import (
+    AntimagicField,
+    AntimagicFieldZone,
+)
 from dnd.spells.enchantment import BlessEffect
 from dnd.spells.evocation import FireBolt
 from dnd.spells.transmutation import Haste
-from dnd.spatial_effects import FieldEffect, SpatialEffect
+from dnd.spatial.effect_base import FieldEffect, SpatialEffect
 from tests.engine.support import has_condition
 from tests.manual.spell_regression_support import (
     create_spell_regression_actor,

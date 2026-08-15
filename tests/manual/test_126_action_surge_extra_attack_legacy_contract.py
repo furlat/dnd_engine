@@ -7,7 +7,9 @@ retain the one-for-one legacy coverage map, including the Surge-first order.
 
 from uuid import uuid4
 
-from dnd.actions import Attack
+from dnd.actions.standard import (
+    Attack,
+)
 from dnd.blocks.action_economy import RechargeType, ResourceCapacityPolicy
 from dnd.classes.fighter import (
     ActionSurge,
@@ -17,7 +19,7 @@ from dnd.classes.fighter import (
 from dnd.content_system.extra_attack_character_grant_appliers import (
     EXTRA_ATTACK_FEATURE_REF,
 )
-from dnd.core.equipment_types import WeaponSlot
+from dnd.types.equipment import WeaponSlot
 from dnd.core.feature_grants import AttackMultiplicityGrant
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity

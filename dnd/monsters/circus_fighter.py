@@ -4,15 +4,19 @@ from uuid import UUID, uuid4
 
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
-from dnd.blocks.equipment import BodyArmor, EquipmentConfig, Weapon
+from dnd.blocks.equipment import (
+    BodyArmor,
+    EquipmentConfig,
+    Weapon,
+)
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.saving_throws import SavingThrowConfig, SavingThrowSetConfig
 from dnd.blocks.skills import SkillConfig, SkillSetConfig
 from dnd.conditions import Blinded
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
-from dnd.core.creature_types import DamageType
-from dnd.core.equipment_types import WeaponSlot
+from dnd.types.damage import DamageType
+from dnd.types.equipment import WeaponSlot
 from dnd.entity import Entity, EntityConfig
 from dnd.monsters.circus_fighter_conditions import (
     CircusPerformer,
@@ -25,7 +29,7 @@ from dnd.monsters.circus_fighter_items import (
     PERFORMER_LEATHER_RECIPE,
     RUSTY_DAGGER_RECIPE,
 )
-from dnd.reactions import add_opportunity_attack_handler
+from dnd.actions.reactions import add_opportunity_attack_handler
 
 
 def create_warrior(

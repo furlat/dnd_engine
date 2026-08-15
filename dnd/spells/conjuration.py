@@ -10,12 +10,11 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
-from dnd.content_system.spatial_effect_materialization import (
+from dnd.content.spatial_effect_materialization import (
     materialize_spatial_effect,
 )
 from dnd.core.base_actions import (
     ActionCategory,
-    ActionEvent,
     ActionInformationOperation,
     ActionTargetEffectBranchProfile,
     ActionTargetEffectProfile,
@@ -33,6 +32,9 @@ from dnd.core.base_actions import (
     TargetEffectDisposition,
     TargetType,
     TopologyEffectProfile,
+)
+from dnd.core.events.action_events import (
+    ActionEvent,
 )
 from dnd.core.base_conditions import BaseCondition, Duration, MostPotentCondition
 from dnd.core.content.dependencies import (
@@ -66,41 +68,59 @@ from dnd.core.content.registration import (
     get_content_declaration,
 )
 from dnd.core.content.runtime import RuntimeBehaviorKind
-from dnd.core.condition_types import (
+from dnd.types.conditions import (
     ConditionCategory,
     ConditionTag,
     DurationType,
     HazardFilter,
 )
-from dnd.blocks.base_item import BaseItem, UsableItem
+from dnd.blocks.base_item import (
+    BaseItem,
+    UsableItem,
+)
 import random
-from dnd.core.dice import AttackOutcome
+from dnd.types.rolls import AttackOutcome
 from dnd.core.values import ModifiableValue
-from dnd.core.events import AbilityName, EventPhase, RangeType, Range, EventType, EventHandler, Trigger, Damage, Event, EventQueue, SpatialChangeEvent, SpatialEffectInteractionEvent
-from dnd.core.spatial_effect_types import (
+from dnd.types.abilities import AbilityName
+from dnd.core.events.events_registry import (
+    EventPhase,
+    EventType,
+    EventHandler,
+    Trigger,
+    Event,
+    EventQueue,
+)
+from dnd.core.events.resolution_events import (
+    RangeType,
+    Range,
+    Damage,
+)
+from dnd.core.events.world_events import (
+    SpatialChangeEvent,
+    SpatialEffectInteractionEvent,
+)
+from dnd.types.spatial_effects import (
     SpatialEffectInteractionOperation,
     SpatialEffectLayer,
     SpatialEffectTriggerKind,
 )
-from dnd.core.creature_types import DamageType
-from dnd.core.modifiers import (
-    NumericalModifier,
-    AdvantageModifier,
-    AdvantageStatus,
-    ResistanceStatus,
-)
-from dnd.core.saving_throw_types import SavingThrowEffectTag
-from dnd.core.base_block import BaseBlock, LightLevel
+from dnd.types.damage import DamageType
+from dnd.core.modifiers import NumericalModifier, AdvantageModifier
+from dnd.types.rolls import AdvantageStatus
+from dnd.types.damage import ResistanceStatus
+from dnd.types.saving_throws import SavingThrowEffectTag
+from dnd.core.base_block import BaseBlock
+from dnd.types.world import LightLevel
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity
 from dnd.conditions import Concentrating, ConcentrationActionMarker, Prone
-from dnd.actions import (
+from dnd.actions.standard import (
     SpellAction,
     SpellEvent,
     entity_action_economy_cost_evaluator,
 )
 from dnd.spells.content_metadata import srd_action_identity
-from dnd.spatial_effect_content import (
+from dnd.content.spatial_effect_recipes import (
     CLOUDKILL_CLOUD_RECIPE,
     DARKNESS_FIELD_RECIPE,
     DAYLIGHT_FIELD_RECIPE,
@@ -116,18 +136,18 @@ from dnd.spatial_effect_content import (
     STINKING_CLOUD_RECIPE,
     WEB_SURFACE_RECIPE,
 )
-from dnd.spatial_effects import (
+from dnd.spatial.effect_base import (
     CloudEffect,
     FieldEffect,
     GroundEffect,
     SpatialEffect,
 )
-from dnd.spatial_effect_controllers import AreaSpatialEffectController
-from dnd.spatial_memberships import (
+from dnd.spatial.effect_controllers import AreaSpatialEffectController
+from dnd.spatial.effect_memberships import (
     SpatialEffectMembershipSource,
     SpatialMembershipAreaController,
 )
-from dnd.spatial_restraints import (
+from dnd.spatial.effect_restraints import (
     EscapeSpatialRestraintAction,
     RestrainingAreaSpatialEffectController,
     SpatialRestraintSource,
@@ -202,7 +222,7 @@ class CallLightningStrike(BaseAction):
 
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
-            ability_name="dexterity",
+            ability_name=AbilityName.DEXTERITY,
             dc=self.spell_dc,
             parent_event=execution_event.uuid
         )
@@ -297,7 +317,7 @@ class CallLightning(SpellAction):
 
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
-            ability_name="dexterity",
+            ability_name=AbilityName.DEXTERITY,
             dc=dc,
             parent_event=effect_event.uuid
         )
@@ -394,7 +414,7 @@ class PoisonSpray(SpellAction):
 
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
-            ability_name="constitution",
+            ability_name=AbilityName.CONSTITUTION,
             dc=dc,
             parent_event=execution_event.uuid
         )
@@ -530,13 +550,13 @@ class AcidSplash(SpellAction):
 
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
-            ability_name="dexterity",
+            ability_name=AbilityName.DEXTERITY,
             dc=dc,
             parent_event=execution_event.uuid
         )
         _, save_roll, success = target.saving_throw(save_request)
 
-        save_bonus = target.saving_throw_bonus(caster.uuid, "dexterity").normalized_score
+        save_bonus = target.saving_throw_bonus(caster.uuid, AbilityName.DEXTERITY).normalized_score
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -715,7 +735,7 @@ class GreaseZone(AreaSpatialEffectController):
     ) -> None:
         save_request = entity.create_saving_throw_request(
             target_entity_uuid=entity.uuid,
-            ability_name="dexterity",
+            ability_name=AbilityName.DEXTERITY,
             dc=self.spell_dc,
             parent_event=parent_event.uuid,
         )
@@ -903,7 +923,7 @@ class EscapeWebAction(EscapeSpatialRestraintAction):
     description: str = Field(
         default="Use an action to make a Strength check against the Web DC.",
     )
-    ability_name: AbilityName = Field(default="strength", frozen=True)
+    ability_name: AbilityName = Field(default=AbilityName.STRENGTH, frozen=True)
 
 
 class WebRestrained(SpatialRestraintSource):
@@ -969,7 +989,7 @@ class WebZone(RestrainingAreaSpatialEffectController):
 
             save_request = entity.create_saving_throw_request(
                 target_entity_uuid=entity.uuid,
-                ability_name="dexterity",
+                ability_name=AbilityName.DEXTERITY,
                 dc=dc,
                 parent_event=event.uuid
             )
@@ -1039,7 +1059,7 @@ class WebZone(RestrainingAreaSpatialEffectController):
 
             save_request = entity.create_saving_throw_request(
                 target_entity_uuid=entity.uuid,
-                ability_name="dexterity",
+                ability_name=AbilityName.DEXTERITY,
                 dc=dc,
                 parent_event=event.uuid
             )
@@ -1263,7 +1283,7 @@ class EscapeEntangleAction(EscapeSpatialRestraintAction):
     description: str = Field(
         default="Use an action to make a Strength check against the Entangle DC.",
     )
-    ability_name: AbilityName = Field(default="strength", frozen=True)
+    ability_name: AbilityName = Field(default=AbilityName.STRENGTH, frozen=True)
 
 
 class EntangleRestrained(SpatialRestraintSource):
@@ -1309,7 +1329,7 @@ class EntangleZone(RestrainingAreaSpatialEffectController):
     ) -> None:
         save_request = entity.create_saving_throw_request(
             target_entity_uuid=entity.uuid,
-            ability_name="strength",
+            ability_name=AbilityName.STRENGTH,
             dc=self.spell_dc,
             parent_event=parent_event.uuid,
             saving_throw_context=self.saving_throw_context(
@@ -1428,7 +1448,7 @@ class EscapeBlackTentaclesStrengthAction(EscapeSpatialRestraintAction):
     description: str = Field(
         default="Use an action to make a Strength check against the spell DC.",
     )
-    ability_name: AbilityName = Field(default="strength", frozen=True)
+    ability_name: AbilityName = Field(default=AbilityName.STRENGTH, frozen=True)
 
 
 class EscapeBlackTentaclesDexterityAction(EscapeSpatialRestraintAction):
@@ -1438,7 +1458,7 @@ class EscapeBlackTentaclesDexterityAction(EscapeSpatialRestraintAction):
     description: str = Field(
         default="Use an action to make a Dexterity check against the spell DC.",
     )
-    ability_name: AbilityName = Field(default="dexterity", frozen=True)
+    ability_name: AbilityName = Field(default=AbilityName.DEXTERITY, frozen=True)
 
 
 class BlackTentaclesRestrained(SpatialRestraintSource):
@@ -1529,7 +1549,7 @@ class BlackTentaclesZone(RestrainingAreaSpatialEffectController):
     ) -> None:
         request = entity.create_saving_throw_request(
             target_entity_uuid=entity.uuid,
-            ability_name="dexterity",
+            ability_name=AbilityName.DEXTERITY,
             dc=self.spell_dc,
             parent_event=parent_event.uuid,
             saving_throw_context=self.saving_throw_context(
@@ -1758,7 +1778,7 @@ class CloudkillZone(AreaSpatialEffectController):
 
             save_request = entity.create_saving_throw_request(
                 target_entity_uuid=entity.uuid,
-                ability_name="constitution",
+                ability_name=AbilityName.CONSTITUTION,
                 dc=dc,
                 parent_event=event.uuid,
                 saving_throw_context=self.saving_throw_context(
@@ -1816,7 +1836,7 @@ class CloudkillZone(AreaSpatialEffectController):
 
             save_request = entity.create_saving_throw_request(
                 target_entity_uuid=entity.uuid,
-                ability_name="constitution",
+                ability_name=AbilityName.CONSTITUTION,
                 dc=dc,
                 parent_event=event.uuid,
                 saving_throw_context=zone_condition.saving_throw_context(
@@ -2148,7 +2168,7 @@ class SpiritGuardiansZone(SpatialMembershipAreaController):
 
         save_request = entity.create_saving_throw_request(
             target_entity_uuid=entity.uuid,
-            ability_name="wisdom",
+            ability_name=AbilityName.WISDOM,
             dc=self.spell_dc,
             parent_event=parent_event.uuid,
         )
@@ -2854,7 +2874,7 @@ class InsectPlagueZone(AreaSpatialEffectController):
             return
         save_request = entity.create_saving_throw_request(
             target_entity_uuid=entity.uuid,
-            ability_name="constitution",
+            ability_name=AbilityName.CONSTITUTION,
             dc=self.spell_dc,
             parent_event=parent_event.uuid,
         )
@@ -3056,7 +3076,7 @@ class IncendiaryCloudZone(AreaSpatialEffectController):
             return
         save_request = entity.create_saving_throw_request(
             target_entity_uuid=entity.uuid,
-            ability_name="dexterity",
+            ability_name=AbilityName.DEXTERITY,
             dc=self.spell_dc,
             parent_event=parent_event.uuid,
         )
@@ -3352,7 +3372,7 @@ class StinkingCloudZone(AreaSpatialEffectController):
 
             save_request = entity.create_saving_throw_request(
                 target_entity_uuid=entity.uuid,
-                ability_name="constitution",
+                ability_name=AbilityName.CONSTITUTION,
                 dc=dc,
                 parent_event=event.uuid
             )
@@ -3607,7 +3627,7 @@ class SleetStormZone(AreaSpatialEffectController):
 
             save_request = entity.create_saving_throw_request(
                 target_entity_uuid=entity.uuid,
-                ability_name="dexterity", dc=dc,
+                ability_name=AbilityName.DEXTERITY, dc=dc,
                 parent_event=event.uuid
             )
             _, _, success = entity.saving_throw(save_request)
@@ -3649,7 +3669,7 @@ class SleetStormZone(AreaSpatialEffectController):
             if "Prone" not in entity.active_conditions:
                 save_request = entity.create_saving_throw_request(
                     target_entity_uuid=entity.uuid,
-                    ability_name="dexterity", dc=dc,
+                    ability_name=AbilityName.DEXTERITY, dc=dc,
                     parent_event=event.uuid
                 )
                 _, _, success = entity.saving_throw(save_request)
@@ -3660,7 +3680,7 @@ class SleetStormZone(AreaSpatialEffectController):
             if "Concentrating" in entity.active_conditions:
                 save_request = entity.create_saving_throw_request(
                     target_entity_uuid=entity.uuid,
-                    ability_name="constitution", dc=dc,
+                    ability_name=AbilityName.CONSTITUTION, dc=dc,
                     parent_event=event.uuid
                 )
                 _, _, success = entity.saving_throw(save_request)
@@ -3905,7 +3925,7 @@ class GuardianOfFaithController(AreaSpatialEffectController):
 
             save_request = entity.create_saving_throw_request(
                 target_entity_uuid=entity.uuid,
-                ability_name="dexterity",
+                ability_name=AbilityName.DEXTERITY,
                 dc=controller.spell_dc,
                 parent_event=event.uuid,
             )
@@ -4048,7 +4068,7 @@ class HeroesFeastBuff(BaseCondition):
         target.add_condition_immunity("Poisoned", immunity_name="Heroes' Feast")
         target.add_condition_immunity("Frightened", immunity_name="Heroes' Feast")
 
-        wis_save = target.saving_throws.get_saving_throw("wisdom")
+        wis_save = target.saving_throws.get_saving_throw(AbilityName.WISDOM)
         wis_adv_uuid = wis_save.bonus.self_static.add_advantage_modifier(
             AdvantageModifier(
                 name="Heroes' Feast",
@@ -4070,7 +4090,7 @@ class HeroesFeastBuff(BaseCondition):
             )
             outs.append((target.health.max_hit_points_bonus.uuid, hp_mod_uuid))
 
-        con_mod = target.ability_scores.get_ability("constitution").get_combined_values().normalized_score
+        con_mod = target.ability_scores.get_ability(AbilityName.CONSTITUTION).get_combined_values().normalized_score
         max_hp = target.health.get_max_hit_dices_points(con_mod) + target.health.max_hit_points_bonus.score
         effect_event = declaration_event.phase_to(
             EventPhase.EFFECT,
@@ -4082,7 +4102,7 @@ class HeroesFeastBuff(BaseCondition):
     def _post_removal_stats(self) -> Dict[str, Any]:
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if target and isinstance(target, Entity):
-            con_mod = target.ability_scores.get_ability("constitution").get_combined_values().normalized_score
+            con_mod = target.ability_scores.get_ability(AbilityName.CONSTITUTION).get_combined_values().normalized_score
             max_hp = target.health.get_max_hit_dices_points(con_mod) + target.health.max_hit_points_bonus.score
             return {"resulting_max_hp": max_hp}
         return {}

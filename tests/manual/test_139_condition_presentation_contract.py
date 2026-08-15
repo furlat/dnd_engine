@@ -9,7 +9,7 @@ from pydantic import Field, ValidationError
 
 from devtools.generate_event_contract import import_dnd_modules
 from dnd.content_system.bootstrap import bootstrap_content_system
-from dnd.content_system.spatial_effect_materialization import (
+from dnd.content.spatial_effect_materialization import (
     materialize_spatial_effect,
 )
 from dnd.conditions import (
@@ -20,10 +20,14 @@ from dnd.conditions import (
     Stunned,
 )
 from dnd.core.base_conditions import BaseCondition, Duration
-from dnd.core.condition_types import ConditionCategory, DurationType
+from dnd.types.conditions import ConditionCategory, DurationType
 from dnd.core.content.registration import get_content_declaration
 from dnd.core.content.runtime import BehaviorBinding
-from dnd.core.events import Event, EventPhase, EventType
+from dnd.core.events.events_registry import (
+    Event,
+    EventPhase,
+    EventType,
+)
 from dnd.core.gridmap import GridMap
 from dnd.core.modifiers import ContextAwareCondition
 from dnd.entity import Entity, EntityConfig
@@ -31,8 +35,8 @@ from dnd.items.consumables import _WeaponCoatCondition
 from dnd.monsters.traits import SimpleMarkerCondition
 from dnd.player_character_body import PLAYER_CHARACTER_BODY_DECLARATION
 from dnd.runtime_reset import reset_engine_runtime
-from dnd.spatial_effect_content import GREASE_SURFACE_RECIPE
-from dnd.spatial_effects import GroundEffect, SpatialEffect
+from dnd.content.spatial_effect_recipes import GREASE_SURFACE_RECIPE
+from dnd.spatial.effect_base import GroundEffect, SpatialEffect
 from dnd.spells.conjuration import GreaseZone
 from server.player_replication.world_projection import (
     SubjectiveSpatialMemory,

@@ -2,14 +2,12 @@ from typing import Optional, List, Literal, Tuple
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, computed_field, field_validator
 from dnd.core.damage import DamageComponentResolution, DamageResolution
-from dnd.core.life_types import LifeState
+from dnd.types.life import LifeState
 from dnd.core.values import ModifiableValue
-from dnd.core.creature_types import DamageType
-from dnd.core.modifiers import (
-    NumericalModifier,
-    ResistanceStatus,
-    ResistanceModifier,
-)
+from dnd.types.damage import DamageType
+from dnd.core.modifiers import NumericalModifier, ResistanceModifier
+from dnd.types.damage import ResistanceStatus
+from dnd.types.rolls import HitDieSize
 
 from random import randint
 from functools import cached_property
@@ -20,7 +18,7 @@ from dnd.core.base_block import BaseBlock
 class HitDiceConfig(BaseModel):
     """Configuration used to materialize a hit-dice block."""
 
-    hit_dice_value: Literal[4,6,8,10,12] = Field(
+    hit_dice_value: HitDieSize = Field(
         default=6,
         description="Die size used by each hit die, such as 8 for d8.",
     )

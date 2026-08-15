@@ -9,9 +9,7 @@ from dnd.content_system.builtin_character_builds import (
     starter_holdings_for_build,
     supplemental_holdings_for_build,
 )
-from dnd.core.content.durable_characters import (
-    StartingEquipmentPackageChoice,
-)
+from dnd.core.content.durable_characters import StartingEquipmentPackageChoice
 from dnd.core.content.premade_characters import (
     CharacterCreationPlan,
     CharacterCreationPlanKind,

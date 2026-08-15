@@ -12,7 +12,9 @@ from pydantic import ValidationError
 
 import dnd.items as item_exports
 import dnd.items.weapons as weapon_definitions
-from dnd.blocks.equipment import Weapon
+from dnd.blocks.equipment import (
+    Weapon,
+)
 from dnd.content_system.icon_bindings import (
     BUILT_IN_CONTENT_ICON_BINDING_LEDGER,
 )
@@ -20,9 +22,11 @@ from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
 from dnd.core.content.item_definitions import ItemPersistencePolicy
 from dnd.core.content.recipes import ContentRecipe
-from dnd.core.events import RangeType
-from dnd.core.creature_types import DamageType
-from dnd.core.equipment_types import WeaponProperty
+from dnd.core.events.resolution_events import (
+    RangeType,
+)
+from dnd.types.damage import DamageType
+from dnd.types.equipment import WeaponProperty
 
 
 _ROOT = Path(__file__).resolve().parents[2]

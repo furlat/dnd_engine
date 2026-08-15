@@ -14,10 +14,10 @@ from dnd.core.base_conditions import (
     ConditionRemovalEvent,
 )
 from dnd.core.combat_log import CombatLogEntry, ConditionLogData
-from dnd.core.condition_types import ConditionApplicationDisposition
+from dnd.types.conditions import ConditionApplicationDisposition
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.content.runtime import BehaviorBinding
-from dnd.core.events import (
+from dnd.core.events.events_registry import (
     Event,
     EventHandler,
     EventPhase,

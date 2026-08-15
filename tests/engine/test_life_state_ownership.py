@@ -2,13 +2,15 @@
 
 from uuid import uuid4
 
-from dnd.actions_functional import setup_standard_actions
+from dnd.actions.operations import setup_standard_actions
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
-from dnd.blocks.equipment import EquipmentConfig
+from dnd.blocks.equipment import (
+    EquipmentConfig,
+)
 from dnd.blocks.health import HealthConfig, HitDiceConfig
-from dnd.core.life_types import LifeState
-from dnd.core.creature_types import DamageType
+from dnd.types.life import LifeState
+from dnd.types.damage import DamageType
 from dnd.entity import Entity, EntityConfig
 from dnd.core.gridmap import get_map
 from tests.engine.test_combat_actions import (

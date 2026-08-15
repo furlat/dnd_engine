@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Literal, Optional, Set, Tuple
 
 from pydantic import BaseModel, Field, field_serializer, model_validator
 
-from dnd.core.condition_types import ConditionApplicationDisposition
+from dnd.types.conditions import ConditionApplicationDisposition
 
 
 def position_evidence_key(position: Tuple[int, int]) -> str:

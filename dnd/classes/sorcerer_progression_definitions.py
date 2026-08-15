@@ -43,8 +43,8 @@ from dnd.core.content.descriptors import (
     ContentPresentation,
     ContentVisibility,
 )
+from dnd.types.abilities import AbilityName
 from dnd.core.content.durable_characters import (
-    AbilityScoreName,
     AbilityScorePrerequisite,
     BuildChoiceRequirement,
     ChoiceRequirementKind,
@@ -64,8 +64,8 @@ from dnd.core.content.registration import (
     get_content_declaration,
     typed_definition,
 )
+from dnd.types.progression import CasterProgression
 from dnd.core.progression import (
-    CasterProgression,
     SpellcastingClassContribution,
     maximum_spell_rank_for_contribution,
 )
@@ -402,18 +402,18 @@ SORCERER_CLASS_DEFINITION = ClassDefinition(
     spellcasting_source_id=SpellcastingSourceId(
         value="class.sorcerer.spellcasting",
     ),
-    spellcasting_ability=AbilityScoreName.CHARISMA,
+    spellcasting_ability=AbilityName.CHARISMA,
     ritual_policy=RitualPreparationPolicy.NONE,
     spell_entitlements=_SORCERER_SPELL_ENTITLEMENTS,
     multiclass_prerequisite=AbilityScorePrerequisite(
-        ability=AbilityScoreName.CHARISMA,
+        ability=AbilityName.CHARISMA,
         minimum=13,
     ),
     first_class_proficiencies=_SORCERER_FIRST_PROFICIENCIES,
     multiclass_proficiencies=ClassProficiencyPackage(),
     saving_throw_proficiencies=(
-        AbilityScoreName.CHARISMA,
-        AbilityScoreName.CONSTITUTION,
+        AbilityName.CHARISMA,
+        AbilityName.CONSTITUTION,
     ),
     level_definitions=tuple(
         ClassLevelDefinition(

@@ -2,35 +2,47 @@
 
 from uuid import UUID, uuid4
 
-from dnd.actions_functional import execute_use_action
+from dnd.actions.operations import execute_use_action
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.base_item import (
     BaseItem,
-    ItemChargeConsumptionEvent,
     UsableItem,
 )
-from dnd.blocks.equipment import BodyArmor, EquipmentConfig, Shield, Weapon
+from dnd.core.events.item_events import (
+    ItemChargeConsumptionEvent,
+)
+from dnd.blocks.equipment import (
+    BodyArmor,
+    EquipmentConfig,
+    Shield,
+    Weapon,
+)
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.inventory import Inventory
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
 from dnd.core.base_block import BaseBlock
-from dnd.core.base_actions import ActionEvent, ActionPresentationKind
+from dnd.core.events.action_events import (
+    ActionEvent,
+)
+from dnd.presentation import ActionPresentationKind
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.base_object import BaseObject
-from dnd.core.condition_types import ConditionTag
-from dnd.core.equipment_types import BodyPart, WeaponProperty, WeaponSlot
-from dnd.core.events import (
+from dnd.types.conditions import ConditionTag
+from dnd.types.equipment import BodyPart, WeaponProperty, WeaponSlot
+from dnd.core.events.events_registry import (
     EventPhase,
     EventQueue,
     EventType,
+)
+from dnd.core.events.resolution_events import (
     Range,
     RangeType,
 )
 from dnd.core.gridmap import GridMap, get_map
-from dnd.core.creature_types import DamageType
-from dnd.core.modifiers import AdvantageStatus
+from dnd.types.damage import DamageType
+from dnd.types.rolls import AdvantageStatus
 from dnd.core.values import BaseValue, ModifiableValue
 from dnd.entity import Entity, EntityConfig
 from dnd.items.consumables import (

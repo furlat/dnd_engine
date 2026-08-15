@@ -4,15 +4,10 @@ from uuid import uuid4
 from pydantic import ValidationError
 
 from dnd.core.base_object import BaseObject
-from dnd.core.dice import AttackOutcome, Dice, DiceRoll, RollType, fixed_dice_faces
-from dnd.core.modifiers import (
-    AdvantageModifier,
-    AdvantageStatus,
-    AutoHitModifier,
-    AutoHitStatus,
-    CriticalModifier,
-    CriticalStatus,
-)
+from dnd.types.rolls import AttackOutcome, RollType
+from dnd.core.dice import Dice, DiceRoll, fixed_dice_faces
+from dnd.core.modifiers import AdvantageModifier, AutoHitModifier, CriticalModifier
+from dnd.types.rolls import AdvantageStatus, AutoHitStatus, CriticalStatus
 from dnd.core.values import BaseValue, ModifiableValue
 
 

@@ -35,7 +35,7 @@ from dnd.core.content.registration import (
     creature_factory,
     get_content_declaration,
 )
-from dnd.core.equipment_types import BodyPart
+from dnd.types.equipment import BodyPart
 from dnd.entity import Entity
 from dnd.items.armors import (
     ARMORED_BOOTS_RECIPE,
