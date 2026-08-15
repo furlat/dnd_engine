@@ -8,7 +8,7 @@ from typing import Any
 import httpx
 
 from dnd.runtime_reset import reset_engine_runtime
-from server.event_server import app, reset_hosted_worker_assignment, sim
+from server.event_server import app, sim
 
 
 class ServerTestClient:
@@ -68,7 +68,6 @@ def reset_server_test_runtime() -> None:
     """Clear engine and standalone-server state between tests."""
     reset_engine_runtime()
     sim.reset()
-    reset_hosted_worker_assignment()
 
 
 __all__ = ["ServerTestClient", "reset_server_test_runtime"]

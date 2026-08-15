@@ -4,6 +4,53 @@ Date: 2026-08-14
 
 Status: read-only architecture study. No production code, tests, database, or runtime artifact was changed. This report was produced from executable Python and configuration only; no existing Markdown was used as a source.
 
+## Implementation outcome — 2026-08-15
+
+The original audit below remains the before-state study. Candidates 1, 2, and 3 were subsequently executed as a destructive product reset. Candidates 4 and 5 remain explicitly deferred for a larger rewrite.
+
+### Removed in this cut
+
+- the multi-game gateway, hosted event-server workers, worker proxy, socket/process-generation protocol, restart recovery, terminal evidence spool, runtime capabilities, and the entire game directory package;
+- SQLite-backed profiles, owned/saved characters, character revisions, deployment leases, settlement, equipment mutation, character-directory APIs, and their migrations;
+- database-backed local game lifecycle and saved-encounter/history contracts;
+- saved/owned-character roster choices and persistent character identifiers from game-creation contracts;
+- obsolete SDK generation coupled to the deleted server contracts;
+- 23 obsolete test modules whose subject was the removed hosting or persistence product.
+
+No compatibility facades, deprecated hosted routes, optional persistent-character fields, dormant topology flags, or database migrations were retained.
+
+### Retained and recovered
+
+- one direct FastAPI application with at most one current game per process;
+- authored encounter composition and database-free premade character materialization;
+- direct player sessions, control, subjective replication, and live event streaming;
+- the pure game-summary reducer and objective replay construction;
+- a new database-free terminal archive that preserves the final summary, every emitted game-event phase, objective combat logs, and objective replay;
+- diagnostics and the visual-preview subprocess, because candidates 4 and 5 were deliberately postponed.
+
+The encounter UUID is now the game identifier. Terminal persistence has one path:
+
+```text
+EncounterEnd
+    -> GameSummaryStore final evidence
+    -> GameArchive construction
+    -> atomic .runtime/game-archives/<encounter-id>/archive.json write
+```
+
+The archive is a cold, validated JSON document rather than a second runtime coordination system. It does not own game creation, profiles, memberships, reconnect capabilities, or process lifecycle.
+
+### Verification after the cut
+
+- production `server/`, `dnd/`, and `devtools/` contain no references to the deleted gateway, hosted-worker, directory, runtime-authority, or persistent-character surfaces;
+- server startup and authored game creation are tested while `sqlite3.connect` is forced to fail;
+- terminal completion is tested end to end through archive creation and cold readback;
+- premade composition and runtime materialization tests now run without a repository;
+- the maintained suite collects 2,797 tests;
+- the complete post-cut suite passes: 2,797 passed in 493.66 seconds;
+- Python compilation and diff-whitespace validation pass.
+
+The remaining server rewrite should begin from this smaller boundary. Candidate 4 is diagnostics ownership and exposure. Candidate 5 is preview isolation/subprocess removal. Neither was partially redesigned in this cut.
+
 ## Executive verdict
 
 Yes: the multi-game subprocess architecture is still present, complete, and active.

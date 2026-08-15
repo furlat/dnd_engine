@@ -306,22 +306,18 @@ class SessionManager:
     def create_game(
         self,
         encounter: Optional[Encounter] = None,
-        *,
-        game_id: UUID | None = None,
     ) -> GameSession:
         """
         Create a new game session.
 
         Args:
             encounter: Optional encounter to associate with the game.
-            game_id: Optional durable directory identity selected by the
-                composition root. Direct engine callers receive a fresh UUID.
 
         Returns:
             The created GameSession
         """
         game = GameSession(
-            game_id=uuid4() if game_id is None else game_id,
+            game_id=(encounter.uuid if encounter is not None else uuid4()),
             encounter=encounter
         )
         if game.game_id in self.games:

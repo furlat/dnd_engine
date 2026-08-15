@@ -11,7 +11,6 @@ from server.replication_perspective import (
     PerspectiveScope,
     perspective_epoch_registry,
 )
-from server.runtime_authority import RuntimeProjectionAuthority, RuntimeScope
 from server.session import PlayerSession, PlayerType
 from server.timeline_contracts import CombatLogProjection
 
@@ -30,21 +29,12 @@ class ResolvedSubjectiveAuthority:
 
 def resolve_subjective_authority(
     session: PlayerSession,
-    authority: Optional[RuntimeProjectionAuthority],
     *,
     observer_entity_uuids: Optional[Iterable[UUID]] = None,
     active_observer_uuid: Optional[UUID] = None,
-    standalone_membership_id: UUID | None = None,
-    allow_standalone: bool = False,
     registry: PerspectiveEpochRegistry = perspective_epoch_registry,
 ) -> ResolvedSubjectiveAuthority:
-    """Bind a runtime session to one server-authorized subjective perspective.
-
-    Hosted requests must carry claims installed by the private gateway-worker
-    hop.  Direct single-server development has no gateway; callers must opt in
-    explicitly with ``allow_standalone=True`` rather than silently treating a
-    query-string session id as a credential.
-    """
+    """Bind a runtime session to its server-owned subjective perspective."""
     controlled = frozenset(session.controlled_entities)
     requested_observers = (
         None
@@ -52,51 +42,19 @@ def resolve_subjective_authority(
         else frozenset(observer_entity_uuids)
     )
     requested_active_observer = active_observer_uuid
-    if authority is None:
-        if not allow_standalone:
-            raise SubjectiveAuthorityError("trusted runtime authority is required")
-        membership_id = (
-            str(standalone_membership_id)
-            if standalone_membership_id is not None
-            else f"standalone:{session.session_id}"
-        )
-        authority_epoch = 1
-        if requested_observers is not None:
-            observers = requested_observers
-        elif controlled:
-            observers = controlled
-        else:
-            observers = frozenset(session.observer_entities)
-        active_observer = (
-            requested_active_observer
-            if requested_active_observer is not None
-            else session.active_observer_uuid
-        )
+    membership_id = f"game:{session.session_id}"
+    authority_epoch = 1
+    if requested_observers is not None:
+        observers = requested_observers
+    elif controlled:
+        observers = controlled
     else:
-        if (
-            RuntimeScope.SUBJECTIVE_OBSERVE not in authority.scopes
-            and RuntimeScope.ADMINISTER not in authority.scopes
-        ):
-            raise SubjectiveAuthorityError("runtime authority lacks subjective observation scope")
-        if authority.runtime_session_id != session.session_id:
-            raise SubjectiveAuthorityError("runtime authority belongs to another runtime session")
-        if authority.controlled_entity_uuids != controlled:
-            raise SubjectiveAuthorityError("runtime authority ownership does not match worker session")
-        membership_id = str(authority.membership_id)
-        authority_epoch = authority.authority_epoch
-        observers = authority.observer_entity_uuids
-        active_observer = authority.active_observer_uuid
-        if requested_observers is not None and requested_observers != observers:
-            raise SubjectiveAuthorityError(
-                "requested observer set does not match runtime authority"
-            )
-        if (
-            requested_active_observer is not None
-            and requested_active_observer != active_observer
-        ):
-            raise SubjectiveAuthorityError(
-                "requested active observer does not match runtime authority"
-            )
+        observers = frozenset(session.observer_entities)
+    active_observer = (
+        requested_active_observer
+        if requested_active_observer is not None
+        else session.active_observer_uuid
+    )
 
     if controlled and observers != controlled:
         raise SubjectiveAuthorityError(

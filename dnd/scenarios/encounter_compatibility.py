@@ -81,8 +81,6 @@ def resolve_encounter_positions(
 def check_encounter_compatibility(
     recipe: EncounterRecipe,
     battlefield: BattlefieldDefinition,
-    *,
-    available_character_ids: frozenset[str] = frozenset(),
 ) -> EncounterCompatibilityReport:
     """Run deterministic checks that do not construct engine state."""
     issues: list[EncounterCompatibilityIssue] = []
@@ -144,23 +142,6 @@ def check_encounter_compatibility(
                 ),
                 roster_slot_id=roster_slot.roster_slot_id,
             ))
-        for member in roster.members:
-            source = member.source
-            if (
-                source.kind == "owned_character"
-                and str(source.character_id) not in available_character_ids
-            ):
-                issues.append(EncounterCompatibilityIssue(
-                    code=EncounterCompatibilityCode.MISSING_CHARACTER,
-                    severity=EncounterCompatibilitySeverity.HARD,
-                    message=(
-                        f"Character {source.character_id} was not resolved "
-                        "before encounter construction."
-                    ),
-                    roster_slot_id=roster_slot.roster_slot_id,
-                    member_id=member.member_id,
-                ))
-
     positions, position_issues = resolve_encounter_positions(recipe)
     issues.extend(position_issues)
     active_positions = [

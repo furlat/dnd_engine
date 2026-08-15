@@ -40,19 +40,16 @@ from server import world_contracts
 
 
 class ServerCapabilitiesResponse(BaseModel):
-    """Describe the server topology available to a connecting game client."""
+    """Describe the only server topology supported by this process."""
 
-    server_mode: Literal["standalone", "gateway"] = Field(
-        description="Active deployment topology exposed by this HTTP origin."
+    schema_version: Literal[1] = 1
+    server_mode: Literal["single_game"] = Field(
+        default="single_game",
+        description="One process owns one current game.",
     )
-    game_directory_enabled: bool = Field(
-        description="Whether hosted-game discovery and attachment routes are available."
-    )
-    persistent_game_history: bool = Field(
-        description="Whether completed game metadata and summaries persist across restarts."
-    )
-    isolated_game_workers: bool = Field(
-        description="Whether each hosted game executes in an isolated hot worker process."
+    terminal_archive: Literal["filesystem"] = Field(
+        default="filesystem",
+        description="Terminal summaries and objective events use the local archive.",
     )
 
 
@@ -1000,59 +997,20 @@ class GameCreationAuthoredRosterSelection(BaseModel):
     roster_id: str = Field(min_length=1)
 
 
-class GameCreationSavedRosterSelection(BaseModel):
-    """Select one owner-scoped saved roster at exact persisted identity."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    kind: Literal["saved_roster"] = "saved_roster"
-    saved_roster_id: str = Field(min_length=1)
-    expected_revision: int = Field(ge=1)
-    expected_recipe_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
-
-
-class GameCreationOwnedCharacterRosterSelection(BaseModel):
-    """Select an ordered owned-character roster for server normalization."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    kind: Literal["owned_characters"] = "owned_characters"
-    title: str = Field(min_length=1, max_length=120)
-    character_ids: tuple[UUID, ...] = Field(min_length=1)
-
-    @model_validator(mode="after")
-    def _validate_character_ids(
-        self,
-    ) -> "GameCreationOwnedCharacterRosterSelection":
-        if len(self.character_ids) != len(set(self.character_ids)):
-            raise ValueError("owned-character roster cannot repeat a character")
-        return self
-
-
-GameCreationRosterSelection = Annotated[
-    Union[
-        GameCreationAuthoredRosterSelection,
-        GameCreationSavedRosterSelection,
-        GameCreationOwnedCharacterRosterSelection,
-    ],
-    Field(discriminator="kind"),
-]
-
-
 class GameCreationRosterSlotSelection(BaseModel):
     """One requested human participant roster, faction, and formation zone."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     roster_slot_id: str = Field(min_length=1)
-    roster: GameCreationRosterSelection
+    roster: GameCreationAuthoredRosterSelection
     faction_id: str = Field(min_length=1)
     deployment_zone_id: str = Field(min_length=1)
     participant_name: str = Field(min_length=1, max_length=120)
 
 
 class GameCreationComposeRequest(BaseModel):
-    """Normalize catalog selections and owned heads into one exact recipe."""
+    """Normalize authored catalog selections into one exact recipe."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -1125,7 +1083,6 @@ class GameCreationEntityAssignment(BaseModel):
     entity_uuid: str
     entity_name: str
     faction: Optional[str] = None
-    character_id: UUID | None = None
     participant_name: str
 
 
@@ -1193,15 +1150,8 @@ class GameCreationStartResponse(BaseModel):
         entity_uuids = tuple(
             assignment.entity_uuid for assignment in assignments
         )
-        character_ids = tuple(
-            assignment.character_id
-            for assignment in assignments
-            if assignment.character_id is not None
-        )
         if len(entity_uuids) != len(set(entity_uuids)):
             raise ValueError("Start result repeats a runtime entity")
-        if len(character_ids) != len(set(character_ids)):
-            raise ValueError("Start result repeats a durable character")
         return self
 
 

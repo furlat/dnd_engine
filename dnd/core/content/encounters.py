@@ -1,8 +1,8 @@
 """Dependency-neutral recipes for rosters, deployments, and encounters.
 
-These values are the authored/persistent composition boundary.  They contain
-exact content recipes or durable character identities, but never import
-``Entity``, a runtime controller, a directory service, or server transport.
+These values are the authored composition boundary. They contain exact
+content recipes, but never import ``Entity``, a runtime controller, or server
+transport.
 """
 
 from __future__ import annotations
@@ -12,7 +12,6 @@ import json
 import re
 from enum import Enum
 from typing import Annotated, Literal, Self, Union
-from uuid import UUID
 
 from pydantic import (
     BaseModel,
@@ -104,7 +103,6 @@ class EncounterCompatibilityCode(str, Enum):
     FORBIDDEN_CAPABILITY = "forbidden_capability"
     MEMBER_CAPACITY = "member_capacity"
     MISSING_CAPABILITY = "missing_capability"
-    MISSING_CHARACTER = "missing_character"
     MISSING_ROLE_SLOT = "missing_role_slot"
     OCCUPIED_SPAWN = "occupied_spawn"
     OUT_OF_BOUNDS_SPAWN = "out_of_bounds_spawn"
@@ -164,37 +162,7 @@ class AuthoredCreatureRosterSource(BaseModel):
         return self
 
 
-class OwnedCharacterRosterSource(BaseModel):
-    """One exact durable character head-set resolved by the owning directory."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    kind: Literal["owned_character"] = "owned_character"
-    character_id: UUID
-    expected_character_row_version: int = Field(ge=1)
-    expected_definition_revision: int = Field(ge=1)
-    expected_definition_digest: str
-    expected_holdings_revision: int = Field(ge=1)
-    expected_holdings_digest: str
-    expected_loadout_revision: int = Field(ge=1)
-    expected_loadout_digest: str
-    expected_ruleset_digest: str
-
-    @field_validator(
-        "expected_definition_digest",
-        "expected_holdings_digest",
-        "expected_loadout_digest",
-        "expected_ruleset_digest",
-    )
-    @classmethod
-    def _validate_expected_digest(cls, value: str, info) -> str:
-        return _validate_digest(value, info.field_name)
-
-
-EncounterRosterMemberSource = Annotated[
-    Union[AuthoredCreatureRosterSource, OwnedCharacterRosterSource],
-    Field(discriminator="kind"),
-]
+EncounterRosterMemberSource = AuthoredCreatureRosterSource
 
 
 class RosterItemGrant(BaseModel):
@@ -960,7 +928,6 @@ __all__ = [
     "EncounterSetupEffect",
     "FixedRosterOpeningPolicy",
     "InitiativeOpeningPolicy",
-    "OwnedCharacterRosterSource",
     "RosterBehaviorGrant",
     "RosterDamageAffinity",
     "RosterItemGrant",

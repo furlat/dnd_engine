@@ -2,11 +2,15 @@
 
 import asyncio
 from collections.abc import Iterator
+from pathlib import Path
+import sqlite3
 from uuid import UUID
 
 import pytest
+from fastapi.testclient import TestClient
 
 from dnd.core.events import EventQueue
+from dnd.core.creature_types import DamageType
 from dnd.entity import Entity
 from dnd.scenarios.encounter_catalog import (
     AUTHORED_DEPLOYMENTS,
@@ -16,6 +20,7 @@ from dnd.scenarios.encounter_catalog import (
 from dnd.scenarios.battlefield_catalog import BATTLEFIELDS
 from server import event_server
 from server.event_stream import event_stream
+from server.game_archive import GameArchiveStore
 from tests.manual.live_replication_support import drain_subscription
 from tests.manual.game_creation_test_support import (
     authored_compose_request,
@@ -56,6 +61,11 @@ def _controller_types(assignment_rows: list[dict[str, object]]) -> set[str]:
         assert controller is not None
         result.add(controller.controller_type)
     return result
+
+
+def _reject_sqlite(*_args: object, **_kwargs: object) -> None:
+    """Fail if the single-game server attempts to open SQLite."""
+    raise AssertionError("single-game server opened SQLite")
 
 
 def test_catalog_is_a_lossless_projection_of_canonical_content(
@@ -128,10 +138,30 @@ def test_openapi_has_one_game_creation_path_and_no_automation_routes(
     }.intersection(paths)
 
 
-def test_compose_rejects_an_explicit_empty_owned_character_roster(
+def test_server_lifespan_never_opens_sqlite(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Starting the direct server requires no profile or database."""
+    monkeypatch.setenv("DND_GAME_ARCHIVE_ROOT", str(tmp_path / "archives"))
+    monkeypatch.setattr(sqlite3, "connect", _reject_sqlite)
+
+    with TestClient(event_server.app) as lifespan_client:
+        response = lifespan_client.get("/")
+        capabilities = lifespan_client.get("/server/capabilities")
+
+    assert response.status_code == 200
+    assert capabilities.json() == {
+        "schema_version": 1,
+        "server_mode": "single_game",
+        "terminal_archive": "filesystem",
+    }
+
+
+def test_compose_rejects_the_deleted_owned_character_roster_kind(
     client: ServerTestClient,
 ) -> None:
-    """The authoritative route never normalizes an empty owned party."""
+    """The authored-only route rejects the removed persistent roster kind."""
     assert event_server.sim.encounter is None
     assert event_server.sim.game is None
     request = authored_compose_request()
@@ -148,7 +178,7 @@ def test_compose_rejects_an_explicit_empty_owned_character_roster(
     response = client.post("/game-creation/compose", json=request)
 
     assert response.status_code == 422
-    assert response.json()["detail"][0]["loc"][-1] == "character_ids"
+    assert response.json()["detail"][0]["loc"][-1] == "kind"
     assert event_server.sim.encounter is None
     assert event_server.sim.game is None
 
@@ -348,3 +378,44 @@ def test_observer_join_has_no_entity_authority(
     assert joined.json()["active_observer_uuid"] == entity_uuid
     assert rejected.status_code == 400
     assert rejected.json()["detail"]["code"] == "observer_cannot_control_entities"
+
+
+def test_terminal_game_writes_summary_and_complete_objective_archive(
+    client: ServerTestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Terminal gameplay exposes one cold summary plus every objective phase."""
+    archive_store = GameArchiveStore(tmp_path / "archives")
+    monkeypatch.setattr(
+        event_server.app.state,
+        "game_archive_store",
+        archive_store,
+        raising=False,
+    )
+    _composition, payload = start_composed_game(client)
+    encounter = event_server.sim.encounter
+    assert encounter is not None
+    assert payload["game_id"] == str(encounter.uuid)
+
+    encounter.start_encounter()
+    player = roster_result(payload, "roster_1")["entity_assignments"][0]
+    opponent = roster_result(payload, "roster_2")["entity_assignments"][0]
+    player_entity = Entity.get(UUID(player["entity_uuid"]))
+    opponent_entity = Entity.get(UUID(opponent["entity_uuid"]))
+    assert player_entity is not None
+    assert opponent_entity is not None
+    opponent_entity.receive_damage(1, DamageType.FORCE, player_entity.uuid)
+    encounter.end_encounter("archive contract test")
+    response = client.get("/game/evidence/archive")
+
+    assert response.status_code == 200, response.text
+    archive = response.json()
+    assert archive["game_id"] == str(encounter.uuid)
+    assert archive["summary"]["game_id"] == str(encounter.uuid)
+    assert archive["events"]["through_cursor"] == archive["replay"][
+        "terminal_event_cursor"
+    ]
+    assert {
+        frame["event"]["phase"] for frame in archive["events"]["frames"]
+    } >= {"declaration", "completion"}

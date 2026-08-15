@@ -7,7 +7,6 @@ from pydantic import ValidationError
 
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
 from server.replication_perspective import PerspectiveEpochRegistry, PerspectiveScope
-from server.runtime_authority import RuntimeProjectionAuthority, RuntimeScope
 from server.session import PlayerSession, PlayerType
 from server.subjective_authority import SubjectiveAuthorityError, resolve_subjective_authority
 from server.timeline_contracts import (
@@ -133,7 +132,7 @@ def test_perspective_epoch_rotates_only_when_projection_scope_changes() -> None:
     assert registry.resolve(active_changed) not in {first, second, third}
 
 
-def test_subjective_authority_requires_trusted_scope_and_exact_ownership() -> None:
+def test_subjective_authority_uses_exact_session_ownership() -> None:
     session_id = uuid4()
     entity_id = uuid4()
     session = PlayerSession(
@@ -143,55 +142,32 @@ def test_subjective_authority_requires_trusted_scope_and_exact_ownership() -> No
         controlled_entities={entity_id},
     )
     session.synchronize_controlled_observers()
-    authority = RuntimeProjectionAuthority(
-        hosted_game_id=uuid4(),
-        runtime_session_id=session_id,
-        membership_id=uuid4(),
-        scopes=frozenset({RuntimeScope.SUBJECTIVE_OBSERVE}),
-        controlled_entity_uuids=frozenset({entity_id}),
-        observer_entity_uuids=frozenset({entity_id}),
-        active_observer_uuid=entity_id,
-        authority_epoch=3,
-    )
     registry = PerspectiveEpochRegistry()
 
-    resolved = resolve_subjective_authority(session, authority, registry=registry)
-    assert resolved.scope.authority_epoch == 3
-    with pytest.raises(SubjectiveAuthorityError, match="trusted runtime authority"):
-        resolve_subjective_authority(session, None, registry=registry)
-    with pytest.raises(SubjectiveAuthorityError, match="another runtime session"):
+    resolved = resolve_subjective_authority(session, registry=registry)
+    assert resolved.scope.authority_epoch == 1
+    assert resolved.scope.controlled_entity_uuids == (str(entity_id),)
+    with pytest.raises(SubjectiveAuthorityError, match="exactly match ownership"):
         resolve_subjective_authority(
             session,
-            authority.model_copy(update={"runtime_session_id": uuid4()}),
-            registry=registry,
-        )
-    with pytest.raises(SubjectiveAuthorityError, match="ownership does not match"):
-        resolve_subjective_authority(
-            session,
-            authority.model_copy(update={"controlled_entity_uuids": frozenset()}),
+            observer_entity_uuids=(),
             registry=registry,
         )
 
 
-def test_subjective_authority_accepts_explicit_zero_control_spectator_union() -> None:
+def test_subjective_authority_accepts_configured_zero_control_spectator() -> None:
     observer_ids = frozenset({uuid4(), uuid4()})
     session = PlayerSession(
         session_id=uuid4(),
         player_type=PlayerType.OBSERVER,
         name="Spectator",
     )
-    authority = RuntimeProjectionAuthority(
-        hosted_game_id=uuid4(),
-        runtime_session_id=session.session_id,
-        membership_id=uuid4(),
-        scopes=frozenset({RuntimeScope.SUBJECTIVE_OBSERVE}),
-        controlled_entity_uuids=frozenset(),
-        observer_entity_uuids=observer_ids,
+    session.configure_subjective_observers(
+        observer_ids,
         active_observer_uuid=min(observer_ids, key=str),
-        authority_epoch=2,
     )
 
-    resolved = resolve_subjective_authority(session, authority)
+    resolved = resolve_subjective_authority(session)
 
     assert set(resolved.scope.observer_entity_uuids) == {
         str(entity_uuid) for entity_uuid in observer_ids
@@ -214,12 +190,10 @@ def test_standalone_spectator_uses_only_join_time_observer_configuration() -> No
 
     resolved = resolve_subjective_authority(
         session,
-        None,
-        allow_standalone=True,
         registry=PerspectiveEpochRegistry(),
     )
 
-    assert resolved.scope.membership_id == f"standalone:{session.session_id}"
+    assert resolved.scope.membership_id == f"game:{session.session_id}"
     assert set(resolved.scope.observer_entity_uuids) == {
         str(entity_uuid) for entity_uuid in observer_ids
     }

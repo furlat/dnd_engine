@@ -10,7 +10,6 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from dnd.content_system.bootstrap import bootstrap_content_system
 from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
-from dnd.core.content.character_deployment import CharacterDeploymentSnapshot
 from dnd.core.content.encounters import EncounterRecipe
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.encounter_assembler import prepare_encounter_recipe
@@ -33,7 +32,6 @@ class PreviewWorkerRequest(BaseModel):
     expected_content_set_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
     expected_ruleset_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
     recipe: EncounterRecipe
-    character_deployments: tuple[CharacterDeploymentSnapshot, ...] = ()
 
 
 def build_worker_preview(
@@ -47,24 +45,7 @@ def build_worker_preview(
             "Content set digest changed between parent and preview worker.",
         )
     SERVER_CONTENT_SYSTEM_RUNTIME.install(content_system)
-    deployments = {
-        deployment.character_id: deployment
-        for deployment in request.character_deployments
-    }
-    if len(deployments) != len(request.character_deployments):
-        raise ValueError("preview character deployments cannot repeat")
-    if any(
-        deployment.expected_ruleset_digest
-        != request.expected_ruleset_digest
-        for deployment in deployments.values()
-    ):
-        raise ValueError(
-            "Character ruleset changed between parent and preview worker.",
-        )
-    assembled = prepare_encounter_recipe(
-        request.recipe,
-        character_deployments=deployments,
-    )
+    assembled = prepare_encounter_recipe(request.recipe)
     rosters: list[GameCreationRosterVisualPreview] = []
     for roster_slot in request.recipe.roster_slots:
         members: list[GameCreationMemberVisualPreview] = []

@@ -1,4 +1,4 @@
-"""Bounded worker-local storage for objective terminal game summaries.
+"""Bounded in-process storage for objective terminal game summaries.
 
 The store is a passive observer of completed EventQueue batches. It captures
 objective entity state at encounter boundaries and delegates all aggregation to
@@ -37,7 +37,7 @@ from server.objective_state import build_current_objective_world
 from server.canonical_json import canonical_json_sha256
 
 
-DEFAULT_WORKER_SUMMARY_CAPACITY = 32
+DEFAULT_GAME_SUMMARY_CAPACITY = 32
 
 
 @dataclass(frozen=True)
@@ -52,7 +52,7 @@ class _EncounterCapture:
     replay_seed: ObjectiveReplaySeed | None
 
 
-class WorkerSummaryEvidence(BaseModel):
+class GameSummaryEvidence(BaseModel):
     """Canonical terminal summary paired with exact source-evidence digests."""
 
     model_config = ConfigDict(frozen=True)
@@ -63,7 +63,7 @@ class WorkerSummaryEvidence(BaseModel):
     source_combat_log_digest: str = Field(min_length=64, max_length=64, description="Digest of structured combat logs.")
 
 
-class WorkerReplayCapture(BaseModel):
+class GameReplayCapture(BaseModel):
     """Cold coordinates needed to materialize one terminal replay artifact."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -73,56 +73,39 @@ class WorkerReplayCapture(BaseModel):
     encounter_uuid: str = Field(min_length=1)
     source_stream_id: str = Field(min_length=1)
     seed: ObjectiveReplaySeed
+    event_origin_cursor: int = Field(ge=0)
     terminal_event_cursor: int = Field(ge=1)
     terminal_combat_log_cursor: int = Field(ge=0)
 
 
-class WorkerGameSummaryStore:
-    """Collect and retain a bounded set of terminal summaries per worker.
+class GameSummaryStore:
+    """Collect and retain a bounded set of terminal summaries.
 
     Args:
         max_summaries: Maximum terminal summaries retained in insertion order.
     """
 
-    def __init__(self, max_summaries: int = DEFAULT_WORKER_SUMMARY_CAPACITY) -> None:
+    def __init__(self, max_summaries: int = DEFAULT_GAME_SUMMARY_CAPACITY) -> None:
         if max_summaries < 1:
             raise ValueError("max_summaries must be at least 1")
         self._max_summaries = max_summaries
         self._captures: dict[UUID, _EncounterCapture] = {}
-        self._directory_game_ids: dict[UUID, UUID] = {}
-        self._summaries: OrderedDict[str, WorkerSummaryEvidence] = OrderedDict()
-        self._replay_captures: OrderedDict[str, WorkerReplayCapture] = OrderedDict()
+        self._summaries: OrderedDict[str, GameSummaryEvidence] = OrderedDict()
+        self._replay_captures: OrderedDict[str, GameReplayCapture] = OrderedDict()
         self._lock = RLock()
         self.ensure_attached()
 
     def reset(self) -> None:
-        """Clear worker-local evidence and restore the passive attachment.
+        """Clear in-process evidence and restore the passive attachment.
 
         ``EventQueue.reset()`` clears callback registrations. Server reset paths
         should therefore call this method immediately afterward.
         """
         with self._lock:
             self._captures.clear()
-            self._directory_game_ids.clear()
             self._summaries.clear()
             self._replay_captures.clear()
         self.ensure_attached()
-
-    def bind_directory_game_id(
-        self,
-        encounter_uuid: UUID,
-        game_id: UUID,
-    ) -> None:
-        """Bind an in-process encounter to its durable directory identity."""
-
-        with self._lock:
-            existing = self._directory_game_ids.get(encounter_uuid)
-            if existing is not None and existing != game_id:
-                raise ValueError(
-                    f"Encounter {encounter_uuid} is already bound to game "
-                    f"{existing}",
-                )
-            self._directory_game_ids[encounter_uuid] = game_id
 
     def ensure_attached(self) -> None:
         """Idempotently attach the store to EventQueue batch notifications."""
@@ -154,8 +137,8 @@ class WorkerGameSummaryStore:
         """Return a defensive copy of a retained terminal summary.
 
         Args:
-            game_id: Hosted game id or encounter UUID. When omitted, return the
-                most recently completed game.
+            game_id: Encounter UUID. When omitted, return the most recently
+                completed game.
 
         Returns:
             A deep copy of the immutable summary contract, or ``None`` when no
@@ -181,8 +164,8 @@ class WorkerGameSummaryStore:
                 )
             return evidence.summary.model_copy(deep=True) if evidence is not None else None
 
-    def get_evidence(self, game_id: str | UUID | None = None) -> WorkerSummaryEvidence | None:
-        """Return summary and source digests for gateway persistence."""
+    def get_evidence(self, game_id: str | UUID | None = None) -> GameSummaryEvidence | None:
+        """Return a summary paired with its source-evidence digests."""
         with self._lock:
             if not self._summaries:
                 return None
@@ -204,7 +187,7 @@ class WorkerGameSummaryStore:
     def get_replay_capture(
         self,
         game_id: str | UUID | None = None,
-    ) -> WorkerReplayCapture | None:
+    ) -> GameReplayCapture | None:
         """Return immutable seed and terminal coordinates for replay assembly."""
         with self._lock:
             if not self._replay_captures:
@@ -268,7 +251,7 @@ class WorkerGameSummaryStore:
             self._captures[event.encounter_uuid] = capture
 
     def _capture_end(self, event: EncounterEndEvent) -> None:
-        """Reduce and retain a terminal summary from typed worker evidence."""
+        """Reduce and retain a terminal summary from typed event evidence."""
         terminal_event_index = EventQueue.get_event_index(event.uuid)
         with self._lock:
             capture = self._captures.pop(event.encounter_uuid, None)
@@ -318,15 +301,7 @@ class WorkerGameSummaryStore:
             ),
             final_snapshot_complete=final_snapshot_complete,
         )
-        with self._lock:
-            directory_game_id = self._directory_game_ids.get(
-                event.encounter_uuid,
-            )
-        game_id = (
-            str(directory_game_id)
-            if directory_game_id is not None
-            else str(event.encounter_uuid)
-        )
+        game_id = str(event.encounter_uuid)
         summary = reduce_game_summary(
             game_id=game_id,
             encounter_uuid=event.encounter_uuid,
@@ -337,7 +312,7 @@ class WorkerGameSummaryStore:
             evidence=evidence,
         )
         self._retain(
-            WorkerSummaryEvidence(
+            GameSummaryEvidence(
                 generation_id=EventQueue.generation_id(),
                 summary=summary,
                 source_event_digest=canonical_json_sha256(
@@ -356,18 +331,19 @@ class WorkerGameSummaryStore:
             and capture.replay_seed.event_cursor <= terminal_event_index
         ):
             self._retain_replay_capture(
-                WorkerReplayCapture(
+                GameReplayCapture(
                     generation_id=capture.replay_generation_id,
                     game_id=game_id,
                     encounter_uuid=str(event.encounter_uuid),
                     source_stream_id=str(event.encounter_uuid),
                     seed=capture.replay_seed,
+                    event_origin_cursor=capture.event_origin,
                     terminal_event_cursor=terminal_event_index + 1,
                     terminal_combat_log_cursor=combat_log_cursor,
                 )
             )
 
-    def _retain(self, evidence: WorkerSummaryEvidence) -> None:
+    def _retain(self, evidence: GameSummaryEvidence) -> None:
         """Retain one summary and evict the oldest entry when necessary."""
         with self._lock:
             self._summaries.pop(evidence.summary.game_id, None)
@@ -375,7 +351,7 @@ class WorkerGameSummaryStore:
             while len(self._summaries) > self._max_summaries:
                 self._summaries.popitem(last=False)
 
-    def _retain_replay_capture(self, capture: WorkerReplayCapture) -> None:
+    def _retain_replay_capture(self, capture: GameReplayCapture) -> None:
         """Retain terminal replay coordinates under the same bounded policy."""
         with self._lock:
             self._replay_captures.pop(capture.game_id, None)
@@ -438,13 +414,13 @@ def _capture_entity(entity: Entity) -> EntitySnapshotV1:
     )
 
 
-game_summary_store = WorkerGameSummaryStore()
+game_summary_store = GameSummaryStore()
 
 
 __all__ = [
-    "DEFAULT_WORKER_SUMMARY_CAPACITY",
-    "WorkerGameSummaryStore",
-    "WorkerReplayCapture",
-    "WorkerSummaryEvidence",
+    "DEFAULT_GAME_SUMMARY_CAPACITY",
+    "GameReplayCapture",
+    "GameSummaryEvidence",
+    "GameSummaryStore",
     "game_summary_store",
 ]

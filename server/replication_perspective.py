@@ -25,7 +25,7 @@ class PerspectiveScope(BaseModel):
     authority_epoch: int = Field(
         default=1,
         ge=1,
-        description="Monotonic authority version supplied by the trusted gateway.",
+        description="Monotonic version of the server-owned session authority.",
     )
     projection: CombatLogProjection = Field(description="Knowledge projection authorized for this scope.")
     controlled_entity_uuids: Tuple[str, ...] = Field(
