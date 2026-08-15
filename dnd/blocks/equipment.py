@@ -1,15 +1,35 @@
 """Equipment, armor, weapon, and shield models for entity combat gear."""
 
 from dataclasses import dataclass
-from typing import Callable, Iterable, Optional, List, Self, Literal, TypeVar, Union, Tuple
+from typing import Callable, Iterable, Optional, List, Self, TypeVar, Union, Tuple
 from uuid import UUID, uuid4
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from dnd.core.values import ModifiableValue
-from dnd.core.creature_types import DamageType
+from dnd.types.damage import DamageType
 from dnd.core.modifiers import NumericalModifier
 from dnd.blocks.abilities import Ability, AbilityScores
-from dnd.core.events import Event, EventQueue, EventType, EventPhase, Range, RangeType, AbilityName, Damage
-from dnd.core.equipment_types import (
+from dnd.core.events.events_registry import (
+    Event,
+    EventQueue,
+    EventType,
+    EventPhase,
+)
+from dnd.core.events.resolution_events import (
+    Range,
+    RangeType,
+    Damage,
+)
+from dnd.core.events.item_events import (
+    ArmorEquipEvent,
+    ArmorUnequipEvent,
+    EquipmentEvent,
+    ShieldEquipEvent,
+    ShieldUnequipEvent,
+    WeaponEquipEvent,
+    WeaponUnequipEvent,
+)
+from dnd.types.abilities import AbilityName
+from dnd.types.equipment import (
     ArmorType,
     BodyPart,
     EquipmentSlot,
@@ -19,62 +39,15 @@ from dnd.core.equipment_types import (
     WeaponSet,
     WeaponSlot,
 )
-from dnd.core.item_types import ItemPresentationKind, ItemPresentationState
+from dnd.presentation import ItemPresentationKind, ItemPresentationState
+from dnd.types.rolls import DieSize
 
 import copy
 
 from dnd.core.base_block import BaseBlock
-from dnd.blocks.base_item import EquippableItem
-
-
-class EquipmentEvent(Event):
-    """Base event for equipment slot transitions."""
-
-    name: str = Field(default="Equipment Event", description="An equipment event")
-    slot: EquipmentSlot = Field(description="The slot being affected")
-    item_uuid: UUID = Field(description="UUID of the item being transitioned")
-
-
-class WeaponEquipEvent(EquipmentEvent):
-    """Event emitted when a weapon is equipped."""
-
-    name: str = Field(default="Weapon Equip", description="A weapon equip event")
-    event_type: EventType = Field(default=EventType.WEAPON_EQUIP, description="The type of event")
-
-
-class WeaponUnequipEvent(EquipmentEvent):
-    """Event emitted when a weapon is unequipped."""
-
-    name: str = Field(default="Weapon Unequip", description="A weapon unequip event")
-    event_type: EventType = Field(default=EventType.WEAPON_UNEQUIP, description="The type of event")
-
-
-class ArmorEquipEvent(EquipmentEvent):
-    """Event emitted when armor is equipped."""
-
-    name: str = Field(default="Armor Equip", description="An armor equip event")
-    event_type: EventType = Field(default=EventType.ARMOR_EQUIP, description="The type of event")
-
-
-class ArmorUnequipEvent(EquipmentEvent):
-    """Event emitted when armor is unequipped."""
-
-    name: str = Field(default="Armor Unequip", description="An armor unequip event")
-    event_type: EventType = Field(default=EventType.ARMOR_UNEQUIP, description="The type of event")
-
-
-class ShieldEquipEvent(EquipmentEvent):
-    """Event emitted when a shield is equipped."""
-
-    name: str = Field(default="Shield Equip", description="A shield equip event")
-    event_type: EventType = Field(default=EventType.SHIELD_EQUIP, description="The type of event")
-
-
-class ShieldUnequipEvent(EquipmentEvent):
-    """Event emitted when a shield is unequipped."""
-
-    name: str = Field(default="Shield Unequip", description="A shield unequip event")
-    event_type: EventType = Field(default=EventType.SHIELD_UNEQUIP, description="The type of event")
+from dnd.blocks.base_item import (
+    EquippableItem,
+)
 
 
 _EQUIPMENT_EVENT_CLASS_BY_TYPE: dict[EventType, type[EquipmentEvent]] = {
@@ -304,7 +277,7 @@ class Weapon(EquippableItem):
         default=None,
         description="Detailed description of the weapon"
     )
-    damage_dice: Literal[4,6,8,10,12,20] = Field(
+    damage_dice: DieSize = Field(
         description="Number of sides on the damage dice (e.g., 6 for d6)"
     )
     dice_numbers: int = Field(
@@ -332,7 +305,7 @@ class Weapon(EquippableItem):
     range: Range = Field(
         description="Weapon's reach or range capabilities"
     )
-    extra_damage_dices: List[Literal[4,6,8,10,12,20]] = Field(
+    extra_damage_dices: List[DieSize] = Field(
         default_factory=list,
         description="Extra damage dice for the weapon"
     )
@@ -695,7 +668,7 @@ class Equipment(BaseBlock):
         value_name="Off-Hand Ranged Ability Bonus"
     ), description="Ability modifier contribution for off-hand ranged damage.")
 
-    extra_attack_damage_dices: List[Literal[4,6,8,10,12,20]] = Field(
+    extra_attack_damage_dices: List[DieSize] = Field(
         default_factory=list,
         description="Extra damage dice for the weapon"
     )
@@ -717,7 +690,7 @@ class Equipment(BaseBlock):
         description="Damage type used by unarmed attacks.",
     )
 
-    unarmed_damage_dice: Literal[4,6,8,10,12,20] = Field(
+    unarmed_damage_dice: DieSize = Field(
         default=4,
         description="Die size used by unarmed damage.",
     )
@@ -1243,13 +1216,13 @@ class Equipment(BaseBlock):
         base_ac = base_modifier.normalized_value if base_modifier is not None else 10
         if self.unarmored_ac_type == UnarmoredAc.BARBARIAN:
             abilities: Tuple[AbilityName, ...] = (
-                "dexterity",
-                "constitution",
+                AbilityName.DEXTERITY,
+                AbilityName.CONSTITUTION,
             )
         elif self.unarmored_ac_type == UnarmoredAc.MONK:
-            abilities = ("dexterity", "strength")
+            abilities = (AbilityName.DEXTERITY, AbilityName.STRENGTH)
         else:
-            abilities = ("dexterity",)
+            abilities = (AbilityName.DEXTERITY,)
         if self.unarmored_ac_type in (
             UnarmoredAc.DRACONIC_SORCERER,
             UnarmoredAc.MAGIC_ARMOR,
@@ -1305,11 +1278,11 @@ class Equipment(BaseBlock):
         if candidate is not None:
             return list(candidate.ability_names)
         if self.unarmored_ac_type == UnarmoredAc.BARBARIAN:
-            return ["dexterity", "constitution"]
+            return [AbilityName.DEXTERITY, AbilityName.CONSTITUTION]
         elif self.unarmored_ac_type == UnarmoredAc.MONK:
-            return ["dexterity", "strength"]
+            return [AbilityName.DEXTERITY, AbilityName.STRENGTH]
         else:
-            return["dexterity"]
+            return[AbilityName.DEXTERITY]
 
     def is_unarmored(self) -> bool:
         """Return whether body armor is absent or cloth-only."""

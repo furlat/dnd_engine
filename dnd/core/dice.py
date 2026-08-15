@@ -1,7 +1,6 @@
 import random
 from collections import deque
 from contextlib import contextmanager
-from enum import Enum
 from functools import cached_property
 from typing import (
     Any,
@@ -10,7 +9,6 @@ from typing import (
     Dict,
     Iterator,
     List,
-    Literal,
     Optional,
     Self,
     Tuple,
@@ -20,12 +18,8 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, computed_field, model_validator
 
-from dnd.core.values import (
-    AdvantageStatus,
-    AutoHitStatus,
-    CriticalStatus,
-    ModifiableValue,
-)
+from dnd.types import rolls as roll_types
+from dnd.core.values import ModifiableValue
 
 
 def _default_randint(low: int, high: int) -> int:
@@ -71,21 +65,6 @@ def fixed_dice_faces(*faces: int) -> Iterator[None]:
         _randint = previous_randint
 
 
-class AttackOutcome(str, Enum):
-    HIT = "Hit"
-    MISS = "Miss"
-    CRIT = "Crit"
-    CRIT_MISS = "Crit Miss"
-
-
-class RollType(str, Enum):
-    DAMAGE = "Damage"
-    ATTACK = "Attack"
-    SAVE = "Save"
-    CHECK = "Check"
-    HEAL = "Heal"
-
-
 class DiceRoll(BaseModel):
     """Stores one concrete roll result and the modifier state used for it."""
 
@@ -117,7 +96,7 @@ class DiceRoll(BaseModel):
         ge=1,
         description="Number of random die faces generated, including advantage alternatives.",
     )
-    roll_type: RollType = Field(
+    roll_type: roll_types.RollType = Field(
         ...,
         description="Rules category for the roll result.",
     )
@@ -136,15 +115,15 @@ class DiceRoll(BaseModel):
         ...,
         description="Normalized modifier value applied to this roll.",
     )
-    advantage_status: AdvantageStatus = Field(
+    advantage_status: roll_types.AdvantageStatus = Field(
         ...,
         description="Advantage state captured when the roll was created.",
     )
-    critical_status: CriticalStatus = Field(
+    critical_status: roll_types.CriticalStatus = Field(
         ...,
         description="Critical state captured when the roll was created.",
     )
-    auto_hit_status: AutoHitStatus = Field(
+    auto_hit_status: roll_types.AutoHitStatus = Field(
         ...,
         description="Automatic hit or miss state captured when the roll was created.",
     )
@@ -156,7 +135,7 @@ class DiceRoll(BaseModel):
         default=None,
         description="Target entity for contested or targeted rolls, when present.",
     )
-    attack_outcome: Optional[AttackOutcome] = Field(
+    attack_outcome: Optional[roll_types.AttackOutcome] = Field(
         default=None,
         description="Attack outcome associated with damage rolls, when applicable.",
     )
@@ -191,7 +170,7 @@ class Dice(BaseModel):
         description="Number of dice in the base expression.",
         ge=1,
     )
-    value: Literal[4, 6, 8, 10, 12, 20] = Field(
+    value: roll_types.DieSize = Field(
         ...,
         description="Number of sides on each die.",
     )
@@ -199,11 +178,11 @@ class Dice(BaseModel):
         ...,
         description="Modifiable value that supplies score, advantage, critical, and auto-hit state.",
     )
-    roll_type: RollType = Field(
-        default=RollType.ATTACK,
+    roll_type: roll_types.RollType = Field(
+        default=roll_types.RollType.ATTACK,
         description="Rules category for rolls produced by this dice expression.",
     )
-    attack_outcome: Optional[AttackOutcome] = Field(
+    attack_outcome: Optional[roll_types.AttackOutcome] = Field(
         default=None,
         description="Required attack outcome for damage rolls; absent for other roll types.",
     )
@@ -238,9 +217,9 @@ class Dice(BaseModel):
             ValueError: If a damage roll omits an outcome or a non-damage roll
                 provides one.
         """
-        if self.roll_type == RollType.DAMAGE and self.attack_outcome is None:
+        if self.roll_type == roll_types.RollType.DAMAGE and self.attack_outcome is None:
             raise ValueError("Attack outcome must be provided for damage rolls")
-        elif self.roll_type != RollType.DAMAGE and self.attack_outcome is not None:
+        elif self.roll_type != roll_types.RollType.DAMAGE and self.attack_outcome is not None:
             raise ValueError("Attack outcome must be None for non-damage rolls")
         return self
 
@@ -254,7 +233,7 @@ class Dice(BaseModel):
         Raises:
             ValueError: If an attack, save, or check tries to roll more than one die.
         """
-        if self.roll_type not in (RollType.DAMAGE, RollType.HEAL) and self.count > 1:
+        if self.roll_type not in (roll_types.RollType.DAMAGE, roll_types.RollType.HEAL) and self.count > 1:
             raise ValueError("Cannot have more than one die for non-damage/heal rolls")
         return self
 
@@ -308,9 +287,9 @@ class Dice(BaseModel):
         """
         count = self.count if not crit else (self.count * 2 + self.crit_extra_dice)
         advantage_status = self.bonus.advantage
-        if advantage_status == AdvantageStatus.ADVANTAGE:
+        if advantage_status == roll_types.AdvantageStatus.ADVANTAGE:
             return [self._roll_with_advantage() for _ in range(count)]
-        elif advantage_status == AdvantageStatus.DISADVANTAGE:
+        elif advantage_status == roll_types.AdvantageStatus.DISADVANTAGE:
             return [self._roll_with_disadvantage() for _ in range(count)]
         else:
             return [(_randint(1, self.value), []) for _ in range(count)]
@@ -326,16 +305,16 @@ class Dice(BaseModel):
         """
         effective_dice_count = self.count
         random_faces_rolled = self.count
-        if self.roll_type in (RollType.DAMAGE, RollType.HEAL):
+        if self.roll_type in (roll_types.RollType.DAMAGE, roll_types.RollType.HEAL):
             effective_dice_count = (
                 self.count * 2 + self.crit_extra_dice
-                if self.attack_outcome == AttackOutcome.CRIT
+                if self.attack_outcome == roll_types.AttackOutcome.CRIT
                 else self.count
             )
             random_faces_rolled = effective_dice_count
             results = [
                 roll[0]
-                for roll in self._roll(crit=(self.attack_outcome == AttackOutcome.CRIT))
+                for roll in self._roll(crit=(self.attack_outcome == roll_types.AttackOutcome.CRIT))
             ]
             total = sum(results) + self.bonus.normalized_score
         else:

@@ -3,7 +3,7 @@
 from uuid import uuid4
 
 from dnd.controller import Controller, TurnContext
-from dnd.core.equipment_types import WeaponSlot
+from dnd.types.equipment import WeaponSlot
 from dnd.encounter import Encounter
 from dnd.entity import Entity
 from dnd.monsters.bestiary import create_goblin, create_skeleton

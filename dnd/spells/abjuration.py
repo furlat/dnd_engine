@@ -14,8 +14,12 @@ from uuid import UUID
 
 from pydantic import Field, PrivateAttr, model_validator
 
-from dnd.core.base_actions import (
+from dnd.core.events.action_events import (
     ActionEvent,
+    CounterspellReactionEvent,
+    _CounterspellEvidenceSnapshot,
+)
+from dnd.core.base_actions import (
     ActionTargetEffectBranchProfile,
     ActionTargetEffectProfile,
     BaseAction,
@@ -24,9 +28,15 @@ from dnd.core.base_actions import (
     TargetType,
     Cost,
 )
-from dnd.core.action_types import CostType, spell_slot_cost_type
-from dnd.core.base_conditions import BaseCondition, ConditionApplicationEvent, OutcomeProtection, SpellProtectionRegistry, SpellProtection
-from dnd.core.condition_types import (
+from dnd.types.actions import CostType, spell_slot_cost_type
+from dnd.core.base_conditions import (
+    BaseCondition,
+    ConditionApplicationEvent,
+    OutcomeProtection,
+    SpellProtectionRegistry,
+    SpellProtection,
+)
+from dnd.types.conditions import (
     ConditionAgencyDenial,
     ConditionCategory,
     ConditionTag,
@@ -40,30 +50,53 @@ from dnd.core.content.runtime import (
     RuntimeBehaviorKind,
     active_runtime_behavior_binding,
 )
-from dnd.core.effect_types import EffectOriginKind
-from dnd.core.events import AbilityName, Event, EventPhase, EventType, EventHandler, Trigger, RangeType, Range, EventQueue, SpatialChangeEvent, TakeDamageEvent, InstantDeathEvent, D20RollResultEvent, HealRollResultEvent
-from dnd.core.creature_types import DamageType
+from dnd.types.effects import EffectOriginKind
+from dnd.types.abilities import AbilityName
+from dnd.core.events.events_registry import (
+    Event,
+    EventPhase,
+    EventType,
+    EventHandler,
+    Trigger,
+    EventQueue,
+)
+from dnd.core.events.resolution_events import (
+    RangeType,
+    Range,
+    TakeDamageEvent,
+    D20RollResultEvent,
+    HealRollResultEvent,
+)
+from dnd.core.events.world_events import (
+    SpatialChangeEvent,
+)
+from dnd.core.events.encounter_events import (
+    InstantDeathEvent,
+)
+from dnd.types.damage import DamageType
 from dnd.core.modifiers import (
     ResistanceModifier,
-    ResistanceStatus,
     NumericalModifier,
-    AutoHitStatus,
     AdvantageModifier,
-    AdvantageStatus,
     ContextualAdvantageModifier,
 )
+from dnd.types.damage import ResistanceStatus
+from dnd.types.rolls import AutoHitStatus, AdvantageStatus
 from dnd.core.aoe import Sphere
 from dnd.core.gridmap import get_map
-from dnd.blocks.equipment import ArmorEquipEvent
-from dnd.core.equipment_types import UnarmoredAc
-from dnd.content_system.spatial_effect_materialization import (
+from dnd.core.events.item_events import (
+    ArmorEquipEvent,
+)
+from dnd.types.equipment import UnarmoredAc
+from dnd.content.spatial_effect_materialization import (
     materialize_spatial_effect,
 )
 
-from dnd.core.dice import AttackOutcome, Dice
+from dnd.types.rolls import AttackOutcome
+from dnd.core.dice import Dice
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType, SpellInterruptionLogData
 from dnd.entity import Entity
-from dnd.actions import (
+from dnd.actions.standard import (
     AttackEvent,
     SpellAction,
     SpellEvent,
@@ -77,292 +110,18 @@ from dnd.spells.content_metadata import (
     srd_spell_identity,
 )
 from dnd.spells.transmutation import HasteEffect
-from dnd.spells.effect_ids import (
+from dnd.core.events.action_events import (
     COUNTERSPELL_FAILURE_OUTCOME_CODE,
     COUNTERSPELL_INTERRUPTION_OUTCOME_CODE,
+)
+from dnd.spells.effect_ids import (
     MAGIC_MISSILE_DAMAGE_EFFECT_ID,
 )
-from dnd.spatial_effect_content import (
+from dnd.content.spatial_effect_recipes import (
     ANTIMAGIC_FIELD_RECIPE,
     GLOBE_OF_INVULNERABILITY_FIELD_RECIPE,
 )
-from dnd.spatial_effects import FieldEffect, SpatialEffect, SpatialEffectController
-
-
-class CounterspellReactionEvent(ActionEvent):
-    """Observable resolution of one Counterspell reaction."""
-
-    name: str = Field(default="Counterspell", description="Reaction event name.")
-    event_type: EventType = Field(
-        default=EventType.TRIGGER_EVENT,
-        description="Reaction event category.",
-    )
-    triggered_event_uuid: UUID = Field(
-        description="Incoming spell event version that triggered the reaction.",
-    )
-    triggered_lineage_uuid: UUID = Field(
-        description="Incoming spell lineage interrupted or challenged.",
-    )
-    incoming_spell_name: str = Field(
-        description="Display name of the incoming spell.",
-    )
-    incoming_spell_level: int = Field(
-        ge=0,
-        le=9,
-        description="Level of the incoming cast.",
-    )
-    counterspell_slot_level: int = Field(
-        ge=3,
-        le=9,
-        description="Slot level spent on Counterspell.",
-    )
-    automatic: bool = Field(
-        description="Whether the selected slot guarantees interruption.",
-    )
-    check_total: Optional[int] = Field(
-        default=None,
-        description="Spellcasting check total when required.",
-    )
-    check_dc: Optional[int] = Field(
-        default=None,
-        description="Spellcasting check DC when required.",
-    )
-    succeeded: bool = Field(
-        description="Whether Counterspell interrupted the incoming spell.",
-    )
-    outcome_code: str = type_cast(
-        str,
-        Field(
-            min_length=1,
-            description="Stable Counterspell result code matching succeeded.",
-        ),
-    )
-    reaction_content_identity: Optional[str] = Field(
-        default=None,
-        min_length=1,
-        description=(
-            "Exact authored Counterspell reaction identity frozen at "
-            "declaration."
-        ),
-    )
-    incoming_spell_content_identity: Optional[str] = Field(
-        default=None,
-        min_length=1,
-        description=(
-            "Exact authored incoming spell identity frozen at declaration."
-        ),
-    )
-
-    @model_validator(mode="after")
-    def validate_counterspell_resolution(
-        self,
-    ) -> "CounterspellReactionEvent":
-        """Reject contradictory reaction, roll, and outcome-code facts."""
-        binding = self.behavior_binding
-        expected_reaction_identity = (
-            binding.definition_ref.identity_key
-            if isinstance(binding, BehaviorBinding)
-            else None
-        )
-        if self.reaction_content_identity != expected_reaction_identity:
-            raise ValueError(
-                "reaction content identity must match its behavior binding",
-            )
-
-        expected_outcome_code = (
-            COUNTERSPELL_INTERRUPTION_OUTCOME_CODE
-            if self.succeeded
-            else COUNTERSPELL_FAILURE_OUTCOME_CODE
-        )
-        if self.outcome_code != expected_outcome_code:
-            raise ValueError(
-                "Counterspell outcome code contradicts its success result",
-            )
-
-        if self.automatic:
-            if self.counterspell_slot_level < self.incoming_spell_level:
-                raise ValueError(
-                    "automatic Counterspell requires a sufficient slot",
-                )
-            if not self.succeeded:
-                raise ValueError("automatic Counterspell must succeed")
-            if self.check_total is not None or self.check_dc is not None:
-                raise ValueError(
-                    "automatic Counterspell forbids check evidence",
-                )
-            return self
-
-        if self.counterspell_slot_level >= self.incoming_spell_level:
-            raise ValueError(
-                "checked Counterspell requires a lower-level slot",
-            )
-        if self.check_total is None or self.check_dc is None:
-            raise ValueError(
-                "checked Counterspell requires total and DC",
-            )
-        if self.check_dc != 10 + self.incoming_spell_level:
-            raise ValueError(
-                "Counterspell check DC must equal 10 plus spell level",
-            )
-        if self.succeeded != (self.check_total >= self.check_dc):
-            raise ValueError("Counterspell success contradicts its check")
-        return self
-
-    def generate_combat_log(self) -> CombatLogEntry:
-        """Generate a typed, subjectivity-filterable reaction log."""
-        counterspeller_name = self.source_entity_name or "Unknown"
-        original_caster_name = self.target_entity_name or "Unknown"
-        result_text = "interrupts" if self.succeeded else "fails to interrupt"
-        compact = (
-            f"{counterspeller_name} uses Counterspell and {result_text} "
-            f"{original_caster_name}'s {self.incoming_spell_name}"
-        )
-        data = SpellInterruptionLogData(
-            outcome_code=self.outcome_code,
-            counterspeller_name=counterspeller_name,
-            counterspeller_uuid=str(self.source_entity_uuid),
-            original_caster_name=original_caster_name,
-            original_caster_uuid=str(self.target_entity_uuid),
-            spell_name=self.incoming_spell_name,
-            incoming_spell_level=self.incoming_spell_level,
-            counterspell_slot_level=self.counterspell_slot_level,
-            automatic=self.automatic,
-            check_total=self.check_total,
-            check_dc=self.check_dc,
-            succeeded=self.succeeded,
-            reaction_content_identity=self.reaction_content_identity,
-            incoming_spell_content_identity=(
-                self.incoming_spell_content_identity
-            ),
-        )
-        return CombatLogEntry(
-            entry_type=CombatLogEntryType.SPELL_INTERRUPTION,
-            source_name=counterspeller_name,
-            source_uuid=str(self.source_entity_uuid),
-            target_name=original_caster_name,
-            target_uuid=str(self.target_entity_uuid),
-            compact=compact,
-            verbose=compact,
-            detailed=compact,
-            data=data.model_dump(mode="json"),
-            success=self.succeeded,
-        )
-
-    def validate_handler_result(self, result: Event) -> Event:
-        """Cancel an evidence or event-type rewrite before queue storage."""
-        evidence = _CounterspellEvidenceSnapshot.capture(self)
-        if (
-            type(result) is not CounterspellReactionEvent
-            or not isinstance(result, CounterspellReactionEvent)
-            or not self.handler_result_preserves_lifecycle(result)
-            or not evidence.matches(result)
-        ):
-            return self.invalid_handler_result_cancellation(
-                result,
-                status_message=(
-                    "Counterspell evidence or lifecycle changed after "
-                    "resolution."
-                ),
-            )
-        return result
-
-
-@dataclass(frozen=True)
-class _CounterspellEvidenceSnapshot:
-    """Immutable resolution and attribution accepted at declaration."""
-
-    name: str
-    event_type: EventType
-    lineage_uuid: UUID
-    parent_event: Optional[UUID]
-    source_entity_uuid: UUID
-    target_entity_uuid: Optional[UUID]
-    outcome_source_entity_uuid: Optional[UUID]
-    source_entity_name: Optional[str]
-    target_entity_name: Optional[str]
-    triggered_event_uuid: UUID
-    triggered_lineage_uuid: UUID
-    incoming_spell_name: str
-    incoming_spell_level: int
-    counterspell_slot_level: int
-    automatic: bool
-    check_total: Optional[int]
-    check_dc: Optional[int]
-    succeeded: bool
-    outcome_code: str
-    reaction_content_identity: Optional[str]
-    incoming_spell_content_identity: Optional[str]
-    behavior_binding: Optional[BehaviorBinding]
-
-    @classmethod
-    def capture(
-        cls,
-        event: CounterspellReactionEvent,
-    ) -> "_CounterspellEvidenceSnapshot":
-        """Capture every fact handlers must not rewrite after resolution."""
-        return cls(
-            name=event.name,
-            event_type=event.event_type,
-            lineage_uuid=event.lineage_uuid,
-            parent_event=event.parent_event,
-            source_entity_uuid=event.source_entity_uuid,
-            target_entity_uuid=event.target_entity_uuid,
-            outcome_source_entity_uuid=event.outcome_source_entity_uuid,
-            source_entity_name=event.source_entity_name,
-            target_entity_name=event.target_entity_name,
-            triggered_event_uuid=event.triggered_event_uuid,
-            triggered_lineage_uuid=event.triggered_lineage_uuid,
-            incoming_spell_name=event.incoming_spell_name,
-            incoming_spell_level=event.incoming_spell_level,
-            counterspell_slot_level=event.counterspell_slot_level,
-            automatic=event.automatic,
-            check_total=event.check_total,
-            check_dc=event.check_dc,
-            succeeded=event.succeeded,
-            outcome_code=event.outcome_code,
-            reaction_content_identity=event.reaction_content_identity,
-            incoming_spell_content_identity=(
-                event.incoming_spell_content_identity
-            ),
-            behavior_binding=event.behavior_binding,
-        )
-
-    def event_updates(self) -> Dict[str, Any]:
-        """Return the exact facts used to close a rewritten lifecycle."""
-        return {
-            "name": self.name,
-            "event_type": self.event_type,
-            "lineage_uuid": self.lineage_uuid,
-            "parent_event": self.parent_event,
-            "source_entity_uuid": self.source_entity_uuid,
-            "target_entity_uuid": self.target_entity_uuid,
-            "outcome_source_entity_uuid": self.outcome_source_entity_uuid,
-            "source_entity_name": self.source_entity_name,
-            "target_entity_name": self.target_entity_name,
-            "triggered_event_uuid": self.triggered_event_uuid,
-            "triggered_lineage_uuid": self.triggered_lineage_uuid,
-            "incoming_spell_name": self.incoming_spell_name,
-            "incoming_spell_level": self.incoming_spell_level,
-            "counterspell_slot_level": self.counterspell_slot_level,
-            "automatic": self.automatic,
-            "check_total": self.check_total,
-            "check_dc": self.check_dc,
-            "succeeded": self.succeeded,
-            "outcome_code": self.outcome_code,
-            "reaction_content_identity": self.reaction_content_identity,
-            "incoming_spell_content_identity": (
-                self.incoming_spell_content_identity
-            ),
-            "behavior_binding": self.behavior_binding,
-        }
-
-    def matches(self, event: CounterspellReactionEvent) -> bool:
-        """Return whether a phase preserves exact values and runtime types."""
-        return all(
-            type(getattr(event, field_name)) is type(expected_value)
-            and getattr(event, field_name) == expected_value
-            for field_name, expected_value in self.event_updates().items()
-        )
+from dnd.spatial.effect_base import FieldEffect, SpatialEffect, SpatialEffectController
 
 
 def _accept_counterspell_phase(
@@ -1731,13 +1490,13 @@ class Banishment(SpellAction):
         dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
-            ability_name="charisma",
+            ability_name=AbilityName.CHARISMA,
             dc=dc,
             parent_event=execution_event.uuid
         )
         _, save_roll, success = target.saving_throw(save_request)
 
-        save_bonus = target.saving_throw_bonus(caster.uuid, "charisma").normalized_score
+        save_bonus = target.saving_throw_bonus(caster.uuid, AbilityName.CHARISMA).normalized_score
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -2029,12 +1788,12 @@ class ProtectionFromPoisonEffect(BaseCondition):
         outs.append((target.health.damage_reduction.uuid, mod_uuid))
 
         poison_save_abilities: Tuple[AbilityName, ...] = (
-            "strength",
-            "dexterity",
-            "constitution",
-            "intelligence",
-            "wisdom",
-            "charisma",
+            AbilityName.STRENGTH,
+            AbilityName.DEXTERITY,
+            AbilityName.CONSTITUTION,
+            AbilityName.INTELLIGENCE,
+            AbilityName.WISDOM,
+            AbilityName.CHARISMA,
         )
         for ability_name in poison_save_abilities:
             save = target.saving_throws.get_saving_throw(ability_name)
@@ -2845,7 +2604,7 @@ class AidEffect(BaseCondition):
         )
         outs.append((target.health.max_hit_points_bonus.uuid, modifier_uuid))
 
-        con_mod = target.ability_scores.get_ability("constitution").get_combined_values().normalized_score
+        con_mod = target.ability_scores.get_ability(AbilityName.CONSTITUTION).get_combined_values().normalized_score
         max_hp = target.health.get_max_hit_dices_points(con_mod) + target.health.max_hit_points_bonus.score
         effect_event = declaration_event.phase_to(
             EventPhase.EFFECT,
@@ -2857,7 +2616,7 @@ class AidEffect(BaseCondition):
     def _post_removal_stats(self) -> Dict[str, Any]:
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if target and isinstance(target, Entity):
-            con_mod = target.ability_scores.get_ability("constitution").get_combined_values().normalized_score
+            con_mod = target.ability_scores.get_ability(AbilityName.CONSTITUTION).get_combined_values().normalized_score
             max_hp = target.health.get_max_hit_dices_points(con_mod) + target.health.max_hit_points_bonus.score
             return {"resulting_max_hp": max_hp}
         return {}
@@ -2989,7 +2748,7 @@ class SanctuaryEffect(BaseCondition):
 
             save_request = caster.create_saving_throw_request(
                 target_entity_uuid=attacker.uuid,
-                ability_name="wisdom",
+                ability_name=AbilityName.WISDOM,
                 dc=dc,
                 parent_event=event.uuid
             )
@@ -3142,7 +2901,7 @@ class BeaconOfHopeEffect(BaseCondition):
         outs: List[Tuple[UUID, UUID]] = []
         handler_uuids: List[UUID] = []
 
-        wis_save = target.saving_throws.get_saving_throw("wisdom")
+        wis_save = target.saving_throws.get_saving_throw(AbilityName.WISDOM)
         modifier_uuid = wis_save.bonus.self_static.add_advantage_modifier(
             AdvantageModifier(
                 name="Beacon of Hope",

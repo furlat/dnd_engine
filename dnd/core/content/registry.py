@@ -28,7 +28,7 @@ from dnd.core.content.registration import (
     ContentDeclarationMode,
 )
 from dnd.core.content.runtime import RuntimeBehaviorKind
-from dnd.core.spatial_effect_types import SpatialEffectTransitionAction
+from dnd.types.spatial_effects import SpatialEffectTransitionAction
 
 
 class NonConstructibleContentError(TypeError):

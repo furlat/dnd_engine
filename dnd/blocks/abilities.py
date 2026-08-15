@@ -1,20 +1,17 @@
-from typing import Dict, Optional, List, Literal, Tuple
+from typing import Dict, Optional, List, Tuple
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field,  computed_field
 from dnd.core.values import ModifiableValue
 from dnd.core.modifiers import NumericalModifier
-from dnd.core.proficiency_types import ProficiencyMode, ProficiencySourceSet
+from dnd.types.proficiency import ProficiencyMode, ProficiencySourceSet
 
-from dnd.core.events import AbilityName
+from dnd.types.abilities import AbilityName
 
 from dnd.core.base_block import BaseBlock
 
 def ability_score_normalizer(score: int) -> int:
     """ Normalizes the ability score to obtain the modifier with: (score - 10) // 2 """
     return (score - 10) // 2
-abilities = Literal['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma']
-
-
 class AbilityConfig(BaseModel):
     """
     Configuration for an Ability block.
@@ -79,7 +76,7 @@ class Ability(BaseBlock):
     """
 
     name: AbilityName = Field(
-        default="strength",
+        default=AbilityName.STRENGTH,
         description="The name of the ability (Strength, Dexterity, Constitution, Intelligence, Wisdom, or Charisma)"
     )
     ability_score: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),base_value=10, value_name="Ability Score",score_normalizer=ability_score_normalizer), description="The base ability score, typically ranging from 3 to 20 for most characters")
@@ -153,7 +150,7 @@ class Ability(BaseBlock):
     @classmethod
     def create(cls, source_entity_uuid: UUID, source_entity_name: Optional[str] = None,
                 target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None,
-                name: Literal['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'] = 'strength', config: Optional[AbilityConfig] = None) -> 'Ability':
+                name: AbilityName = AbilityName.STRENGTH, config: Optional[AbilityConfig] = None) -> 'Ability':
         """
         Create a new BaseBlock instance with the given parameters. Subclasses should override this method to add their own attributes and handle the modifiable values initialization in the method.
 
@@ -251,12 +248,12 @@ class AbilityScores(BaseBlock):
     """
 
     name: str = Field(default="ability_scores", description="The set of six core ability scores in D&D 5e")
-    strength: Ability = Field(default_factory=lambda: Ability.create(source_entity_uuid=uuid4(),name="strength"), description="Strength measures bodily power, athletic training, and the extent to which you can exert raw physical force")
-    dexterity: Ability = Field(default_factory=lambda: Ability.create(source_entity_uuid=uuid4(),name="dexterity"), description="Dexterity measures agility, reflexes, and balance")
-    constitution: Ability = Field(default_factory=lambda: Ability.create(source_entity_uuid=uuid4(),name="constitution"), description="Constitution measures health, stamina, and vital force")
-    intelligence: Ability = Field(default_factory=lambda: Ability.create(source_entity_uuid=uuid4(),name="intelligence"), description="Intelligence measures mental acuity, accuracy of recall, and the ability to reason")
-    wisdom: Ability = Field(default_factory=lambda: Ability.create(source_entity_uuid=uuid4(),name="wisdom"), description="Wisdom reflects how attuned you are to the world around you and represents perceptiveness and intuition")
-    charisma: Ability = Field(default_factory=lambda: Ability.create(source_entity_uuid=uuid4(),name="charisma"), description="Charisma measures your ability to interact effectively with others. It includes such factors as confidence and eloquence")
+    strength: Ability = Field(default_factory=lambda: Ability.create(source_entity_uuid=uuid4(),name=AbilityName.STRENGTH), description="Strength measures bodily power, athletic training, and the extent to which you can exert raw physical force")
+    dexterity: Ability = Field(default_factory=lambda: Ability.create(source_entity_uuid=uuid4(),name=AbilityName.DEXTERITY), description="Dexterity measures agility, reflexes, and balance")
+    constitution: Ability = Field(default_factory=lambda: Ability.create(source_entity_uuid=uuid4(),name=AbilityName.CONSTITUTION), description="Constitution measures health, stamina, and vital force")
+    intelligence: Ability = Field(default_factory=lambda: Ability.create(source_entity_uuid=uuid4(),name=AbilityName.INTELLIGENCE), description="Intelligence measures mental acuity, accuracy of recall, and the ability to reason")
+    wisdom: Ability = Field(default_factory=lambda: Ability.create(source_entity_uuid=uuid4(),name=AbilityName.WISDOM), description="Wisdom reflects how attuned you are to the world around you and represents perceptiveness and intuition")
+    charisma: Ability = Field(default_factory=lambda: Ability.create(source_entity_uuid=uuid4(),name=AbilityName.CHARISMA), description="Charisma measures your ability to interact effectively with others. It includes such factors as confidence and eloquence")
 
     @computed_field
     @property
@@ -270,7 +267,7 @@ class AbilityScores(BaseBlock):
         return [self.strength, self.dexterity, self.constitution, self.intelligence, self.wisdom, self.charisma]
     @computed_field
     @property
-    def ability_blocks_uuid_by_name(self) -> Dict[abilities, UUID]:
+    def ability_blocks_uuid_by_name(self) -> Dict[AbilityName, UUID]:
         """
         A dictionary mapping ability names to their UUIDs.
 
@@ -278,16 +275,16 @@ class AbilityScores(BaseBlock):
             Dict[abilities, UUID]: A dictionary mapping ability names to their UUIDs.
         """
         return {
-            'strength': self.strength.uuid,
-            'dexterity': self.dexterity.uuid,
-            'constitution': self.constitution.uuid,
-            'intelligence': self.intelligence.uuid,
-            'wisdom': self.wisdom.uuid,
-            'charisma': self.charisma.uuid
+            AbilityName.STRENGTH: self.strength.uuid,
+            AbilityName.DEXTERITY: self.dexterity.uuid,
+            AbilityName.CONSTITUTION: self.constitution.uuid,
+            AbilityName.INTELLIGENCE: self.intelligence.uuid,
+            AbilityName.WISDOM: self.wisdom.uuid,
+            AbilityName.CHARISMA: self.charisma.uuid
         }
     @computed_field
     @property
-    def ability_blocks_names_by_uuid(self) -> Dict[UUID, abilities]:
+    def ability_blocks_names_by_uuid(self) -> Dict[UUID, AbilityName]:
         """
         A dictionary mapping ability UUIDs to their names.
 
@@ -296,7 +293,7 @@ class AbilityScores(BaseBlock):
         """
         return{ability.uuid:ability.name for ability in self.abilities_list}
 
-    def get_modifier_from_name(self, ability_name: abilities) -> int:
+    def get_modifier_from_name(self, ability_name: AbilityName) -> int:
         """
         Get the modifier for a specific ability by its name.
 
@@ -346,10 +343,10 @@ class AbilityScores(BaseBlock):
         if config is None:
             return cls(source_entity_uuid=source_entity_uuid, source_entity_name=source_entity_name, target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, name="ability_scores")
         else:
-            strength = Ability.create(source_entity_uuid=source_entity_uuid, source_entity_name=source_entity_name, target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name,name="strength", config=config.strength)
-            dexterity = Ability.create(source_entity_uuid=source_entity_uuid, source_entity_name=source_entity_name, target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name,name="dexterity", config=config.dexterity)
-            constitution = Ability.create(source_entity_uuid=source_entity_uuid, source_entity_name=source_entity_name, target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name,name="constitution", config=config.constitution)
-            intelligence = Ability.create(source_entity_uuid=source_entity_uuid, source_entity_name=source_entity_name, target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name,name="intelligence", config=config.intelligence)
-            wisdom = Ability.create(source_entity_uuid=source_entity_uuid, source_entity_name=source_entity_name, target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name,name="wisdom", config=config.wisdom)
-            charisma = Ability.create(source_entity_uuid=source_entity_uuid, source_entity_name=source_entity_name, target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name,name="charisma", config=config.charisma)
+            strength = Ability.create(source_entity_uuid=source_entity_uuid, source_entity_name=source_entity_name, target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name,name=AbilityName.STRENGTH, config=config.strength)
+            dexterity = Ability.create(source_entity_uuid=source_entity_uuid, source_entity_name=source_entity_name, target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name,name=AbilityName.DEXTERITY, config=config.dexterity)
+            constitution = Ability.create(source_entity_uuid=source_entity_uuid, source_entity_name=source_entity_name, target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name,name=AbilityName.CONSTITUTION, config=config.constitution)
+            intelligence = Ability.create(source_entity_uuid=source_entity_uuid, source_entity_name=source_entity_name, target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name,name=AbilityName.INTELLIGENCE, config=config.intelligence)
+            wisdom = Ability.create(source_entity_uuid=source_entity_uuid, source_entity_name=source_entity_name, target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name,name=AbilityName.WISDOM, config=config.wisdom)
+            charisma = Ability.create(source_entity_uuid=source_entity_uuid, source_entity_name=source_entity_name, target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name,name=AbilityName.CHARISMA, config=config.charisma)
             return cls(source_entity_uuid=source_entity_uuid, source_entity_name=source_entity_name, target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, name="ability_scores", strength=strength, dexterity=dexterity, constitution=constitution, intelligence=intelligence, wisdom=wisdom, charisma=charisma)

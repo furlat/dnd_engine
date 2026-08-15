@@ -14,19 +14,34 @@ from dnd.core.traversal_connectors import (
 )
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_tiles import Tile
-from dnd.core.events import Event, EventHandler, EventPhase, EventQueue, EventType, Trigger
+from dnd.core.events.events_registry import (
+    Event,
+    EventHandler,
+    EventPhase,
+    EventQueue,
+    EventType,
+    Trigger,
+)
 from dnd.core.gridmap import get_map
-from dnd.core.life_types import LifeState
+from dnd.types.life import LifeState
 from dnd.core.positioning import PositionCommitError, PositionPublicationError
 from dnd.core.world_edges import ElevationSurfaceKind, SlopeAxis
 from dnd.core.action_execution import MovementTerminationReason
-from dnd.core.events import MovementTrajectory, StepMovementEvent
+from dnd.core.events.world_events import (
+    MovementTrajectory,
+    StepMovementEvent,
+)
 from dnd.core.combat_log import CombatLogEntryType
-from dnd.actions import TraverseConnector, TraverseConnectorEvent
-from dnd.actions_functional import execute_available_action
+from dnd.actions.standard import (
+    TraverseConnector,
+)
+from dnd.core.events.action_events import (
+    TraverseConnectorEvent,
+)
+from dnd.actions.operations import execute_available_action
 from dnd.monsters.bestiary import create_skeleton
 from dnd.entity import Entity
-from dnd.reactions import add_opportunity_attack_handler
+from dnd.actions.reactions import add_opportunity_attack_handler
 from tests.engine.support import (
     force_attack_hit,
     remove_attack_modifier,

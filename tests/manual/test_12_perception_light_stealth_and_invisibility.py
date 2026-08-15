@@ -4,17 +4,23 @@ from uuid import uuid4
 
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
-from dnd.blocks.equipment import EquipmentConfig
+from dnd.blocks.equipment import (
+    EquipmentConfig,
+)
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.conditions import Hidden, Invisible
-from dnd.actions_functional import execute_by_index
-from dnd.core.base_block import BaseBlock, LightLevel, SenseMode, SensesType
+from dnd.actions.operations import execute_by_index
+from dnd.core.base_block import BaseBlock
+from dnd.types.world import LightLevel
+from dnd.types.senses import SenseMode, SensesType
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.base_object import BaseObject
-from dnd.core.events import (
+from dnd.core.events.events_registry import (
     EventPhase,
     EventQueue,
     EventType,
+)
+from dnd.core.events.world_events import (
     SensoryUpdateEvent,
     SensoryUpdateReason,
 )

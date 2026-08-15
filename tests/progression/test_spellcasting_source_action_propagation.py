@@ -3,15 +3,23 @@
 from typing import cast
 from uuid import UUID, uuid4
 
-from dnd.actions import SpellAction, SpellEvent
-from dnd.actions_functional import register_spell
+from dnd.actions.standard import (
+    SpellAction,
+    SpellEvent,
+)
+from dnd.actions.operations import register_spell
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
-from dnd.core.base_actions import ActionOutcomeProfile
+from dnd.core.base_actions import (
+    ActionOutcomeProfile,
+)
 from dnd.core.content.durable_characters import RitualPreparationPolicy
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
-from dnd.core.events import AbilityName, EventPhase
-from dnd.core.creature_types import DamageType
-from dnd.core.progression import CasterProgression
+from dnd.types.abilities import AbilityName
+from dnd.core.events.events_registry import (
+    EventPhase,
+)
+from dnd.types.damage import DamageType
+from dnd.types.progression import CasterProgression
 from dnd.entity import Entity, EntityConfig
 from dnd.spells.evocation import FireBolt, MagicMissile, SacredFlame
 

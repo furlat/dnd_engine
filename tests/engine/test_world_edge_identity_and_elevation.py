@@ -9,23 +9,21 @@ from pydantic import ValidationError
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_object import BaseObject
 from dnd.core.base_tiles import Tile
-from dnd.core.events import (
+from dnd.core.events.events_registry import (
     Event,
     EventHandler,
     EventPhase,
     EventQueue,
     EventType,
-    TileElevationChangeEvent,
     Trigger,
+)
+from dnd.core.events.world_events import (
+    TileElevationChangeEvent,
 )
 from dnd.core.gridmap import get_map
 from dnd.core.values import BaseValue
-from dnd.core.world_edges import (
-    AdjacentEdgeKey,
-    ElevationSurfaceKind,
-    SlopeAxis,
-    WorldEdgeChannel,
-)
+from dnd.core.world_edges import AdjacentEdgeKey, ElevationSurfaceKind, SlopeAxis
+from dnd.types.world import WorldEdgeChannel
 from dnd.items.environment import DirectionalDoor, DirectionalWall
 from dnd.entity import Entity
 from tests.engine.support import reset_combat_state

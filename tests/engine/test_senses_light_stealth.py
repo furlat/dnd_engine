@@ -5,26 +5,36 @@ from uuid import UUID, uuid4
 import pytest
 from pydantic import Field
 
-from dnd.actions import Move
-from dnd.blocks.base_item import BaseItem
+from dnd.actions.standard import (
+    Move,
+)
+from dnd.blocks.base_item import (
+    BaseItem,
+)
 from dnd.blocks.sensory import spatial_senses_system
-from dnd.content_system.spatial_effect_materialization import (
+from dnd.content.spatial_effect_materialization import (
     materialize_spatial_effect,
 )
 from dnd.conditions import Hidden, Invisible, InvisibilityEffect
 from dnd.controller import PassController
-from dnd.core.base_actions import ActionEvent
-from dnd.core.base_block import BaseBlock, LightLevel, SenseMode, SensesType
+from dnd.core.events.action_events import (
+    ActionEvent,
+)
+from dnd.core.base_block import BaseBlock
+from dnd.types.world import LightLevel
+from dnd.types.senses import SenseMode, SensesType
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.base_object import BaseObject
 from dnd.core.base_tiles import Tile
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
-from dnd.core.condition_types import ConditionCategory, HazardFilter
-from dnd.core.events import (
+from dnd.types.conditions import ConditionCategory, HazardFilter
+from dnd.core.events.events_registry import (
     Event,
     EventPhase,
     EventQueue,
     EventType,
+)
+from dnd.core.events.world_events import (
     SensoryUpdateEvent,
     SensoryUpdateReason,
     SensesUpdateHint,
@@ -40,9 +50,9 @@ from dnd.spells.divination import SeeInvisibilityEffect
 from dnd.spells.enchantment import Bane, Bless
 from dnd.spells.evocation import Fireball, MagicMissile
 from dnd.spells.necromancy import NecroticBless
-from dnd.spatial_effect_content import DARKNESS_FIELD_RECIPE
-from dnd.spatial_effect_controllers import AreaSpatialEffectController
-from dnd.spatial_effects import FieldEffect
+from dnd.content.spatial_effect_recipes import DARKNESS_FIELD_RECIPE
+from dnd.spatial.effect_controllers import AreaSpatialEffectController
+from dnd.spatial.effect_base import FieldEffect
 from tests.engine.support import reset_combat_state
 
 

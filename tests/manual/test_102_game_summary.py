@@ -6,7 +6,14 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from dnd.actions import AttackEvent, JumpEvent, MovementEvent, SpellEvent
+from dnd.actions.standard import (
+    AttackEvent,
+    MovementEvent,
+    SpellEvent,
+)
+from dnd.core.events.action_events import (
+    JumpEvent,
+)
 from dnd.analytics import (
     EntitySnapshotV1,
     GameSummaryEvidenceV1,
@@ -17,40 +24,48 @@ from dnd.analytics import (
     reduce_game_summary,
     summary_digest_is_valid,
 )
-from dnd.blocks.base_item import ItemChargeConsumptionEvent
+from dnd.core.events.item_events import (
+    ItemChargeConsumptionEvent,
+)
 from dnd.conditions import Prone
-from dnd.core.base_actions import ActionEvent, BaseCost
+from dnd.core.events.action_events import (
+    ActionEvent,
+    BaseCost,
+)
 from dnd.core.base_conditions import ConditionApplicationEvent
 from dnd.core.combat_log import CombatLogEntry
 from dnd.core.content.runtime import bind_runtime_behavior
 from dnd.core.damage import DamageComponentResolution, DamageResolution
-from dnd.core.dice import AttackOutcome, DiceRoll, RollType
-from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import (
+from dnd.types.rolls import AttackOutcome, RollType
+from dnd.core.dice import DiceRoll
+from dnd.types.equipment import WeaponSlot
+from dnd.core.events.resolution_events import (
     AttackD20RollResultEvent,
     Damage,
     DamageAppliedEvent,
+    HealEvent,
+    TakeDamageEvent,
+)
+from dnd.core.events.encounter_events import (
     DeathEvent,
     EncounterEndEvent,
     EncounterStartEvent,
-    Event,
-    EventPhase,
-    EventType,
-    ForcedMovementEvent,
-    HealEvent,
     RoundStartEvent,
-    TakeDamageEvent,
     TurnEndEvent,
     TurnStartEvent,
 )
-from dnd.core.life_types import LifeState
-from dnd.core.creature_types import DamageType
-from dnd.core.modifiers import (
-    AdvantageStatus,
-    AutoHitStatus,
-    CriticalStatus,
-    ResistanceStatus,
+from dnd.core.events.events_registry import (
+    Event,
+    EventPhase,
+    EventType,
 )
+from dnd.core.events.world_events import (
+    ForcedMovementEvent,
+)
+from dnd.types.life import LifeState
+from dnd.types.damage import DamageType
+from dnd.types.rolls import AdvantageStatus, AutoHitStatus, CriticalStatus
+from dnd.types.damage import ResistanceStatus
 
 
 HERO_UUID = UUID("00000000-0000-0000-0000-000000000101")

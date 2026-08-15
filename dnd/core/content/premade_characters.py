@@ -23,7 +23,7 @@ from dnd.core.content.durable_characters import (
 )
 from dnd.core.content.identities import ContentRef
 from dnd.core.content.recipes import ContentRecipe
-from dnd.core.equipment_types import EquipmentSlot
+from dnd.types.equipment import EquipmentSlot
 
 
 class CharacterBuildDraft(BaseModel):

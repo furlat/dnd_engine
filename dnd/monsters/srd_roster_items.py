@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
-from typing import Literal
-
 from pydantic import BaseModel, ConfigDict
 
-from dnd.blocks.base_item import EquippedVisualPolicy
-from dnd.blocks.equipment import BodyArmor, Range, Weapon
+from dnd.presentation import EquippedVisualPolicy
+from dnd.types.rolls import DieSize
+from dnd.blocks.equipment import (
+    BodyArmor,
+    Weapon,
+)
+from dnd.core.events.resolution_events import (
+    Range,
+)
 from dnd.core.content.descriptors import (
     ContentDescriptorSpec,
     ContentOrdering,
@@ -30,9 +35,11 @@ from dnd.core.content.registration import (
     ContentDeclaration,
     get_content_declaration,
 )
-from dnd.core.equipment_types import ArmorType, BodyPart, WeaponProperty
-from dnd.core.events import RangeType
-from dnd.core.creature_types import DamageType
+from dnd.types.equipment import ArmorType, BodyPart, WeaponProperty
+from dnd.core.events.resolution_events import (
+    RangeType,
+)
+from dnd.types.damage import DamageType
 from dnd.core.values import ModifiableValue
 from dnd.items.authored_presentations import (
     authored_item_factory as item_factory,
@@ -54,7 +61,7 @@ class _WeaponSpec(BaseModel):
     content_id: str
     display_name: str
     creature_name: str
-    damage_dice: Literal[4, 6, 8, 10, 12, 20]
+    damage_dice: DieSize
     dice_numbers: int
     damage_type: DamageType
     range_type: RangeType = RangeType.REACH

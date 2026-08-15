@@ -11,8 +11,8 @@ from dnd.core.content.identities import (
     ContentRef,
     validate_namespaced_id,
 )
-from dnd.core.equipment_types import ArmorType, WeaponProperty
-from dnd.core.proficiency_types import ProficiencyMode, ProficiencySourceSet
+from dnd.types.equipment import ArmorType, WeaponProperty
+from dnd.types.proficiency import ProficiencyMode, ProficiencySourceSet
 
 
 _WEAPON_CATEGORIES = frozenset({

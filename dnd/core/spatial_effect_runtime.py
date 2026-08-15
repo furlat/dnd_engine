@@ -8,8 +8,8 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict
 
 from dnd.core.content.identities import ContentRef
-from dnd.core.creature_types import DamageType
-from dnd.core.spatial_effect_types import (
+from dnd.types.damage import DamageType
+from dnd.types.spatial_effects import (
     SpatialEffectInteractionIntensity,
     SpatialEffectInteractionOperation,
 )

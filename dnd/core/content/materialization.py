@@ -13,7 +13,7 @@ from dnd.core.content.identities import (
     ContentRef,
     validate_namespaced_id,
 )
-from dnd.core.spatial_effect_types import SpatialEffectAnchorKind
+from dnd.types.spatial_effects import SpatialEffectAnchorKind
 
 
 class CreatureDeploymentRole(BaseModel):

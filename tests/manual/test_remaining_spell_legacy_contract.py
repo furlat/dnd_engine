@@ -7,28 +7,35 @@ action/condition surfaces with legal resources and deterministic outcomes.
 
 from uuid import UUID
 
-from dnd.actions import Attack, Jump, SpellEvent
-from dnd.actions_functional import (
+from dnd.actions.standard import (
+    Attack,
+    Jump,
+    SpellEvent,
+)
+from dnd.actions.operations import (
     execute_by_index,
     get_available_actions,
     register_spell,
     setup_standard_actions,
 )
-from dnd.blocks.equipment import BodyArmor, Weapon
+from dnd.blocks.equipment import (
+    BodyArmor,
+    Weapon,
+)
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
-from dnd.core.base_actions import TargetType
-from dnd.core.condition_types import DurationType
-from dnd.core.dice import AttackOutcome, fixed_dice_faces
-from dnd.core.equipment_types import WeaponSlot
-from dnd.core.gridmap import get_map
-from dnd.core.creature_types import CreatureType, DamageType
-from dnd.core.modifiers import (
-    AdvantageStatus,
-    AutoHitModifier,
-    AutoHitStatus,
-    NumericalModifier,
+from dnd.core.base_actions import (
+    TargetType,
 )
+from dnd.types.conditions import DurationType
+from dnd.types.rolls import AttackOutcome
+from dnd.core.dice import fixed_dice_faces
+from dnd.types.equipment import WeaponSlot
+from dnd.core.gridmap import get_map
+from dnd.types.creatures import CreatureType
+from dnd.types.damage import DamageType
+from dnd.types.rolls import AdvantageStatus, AutoHitStatus
+from dnd.core.modifiers import AutoHitModifier, NumericalModifier
 from dnd.entity import Entity
 from dnd.items.armors import CHAIN_MAIL_RECIPE
 from dnd.items.weapons import DAGGER_RECIPE

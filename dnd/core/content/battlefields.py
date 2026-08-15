@@ -27,6 +27,7 @@ from dnd.core.world_edges import (
     contradictory_progressive_elevation_edge,
 )
 from dnd.core.traversal_connectors import TraversalConnectorDefinition
+from dnd.types.world import CardinalDirection
 
 
 LightLevelName = Literal["bright", "darkness"]
@@ -36,7 +37,6 @@ BattlefieldPreviewTerrain = Literal[
     "difficult_terrain",
     "spikes",
 ]
-BattlefieldPreviewDirection = Literal["north", "south", "east", "west"]
 BattlefieldPreviewObjectKind = Literal[
     "wall",
     "door",
@@ -93,7 +93,7 @@ class BattlefieldPreviewObject(BaseModel):
         description="Stable object presentation category.",
     )
     label: str = Field(description="Player-facing object label.")
-    blocked_directions: tuple[BattlefieldPreviewDirection, ...] = Field(
+    blocked_directions: tuple[CardinalDirection, ...] = Field(
         default=(),
         description="Directions blocked by a wall or closed door.",
     )
@@ -291,7 +291,6 @@ __all__ = [
     "BattlefieldElevationCell",
     "BattlefieldPreview",
     "BattlefieldPreviewCell",
-    "BattlefieldPreviewDirection",
     "BattlefieldPreviewObject",
     "BattlefieldPreviewObjectKind",
     "BattlefieldPreviewTerrain",

@@ -9,7 +9,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from dnd.actions import (
+from dnd.actions.standard import (
     Attack,
     AttackEvent,
     Dodge,
@@ -17,14 +17,16 @@ from dnd.actions import (
     Jump,
     Move,
 )
-from dnd.actions_functional import setup_standard_actions
+from dnd.actions.operations import setup_standard_actions
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import (
     ActionEconomyConfig,
     RechargeType,
     ResourceCapacityPolicy,
 )
-from dnd.blocks.equipment import Weapon
+from dnd.blocks.equipment import (
+    Weapon,
+)
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
@@ -38,12 +40,16 @@ from dnd.content_system.extra_attack_character_grant_appliers import (
     EXTRA_ATTACK_FEATURE_REF,
 )
 from dnd.conditions import Concentrating
-from dnd.core.base_actions import Cost
-from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import EventPhase
+from dnd.core.base_actions import (
+    Cost,
+)
+from dnd.types.equipment import WeaponSlot
+from dnd.core.events.events_registry import (
+    EventPhase,
+)
 from dnd.core.feature_grants import AttackMultiplicityGrant
 from dnd.core.gridmap import get_map
-from dnd.core.creature_types import DamageType
+from dnd.types.damage import DamageType
 from dnd.core.modifiers import NumericalModifier
 from dnd.entity import Entity, EntityConfig
 from dnd.items.weapons import GREATSWORD_RECIPE

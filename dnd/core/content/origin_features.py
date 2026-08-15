@@ -5,13 +5,12 @@ from typing import Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from dnd.core.content.durable_characters import (
-    AbilityScoreName,
-    ProficiencySubject,
-)
-from dnd.core.creature_types import DamageType, Size
-from dnd.core.saving_throw_types import SavingThrowEffectTag
-from dnd.core.senses import SenseMode
+from dnd.types.abilities import AbilityName
+from dnd.core.content.durable_characters import ProficiencySubject
+from dnd.types.damage import DamageType
+from dnd.types.creatures import Size
+from dnd.types.saving_throws import SavingThrowEffectTag
+from dnd.types.senses import SenseMode
 
 
 class OriginCapability(str, Enum):
@@ -32,7 +31,7 @@ class OriginSavingThrowAdvantageRule(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    abilities: tuple[AbilityScoreName, ...] = ()
+    abilities: tuple[AbilityName, ...] = ()
     requires_magical: bool | None = None
     effect_tags: tuple[SavingThrowEffectTag, ...] = ()
 
@@ -40,7 +39,7 @@ class OriginSavingThrowAdvantageRule(BaseModel):
     def _validate_rule(self) -> Self:
         if self.abilities != tuple(
             ability
-            for ability in AbilityScoreName
+            for ability in AbilityName
             if ability in set(self.abilities)
         ):
             raise ValueError("saving throw abilities must be unique and ordered")

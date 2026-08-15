@@ -10,20 +10,16 @@ import pytest
 from dnd.core.base_object import BaseObject
 from dnd.core.base_block import BaseBlock
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
-from dnd.core.dice import AttackOutcome, Dice, DiceRoll, RollType
-from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import (
+from dnd.types.rolls import AttackOutcome, RollType
+from dnd.core.dice import Dice, DiceRoll
+from dnd.types.equipment import WeaponSlot
+from dnd.core.events.resolution_events import (
     AttackD20RollResultEvent,
     AbilityCheckD20RollResultEvent,
     D20RollResultEvent,
     Damage,
     DamageRollPacket,
     DamageRollResultEvent,
-    EventHandler,
-    Event,
-    EventPhase,
-    EventQueue,
-    EventType,
     Healing,
     HealEvent,
     HealRollResultEvent,
@@ -31,11 +27,23 @@ from dnd.core.events import (
     RollModificationOperation,
     SavingThrowD20RollResultEvent,
     SkillCheckD20RollResultEvent,
+)
+from dnd.core.events.events_registry import (
+    EventHandler,
+    Event,
+    EventPhase,
+    EventQueue,
+    EventType,
     Trigger,
 )
-from dnd.actions import Attack
+from dnd.actions.standard import (
+    Attack,
+)
 from dnd.blocks.action_economy import RechargeType
-from dnd.blocks.equipment import Shield, Weapon
+from dnd.blocks.equipment import (
+    Shield,
+    Weapon,
+)
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
@@ -43,12 +51,11 @@ from dnd.core.content.runtime import HandlerDispatchOutcome
 from dnd.classes.feats import lucky_processor
 from dnd.classes.fighter import great_weapon_fighting_processor
 from dnd.core.gridmap import get_map, reset_map
-from dnd.core.creature_types import DamageType
-from dnd.core.modifiers import (
-    AdvantageModifier,
-    AdvantageStatus,
-)
-from dnd.core.values import AutoHitStatus, BaseValue, CriticalStatus, ModifiableValue
+from dnd.types.damage import DamageType
+from dnd.core.modifiers import AdvantageModifier
+from dnd.types.rolls import AdvantageStatus
+from dnd.types.rolls import AutoHitStatus, CriticalStatus
+from dnd.core.values import BaseValue, ModifiableValue
 from dnd.entity import Entity, EntityConfig, determine_attack_outcome
 from dnd.items.armors import WOODEN_SHIELD_RECIPE
 from dnd.items.weapons import (

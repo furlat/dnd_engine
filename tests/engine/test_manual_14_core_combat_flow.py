@@ -4,11 +4,16 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from uuid import uuid4
 
-from dnd.actions import Attack, AttackEvent
-from dnd.actions_functional import get_available_actions, setup_standard_actions
+from dnd.actions.standard import (
+    Attack,
+    AttackEvent,
+)
+from dnd.actions.operations import get_available_actions, setup_standard_actions
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
-from dnd.blocks.equipment import Weapon
+from dnd.blocks.equipment import (
+    Weapon,
+)
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
@@ -16,19 +21,24 @@ from dnd.core import dice as dice_module
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_object import BaseObject
 from dnd.core.combat_log import CombatLogEntryType
-from dnd.core.dice import AttackOutcome, Dice, DiceRoll, RollType
-from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import (
+from dnd.types.rolls import AttackOutcome, RollType
+from dnd.core.dice import Dice, DiceRoll
+from dnd.types.equipment import WeaponSlot
+from dnd.core.events.resolution_events import (
     DamageRollResultEvent,
+    TakeDamageEvent,
+)
+from dnd.core.events.encounter_events import (
     DeathEvent,
+)
+from dnd.core.events.events_registry import (
     EventPhase,
     EventQueue,
     EventType,
-    TakeDamageEvent,
 )
 from dnd.core.gridmap import get_map
-from dnd.core.life_types import LifeState
-from dnd.core.creature_types import DamageType
+from dnd.types.life import LifeState
+from dnd.types.damage import DamageType
 from dnd.core.values import BaseValue
 from dnd.entity import Entity, EntityConfig
 from dnd.items.weapons import SCIMITAR_RECIPE, SHORTBOW_RECIPE

@@ -6,9 +6,15 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from uuid import UUID, uuid4
 
-from dnd.actions import Disengage, Hide, SpellAction
-from dnd.actions_functional import register_spell
-from dnd.blocks.base_item import EquippableItem
+from dnd.actions.standard import (
+    Disengage,
+    Hide,
+    SpellAction,
+)
+from dnd.actions.operations import register_spell
+from dnd.blocks.base_item import (
+    EquippableItem,
+)
 from dnd.conditions import Blinded, Poisoned
 from dnd.content_system.creature_materialization import materialize_creature
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
@@ -36,11 +42,12 @@ from dnd.core.content.materialization import (
 )
 from dnd.core.content.registration import get_content_declaration
 from dnd.core.gridmap import get_map
-from dnd.core.modifiers import ResistanceModifier, ResistanceStatus
+from dnd.core.modifiers import ResistanceModifier
+from dnd.types.damage import ResistanceStatus
 from dnd.encounter import Encounter
 from dnd.entity import Entity
 from dnd.items.torches import Torch
-from dnd.reactions import add_opportunity_attack_handler
+from dnd.actions.reactions import add_opportunity_attack_handler
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.encounter_compatibility import (
     check_built_encounter_compatibility,

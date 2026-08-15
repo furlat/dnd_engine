@@ -52,7 +52,6 @@ from dnd.content_system.starting_equipment_definitions import (
 )
 from dnd.core.content.durable_characters import (
     AbilityScoreAllocation,
-    AbilityScoreName,
     CantripChoice,
     CharacterDefinitionRevisionV2,
     CharacterHoldingsRevision,
@@ -69,13 +68,14 @@ from dnd.core.content.durable_characters import (
     SpellcastingSourceId,
     StartingEquipmentPackageChoice,
 )
+from dnd.types.abilities import AbilityName
 from dnd.core.content.materialization import CreatureDeploymentRole
 from dnd.core.content.registry import FrozenContentRegistry
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.core.dice import fixed_dice_faces
-from dnd.core.creature_types import DamageType
-from dnd.core.events import (
+from dnd.types.damage import DamageType
+from dnd.core.events.events_registry import (
     Event,
     EventHandler,
     EventPhase,
@@ -83,8 +83,12 @@ from dnd.core.events import (
     Trigger,
 )
 from dnd.core.modifiers import NumericalModifier
-from dnd.actions import SpellAction
-from dnd.core.base_actions import BaseAction
+from dnd.actions.standard import (
+    SpellAction,
+)
+from dnd.core.base_actions import (
+    BaseAction,
+)
 from dnd.entity import Entity, EntityConfig
 from dnd.player_character_body import PLAYER_CHARACTER_BODY_RECIPE
 from dnd.runtime_reset import reset_engine_runtime
@@ -113,7 +117,7 @@ def test_origin_innate_spell_contract_closes_fixed_and_chosen_grants() -> None:
         source_id=SpellcastingSourceId(
             value="species_variant.high_elf.innate_spellcasting",
         ),
-        ability=AbilityScoreName.INTELLIGENCE,
+        ability=AbilityName.INTELLIGENCE,
         grants=(
             OriginInnateSpellGrant(
                 grant_id="high_elf.wizard_cantrip",
@@ -228,8 +232,8 @@ def _fighter_level_one_definition(
             charisma=13,
         ),
         flexible_ability_bonuses=FlexibleAbilityBonusSelection(
-            plus_two=AbilityScoreName.STRENGTH,
-            plus_one=AbilityScoreName.CHARISMA,
+            plus_two=AbilityName.STRENGTH,
+            plus_one=AbilityName.CHARISMA,
         ),
         class_levels=(
             ClassLevelEntry(
@@ -300,7 +304,7 @@ def test_tiefling_level_one_validates_materializes_and_removes_thaumaturgy(
         (
             "spell.thaumaturgy",
             0,
-            AbilityScoreName.CHARISMA,
+            AbilityName.CHARISMA,
             None,
         ),
     ]

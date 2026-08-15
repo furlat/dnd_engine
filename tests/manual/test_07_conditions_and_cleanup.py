@@ -7,9 +7,16 @@ from pydantic import Field
 
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition
-from dnd.core.condition_types import DurationType
+from dnd.types.conditions import DurationType
 from dnd.core.base_object import BaseObject
-from dnd.core.events import Event, EventHandler, EventPhase, EventQueue, EventType, Trigger
+from dnd.core.events.events_registry import (
+    Event,
+    EventHandler,
+    EventPhase,
+    EventQueue,
+    EventType,
+    Trigger,
+)
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import BaseValue, ModifiableValue
 

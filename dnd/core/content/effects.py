@@ -18,7 +18,7 @@ from pydantic import (
     model_validator,
 )
 
-from dnd.core.condition_types import (
+from dnd.types.conditions import (
     ConditionAgencyDenial,
     ConditionApplicationPolicy,
     ConditionRemovalTrigger,

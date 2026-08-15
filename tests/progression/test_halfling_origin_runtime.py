@@ -6,7 +6,9 @@ from uuid import uuid4
 
 import pytest
 
-from dnd.actions import Hide
+from dnd.actions.standard import (
+    Hide,
+)
 from dnd.content_system.character_build_validation import (
     CharacterBuildPreview,
     CharacterGrantProvenance,
@@ -26,13 +28,17 @@ from dnd.content_system.origin_runtime_character_grant_appliers import (
 )
 from dnd.content_system.system import LoadedContentSystem
 from dnd.content_system.runtime import ContentSystemRuntime
-from dnd.core.base_actions import ActionEvent
+from dnd.core.events.action_events import (
+    ActionEvent,
+)
 from dnd.core.content.origin_features import OriginCapability
 from dnd.core.content.registry import FrozenContentRegistry
-from dnd.core.dice import RollType
-from dnd.core.events import EventPhase
+from dnd.types.rolls import RollType
+from dnd.core.events.events_registry import (
+    EventPhase,
+)
 from dnd.core.gridmap import get_map
-from dnd.core.creature_types import Size
+from dnd.types.creatures import Size
 from dnd.entity import Entity, EntityConfig
 from dnd.origins.halfling import (
     HALFLING_LUCKY_DECLARATION,

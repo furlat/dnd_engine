@@ -38,7 +38,6 @@ from dnd.core.content.descriptors import (
 from dnd.core.content.durable_characters import (
     AbilityScoreAllocation,
     AbilityScoreImprovementChoice,
-    AbilityScoreName,
     BackgroundDefinition,
     CharacterDefinitionRevisionV2,
     CharacterHoldingsRevision,
@@ -51,6 +50,7 @@ from dnd.core.content.durable_characters import (
     StartingEquipmentPackageChoice,
     SubclassChoice,
 )
+from dnd.types.abilities import AbilityName
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.content.origin_support import OriginRuntimeSupport
 from dnd.core.content.materialization import CreatureDeploymentRole
@@ -66,15 +66,18 @@ from dnd.core.content.registration import (
     compute_definition_contract_hash,
 )
 from dnd.core.content.registry import FrozenContentRegistry
-from dnd.core.dice import AttackOutcome, fixed_dice_faces
-from dnd.core.equipment_types import ArmorType, WeaponProperty, WeaponSlot
-from dnd.core.creature_types import DamageType
-from dnd.core.modifiers import (
-    AdvantageStatus,
-    NumericalModifier,
+from dnd.types.rolls import AttackOutcome
+from dnd.core.dice import fixed_dice_faces
+from dnd.types.equipment import ArmorType, WeaponProperty, WeaponSlot
+from dnd.types.damage import DamageType
+from dnd.types.rolls import AdvantageStatus
+from dnd.core.modifiers import NumericalModifier
+from dnd.actions.standard import (
+    AttackEvent,
 )
-from dnd.actions import AttackEvent
-from dnd.blocks.equipment import Weapon
+from dnd.blocks.equipment import (
+    Weapon,
+)
 from dnd.entity import Entity, EntityConfig
 from dnd.items.weapons import GREATSWORD_RECIPE
 from dnd.player_character_body import PLAYER_CHARACTER_BODY_RECIPE
@@ -204,14 +207,14 @@ def _barbarian_levels() -> tuple[ClassLevelEntry, ...]:
                 ),
             )
         ability_increases = {
-            4: ((AbilityScoreName.STRENGTH, 2),),
+            4: ((AbilityName.STRENGTH, 2),),
             8: (
-                (AbilityScoreName.STRENGTH, 1),
-                (AbilityScoreName.CONSTITUTION, 1),
+                (AbilityName.STRENGTH, 1),
+                (AbilityName.CONSTITUTION, 1),
             ),
-            12: ((AbilityScoreName.CONSTITUTION, 2),),
-            16: ((AbilityScoreName.CONSTITUTION, 2),),
-            19: ((AbilityScoreName.WISDOM, 2),),
+            12: ((AbilityName.CONSTITUTION, 2),),
+            16: ((AbilityName.CONSTITUTION, 2),),
+            19: ((AbilityName.WISDOM, 2),),
         }.get(level)
         if ability_increases is not None:
             choices.append(
@@ -261,8 +264,8 @@ def test_level_twenty_berserker_materializes_and_reverses_exactly() -> None:
             charisma=8,
         ),
         flexible_ability_bonuses=FlexibleAbilityBonusSelection(
-            plus_two=AbilityScoreName.STRENGTH,
-            plus_one=AbilityScoreName.CONSTITUTION,
+            plus_two=AbilityName.STRENGTH,
+            plus_one=AbilityName.CONSTITUTION,
         ),
         class_levels=_barbarian_levels(),
         earned_character_level=20,

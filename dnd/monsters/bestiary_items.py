@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
-from dnd.blocks.equipment import BodyArmor
+from dnd.blocks.equipment import (
+    BodyArmor,
+)
 from dnd.core.content.descriptors import (
     ContentDescriptorSpec,
     ContentOrdering,
@@ -26,7 +28,7 @@ from dnd.core.content.recipes import ContentRecipe
 from dnd.core.content.registration import (
     get_content_declaration,
 )
-from dnd.core.equipment_types import ArmorType, BodyPart
+from dnd.types.equipment import ArmorType, BodyPart
 from dnd.core.values import ModifiableValue
 from dnd.items.authored_presentations import (
     authored_item_factory as item_factory,

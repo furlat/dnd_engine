@@ -10,34 +10,40 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from dnd.actions import JumpEvent, Move, MovementEvent
-from dnd.core.base_conditions import (
-    ConditionApplicationEvent,
-    OutcomeProtection,
+from dnd.core.events.action_events import (
+    JumpEvent,
 )
-from dnd.core.condition_types import (
-    ConditionRemovalTrigger,
-    ConditionTag,
+from dnd.actions.standard import (
+    Move,
+    MovementEvent,
 )
-from dnd.core.events import (
+from dnd.core.base_conditions import ConditionApplicationEvent, OutcomeProtection
+from dnd.types.conditions import ConditionRemovalTrigger, ConditionTag
+from dnd.core.events.events_registry import (
     Event,
     EventQueue,
     EventPhase,
     EventType,
+)
+from dnd.core.events.check_events import (
     SavingThrowEvent,
+)
+from dnd.core.events.world_events import (
     SensesUpdateHint,
     SpatialChangeEvent,
     SpatialChangeType,
     SpatialEffectInteractionEvent,
 )
-from dnd.core.spatial_effect_types import (
+from dnd.types.spatial_effects import (
     SpatialEffectInteractionIntensity,
     SpatialEffectInteractionOperation,
 )
 from dnd.entity import Entity
 from dnd.monsters.bestiary import create_goblin
 from dnd.runtime_reset import reset_engine_runtime
-from dnd.spells.abjuration import ShieldBuff
+from dnd.spells.abjuration import (
+    ShieldBuff,
+)
 from server.event_contract import (
     EVENT_CONTRACT,
     EventContractError,
@@ -223,8 +229,8 @@ def test_concrete_wire_type_distinguishes_move_jump_and_generic_events() -> None
     generic_payload = serialize_event(generic)
 
     assert movement_payload["event_type"] == jump_payload["event_type"] == "movement"
-    assert movement_payload["wire_type"] == "dnd.actions.MovementEvent"
-    assert jump_payload["wire_type"] == "dnd.actions.JumpEvent"
+    assert movement_payload["wire_type"] == "dnd.actions.standard.MovementEvent"
+    assert jump_payload["wire_type"] == "dnd.actions.standard.JumpEvent"
     assert generic_payload["wire_type"] == "dnd.core.events.Event"
     assert movement_payload["trajectory"] == "path"
     assert jump_payload["trajectory"] == "direct_arc"

@@ -13,9 +13,9 @@ from dnd.core.content.descriptors import (
     compute_safe_content_presentation_hash,
 )
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
-from dnd.core.equipment_types import WeaponSet
-from dnd.core.item_types import EquippedVisualPolicy, ItemPresentationKind
-from dnd.core.life_types import LifeState, LifeStateChangeReason
+from dnd.types.equipment import WeaponSet
+from dnd.presentation import EquippedVisualPolicy, ItemPresentationKind
+from dnd.types.life import LifeState, LifeStateChangeReason
 from server.world_contracts import (
     APIAppearance,
     APIContentRefSnapshot,

@@ -2,12 +2,14 @@
 
 from uuid import uuid4
 
-from dnd.actions import SpellEvent
+from dnd.actions.standard import (
+    SpellEvent,
+)
 from dnd.core.base_conditions import BaseCondition
-from dnd.core.condition_types import ConditionTag
-from dnd.core.effect_types import EffectOriginKind
+from dnd.types.conditions import ConditionTag
+from dnd.types.effects import EffectOriginKind
 from dnd.runtime_reset import reset_engine_runtime
-from dnd.spatial_effect_controllers import AreaSpatialEffectController
+from dnd.spatial.effect_controllers import AreaSpatialEffectController
 
 
 def test_spell_event_exports_frozen_base_and_effective_spell_provenance() -> None:

@@ -11,7 +11,13 @@ from dnd.blocks.action_economy import (
     RechargeType,
     Resource,
 )
-from dnd.core.events import EventHandler, EventPhase, EventQueue, EventType, Trigger
+from dnd.core.events.events_registry import (
+    EventHandler,
+    EventPhase,
+    EventQueue,
+    EventType,
+    Trigger,
+)
 from dnd.core.gridmap import get_map
 from dnd.core.positioning import PositionCommitError, PositionPublicationError
 from dnd.core.modifiers import NumericalModifier

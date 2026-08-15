@@ -18,7 +18,7 @@ from typing import Iterable
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
-PRODUCTION_ROOT_NAMES = ("dnd", "server")
+PRODUCTION_ROOT_NAMES = ("dnd",)
 SUPPLEMENTAL_SOURCE_ROOT_NAMES = ("tests", "devtools")
 PROJECT_PACKAGE_NAMES = frozenset(PRODUCTION_ROOT_NAMES)
 
@@ -44,39 +44,150 @@ IGNORED_DIRECTORY_NAMES = frozenset({
 
 CONCRETE_ENTITY_DEPENDENCY_PREFIXES = (
     "dnd.actions",
-    "dnd.actions_functional",
     "dnd.classes",
     "dnd.conditions",
     "dnd.extensions",
     "dnd.items",
     "dnd.monsters",
-    "dnd.reactions",
     "dnd.scenarios",
     "dnd.spells",
-    "dnd.spatial_effect_controllers",
+    "dnd.spatial",
 )
 
 SAFE_LEAF_MODULES = frozenset({
+    "dnd.core.content.origin_support",
+    "dnd.core.presentation_geometry",
+    "dnd.presentation",
+    "dnd.types.abilities",
+    "dnd.types.actions",
+    "dnd.types.conditions",
+    "dnd.types.creatures",
+    "dnd.types.damage",
+    "dnd.types.effects",
+    "dnd.types.encounter",
+    "dnd.types.equipment",
+    "dnd.types.items",
+    "dnd.types.languages",
+    "dnd.types.life",
+    "dnd.types.proficiency",
+    "dnd.types.progression",
+    "dnd.types.rolls",
+    "dnd.types.saving_throws",
+    "dnd.types.senses",
+    "dnd.types.spatial_effects",
+    "dnd.types.world",
+})
+
+RETIRED_TYPE_MODULES = frozenset({
     "dnd.core.action_types",
     "dnd.core.condition_types",
     "dnd.core.creature_types",
-    "dnd.core.content.origin_support",
     "dnd.core.effect_types",
     "dnd.core.equipment_types",
     "dnd.core.item_types",
+    "dnd.core.language_types",
     "dnd.core.life_types",
-    "dnd.core.presentation_geometry",
+    "dnd.core.proficiency_types",
     "dnd.core.roll_types",
+    "dnd.core.saving_throw_types",
     "dnd.core.senses",
+    "dnd.core.spatial_effect_types",
 })
+
+RETIRED_DOMAIN_MODULES = frozenset({
+    "dnd.action_dispatch",
+    "dnd.action_timing",
+    "dnd.actions_functional",
+    "dnd.environmental_effect_runtime",
+    "dnd.environmental_effects",
+    "dnd.reactions",
+    "dnd.content_system.spatial_effect_materialization",
+    "dnd.spatial_effect_content",
+    "dnd.spatial_effect_controllers",
+    "dnd.spatial_effects",
+    "dnd.spatial_memberships",
+    "dnd.spatial_restraints",
+})
+
+RETIRED_ROOT_DOMAIN_PATHS = (
+    "dnd/action_dispatch.py",
+    "dnd/action_timing.py",
+    "dnd/actions.py",
+    "dnd/actions_functional.py",
+    "dnd/environmental_effect_runtime.py",
+    "dnd/environmental_effects.py",
+    "dnd/reactions.py",
+    "dnd/spatial_effect_content.py",
+    "dnd/spatial_effect_controllers.py",
+    "dnd/spatial_effects.py",
+    "dnd/spatial_memberships.py",
+    "dnd/spatial_restraints.py",
+)
+
+EVENT_REGISTRY_MODULE = "dnd.core.events.events_registry"
+EVENT_FAMILY_MODULES = frozenset({
+    "dnd.core.events.action_events",
+    "dnd.core.events.check_events",
+    "dnd.core.events.encounter_events",
+    "dnd.core.events.item_events",
+    "dnd.core.events.resolution_events",
+    "dnd.core.events.world_events",
+})
+MOVED_EVENT_SYMBOL_OWNERS = {
+    "ActionEvent": "dnd.core.events.action_events",
+    "ArmorEquipEvent": "dnd.core.events.item_events",
+    "ArmorUnequipEvent": "dnd.core.events.item_events",
+    "BaseCost": "dnd.core.events.action_events",
+    "CounterspellReactionEvent": "dnd.core.events.action_events",
+    "DragonbornBreathWeaponEvent": "dnd.core.events.action_events",
+    "EquipmentEvent": "dnd.core.events.item_events",
+    "ItemChargeConsumptionEvent": "dnd.core.events.item_events",
+    "ItemLocationStateEvent": "dnd.core.events.item_events",
+    "JumpEvent": "dnd.core.events.action_events",
+    "ShieldEquipEvent": "dnd.core.events.item_events",
+    "ShieldUnequipEvent": "dnd.core.events.item_events",
+    "ShoveEvent": "dnd.core.events.action_events",
+    "TraverseConnectorEvent": "dnd.core.events.action_events",
+    "WeaponEquipEvent": "dnd.core.events.item_events",
+    "WeaponUnequipEvent": "dnd.core.events.item_events",
+}
+RETIRED_EVENT_IMPORT_OWNERS = {
+    "dnd.actions.standard": frozenset({"JumpEvent", "ShoveEvent", "TraverseConnectorEvent"}),
+    "dnd.blocks.base_item": frozenset({
+        "ItemChargeConsumptionEvent",
+        "ItemLocationStateEvent",
+    }),
+    "dnd.blocks.equipment": frozenset({
+        "ArmorEquipEvent",
+        "ArmorUnequipEvent",
+        "EquipmentEvent",
+        "ShieldEquipEvent",
+        "ShieldUnequipEvent",
+        "WeaponEquipEvent",
+        "WeaponUnequipEvent",
+    }),
+    "dnd.core.base_actions": frozenset({"ActionEvent", "BaseCost"}),
+    "dnd.origins.dragonborn": frozenset({"DragonbornBreathWeaponEvent"}),
+    "dnd.spells.abjuration": frozenset({"CounterspellReactionEvent"}),
+}
 
 CANONICAL_NEUTRAL_SYMBOL_OWNERS = {
     "ActionOutcomeProfile": "dnd.core.action_outcomes",
     "DamageRollProfile": "dnd.core.action_outcomes",
     "OutcomeApplicationScope": "dnd.core.action_outcomes",
     "OutcomeResolution": "dnd.core.action_outcomes",
-    "ActionPresentationKind": "dnd.core.action_types",
-    "AdvantageStatus": "dnd.core.roll_types",
+    "ActionPresentationKind": "dnd.presentation",
+    "AbilityName": "dnd.types.abilities",
+    "SkillName": "dnd.types.abilities",
+    "SavingThrowName": "dnd.types.abilities",
+    "AdvantageStatus": "dnd.types.rolls",
+    "AttackOutcome": "dnd.types.rolls",
+    "AutoHitStatus": "dnd.types.rolls",
+    "CriticalStatus": "dnd.types.rolls",
+    "ResistanceStatus": "dnd.types.damage",
+    "RollType": "dnd.types.rolls",
+    "DieSize": "dnd.types.rolls",
+    "HitDieSize": "dnd.types.rolls",
     "ContentDefinitionKind": "dnd.core.content.identities",
     "ContentRef": "dnd.core.content.identities",
     "BehaviorBinding": "dnd.core.content.runtime",
@@ -84,55 +195,68 @@ CANONICAL_NEUTRAL_SYMBOL_OWNERS = {
     "HandlerDispatchOutcome": "dnd.core.content.runtime",
     "HandlerDispatchEvidence": "dnd.core.content.runtime",
     "EffectiveHandlerPresentation": "dnd.core.content.runtime",
-    "ConditionTag": "dnd.core.condition_types",
-    "CreatureType": "dnd.core.creature_types",
-    "DamageType": "dnd.core.creature_types",
-    "Size": "dnd.core.creature_types",
-    "LifeState": "dnd.core.life_types",
-    "WeaponSlot": "dnd.core.equipment_types",
-    "BodyPart": "dnd.core.equipment_types",
-    "RingSlot": "dnd.core.equipment_types",
-    "EquipmentSlot": "dnd.core.equipment_types",
-    "EffectOrigin": "dnd.core.effect_types",
-    "ItemLocation": "dnd.core.item_types",
-    "ItemPresentationState": "dnd.core.item_types",
+    "ConditionTag": "dnd.types.conditions",
+    "CreatureType": "dnd.types.creatures",
+    "DamageType": "dnd.types.damage",
+    "Size": "dnd.types.creatures",
+    "LifeState": "dnd.types.life",
+    "WeaponSlot": "dnd.types.equipment",
+    "BodyPart": "dnd.types.equipment",
+    "RingSlot": "dnd.types.equipment",
+    "EquipmentSlot": "dnd.types.equipment",
+    "EffectOrigin": "dnd.types.effects",
+    "ItemLocation": "dnd.types.items",
+    "ItemPresentationState": "dnd.presentation",
+    "EncounterState": "dnd.types.encounter",
+    "TurnState": "dnd.types.encounter",
+    "ControllerExecutionMode": "dnd.types.encounter",
+    "AdvanceStatus": "dnd.types.encounter",
+    "CasterProgression": "dnd.types.progression",
+    "MulticlassSlotRoundingPolicy": "dnd.types.progression",
+    "MovementMode": "dnd.types.world",
+    "LightLevel": "dnd.types.world",
+    "CardinalDirection": "dnd.types.world",
+    "WorldEdgeChannel": "dnd.types.world",
     "OriginRuntimeSupport": "dnd.core.content.origin_support",
     "OriginRuntimeSupportStatus": "dnd.core.content.origin_support",
-    "APIItemSummary": "server.world_contracts",
-    "APIEquipmentSlot": "server.world_contracts",
-    "APIEquipmentOverview": "server.world_contracts",
-    "APIAppearance": "server.world_contracts",
-    "APIConditionSummary": "server.world_contracts",
-    "APIEntitySummary": "server.world_contracts",
-    "APIDirectionalBlockMap": "server.world_contracts",
-    "APITile": "server.world_contracts",
-    "APIGrid": "server.world_contracts",
-    "APICombatant": "server.world_contracts",
-    "APIEncounter": "server.world_contracts",
-    "APIFloorObject": "server.world_contracts",
-    "APIGameState": "server.world_contracts",
-    "APIEntityVisibility": "server.world_contracts",
-    "APIVisibilityResponse": "server.world_contracts",
+}
+
+RETIRED_SYMBOL_OWNER_IMPORTS = {
+    "dnd.blocks.saving_throws": frozenset({"SavingThrowName"}),
+    "dnd.controller": frozenset({"ControllerExecutionMode"}),
+    "dnd.core.base_block": frozenset({"LightLevel", "MovementMode"}),
+    "dnd.core.dice": frozenset({"AttackOutcome", "RollType"}),
+    "dnd.core.events": frozenset({"AbilityName", "SkillName"}),
+    "dnd.core.modifiers": frozenset({
+        "AutoHitStatus",
+        "CriticalStatus",
+        "ResistanceStatus",
+    }),
+    "dnd.core.progression": frozenset({
+        "CasterProgression",
+        "MulticlassSlotRoundingPolicy",
+    }),
+    "dnd.core.world_edges": frozenset({"WorldEdgeChannel"}),
+    "dnd.encounter": frozenset({"EncounterState", "TurnState"}),
 }
 
 CONTENT_CONTRACT_MODULE_PREFIX = "dnd.core.content"
 CONTENT_CONTRACT_ALLOWED_NEUTRAL_DEPENDENCIES = frozenset({
-    "dnd.core.condition_types",
-    "dnd.core.creature_types",
-    "dnd.core.equipment_types",
     "dnd.core.progression",
-    "dnd.core.saving_throw_types",
-    "dnd.core.senses",
-    "dnd.core.spatial_effect_types",
     "dnd.core.traversal_connectors",
     "dnd.core.world_edges",
-})
-WORLD_CONTRACT_ALLOWED_PROJECT_DEPENDENCIES = frozenset({
-    "dnd.core.equipment_types",
-    "dnd.core.life_types",
-    "dnd.core.senses",
-    "dnd.core.traversal_connectors",
-    "dnd.core.world_edges",
+    "dnd.presentation",
+    "dnd.types.abilities",
+    "dnd.types.conditions",
+    "dnd.types.creatures",
+    "dnd.types.damage",
+    "dnd.types.equipment",
+    "dnd.types.progression",
+    "dnd.types.rolls",
+    "dnd.types.saving_throws",
+    "dnd.types.senses",
+    "dnd.types.spatial_effects",
+    "dnd.types.world",
 })
 
 MECHANISM_MODULES = frozenset({
@@ -617,6 +741,30 @@ def _top_level_symbol_definitions(source_module: SourceModule) -> set[str]:
     return definitions
 
 
+def _literal_module_exports(source_module: SourceModule) -> set[str] | None:
+    """Return a module's literal ``__all__``, or ``None`` when absent."""
+    for node in source_module.tree.body:
+        if not isinstance(node, (ast.Assign, ast.AnnAssign)):
+            continue
+        targets = node.targets if isinstance(node, ast.Assign) else (node.target,)
+        if not any(isinstance(target, ast.Name) and target.id == "__all__" for target in targets):
+            continue
+        value = node.value
+        if not isinstance(value, (ast.List, ast.Tuple, ast.Set)):
+            raise AssertionError(
+                f"{source_module.display_path}: __all__ must be a literal sequence"
+            )
+        exports: set[str] = set()
+        for element in value.elts:
+            if not isinstance(element, ast.Constant) or not isinstance(element.value, str):
+                raise AssertionError(
+                    f"{source_module.display_path}: __all__ entries must be strings"
+                )
+            exports.add(element.value)
+        return exports
+    return None
+
+
 def _expression_mentions_active_conditions(node: ast.AST) -> bool:
     """Return whether an expression reads an active-condition index."""
     for child in ast.walk(node):
@@ -816,6 +964,140 @@ def test_internal_import_graph_has_no_cycles() -> None:
     )
 
 
+def test_root_action_and_spatial_modules_are_fully_retired() -> None:
+    """The package migration may not leave old files or import façades behind."""
+    stale_paths = [
+        path
+        for relative_path in RETIRED_ROOT_DOMAIN_PATHS
+        if (path := REPOSITORY_ROOT / relative_path).exists()
+    ]
+    stale_imports = [
+        reference
+        for reference in _import_references()
+        if reference.target in RETIRED_DOMAIN_MODULES
+    ]
+    package_initializer_findings: list[str] = []
+    for relative_path in (
+        "dnd/actions/__init__.py",
+        "dnd/content/__init__.py",
+        "dnd/spatial/__init__.py",
+    ):
+        path = REPOSITORY_ROOT / relative_path
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        executable_nodes = [
+            node
+            for node in tree.body
+            if not (
+                isinstance(node, ast.Expr)
+                and isinstance(node.value, ast.Constant)
+                and isinstance(node.value.value, str)
+            )
+        ]
+        if executable_nodes:
+            package_initializer_findings.append(relative_path)
+
+    messages: list[str] = []
+    if stale_paths:
+        messages.append(
+            "Retired root modules still exist:\n"
+            + "\n".join(
+                f"- {path.relative_to(REPOSITORY_ROOT)}"
+                for path in stale_paths
+            )
+        )
+    if stale_imports:
+        messages.append(
+            "Active production imports retired root modules:\n"
+            + _format_import_references(stale_imports)
+        )
+    if package_initializer_findings:
+        messages.append(
+            "Domain package initializers must not re-export compatibility symbols:\n"
+            + "\n".join(
+                f"- {path}" for path in package_initializer_findings
+            )
+        )
+    assert not messages, "\n\n".join(messages)
+
+
+def test_event_registry_never_imports_concrete_event_families() -> None:
+    """The event registry is the one-way dependency root of every event family."""
+    family_edges = [
+        reference
+        for reference in _import_references()
+        if reference.importer == EVENT_REGISTRY_MODULE
+        and reference.target in EVENT_FAMILY_MODULES
+    ]
+    package_imports = [
+        reference
+        for reference in _import_references()
+        if reference.importer == "dnd.core.events"
+    ]
+    assert not family_edges and not package_imports, (
+        "The registry may not import concrete event families and the package "
+        "initializer may not provide compatibility exports:\n"
+        + _format_import_references([*family_edges, *package_imports])
+    )
+
+
+def test_moved_event_symbols_have_one_canonical_owner() -> None:
+    """Safely migrated events must remain defined only in their event-family module."""
+    definitions_by_symbol = {symbol: [] for symbol in MOVED_EVENT_SYMBOL_OWNERS}
+    for source_module in _source_modules().values():
+        definitions = _top_level_symbol_definitions(source_module)
+        for symbol in definitions_by_symbol:
+            if symbol in definitions:
+                definitions_by_symbol[symbol].append(source_module.name)
+
+    violations: list[str] = []
+    for symbol, expected_owner in MOVED_EVENT_SYMBOL_OWNERS.items():
+        actual_owners = sorted(definitions_by_symbol[symbol])
+        if actual_owners != [expected_owner]:
+            actual = ", ".join(actual_owners) if actual_owners else "missing"
+            violations.append(
+                f"- {symbol}: expected {expected_owner}; found {actual}"
+            )
+    assert not violations, (
+        "Moved event symbols must have one canonical owner:\n"
+        + "\n".join(violations)
+    )
+
+
+def test_active_code_does_not_import_retired_event_paths() -> None:
+    """The event hard cut leaves no old-module facade in production or tests."""
+    violations: list[str] = []
+    for root_name in ("dnd", "tests"):
+        for path in sorted((REPOSITORY_ROOT / root_name).rglob("*.py")):
+            if "__pycache__" in path.parts:
+                continue
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.ImportFrom) or node.module is None:
+                    continue
+                if node.module == "dnd.core.events":
+                    imported = ", ".join(alias.name for alias in node.names)
+                    violations.append(
+                        f"- {path.relative_to(REPOSITORY_ROOT)}:{node.lineno}: "
+                        f"from dnd.core.events import {imported}"
+                    )
+                    continue
+                retired_symbols = RETIRED_EVENT_IMPORT_OWNERS.get(node.module)
+                if retired_symbols is None:
+                    continue
+                imported = sorted(
+                    alias.name for alias in node.names if alias.name in retired_symbols
+                )
+                if imported:
+                    violations.append(
+                        f"- {path.relative_to(REPOSITORY_ROOT)}:{node.lineno}: "
+                        f"from {node.module} import {', '.join(imported)}"
+                    )
+    assert not violations, (
+        "Active code imports events through retired owners:\n"
+        + "\n".join(violations)
+    )
+
+
 def test_dependency_direction_is_respected() -> None:
     """Project packages and Entity may only depend in the approved direction."""
     violations: list[ImportReference] = []
@@ -860,6 +1142,71 @@ def test_neutral_symbols_have_one_canonical_leaf_owner() -> None:
     )
 
 
+def test_every_public_type_symbol_has_one_canonical_owner() -> None:
+    """Every declared type-package export is defined once, in its exporting leaf."""
+    type_modules = {
+        name: module
+        for name, module in _source_modules().items()
+        if name.startswith("dnd.types.")
+    }
+    export_owners: dict[str, str] = {}
+    violations: list[str] = []
+    for module_name, source_module in sorted(type_modules.items()):
+        exports = _literal_module_exports(source_module)
+        if exports is None:
+            violations.append(f"- {module_name}: missing literal __all__")
+            continue
+        definitions = _top_level_symbol_definitions(source_module)
+        missing_definitions = sorted(exports - definitions)
+        if missing_definitions:
+            violations.append(
+                f"- {module_name}: exports undefined symbols "
+                + ", ".join(missing_definitions)
+            )
+        for symbol in exports:
+            previous_owner = export_owners.setdefault(symbol, module_name)
+            if previous_owner != module_name:
+                violations.append(
+                    f"- {symbol}: exported by {previous_owner} and {module_name}"
+                )
+
+    definitions_by_symbol = {symbol: [] for symbol in export_owners}
+    for source_module in _source_modules().values():
+        definitions = _top_level_symbol_definitions(source_module)
+        for symbol in definitions_by_symbol:
+            if symbol in definitions:
+                definitions_by_symbol[symbol].append(source_module.name)
+    for symbol, expected_owner in sorted(export_owners.items()):
+        actual_owners = sorted(definitions_by_symbol[symbol])
+        if actual_owners != [expected_owner]:
+            actual = ", ".join(actual_owners) if actual_owners else "missing"
+            violations.append(
+                f"- {symbol}: expected {expected_owner}; found {actual}"
+            )
+    assert not violations, (
+        "Public dnd.types symbols must have one canonical leaf owner:\n"
+        + "\n".join(violations)
+    )
+
+
+def test_retired_symbol_owners_do_not_reexport_moved_types() -> None:
+    """A move removes the old module-level import surface as well as its definition."""
+    violations = [
+        reference
+        for reference in _import_references()
+        if reference.importer in RETIRED_SYMBOL_OWNER_IMPORTS
+        and any(
+            reference.syntax.endswith(f" import {symbol}")
+            for symbol in RETIRED_SYMBOL_OWNER_IMPORTS[reference.importer]
+        )
+    ]
+    assert not violations, (
+        "Former type owners must use qualified module imports, never re-export "
+        "their moved symbols:\n"
+        + _format_import_references(violations)
+    )
+
+
 def test_creature_fact_enums_are_not_imported_from_stateful_modifiers() -> None:
     """Creature facts have one import surface instead of a modifiers alias."""
     retired_symbols = {"CreatureType", "DamageType", "Size"}
@@ -873,45 +1220,67 @@ def test_creature_fact_enums_are_not_imported_from_stateful_modifiers() -> None:
         )
     ]
     assert stale_imports == [], (
-        "Import dependency-neutral creature facts from dnd.core.creature_types, "
+        "Import dependency-neutral creature facts from dnd.types.creatures or "
+        "dnd.types.damage, "
         "never dnd.core.modifiers:\n"
         + _format_import_references(stale_imports)
     )
 
 
-def test_world_contract_dtos_are_not_reexported_through_api_models() -> None:
-    """World DTOs have one import surface instead of an api_models compatibility alias."""
-    api_models = _source_modules()["server.api_models"]
-    forbidden_symbols = {
-        symbol
-        for symbol, owner in CANONICAL_NEUTRAL_SYMBOL_OWNERS.items()
-        if owner == "server.world_contracts"
-    }
-    reexports = sorted({
-        alias.asname or alias.name
-        for node in api_models.tree.body
-        if isinstance(node, ast.ImportFrom)
-        and node.module == "server.world_contracts"
-        for alias in node.names
-        if alias.name in forbidden_symbols
-    })
-    assert reexports == [], (
-        "Import world DTOs from server.world_contracts, never server.api_models: "
-        + ", ".join(reexports)
-    )
+def test_retired_type_modules_have_no_importers() -> None:
+    """Removed type locations cannot survive as aliases or stale import paths."""
+    stale_imports = [
+        reference
+        for reference in _import_references()
+        if reference.target in RETIRED_TYPE_MODULES
+    ]
+    existing_modules = sorted(RETIRED_TYPE_MODULES & _source_modules().keys())
+    messages: list[str] = []
+    if existing_modules:
+        messages.append("Retired type modules still exist: " + ", ".join(existing_modules))
+    if stale_imports:
+        messages.append(
+            "Retired type modules still have importers:\n"
+            + _format_import_references(stale_imports)
+        )
+    assert not messages, "\n\n".join(messages)
 
 
 def test_safe_leaf_modules_have_no_project_dependencies() -> None:
-    """Canonical leaf types must remain importable without another project layer."""
+    """Canonical leaves may depend only on sibling type leaves."""
     modules = _source_modules()
+    discovered_type_modules = {
+        module_name
+        for module_name in modules
+        if module_name.startswith("dnd.types.")
+    }
+    listed_type_modules = {
+        module_name
+        for module_name in SAFE_LEAF_MODULES
+        if module_name.startswith("dnd.types.")
+    }
     missing = sorted(SAFE_LEAF_MODULES - modules.keys())
     forbidden_imports = [
         reference
         for reference in _import_references()
         if reference.importer in SAFE_LEAF_MODULES
         and _is_project_module_name(reference.target)
+        and not (
+            (
+                reference.importer.startswith("dnd.types.")
+                or reference.importer == "dnd.presentation"
+            )
+            and reference.target.startswith("dnd.types.")
+        )
     ]
     messages: list[str] = []
+    if discovered_type_modules != listed_type_modules:
+        unlisted = sorted(discovered_type_modules - listed_type_modules)
+        stale = sorted(listed_type_modules - discovered_type_modules)
+        if unlisted:
+            messages.append("Unlisted canonical type modules: " + ", ".join(unlisted))
+        if stale:
+            messages.append("Listed canonical type modules do not exist: " + ", ".join(stale))
     if missing:
         messages.append("Missing canonical safe leaf modules: " + ", ".join(missing))
     if forbidden_imports:
@@ -920,6 +1289,45 @@ def test_safe_leaf_modules_have_no_project_dependencies() -> None:
             + _format_import_references(forbidden_imports)
         )
     assert not messages, "\n\n".join(messages)
+
+
+def test_cold_type_and_presentation_imports_do_not_load_runtime_layers() -> None:
+    """Importing the complete vocabulary boundary cannot initialize gameplay."""
+    marker = "__DND_COLD_TYPES__="
+    script = (
+        "import importlib, json, pkgutil, sys\n"
+        "import dnd.types\n"
+        "for module in pkgutil.iter_modules(dnd.types.__path__, 'dnd.types.'):\n"
+        "    importlib.import_module(module.name)\n"
+        "import dnd.presentation\n"
+        "forbidden = ('server', 'dnd.entity', 'dnd.blocks', 'dnd.actions', "
+        "'dnd.conditions', 'dnd.encounter', 'dnd.controller', 'dnd.core.content')\n"
+        "loaded = sorted(name for name in sys.modules if any("
+        "name == prefix or name.startswith(prefix + '.') for prefix in forbidden))\n"
+        f"print({marker!r} + json.dumps(loaded))\n"
+    )
+    completed = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=REPOSITORY_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert completed.returncode == 0, (
+        "Fresh type/presentation import failed:\n"
+        f"stdout:\n{completed.stdout}\n"
+        f"stderr:\n{completed.stderr}"
+    )
+    marker_lines = [
+        line for line in completed.stdout.splitlines() if line.startswith(marker)
+    ]
+    assert len(marker_lines) == 1
+    loaded = json.loads(marker_lines[0][len(marker):])
+    assert loaded == [], (
+        "Cold types/presentation loaded gameplay layers:\n- "
+        + "\n- ".join(loaded)
+    )
 
 
 def test_content_contract_package_has_one_exact_import_surface_and_direction() -> None:
@@ -1015,38 +1423,6 @@ def test_cold_content_contract_imports_do_not_load_gameplay_or_server_layers() -
         "Cold content contracts loaded gameplay/server layers:\n- "
         + "\n- ".join(loaded)
     )
-
-
-def test_world_contracts_are_a_cold_transport_leaf() -> None:
-    """World DTOs may depend only on dependency-neutral engine value types."""
-    source_module = _source_modules()["server.world_contracts"]
-    forbidden_imports = [
-        reference
-        for reference in _import_references()
-        if reference.importer == source_module.name
-        and _is_project_module_name(reference.target)
-        and reference.target not in WORLD_CONTRACT_ALLOWED_PROJECT_DEPENDENCIES
-    ]
-    mapper_methods = [
-        f"{node.name}.{child.name} at {source_module.display_path}:{child.lineno}"
-        for node in source_module.tree.body
-        if isinstance(node, ast.ClassDef)
-        for child in node.body
-        if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef))
-        and child.name in {"create", "from_entity", "from_grid", "from_item"}
-    ]
-    messages: list[str] = []
-    if forbidden_imports:
-        messages.append(
-            "World contracts import runtime project code:\n"
-            + _format_import_references(forbidden_imports)
-        )
-    if mapper_methods:
-        messages.append(
-            "World contracts own engine projection methods:\n- "
-            + "\n- ".join(mapper_methods)
-        )
-    assert not messages, "\n\n".join(messages)
 
 
 def test_persistent_spell_zones_receive_explicit_effect_provenance() -> None:
@@ -1250,7 +1626,7 @@ def test_weapon_attack_events_have_one_metadata_snapshot_boundary() -> None:
 
     allowed = {
         (
-            "dnd.actions",
+            "dnd.actions.standard",
             None,
             "create_weapon_attack_declaration_event",
         ),

@@ -4,9 +4,12 @@ from collections.abc import Callable
 
 import pytest
 
-from dnd.actions import SpellAction, SpellEvent
+from dnd.actions.standard import (
+    SpellAction,
+    SpellEvent,
+)
 from dnd.core.dice import DiceRoll, fixed_dice_faces
-from dnd.core.events import RollType
+from dnd.types.rolls import RollType
 from dnd.entity import Entity
 from dnd.spells.evocation import (
     EldritchBlast,

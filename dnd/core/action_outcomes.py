@@ -5,7 +5,7 @@ from typing import Any, Literal, Optional, Sequence
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from dnd.core.roll_types import AdvantageStatus
+from dnd.types.rolls import AdvantageStatus
 
 
 class OutcomeResolution(str, Enum):

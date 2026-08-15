@@ -6,7 +6,9 @@ from uuid import uuid4
 
 import pytest
 
-from dnd.core.events import EventQueue
+from dnd.core.events.events_registry import (
+    EventQueue,
+)
 from dnd.runtime_reset import reset_engine_runtime
 from server.event_stream import event_stream
 from server.game_archive import GameArchiveStore, build_game_archive

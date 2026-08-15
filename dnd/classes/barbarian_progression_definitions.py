@@ -48,8 +48,8 @@ from dnd.core.content.descriptors import (
     ContentPresentation,
     ContentVisibility,
 )
+from dnd.types.abilities import AbilityName
 from dnd.core.content.durable_characters import (
-    AbilityScoreName,
     AbilityScorePrerequisite,
     BuildChoiceRequirement,
     ChoiceRequirementKind,
@@ -65,7 +65,7 @@ from dnd.core.content.registration import (
     get_content_declaration,
     typed_definition,
 )
-from dnd.core.progression import CasterProgression
+from dnd.types.progression import CasterProgression
 
 
 _PACK_ID = "content.srd_5_1_cc"
@@ -206,14 +206,14 @@ BARBARIAN_CLASS_DEFINITION = ClassDefinition(
     hit_die=12,
     caster_progression=CasterProgression.NON_CASTER,
     multiclass_prerequisite=AbilityScorePrerequisite(
-        ability=AbilityScoreName.STRENGTH,
+        ability=AbilityName.STRENGTH,
         minimum=13,
     ),
     first_class_proficiencies=_BARBARIAN_FIRST_PROFICIENCIES,
     multiclass_proficiencies=_BARBARIAN_MULTICLASS_PROFICIENCIES,
     saving_throw_proficiencies=(
-        AbilityScoreName.CONSTITUTION,
-        AbilityScoreName.STRENGTH,
+        AbilityName.CONSTITUTION,
+        AbilityName.STRENGTH,
     ),
     level_definitions=tuple(
         ClassLevelDefinition(

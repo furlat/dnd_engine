@@ -46,10 +46,17 @@ from dnd.classes.structural_feature_definitions import (
     UNARMORED_DEFENSE_DECLARATION,
 )
 from dnd.core.content.identities import ContentRef
-from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import DamageAppliedEvent, Event, EventPhase, EventType
-from dnd.core.creature_types import DamageType
-from dnd.core.modifiers import AdvantageStatus
+from dnd.types.equipment import WeaponSlot
+from dnd.core.events.resolution_events import (
+    DamageAppliedEvent,
+)
+from dnd.core.events.events_registry import (
+    Event,
+    EventPhase,
+    EventType,
+)
+from dnd.types.damage import DamageType
+from dnd.types.rolls import AdvantageStatus
 from dnd.conditions import Charmed, Frightened
 from dnd.creature_transforms import (
     apply_incapacitated_transform,

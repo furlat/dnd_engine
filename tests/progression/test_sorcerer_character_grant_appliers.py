@@ -49,14 +49,16 @@ from dnd.content_system.sorcerer_character_grant_appliers import (
     SORCERER_CHARACTER_GRANT_APPLIERS,
     SORCERY_POINTS_REF,
 )
-from dnd.core.base_actions import BaseAction
+from dnd.core.base_actions import (
+    BaseAction,
+)
 from dnd.core.content.identities import ContentRef
 from dnd.core.dice import fixed_dice_faces
-from dnd.core.creature_types import DamageType
-from dnd.core.modifiers import ResistanceStatus
+from dnd.types.damage import DamageType
+from dnd.types.damage import ResistanceStatus
 from dnd.entity import Entity
 from dnd.runtime_reset import reset_engine_runtime
-from dnd.spatial_effects import FieldEffect, SpatialEffect
+from dnd.spatial.effect_base import FieldEffect, SpatialEffect
 
 
 @pytest.fixture(autouse=True)

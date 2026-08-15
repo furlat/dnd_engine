@@ -26,8 +26,8 @@ from dnd.content_system.origin_runtime_character_grant_appliers import (
 from dnd.content_system.system import LoadedContentSystem
 from dnd.content_system.runtime import ContentSystemRuntime
 from dnd.core.content.registry import FrozenContentRegistry
-from dnd.core.life_types import LifeState
-from dnd.core.creature_types import DamageType
+from dnd.types.life import LifeState
+from dnd.types.damage import DamageType
 from dnd.entity import Entity, EntityConfig
 from dnd.origins.half_orc import (
     HALF_ORC_RELENTLESS_ENDURANCE_DECLARATION,

@@ -9,11 +9,15 @@ component re-export paths.
 from uuid import uuid4
 
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
-from dnd.blocks.equipment import BodyArmor, EquipmentConfig, Shield
+from dnd.blocks.equipment import (
+    BodyArmor,
+    EquipmentConfig,
+    Shield,
+)
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
-from dnd.core.equipment_types import BodyPart, UnarmoredAc, WeaponSlot
+from dnd.types.equipment import BodyPart, UnarmoredAc, WeaponSlot
 from dnd.entity import Entity, EntityConfig
 from dnd.items.armors import (
     CHAIN_SHIRT_RECIPE,

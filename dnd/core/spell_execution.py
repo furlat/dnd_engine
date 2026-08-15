@@ -15,8 +15,8 @@ from typing import Iterator
 from uuid import UUID
 
 from dnd.core.content.identities import ContentRef
-from dnd.core.creature_types import DamageType
-from dnd.core.saving_throw_types import SavingThrowEffectTag
+from dnd.types.damage import DamageType
+from dnd.types.saving_throws import SavingThrowEffectTag
 
 
 @dataclass(slots=True)

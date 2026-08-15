@@ -4,14 +4,12 @@ Controllers decide whether an encounter turn should run autonomously or wait for
 external input, and may provide actions while the encounter owns turn flow.
 """
 
-from enum import Enum
 from dataclasses import dataclass
 from typing import Any, Optional, Dict, List, ClassVar
 
 __all__ = [
     "TurnContext",
     "ControllerStepResult",
-    "ControllerExecutionMode",
     "Controller",
     "PassController",
     "HumanController",
@@ -20,16 +18,14 @@ from uuid import UUID
 from pydantic import Field
 
 from dnd.core.base_object import BaseObject
-from dnd.core.base_actions import BaseAction
-from dnd.core.events import Event
+from dnd.core.base_actions import (
+    BaseAction,
+)
+from dnd.core.events.events_registry import (
+    Event,
+)
 from dnd.entity import Entity
-
-
-class ControllerExecutionMode(str, Enum):
-    """Whether the encounter executes decisions or waits for external input."""
-
-    AUTONOMOUS = "autonomous"
-    EXTERNAL = "external"
+from dnd.types import encounter as encounter_types
 
 
 class TurnContext(BaseObject):
@@ -73,7 +69,7 @@ class TurnContext(BaseObject):
         default=None,
         description="Encounter display name.",
     )
-    encounter_state: Optional[str] = Field(
+    encounter_state: Optional[encounter_types.EncounterState] = Field(
         default=None,
         description="Current encounter lifecycle state.",
     )
@@ -111,21 +107,23 @@ class Controller(BaseObject):
     """
 
     _controller_registry: ClassVar[Dict[UUID, 'Controller']] = {}
-    _execution_mode: ClassVar[ControllerExecutionMode] = (
-        ControllerExecutionMode.AUTONOMOUS
+    _execution_mode: ClassVar[encounter_types.ControllerExecutionMode] = (
+        encounter_types.ControllerExecutionMode.AUTONOMOUS
     )
-    _external_boundary_status: ClassVar[Optional[str]] = None
+    _external_boundary_status: ClassVar[
+        Optional[encounter_types.AdvanceStatus]
+    ] = None
 
     name: str = Field(default="Controller", description="Display name of this controller.")
     controller_type: str = Field(default="base", description="Stable controller type identifier.")
 
     @property
-    def execution_mode(self) -> ControllerExecutionMode:
+    def execution_mode(self) -> encounter_types.ControllerExecutionMode:
         """Return whether the encounter should invoke this controller locally."""
         return self._execution_mode
 
     @property
-    def external_boundary_status(self) -> Optional[str]:
+    def external_boundary_status(self) -> Optional[encounter_types.AdvanceStatus]:
         """Return the stable wait status for an external controller boundary."""
         return self._external_boundary_status
 
@@ -263,8 +261,10 @@ class HumanController(Controller):
         controller_type: Stable controller type identifier.
     """
 
-    _execution_mode: ClassVar[ControllerExecutionMode] = ControllerExecutionMode.EXTERNAL
-    _external_boundary_status: ClassVar[str] = "waiting_for_human"
+    _execution_mode: ClassVar[encounter_types.ControllerExecutionMode] = encounter_types.ControllerExecutionMode.EXTERNAL
+    _external_boundary_status: ClassVar[encounter_types.AdvanceStatus] = (
+        encounter_types.AdvanceStatus.WAITING_FOR_HUMAN
+    )
 
     name: str = Field(default="Human Player", description="Display name of this controller.")
     controller_type: str = Field(default="human", description="Stable controller type identifier.")

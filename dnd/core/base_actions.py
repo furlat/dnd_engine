@@ -1,13 +1,11 @@
 """Action templates, cost models, execution events, and discovery DTOs."""
 
-import time
 from contextlib import contextmanager
 from dataclasses import dataclass
 
 from pydantic import BaseModel, Field, ConfigDict, PrivateAttr, model_validator
-from dnd.action_timing import action_timing_enabled, record_action_timing
-from dnd.core.action_types import (
-    ActionPresentationKind,
+from dnd.presentation import ActionPresentationKind
+from dnd.types.actions import (
     CostType,
     RestrictedActionGrant,
     RestrictedActionGrantProvider,
@@ -19,10 +17,19 @@ from dnd.core.action_outcomes import (
     OutcomeApplicationScope as OutcomeApplicationScope,
     OutcomeResolution as OutcomeResolution,
 )
-from dnd.core.events import Event, EventType, EventPhase, Range, EventQueue
+from dnd.core.events.action_events import ActionEvent, ActionEventT, BaseCost
+from dnd.core.events.events_registry import (
+    Event,
+    EventType,
+    EventPhase,
+    EventQueue,
+)
+from dnd.core.events.resolution_events import (
+    Range,
+)
 from dnd.core.base_object import BaseObject
 from dnd.core.base_block import BaseBlock
-from dnd.core.base_tiles import MovementMode
+from dnd.types.world import MovementMode
 from dnd.core.combat_log import ActionLogData, CombatLogEntry, CombatLogEntryType, MultiEntityLogData, md_color
 from dnd.core.content.identities import ContentRef
 from dnd.core.content.runtime import (
@@ -32,10 +39,10 @@ from dnd.core.content.runtime import (
     runtime_behavior_provider,
 )
 from dnd.core.aoe import AoEShape
-from dnd.core.item_types import ItemPresentationProvider, ItemPresentationState
-from dnd.core.equipment_types import WeaponSlot
-from dnd.core.effect_types import EffectOrigin, EffectOriginKind
-from dnd.core.modifiers import AdvantageStatus
+from dnd.presentation import ItemPresentationProvider, ItemPresentationState
+from dnd.types.equipment import WeaponSlot
+from dnd.types.effects import EffectOrigin, EffectOriginKind
+from dnd.types.rolls import AdvantageStatus
 from dnd.core.traversal_connectors import ConnectorTraversalDiscovery
 from typing import Any, Optional, Callable, ClassVar, Iterator, List, Dict, Literal, Sequence, Set, Tuple, TypeVar, cast
 from uuid import UUID, uuid4, uuid5
@@ -486,19 +493,6 @@ def block_action_resource_cost_evaluator(
     return owner.can_afford_action_resource(resource_name, resource_cost)
 
 
-class BaseCost(BaseModel):
-    """Serializable action cost without executable callbacks."""
-
-    name: str = Field(default="A Cost", description="Human-readable cost label.")
-    cost_type: CostType = Field(description="Action economy bucket consumed by this cost.")
-    cost: int = Field(description="Amount consumed from the action economy bucket.")
-    resource_name: Optional[str] = Field(
-        default=None,
-        description="Optional named resource consumed in addition to the action economy bucket.",
-    )
-    resource_cost: int = Field(default=0, description="Amount consumed from the named resource.")
-
-
 class Cost(BaseCost):
     """Runtime action cost with optional affordability callbacks."""
 
@@ -512,261 +506,6 @@ class Cost(BaseCost):
         exclude=True,
         description="Callback that checks named-resource affordability.",
     )
-
-
-class ActionEvent(Event):
-    """Event emitted by the base action pipeline."""
-
-    behavior_binding: Optional[BehaviorBinding] = Field(
-        default=None,
-        exclude=True,
-        repr=False,
-        description=(
-            "Immutable authored behavior identity captured before this event "
-            "version enters the queue."
-        ),
-    )
-    costs: List[BaseCost] = Field(default_factory=list, description="Serializable action costs.")
-    source_item_uuid: Optional[UUID] = Field(
-        default=None,
-        description="Usable item supplying this action when execution is item-bound.",
-    )
-    source_item_presentation: Optional[ItemPresentationState] = Field(
-        default=None,
-        description=(
-            "Immutable source-item snapshot captured when the action was declared; "
-            "later phases and replay never need the live item registry."
-        ),
-    )
-    item_charge_cost: int = Field(
-        default=0,
-        ge=0,
-        description="Finite item charges consumed before this action completes.",
-    )
-    item_charge_action_lineage_uuid: Optional[UUID] = Field(
-        default=None,
-        description="Root action lineage authorized to consume the item resource once.",
-    )
-    presentation_kind: ActionPresentationKind = Field(
-        default=ActionPresentationKind.DEFAULT,
-        description="Stable presentation meaning for clients rendering this action.",
-    )
-    declared_target_entity_uuids: List[UUID] = Field(
-        default_factory=list,
-        description="Complete entity target selection captured when the action is declared.",
-    )
-    application_index: Optional[int] = Field(
-        default=None,
-        ge=0,
-        description="Ordered target-application index for a convolution child event.",
-    )
-    application_id: Optional[UUID] = Field(
-        default=None,
-        description="Deterministic identity of one ordered target application.",
-    )
-    event_type: EventType = Field(default=EventType.BASE_ACTION, description="Base action event type.")
-    description: str = Field(default="", description="Action description for combat log generation")
-    total_targets: int = Field(
-        default=0,
-        description="Number of targets affected by a multi-target or AoE action.",
-    )
-    total_damage: int = Field(
-        default=0,
-        description="Total damage dealt across all per-target child events.",
-    )
-    aoe_position: Optional[Tuple[int, int]] = Field(
-        default=None,
-        description="Grid position targeted by a position-AoE action.",
-    )
-
-    def model_post_init(self, __context: Any) -> None:
-        """Freeze active authored identity before the event is registered."""
-        if self.behavior_binding is None:
-            self.behavior_binding = active_runtime_behavior_binding()
-        super().model_post_init(__context)
-
-    def get_effect_origin(self) -> EffectOrigin:
-        """Expose exact action provenance to persistent child effects."""
-        binding = self.behavior_binding
-        return EffectOrigin(
-            kind=EffectOriginKind.ACTION,
-            source_id=(
-                binding.definition_ref.identity_key
-                if binding is not None
-                else None
-            ),
-            source_event_lineage_uuid=str(self.lineage_uuid),
-        )
-
-    @classmethod
-    def from_costs(
-        cls,
-        costs: List[Cost],
-        source_entity_uuid: UUID,
-        target_entity_uuid: Optional[UUID] = None,
-        parent_event: Optional[Event] = None,
-        use_register: bool = True,
-        source_item_uuid: Optional[UUID] = None,
-        source_item_presentation: Optional[ItemPresentationState] = None,
-        item_charge_cost: int = 0,
-        declared_target_entity_uuids: Optional[List[UUID]] = None,
-        presentation_kind: ActionPresentationKind = ActionPresentationKind.DEFAULT,
-    ) -> "ActionEvent":
-        """Create an action event from runtime costs.
-
-        Args:
-            costs: Runtime costs to serialize on the event.
-            source_entity_uuid: Acting entity UUID.
-            target_entity_uuid: Optional primary target UUID.
-            parent_event: Optional parent event for event-tree nesting.
-            use_register: Whether the event should be registered immediately.
-            source_item_uuid: Optional usable item supplying this action.
-            source_item_presentation: Declaration-time cold item snapshot.
-            item_charge_cost: Finite item charges consumed on completion.
-            declared_target_entity_uuids: Complete entity target selection.
-            presentation_kind: Stable presentation meaning for this action.
-
-        Returns:
-            Newly created action event.
-        """
-        base_costs = [BaseCost.model_validate(cost) for cost in costs]
-        event = cls(
-            source_entity_uuid=source_entity_uuid,
-            target_entity_uuid=target_entity_uuid,
-            costs=base_costs,
-            parent_event=parent_event.uuid if parent_event else None,
-            use_register=use_register,
-            source_item_uuid=source_item_uuid,
-            source_item_presentation=source_item_presentation,
-            item_charge_cost=item_charge_cost,
-            declared_target_entity_uuids=declared_target_entity_uuids or [],
-            presentation_kind=presentation_kind,
-        )
-        event.item_charge_action_lineage_uuid = event.lineage_uuid
-        return event
-
-    @model_validator(mode="after")
-    def validate_cold_presentation_facts(self) -> "ActionEvent":
-        """Keep item and target-application identities internally coherent."""
-        if self.source_item_presentation is not None:
-            if self.source_item_uuid is None:
-                raise ValueError("source item presentation requires source_item_uuid")
-            if self.source_item_presentation.item_uuid != self.source_item_uuid:
-                raise ValueError("source item presentation UUID must match source_item_uuid")
-        if (
-            self.presentation_kind is ActionPresentationKind.DRINK
-            and self.source_item_presentation is None
-        ):
-            raise ValueError("drink action requires a declaration-time item presentation")
-        if (self.application_index is None) != (self.application_id is None):
-            raise ValueError("application_index and application_id must be set together")
-        return self
-
-    def get_participant_entity_uuids(self) -> Set[UUID]:
-        """Return the actor and every entity selected by the action.
-
-        Returns:
-            Direct event participants plus the declaration-time target set.
-        """
-        return super().get_participant_entity_uuids() | set(
-            self.declared_target_entity_uuids
-        )
-
-    def get_affected_positions(self) -> Set[Tuple[int, int]]:
-        """Return positions that spatial handlers should inspect for this event."""
-        positions: Set[Tuple[int, int]] = set()
-        if self.aoe_position:
-            positions.add(self.aoe_position)
-        return positions
-
-    def generate_combat_log(self) -> Optional[CombatLogEntry]:
-        """Generate a combat log entry for generic actions.
-
-        Uses self.name and self.description. Subclasses (AttackEvent,
-        MovementEvent, SpellEvent) override with specific implementations.
-
-        For multi-target actions (total_targets > 0), generates a summary log.
-        Sub-entries come from _collect_child_combat_logs() via parent_event relationship.
-
-        Returns:
-            CombatLogEntry for self-targeting actions, or None for base events.
-        """
-        if self.total_targets > 0:
-            return self._generate_multi_target_log()
-
-        source_name = self.source_entity_name or "Unknown"
-        action_name = self.name or "Action"
-        effect_desc = self.description or ""
-
-        compact = f"{{cyan:{source_name}}} uses {{bold:{action_name}}}"
-        verbose = compact + (f"\n  {effect_desc}" if effect_desc else "")
-        detailed = verbose
-
-        target_name = self.target_entity_name
-        target_uuid = str(self.target_entity_uuid) if self.target_entity_uuid else None
-        data = ActionLogData(
-            entity_name=source_name,
-            entity_uuid=str(self.source_entity_uuid),
-            action_name=action_name,
-            effect_description=effect_desc,
-            target_name=target_name,
-            target_uuid=target_uuid,
-        )
-
-        return CombatLogEntry(
-            entry_type=CombatLogEntryType.ACTION,
-            source_name=source_name,
-            source_uuid=str(self.source_entity_uuid),
-            target_name=target_name,
-            target_uuid=target_uuid,
-            compact=compact,
-            verbose=verbose,
-            detailed=detailed,
-            data=data.model_dump(),
-            success=True
-        )
-
-    def _generate_multi_target_log(self) -> CombatLogEntry:
-        """Generate summary log for multi-target actions.
-
-        Per-target details are child event logs collected into sub-entries by
-        the completion phase.
-
-        Returns:
-            Multi-entity combat-log summary.
-        """
-        source_name = self.source_entity_name or "Unknown"
-        n_targets = self.total_targets
-        total_dmg = self.total_damage or 0
-
-        action_name = self.name or 'Action'
-        if self.aoe_position:
-            location = f" at ({self.aoe_position[0]}, {self.aoe_position[1]})"
-        else:
-            location = ""
-        summary = f"{md_color(source_name, 'cyan')} uses {md_color(action_name, 'yellow')}{location} → {n_targets} targets, {md_color(str(total_dmg), 'red')} total damage"
-
-        data = MultiEntityLogData(
-            action_name=self.name or "Action",
-            caster_name=source_name,
-            total_targets=n_targets,
-            total_damage=total_dmg,
-            aoe_center=self.aoe_position
-        )
-
-        return CombatLogEntry(
-            entry_type=CombatLogEntryType.MULTI_ENTITY_ACTION,
-            source_name=source_name,
-            source_uuid=str(self.source_entity_uuid) if self.source_entity_uuid else "",
-            compact=summary,
-            verbose=summary,
-            detailed=summary,
-            data=data.model_dump(),
-            success=n_targets > 0
-        )
-
-
-ActionEventT = TypeVar("ActionEventT", bound=ActionEvent)
 
 
 class BaseAction(BaseObject):
@@ -1765,38 +1504,17 @@ class BaseAction(BaseObject):
         Raises:
             ValueError: If this is a template (use instantiate() first)
         """
-        timing_enabled = action_timing_enabled()
-        total_started = time.perf_counter() if timing_enabled else 0.0
-
-        def start_phase() -> float:
-            return time.perf_counter() if timing_enabled else 0.0
-
-        def record_phase(phase: str, started_at: float) -> None:
-            if timing_enabled:
-                record_action_timing(f"base_action.{phase}_ms", started_at)
-
-        def record_total() -> None:
-            if timing_enabled:
-                record_action_timing("base_action.apply_total_ms", total_started)
-
         if self.template:
             raise ValueError(f"Cannot apply template action '{self.name}' - use instantiate() first")
 
-        started = start_phase()
         if not self.check_costs():
-            record_phase("check_costs", started)
-            record_total()
             return None
-        record_phase("check_costs", started)
 
-        started = start_phase()
         declaration_event = self._create_declaration_event(
             parent_event,
             use_register=False,
         )
-        record_phase("create_declaration_event", started)
         if declaration_event is None:
-            record_total()
             return None
         published_declaration = EventQueue.publish_declaration(
             declaration_event
@@ -1808,36 +1526,25 @@ class BaseAction(BaseObject):
             )
         declaration_event = published_declaration
         if declaration_event.canceled:
-            record_total()
             return declaration_event
 
         if declaration_event.phase != EventPhase.DECLARATION:
             raise ValueError(f"Action {self.name} can only be validated in the declaration phase")
-        started = start_phase()
         execution_event = self._validate(declaration_event)
-        record_phase("validate", started)
         if execution_event is None:
-            record_total()
             return execution_event
         if execution_event.canceled:
             if execution_event.canceled_from_phase is EventPhase.EXECUTION:
-                started = start_phase()
                 execution_event = self._apply_execution_cancellation_costs(execution_event)
-                record_phase("apply_execution_cancellation_costs", started)
-            record_total()
             return execution_event
         if execution_event.phase not in [EventPhase.EXECUTION]:
             raise ValueError(f"Action {self.name} can only be applied in the execution phase")
 
         if self.effective_target_type in (TargetType.MULTI_ENTITY, TargetType.POSITION_AOE):
-            started = start_phase()
             all_target_uuids = self.get_all_targets()
-            record_phase("resolve_convolution_targets", started)
             total_damage = 0
 
-            targets_started = start_phase()
             for application_index, target_uuid in enumerate(all_target_uuids):
-                target_started = start_phase()
 
                 target_block = BaseBlock.get(target_uuid)
                 target_entity_name = target_block.name if target_block else None
@@ -1859,7 +1566,6 @@ class BaseAction(BaseObject):
                 per_target_event = cast(ActionEvent, EventQueue.register(per_target_event))
 
                 if per_target_event.canceled:
-                    record_phase("convolution_target_canceled", target_started)
                     continue
 
                 with self._target_application(target_uuid):
@@ -1867,10 +1573,7 @@ class BaseAction(BaseObject):
                 if result_event:
                     damage = result_event.total_damage or 0
                     total_damage += damage
-                record_phase("convolution_target_apply", target_started)
-            record_phase("convolution_apply_targets", targets_started)
 
-            started = start_phase()
             effect_event = execution_event.phase_to(
                 EventPhase.EFFECT,
                 total_targets=len(all_target_uuids),
@@ -1878,42 +1581,28 @@ class BaseAction(BaseObject):
                 aoe_position=self.end_position,
                 status_message=f"{self.name} affected {len(all_target_uuids)} targets for {total_damage} total damage"
             )
-            record_phase("convolution_effect_event", started)
 
             if self.effective_target_type == TargetType.POSITION_AOE:
-                started = start_phase()
                 self._finalize_aoe(effect_event)
-                record_phase("finalize_aoe", started)
 
-            started = start_phase()
             completion_event = effect_event.phase_to(
                 EventPhase.COMPLETION,
                 status_message=f"{self.name} completed"
             )
-            record_phase("convolution_completion_event", started)
         else:
-            started = start_phase()
             completion_event = self._apply(execution_event)
-            record_phase("apply_effect", started)
 
         if completion_event is None or completion_event.canceled:
-            record_total()
             return completion_event
         if completion_event.phase not in [EventPhase.COMPLETION]:
             raise ValueError(f"Action {self.name} can only be completed in the completion phase")
         if self.requires_concentration:
-            started = start_phase()
             self._cleanup_concentration(completion_event)
-            record_phase("cleanup_concentration", started)
-        started = start_phase()
         cost_event = self._apply_costs(completion_event)
-        record_phase("apply_costs", started)
         if cost_event is None or cost_event.canceled:
-            record_total()
             return cost_event
         if cost_event.phase not in [EventPhase.COMPLETION]:
             raise ValueError(f"Action {self.name} can only be completed in the completion phase")
-        record_total()
         return cost_event
 
 

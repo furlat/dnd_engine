@@ -36,8 +36,8 @@ from dnd.content_system.condition_definitions import (
 )
 from dnd.core.content.dependencies import ContentDependencyPhase
 from dnd.core.content.dependencies import ContentDependencyRelation
+from dnd.types.abilities import AbilityName
 from dnd.core.content.durable_characters import (
-    AbilityScoreName,
     AbilityScorePrerequisite,
     ChoiceRequirementKind,
     ClassDefinition,
@@ -48,7 +48,7 @@ from dnd.core.content.durable_characters import (
 )
 from dnd.core.content.identities import ContentDefinitionKind
 from dnd.core.content.registration import ContentDeclarationMode
-from dnd.core.progression import CasterProgression
+from dnd.types.progression import CasterProgression
 from dnd.items.weapons import (
     DAGGER_REF,
     DART_REF,
@@ -127,11 +127,11 @@ def test_sorcerer_entry_modes_spell_source_and_saves_are_exact() -> None:
     assert definition.spellcasting_source_id == SpellcastingSourceId(
         value="class.sorcerer.spellcasting",
     )
-    assert definition.spellcasting_ability is AbilityScoreName.CHARISMA
+    assert definition.spellcasting_ability is AbilityName.CHARISMA
     assert definition.ritual_policy is RitualPreparationPolicy.NONE
     assert definition.saving_throw_proficiencies == (
-        AbilityScoreName.CHARISMA,
-        AbilityScoreName.CONSTITUTION,
+        AbilityName.CHARISMA,
+        AbilityName.CONSTITUTION,
     )
     assert isinstance(
         definition.multiclass_prerequisite,
@@ -140,7 +140,7 @@ def test_sorcerer_entry_modes_spell_source_and_saves_are_exact() -> None:
     assert (
         definition.multiclass_prerequisite.ability,
         definition.multiclass_prerequisite.minimum,
-    ) == (AbilityScoreName.CHARISMA, 13)
+    ) == (AbilityName.CHARISMA, 13)
 
     assert tuple(
         (row.subject_kind, row.subject_id, row.content_ref)

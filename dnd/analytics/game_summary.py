@@ -9,7 +9,14 @@ from math import sqrt
 from typing import Callable, Iterable, Optional, Sequence, TypeVar
 from uuid import UUID
 
-from dnd.actions import AttackEvent, JumpEvent, MovementEvent, SpellEvent
+from dnd.actions.standard import (
+    AttackEvent,
+    MovementEvent,
+    SpellEvent,
+)
+from dnd.core.events.action_events import (
+    JumpEvent,
+)
 from dnd.analytics.models import (
     AttackStatisticsV1,
     CombatStatisticsV2,
@@ -36,37 +43,51 @@ from dnd.analytics.models import (
     UsageCountV1,
     compute_summary_digest,
 )
-from dnd.blocks.base_item import ItemChargeConsumptionEvent
-from dnd.core.base_actions import ActionEvent
+from dnd.core.events.item_events import (
+    ItemChargeConsumptionEvent,
+)
+from dnd.core.events.action_events import (
+    ActionEvent,
+)
 from dnd.core.base_conditions import (
     BaseCondition,
     ConditionApplicationEvent,
     ConditionRemovalEvent,
 )
 from dnd.core.combat_log import AttackLogData, CombatLogEntry, CombatLogEntryType
-from dnd.core.dice import AttackOutcome, DiceRoll, RollType
-from dnd.core.events import (
+from dnd.types.rolls import AttackOutcome, RollType
+from dnd.core.dice import DiceRoll
+from dnd.core.events.resolution_events import (
     DamageAppliedEvent,
     DamageRollResultEvent,
-    D20Event,
     D20RollResultEvent,
+    HealEvent,
+    HealRollResultEvent,
+    TakeDamageEvent,
+)
+from dnd.core.events.check_events import (
+    D20Event,
+    SavingThrowEvent,
+    SkillCheckEvent,
+)
+from dnd.core.events.encounter_events import (
     DeathEvent,
     EncounterEvent,
     EncounterEndEvent,
     EncounterStartEvent,
-    Event,
-    EventPhase,
-    ForcedMovementEvent,
-    HealEvent,
-    HealRollResultEvent,
     RoundStartEvent,
-    SavingThrowEvent,
-    SkillCheckEvent,
-    TakeDamageEvent,
     TurnEndEvent,
     TurnStartEvent,
 )
-from dnd.core.modifiers import AdvantageStatus, ResistanceStatus
+from dnd.core.events.events_registry import (
+    Event,
+    EventPhase,
+)
+from dnd.core.events.world_events import (
+    ForcedMovementEvent,
+)
+from dnd.types.rolls import AdvantageStatus
+from dnd.types.damage import ResistanceStatus
 
 
 _ECONOMY_COST_TYPES = frozenset({"actions", "bonus_actions", "reactions", "movement"})

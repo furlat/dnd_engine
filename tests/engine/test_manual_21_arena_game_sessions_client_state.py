@@ -15,9 +15,9 @@ from dnd.conditions import Dashing
 from dnd.core.base_block import BaseBlock
 from dnd.core.content.registration import get_content_declaration
 from dnd.core.dice import fixed_dice_faces
-from dnd.core.equipment_types import WeaponSlot
+from dnd.types.equipment import WeaponSlot
 from dnd.core.gridmap import get_map
-from dnd.encounter import EncounterState, TurnState
+from dnd.types.encounter import EncounterState, TurnState
 from dnd.entity import Entity
 from tests.manual.server_test_client import reset_server_test_runtime
 from server.event_server import (

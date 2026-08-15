@@ -24,17 +24,15 @@ from dnd.conditions import (
 )
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition
-from dnd.core.condition_types import ConditionTag
+from dnd.types.conditions import ConditionTag
 from dnd.core.base_object import BaseObject
-from dnd.core.events import EventQueue
-from dnd.core.gridmap import get_map
-from dnd.core.creature_types import DamageType
-from dnd.core.modifiers import (
-    AdvantageStatus,
-    AutoHitStatus,
-    CriticalStatus,
-    ResistanceStatus,
+from dnd.core.events.events_registry import (
+    EventQueue,
 )
+from dnd.core.gridmap import get_map
+from dnd.types.damage import DamageType
+from dnd.types.rolls import AdvantageStatus, AutoHitStatus, CriticalStatus
+from dnd.types.damage import ResistanceStatus
 from dnd.core.values import BaseValue
 from dnd.entity import Entity, EntityConfig
 from tests.engine.support import reset_combat_state

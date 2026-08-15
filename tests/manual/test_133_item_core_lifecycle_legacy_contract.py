@@ -14,15 +14,23 @@ from pydantic import Field
 
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
-from dnd.blocks.base_item import BaseItem, EquippableItem, UsableItem
-from dnd.blocks.equipment import EquipmentConfig
+from dnd.blocks.base_item import (
+    BaseItem,
+    EquippableItem,
+    UsableItem,
+)
+from dnd.blocks.equipment import (
+    EquipmentConfig,
+)
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition
-from dnd.core.events import Event
+from dnd.core.events.events_registry import (
+    Event,
+)
 from dnd.core.gridmap import get_map
-from dnd.core.item_types import ItemRarity
-from dnd.core.creature_types import DamageType
+from dnd.types.items import ItemRarity
+from dnd.types.damage import DamageType
 from dnd.core.modifiers import NumericalModifier
 from dnd.entity import Entity, EntityConfig
 from tests.engine.support import get_hp, get_max_hp, reset_combat_state, set_hp

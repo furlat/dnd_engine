@@ -9,17 +9,24 @@ from uuid import uuid4
 
 import pytest
 
-from dnd.actions import Disengage, Jump, entity_resource_cost_evaluator
-from dnd.actions_functional import get_available_actions, setup_standard_actions
+from dnd.actions.standard import (
+    Disengage,
+    Jump,
+    entity_resource_cost_evaluator,
+)
+from dnd.actions.operations import get_available_actions, setup_standard_actions
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig, RechargeType
 from dnd.blocks.health import HealthConfig, HitDiceConfig
-from dnd.core.base_actions import Cost, TargetType
+from dnd.core.base_actions import (
+    Cost,
+    TargetType,
+)
 from dnd.core.gridmap import get_map
 from dnd.core.modifiers import NumericalModifier
 from dnd.entity import Entity, EntityConfig
 from dnd.monsters.bestiary import create_skeleton
-from dnd.reactions import add_opportunity_attack_handler
+from dnd.actions.reactions import add_opportunity_attack_handler
 from tests.engine.support import (
     force_attack_hit,
     get_hp,

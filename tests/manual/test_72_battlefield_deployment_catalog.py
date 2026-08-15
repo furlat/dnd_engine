@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from dnd.core.base_block import LightLevel
-from dnd.core.base_tiles import MovementMode
+from dnd.types.world import LightLevel
+from dnd.types.world import MovementMode
 from dnd.core.content.battlefields import BattlefieldDefinition
 from dnd.core.gridmap import get_map
 from dnd.runtime_reset import reset_engine_runtime

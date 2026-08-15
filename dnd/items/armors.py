@@ -5,7 +5,14 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
-from dnd.blocks.equipment import Armor, BodyArmor, Boots, Gauntlets, Helmet, Shield
+from dnd.blocks.equipment import (
+    Armor,
+    BodyArmor,
+    Boots,
+    Gauntlets,
+    Helmet,
+    Shield,
+)
 from dnd.core.content.descriptors import (
     ContentDescriptorSpec,
     ContentOrdering,
@@ -28,9 +35,14 @@ from dnd.core.content.registration import (
     ContentDeclaration,
     get_content_declaration,
 )
-from dnd.core.equipment_types import ArmorType, BodyPart, EquipmentSlot
+from dnd.types.equipment import ArmorType, BodyPart, EquipmentSlot
 from dnd.core.values import ModifiableValue
-from dnd.core.modifiers import AdvantageModifier, AdvantageStatus, ContextualNumericalModifier, NumericalModifier
+from dnd.core.modifiers import (
+    AdvantageModifier,
+    ContextualNumericalModifier,
+    NumericalModifier,
+)
+from dnd.types.rolls import AdvantageStatus
 from dnd.entity import Entity
 from dnd.items.authored_presentations import (
     authored_item_factory as item_factory,

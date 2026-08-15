@@ -9,35 +9,47 @@ direct-ownership condition model.
 import pytest
 from uuid import uuid4
 
-from dnd.actions import (
+from dnd.actions.standard import (
     Move,
     MovementEvent,
     SpellEvent,
     entity_action_economy_cost_evaluator,
 )
-from dnd.actions_functional import get_available_actions, setup_standard_actions
-from dnd.blocks.equipment import Weapon
+from dnd.actions.operations import get_available_actions, setup_standard_actions
+from dnd.blocks.equipment import (
+    Weapon,
+)
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
 from dnd.conditions import Hidden
-from dnd.core.base_actions import BaseAction, Cost
-from dnd.core.base_block import LightLevel
-from dnd.core.base_tiles import dark_floor_factory
-from dnd.core.condition_types import ConditionAgencyDenial, DurationType
-from dnd.core.dice import fixed_dice_faces
-from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import Event, EventPhase, EventQueue, EventType, TakeDamageEvent
-from dnd.core.gridmap import get_map
-from dnd.core.spatial_effect_types import SpatialEffectAnchorKind
-from dnd.core.creature_types import CreatureType, DamageType
-from dnd.core.modifiers import (
-    ResistanceModifier,
-    ResistanceStatus,
+from dnd.core.base_actions import (
+    BaseAction,
+    Cost,
 )
+from dnd.types.world import LightLevel
+from dnd.core.base_tiles import dark_floor_factory
+from dnd.types.conditions import ConditionAgencyDenial, DurationType
+from dnd.core.dice import fixed_dice_faces
+from dnd.types.equipment import WeaponSlot
+from dnd.core.events.events_registry import (
+    Event,
+    EventPhase,
+    EventQueue,
+    EventType,
+)
+from dnd.core.events.resolution_events import (
+    TakeDamageEvent,
+)
+from dnd.core.gridmap import get_map
+from dnd.types.spatial_effects import SpatialEffectAnchorKind
+from dnd.types.creatures import CreatureType
+from dnd.types.damage import DamageType
+from dnd.core.modifiers import ResistanceModifier
+from dnd.types.damage import ResistanceStatus
 from dnd.entity import Entity
 from dnd.items.weapons import DAGGER_RECIPE
 from dnd.items.environment_content import OIL_BARREL_RECIPE, OilBarrel
-from dnd.reactions import add_opportunity_attack_handler
+from dnd.actions.reactions import add_opportunity_attack_handler
 from dnd.spells.conjuration import (
     GuardianOfFaith,
     GuardianOfFaithController,
@@ -50,11 +62,11 @@ from dnd.spells.evocation import (
     FlameStrike,
     Light,
 )
-from dnd.spatial_effect_content import (
+from dnd.content.spatial_effect_recipes import (
     CONTINUAL_FLAME_FIELD_RECIPE,
     GUARDIAN_OF_FAITH_FIELD_RECIPE,
 )
-from dnd.spatial_effects import FieldEffect, SpatialEffect
+from dnd.spatial.effect_base import FieldEffect, SpatialEffect
 from dnd.spells.illusion import Silence
 from dnd.spells.transmutation import HasteEffect
 from tests.engine.support import (

@@ -6,7 +6,8 @@ from uuid import UUID, uuid4
 from pydantic import Field
 
 from dnd.controller import HumanController, PassController, TurnContext
-from dnd.core.modifiers import AutoHitModifier, AutoHitStatus
+from dnd.core.modifiers import AutoHitModifier
+from dnd.types.rolls import AutoHitStatus
 from dnd.encounter import Encounter
 from dnd.entity import Entity
 from dnd.monsters.bestiary import create_goblin, create_skeleton

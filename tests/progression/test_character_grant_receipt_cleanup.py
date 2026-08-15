@@ -19,11 +19,11 @@ from dnd.content_system.condition_definitions import (
 from dnd.classes.rage import Raging
 from dnd.core.modifiers import (
     AdvantageModifier,
-    AdvantageStatus,
     ContextualAdvantageModifier,
     ContextualNumericalModifier,
     NumericalModifier,
 )
+from dnd.types.rolls import AdvantageStatus
 from dnd.entity import Entity
 
 

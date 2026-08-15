@@ -9,12 +9,14 @@ from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import SpellProtectionRegistry
 from dnd.core.base_object import BaseObject
 from dnd.core.dice import Dice, DiceRoll
-from dnd.core.events import EventQueue
+from dnd.core.events.events_registry import (
+    EventQueue,
+)
 from dnd.core.gridmap import GridMap, get_map
 from dnd.core.values import BaseValue
 from dnd.encounter import Encounter
 from dnd.entity import Entity
-from dnd.spatial_effects import SpatialEffect
+from dnd.spatial.effect_base import SpatialEffect
 
 
 def reset_engine_runtime(

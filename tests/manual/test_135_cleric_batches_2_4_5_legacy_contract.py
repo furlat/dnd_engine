@@ -10,32 +10,38 @@ from unittest.mock import patch
 
 import pytest
 
-from dnd.actions import Attack, Move, SpellEvent
-from dnd.actions_functional import setup_standard_actions
-from dnd.blocks.equipment import Weapon
+from dnd.actions.standard import (
+    Attack,
+    Move,
+    SpellEvent,
+)
+from dnd.actions.operations import setup_standard_actions
+from dnd.blocks.equipment import (
+    Weapon,
+)
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
 from dnd.conditions import Frightened, Poisoned
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition
-from dnd.core.condition_types import ConditionTag
+from dnd.types.conditions import ConditionTag
 from dnd.core.dice import fixed_dice_faces
-from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import (
+from dnd.types.equipment import WeaponSlot
+from dnd.core.events.resolution_events import (
     DamageRollResultEvent,
+    TakeDamageEvent,
+)
+from dnd.core.events.events_registry import (
     EventPhase,
     EventQueue,
     EventType,
-    TakeDamageEvent,
 )
 from dnd.core.combat_log import CombatLogEntryType
 from dnd.core.gridmap import get_map
-from dnd.core.life_types import LifeState
-from dnd.core.creature_types import DamageType
-from dnd.core.modifiers import (
-    AdvantageStatus,
-    NumericalModifier,
-)
+from dnd.types.life import LifeState
+from dnd.types.damage import DamageType
+from dnd.types.rolls import AdvantageStatus
+from dnd.core.modifiers import NumericalModifier
 from dnd.entity import Entity
 from dnd.items.weapons import DAGGER_RECIPE
 from dnd.spells.abjuration import (

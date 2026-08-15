@@ -9,8 +9,12 @@ import pytest
 import server.player_replication.mapper as presentation_mapper_module
 import server.player_replication.runtime as replication_runtime_module
 
-from dnd.actions import MovementEvent, Move, SpellEvent
-from dnd.actions_functional import execute_use_action
+from dnd.actions.standard import (
+    MovementEvent,
+    Move,
+    SpellEvent,
+)
+from dnd.actions.operations import execute_use_action
 from dnd.content_system.creature_materialization import materialize_creature
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
@@ -18,11 +22,13 @@ from dnd.conditions import GreaterInvisibilityEffect
 from dnd.controller import Controller
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
 from dnd.core.dice import fixed_dice_faces
-from dnd.core.events import (
+from dnd.core.events.events_registry import (
     Event,
     EventPhase,
     EventQueue,
     EventType,
+)
+from dnd.core.events.world_events import (
     MovementTrajectory,
     StepMovementEvent,
 )
@@ -38,7 +44,7 @@ from dnd.core.content.materialization import (
 )
 from dnd.encounter import Encounter
 from dnd.entity import Entity
-from dnd.environmental_effect_runtime import materialize_spike_trap_effect
+from dnd.content.spike_trap_materialization import materialize_spike_trap_effect
 from dnd.items.consumables import GREATER_INVISIBILITY_POTION_RECIPE
 from dnd.items.torches import TORCH_RECIPE, Torch
 from dnd.monsters.bestiary_content import BESTIARY_CREATURE_RECIPES_BY_ID

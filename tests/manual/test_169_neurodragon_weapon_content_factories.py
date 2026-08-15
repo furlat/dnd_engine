@@ -11,7 +11,9 @@ from pydantic import ValidationError
 
 import dnd.items as item_exports
 import dnd.items.weapons as weapon_definitions
-from dnd.blocks.equipment import Weapon
+from dnd.blocks.equipment import (
+    Weapon,
+)
 from dnd.content_system.icon_bindings import (
     BUILT_IN_CONTENT_ICON_BINDING_LEDGER,
 )
@@ -23,9 +25,15 @@ from dnd.core.content.provenance import (
     ContentProvenanceRelation,
     ContentReviewStatus,
 )
-from dnd.core.equipment_types import WeaponProperty, WeaponSlot
-from dnd.core.events import EventHandler, EventQueue, RangeType
-from dnd.core.creature_types import DamageType
+from dnd.types.equipment import WeaponProperty, WeaponSlot
+from dnd.core.events.events_registry import (
+    EventHandler,
+    EventQueue,
+)
+from dnd.core.events.resolution_events import (
+    RangeType,
+)
+from dnd.types.damage import DamageType
 from dnd.entity import Entity
 from dnd.runtime_reset import reset_engine_runtime
 

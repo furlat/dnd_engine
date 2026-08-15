@@ -9,7 +9,9 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from dnd.actions import SpellAction
+from dnd.actions.standard import (
+    SpellAction,
+)
 from dnd.classes.barbarian_progression_definitions import BARBARIAN_CLASS_REF
 from dnd.classes.progression_definitions import FIGHTER_CLASS_REF
 from dnd.classes.sorcerer_progression_definitions import SORCERER_CLASS_REF
@@ -38,7 +40,6 @@ from dnd.content_system.character_materialization import (
 from dnd.content_system.runtime import ContentSystemRuntime
 from dnd.core.content.durable_characters import (
     AbilityScoreAllocation,
-    AbilityScoreName,
     CantripChoice,
     CharacterDefinitionRevisionV2,
     CharacterHoldingsRevision,
@@ -52,14 +53,12 @@ from dnd.core.content.durable_characters import (
     StartingEquipmentPackageChoice,
     SubclassChoice,
 )
+from dnd.types.abilities import AbilityName
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.content.materialization import CreatureDeploymentRole
-from dnd.core.equipment_types import ArmorType, WeaponProperty, WeaponSlot
-from dnd.core.progression import (
-    MulticlassSlotRoundingPolicy,
-    character_ruleset_digest,
-    proficiency_bonus_for_level,
-)
+from dnd.types.equipment import ArmorType, WeaponProperty, WeaponSlot
+from dnd.types.progression import MulticlassSlotRoundingPolicy
+from dnd.core.progression import character_ruleset_digest, proficiency_bonus_for_level
 from dnd.runtime_reset import reset_engine_runtime
 
 
@@ -96,63 +95,63 @@ _BASE_ABILITIES = AbilityScoreAllocation(
     charisma=14,
 )
 _FLEXIBLE_BONUSES = FlexibleAbilityBonusSelection(
-    plus_two=AbilityScoreName.STRENGTH,
-    plus_one=AbilityScoreName.CHARISMA,
+    plus_two=AbilityName.STRENGTH,
+    plus_one=AbilityName.CHARISMA,
 )
 _ASI_BY_CLASS: dict[
     ClassId,
-    tuple[tuple[int, tuple[tuple[AbilityScoreName, int], ...]], ...],
+    tuple[tuple[int, tuple[tuple[AbilityName, int], ...]], ...],
 ] = {
     "fighter": (
-        (4, ((AbilityScoreName.STRENGTH, 2),)),
+        (4, ((AbilityName.STRENGTH, 2),)),
         (
             6,
             (
-                (AbilityScoreName.STRENGTH, 1),
-                (AbilityScoreName.CONSTITUTION, 1),
+                (AbilityName.STRENGTH, 1),
+                (AbilityName.CONSTITUTION, 1),
             ),
         ),
-        (8, ((AbilityScoreName.CONSTITUTION, 2),)),
-        (12, ((AbilityScoreName.CONSTITUTION, 2),)),
+        (8, ((AbilityName.CONSTITUTION, 2),)),
+        (12, ((AbilityName.CONSTITUTION, 2),)),
         (
             14,
             (
-                (AbilityScoreName.CONSTITUTION, 1),
-                (AbilityScoreName.WISDOM, 1),
+                (AbilityName.CONSTITUTION, 1),
+                (AbilityName.WISDOM, 1),
             ),
         ),
-        (16, ((AbilityScoreName.WISDOM, 2),)),
-        (19, ((AbilityScoreName.DEXTERITY, 2),)),
+        (16, ((AbilityName.WISDOM, 2),)),
+        (19, ((AbilityName.DEXTERITY, 2),)),
     ),
     "barbarian": (
-        (4, ((AbilityScoreName.STRENGTH, 2),)),
+        (4, ((AbilityName.STRENGTH, 2),)),
         (
             8,
             (
-                (AbilityScoreName.STRENGTH, 1),
-                (AbilityScoreName.CONSTITUTION, 1),
+                (AbilityName.STRENGTH, 1),
+                (AbilityName.CONSTITUTION, 1),
             ),
         ),
-        (12, ((AbilityScoreName.CONSTITUTION, 2),)),
-        (16, ((AbilityScoreName.CONSTITUTION, 2),)),
-        (19, ((AbilityScoreName.WISDOM, 2),)),
+        (12, ((AbilityName.CONSTITUTION, 2),)),
+        (16, ((AbilityName.CONSTITUTION, 2),)),
+        (19, ((AbilityName.WISDOM, 2),)),
     ),
     "sorcerer": (
-        (4, ((AbilityScoreName.CHARISMA, 2),)),
+        (4, ((AbilityName.CHARISMA, 2),)),
         (
             8,
             (
-                (AbilityScoreName.CHARISMA, 1),
-                (AbilityScoreName.CONSTITUTION, 1),
+                (AbilityName.CHARISMA, 1),
+                (AbilityName.CONSTITUTION, 1),
             ),
         ),
-        (12, ((AbilityScoreName.CONSTITUTION, 2),)),
-        (16, ((AbilityScoreName.CONSTITUTION, 2),)),
+        (12, ((AbilityName.CONSTITUTION, 2),)),
+        (16, ((AbilityName.CONSTITUTION, 2),)),
         (
             19,
             (
-                (AbilityScoreName.CONSTITUTION, 1),
-                (AbilityScoreName.WISDOM, 1),
+                (AbilityName.CONSTITUTION, 1),
+                (AbilityName.WISDOM, 1),
             ),
         ),
     ),
@@ -317,7 +316,7 @@ def _materialize(
 def _assert_composition_removed(
     result: MaterializedCharacter,
     *,
-    expected_noncomposition_scores: dict[AbilityScoreName, int] | None = None,
+    expected_noncomposition_scores: dict[AbilityName, int] | None = None,
 ) -> None:
     receipt = result.composition_receipt
     assert receipt is not None
@@ -332,10 +331,10 @@ def _assert_composition_removed(
         ability: (
             entity.ability_scores.get_ability(ability.value).ability_score.score
         )
-        for ability in AbilityScoreName
+        for ability in AbilityName
     } == {
         ability: expected_scores.get(ability, 0)
-        for ability in AbilityScoreName
+        for ability in AbilityName
     }
     assert entity.proficiency_bonus.normalized_score == 0
     assert entity.health.total_hit_dices_number == 0
@@ -357,7 +356,7 @@ def _assert_composition_removed(
     assert all(
         not entity.saving_throws.get_saving_throw(ability.value)
         .proficiency_sources.sources
-        for ability in AbilityScoreName
+        for ability in AbilityName
     )
 
 
@@ -399,7 +398,7 @@ def test_all_ordered_pairs_preserve_first_class_saves_and_entry_proficiencies(
     entity = result.entity
     proficient_saves = frozenset(
         ability.value
-        for ability in AbilityScoreName
+        for ability in AbilityName
         if entity.saving_throws.get_saving_throw(
             ability.value,
         ).proficiency_sources.sources
@@ -579,7 +578,7 @@ def test_fighter_two_sorcerer_three_premade_uses_canonical_composition(
     assert entity.proficiency_bonus.normalized_score == 3
     assert {
         ability.value
-        for ability in AbilityScoreName
+        for ability in AbilityName
         if entity.saving_throws.get_saving_throw(
             ability.value,
         ).proficiency_sources.sources
@@ -594,7 +593,7 @@ def test_fighter_two_sorcerer_three_premade_uses_canonical_composition(
 
     _assert_composition_removed(
         result,
-        expected_noncomposition_scores={AbilityScoreName.CHARISMA: 3},
+        expected_noncomposition_scores={AbilityName.CHARISMA: 3},
     )
 
 

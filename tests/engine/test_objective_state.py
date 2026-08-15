@@ -5,10 +5,12 @@ from uuid import uuid4
 
 import pytest
 
-from dnd.blocks.equipment import Weapon
+from dnd.blocks.equipment import (
+    Weapon,
+)
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
-from dnd.core.base_block import SenseMode, SensesType
+from dnd.types.senses import SenseMode, SensesType
 from dnd.core.gridmap import GridMap
 from dnd.entity import Entity, EntityConfig
 from dnd.items.torches import TORCH_RECIPE, Torch

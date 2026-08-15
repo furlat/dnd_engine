@@ -1,17 +1,24 @@
 """Regression coverage for spells that apply one mixed typed damage packet."""
 
-from dnd.actions import SpellEvent
-from dnd.core.dice import fixed_dice_faces
-from dnd.core.events import EventPhase, EventQueue, EventType, TakeDamageEvent
-from dnd.core.gridmap import get_map
-from dnd.core.creature_types import DamageType
-from dnd.core.modifiers import (
-    ResistanceModifier,
-    ResistanceStatus,
+from dnd.actions.standard import (
+    SpellEvent,
 )
+from dnd.core.dice import fixed_dice_faces
+from dnd.core.events.events_registry import (
+    EventPhase,
+    EventQueue,
+    EventType,
+)
+from dnd.core.events.resolution_events import (
+    TakeDamageEvent,
+)
+from dnd.core.gridmap import get_map
+from dnd.types.damage import DamageType
+from dnd.core.modifiers import ResistanceModifier
+from dnd.types.damage import ResistanceStatus
 from dnd.entity import Entity
-from dnd.spatial_effect_content import ICE_STORM_SURFACE_RECIPE
-from dnd.spatial_effects import GroundEffect, SpatialEffect
+from dnd.content.spatial_effect_recipes import ICE_STORM_SURFACE_RECIPE
+from dnd.spatial.effect_base import GroundEffect, SpatialEffect
 from dnd.spells.evocation import IceStorm
 from tests.engine.support import get_hp, has_condition
 from tests.manual.spell_regression_support import (

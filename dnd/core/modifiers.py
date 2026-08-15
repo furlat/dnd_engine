@@ -1,46 +1,19 @@
 import logging
 
 from pydantic import Field, computed_field, model_validator
-from typing import List, Literal, Optional, Dict, Any, Callable, TypeVar, Union, Tuple, Self
+from typing import List, Optional, Dict, Any, Callable, TypeVar, Union, Tuple, Self
 from uuid import UUID
-from enum import Enum
 
 from dnd.core.base_object import BaseObject
-from dnd.core import creature_types as _creature_types
-from dnd.core.roll_types import AdvantageStatus
+from dnd.types import creatures as creature_types
+from dnd.types import damage as damage_types
+from dnd.types import rolls as roll_types
 
 logger = logging.getLogger(__name__)
 
 T_co = TypeVar('T_co', covariant=True)
 
 ContextAwareCallable = Callable[[UUID, Optional[UUID], Optional[Dict[str, Any]]], Optional[T_co]]
-
-
-class AutoHitStatus(str, Enum):
-    NONE = "None"
-    AUTOHIT = "Autohit"
-    AUTOMISS = "Automiss"
-
-class CriticalStatus(str, Enum):
-    NONE = "None"
-    AUTOCRIT = "Autocrit"
-    NOCRIT = "Critical Immune"
-
-class ResistanceStatus(str, Enum):
-    NONE = "None"
-    RESISTANCE = "Resistance"
-    IMMUNITY = "Immunity"
-    VULNERABILITY = "Vulnerability"
-
-
-saving_throws = Literal[
-    "strength_saving_throw",
-    "dexterity_saving_throw",
-    "constitution_saving_throw",
-    "intelligence_saving_throw",
-    "wisdom_saving_throw",
-    "charisma_saving_throw",
-]
 
 
 class NumericalModifier(BaseObject):
@@ -103,7 +76,7 @@ class NumericalModifier(BaseObject):
 class AdvantageModifier(BaseObject):
     """Advantage, disadvantage, or neutral roll-state payload."""
 
-    value: AdvantageStatus = Field(
+    value: roll_types.AdvantageStatus = Field(
         ...,
         description="Roll-state contribution applied by this modifier."
     )
@@ -116,9 +89,9 @@ class AdvantageModifier(BaseObject):
         Returns:
             `1` for advantage, `-1` for disadvantage, and `0` for none.
         """
-        if self.value == AdvantageStatus.ADVANTAGE:
+        if self.value == roll_types.AdvantageStatus.ADVANTAGE:
             return 1
-        elif self.value == AdvantageStatus.DISADVANTAGE:
+        elif self.value == roll_types.AdvantageStatus.DISADVANTAGE:
             return -1
         else:
             return 0
@@ -127,7 +100,7 @@ class AdvantageModifier(BaseObject):
 class CriticalModifier(BaseObject):
     """Critical-hit override payload."""
 
-    value: CriticalStatus = Field(
+    value: roll_types.CriticalStatus = Field(
         ...,
         description="Critical-hit override contributed by this modifier."
     )
@@ -135,7 +108,7 @@ class CriticalModifier(BaseObject):
 class AutoHitModifier(BaseObject):
     """Automatic hit or miss override payload."""
 
-    value: AutoHitStatus = Field(
+    value: roll_types.AutoHitStatus = Field(
         ...,
         description="Hit override contributed by this modifier."
     )
@@ -335,7 +308,7 @@ class ContextualNumericalModifier(ContextualModifier):
 class SizeModifier(BaseObject):
     """Creature or object size payload."""
 
-    value: _creature_types.Size = Field(
+    value: creature_types.Size = Field(
         ...,
         description="Size value contributed by this modifier."
     )
@@ -343,7 +316,7 @@ class SizeModifier(BaseObject):
 class DamageTypeModifier(BaseObject):
     """Damage type payload."""
 
-    value: _creature_types.DamageType = Field(
+    value: damage_types.DamageType = Field(
         ...,
         description="Damage type contributed by this modifier."
     )
@@ -372,11 +345,11 @@ class ContextualDamageTypeModifier(ContextualModifier):
 class ResistanceModifier(BaseObject):
     """Resistance, immunity, or vulnerability payload for one damage type."""
 
-    value: ResistanceStatus = Field(
+    value: damage_types.ResistanceStatus = Field(
         ...,
         description="Resistance state contributed by this modifier."
     )
-    damage_type: _creature_types.DamageType = Field(
+    damage_type: damage_types.DamageType = Field(
         ...,
         description="Damage type affected by this resistance modifier."
     )
@@ -390,11 +363,11 @@ class ResistanceModifier(BaseObject):
             `2` for immunity, `1` for resistance, `0` for none, and `-1`
             for vulnerability.
         """
-        if self.value == ResistanceStatus.IMMUNITY:
+        if self.value == damage_types.ResistanceStatus.IMMUNITY:
             return 2
-        elif self.value == ResistanceStatus.RESISTANCE:
+        elif self.value == damage_types.ResistanceStatus.RESISTANCE:
             return 1
-        elif self.value == ResistanceStatus.VULNERABILITY:
+        elif self.value == damage_types.ResistanceStatus.VULNERABILITY:
             return -1
         else:
             return 0

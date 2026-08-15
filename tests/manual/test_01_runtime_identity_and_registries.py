@@ -5,7 +5,12 @@ from uuid import UUID, uuid4
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_object import BaseObject
 from dnd.core.gridmap import GridMap, get_map
-from dnd.core.values import BaseValue, ContextualValue, ModifiableValue, StaticValue
+from dnd.core.values import (
+    BaseValue,
+    ContextualValue,
+    ModifiableValue,
+    StaticValue,
+)
 from dnd.entity import Entity, EntityConfig
 
 

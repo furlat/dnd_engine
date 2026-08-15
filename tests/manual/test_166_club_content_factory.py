@@ -11,7 +11,9 @@ from pydantic import ValidationError
 
 import dnd.items.weapons as weapons_module
 import dnd.items as item_exports
-from dnd.blocks.equipment import Weapon
+from dnd.blocks.equipment import (
+    Weapon,
+)
 from dnd.content_system.bootstrap import bootstrap_content_system
 from dnd.content_system.item_bindings import (
     ItemRuntimeBindingRegistry,
@@ -33,8 +35,8 @@ from dnd.core.content.provenance import (
     ContentReviewStatus,
 )
 from dnd.core.base_block import BaseBlock
-from dnd.core.equipment_types import WeaponProperty, WeaponSlot
-from dnd.core.creature_types import DamageType
+from dnd.types.equipment import WeaponProperty, WeaponSlot
+from dnd.types.damage import DamageType
 from dnd.items.weapons import (
     CLUB_DECLARATION,
     CLUB_RECIPE,

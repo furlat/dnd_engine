@@ -1,12 +1,19 @@
 """Manual Chapter 21 checks for spell and feature extensions."""
 
-from dnd.actions import SpellEvent
-from dnd.actions_functional import execute_by_index, get_available_actions
-from dnd.core.base_actions import TargetType
+from dnd.actions.standard import (
+    SpellEvent,
+)
+from dnd.actions.operations import execute_by_index, get_available_actions
+from dnd.core.base_actions import (
+    TargetType,
+)
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition, SpellProtectionRegistry
 from dnd.core.base_object import BaseObject
-from dnd.core.events import EventPhase, EventQueue
+from dnd.core.events.events_registry import (
+    EventPhase,
+    EventQueue,
+)
 from dnd.core.gridmap import GridMap, get_map
 from dnd.core.values import BaseValue
 from dnd.entity import Entity

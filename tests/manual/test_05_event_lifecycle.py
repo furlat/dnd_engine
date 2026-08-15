@@ -4,7 +4,12 @@ from uuid import uuid4
 
 from dnd.core.base_object import BaseObject
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
-from dnd.core.events import Event, EventPhase, EventQueue, EventType
+from dnd.core.events.events_registry import (
+    Event,
+    EventPhase,
+    EventQueue,
+    EventType,
+)
 
 
 def reset_event_state() -> None:

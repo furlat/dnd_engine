@@ -15,39 +15,59 @@ from dnd.core.base_actions import (
     TargetEffectDisposition,
     TargetType,
 )
-from dnd.core.base_conditions import (
-    BaseCondition,
-    Duration,
-)
-from dnd.core.condition_types import (
+from dnd.core.base_conditions import BaseCondition, Duration
+from dnd.types.conditions import (
     ConditionAgencyDenial,
     ConditionCategory,
     ConditionRemovalTrigger,
     ConditionTag,
     DurationType,
 )
-from dnd.core.base_tiles import MovementMode
-from dnd.core.dice import AttackOutcome, Dice, RollType
-from dnd.core.events import DamageRollResultEvent, EventPhase, RangeType, Range, Damage, EventType, EventHandler, Trigger, Event, EventQueue, AbilityName, SkillName, ForcedMovementEvent
+from dnd.types.world import MovementMode
+from dnd.types.rolls import AttackOutcome, RollType
+from dnd.core.dice import Dice
+from dnd.core.events.resolution_events import (
+    DamageRollResultEvent,
+    RangeType,
+    Range,
+    Damage,
+)
+from dnd.core.events.events_registry import (
+    EventPhase,
+    EventType,
+    EventHandler,
+    Trigger,
+    Event,
+    EventQueue,
+)
+from dnd.core.events.world_events import (
+    ForcedMovementEvent,
+)
+from dnd.types.abilities import AbilityName, SkillName
 from dnd.core.gridmap import get_map
-from dnd.core.creature_types import CreatureType, DamageType
+from dnd.types.creatures import CreatureType
+from dnd.types.damage import DamageType
 from dnd.core.modifiers import (
     AdvantageModifier,
-    AdvantageStatus,
     NumericalModifier,
     ContextualAdvantageModifier,
 )
+from dnd.types.rolls import AdvantageStatus
 from dnd.core.values import ModifiableValue
 from functools import partial
 from typing import Any, Dict
 from dnd.entity import Entity
-from dnd.actions import (
+from dnd.actions.standard import (
     Dash,
     SpellAction,
     SpellEvent,
     entity_action_economy_cost_evaluator,
 )
-from dnd.core.base_actions import Cost, BaseAction, ActionCategory
+from dnd.core.base_actions import (
+    Cost,
+    BaseAction,
+    ActionCategory,
+)
 from dnd.conditions import Blinded, Deafened, Frightened, Concentrating, ConcentrationActionMarker
 from dnd.creature_transforms import apply_unconscious_transform
 from dnd.spells.enchantment import BaneEffect, BlessEffect
@@ -453,20 +473,20 @@ class Blight(SpellAction):
                 source_entity_uuid=caster.uuid,
                 target_entity_uuid=target.uuid
             )
-            mod_uuid = target.saving_throws.get_saving_throw("constitution").bonus.self_static.add_advantage_modifier(disadv_mod)
+            mod_uuid = target.saving_throws.get_saving_throw(AbilityName.CONSTITUTION).bonus.self_static.add_advantage_modifier(disadv_mod)
 
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
-            ability_name="constitution",
+            ability_name=AbilityName.CONSTITUTION,
             dc=dc,
             parent_event=execution_event.uuid
         )
         _, save_roll, success = target.saving_throw(save_request)
 
         if is_plant and mod_uuid:
-            target.saving_throws.get_saving_throw("constitution").bonus.self_static.remove_modifier(mod_uuid)
+            target.saving_throws.get_saving_throw(AbilityName.CONSTITUTION).bonus.self_static.remove_modifier(mod_uuid)
 
-        save_bonus = target.saving_throw_bonus(caster.uuid, "constitution").normalized_score
+        save_bonus = target.saving_throw_bonus(caster.uuid, AbilityName.CONSTITUTION).normalized_score
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -599,7 +619,7 @@ class BlindnessDeafnessEffect(BaseCondition):
 
             save_request = caster.create_saving_throw_request(
                 target_entity_uuid=target.uuid,
-                ability_name="constitution",
+                ability_name=AbilityName.CONSTITUTION,
                 dc=dc,
                 parent_event=event.uuid
             )
@@ -705,13 +725,13 @@ class BlindnessDeafness(SpellAction):
 
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
-            ability_name="constitution",
+            ability_name=AbilityName.CONSTITUTION,
             dc=dc,
             parent_event=execution_event.uuid
         )
         _, save_roll, success = target.saving_throw(save_request)
 
-        save_bonus = target.saving_throw_bonus(caster.uuid, "constitution").normalized_score
+        save_bonus = target.saving_throw_bonus(caster.uuid, AbilityName.CONSTITUTION).normalized_score
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -856,7 +876,7 @@ class NecroticBless(SpellAction):
         else:
             save_request = caster.create_saving_throw_request(
                 target_entity_uuid=target.uuid,
-                ability_name="charisma",
+                ability_name=AbilityName.CHARISMA,
                 dc=dc,
                 parent_event=execution_event.uuid,
             )
@@ -971,7 +991,7 @@ class SickenedCondition(BaseCondition):
                 return None
             save_request = caster.create_saving_throw_request(
                 target_entity_uuid=target.uuid,
-                ability_name="wisdom",
+                ability_name=AbilityName.WISDOM,
                 dc=dc,
                 parent_event=event.uuid
             )
@@ -1425,7 +1445,7 @@ class EyebiteStrike(BaseAction):
 
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
-            ability_name="wisdom",
+            ability_name=AbilityName.WISDOM,
             dc=self.spell_dc,
             parent_event=execution_event.uuid
         )
@@ -1616,13 +1636,13 @@ class FingerOfDeath(SpellAction):
 
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
-            ability_name="constitution",
+            ability_name=AbilityName.CONSTITUTION,
             dc=dc,
             parent_event=execution_event.uuid
         )
         _, save_roll, success = target.saving_throw(save_request)
 
-        save_bonus = target.saving_throw_bonus(caster.uuid, "constitution").normalized_score
+        save_bonus = target.saving_throw_bonus(caster.uuid, AbilityName.CONSTITUTION).normalized_score
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -1804,7 +1824,7 @@ class Harm(SpellAction):
 
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
-            ability_name="constitution",
+            ability_name=AbilityName.CONSTITUTION,
             dc=dc,
             parent_event=execution_event.uuid,
         )
@@ -1872,7 +1892,7 @@ class AbilityCurseEffect(BaseCondition):
         default_factory=lambda: {ConditionTag.MAGICAL, ConditionTag.CURSE},
         description="Condition tags used by cleanup and spell interactions.",
     )
-    cursed_ability: AbilityName = Field(default="strength", description="Ability affected by the curse.")
+    cursed_ability: AbilityName = Field(default=AbilityName.STRENGTH, description="Ability affected by the curse.")
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         """Apply the ability-save and linked-skill disadvantage modifiers."""
@@ -2046,7 +2066,7 @@ class InactionCurseEffect(BaseCondition):
 
             save_request = caster.create_saving_throw_request(
                 target_entity_uuid=target.uuid,
-                ability_name="wisdom",
+                ability_name=AbilityName.WISDOM,
                 dc=dc,
                 parent_event=event.uuid
             )
@@ -2251,7 +2271,7 @@ class BestowCurse(SpellAction):
     )
     projectile_type: Optional[str] = Field(default="touch", description="VFX projectile metadata.")
     curse_option: int = Field(default=1, description="Selected curse option from 1 through 4.")
-    cursed_ability: AbilityName = Field(default="strength", description="Ability affected when option 1 is used.")
+    cursed_ability: AbilityName = Field(default=AbilityName.STRENGTH, description="Ability affected when option 1 is used.")
 
     def get_target_effect_profile(self, actor: Any) -> Optional[ActionTargetEffectProfile]:
         """Declare the selected Bestow Curse branch."""
@@ -2318,7 +2338,7 @@ class BestowCurse(SpellAction):
 
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
-            ability_name="wisdom",
+            ability_name=AbilityName.WISDOM,
             dc=dc,
             parent_event=effect_event.uuid
         )

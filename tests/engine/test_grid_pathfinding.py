@@ -5,11 +5,14 @@ from uuid import UUID, uuid4
 import pytest
 
 import dnd.core.gridmap as gridmap_module
-from dnd.blocks.base_item import BaseItem
+from dnd.blocks.base_item import (
+    BaseItem,
+)
 from dnd.core.aoe import Cone, Cylinder, Line, Sphere
-from dnd.core.base_block import BaseBlock, MovementMode
+from dnd.core.base_block import BaseBlock
+from dnd.types.world import MovementMode
 from dnd.core.base_conditions import BaseCondition
-from dnd.core.condition_types import ConditionCategory, HazardFilter
+from dnd.types.conditions import ConditionCategory, HazardFilter
 from dnd.core.base_object import BaseObject
 from dnd.core.base_tiles import (
     difficult_terrain_factory,
@@ -17,20 +20,33 @@ from dnd.core.base_tiles import (
     wall_factory,
     water_factory,
 )
-from dnd.core.events import Event, EventHandler, EventPhase, EventQueue, EventType, SpatialChangeEvent
+from dnd.core.events.events_registry import (
+    Event,
+    EventHandler,
+    EventPhase,
+    EventQueue,
+    EventType,
+)
+from dnd.core.events.world_events import (
+    SpatialChangeEvent,
+)
 from dnd.core.geometry import circle_positions, supercover_line
 from dnd.core.gridmap import get_map
-from dnd.core.life_types import LifeState
-from dnd.core.creature_types import DamageType
+from dnd.types.life import LifeState
+from dnd.types.damage import DamageType
 from dnd.core.modifiers import NumericalModifier
-from dnd.core.spatial_effect_types import SpatialEffectTriggerKind
+from dnd.types.spatial_effects import SpatialEffectTriggerKind
 from dnd.core.values import BaseValue
-from dnd.actions import Jump, Move, Shove
+from dnd.actions.standard import (
+    Jump,
+    Move,
+    Shove,
+)
 from dnd.entity import Entity
 from dnd.monsters.bestiary import create_skeleton
-from dnd.spatial_effect_content import GREASE_SURFACE_RECIPE
-from dnd.spatial_effects import GroundEffect
-from dnd.spatial_effect_controllers import AreaSpatialEffectController
+from dnd.content.spatial_effect_recipes import GREASE_SURFACE_RECIPE
+from dnd.spatial.effect_base import GroundEffect
+from dnd.spatial.effect_controllers import AreaSpatialEffectController
 from tests.engine.support import reset_combat_state
 
 

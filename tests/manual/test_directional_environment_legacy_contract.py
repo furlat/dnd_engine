@@ -2,20 +2,27 @@
 
 from uuid import uuid4
 
-from dnd.actions import Attack, AttackEvent
-from dnd.actions_functional import execute_use_action, setup_standard_actions
-from dnd.blocks.equipment import Weapon
+from dnd.actions.standard import (
+    Attack,
+    AttackEvent,
+)
+from dnd.actions.operations import execute_use_action, setup_standard_actions
+from dnd.blocks.equipment import (
+    Weapon,
+)
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
 from dnd.core.base_block import BaseBlock
-from dnd.core.events import (
+from dnd.core.events.events_registry import (
     EventPhase,
     EventQueue,
     EventType,
+)
+from dnd.core.events.world_events import (
     SpatialChangeEvent,
     StepMovementEvent,
 )
-from dnd.core.equipment_types import WeaponSlot
+from dnd.types.equipment import WeaponSlot
 from dnd.core.gridmap import get_map
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.entity import Entity
@@ -33,7 +40,7 @@ from dnd.maps.arena_layout import (
 )
 from dnd.monsters.bestiary import create_goblin, create_skeleton
 from dnd.items.weapons import SHORTBOW_RECIPE
-from dnd.reactions import opportunity_attack_processor
+from dnd.actions.reactions import opportunity_attack_processor
 from server.mapeditor_support import (
     build_forgotten_crypt_arena_map,
     reset_editor_world,

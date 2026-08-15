@@ -3,11 +3,11 @@
 from dataclasses import dataclass
 from typing import Literal
 
-from dnd.actions_functional import execute_use_action
+from dnd.actions.operations import execute_use_action
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
 from dnd.core.base_block import BaseBlock
-from dnd.core.condition_types import DurationType
+from dnd.types.conditions import DurationType
 from dnd.items.consumables import HASTE_POTION_RECIPE
 from dnd.monsters.bestiary import create_skeleton
 from dnd.spells.transmutation import HasteEffect

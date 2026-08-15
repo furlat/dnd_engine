@@ -39,7 +39,6 @@ from dnd.core.content.descriptors import (
 from dnd.core.content.durable_characters import (
     AbilityScoreAllocation,
     AbilityScoreImprovementChoice,
-    AbilityScoreName,
     BackgroundDefinition,
     CharacterDefinitionRevisionV2,
     CharacterHoldingsRevision,
@@ -53,6 +52,7 @@ from dnd.core.content.durable_characters import (
     StartingEquipmentPackageChoice,
     SubclassChoice,
 )
+from dnd.types.abilities import AbilityName
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.content.origin_support import OriginRuntimeSupport
 from dnd.core.content.materialization import CreatureDeploymentRole
@@ -68,7 +68,7 @@ from dnd.core.content.registration import (
     compute_definition_contract_hash,
 )
 from dnd.core.content.registry import FrozenContentRegistry
-from dnd.core.equipment_types import ArmorType, WeaponProperty
+from dnd.types.equipment import ArmorType, WeaponProperty
 from dnd.player_character_body import PLAYER_CHARACTER_BODY_RECIPE
 from dnd.runtime_reset import reset_engine_runtime
 
@@ -198,8 +198,8 @@ def test_fighter_five_champion_materializes_and_reverses_exactly() -> None:
             charisma=8,
         ),
         flexible_ability_bonuses=FlexibleAbilityBonusSelection(
-            plus_two=AbilityScoreName.STRENGTH,
-            plus_one=AbilityScoreName.CONSTITUTION,
+            plus_two=AbilityName.STRENGTH,
+            plus_one=AbilityName.CONSTITUTION,
         ),
         class_levels=(
             ClassLevelEntry(
@@ -256,7 +256,7 @@ def test_fighter_five_champion_materializes_and_reverses_exactly() -> None:
                 choices=(
                     AbilityScoreImprovementChoice(
                         choice_id="class.fighter.level_4.asi_or_feat",
-                        increases=((AbilityScoreName.STRENGTH, 2),),
+                        increases=((AbilityName.STRENGTH, 2),),
                     ),
                 ),
             ),

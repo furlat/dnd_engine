@@ -3,32 +3,17 @@ from uuid import UUID, uuid4, uuid5
 from pydantic import BaseModel, Field,  computed_field
 from dnd.core.values import ModifiableValue
 from dnd.core.modifiers import NumericalModifier
-from typing import Literal as TypeLiteral
-
 from dnd.core.base_block import BaseBlock
-from dnd.core.events import AbilityName
-from dnd.core.proficiency_types import ProficiencyMode, ProficiencySourceSet
-SavingThrowName = TypeLiteral[
-    'strength_saving_throw', 'dexterity_saving_throw', 'constitution_saving_throw',
-    'intelligence_saving_throw', 'wisdom_saving_throw', 'charisma_saving_throw'
-]
+from dnd.types import abilities as ability_types
+from dnd.types.proficiency import ProficiencyMode, ProficiencySourceSet
 
-saving_throw_name_to_ability = {
-    "strength_saving_throw": "strength",
-    "dexterity_saving_throw": "dexterity",
-    "constitution_saving_throw": "constitution",
-    "intelligence_saving_throw": "intelligence",
-    "wisdom_saving_throw": "wisdom",
-    "charisma_saving_throw": "charisma"
-}
-
-SAVING_THROW_TO_ABILITY: Dict[SavingThrowName, AbilityName] = {
-    'strength_saving_throw': 'strength',
-    'dexterity_saving_throw': 'dexterity',
-    'constitution_saving_throw': 'constitution',
-    'intelligence_saving_throw': 'intelligence',
-    'wisdom_saving_throw': 'wisdom',
-    'charisma_saving_throw': 'charisma'
+SAVING_THROW_TO_ABILITY: Dict[ability_types.SavingThrowName, ability_types.AbilityName] = {
+    ability_types.SavingThrowName.STRENGTH: ability_types.AbilityName.STRENGTH,
+    ability_types.SavingThrowName.DEXTERITY: ability_types.AbilityName.DEXTERITY,
+    ability_types.SavingThrowName.CONSTITUTION: ability_types.AbilityName.CONSTITUTION,
+    ability_types.SavingThrowName.INTELLIGENCE: ability_types.AbilityName.INTELLIGENCE,
+    ability_types.SavingThrowName.WISDOM: ability_types.AbilityName.WISDOM,
+    ability_types.SavingThrowName.CHARISMA: ability_types.AbilityName.CHARISMA,
 }
 
 class SavingThrowConfig(BaseModel):
@@ -57,7 +42,7 @@ class SavingThrow(BaseBlock):
         context (Optional[Dict[str, Any]]): Additional context information for this block. (Inherited from BaseBlock)
 
     Properties:
-        ability (AbilityName): The ability score type (strength, dexterity, etc.) that this saving throw is based on.
+        ability (ability_types.AbilityName): The ability score type (strength, dexterity, etc.) that this saving throw is based on.
 
     Inherits all attributes and methods from BaseBlock.
 
@@ -92,8 +77,8 @@ class SavingThrow(BaseBlock):
         blocks_dict_name_uuid (Dict[str, UUID]): A dictionary mapping block names to their UUIDs. (Inherited from BaseBlock)
     """
 
-    name: SavingThrowName = Field(
-        default="strength_saving_throw",
+    name: ability_types.SavingThrowName = Field(
+        default=ability_types.SavingThrowName.STRENGTH,
         description="The name of the saving throw in D&D 5e"
     )
     bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),base_value=0, value_name="Saving Throw Bonus"), description="Any additional bonus applied to the saving throw, beyond ability modifier and proficiency")
@@ -109,12 +94,12 @@ class SavingThrow(BaseBlock):
         return self.proficiency_sources.is_proficient
 
     @property
-    def ability(self) -> AbilityName:
+    def ability(self) -> ability_types.AbilityName:
         """
         Get the ability score associated with this saving throw.
 
         Returns:
-            AbilityName: The ability score type (strength, dexterity, etc.) that this saving throw is based on.
+            ability_types.AbilityName: The ability score type (strength, dexterity, etc.) that this saving throw is based on.
         """
         return SAVING_THROW_TO_ABILITY[self.name]
 
@@ -165,7 +150,7 @@ class SavingThrow(BaseBlock):
         return convert
 
     @classmethod
-    def create(cls, source_entity_uuid: UUID, name: SavingThrowName, source_entity_name: Optional[str] = None,
+    def create(cls, source_entity_uuid: UUID, name: ability_types.SavingThrowName, source_entity_name: Optional[str] = None,
                 target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None,
                 config: Optional[SavingThrowConfig] = None) -> 'SavingThrow':
         """
@@ -235,7 +220,7 @@ class SavingThrowSet(BaseBlock):
         context (Optional[Dict[str, Any]]): Additional context information for this block. (Inherited from BaseBlock)
 
     Methods:
-        get_saving_throw(ability_name: AbilityName) -> SavingThrow:
+        get_saving_throw(ability_name: ability_types.AbilityName) -> SavingThrow:
             Get a SavingThrow instance by its corresponding ability name.
         get_values() -> List[ModifiableValue]: (Inherited from BaseBlock)
             Searches through attributes and returns all ModifiableValue instances that are attributes of this class.
@@ -261,12 +246,12 @@ class SavingThrowSet(BaseBlock):
     """
 
     name: str = Field(default="SavingThrowSet", description="The complete set of six saving throws in D&D 5e")
-    strength_saving_throw: SavingThrow = Field(default_factory=lambda: SavingThrow.create(source_entity_uuid=uuid4(),name="strength_saving_throw"), description="Strength saving throw: Used to resist physical force and avoid being moved against your will")
-    dexterity_saving_throw: SavingThrow = Field(default_factory=lambda: SavingThrow.create(source_entity_uuid=uuid4(),name="dexterity_saving_throw"), description="Dexterity saving throw: Used to dodge area effects, such as the breath of a dragon or a fireball spell")
-    constitution_saving_throw: SavingThrow = Field(default_factory=lambda: SavingThrow.create(source_entity_uuid=uuid4(),name="constitution_saving_throw"), description="Constitution saving throw: Used to resist poison, disease, and other bodily ailments")
-    intelligence_saving_throw: SavingThrow = Field(default_factory=lambda: SavingThrow.create(source_entity_uuid=uuid4(),name="intelligence_saving_throw"), description="Intelligence saving throw: Used to resist mental attacks and illusions")
-    wisdom_saving_throw: SavingThrow = Field(default_factory=lambda: SavingThrow.create(source_entity_uuid=uuid4(),name="wisdom_saving_throw"), description="Wisdom saving throw: Used to resist mental influence or charm effects")
-    charisma_saving_throw: SavingThrow = Field(default_factory=lambda: SavingThrow.create(source_entity_uuid=uuid4(),name="charisma_saving_throw"), description="Charisma saving throw: Used to resist effects that would subsume your personality or possess you")
+    strength_saving_throw: SavingThrow = Field(default_factory=lambda: SavingThrow.create(source_entity_uuid=uuid4(),name=ability_types.SavingThrowName.STRENGTH), description="Strength saving throw: Used to resist physical force and avoid being moved against your will")
+    dexterity_saving_throw: SavingThrow = Field(default_factory=lambda: SavingThrow.create(source_entity_uuid=uuid4(),name=ability_types.SavingThrowName.DEXTERITY), description="Dexterity saving throw: Used to dodge area effects, such as the breath of a dragon or a fireball spell")
+    constitution_saving_throw: SavingThrow = Field(default_factory=lambda: SavingThrow.create(source_entity_uuid=uuid4(),name=ability_types.SavingThrowName.CONSTITUTION), description="Constitution saving throw: Used to resist poison, disease, and other bodily ailments")
+    intelligence_saving_throw: SavingThrow = Field(default_factory=lambda: SavingThrow.create(source_entity_uuid=uuid4(),name=ability_types.SavingThrowName.INTELLIGENCE), description="Intelligence saving throw: Used to resist mental attacks and illusions")
+    wisdom_saving_throw: SavingThrow = Field(default_factory=lambda: SavingThrow.create(source_entity_uuid=uuid4(),name=ability_types.SavingThrowName.WISDOM), description="Wisdom saving throw: Used to resist mental influence or charm effects")
+    charisma_saving_throw: SavingThrow = Field(default_factory=lambda: SavingThrow.create(source_entity_uuid=uuid4(),name=ability_types.SavingThrowName.CHARISMA), description="Charisma saving throw: Used to resist effects that would subsume your personality or possess you")
 
     @computed_field
     @property
@@ -280,12 +265,12 @@ class SavingThrowSet(BaseBlock):
         blocks = self.get_blocks()
         return [saving_throw for saving_throw in blocks if isinstance(saving_throw, SavingThrow) and saving_throw.proficiency]
 
-    def get_saving_throw(self, ability_name: AbilityName) -> SavingThrow:
+    def get_saving_throw(self, ability_name: ability_types.AbilityName) -> SavingThrow:
         """
         Get a SavingThrow instance by its corresponding ability name.
 
         Args:
-            ability_name (AbilityName): The name of the ability to get the saving throw for.
+            ability_name (ability_types.AbilityName): The name of the ability to get the saving throw for.
 
         Returns:
             SavingThrow: The corresponding SavingThrow instance.
@@ -309,17 +294,17 @@ class SavingThrowSet(BaseBlock):
             return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name,
                        target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name)
         else:
-            strength_saving_throw = SavingThrow.create(source_entity_uuid=source_entity_uuid, name="strength_saving_throw", source_entity_name=source_entity_name,
+            strength_saving_throw = SavingThrow.create(source_entity_uuid=source_entity_uuid, name=ability_types.SavingThrowName.STRENGTH, source_entity_name=source_entity_name,
                                                         target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.strength_saving_throw)
-            dexterity_saving_throw = SavingThrow.create(source_entity_uuid=source_entity_uuid, name="dexterity_saving_throw", source_entity_name=source_entity_name,
+            dexterity_saving_throw = SavingThrow.create(source_entity_uuid=source_entity_uuid, name=ability_types.SavingThrowName.DEXTERITY, source_entity_name=source_entity_name,
                                                         target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.dexterity_saving_throw)
-            constitution_saving_throw = SavingThrow.create(source_entity_uuid=source_entity_uuid, name="constitution_saving_throw", source_entity_name=source_entity_name,
+            constitution_saving_throw = SavingThrow.create(source_entity_uuid=source_entity_uuid, name=ability_types.SavingThrowName.CONSTITUTION, source_entity_name=source_entity_name,
                                                         target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.constitution_saving_throw)
-            intelligence_saving_throw = SavingThrow.create(source_entity_uuid=source_entity_uuid, name="intelligence_saving_throw", source_entity_name=source_entity_name,
+            intelligence_saving_throw = SavingThrow.create(source_entity_uuid=source_entity_uuid, name=ability_types.SavingThrowName.INTELLIGENCE, source_entity_name=source_entity_name,
                                                         target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.intelligence_saving_throw)
-            wisdom_saving_throw = SavingThrow.create(source_entity_uuid=source_entity_uuid, name="wisdom_saving_throw", source_entity_name=source_entity_name,
+            wisdom_saving_throw = SavingThrow.create(source_entity_uuid=source_entity_uuid, name=ability_types.SavingThrowName.WISDOM, source_entity_name=source_entity_name,
                                                         target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.wisdom_saving_throw)
-            charisma_saving_throw = SavingThrow.create(source_entity_uuid=source_entity_uuid, name="charisma_saving_throw", source_entity_name=source_entity_name,
+            charisma_saving_throw = SavingThrow.create(source_entity_uuid=source_entity_uuid, name=ability_types.SavingThrowName.CHARISMA, source_entity_name=source_entity_name,
                                                         target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.charisma_saving_throw)
             return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name,
                        target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name,

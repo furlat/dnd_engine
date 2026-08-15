@@ -20,25 +20,43 @@ Level 20: Primal Champion
 """
 
 from dnd.core.base_conditions import BaseCondition
-from dnd.core.condition_types import DurationType
+from dnd.types.conditions import DurationType
+from dnd.types.abilities import AbilityName
 from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_actions import (
-    BaseAction, ActionEvent, Cost, TargetType
+    BaseAction,
+    Cost,
+    TargetType,
 )
-from dnd.core.events import (
-    Event, EventPhase, EventType,
-    Trigger, EventHandler,
-    DamageAppliedEvent, RangeType, TakeDamageEvent, SkillCheckEvent
+from dnd.core.events.action_events import (
+    ActionEvent,
 )
-from dnd.core.equipment_types import ArmorType, WeaponSlot
+from dnd.core.events.events_registry import (
+    Event,
+    EventPhase,
+    EventType,
+    Trigger,
+    EventHandler,
+)
+from dnd.core.events.resolution_events import (
+    DamageAppliedEvent,
+    RangeType,
+    TakeDamageEvent,
+)
+from dnd.core.events.check_events import (
+    SkillCheckEvent,
+)
+from dnd.types.equipment import ArmorType, WeaponSlot
 from dnd.core.modifiers import (
-    NumericalModifier, AdvantageModifier, AdvantageStatus,
+    NumericalModifier,
+    AdvantageModifier,
     ContextualAdvantageModifier,
 )
-from dnd.core.dice import RollType
+from dnd.types.rolls import AdvantageStatus
+from dnd.types.rolls import RollType
 from dnd.entity import Entity
-from dnd.actions import (
+from dnd.actions.standard import (
     entity_action_economy_cost_evaluator,
     Attack,
 )
@@ -363,11 +381,11 @@ def relentless_rage_processor(event: Event, source_entity_uuid: UUID) -> Optiona
     uses_consumed = resource.maximum - resource.current
     current_dc = 10 + (uses_consumed * 5)
 
-    con_save = entity.saving_throws.get_saving_throw("constitution")
+    con_save = entity.saving_throws.get_saving_throw(AbilityName.CONSTITUTION)
     dice_roll = entity.roll_d20(
         con_save.bonus,
         RollType.SAVE,
-        ability_name="constitution",
+        ability_name=AbilityName.CONSTITUTION,
         parent_event=event.uuid,
     )
     total = dice_roll.total
@@ -715,7 +733,7 @@ class IntimidatingPresence(BaseAction):
 
         request = entity.create_saving_throw_request(
             target_entity_uuid=self.target_entity_uuid,
-            ability_name="wisdom",
+            ability_name=AbilityName.WISDOM,
             dc=dc
         )
         _, dice_roll, success = target.saving_throw(request)

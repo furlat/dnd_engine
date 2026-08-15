@@ -2,10 +2,15 @@
 
 import pytest
 
-from dnd.core.base_block import BaseBlock, MovementMode
-from dnd.core.equipment_types import WeaponSlot
+from dnd.core.base_block import BaseBlock
+from dnd.types.world import MovementMode
+from dnd.types.equipment import WeaponSlot
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
-from dnd.core.events import EventPhase, EventQueue, EventType
+from dnd.core.events.events_registry import (
+    EventPhase,
+    EventQueue,
+    EventType,
+)
 from dnd.core.elevation import support_distance_feet
 from dnd.core.content import battlefields as battlefield_contracts
 from dnd.core.content.battlefields import (
@@ -17,24 +22,26 @@ from dnd.core.gridmap import get_map
 from dnd.core.world_edges import ElevationSurfaceKind, SlopeAxis
 from dnd.core.traversal_connectors import TraversalConnectorKind
 from dnd.items.environment import DirectionalDoor, OpenDirectionalDoorAction
-from dnd.actions import (
+from dnd.actions.standard import (
     Attack,
     AttackEvent,
     Jump,
-    JumpEvent,
     Move,
     MovementEvent,
+)
+from dnd.core.events.action_events import (
+    JumpEvent,
     TraverseConnectorEvent,
 )
-from dnd.actions_functional import execute_available_action
-from dnd.encounter import EncounterState
+from dnd.actions.operations import execute_available_action
+from dnd.types.encounter import EncounterState
 from dnd.entity import Entity
 from dnd.monsters.bestiary import create_skeleton
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield, get_battlefield
 from dnd.scenarios.encounter_assembler import assemble_encounter_recipe
 from dnd.scenarios.encounter_catalog import encounter_recipe
-from dnd.spatial_effects import SpatialEffect
+from dnd.spatial.effect_base import SpatialEffect
 from server.world_projection import project_encounter, project_grid
 
 

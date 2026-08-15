@@ -3,9 +3,13 @@
 from typing import cast
 from uuid import uuid4
 
-from dnd.blocks.base_item import BaseItem
+from dnd.blocks.base_item import (
+    BaseItem,
+)
 from dnd.blocks.creature_proficiencies import CreatureProficienciesConfig
-from dnd.blocks.equipment import Weapon
+from dnd.blocks.equipment import (
+    Weapon,
+)
 from dnd.content_system.acolyte_starting_holdings import (
     ACOLYTE_STARTING_HOLDINGS_DECLARATION,
 )
@@ -40,7 +44,7 @@ from dnd.core.content.registry import FrozenContentRegistry
 from dnd.core.content.starting_equipment import (
     StartingEquipmentPackageDefinition,
 )
-from dnd.core.equipment_types import WeaponProperty
+from dnd.types.equipment import WeaponProperty
 from dnd.items.acolyte_gear import (
     COMMON_CLOTHES_RECIPE,
     HOLY_SYMBOL_DECLARATION,

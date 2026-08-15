@@ -5,13 +5,13 @@ data lives in :mod:`dnd.core.content.durable_characters`.
 """
 
 from dataclasses import dataclass
-from enum import Enum
 from hashlib import sha256
 import json
 from math import ceil
 from typing import Dict, Iterable
 
-from dnd.core.proficiency_types import ProficiencyMode
+from dnd.types.proficiency import ProficiencyMode
+from dnd.types import progression as progression_types
 
 FULL_CASTER_SPELL_SLOTS: Dict[int, Dict[int, int]] = {
     1: {1: 2},
@@ -50,26 +50,10 @@ POINT_BUY_COSTS: dict[int, int] = {
 CHARACTER_RULESET_SCHEMA_VERSION = 1
 
 
-class CasterProgression(str, Enum):
-    """Normal shared-slot contribution category for one class."""
-
-    NON_CASTER = "non_caster"
-    FULL_CASTER = "full_caster"
-    HALF_CASTER = "half_caster"
-    THIRD_CASTER = "third_caster"
-
-
-class MulticlassSlotRoundingPolicy(str, Enum):
-    """Selected hybrid rule for aggregate half-caster contributions."""
-
-    SRD_5_2_ROUND_UP = "srd_5_2_round_up"
-    SRD_5_1_ROUND_DOWN = "srd_5_1_round_down"
-
-
 def character_ruleset_digest(
     *,
     permissive_multiclass_prerequisites: bool,
-    multiclass_slot_rounding_policy: MulticlassSlotRoundingPolicy,
+    multiclass_slot_rounding_policy: progression_types.MulticlassSlotRoundingPolicy,
 ) -> str:
     """Authenticate the complete build-rules policy pinned by a character.
 
@@ -117,13 +101,13 @@ class SpellcastingClassContribution:
     """One class's inputs to normal shared spell-slot progression."""
 
     class_level: int
-    progression: CasterProgression
+    progression: progression_types.CasterProgression
     spellcasting_feature_class_level: int | None = None
 
     def __post_init__(self) -> None:
         _validate_character_level(self.class_level)
         feature_level = self.spellcasting_feature_class_level
-        if self.progression == CasterProgression.NON_CASTER:
+        if self.progression == progression_types.CasterProgression.NON_CASTER:
             if feature_level is not None:
                 raise ValueError(
                     "non-caster contribution cannot declare a spellcasting "
@@ -141,7 +125,7 @@ class SpellcastingClassContribution:
         """Whether this class has actually gained Spellcasting."""
         feature_level = self.spellcasting_feature_class_level
         return (
-            self.progression != CasterProgression.NON_CASTER
+            self.progression != progression_types.CasterProgression.NON_CASTER
             and feature_level is not None
             and self.class_level >= feature_level
         )
@@ -179,8 +163,8 @@ def resolve_proficiency_bonus(
 def effective_spellcaster_level(
     contributions: Iterable[SpellcastingClassContribution],
     *,
-    policy: MulticlassSlotRoundingPolicy = (
-        MulticlassSlotRoundingPolicy.SRD_5_2_ROUND_UP
+    policy: progression_types.MulticlassSlotRoundingPolicy = (
+        progression_types.MulticlassSlotRoundingPolicy.SRD_5_2_ROUND_UP
     ),
 ) -> int:
     """Resolve the normal shared-slot ESL for an additive class ledger.
@@ -200,21 +184,21 @@ def effective_spellcaster_level(
     full_levels = sum(
         row.class_level
         for row in eligible
-        if row.progression == CasterProgression.FULL_CASTER
+        if row.progression == progression_types.CasterProgression.FULL_CASTER
     )
     half_levels = sum(
         row.class_level
         for row in eligible
-        if row.progression == CasterProgression.HALF_CASTER
+        if row.progression == progression_types.CasterProgression.HALF_CASTER
     )
     third_levels = sum(
         row.class_level
         for row in eligible
-        if row.progression == CasterProgression.THIRD_CASTER
+        if row.progression == progression_types.CasterProgression.THIRD_CASTER
     )
     half_contribution = (
         ceil(half_levels / 2)
-        if policy == MulticlassSlotRoundingPolicy.SRD_5_2_ROUND_UP
+        if policy == progression_types.MulticlassSlotRoundingPolicy.SRD_5_2_ROUND_UP
         else half_levels // 2
     )
     return full_levels + half_contribution + third_levels // 3
@@ -235,11 +219,11 @@ def maximum_spell_rank_for_contribution(
 def _single_class_spellcaster_level(
     contribution: SpellcastingClassContribution,
 ) -> int:
-    if contribution.progression == CasterProgression.FULL_CASTER:
+    if contribution.progression == progression_types.CasterProgression.FULL_CASTER:
         return contribution.class_level
-    if contribution.progression == CasterProgression.HALF_CASTER:
+    if contribution.progression == progression_types.CasterProgression.HALF_CASTER:
         return ceil(contribution.class_level / 2)
-    if contribution.progression == CasterProgression.THIRD_CASTER:
+    if contribution.progression == progression_types.CasterProgression.THIRD_CASTER:
         return contribution.class_level // 3
     return 0
 

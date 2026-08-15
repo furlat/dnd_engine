@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Literal, Self
+from typing import Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from dnd.types.abilities import AbilityName
+from dnd.types.damage import DamageType
 
 class DragonbornAncestry(str, Enum):
     """The ten draconic ancestries defined by SRD 5.1 Dragonborn."""
@@ -29,31 +32,34 @@ class DragonbornBreathGeometry(str, Enum):
     CONE = "cone"
 
 
-DragonbornSaveAbility = Literal["dexterity", "constitution"]
-DragonbornDamageType = Literal[
-    "Acid",
-    "Cold",
-    "Fire",
-    "Lightning",
-    "Poison",
-]
-
-
 class DragonbornAncestryFeatureDefinition(BaseModel):
     """Exact rules data selected by one Dragonborn ancestry choice."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     ancestry: DragonbornAncestry
-    damage_type: DragonbornDamageType
+    damage_type: DamageType
     breath_geometry: DragonbornBreathGeometry
-    save_ability: DragonbornSaveAbility
+    save_ability: AbilityName
     line_length_feet: int | None = Field(default=None, ge=5)
     line_width_feet: int | None = Field(default=None, ge=5)
     cone_length_feet: int | None = Field(default=None, ge=5)
 
     @model_validator(mode="after")
     def _validate_geometry(self) -> Self:
+        if self.damage_type not in {
+            DamageType.ACID,
+            DamageType.COLD,
+            DamageType.FIRE,
+            DamageType.LIGHTNING,
+            DamageType.POISON,
+        }:
+            raise ValueError("Dragonborn ancestry requires an elemental damage type")
+        if self.save_ability not in {
+            AbilityName.DEXTERITY,
+            AbilityName.CONSTITUTION,
+        }:
+            raise ValueError("Dragonborn breath requires Dexterity or Constitution")
         if self.breath_geometry is DragonbornBreathGeometry.LINE:
             if (
                 self.line_length_feet != 30
@@ -77,6 +83,4 @@ __all__ = [
     "DragonbornAncestry",
     "DragonbornAncestryFeatureDefinition",
     "DragonbornBreathGeometry",
-    "DragonbornDamageType",
-    "DragonbornSaveAbility",
 ]

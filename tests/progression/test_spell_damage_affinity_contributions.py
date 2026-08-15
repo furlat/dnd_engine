@@ -5,9 +5,12 @@ from uuid import uuid4
 
 import pytest
 
-from dnd.actions import SpellAction, SpellEvent
+from dnd.actions.standard import (
+    SpellAction,
+    SpellEvent,
+)
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
-from dnd.core.creature_types import DamageType
+from dnd.types.damage import DamageType
 from dnd.entity import Entity, EntityConfig
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.spells.evocation import FireBolt, RayOfFrost

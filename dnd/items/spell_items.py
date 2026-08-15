@@ -10,14 +10,20 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from dnd.actions import (
+from dnd.actions.standard import (
     SpellAction,
     SpellEvent,
     entity_action_economy_cost_evaluator,
 )
-from dnd.blocks.base_item import UsableItem
+from dnd.blocks.base_item import (
+    UsableItem,
+)
 from dnd.core.aoe import AoEShape, Cube
-from dnd.core.base_actions import BaseAction, Cost, TargetType
+from dnd.core.base_actions import (
+    BaseAction,
+    Cost,
+    TargetType,
+)
 from dnd.core.content.dependencies import (
     ContentDependency,
     ContentDependencyPhase,
@@ -49,17 +55,22 @@ from dnd.core.content.registration import (
     item_factory,
 )
 from dnd.core.content.runtime import RuntimeBehaviorKind
-from dnd.core.dice import AttackOutcome
-from dnd.core.events import (
+from dnd.types.rolls import AttackOutcome
+from dnd.types.abilities import AbilityName
+from dnd.core.events.resolution_events import (
     Damage,
-    EventPhase,
     Range,
     RangeType,
 )
-from dnd.core.creature_types import DamageType
+from dnd.core.events.events_registry import (
+    EventPhase,
+)
+from dnd.types.damage import DamageType
 from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
-from dnd.spells.abjuration import MageArmor
+from dnd.spells.abjuration import (
+    MageArmor,
+)
 from dnd.spells.enchantment import HoldPerson
 from dnd.spells.evocation import (
     BurningHands,
@@ -312,14 +323,14 @@ class _AcidFlaskSpell(SpellAction):
 
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
-            ability_name="dexterity",
+            ability_name=AbilityName.DEXTERITY,
             dc=self._fixed_dc,
             parent_event=execution_event.uuid,
         )
         _, save_roll, success = target.saving_throw(save_request)
         save_bonus = target.saving_throw_bonus(
             caster.uuid,
-            "dexterity",
+            AbilityName.DEXTERITY,
         ).normalized_score
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,

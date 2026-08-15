@@ -11,23 +11,24 @@ from typing import Any, Optional, Protocol, runtime_checkable
 from uuid import UUID
 
 from dnd.blocks.action_economy import ActionEconomy
-from dnd.blocks.equipment import Equipment
+from dnd.blocks.equipment import (
+    Equipment,
+)
 from dnd.blocks.saving_throws import SavingThrowSet
 from dnd.blocks.sensory import Senses
 from dnd.core.base_block import BaseBlock
-from dnd.core.creature_types import Size
-from dnd.core.life_types import LifeState
+from dnd.types.creatures import Size
+from dnd.types.life import LifeState
 from dnd.core.modifiers import (
     AdvantageModifier,
-    AdvantageStatus,
     AutoHitModifier,
-    AutoHitStatus,
     ContextualAdvantageModifier,
     ContextualCriticalModifier,
     CriticalModifier,
-    CriticalStatus,
     NumericalModifier,
 )
+from dnd.types.rolls import AdvantageStatus, AutoHitStatus, CriticalStatus
+from dnd.types.abilities import AbilityName
 from dnd.core.values import ModifiableValue
 
 
@@ -173,7 +174,7 @@ def apply_failed_strength_dexterity_saves(
 ) -> ModifierOwnership:
     """Make Strength and Dexterity saving throws fail automatically."""
     ownership: ModifierOwnership = []
-    for ability_name in ("strength", "dexterity"):
+    for ability_name in (AbilityName.STRENGTH, AbilityName.DEXTERITY):
         save_bonus = target.saving_throws.get_saving_throw(ability_name).bonus
         modifier_uuid = save_bonus.self_static.add_auto_hit_modifier(
             AutoHitModifier(

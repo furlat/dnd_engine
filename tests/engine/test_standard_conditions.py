@@ -5,35 +5,37 @@ from uuid import UUID, uuid4
 
 import dnd.core.dice as dice_module
 import dnd.conditions as conditions_module
-from dnd.actions_functional import setup_standard_actions
+from dnd.actions.operations import setup_standard_actions
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
-from dnd.core.base_actions import ActionEvent
+from dnd.core.events.action_events import (
+    ActionEvent,
+)
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition, ConditionRemovalEvent
-from dnd.core.condition_types import ConditionTag, DurationType
+from dnd.types.conditions import ConditionTag, DurationType
 from dnd.core.base_object import BaseObject
-from dnd.core.events import (
+from dnd.core.events.events_registry import (
     Event,
     EventHandler,
     EventPhase,
     EventQueue,
     EventType,
-    SkillCheckD20RollResultEvent,
-    SkillCheckEvent,
-    SkillName,
     Trigger,
 )
-from dnd.core.gridmap import get_map
-from dnd.core.life_types import LifeState
-from dnd.core.creature_types import DamageType
-from dnd.core.modifiers import (
-    AdvantageStatus,
-    AutoHitStatus,
-    CriticalStatus,
-    ResistanceStatus,
+from dnd.core.events.resolution_events import (
+    SkillCheckD20RollResultEvent,
 )
+from dnd.core.events.check_events import (
+    SkillCheckEvent,
+)
+from dnd.types.abilities import SkillName
+from dnd.core.gridmap import get_map
+from dnd.types.life import LifeState
+from dnd.types.damage import DamageType
+from dnd.types.rolls import AdvantageStatus, AutoHitStatus, CriticalStatus
+from dnd.types.damage import ResistanceStatus
 from dnd.core.values import BaseValue
 from dnd.entity import Entity, EntityConfig
 from dnd.conditions import (

@@ -2,8 +2,10 @@
 
 from typing import cast
 
-from dnd.actions import MovementEvent
-from dnd.actions_functional import execute_by_index, get_available_actions
+from dnd.actions.standard import (
+    MovementEvent,
+)
+from dnd.actions.operations import execute_by_index, get_available_actions
 from dnd.core.action_execution import (
     MovementContinuationDecision,
     MovementContinuationResult,

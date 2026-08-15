@@ -17,7 +17,7 @@ from dnd.content_system.character_materialization import materialize_character
 from dnd.content_system.item_bindings import ITEM_RUNTIME_BINDINGS
 from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
 from dnd.core.content.materialization import CreatureDeploymentRole
-from dnd.core.equipment_types import BodyPart
+from dnd.types.equipment import BodyPart
 from dnd.core.gridmap import get_map
 from dnd.items.torches import Torch
 from dnd.runtime_reset import reset_engine_runtime

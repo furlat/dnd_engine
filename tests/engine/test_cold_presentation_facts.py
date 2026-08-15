@@ -5,15 +5,19 @@ from uuid import uuid4, uuid5
 import pytest
 from pydantic import ValidationError
 
-from dnd.actions import SpellEvent
+from dnd.actions.standard import (
+    SpellEvent,
+)
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
-from dnd.blocks.base_item import UsableItem
+from dnd.blocks.base_item import (
+    UsableItem,
+)
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
-from dnd.core.action_types import ActionPresentationKind
+from dnd.presentation import ActionPresentationKind
 from dnd.core.aoe import (
     Cone,
     Cube,
@@ -22,9 +26,15 @@ from dnd.core.aoe import (
     Sphere,
     snapshot_aoe_presentation_geometry,
 )
-from dnd.core.base_actions import ActionEvent
-from dnd.core.events import EventPhase, EventQueue, EventType
-from dnd.core.item_types import ItemPresentationKind
+from dnd.core.events.action_events import (
+    ActionEvent,
+)
+from dnd.core.events.events_registry import (
+    EventPhase,
+    EventQueue,
+    EventType,
+)
+from dnd.presentation import ItemPresentationKind
 from dnd.core.presentation_geometry import (
     ConePresentationGeometry,
     CubePresentationGeometry,

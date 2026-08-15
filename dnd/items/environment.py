@@ -5,27 +5,36 @@ from uuid import UUID
 
 from pydantic import Field
 
-from dnd.blocks.base_item import BaseItem, UsableItem
-from dnd.core.base_actions import BaseAction, ActionEvent, Cost, TargetType
+from dnd.blocks.base_item import (
+    BaseItem,
+    UsableItem,
+)
+from dnd.core.base_actions import (
+    BaseAction,
+    Cost,
+    TargetType,
+)
+from dnd.core.events.action_events import (
+    ActionEvent,
+)
 from dnd.core.base_block import BaseBlock
-from dnd.core.events import EventPhase
+from dnd.core.events.events_registry import (
+    EventPhase,
+)
 from dnd.core.gridmap import get_map
-from dnd.core.item_types import (
-    ItemBlockingChannel,
-    ItemDirection,
-    ItemDirectionalStructureState,
-)
+from dnd.types.world import WorldEdgeChannel, CardinalDirection
+from dnd.types.items import ItemDirectionalStructureState
 
-DIRECTIONS: Tuple[ItemDirection, ...] = ("north", "south", "east", "west")
-DIRECTIONAL_CHANNELS: Tuple[ItemBlockingChannel, ...] = (
-    "movement",
-    "vision",
-    "light",
-    "propagation",
+DIRECTIONS: Tuple[CardinalDirection, ...] = tuple(CardinalDirection)
+DIRECTIONAL_CHANNELS: Tuple[WorldEdgeChannel, ...] = (
+    WorldEdgeChannel.MOVEMENT,
+    WorldEdgeChannel.VISION,
+    WorldEdgeChannel.LIGHT,
+    WorldEdgeChannel.PROPAGATION,
 )
 
 
-def _validate_directions(directions: Tuple[ItemDirection, ...]) -> None:
+def _validate_directions(directions: Tuple[CardinalDirection, ...]) -> None:
     """Validate directional blocker names.
 
     Args:
@@ -39,7 +48,7 @@ def _validate_directions(directions: Tuple[ItemDirection, ...]) -> None:
             raise ValueError(f"Unsupported direction: {direction}")
 
 
-def _validate_channels(channels: Tuple[ItemBlockingChannel, ...]) -> None:
+def _validate_channels(channels: Tuple[WorldEdgeChannel, ...]) -> None:
     """Validate directional blocking channel names.
 
     Args:
@@ -87,11 +96,11 @@ class DirectionalWall(BaseItem):
         description="Whether object action discovery includes the wall.",
     )
 
-    blocked_directions: Tuple[ItemDirection, ...] = Field(
+    blocked_directions: Tuple[CardinalDirection, ...] = Field(
         default_factory=lambda: DIRECTIONS,
         description="Cardinal directions blocked from the wall tile.",
     )
-    blocked_channels: Tuple[ItemBlockingChannel, ...] = Field(
+    blocked_channels: Tuple[WorldEdgeChannel, ...] = Field(
         default_factory=lambda: DIRECTIONAL_CHANNELS,
         description="Spatial channels blocked in each configured direction.",
     )
@@ -265,11 +274,11 @@ class DirectionalDoor(UsableItem):
     )
 
     is_open: bool = Field(default=False, description="Current open or closed state of the door.")
-    blocked_directions: Tuple[ItemDirection, ...] = Field(
+    blocked_directions: Tuple[CardinalDirection, ...] = Field(
         default_factory=lambda: DIRECTIONS,
         description="Cardinal directions blocked while the door is closed.",
     )
-    blocked_channels: Tuple[ItemBlockingChannel, ...] = Field(
+    blocked_channels: Tuple[WorldEdgeChannel, ...] = Field(
         default_factory=lambda: DIRECTIONAL_CHANNELS,
         description="Spatial channels blocked in each configured direction.",
     )

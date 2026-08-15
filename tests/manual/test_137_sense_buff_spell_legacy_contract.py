@@ -2,20 +2,27 @@
 
 from uuid import UUID
 
-from dnd.actions import SpellEvent
-from dnd.actions_functional import execute_by_index, register_spell
+from dnd.actions.standard import (
+    SpellEvent,
+)
+from dnd.actions.operations import execute_by_index, register_spell
 from dnd.conditions import Concentrating, Invisible
-from dnd.core.base_actions import AvailableActionsResult
-from dnd.core.base_block import LightLevel, SensesType
-from dnd.core.base_conditions import DurationType
+from dnd.core.base_actions import (
+    AvailableActionsResult,
+)
+from dnd.types.world import LightLevel
+from dnd.types.senses import SensesType
+from dnd.types.conditions import DurationType
 from dnd.core.base_tiles import dark_floor_factory
-from dnd.core.events import (
+from dnd.core.events.events_registry import (
     EventPhase,
     EventQueue,
+)
+from dnd.core.events.world_events import (
     SensoryUpdateEvent,
 )
 from dnd.core.gridmap import get_map
-from dnd.core.creature_types import DamageType
+from dnd.types.damage import DamageType
 from dnd.entity import Entity
 from dnd.spells.divination import SeeInvisibility, TrueSeeing
 from dnd.spells.evocation import FireBolt

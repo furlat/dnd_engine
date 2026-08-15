@@ -13,25 +13,29 @@ from dnd.core.base_conditions import BaseCondition
 from dnd.core.base_object import BaseObject
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
 from dnd.core.dice import fixed_dice_faces
-from dnd.core.events import (
-    AbilityName,
+from dnd.types.abilities import AbilityName
+from dnd.core.events.check_events import (
     AbilityCheckEvent,
+)
+from dnd.core.events.events_registry import (
     Event,
     EventPhase,
     EventQueue,
     EventType,
+)
+from dnd.core.events.world_events import (
     SpatialChangeEvent,
 )
 from dnd.core.gridmap import get_map
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import BaseValue
 from dnd.entity import Entity, EntityConfig
-from dnd.spatial_effect_content import (
+from dnd.content.spatial_effect_recipes import (
     ENTANGLE_FIELD_RECIPE,
     EVARDS_BLACK_TENTACLES_FIELD_RECIPE,
     WEB_SURFACE_RECIPE,
 )
-from dnd.spatial_effects import FieldEffect, SpatialEffect
+from dnd.spatial.effect_base import FieldEffect, SpatialEffect
 from dnd.spells.conjuration import (
     BlackTentaclesRestrained,
     BlackTentaclesZone,
@@ -43,7 +47,7 @@ from dnd.spells.conjuration import (
     WebRestrained,
     WebZone,
 )
-from dnd.content_system.spatial_effect_materialization import (
+from dnd.content.spatial_effect_materialization import (
     materialize_spatial_effect,
 )
 from tests.engine.support import get_hp, reset_combat_state

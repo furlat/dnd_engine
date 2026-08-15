@@ -2,19 +2,26 @@
 
 from uuid import uuid4
 
-from dnd.actions_functional import execute_by_index, get_available_actions
-from dnd.blocks.base_item import UsableItem
+from dnd.actions.operations import execute_by_index, get_available_actions
+from dnd.blocks.base_item import (
+    UsableItem,
+)
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition, SpellProtectionRegistry
 from dnd.core.base_actions import (
     ActionAvailabilityStatus,
-    ActionEvent,
     TargetType,
 )
+from dnd.core.events.action_events import (
+    ActionEvent,
+)
 from dnd.core.base_object import BaseObject
-from dnd.core.events import EventPhase, EventQueue
+from dnd.core.events.events_registry import (
+    EventPhase,
+    EventQueue,
+)
 from dnd.core.gridmap import GridMap, get_map
 from dnd.core.values import BaseValue
 from dnd.entity import Entity

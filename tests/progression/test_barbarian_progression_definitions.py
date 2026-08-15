@@ -16,8 +16,8 @@ from dnd.classes.permanent_feature_definitions import (
     LUCKY_FEAT_DECLARATION,
 )
 from dnd.core.content.dependencies import ContentDependencyRelation
+from dnd.types.abilities import AbilityName
 from dnd.core.content.durable_characters import (
-    AbilityScoreName,
     AbilityScorePrerequisite,
     ChoiceRequirementKind,
     ClassDefinition,
@@ -26,7 +26,7 @@ from dnd.core.content.durable_characters import (
 )
 from dnd.core.content.identities import ContentDefinitionKind
 from dnd.core.content.registration import ContentDeclarationMode
-from dnd.core.progression import CasterProgression
+from dnd.types.progression import CasterProgression
 
 
 def _level(
@@ -92,8 +92,8 @@ def test_barbarian_entry_modes_saves_and_prerequisite_are_exact() -> None:
     assert definition.hit_die == 12
     assert definition.caster_progression is CasterProgression.NON_CASTER
     assert definition.saving_throw_proficiencies == (
-        AbilityScoreName.CONSTITUTION,
-        AbilityScoreName.STRENGTH,
+        AbilityName.CONSTITUTION,
+        AbilityName.STRENGTH,
     )
     assert isinstance(
         definition.multiclass_prerequisite,
@@ -102,7 +102,7 @@ def test_barbarian_entry_modes_saves_and_prerequisite_are_exact() -> None:
     assert (
         definition.multiclass_prerequisite.ability,
         definition.multiclass_prerequisite.minimum,
-    ) == (AbilityScoreName.STRENGTH, 13)
+    ) == (AbilityName.STRENGTH, 13)
 
     assert tuple(
         (row.subject_kind, row.subject_id)

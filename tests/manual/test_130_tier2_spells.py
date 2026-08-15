@@ -8,14 +8,24 @@ from uuid import uuid4
 
 import pytest
 
-from dnd.actions import SpellEvent
+from dnd.actions.standard import (
+    SpellEvent,
+)
 from dnd.core.aoe import Cone, Sphere
 from dnd.core.dice import fixed_dice_faces
-from dnd.core.events import EventPhase, EventQueue, EventType
-from dnd.core.life_types import LifeState
-from dnd.core.creature_types import CreatureType, DamageType
+from dnd.core.events.events_registry import (
+    EventPhase,
+    EventQueue,
+    EventType,
+)
+from dnd.types.life import LifeState
+from dnd.types.creatures import CreatureType
+from dnd.types.damage import DamageType
 from dnd.entity import Entity
-from dnd.spells.abjuration import ProtectionFromEnergy, Stoneskin
+from dnd.spells.abjuration import (
+    ProtectionFromEnergy,
+    Stoneskin,
+)
 from dnd.spells.enchantment import PowerWordKill
 from dnd.spells.evocation import CircleOfDeath, ConeOfCold
 from dnd.spells.necromancy import Blight

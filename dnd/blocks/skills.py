@@ -5,35 +5,35 @@ from dnd.core.values import ModifiableValue
 from dnd.core.modifiers import NumericalModifier
 
 from dnd.core.base_block import BaseBlock
-from dnd.core.events import AbilityName, SkillName
-from dnd.core.proficiency_types import ProficiencyMode, ProficiencySourceSet
+from dnd.types.abilities import AbilityName, SkillName
+from dnd.types.proficiency import ProficiencyMode, ProficiencySourceSet
 
 SKILL_TO_ABILITY: Dict['SkillName', AbilityName] = {
-    'acrobatics': 'dexterity',
-    'animal_handling': 'wisdom',
-    'arcana': 'intelligence',
-    'athletics': 'strength',
-    'deception': 'charisma',
-    'history': 'intelligence',
-    'insight': 'wisdom',
-    'intimidation': 'charisma',
-    'investigation': 'intelligence',
-    'medicine': 'wisdom',
-    'nature': 'intelligence',
-    'perception': 'wisdom',
-    'performance': 'charisma',
-    'persuasion': 'charisma',
-    'religion': 'intelligence',
-    'sleight_of_hand': 'dexterity',
-    'stealth': 'dexterity',
-    'survival': 'wisdom'
+    SkillName.ACROBATICS: AbilityName.DEXTERITY,
+    SkillName.ANIMAL_HANDLING: AbilityName.WISDOM,
+    SkillName.ARCANA: AbilityName.INTELLIGENCE,
+    SkillName.ATHLETICS: AbilityName.STRENGTH,
+    SkillName.DECEPTION: AbilityName.CHARISMA,
+    SkillName.HISTORY: AbilityName.INTELLIGENCE,
+    SkillName.INSIGHT: AbilityName.WISDOM,
+    SkillName.INTIMIDATION: AbilityName.CHARISMA,
+    SkillName.INVESTIGATION: AbilityName.INTELLIGENCE,
+    SkillName.MEDICINE: AbilityName.WISDOM,
+    SkillName.NATURE: AbilityName.INTELLIGENCE,
+    SkillName.PERCEPTION: AbilityName.WISDOM,
+    SkillName.PERFORMANCE: AbilityName.CHARISMA,
+    SkillName.PERSUASION: AbilityName.CHARISMA,
+    SkillName.RELIGION: AbilityName.INTELLIGENCE,
+    SkillName.SLEIGHT_OF_HAND: AbilityName.DEXTERITY,
+    SkillName.STEALTH: AbilityName.DEXTERITY,
+    SkillName.SURVIVAL: AbilityName.WISDOM
 }
 
-skills_requiring_sight : List[SkillName] = ['perception','investigation', 'sleight_of_hand','stealth']
-skills_requiring_hearing : List[SkillName] = ['perception','insight']
-skills_requiring_speak : List[SkillName] = ['deception','intimidation','persuasion','performance']
+skills_requiring_sight : List[SkillName] = [SkillName.PERCEPTION,SkillName.INVESTIGATION, SkillName.SLEIGHT_OF_HAND,SkillName.STEALTH]
+skills_requiring_hearing : List[SkillName] = [SkillName.PERCEPTION,SkillName.INSIGHT]
+skills_requiring_speak : List[SkillName] = [SkillName.DECEPTION,SkillName.INTIMIDATION,SkillName.PERSUASION,SkillName.PERFORMANCE]
 
-skills_social : List[SkillName] = ['deception','intimidation','performance','persuasion']
+skills_social : List[SkillName] = [SkillName.DECEPTION,SkillName.INTIMIDATION,SkillName.PERFORMANCE,SkillName.PERSUASION]
 all_skills : List[SkillName] = list(SKILL_TO_ABILITY.keys())
 class SkillConfig(BaseModel):
     """
@@ -106,7 +106,7 @@ class Skill(BaseBlock):
         blocks_dict_name_uuid (Dict[str, UUID]): A dictionary mapping block names to their UUIDs. (Inherited from BaseBlock)
     """
 
-    name: SkillName = Field(default="acrobatics", description="The name of the skill in D&D 5e")
+    name: SkillName = Field(default=SkillName.ACROBATICS, description="The name of the skill in D&D 5e")
     skill_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),base_value=0, value_name="Skill Bonus"), description="Any additional bonus applied to skill checks, beyond ability modifier and proficiency")
     proficiency_sources: ProficiencySourceSet = Field(
         default_factory=ProficiencySourceSet,
@@ -324,24 +324,24 @@ class SkillSet(BaseBlock):
     """
 
     name: str = Field(default="SkillSet", description="The complete set of 18 skills in D&D 5e")
-    acrobatics: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="acrobatics"), description="Dexterity (Acrobatics): Staying on your feet in tricky situations, such as balancing on a tightrope or staying upright on a rocking ship's deck")
-    animal_handling: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="animal_handling"), description="Wisdom (Animal Handling): Calming domesticated animals, keeping mounts from getting spooked, or intuiting an animal's intentions")
-    arcana: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="arcana"), description="Intelligence (Arcana): Recalling lore about spells, magic items, eldritch symbols, magical traditions, planes of existence, and planar inhabitants")
-    athletics: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="athletics"), description="Strength (Athletics): Climbing, jumping, swimming, and other difficult physical activities")
-    deception: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="deception"), description="Charisma (Deception): Convincingly hiding the truth through words or actions")
-    history: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="history"), description="Intelligence (History): Recalling lore about historical events, legendary people, ancient kingdoms, past disputes, recent wars, and lost civilizations")
-    insight: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="insight"), description="Wisdom (Insight): Determining the true intentions of others, detecting lies, and predicting someone's next move")
-    intimidation: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="intimidation"), description="Charisma (Intimidation): Influencing others through overt threats, hostile actions, and physical violence")
-    investigation: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="investigation"), description="Intelligence (Investigation): Searching for clues and making deductions based on those clues")
-    medicine: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="medicine"), description="Wisdom (Medicine): Stabilizing dying companions or diagnosing illnesses")
-    nature: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="nature"), description="Intelligence (Nature): Recalling lore about terrain, plants and animals, the weather, and natural cycles")
-    perception: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="perception"), description="Wisdom (Perception): Spotting, hearing, or detecting the presence of something, measuring general awareness and sensory acuity")
-    performance: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="performance"), description="Charisma (Performance): Delighting an audience with music, dance, acting, storytelling, or other forms of entertainment")
-    persuasion: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="persuasion"), description="Charisma (Persuasion): Influencing others through tact, social graces, or good nature")
-    religion: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="religion"), description="Intelligence (Religion): Recalling lore about deities, rites, prayers, religious hierarchies, holy symbols, and the practices of secret cults")
-    sleight_of_hand: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="sleight_of_hand"), description="Dexterity (Sleight of Hand): Performing acts of legerdemain, manual trickery, or subtle manipulations")
-    stealth: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="stealth"), description="Dexterity (Stealth): Concealing yourself, moving silently, and avoiding detection")
-    survival: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name="survival"), description="Wisdom (Survival): Following tracks, hunting wild game, guiding through wilderness, identifying natural hazards, and predicting weather")
+    acrobatics: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name=SkillName.ACROBATICS), description="Dexterity (Acrobatics): Staying on your feet in tricky situations, such as balancing on a tightrope or staying upright on a rocking ship's deck")
+    animal_handling: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name=SkillName.ANIMAL_HANDLING), description="Wisdom (Animal Handling): Calming domesticated animals, keeping mounts from getting spooked, or intuiting an animal's intentions")
+    arcana: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name=SkillName.ARCANA), description="Intelligence (Arcana): Recalling lore about spells, magic items, eldritch symbols, magical traditions, planes of existence, and planar inhabitants")
+    athletics: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name=SkillName.ATHLETICS), description="Strength (Athletics): Climbing, jumping, swimming, and other difficult physical activities")
+    deception: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name=SkillName.DECEPTION), description="Charisma (Deception): Convincingly hiding the truth through words or actions")
+    history: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name=SkillName.HISTORY), description="Intelligence (History): Recalling lore about historical events, legendary people, ancient kingdoms, past disputes, recent wars, and lost civilizations")
+    insight: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name=SkillName.INSIGHT), description="Wisdom (Insight): Determining the true intentions of others, detecting lies, and predicting someone's next move")
+    intimidation: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name=SkillName.INTIMIDATION), description="Charisma (Intimidation): Influencing others through overt threats, hostile actions, and physical violence")
+    investigation: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name=SkillName.INVESTIGATION), description="Intelligence (Investigation): Searching for clues and making deductions based on those clues")
+    medicine: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name=SkillName.MEDICINE), description="Wisdom (Medicine): Stabilizing dying companions or diagnosing illnesses")
+    nature: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name=SkillName.NATURE), description="Intelligence (Nature): Recalling lore about terrain, plants and animals, the weather, and natural cycles")
+    perception: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name=SkillName.PERCEPTION), description="Wisdom (Perception): Spotting, hearing, or detecting the presence of something, measuring general awareness and sensory acuity")
+    performance: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name=SkillName.PERFORMANCE), description="Charisma (Performance): Delighting an audience with music, dance, acting, storytelling, or other forms of entertainment")
+    persuasion: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name=SkillName.PERSUASION), description="Charisma (Persuasion): Influencing others through tact, social graces, or good nature")
+    religion: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name=SkillName.RELIGION), description="Intelligence (Religion): Recalling lore about deities, rites, prayers, religious hierarchies, holy symbols, and the practices of secret cults")
+    sleight_of_hand: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name=SkillName.SLEIGHT_OF_HAND), description="Dexterity (Sleight of Hand): Performing acts of legerdemain, manual trickery, or subtle manipulations")
+    stealth: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name=SkillName.STEALTH), description="Dexterity (Stealth): Concealing yourself, moving silently, and avoiding detection")
+    survival: Skill = Field(default_factory=lambda: Skill.create(source_entity_uuid=uuid4(),name=SkillName.SURVIVAL), description="Wisdom (Survival): Following tracks, hunting wild game, guiding through wilderness, identifying natural hazards, and predicting weather")
 
     @computed_field
     @property
@@ -375,41 +375,41 @@ class SkillSet(BaseBlock):
             return cls(source_entity_uuid=source_entity_uuid, name="skill_set", source_entity_name=source_entity_name,
                        target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name)
         else:
-            acrobatics = Skill.create(source_entity_uuid=source_entity_uuid, name="acrobatics", source_entity_name=source_entity_name,
+            acrobatics = Skill.create(source_entity_uuid=source_entity_uuid, name=SkillName.ACROBATICS, source_entity_name=source_entity_name,
                                       target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.acrobatics)
-            animal_handling = Skill.create(source_entity_uuid=source_entity_uuid, name="animal_handling", source_entity_name=source_entity_name,
+            animal_handling = Skill.create(source_entity_uuid=source_entity_uuid, name=SkillName.ANIMAL_HANDLING, source_entity_name=source_entity_name,
                                            target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.animal_handling)
-            arcana = Skill.create(source_entity_uuid=source_entity_uuid, name="arcana", source_entity_name=source_entity_name,
+            arcana = Skill.create(source_entity_uuid=source_entity_uuid, name=SkillName.ARCANA, source_entity_name=source_entity_name,
                                  target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.arcana)
-            athletics = Skill.create(source_entity_uuid=source_entity_uuid, name="athletics", source_entity_name=source_entity_name,
+            athletics = Skill.create(source_entity_uuid=source_entity_uuid, name=SkillName.ATHLETICS, source_entity_name=source_entity_name,
                                     target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.athletics)
-            deception = Skill.create(source_entity_uuid=source_entity_uuid, name="deception", source_entity_name=source_entity_name,
+            deception = Skill.create(source_entity_uuid=source_entity_uuid, name=SkillName.DECEPTION, source_entity_name=source_entity_name,
                                     target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.deception)
-            history = Skill.create(source_entity_uuid=source_entity_uuid, name="history", source_entity_name=source_entity_name,
+            history = Skill.create(source_entity_uuid=source_entity_uuid, name=SkillName.HISTORY, source_entity_name=source_entity_name,
                                   target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.history)
-            insight = Skill.create(source_entity_uuid=source_entity_uuid, name="insight", source_entity_name=source_entity_name,
+            insight = Skill.create(source_entity_uuid=source_entity_uuid, name=SkillName.INSIGHT, source_entity_name=source_entity_name,
                                   target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.insight)
-            intimidation = Skill.create(source_entity_uuid=source_entity_uuid, name="intimidation", source_entity_name=source_entity_name,
+            intimidation = Skill.create(source_entity_uuid=source_entity_uuid, name=SkillName.INTIMIDATION, source_entity_name=source_entity_name,
                                         target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.intimidation)
-            investigation = Skill.create(source_entity_uuid=source_entity_uuid, name="investigation", source_entity_name=source_entity_name,
+            investigation = Skill.create(source_entity_uuid=source_entity_uuid, name=SkillName.INVESTIGATION, source_entity_name=source_entity_name,
                                          target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.investigation)
-            medicine = Skill.create(source_entity_uuid=source_entity_uuid, name="medicine", source_entity_name=source_entity_name,
+            medicine = Skill.create(source_entity_uuid=source_entity_uuid, name=SkillName.MEDICINE, source_entity_name=source_entity_name,
                                     target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.medicine)
-            nature = Skill.create(source_entity_uuid=source_entity_uuid, name="nature", source_entity_name=source_entity_name,
+            nature = Skill.create(source_entity_uuid=source_entity_uuid, name=SkillName.NATURE, source_entity_name=source_entity_name,
                                   target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.nature)
-            perception = Skill.create(source_entity_uuid=source_entity_uuid, name="perception", source_entity_name=source_entity_name,
+            perception = Skill.create(source_entity_uuid=source_entity_uuid, name=SkillName.PERCEPTION, source_entity_name=source_entity_name,
                                       target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.perception)
-            performance = Skill.create(source_entity_uuid=source_entity_uuid, name="performance", source_entity_name=source_entity_name,
+            performance = Skill.create(source_entity_uuid=source_entity_uuid, name=SkillName.PERFORMANCE, source_entity_name=source_entity_name,
                                       target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.performance)
-            persuasion = Skill.create(source_entity_uuid=source_entity_uuid, name="persuasion", source_entity_name=source_entity_name,
+            persuasion = Skill.create(source_entity_uuid=source_entity_uuid, name=SkillName.PERSUASION, source_entity_name=source_entity_name,
                                       target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.persuasion)
-            religion = Skill.create(source_entity_uuid=source_entity_uuid, name="religion", source_entity_name=source_entity_name,
+            religion = Skill.create(source_entity_uuid=source_entity_uuid, name=SkillName.RELIGION, source_entity_name=source_entity_name,
                                     target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.religion)
-            sleight_of_hand = Skill.create(source_entity_uuid=source_entity_uuid, name="sleight_of_hand", source_entity_name=source_entity_name,
+            sleight_of_hand = Skill.create(source_entity_uuid=source_entity_uuid, name=SkillName.SLEIGHT_OF_HAND, source_entity_name=source_entity_name,
                                           target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.sleight_of_hand)
-            stealth = Skill.create(source_entity_uuid=source_entity_uuid, name="stealth", source_entity_name=source_entity_name,
+            stealth = Skill.create(source_entity_uuid=source_entity_uuid, name=SkillName.STEALTH, source_entity_name=source_entity_name,
                                   target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.stealth)
-            survival = Skill.create(source_entity_uuid=source_entity_uuid, name="survival", source_entity_name=source_entity_name,
+            survival = Skill.create(source_entity_uuid=source_entity_uuid, name=SkillName.SURVIVAL, source_entity_name=source_entity_name,
                                    target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, config=config.survival)
 
             return cls(source_entity_uuid=source_entity_uuid, name="skill_set", source_entity_name=source_entity_name,

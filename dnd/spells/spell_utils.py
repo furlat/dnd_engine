@@ -6,7 +6,14 @@ cross-spell-file imports.
 from uuid import UUID
 
 from dnd.core.dice import DiceRoll
-from dnd.core.events import EventPhase, Healing, HealRollResultEvent, Event
+from dnd.core.events.events_registry import (
+    EventPhase,
+    Event,
+)
+from dnd.core.events.resolution_events import (
+    Healing,
+    HealRollResultEvent,
+)
 from dnd.entity import Entity
 
 

@@ -7,7 +7,9 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from dnd.actions import CORE_STANDARD_ACTION_DECLARATIONS
+from dnd.actions.standard import (
+    CORE_STANDARD_ACTION_DECLARATIONS,
+)
 from dnd.content_system.action_definitions import (
     ACTION_BEHAVIOR_DECLARATIONS_BY_CLASS,
 )
@@ -17,7 +19,9 @@ from dnd.content_system.creature_possessions import (
     apply_creature_possessions,
     creature_possession_dependencies,
 )
-from dnd.core.base_actions import BaseAction
+from dnd.core.base_actions import (
+    BaseAction,
+)
 from dnd.core.content.dependencies import (
     ContentDependency,
     ContentDependencyPhase,
@@ -42,7 +46,7 @@ from dnd.core.content.registration import (
     creature_factory,
     get_content_declaration,
 )
-from dnd.core.equipment_types import BodyPart
+from dnd.types.equipment import BodyPart
 from dnd.entity import Entity
 from dnd.items.armors import (
     CLOTH_SHOES_RECIPE,

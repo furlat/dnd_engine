@@ -15,7 +15,7 @@ from dnd.core.content.identities import ContentDefinitionKind
 from dnd.core.content.starting_equipment import (
     StartingEquipmentPackageDefinition,
 )
-from dnd.core.equipment_types import BodyPart
+from dnd.types.equipment import BodyPart
 from server.content_catalog import build_public_content_catalog
 
 

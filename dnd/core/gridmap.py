@@ -1,7 +1,6 @@
 """Central spatial registry for tiles, entities, objects, light, and paths."""
 
 import math
-import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple, Set, DefaultDict
 from uuid import UUID, uuid4
@@ -13,24 +12,33 @@ from dnd.core.elevation import support_distance_feet
 from dnd.core.geometry import circle_positions, supercover_line, supercover_line_offsets
 from dnd.core.shadowcast import compute_fov
 from dnd.core.dijkstra import breadth_first_paths, dijkstra
-from dnd.core.base_block import BaseBlock, MovementMode, LightLevel
+from dnd.core.base_block import BaseBlock
+from dnd.types.world import MovementMode, LightLevel
 from dnd.core.base_tiles import Tile, validate_elevation_surface_tuple
-from dnd.core.events import Event, SpatialChangeEvent, SpatialChangeType, EventPhase, EventQueue, EventType, SensesUpdateHint, TileElevationChangeEvent, TraversalConnectorChangeEvent
-from dnd.core.spatial_effect_types import (
-    SpatialEffectLayer,
-    SpatialEffectOccupancyPolicy,
+from dnd.core.events.events_registry import (
+    Event,
+    EventPhase,
+    EventQueue,
+    EventType,
 )
-from dnd.action_timing import action_timing_enabled, record_action_elapsed, record_action_timing
+from dnd.core.events.world_events import (
+    SpatialChangeEvent,
+    SpatialChangeType,
+    SensesUpdateHint,
+    TileElevationChangeEvent,
+    TraversalConnectorChangeEvent,
+)
+from dnd.types.spatial_effects import SpatialEffectLayer, SpatialEffectOccupancyPolicy
 from dnd.core.world_edges import (
     AdjacentEdgeKey,
     ElevationSurfaceKind,
     SlopeAxis,
-    WorldEdgeChannel,
     WorldEdgeStructuralContribution,
     WorldEdgeView,
     progressive_elevation_transition,
     transition_axis,
 )
+from dnd.types.world import WorldEdgeChannel
 from dnd.core.positioning import PositionCommitError, PositionPublicationError
 from dnd.core.traversal_connectors import (
     TraversalConnector,
@@ -2226,8 +2234,6 @@ class GridMap:
     def _compute_directional_fov(self, origin: Tuple[int, int], max_distance: Optional[float],
                                  channel: str,
                                  observer_uuid: Optional[UUID] = None) -> List[Tuple[int, int]]:
-        timing = action_timing_enabled()
-        total_started = time.perf_counter() if timing else 0.0
         if origin not in self._tiles:
             return []
         if self._bounds_dirty:
@@ -2267,53 +2273,37 @@ class GridMap:
         else:
             transition_cache: Dict[Tuple[Tuple[int, int], Tuple[int, int]], bool] = {}
             blocking_cache: Dict[Tuple[int, int], bool] = {}
-        line_seconds = 0.0
-        transition_seconds = 0.0
-        blocking_seconds = 0.0
-
         def get_line_offsets(end: Tuple[int, int]) -> Tuple[Tuple[int, int], ...]:
-            nonlocal line_seconds
             key = (end[0] - origin[0], end[1] - origin[1])
             cached = line_cache.get(key)
             if cached is not None:
                 return cached
-            started = time.perf_counter() if timing else 0.0
             path = supercover_line_offsets(key)
-            if timing:
-                line_seconds += time.perf_counter() - started
             line_cache[key] = path
             return path
 
         def transition_allows(prev: Tuple[int, int], current: Tuple[int, int]) -> bool:
-            nonlocal transition_seconds
             key = (prev, current)
             cached = transition_cache.get(key)
             if cached is not None:
                 return cached
-            started = time.perf_counter() if timing else 0.0
             if channel == "vision":
                 allowed = self.can_see_transition(prev, current, observer_uuid)
             elif channel == "light":
                 allowed = self.can_light_transition(prev, current, observer_uuid)
             else:
                 allowed = self.can_propagate_transition(prev, current, observer_uuid)
-            if timing:
-                transition_seconds += time.perf_counter() - started
             transition_cache[key] = allowed
             return allowed
 
         def blocks_cell(position: Tuple[int, int]) -> bool:
-            nonlocal blocking_seconds
             cached = blocking_cache.get(position)
             if cached is not None:
                 return cached
-            started = time.perf_counter() if timing else 0.0
             if channel in {"vision", "light"}:
                 blocked = self.is_blocking(position[0], position[1], observer_uuid)
             else:
                 blocked = self.is_blocking_propagation(position[0], position[1])
-            if timing:
-                blocking_seconds += time.perf_counter() - started
             blocking_cache[position] = blocked
             return blocked
 
@@ -2345,11 +2335,6 @@ class GridMap:
                         continue
                 if pos == origin or transition_clear(origin, pos):
                     visible_positions.append(pos)
-        if timing:
-            record_action_elapsed("grid.directional_fov.supercover_line_ms", line_seconds)
-            record_action_elapsed("grid.directional_fov.transition_checks_ms", transition_seconds)
-            record_action_elapsed("grid.directional_fov.blocking_checks_ms", blocking_seconds)
-            record_action_timing("grid.directional_fov.total_ms", total_started)
         return visible_positions
 
     def compute_fov(self, origin: Tuple[int, int], max_distance: Optional[float] = None,
@@ -2364,8 +2349,6 @@ class GridMap:
 
         Returns list of visible positions.
         """
-        timing = action_timing_enabled()
-        cache_started = time.perf_counter() if timing else 0.0
         cache_key = (
             origin,
             max_distance,
@@ -2374,8 +2357,6 @@ class GridMap:
         )
         cached = self._fov_cache.get(cache_key)
         if cached is not None:
-            if timing:
-                record_action_timing("grid.compute_fov.cache_hit_ms", cache_started)
             return list(cached)
         if max_distance is not None:
             supersets = [
@@ -2406,11 +2387,7 @@ class GridMap:
                     ) <= radius_squared
                 ]
                 self._fov_cache[cache_key] = list(cached)
-                if timing:
-                    record_action_timing("grid.compute_fov.cache_hit_ms", cache_started)
                 return list(cached)
-        if timing:
-            record_action_timing("grid.compute_fov.cache_miss_ms", cache_started)
 
         visible_positions: List[Tuple[int, int]] = []
         blocking_cache: Dict[Tuple[int, int], bool] = {}
@@ -2482,7 +2459,6 @@ class GridMap:
         if self._bounds_dirty:
             self._update_bounds()
 
-        timing = action_timing_enabled()
         cache_key = (
             start,
             max_distance,
@@ -2501,19 +2477,14 @@ class GridMap:
             self._max_x,
             self._max_y,
         )
-        cache_started = time.perf_counter() if timing else 0.0
         cached = self._path_cache.get(cache_key)
         if cached is not None:
             self._path_cache.move_to_end(cache_key)
-            if timing:
-                record_action_timing("grid.compute_paths.cache_hit_ms", cache_started)
             cached_distances, cached_paths = cached
             return (
                 dict(cached_distances),
                 {position: list(path) for position, path in cached_paths.items()},
             )
-        if timing:
-            record_action_timing("grid.compute_paths.cache_miss_ms", cache_started)
 
         grid_width = self.width
         grid_height = self.height
@@ -2599,41 +2570,9 @@ class GridMap:
             transition_cache[key] = value
             return value
 
-        walkable_elapsed = 0.0
-        tile_cost_elapsed = 0.0
-        can_enter_elapsed = 0.0
-
-        if timing:
-            def walkable_check(x: int, y: int) -> bool:
-                nonlocal walkable_elapsed
-                started = time.perf_counter()
-                try:
-                    return cached_walkable_check(x, y)
-                finally:
-                    walkable_elapsed += time.perf_counter() - started
-
-            def get_edge_cost(
-                from_pos: Tuple[int, int],
-                to_pos: Tuple[int, int],
-            ) -> float:
-                nonlocal tile_cost_elapsed
-                started = time.perf_counter()
-                try:
-                    return cached_get_edge_cost(from_pos, to_pos)
-                finally:
-                    tile_cost_elapsed += time.perf_counter() - started
-
-            def can_enter_tile(from_pos: Tuple[int, int], to_pos: Tuple[int, int]) -> bool:
-                nonlocal can_enter_elapsed
-                started = time.perf_counter()
-                try:
-                    return cached_can_enter_tile(from_pos, to_pos)
-                finally:
-                    can_enter_elapsed += time.perf_counter() - started
-        else:
-            walkable_check = cached_walkable_check
-            get_edge_cost = cached_get_edge_cost
-            can_enter_tile = cached_can_enter_tile
+        walkable_check = cached_walkable_check
+        get_edge_cost = cached_get_edge_cost
+        can_enter_tile = cached_can_enter_tile
 
         start_tile = self.get_tile(*start)
         if (
@@ -2652,7 +2591,6 @@ class GridMap:
                 self._path_cache.popitem(last=False)
             return sentinel_result
 
-        started = time.perf_counter() if timing else 0.0
         use_unit_pathfinder = unit_movement_costs() and (
             movement_mode is not MovementMode.FLYING
             or len({tile.height for tile in self._tiles.values()}) <= 1
@@ -2682,13 +2620,6 @@ class GridMap:
                 min_x=self._min_x,
                 min_y=self._min_y,
             )
-        if timing:
-            if use_unit_pathfinder:
-                record_action_timing("grid.compute_paths.bfs_total_ms", started)
-            record_action_timing("grid.compute_paths.dijkstra_total_ms", started)
-            record_action_elapsed("grid.compute_paths.walkable_checks_ms", walkable_elapsed)
-            record_action_elapsed("grid.compute_paths.tile_cost_ms", tile_cost_elapsed)
-            record_action_elapsed("grid.compute_paths.can_enter_ms", can_enter_elapsed)
         distances, paths = result
         self._path_cache[cache_key] = (
             dict(distances),
@@ -2838,14 +2769,9 @@ class GridMap:
             source.affected_tiles.clear()
             return
 
-        timing = action_timing_enabled()
-        started = time.perf_counter() if timing else 0.0
         old_affected = dict(source.affected_tiles)
         new_affected = self._compute_light_tiles(source, new_position)
-        if timing:
-            record_action_timing("grid.move_light_source.compute_tiles_ms", started)
 
-        started = time.perf_counter() if timing else 0.0
         changed_positions: List[Tuple[int, int]] = []
         all_positions = set(old_affected) | set(new_affected)
         for pos in all_positions:
@@ -2864,16 +2790,11 @@ class GridMap:
             elif new_level is not None:
                 if tile.add_illumination(source.uuid, new_level, fire_event=False):
                     changed_positions.append(pos)
-        if timing:
-            record_action_timing("grid.move_light_source.apply_delta_ms", started)
 
         source.position = new_position
         source.affected_tiles = new_affected
 
-        started = time.perf_counter() if timing else 0.0
         self._fire_light_batch_events(changed_positions, parent_event=parent_event)
-        if timing:
-            record_action_timing("grid.move_light_source.publish_batch_ms", started)
 
     def toggle_light_source(
         self,
@@ -3153,13 +3074,10 @@ class GridMap:
 
         Unlike compute_fov(), ignores magical darkness — AoE spreads through
         darkness but not through walls/closed doors."""
-        cache_started = time.perf_counter()
         cache_key = (origin, max_distance)
         cached = self._propagation_fov_cache.get(cache_key)
         if cached is not None:
-            record_action_timing("grid.compute_propagation_fov.cache_hit_ms", cache_started)
             return list(cached)
-        record_action_timing("grid.compute_propagation_fov.cache_miss_ms", cache_started)
         visible_positions: List[Tuple[int, int]] = []
 
         def mark_visible(x: int, y: int) -> None:
@@ -3197,66 +3115,43 @@ class GridMap:
         Returns:
             Candidate positions that physical propagation can reach.
         """
-        timing = action_timing_enabled()
-        total_started = time.perf_counter() if timing else 0.0
         if origin not in self._tiles:
             return set()
 
-        cache_started = time.perf_counter() if timing else 0.0
         cache_key = (origin, max_distance, tuple(sorted(positions)))
         cached_positions = self._propagation_filter_cache.get(cache_key)
         if cached_positions is not None:
             self._propagation_filter_cache.move_to_end(cache_key)
-            if timing:
-                record_action_timing("grid.filter_propagation_positions.cache_hit_ms", cache_started)
-                record_action_timing("grid.filter_propagation_positions.total_ms", total_started)
             return set(cached_positions)
-        if timing:
-            record_action_timing("grid.filter_propagation_positions.cache_miss_ms", cache_started)
 
         radius_squared = max_distance * max_distance if max_distance is not None else None
         transition_cache = self._propagation_transition_cache
         blocking_cache = self._propagation_blocking_cache
         line_cache: Dict[Tuple[int, int], Tuple[Tuple[int, int], ...]] = {}
-        line_seconds = 0.0
-        transition_seconds = 0.0
-        blocking_seconds = 0.0
 
         def get_line_offsets(end: Tuple[int, int]) -> Tuple[Tuple[int, int], ...]:
-            nonlocal line_seconds
             key = (end[0] - origin[0], end[1] - origin[1])
             cached = line_cache.get(key)
             if cached is not None:
                 return cached
-            started = time.perf_counter() if timing else 0.0
             path = supercover_line_offsets(key)
-            if timing:
-                line_seconds += time.perf_counter() - started
             line_cache[key] = path
             return path
 
         def transition_allows(prev: Tuple[int, int], current: Tuple[int, int]) -> bool:
-            nonlocal transition_seconds
             key = (prev, current)
             cached = transition_cache.get(key)
             if cached is not None:
                 return cached
-            started = time.perf_counter() if timing else 0.0
             allowed = self.can_propagate_transition(prev, current, None)
-            if timing:
-                transition_seconds += time.perf_counter() - started
             transition_cache[key] = allowed
             return allowed
 
         def blocks_cell(position: Tuple[int, int]) -> bool:
-            nonlocal blocking_seconds
             cached = blocking_cache.get(position)
             if cached is not None:
                 return cached
-            started = time.perf_counter() if timing else 0.0
             blocked = self.is_blocking_propagation(position[0], position[1])
-            if timing:
-                blocking_seconds += time.perf_counter() - started
             blocking_cache[position] = blocked
             return blocked
 
@@ -3288,11 +3183,6 @@ class GridMap:
             if position == origin or transition_clear(position):
                 visible_positions.add(position)
 
-        if timing:
-            record_action_elapsed("grid.filter_propagation_positions.supercover_line_ms", line_seconds)
-            record_action_elapsed("grid.filter_propagation_positions.transition_checks_ms", transition_seconds)
-            record_action_elapsed("grid.filter_propagation_positions.blocking_checks_ms", blocking_seconds)
-            record_action_timing("grid.filter_propagation_positions.total_ms", total_started)
         self._propagation_filter_cache[cache_key] = tuple(sorted(visible_positions))
         if len(self._propagation_filter_cache) > 256:
             self._propagation_filter_cache.popitem(last=False)
@@ -3303,11 +3193,8 @@ class GridMap:
 
         Used for fast-path: if geometric_shape & barrier_positions is empty,
         skip shadowcast entirely."""
-        cache_started = time.perf_counter()
         if self._barrier_positions_cache is not None:
-            record_action_timing("grid.get_barrier_positions.cache_hit_ms", cache_started)
             return set(self._barrier_positions_cache)
-        record_action_timing("grid.get_barrier_positions.cache_miss_ms", cache_started)
         barriers: Set[Tuple[int, int]] = set()
         for pos, tile in self._tiles.items():
             if not tile.visible:

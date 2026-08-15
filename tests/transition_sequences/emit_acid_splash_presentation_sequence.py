@@ -8,7 +8,9 @@ from contextlib import redirect_stdout
 from typing import NoReturn
 from uuid import uuid4
 
-from dnd.actions import SpellEvent
+from dnd.actions.standard import (
+    SpellEvent,
+)
 from dnd.content_system.bootstrap import bootstrap_content_system
 from dnd.content_system.creature_materialization import materialize_creature
 from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME

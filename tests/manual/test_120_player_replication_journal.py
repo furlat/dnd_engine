@@ -7,8 +7,8 @@ import pytest
 from pydantic import ValidationError
 
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
-from dnd.core.equipment_types import WeaponSet
-from dnd.core.life_types import LifeState
+from dnd.types.equipment import WeaponSet
+from dnd.types.life import LifeState
 from server.world_contracts import (
     APIAppearance,
     APIContentRefSnapshot,

@@ -17,18 +17,14 @@ from dnd.core.content.origin_features import (
     OriginSavingThrowAdvantageRule,
     OriginStructuralFeatureDefinition,
 )
-from dnd.core.content.durable_characters import AbilityScoreName
-from dnd.core.creature_types import DamageType, Size
-from dnd.core.modifiers import (
-    AdvantageStatus,
-    ResistanceStatus,
-)
-from dnd.core.saving_throw_types import (
-    SAVING_THROW_CONTEXT_KEY,
-    SavingThrowContext,
-    SavingThrowEffectTag,
-)
-from dnd.core.senses import SenseMode, SensesType
+from dnd.types.abilities import AbilityName
+from dnd.types.damage import DamageType
+from dnd.types.creatures import Size
+from dnd.types.rolls import AdvantageStatus
+from dnd.types.damage import ResistanceStatus
+from dnd.types.saving_throws import SAVING_THROW_CONTEXT_KEY, SavingThrowEffectTag
+from dnd.core.content.saving_throws import SavingThrowContext
+from dnd.types.senses import SenseMode, SensesType
 from dnd.entity import Entity
 
 
@@ -63,7 +59,7 @@ def test_origin_structural_feature_installs_and_reverses_exact_sources() -> None
                 effect_tags=(SavingThrowEffectTag.POISON,),
             ),
             OriginSavingThrowAdvantageRule(
-                abilities=(AbilityScoreName.WISDOM,),
+                abilities=(AbilityName.WISDOM,),
                 requires_magical=True,
             ),
         ),
@@ -166,7 +162,7 @@ def test_origin_structural_feature_failure_rolls_back_every_prior_source(
         ),
         saving_throw_advantages=(
             OriginSavingThrowAdvantageRule(
-                abilities=(AbilityScoreName.WISDOM,),
+                abilities=(AbilityName.WISDOM,),
                 requires_magical=True,
             ),
         ),

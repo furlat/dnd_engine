@@ -24,8 +24,13 @@ from dnd.core.content.registration import (
 )
 from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.core.dice import Dice, DiceRoll
-from dnd.core.events import D20RollResultEvent, Event
-from dnd.core.modifiers import AdvantageStatus
+from dnd.core.events.resolution_events import (
+    D20RollResultEvent,
+)
+from dnd.core.events.events_registry import (
+    Event,
+)
+from dnd.types.rolls import AdvantageStatus
 
 
 def _selected_natural_d20(roll: DiceRoll) -> int:

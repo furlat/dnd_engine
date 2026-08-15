@@ -16,8 +16,13 @@ warnings.filterwarnings(
 from fastapi.testclient import TestClient
 from pydantic import Field
 
-from dnd.actions import Attack, Move
-from dnd.blocks.equipment import Weapon
+from dnd.actions.standard import (
+    Attack,
+    Move,
+)
+from dnd.blocks.equipment import (
+    Weapon,
+)
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
 from dnd.controller import (
@@ -26,19 +31,25 @@ from dnd.controller import (
     PassController,
     TurnContext,
 )
-from dnd.core.base_actions import BaseAction
+from dnd.core.base_actions import (
+    BaseAction,
+)
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_object import BaseObject
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.content.recipes import ContentRecipe
 from dnd.core.dice import fixed_dice_faces
-from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import EventQueue, EventType
+from dnd.types.equipment import WeaponSlot
+from dnd.core.events.events_registry import (
+    EventQueue,
+    EventType,
+)
 from dnd.core.gridmap import get_map
-from dnd.core.life_types import LifeState
-from dnd.core.creature_types import DamageType
+from dnd.types.life import LifeState
+from dnd.types.damage import DamageType
 from dnd.core.values import BaseValue
-from dnd.encounter import Encounter, EncounterState, TurnState
+from dnd.encounter import Encounter
+from dnd.types.encounter import EncounterState, TurnState
 from dnd.entity import Entity
 from dnd.items.consumables import HEALING_POTION_RECIPE
 from dnd.items.weapons import DAGGER_RECIPE
@@ -46,7 +57,7 @@ from dnd.monsters.bestiary import create_caster, create_goblin, create_skeleton
 from dnd.monsters.bestiary_content import (
     BESTIARY_CREATURE_DECLARATIONS_BY_ID,
 )
-from dnd.reactions import add_opportunity_attack_handler
+from dnd.actions.reactions import add_opportunity_attack_handler
 from tests.engine.support import (
     force_attack_hit,
     get_hp,

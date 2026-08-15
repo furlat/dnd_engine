@@ -12,7 +12,7 @@ from enum import StrEnum
 from unittest.mock import patch
 from uuid import UUID, uuid4
 
-from dnd.actions_functional import (
+from dnd.actions.operations import (
     execute_by_index,
     execute_use_action,
     get_available_actions,
@@ -20,21 +20,31 @@ from dnd.actions_functional import (
 )
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
-from dnd.blocks.base_item import BaseItem, UsableItem
-from dnd.blocks.equipment import EquipmentConfig, Weapon
+from dnd.blocks.base_item import (
+    BaseItem,
+    UsableItem,
+)
+from dnd.blocks.equipment import (
+    EquipmentConfig,
+    Weapon,
+)
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.inventory import Inventory
 from dnd.blocks.spellcasting import SpellcastingConfig
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
-from dnd.core.base_actions import AvailableActionInfo
+from dnd.core.base_actions import (
+    AvailableActionInfo,
+)
 from dnd.core.base_block import BaseBlock
 from dnd.core.dice import fixed_dice_faces
-from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import EventPhase
+from dnd.types.equipment import WeaponSlot
+from dnd.core.events.events_registry import (
+    EventPhase,
+)
 from dnd.core.gridmap import get_map
-from dnd.core.creature_types import DamageType
-from dnd.environmental_effect_runtime import materialize_spike_trap_effect
+from dnd.types.damage import DamageType
+from dnd.content.spike_trap_materialization import materialize_spike_trap_effect
 from dnd.entity import Entity, EntityConfig
 from dnd.items.consumables import (
     FIRE_WEAPON_COAT_RECIPE,
@@ -60,7 +70,7 @@ from dnd.items.environment_interactables import (
     TrapLever,
 )
 from dnd.items.weapons import LONGSWORD_RECIPE, SHORTSWORD_RECIPE
-from dnd.spatial_effects import SpatialEffect
+from dnd.spatial.effect_base import SpatialEffect
 from tests.engine.support import get_hp, reset_combat_state, set_hp
 
 

@@ -3,7 +3,7 @@
 from uuid import UUID, uuid4
 
 from dnd.core.base_object import BaseObject
-from dnd.core.events import (
+from dnd.core.events.events_registry import (
     Event,
     EventHandler,
     EventPhase,

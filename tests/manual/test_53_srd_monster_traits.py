@@ -3,30 +3,38 @@
 from collections.abc import Iterable
 from uuid import uuid4
 
-from dnd.actions import Attack, AttackEvent
+from dnd.actions.standard import (
+    Attack,
+    AttackEvent,
+)
 from dnd.conditions import Incapacitated
 from dnd.content_system.creature_materialization import materialize_creature
-from dnd.core.base_actions import ActionEvent
+from dnd.core.events.action_events import (
+    ActionEvent,
+)
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition, ConditionApplicationEvent
 from dnd.core.base_object import BaseObject
-from dnd.core.condition_types import ConditionApplicationDisposition
-from dnd.core.dice import AttackOutcome, fixed_dice_faces
-from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import (
+from dnd.types.conditions import ConditionApplicationDisposition
+from dnd.types.rolls import AttackOutcome
+from dnd.core.dice import fixed_dice_faces
+from dnd.types.equipment import WeaponSlot
+from dnd.core.events.resolution_events import (
     D20RollResultEvent,
     DamageRollResultEvent,
+    RollModificationOperation,
+)
+from dnd.core.events.events_registry import (
     Event,
     EventHandler,
     EventPhase,
     EventQueue,
     EventType,
-    RollModificationOperation,
     Trigger,
 )
 from dnd.core.gridmap import GridMap, get_map
-from dnd.core.creature_types import DamageType
-from dnd.core.modifiers import AdvantageStatus
+from dnd.types.damage import DamageType
+from dnd.types.rolls import AdvantageStatus
 from dnd.core.content.materialization import (
     CreatureDeploymentRole,
     CreaturePossessionMode,
@@ -38,7 +46,7 @@ from dnd.monsters.srd_roster import (
     SRD_CREATURE_DECLARATIONS_BY_ID,
     SRD_CREATURE_RECIPES_BY_ID,
 )
-from dnd.spatial_effects import FieldEffect, SpatialEffect
+from dnd.spatial.effect_base import FieldEffect, SpatialEffect
 
 
 def reset_srd_trait_state(width: int = 12, height: int = 12) -> None:

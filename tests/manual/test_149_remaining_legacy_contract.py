@@ -12,9 +12,11 @@ from uuid import uuid4
 from fastapi.responses import Response
 from starlette.requests import Request
 
-from dnd.actions_functional import setup_standard_actions
+from dnd.actions.operations import setup_standard_actions
 from dnd.conditions import Prone
-from dnd.core.events import EventQueue
+from dnd.core.events.events_registry import (
+    EventQueue,
+)
 from dnd.core.gridmap import get_map
 from dnd.encounter import Encounter
 from server.event_server import (

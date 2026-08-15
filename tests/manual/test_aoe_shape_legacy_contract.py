@@ -4,16 +4,18 @@ from typing import Optional
 from uuid import uuid4
 
 from dnd.core.aoe import Cone, Cube, Line, Sphere
-from dnd.core.events import (
+from dnd.core.events.events_registry import (
     Event,
     EventHandler,
     EventPhase,
     EventQueue,
     EventType,
-    SpatialChangeEvent,
-    SpatialChangeType,
     SpatialHandler,
     Trigger,
+)
+from dnd.core.events.world_events import (
+    SpatialChangeEvent,
+    SpatialChangeType,
 )
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity

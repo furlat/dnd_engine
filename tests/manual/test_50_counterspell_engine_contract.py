@@ -5,8 +5,11 @@ from uuid import uuid4
 
 import pytest
 
-from dnd.actions import SpellAction, SpellEvent
-from dnd.actions_functional import register_spell
+from dnd.actions.standard import (
+    SpellAction,
+    SpellEvent,
+)
+from dnd.actions.operations import register_spell
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
@@ -18,18 +21,27 @@ from dnd.core.combat_log import (
     CombatLogEntryType,
     SpellInterruptionLogData,
 )
-from dnd.core.events import Event, EventHandler, EventPhase, EventQueue, EventType, Trigger
+from dnd.core.events.events_registry import (
+    Event,
+    EventHandler,
+    EventPhase,
+    EventQueue,
+    EventType,
+    Trigger,
+)
 from dnd.core.gridmap import get_map
 from dnd.core.values import BaseValue
 from dnd.classes.sorcerer import QuickenedSpell
 from dnd.blocks.action_economy import RechargeType
 from dnd.entity import Entity, EntityConfig
 from tests.spell_test_exports import Fireball, FireBolt, MagicMissile
-from dnd.spells.abjuration import (
+from dnd.core.events.action_events import (
     CounterspellReactionEvent,
+)
+from dnd.spells.abjuration import (
     register_counterspell_reaction,
 )
-from dnd.spells.effect_ids import (
+from dnd.core.events.action_events import (
     COUNTERSPELL_FAILURE_OUTCOME_CODE,
     COUNTERSPELL_INTERRUPTION_OUTCOME_CODE,
 )

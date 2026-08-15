@@ -10,7 +10,6 @@ from pydantic import ValidationError
 from dnd.core.content.descriptors import ContentDescriptorSpec, ContentVisibility
 from dnd.core.content.durable_characters import (
     AbilityScoreAllocation,
-    AbilityScoreName,
     AbilityScorePrerequisite,
     CharacterAppearanceSelection,
     CharacterDefinitionRevisionV2,
@@ -36,6 +35,7 @@ from dnd.core.content.durable_characters import (
     SpeciesDefinition,
     SpeciesVariantDefinition,
 )
+from dnd.types.abilities import AbilityName
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.content.origin_support import (
     OriginRuntimeSupport,
@@ -60,10 +60,9 @@ from dnd.core.content.registry import (
     ContentRegistryBuilder,
     NonTypedDefinitionError,
 )
-from dnd.core.proficiency_types import ProficiencyMode
+from dnd.types.proficiency import ProficiencyMode
+from dnd.types.progression import CasterProgression, MulticlassSlotRoundingPolicy
 from dnd.core.progression import (
-    CasterProgression,
-    MulticlassSlotRoundingPolicy,
     SpellcastingClassContribution,
     character_ruleset_digest,
     effective_spellcaster_level,
@@ -193,8 +192,8 @@ def test_point_buy_and_flexible_bonuses_follow_selected_bg3_policy() -> None:
         )
     with pytest.raises(ValidationError, match="different abilities"):
         FlexibleAbilityBonusSelection(
-            plus_two=AbilityScoreName.STRENGTH,
-            plus_one=AbilityScoreName.STRENGTH,
+            plus_two=AbilityName.STRENGTH,
+            plus_one=AbilityName.STRENGTH,
         )
 
 
@@ -357,8 +356,8 @@ def test_character_v2_is_an_ordered_self_authenticating_level_ledger() -> None:
             charisma=8,
         ),
         flexible_ability_bonuses=FlexibleAbilityBonusSelection(
-            plus_two=AbilityScoreName.STRENGTH,
-            plus_one=AbilityScoreName.CONSTITUTION,
+            plus_two=AbilityName.STRENGTH,
+            plus_one=AbilityName.CONSTITUTION,
         ),
         class_levels=(
             ClassLevelEntry(
@@ -451,8 +450,8 @@ def test_class_definitions_separate_entry_proficiencies_and_reject_bad_order() -
         first_class_proficiencies=first,
         multiclass_proficiencies=multiclass,
         saving_throw_proficiencies=(
-            AbilityScoreName.CONSTITUTION,
-            AbilityScoreName.STRENGTH,
+            AbilityName.CONSTITUTION,
+            AbilityName.STRENGTH,
         ),
     )
     assert definition.first_class_proficiencies == first
@@ -475,13 +474,13 @@ def test_caster_definition_owns_exact_source_list_and_multiclass_gate() -> None:
         caster_progression=CasterProgression.FULL_CASTER,
         spellcasting_feature_class_level=1,
         spellcasting_source_id=SpellcastingSourceId(value="class.cleric"),
-        spellcasting_ability=AbilityScoreName.WISDOM,
+        spellcasting_ability=AbilityName.WISDOM,
         ritual_policy=RitualPreparationPolicy.PREPARED,
         spell_entitlements=(
             ClassSpellEntitlement(spell_ref=spell_ref, spell_rank=1),
         ),
         multiclass_prerequisite=AbilityScorePrerequisite(
-            ability=AbilityScoreName.WISDOM,
+            ability=AbilityName.WISDOM,
             minimum=13,
         ),
     )
@@ -508,7 +507,7 @@ def test_class_spell_contract_fails_closed_for_incomplete_or_incoherent_rows() -
             spellcasting_source_id=SpellcastingSourceId(
                 value="class.impossible",
             ),
-            spellcasting_ability=AbilityScoreName.INTELLIGENCE,
+            spellcasting_ability=AbilityName.INTELLIGENCE,
         )
 
     with pytest.raises(ValidationError, match="spell definition"):
@@ -526,7 +525,7 @@ def test_class_spell_contract_fails_closed_for_incomplete_or_incoherent_rows() -
             caster_progression=CasterProgression.FULL_CASTER,
             spellcasting_feature_class_level=1,
             spellcasting_source_id=SpellcastingSourceId(value="class.cleric"),
-            spellcasting_ability=AbilityScoreName.WISDOM,
+            spellcasting_ability=AbilityName.WISDOM,
             spell_entitlements=(
                 ClassSpellEntitlement(
                     spell_ref=_ref(

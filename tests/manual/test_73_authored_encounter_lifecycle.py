@@ -6,7 +6,11 @@ from dnd.core.content.encounters import (
     EncounterRecipe,
     FixedRosterOpeningPolicy,
 )
-from dnd.core.events import EventPhase, EventQueue, EventType
+from dnd.core.events.events_registry import (
+    EventPhase,
+    EventQueue,
+    EventType,
+)
 from dnd.items.torches import Torch
 from dnd.scenarios.encounter_assembler import assemble_encounter_recipe
 from dnd.scenarios.encounter_catalog import (

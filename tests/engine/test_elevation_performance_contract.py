@@ -4,7 +4,7 @@ from time import perf_counter
 
 import pytest
 
-from dnd.core.base_block import MovementMode
+from dnd.types.world import MovementMode
 from dnd.core.gridmap import GridMap, get_map
 from dnd.core.world_edges import ElevationSurfaceKind
 from dnd.core.traversal_connectors import (
@@ -12,7 +12,9 @@ from dnd.core.traversal_connectors import (
     TraversalConnectorDefinition,
     TraversalConnectorKind,
 )
-from dnd.actions import TraverseConnector
+from dnd.actions.standard import (
+    TraverseConnector,
+)
 from dnd.entity import Entity
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield, get_battlefield

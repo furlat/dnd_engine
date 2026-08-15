@@ -16,29 +16,40 @@ from dnd.core.base_actions import (
     TargetEffectDisposition,
     TargetType,
 )
-from dnd.core.base_conditions import (
-    BaseCondition,
-)
-from dnd.core.condition_types import (
+from dnd.core.base_conditions import BaseCondition
+from dnd.types.conditions import (
     ConditionAgencyDenial,
     ConditionRemovalTrigger,
     ConditionTag,
 )
+from dnd.types.abilities import AbilityName
 from dnd.core.content.origin_features import OriginCapability
-from dnd.core.events import (
-    Event, EventPhase, RangeType, Range, EventType, EventHandler, Trigger,
+from dnd.core.events.events_registry import (
+    Event,
+    EventPhase,
+    EventType,
+    EventHandler,
+    Trigger,
+)
+from dnd.core.events.resolution_events import (
+    RangeType,
+    Range,
     D20RollResultEvent,
 )
-from dnd.core.creature_types import CreatureType, DamageType
-from dnd.core.modifiers import (
-    AdvantageModifier,
-    AdvantageStatus,
-)
-from dnd.core.saving_throw_types import SavingThrowEffectTag
+from dnd.types.creatures import CreatureType
+from dnd.types.damage import DamageType
+from dnd.core.modifiers import AdvantageModifier
+from dnd.types.rolls import AdvantageStatus
+from dnd.types.saving_throws import SavingThrowEffectTag
 from dnd.core.aoe import AoEShape, Sphere
 
 from dnd.entity import Entity
-from dnd.actions import Move, SpellAction, SpellEvent, validate_line_of_sight
+from dnd.actions.standard import (
+    Move,
+    SpellAction,
+    SpellEvent,
+    validate_line_of_sight,
+)
 from dnd.conditions import Paralyzed, Charmed, Stunned, Prone
 from dnd.creature_transforms import (
     apply_turn_spent_transform,
@@ -156,20 +167,20 @@ class CharmPerson(SpellAction):
                 source_entity_uuid=caster.uuid,
                 target_entity_uuid=target.uuid
             )
-            advantage_mod_uuid = target.saving_throws.get_saving_throw("wisdom").bonus.self_static.add_advantage_modifier(adv_mod)
+            advantage_mod_uuid = target.saving_throws.get_saving_throw(AbilityName.WISDOM).bonus.self_static.add_advantage_modifier(adv_mod)
 
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
-            ability_name="wisdom",
+            ability_name=AbilityName.WISDOM,
             dc=dc,
             parent_event=execution_event.uuid
         )
         _, save_roll, success = target.saving_throw(save_request)
 
         if advantage_mod_uuid:
-            target.saving_throws.get_saving_throw("wisdom").bonus.self_static.remove_modifier(advantage_mod_uuid)
+            target.saving_throws.get_saving_throw(AbilityName.WISDOM).bonus.self_static.remove_modifier(advantage_mod_uuid)
 
-        save_bonus = target.saving_throw_bonus(caster.uuid, "wisdom").normalized_score
+        save_bonus = target.saving_throw_bonus(caster.uuid, AbilityName.WISDOM).normalized_score
 
         fighting_text = " (advantage: fighting)" if is_fighting else ""
         effect_event = execution_event.phase_to(
@@ -289,7 +300,7 @@ class HoldPersonEffect(BaseCondition):
 
             save_request = caster.create_saving_throw_request(
                 target_entity_uuid=target.uuid,
-                ability_name="wisdom",
+                ability_name=AbilityName.WISDOM,
                 dc=dc,
                 parent_event=event.uuid
             )
@@ -389,7 +400,7 @@ class HoldPerson(SpellAction):
             execution_event,
             caster=caster,
             target=target,
-            ability_name="wisdom",
+            ability_name=AbilityName.WISDOM,
             dc=dc,
         )
 
@@ -494,7 +505,7 @@ class HoldMonsterEffect(BaseCondition):
 
             save_request = caster.create_saving_throw_request(
                 target_entity_uuid=target.uuid,
-                ability_name="wisdom",
+                ability_name=AbilityName.WISDOM,
                 dc=dc,
                 parent_event=event.uuid
             )
@@ -604,7 +615,7 @@ class HoldMonster(SpellAction):
             execution_event,
             caster=caster,
             target=target,
-            ability_name="wisdom",
+            ability_name=AbilityName.WISDOM,
             dc=dc,
         )
 
@@ -1050,7 +1061,7 @@ class PowerWordStunEffect(BaseCondition):
 
             save_request = caster.create_saving_throw_request(
                 target_entity_uuid=target.uuid,
-                ability_name="constitution",
+                ability_name=AbilityName.CONSTITUTION,
                 dc=dc,
                 parent_event=event.uuid
             )
@@ -1332,7 +1343,7 @@ class Bane(SpellAction):
 
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
-            ability_name="charisma",
+            ability_name=AbilityName.CHARISMA,
             dc=dc,
             parent_event=execution_event.uuid,
         )
@@ -1806,7 +1817,7 @@ class Command(SpellAction):
 
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
-            ability_name="wisdom",
+            ability_name=AbilityName.WISDOM,
             dc=dc,
             parent_event=execution_event.uuid
         )

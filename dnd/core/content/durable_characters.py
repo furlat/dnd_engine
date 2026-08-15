@@ -24,8 +24,11 @@ from dnd.core.content.identities import (
 )
 from dnd.core.content.origin_support import OriginRuntimeSupport
 from dnd.core.content.recipes import ContentRecipe
-from dnd.core.equipment_types import EquipmentSlot
-from dnd.core.progression import CasterProgression, point_buy_cost
+from dnd.types.equipment import EquipmentSlot
+from dnd.types.progression import CasterProgression
+from dnd.types import abilities as ability_types
+from dnd.types.rolls import HitDieSize
+from dnd.core.progression import point_buy_cost
 
 
 def _canonical_sha256(payload: object) -> str:
@@ -343,37 +346,7 @@ class SpellcastingSourceId(_StableProgressionId):
     """Identity of one class-owned or origin-owned spellcasting source."""
 
 
-class AbilityScoreName(str, Enum):
-    """The six ability score identities used by durable build contracts."""
-
-    STRENGTH = "strength"
-    DEXTERITY = "dexterity"
-    CONSTITUTION = "constitution"
-    INTELLIGENCE = "intelligence"
-    WISDOM = "wisdom"
-    CHARISMA = "charisma"
-
-
-_SKILL_NAMES = frozenset({
-    "acrobatics",
-    "animal_handling",
-    "arcana",
-    "athletics",
-    "deception",
-    "history",
-    "insight",
-    "intimidation",
-    "investigation",
-    "medicine",
-    "nature",
-    "perception",
-    "performance",
-    "persuasion",
-    "religion",
-    "sleight_of_hand",
-    "stealth",
-    "survival",
-})
+_SKILL_NAMES = frozenset(skill.value for skill in ability_types.SkillName)
 
 
 class AbilityScoreAllocation(BaseModel):
@@ -388,20 +361,20 @@ class AbilityScoreAllocation(BaseModel):
     wisdom: int = Field(ge=8, le=15)
     charisma: int = Field(ge=8, le=15)
 
-    def score(self, ability: AbilityScoreName) -> int:
+    def score(self, ability: ability_types.AbilityName) -> int:
         """Return one explicitly selected ability score."""
         match ability:
-            case AbilityScoreName.STRENGTH:
+            case ability_types.AbilityName.STRENGTH:
                 return self.strength
-            case AbilityScoreName.DEXTERITY:
+            case ability_types.AbilityName.DEXTERITY:
                 return self.dexterity
-            case AbilityScoreName.CONSTITUTION:
+            case ability_types.AbilityName.CONSTITUTION:
                 return self.constitution
-            case AbilityScoreName.INTELLIGENCE:
+            case ability_types.AbilityName.INTELLIGENCE:
                 return self.intelligence
-            case AbilityScoreName.WISDOM:
+            case ability_types.AbilityName.WISDOM:
                 return self.wisdom
-            case AbilityScoreName.CHARISMA:
+            case ability_types.AbilityName.CHARISMA:
                 return self.charisma
 
     @property
@@ -431,8 +404,8 @@ class FlexibleAbilityBonusSelection(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    plus_two: AbilityScoreName
-    plus_one: AbilityScoreName
+    plus_two: ability_types.AbilityName
+    plus_one: ability_types.AbilityName
 
     @model_validator(mode="after")
     def _validate_distinct(self) -> Self:
@@ -727,7 +700,7 @@ class AbilityScoreImprovementChoice(BaseModel):
         "ability_score_improvement"
     )
     choice_id: str
-    increases: tuple[tuple[AbilityScoreName, int], ...]
+    increases: tuple[tuple[ability_types.AbilityName, int], ...]
 
     @field_validator("choice_id")
     @classmethod
@@ -1015,7 +988,7 @@ class ClassDefinition(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    hit_die: Literal[4, 6, 8, 10, 12]
+    hit_die: HitDieSize
     caster_progression: CasterProgression
     spellcasting_feature_class_level: int | None = Field(
         default=None,
@@ -1023,7 +996,7 @@ class ClassDefinition(BaseModel):
         le=20,
     )
     spellcasting_source_id: SpellcastingSourceId | None = None
-    spellcasting_ability: AbilityScoreName | None = None
+    spellcasting_ability: ability_types.AbilityName | None = None
     ritual_policy: RitualPreparationPolicy = RitualPreparationPolicy.NONE
     spell_entitlements: tuple[ClassSpellEntitlement, ...] = ()
     multiclass_prerequisite: "PrerequisiteExpression | None" = None
@@ -1033,7 +1006,7 @@ class ClassDefinition(BaseModel):
     multiclass_proficiencies: ClassProficiencyPackage = Field(
         default_factory=ClassProficiencyPackage,
     )
-    saving_throw_proficiencies: tuple[AbilityScoreName, ...] = ()
+    saving_throw_proficiencies: tuple[ability_types.AbilityName, ...] = ()
     level_definitions: tuple[ClassLevelDefinition, ...] = ()
 
     @model_validator(mode="after")
@@ -1179,7 +1152,7 @@ class OriginInnateSpellcastingDefinition(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     source_id: SpellcastingSourceId
-    ability: AbilityScoreName
+    ability: ability_types.AbilityName
     grants: tuple[OriginInnateSpellGrant, ...]
 
     @model_validator(mode="after")
@@ -1352,7 +1325,7 @@ class TotalCharacterLevelPrerequisite(BaseModel):
 class AbilityScorePrerequisite(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     prerequisite_type: Literal["ability_score"] = "ability_score"
-    ability: AbilityScoreName
+    ability: ability_types.AbilityName
     minimum: int = Field(ge=1, le=30)
 
 

@@ -2,31 +2,39 @@
 
 from uuid import UUID, uuid4
 
-from dnd.actions_functional import execute_use_action, setup_standard_actions
-from dnd.blocks.base_item import BaseItem, UsableItem
-from dnd.blocks.equipment import BodyArmor, Shield, Weapon
+from dnd.actions.operations import execute_use_action, setup_standard_actions
+from dnd.blocks.base_item import (
+    BaseItem,
+    UsableItem,
+)
+from dnd.blocks.equipment import (
+    BodyArmor,
+    Shield,
+    Weapon,
+)
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
-from dnd.core.equipment_types import BodyPart, WeaponProperty, WeaponSlot
+from dnd.types.equipment import BodyPart, WeaponProperty, WeaponSlot
 from dnd.blocks.inventory import Inventory
-from dnd.core.base_block import BaseBlock, LightLevel
+from dnd.core.base_block import BaseBlock
+from dnd.types.world import LightLevel
 from dnd.core.base_object import BaseObject
-from dnd.core.events import (
+from dnd.core.events.events_registry import (
     Event,
     EventHandler,
     EventQueue,
     EventPhase,
     EventType,
-    SpatialEffectInteractionEvent,
     Trigger,
 )
-from dnd.core.spatial_effect_types import SpatialEffectInteractionOperation
-from dnd.core.gridmap import get_map
-from dnd.core.creature_types import DamageType
-from dnd.core.modifiers import (
-    AdvantageStatus,
-    NumericalModifier,
+from dnd.core.events.world_events import (
+    SpatialEffectInteractionEvent,
 )
+from dnd.types.spatial_effects import SpatialEffectInteractionOperation
+from dnd.core.gridmap import get_map
+from dnd.types.damage import DamageType
+from dnd.types.rolls import AdvantageStatus
+from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import BaseValue
 from dnd.entity import Entity
 from dnd.items.armors import CHAIN_MAIL_RECIPE, SHIELD_RECIPE

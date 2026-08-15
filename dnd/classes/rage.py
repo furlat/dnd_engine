@@ -13,29 +13,52 @@ Permanent Rage/Frenzy ownership is installed by the character composer.
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_actions import (
-    ActionOutcomeProfile, BaseAction, ActionEvent, Cost, TargetType, ActionCategory
+    ActionOutcomeProfile,
+    BaseAction,
+    Cost,
+    TargetType,
+    ActionCategory,
 )
-from dnd.core.events import (
-    Event, EventPhase, EventType,
-    Trigger, EventHandler,
-    DeathEvent, RangeType,
+from dnd.core.events.action_events import (
+    ActionEvent,
 )
-from dnd.core.equipment_types import ArmorType, WeaponSlot
-from dnd.core.creature_types import DamageType
+from dnd.core.events.events_registry import (
+    Event,
+    EventPhase,
+    EventType,
+    Trigger,
+    EventHandler,
+)
+from dnd.core.events.encounter_events import (
+    DeathEvent,
+)
+from dnd.core.events.resolution_events import (
+    RangeType,
+)
+from dnd.types.equipment import ArmorType, WeaponSlot
+from dnd.types.damage import DamageType
+from dnd.types.abilities import AbilityName, SkillName
 from dnd.core.modifiers import (
     NumericalModifier,
     AdvantageModifier,
-    AdvantageStatus,
     ContextualNumericalModifier,
     ResistanceModifier,
-    ResistanceStatus,
 )
-from dnd.blocks.equipment import ArmorEquipEvent, Armor
+from dnd.types.rolls import AdvantageStatus
+from dnd.types.damage import ResistanceStatus
+from dnd.core.events.item_events import (
+    ArmorEquipEvent,
+)
+from dnd.blocks.equipment import (
+    Armor,
+)
 from dnd.entity import Entity
-from dnd.actions import (
+from dnd.actions.standard import (
     entity_action_economy_cost_evaluator,
     entity_resource_cost_evaluator,
-    Attack, AttackEvent, build_weapon_attack_outcome_profile,
+    Attack,
+    AttackEvent,
+    build_weapon_attack_outcome_profile,
     create_weapon_attack_declaration_event,
 )
 from pydantic import Field
@@ -299,7 +322,7 @@ class Raging(BaseCondition):
         outs: List[Tuple[UUID, UUID]] = []
         handler_uuids: List[UUID] = []
 
-        athletics = target.skill_set.get_skill("athletics")
+        athletics = target.skill_set.get_skill(SkillName.ATHLETICS)
         str_adv_mod = AdvantageModifier(
             name="Raging",
             value=AdvantageStatus.ADVANTAGE,
@@ -309,7 +332,7 @@ class Raging(BaseCondition):
         mod_uuid = athletics.skill_bonus.self_static.add_advantage_modifier(str_adv_mod)
         outs.append((athletics.skill_bonus.uuid, mod_uuid))
 
-        str_save = target.saving_throws.get_saving_throw("strength")
+        str_save = target.saving_throws.get_saving_throw(AbilityName.STRENGTH)
         str_save_adv = AdvantageModifier(
             name="Raging",
             value=AdvantageStatus.ADVANTAGE,

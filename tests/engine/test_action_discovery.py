@@ -3,8 +3,12 @@
 from typing import cast
 from uuid import uuid4
 
-from dnd.actions import Dash, MovementEvent, SpellEvent
-from dnd.actions_functional import (
+from dnd.actions.standard import (
+    Dash,
+    MovementEvent,
+    SpellEvent,
+)
+from dnd.actions.operations import (
     apply_action_overrides,
     clear_action_overrides,
     execute_by_index,
@@ -14,8 +18,12 @@ from dnd.actions_functional import (
 )
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
-from dnd.blocks.base_item import BaseItem
-from dnd.blocks.equipment import EquipmentConfig
+from dnd.blocks.base_item import (
+    BaseItem,
+)
+from dnd.blocks.equipment import (
+    EquipmentConfig,
+)
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
@@ -28,11 +36,14 @@ from dnd.core.base_actions import (
 )
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition
-from dnd.core.condition_types import HazardFilter
+from dnd.types.conditions import HazardFilter
 from dnd.core.base_object import BaseObject
-from dnd.core.events import EventHandler, EventQueue
+from dnd.core.events.events_registry import (
+    EventHandler,
+    EventQueue,
+)
 from dnd.core.gridmap import get_map
-from dnd.core.creature_types import DamageType
+from dnd.types.damage import DamageType
 from dnd.core.values import BaseValue
 from dnd.entity import Entity, EntityConfig
 from dnd.items.consumables import HEALING_POTION_RECIPE

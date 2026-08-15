@@ -19,7 +19,9 @@ from dnd.core.content.registration import (
     ContentDeclaration,
     get_content_declaration,
 )
-from dnd.core.events import EventHandler
+from dnd.core.events.events_registry import (
+    EventHandler,
+)
 from dnd.spells.abjuration import (
     COUNTERSPELL_REACTION_DECLARATION,
     SHIELD_REACTION_DECLARATION,

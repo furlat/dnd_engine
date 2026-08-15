@@ -6,56 +6,70 @@ from typing import cast
 from uuid import UUID, uuid4
 
 import pytest
-from dnd.actions import (
+from dnd.actions.standard import (
     Attack,
     AttackEvent,
     Dash,
     Disengage,
     Jump,
-    JumpEvent,
     Move,
     MovementEvent,
     Shove,
+)
+from dnd.core.events.action_events import (
+    JumpEvent,
     ShoveEvent,
 )
-from dnd.actions_functional import setup_standard_actions
+from dnd.actions.operations import setup_standard_actions
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
-from dnd.blocks.equipment import EquipmentConfig, Weapon
+from dnd.blocks.equipment import (
+    EquipmentConfig,
+    Weapon,
+)
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.core import dice as dice_module
-from dnd.core.dice import AttackOutcome, fixed_dice_faces
+from dnd.types.rolls import AttackOutcome
+from dnd.core.dice import fixed_dice_faces
 from dnd.core.combat_log import CombatLogEntryType
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_object import BaseObject
 from dnd.core.action_execution import MovementTerminationReason
-from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import (
-    AbilityName,
+from dnd.types.equipment import WeaponSlot
+from dnd.types.abilities import AbilityName
+from dnd.core.events.encounter_events import (
     DeathSaveEvent,
     DeathEvent,
+)
+from dnd.core.events.events_registry import (
     Event,
     EventHandler,
     EventPhase,
     EventQueue,
     EventType,
-    ForcedMovementEvent,
-    MovementTrajectory,
-    RangeType,
-    SpatialChangeEvent,
-    StepMovementEvent,
-    TakeDamageEvent,
     Trigger,
 )
+from dnd.core.events.world_events import (
+    ForcedMovementEvent,
+    MovementTrajectory,
+    SpatialChangeEvent,
+    StepMovementEvent,
+)
+from dnd.core.events.resolution_events import (
+    RangeType,
+    TakeDamageEvent,
+)
 from dnd.core.gridmap import get_map
-from dnd.environmental_effect_runtime import materialize_spike_trap_effect
-from dnd.core.life_types import LifeState
-from dnd.core.creature_types import DamageType, Size
+from dnd.content.spike_trap_materialization import materialize_spike_trap_effect
+from dnd.types.life import LifeState
+from dnd.types.damage import DamageType
+from dnd.types.creatures import Size
 from dnd.core.modifiers import NumericalModifier
-from dnd.core.values import AdvantageStatus, BaseValue, ModifiableValue
+from dnd.types.rolls import AdvantageStatus
+from dnd.core.values import BaseValue, ModifiableValue
 from dnd.entity import Entity, EntityConfig
 from dnd.monsters.bestiary import create_goblin, create_goblin_archer, create_skeleton
-from dnd.reactions import add_opportunity_attack_handler
+from dnd.actions.reactions import add_opportunity_attack_handler
 from tests.engine.support import (
     force_attack_crit,
     force_attack_hit,

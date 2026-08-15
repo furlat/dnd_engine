@@ -3,20 +3,21 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, PrivateAttr, computed_field, field_validator
 from collections import defaultdict
 from contextlib import contextmanager
-import time
 
-from dnd.action_timing import action_timing_enabled, record_action_elapsed, record_action_timing
-from dnd.core.values import BaseValue, ModifiableValue, AdvantageStatus
-from dnd.core.creature_types import CreatureType, DamageDieValue, DamageType, Size
+from dnd.core.values import BaseValue, ModifiableValue
+from dnd.types.rolls import AdvantageStatus
+from dnd.types.creatures import CreatureType, Size
+from dnd.types.rolls import DieSize
+from dnd.types.damage import DamageType
 from dnd.core.modifiers import NumericalModifier
-from dnd.core.values import CriticalStatus, AutoHitStatus
+from dnd.types.rolls import CriticalStatus, AutoHitStatus
 from dnd.core.base_conditions import BaseCondition
-from dnd.core.condition_types import (
+from dnd.types.conditions import (
     ConditionApplicationDisposition,
     ConditionApplicationPolicy,
 )
-from dnd.core.action_types import RestrictedActionGrant
-from dnd.core.action_types import CostType
+from dnd.types.actions import RestrictedActionGrant
+from dnd.types.actions import CostType
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.content.origin_features import OriginCapability
 from dnd.core.content.runtime import (
@@ -25,23 +26,50 @@ from dnd.core.content.runtime import (
     bind_runtime_action_before_admission,
     bind_runtime_root_owned_behavior,
 )
-from dnd.core.life_types import LifeState, LifeStateChangeReason
-from dnd.core.saving_throw_types import (
-    SAVING_THROW_CONTEXT_KEY,
-    SavingThrowContext,
-)
+from dnd.types.life import LifeState, LifeStateChangeReason
+from dnd.types.saving_throws import SAVING_THROW_CONTEXT_KEY
+from dnd.core.content.saving_throws import SavingThrowContext
 from dnd.core.spell_execution import current_spell_execution
-from dnd.core.dice import Dice, RollType, DiceRoll, AttackOutcome
+from dnd.core.dice import Dice, DiceRoll
+from dnd.types.rolls import RollType, AttackOutcome
 
-from dnd.core.events import (
-    AbilityCheckD20RollResultEvent, AbilityCheckEvent, Damage, Event, EventHandler, EventPhase, EventQueue, Range, RangeType, SavingThrowEvent, SkillCheckEvent, TurnStartEvent, TurnEndEvent,
-    D20RollResultEvent, AttackD20RollResultEvent, SavingThrowD20RollResultEvent, SkillCheckD20RollResultEvent,
-    TakeDamageEvent, DamageAppliedEvent, DeathSaveEvent, InstantDeathEvent, DeathEvent, HealEvent,
+from dnd.core.events.resolution_events import (
+    AbilityCheckD20RollResultEvent,
+    Damage,
+    Range,
+    RangeType,
+    D20RollResultEvent,
+    AttackD20RollResultEvent,
+    SavingThrowD20RollResultEvent,
+    SkillCheckD20RollResultEvent,
+    TakeDamageEvent,
+    DamageAppliedEvent,
+    HealEvent,
     TemporaryHitPointsEvent,
-    LifeStateChangeEvent, ReviveEvent,
 )
-from dnd.core.equipment_types import EquipmentSlot, WeaponProperty, WeaponSlot
-from dnd.core.base_block import BaseBlock, MovementMode
+from dnd.core.events.check_events import (
+    AbilityCheckEvent,
+    SavingThrowEvent,
+    SkillCheckEvent,
+)
+from dnd.core.events.events_registry import (
+    Event,
+    EventHandler,
+    EventPhase,
+    EventQueue,
+)
+from dnd.core.events.encounter_events import (
+    TurnStartEvent,
+    TurnEndEvent,
+    DeathSaveEvent,
+    InstantDeathEvent,
+    DeathEvent,
+    LifeStateChangeEvent,
+    ReviveEvent,
+)
+from dnd.types.equipment import EquipmentSlot, WeaponProperty, WeaponSlot
+from dnd.core.base_block import BaseBlock
+from dnd.types.world import MovementMode
 from dnd.core.base_object import BaseObject
 from dnd.blocks.abilities import Ability, AbilityScoresConfig, AbilityScores
 from dnd.blocks.saving_throws import SavingThrowSetConfig, SavingThrowSet
@@ -52,7 +80,10 @@ from dnd.blocks.health import (
     HitDiceConfig,
     HitDiceHealingResult,
 )
-from dnd.blocks.equipment import EquipmentConfig, Equipment
+from dnd.blocks.equipment import (
+    EquipmentConfig,
+    Equipment,
+)
 from dnd.blocks.creature_proficiencies import (
     CreatureProficiencies,
     CreatureProficienciesConfig,
@@ -60,18 +91,21 @@ from dnd.blocks.creature_proficiencies import (
 from dnd.blocks.action_economy import ActionEconomyConfig, ActionEconomy
 from dnd.blocks.skills import SkillSetConfig, SkillSet
 from dnd.blocks.sensory import Senses, VisibilityComputationCache, spatial_senses_system
-from dnd.core.base_block import SensesType, SenseMode, LightLevel
+from dnd.types.senses import SensesType, SenseMode
+from dnd.types.world import LightLevel
 from dnd.blocks.inventory import Inventory, InventoryAddResult
 from dnd.blocks.spellcasting import SpellcastingBlock, SpellcastingConfig
 from dnd.blocks.base_item import (
     BaseItem,
     EquippableItem,
-    ItemLocationStateEvent,
     UsableItem,
 )
-from dnd.core.item_types import ItemLocation
+from dnd.core.events.item_events import (
+    ItemLocationStateEvent,
+)
+from dnd.types.items import ItemLocation
 from dnd.blocks.appearance import Appearance, AppearanceConfig
-from dnd.core.events import AbilityName, SkillName
+from dnd.types.abilities import AbilityName, SkillName
 from dnd.core.gridmap import get_map
 from dnd.core.positioning import PositionCommitError, PositionPublicationError
 from dnd.core.elevation import creature_volume_distance_feet, support_distance_feet
@@ -89,11 +123,22 @@ from dnd.creature_transforms import (
     remove_modifier_ownership,
 )
 from dnd.core.base_actions import (
-    ActionAvailabilityStatus, ActionOverrideLease, AttackRollBaseline, BaseAction, BaseCost,
-    DamageRollProfile, TargetType,
-    AvailableTarget, AvailableActionInfo, AvailableActionsResult, AvailableHandlerInfo,
+    ActionAvailabilityStatus,
+    ActionOverrideLease,
+    AttackRollBaseline,
+    BaseAction,
+    DamageRollProfile,
+    TargetType,
+    AvailableTarget,
+    AvailableActionInfo,
+    AvailableActionsResult,
+    AvailableHandlerInfo,
     OpportunityAttackExposure,
-    PositionDiscoveryContract, target_resolution_sort_key,
+    PositionDiscoveryContract,
+    target_resolution_sort_key,
+)
+from dnd.core.events.action_events import (
+    BaseCost,
 )
 
 
@@ -1262,7 +1307,7 @@ class Entity(BaseBlock):
         if count > hit_die.available_hit_dice:
             raise ValueError(f"Not enough hit dice available to spend {count}")
 
-        constitution_modifier = self.ability_scores.get_ability("constitution").get_combined_values().normalized_score
+        constitution_modifier = self.ability_scores.get_ability(AbilityName.CONSTITUTION).get_combined_values().normalized_score
         results: List[HitDiceHealingResult] = []
         for _ in range(count):
             roll_result = self.health.spend_hit_die(
@@ -1307,7 +1352,7 @@ class Entity(BaseBlock):
 
     def get_max_hp(self) -> int:
         """Return maximum normal HP before temporary hit points and damage."""
-        con_modifier = self.ability_scores.get_ability("constitution").get_combined_values()
+        con_modifier = self.ability_scores.get_ability(AbilityName.CONSTITUTION).get_combined_values()
         return self.health.get_max_hit_dices_points(
             constitution_modifier=con_modifier.normalized_score
         ) + self.health.max_hit_points_bonus.normalized_score
@@ -2040,31 +2085,21 @@ class Entity(BaseBlock):
         Returns:
             Passive score for the skill.
         """
-        timing = action_timing_enabled()
-        started = time.perf_counter() if timing else 0.0
         skill_bonuses = self._get_bonuses_for_skill(skill_name)
         skill_bonus = skill_bonuses[0].combine_values(list(skill_bonuses[1:]))
-        if timing:
-            record_action_timing(f"passive_skill.{skill_name}.skill_bonus_ms", started)
 
-        started = time.perf_counter() if timing else 0.0
         base = 10 + skill_bonus.normalized_score
-        if timing:
-            record_action_timing(f"passive_skill.{skill_name}.normalized_score_ms", started)
 
-        started = time.perf_counter() if timing else 0.0
         if skill_bonus.advantage == AdvantageStatus.ADVANTAGE:
             base += 5
         elif skill_bonus.advantage == AdvantageStatus.DISADVANTAGE:
             base -= 5
-        if timing:
-            record_action_timing(f"passive_skill.{skill_name}.advantage_ms", started)
 
         return base
 
     def get_passive_perception(self) -> int:
         """Entity's passive perception from skill system."""
-        return self.passive_skill("perception")
+        return self.passive_skill(SkillName.PERCEPTION)
 
     def can_bypass_invisibility(self) -> bool:
         """Entity can bypass invisibility with special senses."""
@@ -2120,7 +2155,7 @@ class Entity(BaseBlock):
         else:
             armored_values = self.equipment.get_armored_ac_values()
             max_dexterity_bonus = self.equipment.get_armored_max_dex_bonus()
-            combined_dexterity_bonus = self.ability_scores.get_ability("dexterity").get_combined_values()
+            combined_dexterity_bonus = self.ability_scores.get_ability(AbilityName.DEXTERITY).get_combined_values()
 
             if max_dexterity_bonus is not None and combined_dexterity_bonus.normalized_score > max_dexterity_bonus.normalized_score:
                 combined_dexterity_bonus = max_dexterity_bonus
@@ -2258,7 +2293,7 @@ class Entity(BaseBlock):
     ) -> AttackRollBaseline:
         """Read actor-side values for a creature-owned intrinsic attack."""
         ability = self.ability_scores.get_ability(
-            override_ability if override_ability is not None else "strength"
+            override_ability if override_ability is not None else AbilityName.STRENGTH
         )
         typed_bonus = (
             self.equipment.ranged_attack_bonus
@@ -2296,7 +2331,7 @@ class Entity(BaseBlock):
     def intrinsic_damage_outcome_baseline(
         self,
         *,
-        damage_die: DamageDieValue,
+        damage_die: DieSize,
         dice_count: int,
         damage_type: DamageType,
         range_type: RangeType,
@@ -2365,7 +2400,7 @@ class Entity(BaseBlock):
                     override_ability=override_ability,
                 )
         ability = self.ability_scores.get_ability(
-            override_ability if override_ability is not None else "strength"
+            override_ability if override_ability is not None else AbilityName.STRENGTH
         )
         typed_bonus = (
             self.equipment.ranged_attack_bonus
@@ -2391,7 +2426,7 @@ class Entity(BaseBlock):
     def get_intrinsic_attack_damages(
         self,
         *,
-        damage_die: DamageDieValue,
+        damage_die: DieSize,
         dice_count: int,
         damage_type: DamageType,
         range_type: RangeType,
@@ -3046,7 +3081,7 @@ class Entity(BaseBlock):
 
     def get_hp(self) -> int:
         """Return current total HP after Constitution, bonuses, temp HP, and damage."""
-        con_modifier = self.ability_scores.get_ability("constitution").get_combined_values()
+        con_modifier = self.ability_scores.get_ability(AbilityName.CONSTITUTION).get_combined_values()
         return self.health.get_total_hit_points(constitution_modifier=con_modifier.normalized_score)
 
     def get_weapon_range(self, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN) -> Range:
@@ -4395,29 +4430,18 @@ class Entity(BaseBlock):
             paths, and safe path costs.
         """
         grid = get_map()
-        timing = action_timing_enabled()
         if visibility_cache is not None:
-            started = time.perf_counter() if timing else 0.0
             fov_positions = list(visibility_cache.fov_positions)
             visible_dict = dict(visibility_cache.visible)
-            if timing:
-                record_action_timing("senses.reuse_visibility_cache_ms", started)
         else:
-            started = time.perf_counter() if timing else 0.0
             fov_positions = grid.compute_fov(position, max_distance, observer_uuid=entity_uuid)
-            if timing:
-                record_action_timing("senses.compute_fov_ms", started)
 
-            started = time.perf_counter() if timing else 0.0
             visible_dict = Entity._filter_visible_positions_by_light(
                 fov_positions,
                 position,
                 entity_uuid,
             )
-            if timing:
-                record_action_timing("senses.filter_visible_light_ms", started)
 
-        started = time.perf_counter() if timing else 0.0
         collision: Set[Tuple[int, int]] = set()
         directional_collision: Set[Tuple[Tuple[int, int], str]] = set()
         ign_terrain = False
@@ -4430,18 +4454,12 @@ class Entity(BaseBlock):
                     requesting_entity.senses.directional_collision_blocked
                 )
                 ign_terrain = requesting_entity.ignore_difficult_terrain
-        if timing:
-            record_action_timing("senses.prepare_path_context_ms", started)
         effective_path_max_distance = path_max_distance if path_max_distance is not None else max_distance
-        started = time.perf_counter() if timing else 0.0
         distances, paths = grid.compute_paths(position, effective_path_max_distance, requesting_entity_uuid=entity_uuid,
                                               subjective=True, collision_blocked=collision,
                                               directional_collision_blocked=directional_collision,
                                               ignore_difficult_terrain=ign_terrain)
-        if timing:
-            record_action_timing("senses.compute_paths_ms", started)
 
-        started = time.perf_counter() if timing else 0.0
         filtered_paths: DefaultDict[Tuple[int, int], List[Tuple[int, int]]] = defaultdict(list)
         path_costs: Dict[Tuple[int, int], int] = {}
         for pos, path in paths.items():
@@ -4461,10 +4479,7 @@ class Entity(BaseBlock):
             ):
                 filtered_paths[pos] = path
                 path_costs[pos] = int(distances[pos] * 5)
-        if timing:
-            record_action_timing("senses.filter_paths_ms", started)
 
-        started = time.perf_counter() if timing else 0.0
         safe_paths: Dict[Tuple[int, int], List[Tuple[int, int]]] = {}
         safe_path_costs: Dict[Tuple[int, int], int] = {}
         has_any_hazardous = False
@@ -4476,20 +4491,14 @@ class Entity(BaseBlock):
                         break
                 if has_any_hazardous:
                     break
-        if timing:
-            record_action_timing("senses.scan_hazards_ms", started)
 
         if has_any_hazardous:
-            started = time.perf_counter() if timing else 0.0
             safe_distances, safe_raw = grid.compute_paths(
                 position, effective_path_max_distance, requesting_entity_uuid=entity_uuid,
                 walk_in_danger=False, subjective=True, collision_blocked=collision,
                 directional_collision_blocked=directional_collision,
                 ignore_difficult_terrain=ign_terrain
             )
-            if timing:
-                record_action_timing("senses.compute_safe_paths_ms", started)
-            started = time.perf_counter() if timing else 0.0
             for pos, path in safe_raw.items():
                 if (
                     pos in visible_dict
@@ -4507,11 +4516,8 @@ class Entity(BaseBlock):
                 ):
                     safe_paths[pos] = path
                     safe_path_costs[pos] = int(safe_distances[pos] * 5)
-            if timing:
-                record_action_timing("senses.filter_safe_paths_ms", started)
 
         if visibility_cache is not None:
-            started = time.perf_counter() if timing else 0.0
             visible_entities: Dict[UUID, Tuple[int, int]] = {}
             for visible_uuid, visible_position in visibility_cache.entities.items():
                 candidate = Entity._entity_registry.get(visible_uuid)
@@ -4521,10 +4527,7 @@ class Entity(BaseBlock):
                 ):
                     visible_entities[visible_uuid] = visible_position
             visible_objects = dict(visibility_cache.objects)
-            if timing:
-                record_action_timing("senses.reuse_visible_entities_objects_ms", started)
         else:
-            started = time.perf_counter() if timing else 0.0
             visible_entities: Dict[UUID, Tuple[int, int]] = {}
             for pos in visible_dict:
                 entities = Entity.get_all_entities_at_position(pos)
@@ -4533,10 +4536,7 @@ class Entity(BaseBlock):
                         continue
                     if Entity._is_senses_visible_entity(entity, entity_uuid):
                         visible_entities[entity.uuid] = pos
-            if timing:
-                record_action_timing("senses.collect_visible_entities_ms", started)
 
-            started = time.perf_counter() if timing else 0.0
             visible_objects: Dict[UUID, Tuple[int, int]] = {}
             for pos in visible_dict:
                 for obj_uuid in grid.get_objects_at(pos):
@@ -4548,17 +4548,9 @@ class Entity(BaseBlock):
                     if not obj.is_perceivable_by(entity_uuid):
                         continue
                     visible_objects[obj_uuid] = pos
-            if timing:
-                record_action_timing("senses.collect_visible_objects_ms", started)
-            started = time.perf_counter() if timing else 0.0
             Entity._add_adjacent_senses_objects(visible_objects, position, entity_uuid)
-            if timing:
-                record_action_timing("senses.add_adjacent_objects_ms", started)
 
-        started = time.perf_counter() if timing else 0.0
         walkable = {pos: grid.is_walkable(pos[0], pos[1]) for pos in fov_positions}
-        if timing:
-            record_action_timing("senses.walkable_map_ms", started)
 
         return (
             visible_dict,
@@ -4633,7 +4625,6 @@ class Entity(BaseBlock):
             path_max_distance: Optional movement-cost radius for paths. When
                 omitted, pathfinding uses `max_distance`.
         """
-        timing = action_timing_enabled()
         visibility_cache = None
         if reuse_visibility_cache:
             candidate = self.senses._visibility_cache
@@ -4644,7 +4635,6 @@ class Entity(BaseBlock):
             ):
                 visibility_cache = candidate
 
-        started = time.perf_counter() if timing else 0.0
         (
             visible_dict,
             filtered_paths,
@@ -4663,9 +4653,6 @@ class Entity(BaseBlock):
             visibility_cache=visibility_cache,
             path_max_distance=path_max_distance,
         )
-        if timing:
-            record_action_timing("entity.update_senses.compute_ms", started)
-        started = time.perf_counter() if timing else 0.0
         self.senses.update_senses(
             entities=visible_entities,
             visible=visible_dict,
@@ -4677,17 +4664,9 @@ class Entity(BaseBlock):
             safe_path_costs=safe_path_costs,
             path_max_distance=path_max_distance if path_max_distance is not None else max_distance,
         )
-        if timing:
-            record_action_timing("entity.update_senses.apply_cache_ms", started)
-        started = time.perf_counter() if timing else 0.0
         self.senses.snapshot_perception(self.get_passive_perception())
-        if timing:
-            record_action_timing("entity.update_senses.snapshot_perception_ms", started)
-        started = time.perf_counter() if timing else 0.0
         get_map().subscribe_to_cells(self.uuid, set(fov_positions))
         spatial_senses_system.refresh_observer(self.uuid)
-        if timing:
-            record_action_timing("entity.update_senses.subscribe_cells_ms", started)
 
     @classmethod
     def update_all_entities_senses(cls, max_distance: int = 10) -> None:
@@ -4711,22 +4690,14 @@ class Entity(BaseBlock):
             max_distance: Maximum view distance (default 10)
         """
         grid = get_map()
-        timing = action_timing_enabled()
-        started = time.perf_counter() if timing else 0.0
         fov_positions = grid.compute_fov(self.position, max_distance, observer_uuid=self.uuid)
-        if timing:
-            record_action_timing("entity.update_visibility.compute_fov_ms", started)
 
-        started = time.perf_counter() if timing else 0.0
         visible_dict = Entity._filter_visible_positions_by_light(
             fov_positions,
             self.position,
             self.uuid,
         )
-        if timing:
-            record_action_timing("entity.update_visibility.filter_visible_light_ms", started)
 
-        started = time.perf_counter() if timing else 0.0
         visible_entities: Dict[UUID, Tuple[int, int]] = {}
         for pos in visible_dict:
             for ent_uuid in grid.get_entities_at(pos):
@@ -4737,10 +4708,7 @@ class Entity(BaseBlock):
                         self.uuid,
                     ):
                         visible_entities[ent_uuid] = pos
-        if timing:
-            record_action_timing("entity.update_visibility.collect_visible_entities_ms", started)
 
-        started = time.perf_counter() if timing else 0.0
         visible_objects: Dict[UUID, Tuple[int, int]] = {}
         for pos in visible_dict:
             for obj_uuid in grid.get_objects_at(pos):
@@ -4752,14 +4720,8 @@ class Entity(BaseBlock):
                 if not obj.is_perceivable_by(self.uuid):
                     continue
                 visible_objects[obj_uuid] = pos
-        if timing:
-            record_action_timing("entity.update_visibility.collect_visible_objects_ms", started)
-        started = time.perf_counter() if timing else 0.0
         Entity._add_adjacent_senses_objects(visible_objects, self.position, self.uuid)
-        if timing:
-            record_action_timing("entity.update_visibility.add_adjacent_objects_ms", started)
 
-        started = time.perf_counter() if timing else 0.0
         old_entities = set(self.senses.entities.keys())
         newly_spotted = set(visible_entities.keys()) - old_entities
         for spotted_uuid in newly_spotted:
@@ -4792,10 +4754,7 @@ class Entity(BaseBlock):
                     ).model_dump()
                 )
                 EventQueue.push_combat_log(log_entry, self.uuid)
-        if timing:
-            record_action_timing("entity.update_visibility.spotted_logs_ms", started)
 
-        started = time.perf_counter() if timing else 0.0
         self.senses.visible = visible_dict
         self.senses.update_seen(visible_dict)
         self.senses.entities = visible_entities
@@ -4808,14 +4767,9 @@ class Entity(BaseBlock):
             entities=dict(visible_entities),
             objects=dict(visible_objects),
         )
-        if timing:
-            record_action_timing("entity.update_visibility.apply_cache_ms", started)
 
-        started = time.perf_counter() if timing else 0.0
         grid.subscribe_to_cells(self.uuid, set(fov_positions))
         spatial_senses_system.refresh_observer(self.uuid)
-        if timing:
-            record_action_timing("entity.update_visibility.subscribe_cells_ms", started)
 
     def register_action(self, action: BaseAction) -> None:
         """Register an action template.
@@ -5215,15 +5169,6 @@ class Entity(BaseBlock):
             ))
         return infos
 
-    @staticmethod
-    def _timing_label(value: object) -> str:
-        """Return a compact label suitable for timing phase keys."""
-        text = str(value or "unnamed")
-        label = "".join(char.lower() if char.isalnum() else "_" for char in text)
-        while "__" in label:
-            label = label.replace("__", "_")
-        return label.strip("_")[:80] or "unnamed"
-
     def _compute_target_pool(
         self,
         action_filter: str,
@@ -5280,7 +5225,7 @@ class Entity(BaseBlock):
         """
         if entity.health.life_state is LifeState.DEAD:
             return False
-        constitution = entity.ability_scores.get_ability("constitution")
+        constitution = entity.ability_scores.get_ability(AbilityName.CONSTITUTION)
         max_hp = (
             entity.health.get_max_hit_dices_points(constitution.modifier)
             + entity.health.max_hit_points_bonus.normalized_score
@@ -5361,7 +5306,6 @@ class Entity(BaseBlock):
             shape_definition_key,
             shape.footprint_target_key(self.position),
         )
-        cache_started = time.perf_counter() if action_timing_enabled() else 0.0
         cached_footprint = self._aoe_footprint_cache.get(footprint_key)
         if cached_footprint is None:
             cached_footprint = frozenset(
@@ -5372,11 +5316,6 @@ class Entity(BaseBlock):
                 )
             )
             self._aoe_footprint_cache[footprint_key] = cached_footprint
-            if cache_started:
-                record_action_timing("available_actions.aoe_footprint_cache_miss_ms", cache_started)
-        else:
-            if cache_started:
-                record_action_timing("available_actions.aoe_footprint_cache_hit_ms", cache_started)
         shape.set_subjective_footprint(
             self.position,
             self.senses,
@@ -5706,16 +5645,10 @@ class Entity(BaseBlock):
             Available entity-targeting action metadata.
         """
         actions: List[AvailableActionInfo] = []
-        timing = action_timing_enabled()
-        started = time.perf_counter() if timing else 0.0
         registered_entity_actions = self.entity_actions
         target_pool_cache: Dict[Tuple[str, bool, bool], Dict[UUID, Tuple[int, int]]] = {}
-        if timing:
-            record_action_timing("available_actions.entity_actions.list_templates_ms", started)
 
         for registered_template in registered_entity_actions:
-            base_label = self._timing_label(registered_template.name)
-            started = time.perf_counter() if timing else 0.0
             variants = (
                 discovery_variants.get(registered_template.uuid)
                 if discovery_variants is not None
@@ -5723,35 +5656,15 @@ class Entity(BaseBlock):
             )
             if variants is None:
                 variants = registered_template.get_discovery_variants(self)
-            if timing:
-                record_action_timing(
-                    f"available_actions.entity_actions.variant_generation.{base_label}_ms",
-                    started,
-                )
 
             for template in variants:
-                started = time.perf_counter() if timing else 0.0
                 template_name = template.get_discovery_template_name()
-                template_label = self._timing_label(template_name)
                 display_name = template.get_discovery_display_name()
-                if timing:
-                    record_action_timing(
-                        f"available_actions.entity_actions.discovery_names.{template_label}_ms",
-                        started,
-                    )
 
-                started = time.perf_counter() if timing else 0.0
                 can_afford = template.check_target_independent_costs()
-                if timing:
-                    record_action_timing(
-                        f"available_actions.entity_actions.check_costs.{template_label}_ms",
-                        started,
-                    )
-                    record_action_timing("available_actions.entity_actions.check_costs_total_ms", started)
                 if legal_only and not can_afford:
                     continue
 
-                started = time.perf_counter() if timing else 0.0
                 source_requirements_met = (
                     can_afford
                     and template.validate_source_requirements_for_discovery()
@@ -5765,30 +5678,16 @@ class Entity(BaseBlock):
                         template.valid_target_filter, include_dead,
                         template.include_self, potential_targets, target_pool_cache
                     )
-                if timing:
-                    record_action_timing(
-                        f"available_actions.entity_actions.target_pool.{template_label}_ms",
-                        started,
-                    )
-                    record_action_timing("available_actions.entity_actions.target_pool_total_ms", started)
 
-                started = time.perf_counter() if timing else 0.0
                 valid_targets, rules_valid_count = (
                     self._validate_entity_targets(template, target_pool)
                     if source_requirements_met
                     else ([], 0)
                 )
-                if timing:
-                    record_action_timing(
-                        f"available_actions.entity_actions.validate_targets.{template_label}_ms",
-                        started,
-                    )
-                    record_action_timing("available_actions.entity_actions.validate_targets_total_ms", started)
 
                 if legal_only and not valid_targets:
                     continue
 
-                started = time.perf_counter() if timing else 0.0
                 weapon_name: Optional[str] = None
                 weapon_slot_str: Optional[str] = None
                 damage_types: List[str] = []
@@ -5820,13 +5719,7 @@ class Entity(BaseBlock):
                                 if grant_display is not None
                                 else weapon_name
                             )
-                if timing:
-                    record_action_timing(
-                        f"available_actions.entity_actions.weapon_metadata.{template_label}_ms",
-                        started,
-                    )
 
-                started = time.perf_counter() if timing else 0.0
                 actions.append(self._make_action_info(
                     template_name=template_name,
                     target_type=template.effective_target_type,
@@ -5856,12 +5749,6 @@ class Entity(BaseBlock):
                     damage_types=damage_types,
                     source_item_uuid=attack_source_item_uuid,
                 ))
-                if timing:
-                    record_action_timing(
-                        f"available_actions.entity_actions.make_info.{template_label}_ms",
-                        started,
-                    )
-                    record_action_timing("available_actions.entity_actions.make_info_total_ms", started)
         return actions
 
     def _collect_declared_position_targets(
@@ -6455,23 +6342,13 @@ class Entity(BaseBlock):
                 total_cost += step_cost
             return int(total_cost * 5)
 
-        timing = action_timing_enabled()
-        path_cost_seconds = 0.0
-        hazard_seconds = 0.0
-        safe_path_seconds = 0.0
-        exposure_seconds = 0.0
-        target_model_seconds = 0.0
         for pos, normal_path in paths_by_position.items():
             if pos == self.senses.position:
                 continue
-            phase_started = time.perf_counter() if timing else 0.0
             path_cost = cached_path_cost_feet(normal_path)
-            if timing:
-                path_cost_seconds += time.perf_counter() - phase_started
             if path_cost > remaining_movement:
                 continue
 
-            phase_started = time.perf_counter() if timing else 0.0
             is_hazardous = (
                 map_has_hazards
                 and any(
@@ -6479,8 +6356,6 @@ class Entity(BaseBlock):
                     for step in normal_path[1:]
                 )
             )
-            if timing:
-                hazard_seconds += time.perf_counter() - phase_started
 
             safe_cost: Optional[int] = None
             safe_path_list: Optional[List[Tuple[int, int]]] = None
@@ -6489,13 +6364,9 @@ class Entity(BaseBlock):
                 and is_hazardous
                 and pos in self.senses.safe_paths
             ):
-                phase_started = time.perf_counter() if timing else 0.0
                 safe_path_list = list(self.senses.safe_paths[pos])
                 safe_cost = cached_path_cost_feet(safe_path_list)
-                if timing:
-                    safe_path_seconds += time.perf_counter() - phase_started
 
-            phase_started = time.perf_counter() if timing else 0.0
             opportunity_attack_exposures = self._opportunity_attack_exposures_for_path(
                 normal_path,
                 threat_domains,
@@ -6508,9 +6379,6 @@ class Entity(BaseBlock):
                 if safe_path_list is not None
                 else []
             )
-            if timing:
-                exposure_seconds += time.perf_counter() - phase_started
-            phase_started = time.perf_counter() if timing else 0.0
             valid_positions.append(AvailableTarget(
                 index=idx,
                 position=pos,
@@ -6523,15 +6391,7 @@ class Entity(BaseBlock):
                 opportunity_attack_exposures=opportunity_attack_exposures,
                 safe_path_opportunity_attack_exposures=safe_path_opportunity_attack_exposures,
             ))
-            if timing:
-                target_model_seconds += time.perf_counter() - phase_started
             idx += 1
-        if timing:
-            record_action_elapsed("available_actions.fast_move_targets.path_cost_ms", path_cost_seconds)
-            record_action_elapsed("available_actions.fast_move_targets.hazard_ms", hazard_seconds)
-            record_action_elapsed("available_actions.fast_move_targets.safe_path_ms", safe_path_seconds)
-            record_action_elapsed("available_actions.fast_move_targets.opportunity_exposure_ms", exposure_seconds)
-            record_action_elapsed("available_actions.fast_move_targets.target_model_ms", target_model_seconds)
         self._fast_move_target_cache[cache_context] = tuple(valid_positions)
         return valid_positions
 
@@ -7346,21 +7206,13 @@ class Entity(BaseBlock):
         Returns:
             Grouped discovery result for the acting entity.
         """
-        timing = action_timing_enabled()
-        started = time.perf_counter() if timing else 0.0
         remaining_movement = self.action_economy.movement.normalized_score
-        if timing:
-            record_action_timing("available_actions.remaining_movement_ms", started)
 
-        started = time.perf_counter() if timing else 0.0
         result = AvailableActionsResult(
             entity_uuid=self.uuid,
             remaining_movement=remaining_movement
         )
-        if timing:
-            record_action_timing("available_actions.result_model_ms", started)
 
-        started = time.perf_counter() if timing else 0.0
         effective_templates = self.get_effective_action_templates()
         discovery_variants = {
             template.uuid: template.get_discovery_variants(self)
@@ -7371,10 +7223,7 @@ class Entity(BaseBlock):
             for template in effective_templates
             for variant in discovery_variants[template.uuid]
         ])
-        if timing:
-            record_action_timing("available_actions.registered_variants_ms", started)
 
-        started = time.perf_counter() if timing else 0.0
         if target_filter == "enemies":
             potential_targets = self.get_visible_enemies(include_dead=include_dead)
         elif target_filter == "allies":
@@ -7389,23 +7238,15 @@ class Entity(BaseBlock):
                     if other and not other.has_hp:
                         continue
                 potential_targets[k] = v
-        if timing:
-            record_action_timing("available_actions.potential_targets_ms", started)
 
-        started = time.perf_counter() if timing else 0.0
         result.self_actions = self._collect_self_actions(discovery_variants, legal_only)
-        if timing:
-            record_action_timing("available_actions.collect_self_actions_ms", started)
 
-        started = time.perf_counter() if timing else 0.0
         result.entity_actions = self._collect_entity_actions(
             potential_targets,
             include_dead,
             discovery_variants,
             legal_only,
         )
-        if timing:
-            record_action_timing("available_actions.collect_entity_actions_ms", started)
 
         required_path_distance = max(1, (remaining_movement + 4) // 5) if remaining_movement > 0 else 0
         paths_need_refresh = (
@@ -7413,14 +7254,8 @@ class Entity(BaseBlock):
             and not self.senses.has_clean_paths_for_distance(required_path_distance)
         )
         if paths_need_refresh:
-            started = time.perf_counter() if timing else 0.0
             self.update_entity_senses(max_distance=20, path_max_distance=required_path_distance)
-            if timing:
-                record_action_timing("available_actions.update_dirty_senses_ms", started)
-        elif self.senses._paths_dirty and timing:
-            record_action_timing("available_actions.skip_dirty_senses_no_movement_ms", time.perf_counter())
 
-        started = time.perf_counter() if timing else 0.0
         grid = get_map()
         if self._aoe_origin_fov_cache_revision != grid.propagation_revision:
             self._aoe_origin_fov_cache_revision = grid.propagation_revision
@@ -7432,20 +7267,14 @@ class Entity(BaseBlock):
             for position, visible in self.senses.visible.items()
             if visible
         )
-        if timing:
-            record_action_timing("available_actions.prepare_position_context_ms", started)
 
-        started = time.perf_counter() if timing else 0.0
         result.position_actions = self._collect_path_actions(
             result.remaining_movement,
             discovery_variants,
             caster_visible_positions,
             legal_only,
         )
-        if timing:
-            record_action_timing("available_actions.collect_path_actions_ms", started)
 
-        started = time.perf_counter() if timing else 0.0
         result.position_actions.extend(
             self._collect_los_actions(
                 discovery_variants,
@@ -7453,10 +7282,7 @@ class Entity(BaseBlock):
                 legal_only,
             )
         )
-        if timing:
-            record_action_timing("available_actions.collect_los_actions_ms", started)
 
-        started = time.perf_counter() if timing else 0.0
         result.position_actions.extend(
             self._collect_aoe_actions(
                 include_dead,
@@ -7467,15 +7293,9 @@ class Entity(BaseBlock):
                 legal_only,
             )
         )
-        if timing:
-            record_action_timing("available_actions.collect_aoe_actions_ms", started)
 
-        started = time.perf_counter() if timing else 0.0
         result.object_actions = self._collect_object_actions(legal_only)
-        if timing:
-            record_action_timing("available_actions.collect_object_actions_ms", started)
 
-        started = time.perf_counter() if timing else 0.0
         self._collect_use_actions(
             result,
             potential_targets,
@@ -7485,15 +7305,10 @@ class Entity(BaseBlock):
             caster_visible_positions,
             legal_only,
         )
-        if timing:
-            record_action_timing("available_actions.collect_use_actions_ms", started)
 
-        started = time.perf_counter() if timing else 0.0
         result.handler_details.extend(
             self.get_player_toggleable_handler_infos(),
         )
-        if timing:
-            record_action_timing("available_actions.handler_details_ms", started)
 
         return result
 

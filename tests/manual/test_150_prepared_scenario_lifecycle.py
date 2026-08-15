@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import ClassVar
 
 from dnd.controller import PassController
-from dnd.encounter import EncounterState
+from dnd.types.encounter import EncounterState
 from dnd.entity import Entity
 from dnd.scenarios.encounter_assembler import prepare_encounter_recipe
 from dnd.scenarios.encounter_catalog import (

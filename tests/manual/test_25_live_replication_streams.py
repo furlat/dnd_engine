@@ -6,10 +6,21 @@ from threading import Event as ThreadEvent, Thread
 
 import pytest
 
-from dnd.actions import Dodge, Shove, ShoveEvent
+from dnd.actions.standard import (
+    Dodge,
+    Shove,
+)
+from dnd.core.events.action_events import (
+    ShoveEvent,
+)
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
 from dnd.core.dice import fixed_dice_faces
-from dnd.core.events import Event, EventPhase, EventQueue, EventType
+from dnd.core.events.events_registry import (
+    Event,
+    EventPhase,
+    EventQueue,
+    EventType,
+)
 from dnd.encounter import Encounter
 from tests.manual import live_replication_support as live_replication
 from server.event_stream import (
@@ -403,7 +414,7 @@ def test_enemy_shove_burst_streams_forced_movement_and_trajectory_log() -> None:
     shove_envelope = next(
         envelope
         for envelope in completion_envelopes
-        if envelope["data"].event.wire_type == "dnd.actions.ShoveEvent"
+        if envelope["data"].event.wire_type == "dnd.actions.standard.ShoveEvent"
     )
 
     forced_wire = forced_envelope["data"].model_dump(mode="json")["event"]

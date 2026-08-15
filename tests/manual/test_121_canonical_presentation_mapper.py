@@ -6,27 +6,33 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from dnd.actions import (
+from dnd.actions.standard import (
     Attack,
     AttackEvent,
     Jump,
-    JumpEvent,
     Move,
     MovementEvent,
     Shove,
-    ShoveEvent,
     SpellEvent,
+)
+from dnd.core.events.action_events import (
+    JumpEvent,
+    ShoveEvent,
     TraverseConnectorEvent,
 )
-from dnd.core.base_block import MovementMode
-from dnd.blocks.base_item import ItemLocationStateEvent
+from dnd.types.world import MovementMode
+from dnd.core.events.item_events import (
+    ItemLocationStateEvent,
+)
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.classes.paladin import create_divine_smite_handler
 from dnd.conditions import Prone
 from dnd.content_system.bootstrap import bootstrap_content_system
 from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
-from dnd.core.action_types import ActionPresentationKind
-from dnd.core.base_actions import ActionEvent
+from dnd.presentation import ActionPresentationKind
+from dnd.core.events.action_events import (
+    ActionEvent,
+)
 from dnd.core.base_conditions import ConditionApplicationEvent
 from dnd.core.combat_log import position_evidence_key
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
@@ -36,22 +42,29 @@ from dnd.core.content.runtime import (
     EffectiveHandlerPresentation,
     HandlerDispatchOutcome,
 )
-from dnd.core.dice import AttackOutcome, fixed_dice_faces
-from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import (
+from dnd.types.rolls import AttackOutcome
+from dnd.core.dice import fixed_dice_faces
+from dnd.types.equipment import WeaponSlot
+from dnd.core.events.resolution_events import (
     Damage,
     DamageAppliedEvent,
     DamageRollResultEvent,
+    HealEvent,
+    RollModificationOperation,
+)
+from dnd.core.events.encounter_events import (
     EncounterEndEvent,
+    LifeStateChangeEvent,
+)
+from dnd.core.events.events_registry import (
     Event,
     EventPhase,
     EventQueue,
     EventType,
+)
+from dnd.core.events.world_events import (
     ForcedMovementEvent,
-    HealEvent,
-    LifeStateChangeEvent,
     MovementTrajectory,
-    RollModificationOperation,
     SensoryUpdateEvent,
     SpatialChangeEvent,
     SpatialChangeType,
@@ -59,29 +72,23 @@ from dnd.core.events import (
     StepMovementEvent,
 )
 from dnd.core.gridmap import get_map
-from dnd.core.item_types import (
+from dnd.presentation import (
     EquippedVisualPolicy,
     ItemContentRefSnapshot,
-    ItemLocation,
     ItemPresentationKind,
     ItemPresentationState,
-    ItemRarity,
 )
-from dnd.core.life_types import LifeState, LifeStateChangeReason
-from dnd.core.creature_types import DamageType
-from dnd.core.modifiers import (
-    ResistanceModifier,
-    ResistanceStatus,
-)
+from dnd.types.items import ItemLocation, ItemRarity
+from dnd.types.life import LifeState, LifeStateChangeReason
+from dnd.types.damage import DamageType
+from dnd.core.modifiers import ResistanceModifier
+from dnd.types.damage import ResistanceStatus
 from dnd.core.presentation_geometry import (
     ConePresentationGeometry,
     CubePresentationGeometry,
     SpherePresentationGeometry,
 )
-from dnd.core.spatial_effect_types import (
-    SpatialEffectChangeOperation,
-    SpatialEffectLayer,
-)
+from dnd.types.spatial_effects import SpatialEffectChangeOperation, SpatialEffectLayer
 from dnd.core.traversal_connectors import (
     ConnectorProvocationPolicy,
     TraversalConnectorKind,
@@ -89,12 +96,14 @@ from dnd.core.traversal_connectors import (
 from dnd.entity import Entity, EntityConfig
 from dnd.monsters.bestiary import create_goblin, create_skeleton
 from dnd.monsters.traits import ParryFeature
-from dnd.reactions import add_opportunity_attack_handler
-from dnd.spells.abjuration import (
+from dnd.actions.reactions import add_opportunity_attack_handler
+from dnd.core.events.action_events import (
     CounterspellReactionEvent,
+)
+from dnd.spells.abjuration import (
     create_shield_reaction_handler,
 )
-from dnd.spells.effect_ids import (
+from dnd.core.events.action_events import (
     COUNTERSPELL_FAILURE_OUTCOME_CODE,
     COUNTERSPELL_INTERRUPTION_OUTCOME_CODE,
 )

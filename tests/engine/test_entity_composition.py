@@ -6,41 +6,51 @@ from unittest.mock import patch
 from uuid import uuid4
 import random
 
-from dnd.actions import Attack
-from dnd.actions_functional import register_spell, setup_standard_actions
+from dnd.actions.standard import (
+    Attack,
+)
+from dnd.actions.operations import register_spell, setup_standard_actions
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig, RechargeType
-from dnd.blocks.equipment import Weapon
+from dnd.blocks.equipment import (
+    Weapon,
+)
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
-from dnd.core.equipment_types import WeaponSlot
+from dnd.types.equipment import WeaponSlot
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.saving_throws import SavingThrowConfig, SavingThrowSetConfig
 from dnd.blocks.skills import SkillConfig, SkillSetConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition, Duration
-from dnd.core.condition_types import DurationType
+from dnd.types.conditions import DurationType
 from dnd.core.base_object import BaseObject
-from dnd.core.dice import AttackOutcome, RollType
-from dnd.core.events import (
+from dnd.types.rolls import AttackOutcome, RollType
+from dnd.core.events.resolution_events import (
     AbilityCheckD20RollResultEvent,
+    SavingThrowD20RollResultEvent,
+    SkillCheckD20RollResultEvent,
+    TemporaryHitPointsEvent,
+)
+from dnd.core.events.check_events import (
     AbilityCheckEvent,
+    SavingThrowEvent,
+    SkillCheckEvent,
+)
+from dnd.core.events.events_registry import (
     EventPhase,
     EventQueue,
     EventType,
-    SavingThrowD20RollResultEvent,
-    SavingThrowEvent,
-    SkillCheckD20RollResultEvent,
-    SkillCheckEvent,
-    TemporaryHitPointsEvent,
 )
 from dnd.core.combat_log import CombatLogEntryType
 from dnd.core.gridmap import get_map
-from dnd.core.life_types import LifeState
-from dnd.core.creature_types import CreatureType, DamageType, Size
+from dnd.types.life import LifeState
+from dnd.types.creatures import CreatureType, Size
+from dnd.types.damage import DamageType
 from dnd.core.modifiers import NumericalModifier
-from dnd.core.values import AdvantageStatus, BaseValue, ModifiableValue
+from dnd.types.rolls import AdvantageStatus
+from dnd.core.values import BaseValue, ModifiableValue
 from dnd.conditions import Exhaustion
 from dnd.entity import Entity, EntityConfig
 from dnd.items.weapons import SHORTSWORD_RECIPE

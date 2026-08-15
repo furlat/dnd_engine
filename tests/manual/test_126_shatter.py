@@ -7,7 +7,9 @@ from uuid import uuid4
 
 import pytest
 
-from dnd.actions import SpellEvent
+from dnd.actions.standard import (
+    SpellEvent,
+)
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity

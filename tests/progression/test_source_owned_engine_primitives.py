@@ -14,20 +14,29 @@ from dnd.blocks.action_economy import (
 from dnd.blocks.creature_proficiencies import (
     CreatureProficienciesConfig,
 )
-from dnd.blocks.equipment import ArmorClassFormulaCandidate, Weapon
+from dnd.blocks.equipment import (
+    ArmorClassFormulaCandidate,
+    Weapon,
+)
 from dnd.blocks.health import Health, HitDice, HitDiceConfig
 from dnd.blocks.skills import Skill
 from dnd.blocks.saving_throws import SavingThrow
 from dnd.blocks.spellcasting import SpellcastingBlock
-from dnd.core.base_actions import BaseAction
+from dnd.core.base_actions import (
+    BaseAction,
+)
 from dnd.core.content.durable_characters import RitualPreparationPolicy
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
-from dnd.core.equipment_types import ArmorType, WeaponProperty, WeaponSlot
-from dnd.core.events import AbilityName, Range, RangeType
+from dnd.types.equipment import ArmorType, WeaponProperty, WeaponSlot
+from dnd.types.abilities import AbilityName
+from dnd.core.events.resolution_events import (
+    Range,
+    RangeType,
+)
 from dnd.core.feature_grants import AttackMultiplicityGrant
-from dnd.core.creature_types import DamageType
-from dnd.core.proficiency_types import ProficiencyMode
-from dnd.core.progression import CasterProgression
+from dnd.types.damage import DamageType
+from dnd.types.proficiency import ProficiencyMode
+from dnd.types.progression import CasterProgression
 from dnd.entity import Entity, EntityConfig
 
 

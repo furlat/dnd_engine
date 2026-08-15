@@ -4,9 +4,9 @@ from dataclasses import dataclass
 from typing import Tuple
 from uuid import UUID, uuid4
 
-from dnd.core.base_block import LightLevel
+from dnd.types.world import LightLevel
 from dnd.core.gridmap import GridMap
-from dnd.core.item_types import ItemBlockingChannel, ItemDirection
+from dnd.types.world import WorldEdgeChannel, CardinalDirection
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
 from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
@@ -23,7 +23,7 @@ from dnd.items.environment_interactables import (
     TrapLever,
 )
 from dnd.items.torches import WallTorch
-from dnd.environmental_effect_runtime import materialize_spike_trap_effect
+from dnd.content.spike_trap_materialization import materialize_spike_trap_effect
 from dnd.core.base_tiles import difficult_terrain_factory, water_factory
 
 ARENA_WIDTH = 15
@@ -39,9 +39,9 @@ WALL_POSITIONS: Tuple[Tuple[int, int], ...] = tuple(
     if (WALL_COLUMN, y) != DOOR_POSITION
 )
 
-DOOR_DIRECTIONS: Tuple[ItemDirection, ...] = ("west",)
-WALL_DIRECTIONS: Tuple[ItemDirection, ...] = DOOR_DIRECTIONS
-STANDARD_BLOCKING_CHANNELS: Tuple[ItemBlockingChannel, ...] = (
+DOOR_DIRECTIONS: Tuple[CardinalDirection, ...] = (CardinalDirection.WEST,)
+WALL_DIRECTIONS: Tuple[CardinalDirection, ...] = DOOR_DIRECTIONS
+STANDARD_BLOCKING_CHANNELS: Tuple[WorldEdgeChannel, ...] = (
     DIRECTIONAL_CHANNELS
 )
 

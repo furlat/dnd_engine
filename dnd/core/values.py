@@ -3,16 +3,15 @@ from collections import Counter
 from typing import List, Optional, Dict, Any, Callable, ClassVar, Iterable, Union, Self
 from uuid import UUID, uuid4
 from dnd.core.base_object import BaseObject
-from dnd.core.creature_types import DamageType, Size
+from dnd.types import creatures as creature_types
+from dnd.types import damage as damage_type_types
+from dnd.types import rolls as roll_types
 from dnd.core.modifiers import (
     naming_callable,
     NumericalModifier,
     AdvantageModifier,
     CriticalModifier,
     AutoHitModifier,
-    AdvantageStatus,
-    CriticalStatus,
-    AutoHitStatus,
     SizeModifier,
     DamageTypeModifier,
     ContextualNumericalModifier,
@@ -23,13 +22,10 @@ from dnd.core.modifiers import (
     ContextualDamageTypeModifier,
     ResistanceModifier,
     ContextualResistanceModifier,
-    ResistanceStatus,
 )
-
-
 def _dominant_damage_types(
-    damage_types: Iterable[DamageType],
-) -> List[DamageType]:
+    damage_types: Iterable[damage_type_types.DamageType],
+) -> List[damage_type_types.DamageType]:
     """Return the most frequent damage types in canonical enum order."""
     counts = Counter(damage_types)
     if not counts:
@@ -37,7 +33,7 @@ def _dominant_damage_types(
     maximum = max(counts.values())
     return [
         damage_type
-        for damage_type in DamageType
+        for damage_type in damage_type_types.DamageType
         if counts[damage_type] == maximum
     ]
 
@@ -164,7 +160,7 @@ class StaticValue(BaseValue):
     )
     size_modifiers: Dict[UUID, SizeModifier] = Field(
         default_factory=dict,
-        description="Size modifiers used when a value needs an effective creature or object size."
+        description="creature_types.Size modifiers used when a value needs an effective creature or object size."
     )
     damage_type_modifiers: Dict[UUID, DamageTypeModifier] = Field(
         default_factory=dict,
@@ -507,69 +503,69 @@ class StaticValue(BaseValue):
 
     @computed_field
     @property
-    def advantage(self) -> AdvantageStatus:
+    def advantage(self) -> roll_types.AdvantageStatus:
         """Return the final advantage state.
 
         Returns:
             Advantage, disadvantage, or none after signed aggregation.
         """
         if self.advantage_sum > 0:
-            return AdvantageStatus.ADVANTAGE
+            return roll_types.AdvantageStatus.ADVANTAGE
         elif self.advantage_sum < 0:
-            return AdvantageStatus.DISADVANTAGE
+            return roll_types.AdvantageStatus.DISADVANTAGE
         else:
-            return AdvantageStatus.NONE
+            return roll_types.AdvantageStatus.NONE
 
     @computed_field
     @property
-    def critical(self) -> CriticalStatus:
+    def critical(self) -> roll_types.CriticalStatus:
         """Return the final critical-hit override state.
 
         Returns:
             `NOCRIT`, `AUTOCRIT`, or `NONE`, with `NOCRIT` taking precedence.
         """
-        if CriticalStatus.NOCRIT in (mod.value for mod in self.critical_modifiers.values()):
-            return CriticalStatus.NOCRIT
-        elif CriticalStatus.AUTOCRIT in (mod.value for mod in self.critical_modifiers.values()):
-            return CriticalStatus.AUTOCRIT
+        if roll_types.CriticalStatus.NOCRIT in (mod.value for mod in self.critical_modifiers.values()):
+            return roll_types.CriticalStatus.NOCRIT
+        elif roll_types.CriticalStatus.AUTOCRIT in (mod.value for mod in self.critical_modifiers.values()):
+            return roll_types.CriticalStatus.AUTOCRIT
         else:
-            return CriticalStatus.NONE
+            return roll_types.CriticalStatus.NONE
 
     @computed_field
     @property
-    def auto_hit(self) -> AutoHitStatus:
+    def auto_hit(self) -> roll_types.AutoHitStatus:
         """Return the final hit override state.
 
         Returns:
             `AUTOMISS`, `AUTOHIT`, or `NONE`, with `AUTOMISS` taking precedence.
         """
-        if AutoHitStatus.AUTOMISS in (mod.value for mod in self.auto_hit_modifiers.values()):
-            return AutoHitStatus.AUTOMISS
-        elif AutoHitStatus.AUTOHIT in (mod.value for mod in self.auto_hit_modifiers.values()):
-            return AutoHitStatus.AUTOHIT
+        if roll_types.AutoHitStatus.AUTOMISS in (mod.value for mod in self.auto_hit_modifiers.values()):
+            return roll_types.AutoHitStatus.AUTOMISS
+        elif roll_types.AutoHitStatus.AUTOHIT in (mod.value for mod in self.auto_hit_modifiers.values()):
+            return roll_types.AutoHitStatus.AUTOHIT
         else:
-            return AutoHitStatus.NONE
+            return roll_types.AutoHitStatus.NONE
 
     @computed_field
     @property
-    def size(self) -> Size:
+    def size(self) -> creature_types.Size:
         """Return the effective size from static size modifiers.
 
         Returns:
             Effective size, defaulting to `MEDIUM` when no modifiers exist.
         """
         if not self.size_modifiers:
-            return Size.MEDIUM
+            return creature_types.Size.MEDIUM
 
         sizes = [modifier.value for modifier in self.size_modifiers.values()]
         if self.largest_size_priority:
-            return max(sizes, key=lambda s: list(Size).index(s))
+            return max(sizes, key=lambda s: list(creature_types.Size).index(s))
         else:
-            return min(sizes, key=lambda s: list(Size).index(s))
+            return min(sizes, key=lambda s: list(creature_types.Size).index(s))
 
     @computed_field
     @property
-    def damage_types(self) -> List[DamageType]:
+    def damage_types(self) -> List[damage_type_types.DamageType]:
         """Return the most common damage types in this channel.
 
         Returns:
@@ -582,7 +578,7 @@ class StaticValue(BaseValue):
 
     @computed_field
     @property
-    def damage_type(self) -> Optional[DamageType]:
+    def damage_type(self) -> Optional[damage_type_types.DamageType]:
         """Return one representative damage type.
 
         Returns:
@@ -595,20 +591,20 @@ class StaticValue(BaseValue):
 
     @computed_field
     @property
-    def resistance_sum(self) -> Dict[DamageType, int]:
+    def resistance_sum(self) -> Dict[damage_type_types.DamageType, int]:
         """Return signed resistance totals by damage type.
 
         Returns:
             Damage type to signed resistance total.
         """
-        resistance_sum = {damage_type: 0 for damage_type in DamageType}
+        resistance_sum = {damage_type: 0 for damage_type in damage_type_types.DamageType}
         for modifier in self.resistance_modifiers.values():
             resistance_sum[modifier.damage_type] += modifier.numerical_value
         return resistance_sum
 
     @computed_field
     @property
-    def resistance(self) -> Dict[DamageType, ResistanceStatus]:
+    def resistance(self) -> Dict[damage_type_types.DamageType, damage_type_types.ResistanceStatus]:
         """Return final resistance states by damage type.
 
         Returns:
@@ -617,13 +613,13 @@ class StaticValue(BaseValue):
         resistance = {}
         for damage_type, sum_value in self.resistance_sum.items():
             if sum_value > 1:
-                resistance[damage_type] = ResistanceStatus.IMMUNITY
+                resistance[damage_type] = damage_type_types.ResistanceStatus.IMMUNITY
             elif sum_value == 1:
-                resistance[damage_type] = ResistanceStatus.RESISTANCE
+                resistance[damage_type] = damage_type_types.ResistanceStatus.RESISTANCE
             elif sum_value == 0:
-                resistance[damage_type] = ResistanceStatus.NONE
+                resistance[damage_type] = damage_type_types.ResistanceStatus.NONE
             else:
-                resistance[damage_type] = ResistanceStatus.VULNERABILITY
+                resistance[damage_type] = damage_type_types.ResistanceStatus.VULNERABILITY
         return resistance
 
     def combine_values(self, others: List['StaticValue'], naming_callable: Optional[naming_callable] = None) -> 'StaticValue':
@@ -889,22 +885,22 @@ class ContextualValue(BaseValue):
 
     @computed_field
     @property
-    def advantage(self) -> AdvantageStatus:
+    def advantage(self) -> roll_types.AdvantageStatus:
         """Return the final contextual advantage state.
 
         Returns:
             Advantage, disadvantage, or none after signed aggregation.
         """
         if self.advantage_sum > 0:
-            return AdvantageStatus.ADVANTAGE
+            return roll_types.AdvantageStatus.ADVANTAGE
         elif self.advantage_sum < 0:
-            return AdvantageStatus.DISADVANTAGE
+            return roll_types.AdvantageStatus.DISADVANTAGE
         else:
-            return AdvantageStatus.NONE
+            return roll_types.AdvantageStatus.NONE
 
     @computed_field
     @property
-    def critical(self) -> CriticalStatus:
+    def critical(self) -> roll_types.CriticalStatus:
         """Return the final contextual critical-hit override state.
 
         Returns:
@@ -913,16 +909,16 @@ class ContextualValue(BaseValue):
         critical_modifiers = [modifier.evaluate(self.source_entity_uuid, self.target_entity_uuid, self.context,
                               event_lineage_uuid=self.event_lineage_uuid) for modifier in self.critical_modifiers.values()]
         values = [modifier.value for modifier in critical_modifiers if isinstance(modifier, CriticalModifier)]
-        if CriticalStatus.NOCRIT in values:
-            return CriticalStatus.NOCRIT
-        elif CriticalStatus.AUTOCRIT in values:
-            return CriticalStatus.AUTOCRIT
+        if roll_types.CriticalStatus.NOCRIT in values:
+            return roll_types.CriticalStatus.NOCRIT
+        elif roll_types.CriticalStatus.AUTOCRIT in values:
+            return roll_types.CriticalStatus.AUTOCRIT
         else:
-            return CriticalStatus.NONE
+            return roll_types.CriticalStatus.NONE
 
     @computed_field
     @property
-    def auto_hit(self) -> AutoHitStatus:
+    def auto_hit(self) -> roll_types.AutoHitStatus:
         """Return the final contextual hit override state.
 
         Returns:
@@ -931,40 +927,40 @@ class ContextualValue(BaseValue):
         auto_hit_modifiers = [modifier.evaluate(self.source_entity_uuid, self.target_entity_uuid, self.context,
                               event_lineage_uuid=self.event_lineage_uuid) for modifier in self.auto_hit_modifiers.values()]
         values = [modifier.value for modifier in auto_hit_modifiers if isinstance(modifier, AutoHitModifier)]
-        if AutoHitStatus.AUTOMISS in values:
-            return AutoHitStatus.AUTOMISS
-        elif AutoHitStatus.AUTOHIT in values:
-            return AutoHitStatus.AUTOHIT
+        if roll_types.AutoHitStatus.AUTOMISS in values:
+            return roll_types.AutoHitStatus.AUTOMISS
+        elif roll_types.AutoHitStatus.AUTOHIT in values:
+            return roll_types.AutoHitStatus.AUTOHIT
         else:
-            return AutoHitStatus.NONE
+            return roll_types.AutoHitStatus.NONE
 
     @computed_field
     @property
-    def size(self) -> Size:
+    def size(self) -> creature_types.Size:
         """Return the effective size from active contextual size modifiers.
 
         Returns:
             Effective size, defaulting to `MEDIUM` when no modifier applies.
         """
         if not self.size_modifiers:
-            return Size.MEDIUM
+            return creature_types.Size.MEDIUM
         size_modifiers = [modifier.evaluate(self.source_entity_uuid, self.target_entity_uuid, self.context,
                           event_lineage_uuid=self.event_lineage_uuid) for modifier in self.size_modifiers.values()]
         sizes = [modifier.value for modifier in size_modifiers if isinstance(modifier, SizeModifier)]
         if self.largest_size_priority:
-            return max(sizes, key=lambda s: list(Size).index(s)) if len(sizes) > 0 else Size.MEDIUM
+            return max(sizes, key=lambda s: list(creature_types.Size).index(s)) if len(sizes) > 0 else creature_types.Size.MEDIUM
         else:
-            return min(sizes, key=lambda s: list(Size).index(s)) if len(sizes) > 0 else Size.MEDIUM
+            return min(sizes, key=lambda s: list(creature_types.Size).index(s)) if len(sizes) > 0 else creature_types.Size.MEDIUM
 
     @computed_field
     @property
-    def damage_types(self) -> List[DamageType]:
+    def damage_types(self) -> List[damage_type_types.DamageType]:
         """Return the most common active contextual damage types.
 
         Returns:
             Damage types tied for highest occurrence.
         """
-        evaluated_types: List[DamageType] = []
+        evaluated_types: List[damage_type_types.DamageType] = []
         for modifier in self.damage_type_modifiers.values():
             result = modifier.evaluate(self.source_entity_uuid, self.target_entity_uuid, self.context,
                                         event_lineage_uuid=self.event_lineage_uuid)
@@ -974,7 +970,7 @@ class ContextualValue(BaseValue):
 
     @computed_field
     @property
-    def damage_type(self) -> Optional[DamageType]:
+    def damage_type(self) -> Optional[damage_type_types.DamageType]:
         """Return one representative contextual damage type.
 
         Returns:
@@ -987,13 +983,13 @@ class ContextualValue(BaseValue):
 
     @computed_field
     @property
-    def resistance_sum(self) -> Dict[DamageType, int]:
+    def resistance_sum(self) -> Dict[damage_type_types.DamageType, int]:
         """Return signed contextual resistance totals by damage type.
 
         Returns:
             Damage type to signed resistance total.
         """
-        resistance_sum = {damage_type: 0 for damage_type in DamageType}
+        resistance_sum = {damage_type: 0 for damage_type in damage_type_types.DamageType}
         for modifier in self.resistance_modifiers.values():
             result = modifier.evaluate(self.source_entity_uuid, self.target_entity_uuid, self.context,
                                         event_lineage_uuid=self.event_lineage_uuid)
@@ -1003,7 +999,7 @@ class ContextualValue(BaseValue):
 
     @computed_field
     @property
-    def resistance(self) -> Dict[DamageType, ResistanceStatus]:
+    def resistance(self) -> Dict[damage_type_types.DamageType, damage_type_types.ResistanceStatus]:
         """Return final contextual resistance states by damage type.
 
         Returns:
@@ -1012,13 +1008,13 @@ class ContextualValue(BaseValue):
         resistance = {}
         for damage_type, sum_value in self.resistance_sum.items():
             if sum_value > 1:
-                resistance[damage_type] = ResistanceStatus.IMMUNITY
+                resistance[damage_type] = damage_type_types.ResistanceStatus.IMMUNITY
             elif sum_value == 1:
-                resistance[damage_type] = ResistanceStatus.RESISTANCE
+                resistance[damage_type] = damage_type_types.ResistanceStatus.RESISTANCE
             elif sum_value == 0:
-                resistance[damage_type] = ResistanceStatus.NONE
+                resistance[damage_type] = damage_type_types.ResistanceStatus.NONE
             else:
-                resistance[damage_type] = ResistanceStatus.VULNERABILITY
+                resistance[damage_type] = damage_type_types.ResistanceStatus.VULNERABILITY
         return resistance
 
     def add_value_modifier(self, modifier: ContextualNumericalModifier) -> UUID:
@@ -1594,7 +1590,7 @@ class ModifiableValue(BaseValue):
 
     @computed_field
     @property
-    def advantage(self) -> AdvantageStatus:
+    def advantage(self) -> roll_types.AdvantageStatus:
         """Return the final advantage state.
 
         Returns:
@@ -1602,15 +1598,15 @@ class ModifiableValue(BaseValue):
         """
         total_sum = self.advantage_sum
         if total_sum > 0:
-            return AdvantageStatus.ADVANTAGE
+            return roll_types.AdvantageStatus.ADVANTAGE
         elif total_sum < 0:
-            return AdvantageStatus.DISADVANTAGE
+            return roll_types.AdvantageStatus.DISADVANTAGE
         else:
-            return AdvantageStatus.NONE
+            return roll_types.AdvantageStatus.NONE
 
     @computed_field
     @property
-    def critical(self) -> CriticalStatus:
+    def critical(self) -> roll_types.CriticalStatus:
         """Return the final critical-hit override state.
 
         Returns:
@@ -1618,16 +1614,16 @@ class ModifiableValue(BaseValue):
         """
         typed_modifiers = self.get_typed_modifiers()
         all_critical_modifiers = [modifier.critical for modifier in typed_modifiers]
-        if CriticalStatus.NOCRIT in all_critical_modifiers:
-            return CriticalStatus.NOCRIT
-        elif CriticalStatus.AUTOCRIT in all_critical_modifiers:
-            return CriticalStatus.AUTOCRIT
+        if roll_types.CriticalStatus.NOCRIT in all_critical_modifiers:
+            return roll_types.CriticalStatus.NOCRIT
+        elif roll_types.CriticalStatus.AUTOCRIT in all_critical_modifiers:
+            return roll_types.CriticalStatus.AUTOCRIT
         else:
-            return CriticalStatus.NONE
+            return roll_types.CriticalStatus.NONE
 
     @computed_field
     @property
-    def auto_hit(self) -> AutoHitStatus:
+    def auto_hit(self) -> roll_types.AutoHitStatus:
         """Return the final hit override state.
 
         Returns:
@@ -1635,50 +1631,50 @@ class ModifiableValue(BaseValue):
         """
         typed_modifiers = self.get_typed_modifiers()
         all_auto_hit_modifiers = [modifier.auto_hit for modifier in typed_modifiers]
-        if AutoHitStatus.AUTOMISS in all_auto_hit_modifiers:
-            return AutoHitStatus.AUTOMISS
-        elif AutoHitStatus.AUTOHIT in all_auto_hit_modifiers:
-            return AutoHitStatus.AUTOHIT
+        if roll_types.AutoHitStatus.AUTOMISS in all_auto_hit_modifiers:
+            return roll_types.AutoHitStatus.AUTOMISS
+        elif roll_types.AutoHitStatus.AUTOHIT in all_auto_hit_modifiers:
+            return roll_types.AutoHitStatus.AUTOHIT
         else:
-            return AutoHitStatus.NONE
+            return roll_types.AutoHitStatus.NONE
 
     @computed_field
     @property
-    def size(self) -> Size:
+    def size(self) -> creature_types.Size:
         """Return the effective size from active size modifiers.
 
         Returns:
             Effective size, defaulting to `MEDIUM` when no modifier applies.
         """
-        sizes: List[Size] = []
+        sizes: List[creature_types.Size] = []
         components = self.get_typed_modifiers()
         for component in components:
-            if component.size != Size.MEDIUM:
+            if component.size != creature_types.Size.MEDIUM:
                 sizes.append(component.size)
-        if self.from_target_static and self.from_target_static.size != Size.MEDIUM:
+        if self.from_target_static and self.from_target_static.size != creature_types.Size.MEDIUM:
             sizes.append(self.from_target_static.size)
-        if self.from_target_contextual and self.from_target_contextual.size != Size.MEDIUM:
+        if self.from_target_contextual and self.from_target_contextual.size != creature_types.Size.MEDIUM:
             sizes.append(self.from_target_contextual.size)
 
         if not sizes:
-            return Size.MEDIUM
+            return creature_types.Size.MEDIUM
 
         largest_size_priority = self.self_static.largest_size_priority
 
         if largest_size_priority:
-            return max(sizes, key=lambda s: list(Size).index(s))
+            return max(sizes, key=lambda s: list(creature_types.Size).index(s))
         else:
-            return min(sizes, key=lambda s: list(Size).index(s))
+            return min(sizes, key=lambda s: list(creature_types.Size).index(s))
 
     @computed_field
     @property
-    def damage_types(self) -> List[DamageType]:
+    def damage_types(self) -> List[damage_type_types.DamageType]:
         """Return the most common active damage types.
 
         Returns:
             Damage types tied for highest occurrence.
         """
-        active_types: List[DamageType] = []
+        active_types: List[damage_type_types.DamageType] = []
         for component in [self.self_static, self.to_target_static, self.self_contextual, self.to_target_contextual]:
             active_types.extend(component.damage_types)
         if self.from_target_static:
@@ -1689,7 +1685,7 @@ class ModifiableValue(BaseValue):
 
     @computed_field
     @property
-    def damage_type(self) -> Optional[DamageType]:
+    def damage_type(self) -> Optional[damage_type_types.DamageType]:
         """Return one representative damage type.
 
         Returns:
@@ -1702,13 +1698,13 @@ class ModifiableValue(BaseValue):
 
     @computed_field
     @property
-    def resistance_sum(self) -> Dict[DamageType, int]:
+    def resistance_sum(self) -> Dict[damage_type_types.DamageType, int]:
         """Return signed resistance totals by damage type.
 
         Returns:
             Damage type to signed resistance total.
         """
-        resistance_sum = {damage_type: 0 for damage_type in DamageType}
+        resistance_sum = {damage_type: 0 for damage_type in damage_type_types.DamageType}
         for component in [self.self_static, self.to_target_static, self.self_contextual, self.to_target_contextual]:
             for damage_type, value in component.resistance_sum.items():
                 resistance_sum[damage_type] += value
@@ -1722,7 +1718,7 @@ class ModifiableValue(BaseValue):
 
     @computed_field
     @property
-    def resistance(self) -> Dict[DamageType, ResistanceStatus]:
+    def resistance(self) -> Dict[damage_type_types.DamageType, damage_type_types.ResistanceStatus]:
         """Return final resistance states by damage type.
 
         Returns:
@@ -1731,13 +1727,13 @@ class ModifiableValue(BaseValue):
         resistance = {}
         for damage_type, sum_value in self.resistance_sum.items():
             if sum_value > 1:
-                resistance[damage_type] = ResistanceStatus.IMMUNITY
+                resistance[damage_type] = damage_type_types.ResistanceStatus.IMMUNITY
             elif sum_value == 1:
-                resistance[damage_type] = ResistanceStatus.RESISTANCE
+                resistance[damage_type] = damage_type_types.ResistanceStatus.RESISTANCE
             elif sum_value == 0:
-                resistance[damage_type] = ResistanceStatus.NONE
+                resistance[damage_type] = damage_type_types.ResistanceStatus.NONE
             else:
-                resistance[damage_type] = ResistanceStatus.VULNERABILITY
+                resistance[damage_type] = damage_type_types.ResistanceStatus.VULNERABILITY
         return resistance
 
     def set_source_entity(self, source_entity_uuid: UUID, source_entity_name: Optional[str]=None) -> None:
@@ -2012,13 +2008,13 @@ class ModifiableValue(BaseValue):
             if component is None:
                 continue
             for modifier in component.advantage_modifiers.values():
-                if modifier.value == AdvantageStatus.ADVANTAGE:
+                if modifier.value == roll_types.AdvantageStatus.ADVANTAGE:
                     result.append({
                         "name": modifier.name or "Unknown",
                         "value": "advantage",
                         "source": source
                     })
-                elif modifier.value == AdvantageStatus.DISADVANTAGE:
+                elif modifier.value == roll_types.AdvantageStatus.DISADVANTAGE:
                     result.append({
                         "name": modifier.name or "Unknown",
                         "value": "disadvantage",
@@ -2236,7 +2232,7 @@ class ModifiableValue(BaseValue):
 
     @computed_field
     @property
-    def outgoing_advantage(self) -> AdvantageStatus:
+    def outgoing_advantage(self) -> roll_types.AdvantageStatus:
         """Return the advantage state exported to targeters.
 
         Returns:
@@ -2244,15 +2240,15 @@ class ModifiableValue(BaseValue):
         """
         total_sum = self.outgoing_advantage_sum
         if total_sum > 0:
-            return AdvantageStatus.ADVANTAGE
+            return roll_types.AdvantageStatus.ADVANTAGE
         elif total_sum < 0:
-            return AdvantageStatus.DISADVANTAGE
+            return roll_types.AdvantageStatus.DISADVANTAGE
         else:
-            return AdvantageStatus.NONE
+            return roll_types.AdvantageStatus.NONE
 
     @computed_field
     @property
-    def outgoing_critical(self) -> CriticalStatus:
+    def outgoing_critical(self) -> roll_types.CriticalStatus:
         """Return the critical-hit override exported to targeters.
 
         Returns:
@@ -2263,16 +2259,16 @@ class ModifiableValue(BaseValue):
             if source is not None:
                 critical_modifiers.append(source.critical)
 
-        if CriticalStatus.NOCRIT in critical_modifiers:
-            return CriticalStatus.NOCRIT
-        elif CriticalStatus.AUTOCRIT in critical_modifiers:
-            return CriticalStatus.AUTOCRIT
+        if roll_types.CriticalStatus.NOCRIT in critical_modifiers:
+            return roll_types.CriticalStatus.NOCRIT
+        elif roll_types.CriticalStatus.AUTOCRIT in critical_modifiers:
+            return roll_types.CriticalStatus.AUTOCRIT
         else:
-            return CriticalStatus.NONE
+            return roll_types.CriticalStatus.NONE
 
     @computed_field
     @property
-    def outgoing_auto_hit(self) -> AutoHitStatus:
+    def outgoing_auto_hit(self) -> roll_types.AutoHitStatus:
         """Return the hit override exported to targeters.
 
         Returns:
@@ -2283,9 +2279,9 @@ class ModifiableValue(BaseValue):
             if source is not None:
                 auto_hit_modifiers.append(source.auto_hit)
 
-        if AutoHitStatus.AUTOMISS in auto_hit_modifiers:
-            return AutoHitStatus.AUTOMISS
-        elif AutoHitStatus.AUTOHIT in auto_hit_modifiers:
-            return AutoHitStatus.AUTOHIT
+        if roll_types.AutoHitStatus.AUTOMISS in auto_hit_modifiers:
+            return roll_types.AutoHitStatus.AUTOMISS
+        elif roll_types.AutoHitStatus.AUTOHIT in auto_hit_modifiers:
+            return roll_types.AutoHitStatus.AUTOHIT
         else:
-            return AutoHitStatus.NONE
+            return roll_types.AutoHitStatus.NONE

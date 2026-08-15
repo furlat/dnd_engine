@@ -3,7 +3,12 @@
 import asyncio
 
 from dnd.controller import PassController
-from dnd.core.events import Event, EventPhase, EventQueue, EventType
+from dnd.core.events.events_registry import (
+    Event,
+    EventPhase,
+    EventQueue,
+    EventType,
+)
 from tests.manual.controller_test_support import (
     create_controller_pair,
     reset_controller_catalogue_state,

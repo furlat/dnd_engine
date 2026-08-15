@@ -10,14 +10,9 @@ from uuid import UUID, uuid4
 from dnd.entity import Entity
 from dnd.encounter import Encounter
 from dnd.controller import HumanController
-from dnd.core.creature_types import DamageType
-from dnd.core.modifiers import (
-    NumericalModifier,
-    CriticalModifier,
-    CriticalStatus,
-    AutoHitModifier,
-    AutoHitStatus,
-)
+from dnd.types.damage import DamageType
+from dnd.core.modifiers import NumericalModifier, CriticalModifier, AutoHitModifier
+from dnd.types.rolls import CriticalStatus, AutoHitStatus
 from dnd.runtime_reset import reset_engine_runtime
 
 

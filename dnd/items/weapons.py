@@ -1,11 +1,16 @@
 """Weapon factories and hook-bearing weapon test fixtures."""
 
-from typing import Literal, Optional
+from typing import Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
-from dnd.blocks.equipment import Weapon, Range
+from dnd.blocks.equipment import (
+    Weapon,
+)
+from dnd.core.events.resolution_events import (
+    Range,
+)
 from dnd.core.content.descriptors import (
     ContentDescriptorSpec,
     ContentOrdering,
@@ -27,12 +32,21 @@ from dnd.core.content.recipes import ContentRecipe
 from dnd.core.content.registration import (
     get_content_declaration,
 )
-from dnd.core.equipment_types import EquipmentSlot, WeaponProperty
-from dnd.core.events import (
-    RangeType, Event, EventType, EventPhase, EventHandler, Trigger,
-    Damage, DamageRollResultEvent,
+from dnd.types.equipment import EquipmentSlot, WeaponProperty
+from dnd.types.rolls import DieSize
+from dnd.core.events.resolution_events import (
+    RangeType,
+    Damage,
+    DamageRollResultEvent,
 )
-from dnd.core.creature_types import DamageType
+from dnd.core.events.events_registry import (
+    Event,
+    EventType,
+    EventPhase,
+    EventHandler,
+    Trigger,
+)
+from dnd.types.damage import DamageType
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
@@ -139,7 +153,7 @@ class _StandardWeaponSpec(BaseModel):
     description: str
     group: str
     order: int
-    damage_dice: Literal[4, 6, 8, 10, 12, 20]
+    damage_dice: DieSize
     dice_numbers: int
     damage_type: DamageType
     properties: tuple[WeaponProperty, ...]

@@ -21,8 +21,13 @@ from dnd.core.content.registration import (
     get_content_declaration,
 )
 from dnd.core.content.runtime import RuntimeBehaviorKind
-from dnd.core.events import Event, TakeDamageEvent
-from dnd.core.life_types import LifeState
+from dnd.core.events.events_registry import (
+    Event,
+)
+from dnd.core.events.resolution_events import (
+    TakeDamageEvent,
+)
+from dnd.types.life import LifeState
 from dnd.entity import Entity
 
 

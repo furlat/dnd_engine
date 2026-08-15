@@ -33,10 +33,8 @@ from dnd.core.content.descriptors import (
     ContentPresentation,
     ContentVisibility,
 )
-from dnd.core.content.durable_characters import (
-    AbilityScoreName,
-    CharacterHoldingsRevision,
-)
+from dnd.types.abilities import AbilityName
+from dnd.core.content.durable_characters import CharacterHoldingsRevision
 from dnd.core.content.materialization import (
     CreatureBuildContext,
     CreaturePossessionMode,
@@ -56,7 +54,7 @@ from dnd.core.content.registration import (
 from dnd.entity import Entity
 
 
-AbilityIncrease = tuple[tuple[AbilityScoreName, int], ...]
+AbilityIncrease = tuple[tuple[AbilityName, int], ...]
 
 
 class BarbarianCreatureParameters(BaseModel):

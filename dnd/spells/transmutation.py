@@ -3,17 +3,16 @@
 Contains: SpikeGrowth, Slow, Haste, Darkvision, JumpSpell, ExpeditiousRetreat, Disintegrate,
           EnhanceAbility, EnlargeReduce, Regenerate
 """
-from typing import Any, Dict, Literal, Optional, List, Set, Tuple, cast as type_cast
+from typing import Any, Dict, Optional, List, Set, Tuple, cast as type_cast
 from uuid import UUID
 
 from pydantic import Field, PrivateAttr
 
-from dnd.content_system.spatial_effect_materialization import (
+from dnd.content.spatial_effect_materialization import (
     materialize_spatial_effect,
 )
 from dnd.core.base_actions import (
     ActionCategory,
-    ActionEvent,
     ActionTargetEffectBranchProfile,
     ActionTargetEffectProfile,
     ActionInformationOperation,
@@ -30,37 +29,55 @@ from dnd.core.base_actions import (
     TargetEffectDisposition,
     TargetType,
 )
+from dnd.core.events.action_events import (
+    ActionEvent,
+)
 from dnd.core.base_conditions import BaseCondition
-from dnd.core.condition_types import (
+from dnd.types.conditions import (
     ConditionAgencyDenial,
     ConditionTag,
     DurationType,
     HazardFilter,
 )
-from dnd.core.spatial_effect_types import SpatialEffectTriggerKind
+from dnd.types.spatial_effects import SpatialEffectTriggerKind
 from dnd.core.content.dependencies import (
     ContentDependency,
     ContentDependencyPhase,
     ContentDependencyRelation,
 )
 from dnd.core.content.registration import get_content_declaration
-from dnd.core.action_types import (
+from dnd.types.actions import (
     ActionEconomyCostType,
     HasteActionPolicy,
     RestrictedActionGrant,
     RestrictedActionKind,
 )
-from dnd.core.base_block import SensesType
-from dnd.core.events import (
-    Event, EventPhase, EventType, EventHandler, EventQueue, Trigger, Range, RangeType, SpatialChangeEvent, Damage, Healing, AbilityName, ForcedMovementEvent
+from dnd.types.senses import SensesType
+from dnd.core.events.events_registry import (
+    Event,
+    EventPhase,
+    EventType,
+    EventHandler,
+    EventQueue,
+    Trigger,
 )
-from dnd.core.dice import AttackOutcome
-from dnd.core.creature_types import DamageType, Size
-from dnd.core.modifiers import (
-    NumericalModifier,
-    AdvantageModifier,
-    AdvantageStatus,
+from dnd.core.events.resolution_events import (
+    Range,
+    RangeType,
+    Damage,
+    Healing,
 )
+from dnd.core.events.world_events import (
+    SpatialChangeEvent,
+    ForcedMovementEvent,
+)
+from dnd.types.abilities import AbilityName
+from dnd.types.rolls import AttackOutcome
+from dnd.types.rolls import DieSize
+from dnd.types.damage import DamageType
+from dnd.types.creatures import Size
+from dnd.core.modifiers import NumericalModifier, AdvantageModifier
+from dnd.types.rolls import AdvantageStatus
 from dnd.core.values import ModifiableValue
 from dnd.core.aoe import AoEShape, Cube
 from dnd.core.gridmap import get_map
@@ -73,16 +90,16 @@ from dnd.conditions import (
     Restrained,
 )
 from dnd.creature_transforms import apply_incapacitated_transform
-from dnd.actions import (
+from dnd.actions.standard import (
     SpellAction,
     SpellEvent,
     entity_action_economy_cost_evaluator,
 )
-from dnd.spatial_effect_controllers import AreaSpatialEffectController
+from dnd.spatial.effect_controllers import AreaSpatialEffectController
 from dnd.spells.content_metadata import srd_action_identity, srd_spell_identity
 from dnd.spells.spell_utils import fire_heal_roll_result
-from dnd.spatial_effect_content import SPIKE_GROWTH_SURFACE_RECIPE
-from dnd.spatial_effects import GroundEffect
+from dnd.content.spatial_effect_recipes import SPIKE_GROWTH_SURFACE_RECIPE
+from dnd.spatial.effect_base import GroundEffect
 
 
 def _parse_damage_dice(dice_expression: str) -> tuple[int, int]:
@@ -151,7 +168,7 @@ class SpikeGrowthZone(AreaSpatialEffectController):
             )
             damage_obj = Damage(
                 source_entity_uuid=source_uuid, target_entity_uuid=entity.uuid,
-                damage_dice=type_cast(Literal[4, 6, 8, 10, 12, 20], value), dice_numbers=count, damage_bonus=dmg_bonus,
+                damage_dice=type_cast(DieSize, value), dice_numbers=count, damage_bonus=dmg_bonus,
                 damage_type=DamageType.PIERCING
             )
             damage_roll = damage_obj.get_dice(attack_outcome=AttackOutcome.HIT).roll
@@ -310,7 +327,7 @@ class SlowedEffect(BaseCondition):
         target.equipment.ac_bonus.self_static.add_value_modifier(ac_mod)
         outs.append((target.equipment.ac_bonus.uuid, ac_mod.uuid))
 
-        dex_save = target.saving_throws.get_saving_throw("dexterity")
+        dex_save = target.saving_throws.get_saving_throw(AbilityName.DEXTERITY)
         dex_mod = NumericalModifier(
             name="Slowed",
             value=-2,
@@ -539,7 +556,7 @@ class SlowedEffect(BaseCondition):
 
             save_request = caster.create_saving_throw_request(
                 target_entity_uuid=target.uuid,
-                ability_name="wisdom",
+                ability_name=AbilityName.WISDOM,
                 dc=dc,
                 parent_event=event.uuid
             )
@@ -635,13 +652,13 @@ class Slow(SpellAction):
 
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
-            ability_name="wisdom",
+            ability_name=AbilityName.WISDOM,
             dc=dc,
             parent_event=execution_event.uuid
         )
         _, save_roll, success = target.saving_throw(save_request)
 
-        save_bonus = target.saving_throw_bonus(caster.uuid, "wisdom").normalized_score
+        save_bonus = target.saving_throw_bonus(caster.uuid, AbilityName.WISDOM).normalized_score
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -765,7 +782,7 @@ class HasteEffect(BaseCondition):
         target.equipment.ac_bonus.self_static.add_value_modifier(ac_mod)
         outs.append((target.equipment.ac_bonus.uuid, ac_mod.uuid))
 
-        dex_save = target.saving_throws.get_saving_throw("dexterity")
+        dex_save = target.saving_throws.get_saving_throw(AbilityName.DEXTERITY)
         dex_adv = AdvantageModifier(
             name="Haste",
             value=AdvantageStatus.ADVANTAGE,
@@ -1028,7 +1045,7 @@ class Disintegrate(SpellAction):
 
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
-            ability_name="dexterity",
+            ability_name=AbilityName.DEXTERITY,
             dc=dc,
             parent_event=execution_event.uuid
         )
@@ -1387,7 +1404,7 @@ class EnlargeReduceEffect(BaseCondition):
             target.size = _shift_size(target.size, -1)
             adv_value = AdvantageStatus.DISADVANTAGE
 
-        str_ability = target.ability_scores.get_ability("strength")
+        str_ability = target.ability_scores.get_ability(AbilityName.STRENGTH)
         mod_uuid = str_ability.ability_score.self_static.add_advantage_modifier(
             AdvantageModifier(
                 name=f"{'Enlarge' if self.mode == 'enlarge' else 'Reduce'} (STR checks)",
@@ -1398,7 +1415,7 @@ class EnlargeReduceEffect(BaseCondition):
         )
         outs.append((str_ability.ability_score.uuid, mod_uuid))
 
-        str_save = target.saving_throws.get_saving_throw("strength")
+        str_save = target.saving_throws.get_saving_throw(AbilityName.STRENGTH)
         save_mod_uuid = str_save.bonus.self_static.add_advantage_modifier(
             AdvantageModifier(
                 name=f"{'Enlarge' if self.mode == 'enlarge' else 'Reduce'} (STR saves)",
@@ -1464,7 +1481,7 @@ class EnlargeReduce(SpellAction):
         if target.uuid != caster.uuid and caster.is_enemy(target):
             save_request = caster.create_saving_throw_request(
                 target_entity_uuid=target.uuid,
-                ability_name="constitution",
+                ability_name=AbilityName.CONSTITUTION,
                 dc=dc,
                 parent_event=execution_event.uuid
             )
@@ -1756,7 +1773,7 @@ class TelekinesisGrab(BaseAction):
 
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
-            ability_name="strength",
+            ability_name=AbilityName.STRENGTH,
             dc=self.spell_dc,
             parent_event=execution_event.uuid
         )

@@ -23,13 +23,13 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from dnd.actions import (
+from dnd.actions.standard import (
     SpellAction,
     SpellEvent,
     entity_action_economy_cost_evaluator,
     entity_resource_cost_evaluator,
 )
-from dnd.actions_functional import (
+from dnd.actions.operations import (
     apply_action_overrides,
     clear_action_overrides,
     execute_by_index,
@@ -51,8 +51,8 @@ from dnd.core.base_actions import (
     TargetType,
 )
 from dnd.core.dice import fixed_dice_faces
-from dnd.core.events import (
-    AbilityName,
+from dnd.types.abilities import AbilityName
+from dnd.core.events.events_registry import (
     Event,
     EventHandler,
     EventPhase,
@@ -61,7 +61,7 @@ from dnd.core.events import (
     Trigger,
 )
 from dnd.core.gridmap import get_map
-from dnd.core.creature_types import CreatureType
+from dnd.types.creatures import CreatureType
 from dnd.core.modifiers import NumericalModifier
 from dnd.entity import Entity, EntityConfig
 from dnd.spells.conjuration import Web
@@ -74,8 +74,8 @@ from dnd.spells.evocation import (
     IceStorm,
     MagicMissile,
 )
-from dnd.spatial_effect_content import ICE_STORM_SURFACE_RECIPE
-from dnd.spatial_effects import SpatialEffect
+from dnd.content.spatial_effect_recipes import ICE_STORM_SURFACE_RECIPE
+from dnd.spatial.effect_base import SpatialEffect
 from tests.engine.support import (
     deal_damage_to,
     force_spell_attack_hit,

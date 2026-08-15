@@ -11,8 +11,10 @@ from pydantic import ValidationError
 from dnd.core.combat_log import SpellInterruptionLogData
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.content.runtime import BehaviorBinding
-from dnd.spells.abjuration import CounterspellReactionEvent
-from dnd.spells.effect_ids import (
+from dnd.core.events.action_events import (
+    CounterspellReactionEvent,
+)
+from dnd.core.events.action_events import (
     COUNTERSPELL_FAILURE_OUTCOME_CODE,
     COUNTERSPELL_INTERRUPTION_OUTCOME_CODE,
 )

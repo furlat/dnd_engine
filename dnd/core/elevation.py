@@ -2,7 +2,7 @@
 
 from math import ceil, sqrt
 
-from dnd.core.creature_types import Size
+from dnd.types.creatures import Size
 
 
 _TACTICAL_VERTICAL_EXTENT_FEET: dict[Size, float] = {

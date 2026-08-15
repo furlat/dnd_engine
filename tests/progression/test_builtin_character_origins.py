@@ -31,7 +31,6 @@ from dnd.content_system.starting_equipment_definitions import (
 from dnd.core.content.dependencies import ContentDependencyRelation
 from dnd.core.content.durable_characters import (
     AbilityScoreAllocation,
-    AbilityScoreName,
     BackgroundDefinition,
     BuildChoiceSelection,
     CantripChoice,
@@ -53,6 +52,7 @@ from dnd.core.content.durable_characters import (
     StartingProficiencyChoice,
     SubclassChoice,
 )
+from dnd.types.abilities import AbilityName
 from dnd.core.content.identities import ContentDefinitionKind
 from dnd.core.content.materialization import CreatureDeploymentRole
 from dnd.core.content.origin_support import OriginRuntimeSupportStatus
@@ -63,7 +63,7 @@ from dnd.core.content.provenance import (
 from dnd.core.content.registration import ContentDeclarationMode
 from dnd.player_character_body import PLAYER_CHARACTER_BODY_RECIPE
 from dnd.runtime_reset import reset_engine_runtime
-from dnd.core.language_types import SrdLanguageId
+from dnd.types.languages import SrdLanguageId
 from server.content_catalog import build_public_content_catalog
 
 
@@ -341,7 +341,7 @@ def _sorcerer_level_one_choices() -> tuple[BuildChoiceSelection, ...]:
                     ),
                 ),
             ),
-            AbilityScoreName.STRENGTH,
+            AbilityName.STRENGTH,
         ),
         (
             "barbarian",
@@ -367,7 +367,7 @@ def _sorcerer_level_one_choices() -> tuple[BuildChoiceSelection, ...]:
                     ),
                 ),
             ),
-            AbilityScoreName.STRENGTH,
+            AbilityName.STRENGTH,
         ),
         (
             "sorcerer",
@@ -379,14 +379,14 @@ def _sorcerer_level_one_choices() -> tuple[BuildChoiceSelection, ...]:
                 subclass_ref=DRACONIC_BLOODLINE_SUBCLASS_REF,
                 choices=_sorcerer_level_one_choices(),
             ),
-            AbilityScoreName.CHARISMA,
+            AbilityName.CHARISMA,
         ),
     ),
 )
 def test_human_adventurer_validates_materializes_and_reverses_existing_classes(
     class_id: str,
     class_level: ClassLevelEntry,
-    primary_ability: AbilityScoreName,
+    primary_ability: AbilityName,
 ) -> None:
     loaded = bootstrap_content_system()
     runtime = ContentSystemRuntime()
@@ -424,7 +424,7 @@ def test_human_adventurer_validates_materializes_and_reverses_existing_classes(
         ),
         flexible_ability_bonuses=FlexibleAbilityBonusSelection(
             plus_two=primary_ability,
-            plus_one=AbilityScoreName.CONSTITUTION,
+            plus_one=AbilityName.CONSTITUTION,
         ),
         class_levels=(class_level,),
         earned_character_level=1,

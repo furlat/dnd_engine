@@ -4,7 +4,9 @@ from uuid import uuid4
 
 import pytest
 
-from dnd.actions import SpellEvent
+from dnd.actions.standard import (
+    SpellEvent,
+)
 from dnd.conditions import (
     Blinded,
     Charmed,
@@ -14,12 +16,23 @@ from dnd.conditions import (
     Poisoned,
     Stunned,
 )
-from dnd.core.dice import Dice, RollType, fixed_dice_faces
-from dnd.core.events import EventPhase, EventQueue, EventType, HealEvent
-from dnd.core.creature_types import DamageType
+from dnd.core.dice import Dice, fixed_dice_faces
+from dnd.types.rolls import RollType
+from dnd.core.events.events_registry import (
+    EventPhase,
+    EventQueue,
+    EventType,
+)
+from dnd.core.events.resolution_events import (
+    HealEvent,
+)
+from dnd.types.damage import DamageType
 from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
-from dnd.spells.abjuration import GreaterRestoration, LesserRestoration
+from dnd.spells.abjuration import (
+    GreaterRestoration,
+    LesserRestoration,
+)
 from dnd.spells.evocation import (
     CureWounds,
     HealSpell,

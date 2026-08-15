@@ -12,17 +12,29 @@ warnings.filterwarnings(
 from fastapi.testclient import TestClient
 from pydantic import Field
 
-from dnd.actions import Attack
-from dnd.controller import Controller, HumanController, PassController, TurnContext
-from dnd.core.base_actions import BaseAction
+from dnd.actions.standard import (
+    Attack,
+)
+from dnd.controller import (
+    Controller,
+    HumanController,
+    PassController,
+    TurnContext,
+)
+from dnd.core.base_actions import (
+    BaseAction,
+)
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_object import BaseObject
-from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import EventQueue
+from dnd.types.equipment import WeaponSlot
+from dnd.core.events.events_registry import (
+    EventQueue,
+)
 from dnd.core.gridmap import get_map
-from dnd.core.life_types import LifeState
+from dnd.types.life import LifeState
 from dnd.core.values import BaseValue
-from dnd.encounter import Encounter, EncounterState, TurnState
+from dnd.encounter import Encounter
+from dnd.types.encounter import EncounterState, TurnState
 from dnd.entity import Entity
 from dnd.monsters.bestiary import create_caster, create_goblin, create_skeleton
 from dnd.monsters.bestiary_content import (

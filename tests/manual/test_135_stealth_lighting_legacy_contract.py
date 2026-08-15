@@ -13,10 +13,22 @@ from enum import StrEnum
 from unittest.mock import patch
 from uuid import UUID, uuid4
 
-from dnd.actions import Attack, Disengage, Dodge, Hide, Move
-from dnd.actions_functional import execute_use_action
-from dnd.blocks.base_item import BaseItem, UsableItem
-from dnd.blocks.equipment import BodyArmor, Weapon
+from dnd.actions.standard import (
+    Attack,
+    Disengage,
+    Dodge,
+    Hide,
+    Move,
+)
+from dnd.actions.operations import execute_use_action
+from dnd.blocks.base_item import (
+    BaseItem,
+    UsableItem,
+)
+from dnd.blocks.equipment import (
+    BodyArmor,
+    Weapon,
+)
 from dnd.conditions import (
     GreaterInvisibilityEffect,
     Hidden,
@@ -24,23 +36,29 @@ from dnd.conditions import (
     Invisible,
     InvisibilityEffect,
 )
-from dnd.core.base_block import BaseBlock, LightLevel, SenseMode, SensesType
+from dnd.core.base_block import BaseBlock
+from dnd.types.world import LightLevel
+from dnd.types.senses import SenseMode, SensesType
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.base_object import BaseObject
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
 from dnd.core.dice import fixed_dice_faces
-from dnd.core.equipment_types import BodyPart, WeaponSlot
-from dnd.core.events import (
+from dnd.types.equipment import BodyPart, WeaponSlot
+from dnd.core.events.resolution_events import (
     DamageRollResultEvent,
+)
+from dnd.core.events.events_registry import (
     EventHandler,
     EventPhase,
     EventQueue,
     EventType,
+)
+from dnd.core.events.check_events import (
     SkillCheckEvent,
 )
 from dnd.core.gridmap import get_map
-from dnd.core.creature_types import DamageType
-from dnd.core.modifiers import AdvantageStatus
+from dnd.types.damage import DamageType
+from dnd.types.rolls import AdvantageStatus
 from dnd.core.values import BaseValue
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item

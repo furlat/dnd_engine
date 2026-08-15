@@ -12,7 +12,7 @@ from dnd.core.content.durable_characters import (
     CharacterHoldingsRevision,
     CharacterLoadoutRevisionV1,
 )
-from dnd.core.progression import MulticlassSlotRoundingPolicy
+from dnd.types.progression import MulticlassSlotRoundingPolicy
 
 
 class CharacterDeploymentSnapshot(BaseModel):

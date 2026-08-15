@@ -13,7 +13,9 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
 
-from dnd.actions import SpellAction
+from dnd.actions.standard import (
+    SpellAction,
+)
 from dnd.core.content.dependencies import (
     ContentDependency,
     ContentDependencyPhase,
@@ -26,8 +28,8 @@ from dnd.core.content.registration import (
     get_content_declaration,
 )
 from dnd.core.content.runtime import RuntimeBehaviorKind
-from dnd.core.events import AbilityName
-from dnd.core.creature_types import DamageType
+from dnd.types.abilities import AbilityName
+from dnd.types.damage import DamageType
 import dnd.spells.abjuration as abjuration
 import dnd.spells.conjuration as conjuration
 import dnd.spells.divination as divination
@@ -315,11 +317,11 @@ SPELL_CATALOG_METADATA_SPECS: tuple[
     )),
     (evocation.SacredFlame, _catalog(
         'sacred_flame', 'Target must succeed on DEX save or take radiant damage', 'entity', 'ranged', 60, 'single_projectile',
-        projectile='radiance', damage=(DamageType.RADIANT,), saves=_saving_throws('dexterity'), tags=('radiant', 'radiance'),
+        projectile='radiance', damage=(DamageType.RADIANT,), saves=_saving_throws(AbilityName.DEXTERITY), tags=('radiant', 'radiance'),
     )),
     (conjuration.PoisonSpray, _catalog(
         'poison_spray', 'CON save or 1d12 poison (10ft range)', 'entity', 'ranged', 10, 'single_projectile',
-        projectile='spray', damage=(DamageType.POISON,), saves=_saving_throws('constitution'), tags=('poison', 'spray'),
+        projectile='spray', damage=(DamageType.POISON,), saves=_saving_throws(AbilityName.CONSTITUTION), tags=('poison', 'spray'),
     )),
     (evocation.RayOfFrost, _catalog(
         'ray_of_frost', 'Ranged spell attack, 1d8 cold, target speed -10ft', 'entity', 'ranged', 60, 'ray',
@@ -327,7 +329,7 @@ SPELL_CATALOG_METADATA_SPECS: tuple[
     )),
     (conjuration.AcidSplash, _catalog(
         'acid_splash', '1-2 targets within 5ft of each other, DEX save or 1d6 acid', 'multi_entity', 'ranged', 60, 'missile_volley',
-        projectile='orb', damage=(DamageType.ACID,), saves=_saving_throws('dexterity'), multi_target=_multi_target(1, 2, False, projectiles_per_cast=2), tags=('acid', 'orb'),
+        projectile='orb', damage=(DamageType.ACID,), saves=_saving_throws(AbilityName.DEXTERITY), multi_target=_multi_target(1, 2, False, projectiles_per_cast=2), tags=('acid', 'orb'),
     )),
     (necromancy.ChillTouch, _catalog(
         'chill_touch', "1d8 necrotic, target can't heal. Undead: disadvantage vs caster.", 'entity', 'ranged', 120, 'single_projectile',
@@ -366,18 +368,18 @@ SPELL_CATALOG_METADATA_SPECS: tuple[
     )),
     (evocation.BurningHands, _catalog(
         'burning_hands', '15ft cone of fire dealing 3d6 fire damage (DEX save half)', 'position_aoe', 'self', 0, 'aoe',
-        area=_area('cone', length_ft=15), damage=(DamageType.FIRE,), saves=_saving_throws('dexterity'), tags=('fire', 'cone'),
+        area=_area('cone', length_ft=15), damage=(DamageType.FIRE,), saves=_saving_throws(AbilityName.DEXTERITY), tags=('fire', 'cone'),
     )),
     (evocation.Thunderwave, _catalog(
         'thunderwave', '15ft cube dealing 2d8 thunder + 10ft push on fail (CON save)', 'position_aoe', 'self', 0, 'aoe',
-        area=_area('cube', length_ft=15, width_ft=15, height_ft=15), damage=(DamageType.THUNDER,), saves=_saving_throws('constitution'), tags=('thunder', 'cube'),
+        area=_area('cube', length_ft=15, width_ft=15, height_ft=15), damage=(DamageType.THUNDER,), saves=_saving_throws(AbilityName.CONSTITUTION), tags=('thunder', 'cube'),
     )),
     (necromancy.FalseLife, _catalog(
         'false_life', 'Gain 1d4+4 temporary hit points (+5 per upcast level)', 'self', 'self', 0, 'self',
     )),
     (enchantment.CharmPerson, _catalog(
         'charm_person', 'WIS save or charmed. Advantage if fighting.', 'multi_entity', 'ranged', 30, 'none',
-        saves=_saving_throws('wisdom'), multi_target=_multi_target(1, 1, False),
+        saves=_saving_throws(AbilityName.WISDOM), multi_target=_multi_target(1, 1, False),
     )),
     (enchantment.Sleep, _catalog(
         'sleep', 'Roll 5d8 HP pool. Affects creatures in order of lowest HP.', 'position_aoe', 'ranged', 90, 'aoe',
@@ -393,11 +395,11 @@ SPELL_CATALOG_METADATA_SPECS: tuple[
     )),
     (conjuration.Grease, _catalog(
         'grease', '10ft square difficult terrain, DEX save or prone', 'position', 'ranged', 60, 'aoe',
-        area=_area('cube', length_ft=10, width_ft=10, height_ft=10), saves=_saving_throws('dexterity'), tags=('cube',),
+        area=_area('cube', length_ft=10, width_ft=10, height_ft=10), saves=_saving_throws(AbilityName.DEXTERITY), tags=('cube',),
     )),
     (conjuration.Entangle, _catalog(
         'entangle', '20ft square difficult terrain; STR save or restrained', 'position', 'ranged', 90, 'aoe',
-        area=_area('cube', length_ft=20, width_ft=20, height_ft=20), saves=_saving_throws('strength'), concentration=True, tags=('cube', 'concentration'),
+        area=_area('cube', length_ft=20, width_ft=20, height_ft=20), saves=_saving_throws(AbilityName.STRENGTH), concentration=True, tags=('cube', 'concentration'),
     )),
     (conjuration.FogCloud, _catalog(
         'fog_cloud', '20ft sphere heavily obscured fog (blocks darkvision)', 'position', 'ranged', 120, 'aoe',
@@ -405,7 +407,7 @@ SPELL_CATALOG_METADATA_SPECS: tuple[
     )),
     (enchantment.Bane, _catalog(
         'bane', 'Up to 3 enemies: CHA save or -1d4 on attacks and saves', 'multi_entity', 'ranged', 30, 'none',
-        saves=_saving_throws('charisma'), concentration=True, multi_target=_multi_target(1, 3, False), tags=('concentration',),
+        saves=_saving_throws(AbilityName.CHARISMA), concentration=True, multi_target=_multi_target(1, 3, False), tags=('concentration',),
     )),
     (enchantment.Bless, _catalog(
         'bless', 'Up to 3 allies: +1d4 on attacks and saves', 'multi_entity', 'ranged', 30, 'none',
@@ -420,7 +422,7 @@ SPELL_CATALOG_METADATA_SPECS: tuple[
     )),
     (enchantment.Command, _catalog(
         'command', 'WIS save or follow a one-word command (Grovel/Flee/Halt)', 'entity', 'ranged', 60, 'none',
-        saves=_saving_throws('wisdom'),
+        saves=_saving_throws(AbilityName.WISDOM),
     )),
     (evocation.CureWounds, _catalog(
         'cure_wounds', 'Touch a creature to restore 1d8 + modifier HP', 'entity', 'touch', 5, 'touch',
@@ -440,15 +442,15 @@ SPELL_CATALOG_METADATA_SPECS: tuple[
     )),
     (abjuration.Sanctuary, _catalog(
         'sanctuary', 'Ward: attackers must WIS save; breaks on offensive action', 'entity', 'ranged', 30, 'none',
-        saves=_saving_throws('wisdom'),
+        saves=_saving_throws(AbilityName.WISDOM),
     )),
     (enchantment.HoldPerson, _catalog(
         'hold_person', 'Target must succeed on WIS save or be paralyzed', 'entity', 'ranged', 60, 'none',
-        saves=_saving_throws('wisdom'), concentration=True, tags=('concentration',),
+        saves=_saving_throws(AbilityName.WISDOM), concentration=True, tags=('concentration',),
     )),
     (evocation.Shatter, _catalog(
         'shatter', '10ft radius sphere dealing 3d8 thunder damage (CON save half)', 'position_aoe', 'ranged', 60, 'aoe_projectile',
-        projectile='orb', area=_area('sphere', radius_ft=10), damage=(DamageType.THUNDER,), saves=_saving_throws('constitution'), tags=('thunder', 'orb', 'sphere'),
+        projectile='orb', area=_area('sphere', radius_ft=10), damage=(DamageType.THUNDER,), saves=_saving_throws(AbilityName.CONSTITUTION), tags=('thunder', 'orb', 'sphere'),
     )),
     (evocation.ScorchingRay, _catalog(
         'scorching_ray', '3 rays, each 2d6 fire, ranged spell attack per ray', 'multi_entity', 'ranged', 120, 'ray',
@@ -463,7 +465,7 @@ SPELL_CATALOG_METADATA_SPECS: tuple[
     )),
     (necromancy.BlindnessDeafness, _catalog(
         'blindness_deafness', 'CON save or Blinded/Deafened. Repeat save each turn.', 'multi_entity', 'ranged', 30, 'none',
-        saves=_saving_throws('constitution'), multi_target=_multi_target(1, 1, False),
+        saves=_saving_throws(AbilityName.CONSTITUTION), multi_target=_multi_target(1, 1, False),
     )),
     (transmutation.SpikeGrowth, _catalog(
         'spike_growth', '20ft radius difficult terrain, 2d4 piercing per 5ft traveled', 'position', 'ranged', 150, 'aoe',
@@ -471,7 +473,7 @@ SPELL_CATALOG_METADATA_SPECS: tuple[
     )),
     (conjuration.Web, _catalog(
         'web', '20ft cube of webs, DEX save or restrained, can escape with STR check', 'position', 'ranged', 60, 'aoe',
-        area=_area('cube', length_ft=20, width_ft=20, height_ft=20), saves=_saving_throws('dexterity'), concentration=True, tags=('cube', 'concentration'),
+        area=_area('cube', length_ft=20, width_ft=20, height_ft=20), saves=_saving_throws(AbilityName.DEXTERITY), concentration=True, tags=('cube', 'concentration'),
     )),
     (illusion.Invisibility, _catalog(
         'invisibility', 'Concentration. Touch target becomes invisible until attacking or casting.', 'entity', 'touch', 5, 'touch',
@@ -486,7 +488,7 @@ SPELL_CATALOG_METADATA_SPECS: tuple[
     )),
     (necromancy.NecroticBless, _catalog(
         'necrotic_bless', '4 targets: undead get +1d4, others CHA save or -1d4', 'multi_entity', 'ranged', 30, 'none',
-        saves=_saving_throws('charisma'), concentration=True, multi_target=_multi_target(1, 4, False), tags=('concentration',),
+        saves=_saving_throws(AbilityName.CHARISMA), concentration=True, multi_target=_multi_target(1, 4, False), tags=('concentration',),
     )),
     (transmutation.DarkvisionSpell, _catalog(
         'darkvision', 'Grant 60ft darkvision to a willing creature', 'entity', 'touch', 5, 'touch',
@@ -496,7 +498,7 @@ SPELL_CATALOG_METADATA_SPECS: tuple[
     )),
     (evocation.GustOfWind, _catalog(
         'gust_of_wind', '60ft line of wind, STR save or pushed 15ft, difficult terrain', 'position_aoe', 'self', 0, 'aoe',
-        area=_area('line', length_ft=60, width_ft=10), saves=_saving_throws('strength'), concentration=True, tags=('line', 'concentration'),
+        area=_area('line', length_ft=60, width_ft=10), saves=_saving_throws(AbilityName.STRENGTH), concentration=True, tags=('line', 'concentration'),
     )),
     (transmutation.EnhanceAbility, _catalog(
         'enhance_ability', "Advantage on one ability's checks (concentration)", 'entity', 'touch', 5, 'touch',
@@ -504,7 +506,7 @@ SPELL_CATALOG_METADATA_SPECS: tuple[
     )),
     (transmutation.EnlargeReduce, _catalog(
         'enlarge_reduce', 'Change creature size, STR advantage/disadvantage, +/-1d4 weapon damage', 'entity', 'ranged', 30, 'none',
-        saves=_saving_throws('constitution'), concentration=True, tags=('concentration',),
+        saves=_saving_throws(AbilityName.CONSTITUTION), concentration=True, tags=('concentration',),
     )),
     (illusion.Silence, _catalog(
         'silence', '20ft sphere: no sound, blocks verbal spells, deafens (concentration)', 'position', 'ranged', 120, 'aoe',
@@ -529,15 +531,15 @@ SPELL_CATALOG_METADATA_SPECS: tuple[
     )),
     (conjuration.CallLightning, _catalog(
         'call_lightning', 'Summon storm cloud, strike with lightning each turn', 'entity', 'ranged', 120, 'single_projectile',
-        projectile='bolt', damage=(DamageType.LIGHTNING,), saves=_saving_throws('dexterity'), concentration=True, tags=('lightning', 'bolt', 'concentration'),
+        projectile='bolt', damage=(DamageType.LIGHTNING,), saves=_saving_throws(AbilityName.DEXTERITY), concentration=True, tags=('lightning', 'bolt', 'concentration'),
     )),
     (evocation.Fireball, _catalog(
         'fireball', '20ft radius explosion dealing 8d6 fire damage (DEX save half)', 'position_aoe', 'ranged', 150, 'aoe_projectile',
-        projectile='orb', area=_area('sphere', radius_ft=20), damage=(DamageType.FIRE,), saves=_saving_throws('dexterity'), classes=('wizard', 'sorcerer'), tags=('fire', 'orb', 'explosion'),
+        projectile='orb', area=_area('sphere', radius_ft=20), damage=(DamageType.FIRE,), saves=_saving_throws(AbilityName.DEXTERITY), classes=('wizard', 'sorcerer'), tags=('fire', 'orb', 'explosion'),
     )),
     (evocation.LightningBolt, _catalog(
         'lightning_bolt', '100ft×5ft line dealing 8d6 lightning damage (DEX save half)', 'position_aoe', 'self', 0, 'aoe',
-        area=_area('line', length_ft=100, width_ft=5), damage=(DamageType.LIGHTNING,), saves=_saving_throws('dexterity'), tags=('lightning', 'line'),
+        area=_area('line', length_ft=100, width_ft=5), damage=(DamageType.LIGHTNING,), saves=_saving_throws(AbilityName.DEXTERITY), tags=('lightning', 'line'),
     )),
     (abjuration.ProtectionFromEnergy, _catalog(
         'protection_from_energy', 'Grant resistance to one energy type (acid/cold/fire/lightning/thunder)', 'entity', 'touch', 5, 'touch',
@@ -545,15 +547,15 @@ SPELL_CATALOG_METADATA_SPECS: tuple[
     )),
     (illusion.Fear, _catalog(
         'fear', '30ft cone, WIS save or Frightened + must Dash away', 'position_aoe', 'self', 0, 'aoe',
-        area=_area('cone', length_ft=30), saves=_saving_throws('wisdom'), concentration=True, tags=('cone', 'concentration'),
+        area=_area('cone', length_ft=30), saves=_saving_throws(AbilityName.WISDOM), concentration=True, tags=('cone', 'concentration'),
     )),
     (illusion.HypnoticPattern, _catalog(
         'hypnotic_pattern', '30ft cube, WIS save or Charmed + Incapacitated', 'position_aoe', 'ranged', 120, 'aoe_projectile',
-        projectile='orb', area=_area('cube', length_ft=30, width_ft=30, height_ft=30), saves=_saving_throws('wisdom'), concentration=True, tags=('orb', 'cube', 'concentration'),
+        projectile='orb', area=_area('cube', length_ft=30, width_ft=30, height_ft=30), saves=_saving_throws(AbilityName.WISDOM), concentration=True, tags=('orb', 'cube', 'concentration'),
     )),
     (conjuration.SpiritGuardians, _catalog(
         'spirit_guardians', '15ft sphere around caster, enemies take 3d8 radiant (WIS half), speed halved', 'self', 'self', 0, 'aoe',
-        area=_area('sphere', radius_ft=15), damage=(DamageType.RADIANT,), saves=_saving_throws('wisdom'), concentration=True, tags=('radiant', 'sphere', 'concentration'),
+        area=_area('sphere', radius_ft=15), damage=(DamageType.RADIANT,), saves=_saving_throws(AbilityName.WISDOM), concentration=True, tags=('radiant', 'sphere', 'concentration'),
     )),
     (conjuration.Daylight, _catalog(
         'daylight', '60ft sphere very bright light, reveals hidden, dispels darkness', 'position', 'ranged', 60, 'aoe',
@@ -561,7 +563,7 @@ SPELL_CATALOG_METADATA_SPECS: tuple[
     )),
     (transmutation.Slow, _catalog(
         'slow', '40ft cube, WIS save or Slowed', 'position_aoe', 'ranged', 120, 'aoe',
-        area=_area('cube', length_ft=40, width_ft=40, height_ft=40), saves=_saving_throws('wisdom'), concentration=True, tags=('cube', 'concentration'),
+        area=_area('cube', length_ft=40, width_ft=40, height_ft=40), saves=_saving_throws(AbilityName.WISDOM), concentration=True, tags=('cube', 'concentration'),
     )),
     (transmutation.Haste, _catalog(
         'haste', 'Double speed, +2 AC, DEX advantage, and one restricted action', 'entity', 'ranged', 30, 'none',
@@ -569,11 +571,11 @@ SPELL_CATALOG_METADATA_SPECS: tuple[
     )),
     (conjuration.StinkingCloud, _catalog(
         'stinking_cloud', '20ft sphere nauseating fog, CON save or spend action', 'position', 'ranged', 90, 'aoe',
-        area=_area('sphere', radius_ft=20), saves=_saving_throws('constitution'), concentration=True, tags=('sphere', 'concentration'),
+        area=_area('sphere', radius_ft=20), saves=_saving_throws(AbilityName.CONSTITUTION), concentration=True, tags=('sphere', 'concentration'),
     )),
     (conjuration.SleetStorm, _catalog(
         'sleet_storm', '40ft cylinder: difficult terrain, heavily obscured, DEX save/prone, conc disruption', 'position', 'ranged', 150, 'aoe',
-        area=_area('cylinder', radius_ft=40, height_ft=20), saves=_saving_throws('dexterity', 'constitution'), concentration=True, tags=('cylinder', 'concentration'),
+        area=_area('cylinder', radius_ft=40, height_ft=20), saves=_saving_throws(AbilityName.DEXTERITY, AbilityName.CONSTITUTION), concentration=True, tags=('cylinder', 'concentration'),
     )),
     (evocation.MassHealingWord, _catalog(
         'mass_healing_word', 'Bonus action: heal up to 6 allies for 1d4 + modifier HP', 'multi_entity', 'ranged', 60, 'none',
@@ -588,11 +590,11 @@ SPELL_CATALOG_METADATA_SPECS: tuple[
     )),
     (necromancy.BestowCurse, _catalog(
         'bestow_curse', 'Touch: WIS save or be cursed (concentration)', 'entity', 'touch', 5, 'touch',
-        projectile='touch', saves=_saving_throws('wisdom'), concentration=True, tags=('touch', 'concentration'),
+        projectile='touch', saves=_saving_throws(AbilityName.WISDOM), concentration=True, tags=('touch', 'concentration'),
     )),
     (necromancy.Blight, _catalog(
         'blight', '8d8 necrotic, CON save half. No effect on undead/constructs. Plants: disadvantage + max damage.', 'entity', 'ranged', 30, 'ray',
-        projectile='ray', damage=(DamageType.NECROTIC,), saves=_saving_throws('constitution'), tags=('necrotic', 'ray'),
+        projectile='ray', damage=(DamageType.NECROTIC,), saves=_saving_throws(AbilityName.CONSTITUTION), tags=('necrotic', 'ray'),
     )),
     (abjuration.Stoneskin, _catalog(
         'stoneskin', 'Grant resistance to B/P/S damage', 'entity', 'touch', 5, 'touch',
@@ -604,22 +606,22 @@ SPELL_CATALOG_METADATA_SPECS: tuple[
     )),
     (evocation.IceStorm, _catalog(
         'ice_storm', '20ft cylinder: 2d8 bludg + 4d6 cold (DEX half), difficult terrain 1 round', 'position_aoe', 'ranged', 60, 'aoe_projectile',
-        projectile='rain', area=_area('cylinder', radius_ft=20, height_ft=40), damage=(DamageType.BLUDGEONING, DamageType.COLD), saves=_saving_throws('dexterity'), tags=('ice', 'hail', 'storm'),
+        projectile='rain', area=_area('cylinder', radius_ft=20, height_ft=40), damage=(DamageType.BLUDGEONING, DamageType.COLD), saves=_saving_throws(AbilityName.DEXTERITY), tags=('ice', 'hail', 'storm'),
     )),
     (conjuration.DimensionDoor, _catalog(
         'dimension_door', 'Teleport to a visible position within 500ft', 'position', 'ranged', 500, 'none',
     )),
     (abjuration.Banishment, _catalog(
         'banishment', 'CHA save or banished (removed from play), concentration', 'entity', 'ranged', 60, 'none',
-        saves=_saving_throws('charisma'), concentration=True, tags=('concentration',),
+        saves=_saving_throws(AbilityName.CHARISMA), concentration=True, tags=('concentration',),
     )),
     (conjuration.GuardianOfFaith, _catalog(
         'guardian_of_faith', 'Summon spectral guardian: 20 radiant (DEX half), 60 damage budget', 'position', 'ranged', 30, 'aoe',
-        area=_area('sphere', radius_ft=10), damage=(DamageType.RADIANT,), saves=_saving_throws('dexterity'), tags=('radiant', 'sphere'),
+        area=_area('sphere', radius_ft=10), damage=(DamageType.RADIANT,), saves=_saving_throws(AbilityName.DEXTERITY), tags=('radiant', 'sphere'),
     )),
     (conjuration.EvardsBlackTentacles, _catalog(
         'evards_black_tentacles', '20ft square difficult terrain; DEX save or 3d6 bludgeoning and restrained', 'position', 'ranged', 90, 'aoe',
-        area=_area('cube', length_ft=20, width_ft=20, height_ft=20), damage=(DamageType.BLUDGEONING,), saves=_saving_throws('dexterity'), concentration=True, tags=('bludgeoning', 'cube', 'concentration'),
+        area=_area('cube', length_ft=20, width_ft=20, height_ft=20), damage=(DamageType.BLUDGEONING,), saves=_saving_throws(AbilityName.DEXTERITY), concentration=True, tags=('bludgeoning', 'cube', 'concentration'),
     )),
     (abjuration.DeathWard, _catalog(
         'death_ward', 'Touch: once, survive lethal damage at 1 HP', 'entity', 'touch', 5, 'touch',
@@ -629,27 +631,27 @@ SPELL_CATALOG_METADATA_SPECS: tuple[
     )),
     (enchantment.HoldMonster, _catalog(
         'hold_monster', 'Target must succeed on WIS save or be paralyzed (not undead)', 'multi_entity', 'ranged', 90, 'none',
-        saves=_saving_throws('wisdom'), concentration=True, multi_target=_multi_target(1, 1, False), tags=('concentration',),
+        saves=_saving_throws(AbilityName.WISDOM), concentration=True, multi_target=_multi_target(1, 1, False), tags=('concentration',),
     )),
     (evocation.ConeOfCold, _catalog(
         'cone_of_cold', '60ft cone dealing 8d8 cold damage (CON save half)', 'position_aoe', 'self', 0, 'aoe',
-        area=_area('cone', length_ft=60), damage=(DamageType.COLD,), saves=_saving_throws('constitution'), tags=('cold', 'cone'),
+        area=_area('cone', length_ft=60), damage=(DamageType.COLD,), saves=_saving_throws(AbilityName.CONSTITUTION), tags=('cold', 'cone'),
     )),
     (conjuration.Cloudkill, _catalog(
         'cloudkill', '20ft sphere poison fog, 5d8 poison (CON half), moves away from caster', 'position', 'ranged', 120, 'aoe_projectile',
-        projectile='orb', area=_area('sphere', radius_ft=20), damage=(DamageType.POISON,), saves=_saving_throws('constitution'), concentration=True, tags=('poison', 'orb', 'sphere', 'concentration'),
+        projectile='orb', area=_area('sphere', radius_ft=20), damage=(DamageType.POISON,), saves=_saving_throws(AbilityName.CONSTITUTION), concentration=True, tags=('poison', 'orb', 'sphere', 'concentration'),
     )),
     (conjuration.InsectPlague, _catalog(
         'insect_plague', '20ft sphere swarming locusts, 4d10 piercing (CON half)', 'position', 'ranged', 60, 'aoe_projectile',
-        projectile='orb', area=_area('sphere', radius_ft=20), damage=(DamageType.PIERCING,), saves=_saving_throws('constitution'), concentration=True, tags=('piercing', 'orb', 'sphere', 'concentration'),
+        projectile='orb', area=_area('sphere', radius_ft=20), damage=(DamageType.PIERCING,), saves=_saving_throws(AbilityName.CONSTITUTION), concentration=True, tags=('piercing', 'orb', 'sphere', 'concentration'),
     )),
     (transmutation.Telekinesis, _catalog(
         'telekinesis', 'Telekinetically grab, move, or restrain a creature (STR save)', 'entity', 'ranged', 60, 'ray',
-        projectile='ray', saves=_saving_throws('strength'), concentration=True, tags=('ray', 'concentration'),
+        projectile='ray', saves=_saving_throws(AbilityName.STRENGTH), concentration=True, tags=('ray', 'concentration'),
     )),
     (evocation.FlameStrike, _catalog(
         'flame_strike', '10ft cylinder: 4d6 fire + 4d6 radiant (DEX half)', 'position_aoe', 'ranged', 60, 'aoe_projectile',
-        projectile='radiance', area=_area('cylinder', radius_ft=10, height_ft=40), damage=(DamageType.FIRE, DamageType.RADIANT), saves=_saving_throws('dexterity'), tags=('fire', 'radiant', 'cylinder'),
+        projectile='radiance', area=_area('cylinder', radius_ft=10, height_ft=40), damage=(DamageType.FIRE, DamageType.RADIANT), saves=_saving_throws(AbilityName.DEXTERITY), tags=('fire', 'radiant', 'cylinder'),
     )),
     (evocation.MassCureWounds, _catalog(
         'mass_cure_wounds', 'AoE heal up to 6 allies in 30ft sphere for 3d8 + modifier HP', 'position_aoe', 'ranged', 60, 'aoe',
@@ -660,26 +662,26 @@ SPELL_CATALOG_METADATA_SPECS: tuple[
     )),
     (evocation.CircleOfDeath, _catalog(
         'circle_of_death', '60ft radius sphere dealing 8d6 necrotic damage (CON save half)', 'position_aoe', 'ranged', 150, 'aoe_projectile',
-        projectile='orb', area=_area('sphere', radius_ft=60), damage=(DamageType.NECROTIC,), saves=_saving_throws('constitution'), tags=('necrotic', 'orb', 'sphere'),
+        projectile='orb', area=_area('sphere', radius_ft=60), damage=(DamageType.NECROTIC,), saves=_saving_throws(AbilityName.CONSTITUTION), tags=('necrotic', 'orb', 'sphere'),
     )),
     (transmutation.Disintegrate, _catalog(
         'disintegrate', 'DEX save or 10d6+40 force damage. 0 on save.', 'entity', 'ranged', 60, 'ray',
-        projectile='ray', damage=(DamageType.FORCE,), saves=_saving_throws('dexterity'), tags=('force', 'ray'),
+        projectile='ray', damage=(DamageType.FORCE,), saves=_saving_throws(AbilityName.DEXTERITY), tags=('force', 'ray'),
     )),
     (divination.TrueSeeing, _catalog(
         'true_seeing', 'Grant truesight 120ft', 'entity', 'touch', 5, 'touch',
     )),
     (evocation.Sunbeam, _catalog(
         'sunbeam', '60ft line beam, 6d8 radiant + Blinded (CON half), repeatable', 'self', 'self', 0, 'beam',
-        projectile='beam', area=_area('line', length_ft=60, width_ft=5), damage=(DamageType.RADIANT,), saves=_saving_throws('constitution'), concentration=True, tags=('radiant', 'beam', 'line', 'concentration'),
+        projectile='beam', area=_area('line', length_ft=60, width_ft=5), damage=(DamageType.RADIANT,), saves=_saving_throws(AbilityName.CONSTITUTION), concentration=True, tags=('radiant', 'beam', 'line', 'concentration'),
     )),
     (evocation.ChainLightning, _catalog(
         'chain_lightning', '10d8 lightning to primary + up to 3 secondaries (DEX half)', 'entity', 'ranged', 150, 'single_projectile',
-        projectile='bolt', damage=(DamageType.LIGHTNING,), saves=_saving_throws('dexterity'), tags=('lightning', 'bolt'),
+        projectile='bolt', damage=(DamageType.LIGHTNING,), saves=_saving_throws(AbilityName.DEXTERITY), tags=('lightning', 'bolt'),
     )),
     (necromancy.Eyebite, _catalog(
         'eyebite', 'WIS save or Asleep/Panicked/Sickened, repeatable each turn', 'self', 'self', 0, 'ray',
-        projectile='ray', saves=_saving_throws('wisdom'), concentration=True, tags=('ray', 'concentration'),
+        projectile='ray', saves=_saving_throws(AbilityName.WISDOM), concentration=True, tags=('ray', 'concentration'),
     )),
     (abjuration.GlobeOfInvulnerability, _catalog(
         'globe_of_invulnerability', '10ft sphere blocks spells L5 or lower, concentration', 'self', 'self', 0, 'aoe',
@@ -691,18 +693,18 @@ SPELL_CATALOG_METADATA_SPECS: tuple[
     )),
     (necromancy.Harm, _catalog(
         'harm', 'CON save, 14d6 necrotic, half on save, min 1 HP', 'entity', 'ranged', 60, 'touch',
-        projectile='touch', damage=(DamageType.NECROTIC,), saves=_saving_throws('constitution'), tags=('necrotic', 'touch'),
+        projectile='touch', damage=(DamageType.NECROTIC,), saves=_saving_throws(AbilityName.CONSTITUTION), tags=('necrotic', 'touch'),
     )),
     (conjuration.HeroesFeast, _catalog(
         'heroes_feast', 'Summon feast: eat for poison/fear immunity, WIS save advantage, +HP', 'position', 'ranged', 30, 'none',
     )),
     (evocation.PrismaticSpray, _catalog(
         'prismatic_spray', '60ft cone, random color effect per target', 'position_aoe', 'self', 0, 'aoe',
-        area=_area('cone', length_ft=60), damage=(DamageType.FIRE, DamageType.ACID, DamageType.LIGHTNING, DamageType.POISON, DamageType.COLD), saves=_saving_throws('dexterity', 'constitution', 'wisdom'), tags=('fire', 'acid', 'lightning', 'poison', 'cold', 'cone'),
+        area=_area('cone', length_ft=60), damage=(DamageType.FIRE, DamageType.ACID, DamageType.LIGHTNING, DamageType.POISON, DamageType.COLD), saves=_saving_throws(AbilityName.DEXTERITY, AbilityName.CONSTITUTION, AbilityName.WISDOM), tags=('fire', 'acid', 'lightning', 'poison', 'cold', 'cone'),
     )),
     (necromancy.FingerOfDeath, _catalog(
         'finger_of_death', '7d8+30 necrotic, CON save half', 'entity', 'ranged', 60, 'ray',
-        projectile='ray', damage=(DamageType.NECROTIC,), saves=_saving_throws('constitution'), tags=('necrotic', 'ray'),
+        projectile='ray', damage=(DamageType.NECROTIC,), saves=_saving_throws(AbilityName.CONSTITUTION), tags=('necrotic', 'ray'),
     )),
     (transmutation.Regenerate, _catalog(
         'regenerate', 'Heal 4d8+15 instantly, then 1 HP/round for 10 rounds', 'entity', 'touch', 5, 'touch',
@@ -714,15 +716,15 @@ SPELL_CATALOG_METADATA_SPECS: tuple[
     )),
     (evocation.Sunburst, _catalog(
         'sunburst', '60ft sphere, 12d6 radiant, CON save or blinded', 'position_aoe', 'ranged', 150, 'aoe',
-        area=_area('sphere', radius_ft=60), damage=(DamageType.RADIANT,), saves=_saving_throws('constitution'), tags=('radiant', 'sphere'),
+        area=_area('sphere', radius_ft=60), damage=(DamageType.RADIANT,), saves=_saving_throws(AbilityName.CONSTITUTION), tags=('radiant', 'sphere'),
     )),
     (enchantment.PowerWordStun, _catalog(
         'power_word_stun', 'If target has <=150 HP, it is stunned. CON save each turn to end.', 'entity', 'ranged', 60, 'none',
-        saves=_saving_throws('constitution'),
+        saves=_saving_throws(AbilityName.CONSTITUTION),
     )),
     (conjuration.IncendiaryCloud, _catalog(
         'incendiary_cloud', '20ft sphere fire cloud, 10d8 fire (DEX half), heavily obscured', 'position', 'ranged', 60, 'aoe',
-        area=_area('sphere', radius_ft=20), damage=(DamageType.FIRE,), saves=_saving_throws('dexterity'), concentration=True, tags=('fire', 'sphere', 'concentration'),
+        area=_area('sphere', radius_ft=20), damage=(DamageType.FIRE,), saves=_saving_throws(AbilityName.DEXTERITY), concentration=True, tags=('fire', 'sphere', 'concentration'),
     )),
     (abjuration.AntimagicField, _catalog(
         'antimagic_field', '10ft sphere suppresses all magic, concentration', 'self', 'self', 0, 'aoe',

@@ -8,7 +8,9 @@ from uuid import uuid4
 import pytest
 from pydantic import BaseModel
 
-from dnd.actions import SpellEvent
+from dnd.actions.standard import (
+    SpellEvent,
+)
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
@@ -42,7 +44,6 @@ from dnd.core.content.descriptors import (
 from dnd.core.content.durable_characters import RitualPreparationPolicy
 from dnd.core.content.durable_characters import (
     AbilityScoreAllocation,
-    AbilityScoreName,
     BackgroundDefinition,
     BuildChoiceRequirement,
     CharacterDefinitionRevisionV2,
@@ -61,6 +62,7 @@ from dnd.core.content.durable_characters import (
     SpellKnownChoice,
     SpellReplacementChoice,
 )
+from dnd.types.abilities import AbilityName
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.content.origin_support import OriginRuntimeSupport
 from dnd.core.content.materialization import CreatureDeploymentRole
@@ -78,8 +80,11 @@ from dnd.core.content.registration import (
 )
 from dnd.core.content.registry import FrozenContentRegistry
 from dnd.core.content.runtime import RuntimeBehaviorKind
-from dnd.core.events import EventPhase, EventType
-from dnd.core.progression import CasterProgression
+from dnd.core.events.events_registry import (
+    EventPhase,
+    EventType,
+)
+from dnd.types.progression import CasterProgression
 from dnd.entity import Entity, EntityConfig
 from dnd.player_character_body import PLAYER_CHARACTER_BODY_RECIPE
 from dnd.runtime_reset import reset_engine_runtime
@@ -205,7 +210,7 @@ def _spell_dependency(spell_ref: ContentRef) -> ContentDependency:
 def _caster_definition(
     *,
     source_id: str,
-    ability: AbilityScoreName,
+    ability: AbilityName,
     spell_refs: tuple[ContentRef, ...],
     level_definitions: tuple[ClassLevelDefinition, ...],
 ) -> ClassDefinition:
@@ -294,8 +299,8 @@ def _definition(
             charisma=8,
         ),
         flexible_ability_bonuses=FlexibleAbilityBonusSelection(
-            plus_two=AbilityScoreName.CHARISMA,
-            plus_one=AbilityScoreName.WISDOM,
+            plus_two=AbilityName.CHARISMA,
+            plus_one=AbilityName.WISDOM,
         ),
         class_levels=levels,
         earned_character_level=len(levels),
@@ -365,13 +370,13 @@ def test_same_spell_is_owned_and_materialized_once_per_exact_source() -> None:
         (
             "class.arcane",
             "source.arcane",
-            AbilityScoreName.CHARISMA,
+            AbilityName.CHARISMA,
             "class.arcane.level_1.spell",
         ),
         (
             "class.divine",
             "source.divine",
-            AbilityScoreName.WISDOM,
+            AbilityName.WISDOM,
             "class.divine.level_1.spell",
         ),
     ):
@@ -496,7 +501,7 @@ def test_replacement_is_source_local_and_materializes_only_final_spell() -> None
         content_id="class.sorcerer",
         payload=_caster_definition(
             source_id="source.sorcerer",
-            ability=AbilityScoreName.CHARISMA,
+            ability=AbilityName.CHARISMA,
             spell_refs=(fire_ref, missile_ref),
             level_definitions=(
                 ClassLevelDefinition(
@@ -638,7 +643,7 @@ def test_metamagic_cannot_be_selected_again_at_a_later_level() -> None:
         content_id="class.sorcerer",
         payload=_caster_definition(
             source_id="source.sorcerer",
-            ability=AbilityScoreName.CHARISMA,
+            ability=AbilityName.CHARISMA,
             spell_refs=(),
             level_definitions=tuple(
                 ClassLevelDefinition(
@@ -702,13 +707,13 @@ def test_learned_shield_installs_one_shared_exact_handler() -> None:
         (
             "class.arcane",
             "source.arcane",
-            AbilityScoreName.CHARISMA,
+            AbilityName.CHARISMA,
             "class.arcane.level_1.spell",
         ),
         (
             "class.divine",
             "source.divine",
-            AbilityScoreName.WISDOM,
+            AbilityName.WISDOM,
             "class.divine.level_1.spell",
         ),
     ):

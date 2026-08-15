@@ -6,7 +6,10 @@ from uuid import UUID
 from pydantic import Field
 
 from dnd.core.base_block import BaseBlock
-from dnd.blocks.base_item import BaseItem, UsableItem
+from dnd.blocks.base_item import (
+    BaseItem,
+    UsableItem,
+)
 from dnd.core.gridmap import get_map
 
 

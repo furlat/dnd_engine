@@ -16,7 +16,8 @@ from uuid import UUID
 from pydantic import Field, PrivateAttr
 
 from dnd.core.base_conditions import BaseCondition, Duration
-from dnd.core.condition_types import ConditionCategory, DurationType
+from dnd.types.conditions import ConditionCategory, DurationType
+from dnd.types.abilities import AbilityName
 from dnd.core.base_actions import (
     ActionOverrideLease,
     ActionSelectionParameter,
@@ -25,37 +26,43 @@ from dnd.core.base_actions import (
     ActionCategory,
     TargetType,
     Cost,
+)
+from dnd.core.events.action_events import (
     ActionEvent,
 )
-from dnd.core.action_types import CostType, spell_slot_cost_type
+from dnd.types.actions import CostType, spell_slot_cost_type
 from dnd.core.action_execution import MovementTerminationReason
-from dnd.core.events import (
-    Event, EventPhase, EventType, EventHandler, Trigger,
+from dnd.core.events.events_registry import (
+    Event,
+    EventPhase,
+    EventType,
+    EventHandler,
+    Trigger,
+)
+from dnd.core.events.resolution_events import (
     RangeType,
 )
-from dnd.core.spatial_effect_types import SpatialEffectTriggerKind
-from dnd.core.creature_types import DamageType
-from dnd.core.modifiers import (
-    ResistanceModifier,
-    ResistanceStatus,
-)
+from dnd.types.spatial_effects import SpatialEffectTriggerKind
+from dnd.types.damage import DamageType
+from dnd.core.modifiers import ResistanceModifier
+from dnd.types.damage import ResistanceStatus
 from dnd.entity import Entity
-from dnd.actions import (
+from dnd.actions.standard import (
     entity_action_economy_cost_evaluator,
     entity_resource_cost_evaluator,
     Move,
     MovementEvent,
     SpellAction,
 )
-from dnd.actions_functional import apply_action_overrides, clear_action_overrides
-from dnd.core.base_block import MovementMode
+from dnd.actions.operations import apply_action_overrides, clear_action_overrides
+from dnd.types.world import MovementMode
 from dnd.conditions import Charmed, Concentrating, Frightened
-from dnd.content_system.spatial_effect_materialization import (
+from dnd.content.spatial_effect_materialization import (
     materialize_spatial_effect,
 )
-from dnd.spatial_effect_content import DRACONIC_PRESENCE_FIELD_RECIPE
-from dnd.spatial_effects import FieldEffect
-from dnd.spatial_effect_controllers import AreaSpatialEffectController
+from dnd.content.spatial_effect_recipes import DRACONIC_PRESENCE_FIELD_RECIPE
+from dnd.spatial.effect_base import FieldEffect
+from dnd.spatial.effect_controllers import AreaSpatialEffectController
 
 
 
@@ -465,7 +472,7 @@ class DraconicPresenceAura(AreaSpatialEffectController):
 
         request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
-            ability_name="wisdom",
+            ability_name=AbilityName.WISDOM,
             dc=caster.spell_save_dc(),
             parent_event=event.uuid,
             condition_context=self.name,

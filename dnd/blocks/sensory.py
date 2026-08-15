@@ -6,20 +6,30 @@ from pydantic import Field, PrivateAttr
 
 from dataclasses import dataclass
 from collections import defaultdict
-import time
 
-from dnd.action_timing import action_timing_enabled, record_action_timing
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_tiles import Tile
 from dnd.core.elevation import support_distance_feet
 from dnd.core.gridmap import get_map
 from dnd.core.values import ModifiableValue
-from dnd.core.events import (
-    Event, EventType, EventPhase, SensesUpdateHint, SpatialChangeEvent,
-    SpatialEffectChangeEvent, DeathEvent, EventQueue, SensoryUpdateEvent,
+from dnd.core.events.events_registry import (
+    Event,
+    EventType,
+    EventPhase,
+    EventQueue,
+)
+from dnd.core.events.world_events import (
+    SensesUpdateHint,
+    SpatialChangeEvent,
+    SpatialEffectChangeEvent,
+    SensoryUpdateEvent,
     SensoryUpdateReason,
 )
-from dnd.core.base_block import SensesType, SenseMode, LightLevel
+from dnd.core.events.encounter_events import (
+    DeathEvent,
+)
+from dnd.types.senses import SensesType, SenseMode
+from dnd.types.world import LightLevel
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType, EntitySpottedLogData, HazardDetectedLogData
 
 
@@ -427,9 +437,6 @@ def emit_sensory_update_delta(
     Returns:
         The completed sensory event when the snapshots differ, otherwise None.
     """
-    timing = action_timing_enabled()
-    total_started = time.perf_counter() if timing else 0.0
-    started = time.perf_counter() if timing else 0.0
     visible_added = after.visible - before.visible
     visible_removed = before.visible - after.visible
     seen_added = after.seen - before.seen
@@ -482,14 +489,8 @@ def emit_sensory_update_delta(
         light_changed,
     ))
     if not has_delta:
-        if timing:
-            record_action_timing("sensory_callback.emit.delta_ms", started)
-            record_action_timing("sensory_callback.emit.total_ms", total_started)
         return None
 
-    if timing:
-        record_action_timing("sensory_callback.emit.delta_ms", started)
-    started = time.perf_counter() if timing else 0.0
     sensory_event = SensoryUpdateEvent(
         source_entity_uuid=owner_uuid,
         target_entity_uuid=owner_uuid,
@@ -526,15 +527,8 @@ def emit_sensory_update_delta(
         sense_modes_changed=sense_modes_changed,
         sense_modes=_serialize_sense_modes(senses) if sense_modes_changed else None,
     )
-    if timing:
-        record_action_timing("sensory_callback.emit.construct_event_ms", started)
-
-    started = time.perf_counter() if timing else 0.0
     if register_event:
         EventQueue.register(sensory_event)
-    if timing:
-        record_action_timing("sensory_callback.emit.completion_ms", started)
-        record_action_timing("sensory_callback.emit.total_ms", total_started)
     return sensory_event
 
 
@@ -604,84 +598,50 @@ class SpatialSensesCallback:
         Returns:
             The completed sensory event when the observer state changed.
         """
-        timing = action_timing_enabled()
-        total_started = time.perf_counter() if timing else 0.0
-        try:
-            if event.event_type == EventType.SENSORY_UPDATE:
+        if event.event_type == EventType.SENSORY_UPDATE:
+            return
+        reason: Optional[SensoryUpdateReason] = None
+
+        if event.event_type == EventType.DEATH:
+            before = self._snapshot()
+            self._handle_death_event(event)
+            reason = SensoryUpdateReason.DEATH
+
+        elif event.event_type in (
+            EventType.CONDITION_APPLICATION,
+            EventType.CONDITION_REMOVAL,
+            EventType.LIFE_STATE_CHANGE,
+        ):
+            if event.target_entity_uuid != self.owner_uuid:
                 return
-            reason: Optional[SensoryUpdateReason] = None
-
-            if event.event_type == EventType.DEATH:
-                started = time.perf_counter() if timing else 0.0
-                before = self._snapshot()
-                if timing:
-                    record_action_timing("sensory_callback.snapshot_before_ms", started)
-                started = time.perf_counter() if timing else 0.0
-                self._handle_death_event(event)
-                if timing:
-                    record_action_timing("sensory_callback.handle_death_ms", started)
-                reason = SensoryUpdateReason.DEATH
-
-            elif event.event_type in (
-                EventType.CONDITION_APPLICATION,
-                EventType.CONDITION_REMOVAL,
-                EventType.LIFE_STATE_CHANGE,
-            ):
-                if event.target_entity_uuid != self.owner_uuid:
-                    return
-                started = time.perf_counter() if timing else 0.0
-                before = self._snapshot()
-                if timing:
-                    record_action_timing("sensory_callback.snapshot_before_ms", started)
-                started = time.perf_counter() if timing else 0.0
-                self._handle_own_perception_change()
-                if timing:
-                    record_action_timing("sensory_callback.handle_perception_change_ms", started)
-                reason = (
-                    SensoryUpdateReason.LIFE_STATE
-                    if event.event_type == EventType.LIFE_STATE_CHANGE
-                    else SensoryUpdateReason.CONDITION
-                )
-
-            elif event.event_type in self.SPATIAL_EVENTS:
-                started = time.perf_counter() if timing else 0.0
-                might_affect = self._spatial_event_might_affect_self(event)
-                if timing:
-                    record_action_timing("sensory_callback.spatial_filter_ms", started)
-                if not might_affect:
-                    return
-                started = time.perf_counter() if timing else 0.0
-                before = self._snapshot()
-                if timing:
-                    record_action_timing("sensory_callback.snapshot_before_ms", started)
-                started = time.perf_counter() if timing else 0.0
-                reason = self._handle_spatial_event(event)
-                if timing:
-                    record_action_timing("sensory_callback.handle_spatial_event_ms", started)
-                if reason is None:
-                    return
-
-            else:
-                return
-
-            started = time.perf_counter() if timing else 0.0
-            after = self._snapshot()
-            if timing:
-                record_action_timing("sensory_callback.snapshot_after_ms", started)
-            started = time.perf_counter() if timing else 0.0
-            sensory_event = self._emit_sensory_update(
-                event,
-                before,
-                after,
-                reason,
-                register_event=register_event,
+            before = self._snapshot()
+            self._handle_own_perception_change()
+            reason = (
+                SensoryUpdateReason.LIFE_STATE
+                if event.event_type == EventType.LIFE_STATE_CHANGE
+                else SensoryUpdateReason.CONDITION
             )
-            if timing:
-                record_action_timing("sensory_callback.emit_update_ms", started)
-            return sensory_event
-        finally:
-            if timing:
-                record_action_timing("sensory_callback.total_ms", total_started)
+
+        elif event.event_type in self.SPATIAL_EVENTS:
+            might_affect = self._spatial_event_might_affect_self(event)
+            if not might_affect:
+                return
+            before = self._snapshot()
+            reason = self._handle_spatial_event(event)
+            if reason is None:
+                return
+
+        else:
+            return
+
+        after = self._snapshot()
+        return self._emit_sensory_update(
+            event,
+            before,
+            after,
+            reason,
+            register_event=register_event,
+        )
 
     def _spatial_event_might_affect_self(self, event: Event) -> bool:
         """Return whether a spatial event can change this observer's senses."""
@@ -1450,14 +1410,7 @@ class SpatialSensesSystem:
             finally:
                 self.refresh_observer(observer_uuid)
         if sensory_events:
-            timing = action_timing_enabled()
-            started = time.perf_counter() if timing else 0.0
             EventQueue.register_completion_sequence(sensory_events)
-            if timing:
-                record_action_timing(
-                    "sensory_system.register_completion_sequence_ms",
-                    started,
-                )
 
     def _candidate_positions(self, event: SpatialChangeEvent) -> Set[Tuple[int, int]]:
         """Collect all positions represented by a spatial event and its hint."""

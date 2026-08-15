@@ -12,7 +12,8 @@ from uuid import uuid4
 import pytest
 
 from dnd.classes.fighter import create_modified_dice_roll
-from dnd.core.dice import AttackOutcome, DiceRoll, RollType
+from dnd.types.rolls import AttackOutcome, RollType
+from dnd.core.dice import DiceRoll
 from dnd.core.geometry import (
     bresenham_line,
     circle_positions,
@@ -20,7 +21,7 @@ from dnd.core.geometry import (
     line_positions,
     rectangle_positions,
 )
-from dnd.core.values import AdvantageStatus, AutoHitStatus, CriticalStatus
+from dnd.types.rolls import AdvantageStatus, AutoHitStatus, CriticalStatus
 
 
 THIS_FILE = "tests/manual/test_legacy_geometry_dice_coverage.py"

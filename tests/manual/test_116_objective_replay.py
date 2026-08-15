@@ -8,7 +8,9 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from dnd.core.events import EventQueue
+from dnd.core.events.events_registry import (
+    EventQueue,
+)
 from dnd.runtime_reset import reset_engine_runtime
 from server.event_stream import event_stream
 from tests.manual.live_replication_support import (

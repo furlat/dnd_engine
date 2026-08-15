@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
-from dnd.blocks.equipment import BodyArmor, Range, Weapon
+from dnd.blocks.equipment import (
+    BodyArmor,
+    Weapon,
+)
+from dnd.core.events.resolution_events import (
+    Range,
+)
 from dnd.core.content.descriptors import (
     ContentDescriptorSpec,
     ContentOrdering,
@@ -27,17 +33,13 @@ from dnd.core.content.registration import (
     ContentDeclaration,
     get_content_declaration,
 )
-from dnd.core.equipment_types import (
-    ArmorType,
-    BodyPart,
-    WeaponProperty,
+from dnd.types.equipment import ArmorType, BodyPart, WeaponProperty
+from dnd.core.events.resolution_events import (
+    RangeType,
 )
-from dnd.core.events import RangeType
-from dnd.core.creature_types import DamageType
-from dnd.core.modifiers import (
-    AdvantageModifier,
-    AdvantageStatus,
-)
+from dnd.types.damage import DamageType
+from dnd.core.modifiers import AdvantageModifier
+from dnd.types.rolls import AdvantageStatus
 from dnd.core.values import ModifiableValue
 from dnd.items.authored_presentations import (
     authored_item_factory as item_factory,

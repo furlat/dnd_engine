@@ -1,28 +1,37 @@
 """Atomic elevated Jump settlement and takeoff-only reaction truth."""
 
-from dnd.actions import Jump, JumpEvent
+from dnd.actions.standard import (
+    Jump,
+)
+from dnd.core.events.action_events import (
+    JumpEvent,
+)
 from uuid import UUID, uuid4
 
 import pytest
 
-from dnd.core.events import (
+from dnd.core.events.events_registry import (
     Event,
     EventHandler,
     EventPhase,
     EventQueue,
     EventType,
-    MovementProvocationPolicy,
-    MovementTrajectory,
-    StepMovementEvent,
     Trigger,
 )
+from dnd.core.action_execution import (
+    MovementProvocationPolicy,
+)
+from dnd.core.events.world_events import (
+    MovementTrajectory,
+    StepMovementEvent,
+)
 from dnd.core.gridmap import get_map
-from dnd.core.life_types import LifeState
+from dnd.types.life import LifeState
 from dnd.core.positioning import PositionCommitError, PositionPublicationError
 from dnd.core.world_edges import ElevationSurfaceKind
 from dnd.entity import Entity
 from dnd.monsters.bestiary import create_skeleton
-from dnd.reactions import add_opportunity_attack_handler
+from dnd.actions.reactions import add_opportunity_attack_handler
 from tests.engine.support import (
     force_attack_crit,
     force_attack_hit,
