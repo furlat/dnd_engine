@@ -25,7 +25,7 @@ from dnd.blocks.spellcasting import SpellcastingBlock
 from dnd.core.base_actions import (
     BaseAction,
 )
-from dnd.core.content.durable_characters import RitualPreparationPolicy
+from dnd.types.progression import RitualPreparationPolicy
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.types.equipment import ArmorType, WeaponProperty, WeaponSlot
 from dnd.types.abilities import AbilityName
@@ -37,7 +37,7 @@ from dnd.core.feature_grants import AttackMultiplicityGrant
 from dnd.types.damage import DamageType
 from dnd.types.proficiency import ProficiencyMode
 from dnd.types.progression import CasterProgression
-from dnd.entity import Entity, EntityConfig
+from dnd.entities.entity import Entity, EntityConfig
 
 
 class _OwnedAction(BaseAction):
@@ -421,7 +421,7 @@ def test_exact_weapon_training_does_not_overgrant_a_whole_category() -> None:
 
     entity.creature_proficiencies.add_specific_weapon_source(
         source,
-        dagger_ref,
+        dagger_ref.identity_key,
     )
     assert entity.equipment.equip(dagger, WeaponSlot.MELEE_MAIN)
     assert entity.attack_bonus().normalized_score == 5

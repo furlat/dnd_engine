@@ -21,10 +21,10 @@ from dnd.types.equipment import WeaponSlot
 from dnd.types.rolls import AttackOutcome
 from dnd.types.creatures import CreatureType
 from dnd.types.damage import DamageType
-from dnd.core.content.runtime import RuntimeBehaviorKind
+from dnd.types.behaviors import RuntimeBehaviorKind
 from dnd.core.values import ModifiableValue
 
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 
 MAX_SMITE_DICE = 5
 MAX_SMITE_DICE_VS_UNDEAD_OR_FIEND = 6

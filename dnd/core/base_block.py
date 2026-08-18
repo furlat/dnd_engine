@@ -9,10 +9,6 @@ from dnd.types.conditions import (
     HazardFilter,
 )
 from dnd.types.actions import CostType
-from dnd.core.content.runtime import (
-    bind_runtime_behavior,
-    bind_runtime_handler_before_admission,
-)
 from dnd.core.events.events_registry import (
     EventHandler,
     EventQueue,
@@ -727,7 +723,7 @@ class BaseBlock(BaseModel):
         if not self.allow_events_conditions:
             event_handler.remove_from_register()
             return None
-        bind_runtime_handler_before_admission(event_handler)
+        event_handler.bind_behavior_owner()
         event_handler.owner_block = self
         self.event_handlers[event_handler.uuid] = event_handler
         for trigger in event_handler.trigger_conditions:
@@ -825,13 +821,15 @@ class BaseBlock(BaseModel):
         for target_uuid, child_uuid in list(condition.linked_conditions):
             target_block = BaseBlock.get(target_uuid)
             child_condition = BaseCondition.get(child_uuid)
-            if (
-                target_block is None
-                or not isinstance(child_condition, BaseCondition)
-            ):
+            if not isinstance(child_condition, BaseCondition):
                 continue
-            target_block._discard_condition_indexes(child_condition)
-            target_block._discard_uncommitted_condition_tree(child_condition)
+            if target_block is not None:
+                target_block._discard_condition_indexes(child_condition)
+                target_block._discard_uncommitted_condition_tree(
+                    child_condition,
+                )
+            else:
+                child_condition.discard_from_runtime_owner()
 
         condition.discard_uncommitted_runtime_state()
 
@@ -1242,6 +1240,12 @@ class BaseBlock(BaseModel):
             target_block = BaseBlock.get(target_uuid)
             if target_block is not None:
                 target_block.remove_condition_by_uuid(cond_uuid, parent_event=parent_event)
+                continue
+            child_condition = BaseCondition.get(cond_uuid)
+            if isinstance(child_condition, BaseCondition):
+                child_condition.remove_from_runtime_owner(
+                    parent_event=parent_event,
+                )
 
         if condition.parent_link is not None:
             parent_block_uuid, parent_cond_uuid = condition.parent_link
@@ -1250,6 +1254,7 @@ class BaseBlock(BaseModel):
                     and isinstance(parent_cond, BaseCondition)
                     and parent_cond.applied
                     and parent_cond.name is not None):
+                parent_cond.unlink_runtime_child(condition.uuid)
                 parent_block = BaseBlock.get(parent_block_uuid)
                 if parent_block is not None and parent_cond.name in parent_block.active_conditions:
                     policy = parent_cond.child_removal_policy
@@ -1263,6 +1268,23 @@ class BaseBlock(BaseModel):
                         )
                         if remaining == 0:
                             parent_block.remove_condition(parent_cond.name, parent_event=parent_event)
+                elif parent_block is None:
+                    policy = parent_cond.child_removal_policy
+                    remaining = sum(
+                        1
+                        for _, child_uuid in parent_cond.linked_conditions
+                        if isinstance(
+                            child := BaseCondition.get(child_uuid),
+                            BaseCondition,
+                        )
+                        and child.applied
+                    )
+                    if policy == "any" or (
+                        policy == "last" and remaining == 0
+                    ):
+                        parent_cond.remove_from_runtime_owner(
+                            parent_event=parent_event,
+                        )
         self._remove_condition_owned_actions(condition)
         condition.remove_from_register()
         return True
@@ -1326,10 +1348,7 @@ class BaseBlock(BaseModel):
             raise ValueError("BaseCondition name is not set")
         if condition.target_entity_uuid is None:
             condition.target_entity_uuid = self.uuid
-        bind_runtime_behavior(
-            condition,
-            runtime_owner_uuid=self.uuid,
-        )
+        condition.bind_behavior_owner()
         if context is not None:
             condition.set_context(context)
 

@@ -21,7 +21,7 @@ from dnd.content_system.extra_attack_character_grant_appliers import (
 )
 from dnd.content_system.system import LoadedContentSystem
 from dnd.content_system.runtime import ContentSystemRuntime
-from dnd.controller import PassController
+from dnd.encounters.controllers import PassController
 from dnd.classes.structural_feature_definitions import (
     REMARKABLE_ATHLETE_DECLARATION,
 )
@@ -76,12 +76,12 @@ from dnd.core.gridmap import get_map
 from dnd.types.life import LifeState
 from dnd.types.damage import DamageType
 from dnd.types.progression import CasterProgression
-from dnd.encounter import Encounter
-from dnd.types.encounter import EncounterState
-from dnd.entity import Entity
+from dnd.encounters.encounter import Encounter
+from dnd.types.encounter_state import EncounterState
+from dnd.entities.entity import Entity
 from dnd.items.consumables import HEALING_POTION_RECIPE
 from dnd.items.torches import TORCH_RECIPE, Torch
-from dnd.monsters.bestiary import create_goblin
+from tests.engine.support import create_test_monster
 from dnd.player_character_body import PLAYER_CHARACTER_BODY_RECIPE
 from dnd.runtime_reset import reset_engine_runtime
 
@@ -525,7 +525,7 @@ def test_schema2_player_zero_hp_commits_dead_and_terminal_encounter() -> None:
         levels=1,
     )
     hero = result.entity
-    enemy = create_goblin(
+    enemy = create_test_monster("monster.goblin", 
         name="Terminal Enemy",
         position=(3, 2),
         faction="monsters",

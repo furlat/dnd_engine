@@ -12,7 +12,7 @@ import server.game_summary_store as game_summary_store_module
 from dnd.analytics import GameOutcomeResolution, summary_digest_is_valid
 from dnd.blocks.action_economy import RechargeType
 from dnd.content_system.creature_materialization import materialize_creature
-from dnd.controller import Controller, PassController
+from dnd.encounters.controllers import Controller, PassController
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.base_object import BaseObject
@@ -27,8 +27,8 @@ from dnd.core.gridmap import GridMap, get_map
 from dnd.types.life import LifeState
 from dnd.types.damage import DamageType
 from dnd.core.values import BaseValue
-from dnd.encounter import Encounter
-from dnd.entity import Entity
+from dnd.encounters.encounter import Encounter
+from dnd.entities.entity import Entity
 from dnd.monsters.bestiary_content import BESTIARY_CREATURE_RECIPES_BY_ID
 from server.game_summary_store import GameSummaryStore
 

@@ -1,6 +1,5 @@
 """Exact source ownership and arbitration for restraining spatial effects."""
 
-from typing import cast
 from uuid import UUID, uuid4
 
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
@@ -8,9 +7,7 @@ from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
 from dnd.conditions import Restrained
-from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition
-from dnd.core.base_object import BaseObject
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
 from dnd.core.dice import fixed_dice_faces
 from dnd.types.abilities import AbilityName
@@ -28,14 +25,12 @@ from dnd.core.events.world_events import (
 )
 from dnd.core.gridmap import get_map
 from dnd.core.modifiers import NumericalModifier
-from dnd.core.values import BaseValue
-from dnd.entity import Entity, EntityConfig
+from dnd.entities.entity import Entity, EntityConfig
 from dnd.content.spatial_effect_recipes import (
     ENTANGLE_FIELD_RECIPE,
     EVARDS_BLACK_TENTACLES_FIELD_RECIPE,
     WEB_SURFACE_RECIPE,
 )
-from dnd.spatial.effect_base import FieldEffect, SpatialEffect
 from dnd.spells.conjuration import (
     BlackTentaclesRestrained,
     BlackTentaclesZone,
@@ -48,18 +43,15 @@ from dnd.spells.conjuration import (
     WebZone,
 )
 from dnd.content.spatial_effect_materialization import (
-    materialize_spatial_effect,
+    materialize_spatial_condition,
 )
-from tests.engine.support import get_hp, reset_combat_state
+from dnd.runtime_reset import reset_engine_runtime
+from tests.engine.support import create_test_entity, get_hp
 
 
 def _reset(width: int = 18, height: int = 18) -> None:
-    reset_combat_state()
+    reset_engine_runtime(grid_size=(width, height))
     EventQueue.set_combat_log_callback(None)
-    BaseObject._registry.clear()
-    BaseBlock._registry.clear()
-    BaseValue._registry.clear()
-    get_map().create_rectangle(0, 0, width, height)
 
 
 def _actor(
@@ -70,8 +62,7 @@ def _actor(
     spell_slots: dict[int, int] | None = None,
     intelligence: int = 10,
 ) -> Entity:
-    return Entity.create(
-        source_entity_uuid=uuid4(),
+    return create_test_entity(
         name=name,
         config=EntityConfig(
             ability_scores=AbilityScoresConfig(
@@ -116,19 +107,6 @@ def _penalize_save(entity: Entity, ability_name: AbilityName) -> None:
     )
 
 
-def _controller(
-    effect: SpatialEffect,
-    controller_type: type[BaseCondition],
-) -> BaseCondition:
-    matches = [
-        condition
-        for condition in effect.active_conditions_by_uuid.values()
-        if isinstance(condition, controller_type)
-    ]
-    assert len(matches) == 1
-    return matches[0]
-
-
 def _root_event(source_uuid: UUID) -> Event:
     event = EventQueue.publish_lifecycle(Event(
         source_entity_uuid=source_uuid,
@@ -145,20 +123,24 @@ def test_square_area_controllers_use_the_authored_side_length() -> None:
     _reset()
     source = _actor("Source", (1, 1), "heroes")
 
-    web = WebZone(
-        source_entity_uuid=source.uuid,
-        target_entity_uuid=uuid4(),
-        zone_center=(8, 8),
+    web = materialize_spatial_condition(
+        WEB_SURFACE_RECIPE,
+        source.uuid,
+        position=(8, 8),
+        faction=source.faction,
+        condition_type=WebZone,
     )
-    entangle = EntangleZone(
-        source_entity_uuid=source.uuid,
-        target_entity_uuid=uuid4(),
-        zone_center=(8, 8),
+    entangle = materialize_spatial_condition(
+        ENTANGLE_FIELD_RECIPE,
+        source.uuid,
+        position=(8, 8),
+        faction=source.faction,
+        condition_type=EntangleZone,
     )
     web.zone_radius_feet = 10
 
-    assert len(web.resolve_effect_footprint()) == 4
-    assert len(entangle.resolve_effect_footprint()) == 16
+    assert len(web.resolve_area_footprint()) == 4
+    assert len(entangle.resolve_area_footprint()) == 16
 
 
 def test_entangle_uses_raw_strength_escape_and_exact_effect_cleanup() -> None:
@@ -191,17 +173,19 @@ def test_entangle_uses_raw_strength_escape_and_exact_effect_cleanup() -> None:
         ).apply()
 
     assert result is not None and not result.canceled
-    effect = next(
+    zone = next(
         candidate
-        for candidate in SpatialEffect.active_effects()
+        for candidate in get_map().get_spatial_conditions()
         if candidate.content_ref == ENTANGLE_FIELD_RECIPE.ref
     )
-    assert len(effect.affected_positions) == 16
+    assert isinstance(zone, EntangleZone)
+    assert len(zone.affected_positions) == 16
     membership = next(
         condition
         for condition in target.active_conditions_by_uuid.values()
         if isinstance(condition, EntangleRestrained)
     )
+    assert (target.uuid, membership.uuid) in zone.linked_conditions
     assert isinstance(target.active_conditions["Restrained"], Restrained)
     assert target.action_economy.movement.normalized_score == 0
     escape = next(
@@ -223,6 +207,10 @@ def test_entangle_uses_raw_strength_escape_and_exact_effect_cleanup() -> None:
 
     assert escape_result is not None and not escape_result.canceled
     assert membership.uuid not in target.active_conditions_by_uuid
+    assert all(
+        child_uuid != membership.uuid
+        for _, child_uuid in zone.linked_conditions
+    )
     assert "Restrained" not in target.active_conditions
     assert target.action_economy.movement.normalized_score == 30
     assert all(
@@ -231,8 +219,9 @@ def test_entangle_uses_raw_strength_escape_and_exact_effect_cleanup() -> None:
     )
     ability_checks = [
         candidate
-        for candidate in BaseObject._registry.values()
+        for candidate in EventQueue.get_events_by_type(EventType.ABILITY_CHECK)
         if isinstance(candidate, AbilityCheckEvent)
+        and candidate.phase is EventPhase.COMPLETION
     ]
     assert len(ability_checks) == 1
     assert ability_checks[0].ability_name == "strength"
@@ -244,7 +233,7 @@ def test_entangle_uses_raw_strength_escape_and_exact_effect_cleanup() -> None:
     )
 
     caster.remove_condition("Concentrating")
-    assert SpatialEffect.get_effect(effect.uuid) is None
+    assert BaseCondition.get(zone.uuid) is None
 
 
 def test_web_leaving_footprint_releases_only_its_exact_source() -> None:
@@ -268,12 +257,12 @@ def test_web_leaving_footprint_releases_only_its_exact_source() -> None:
             template=False,
         ).apply()
     assert result is not None and not result.canceled
-    effect = next(
+    zone = next(
         candidate
-        for candidate in SpatialEffect.active_effects()
+        for candidate in get_map().get_spatial_conditions()
         if candidate.content_ref == WEB_SURFACE_RECIPE.ref
     )
-    zone = cast(WebZone, _controller(effect, WebZone))
+    assert isinstance(zone, WebZone)
 
     with fixed_dice_faces(1):
         Entity.update_entity_position(target, (8, 8))
@@ -301,47 +290,44 @@ def test_overlapping_restraints_never_downgrade_and_promote_live_sources() -> No
     target = _actor("Target", (8, 8), "monsters")
     _penalize_save(target, "strength")
     parent = _root_event(caster.uuid)
-    installed: list[tuple[FieldEffect, EntangleZone]] = []
+    installed: list[EntangleZone] = []
 
     for dc in (10, 12, 18):
-        field = materialize_spatial_effect(
+        zone = materialize_spatial_condition(
             ENTANGLE_FIELD_RECIPE,
             caster.uuid,
             position=(8, 8),
             faction=caster.faction,
-            expected_type=FieldEffect,
-        )
-        zone = EntangleZone(
-            source_entity_uuid=caster.uuid,
-            target_entity_uuid=field.uuid,
-            zone_center=(8, 8),
-            spell_dc=dc,
+            condition_type=EntangleZone,
+            condition_fields={
+                "spell_dc": dc,
+            },
         )
         with fixed_dice_faces(1):
-            field.install_controller(zone, parent_event=parent)
-        installed.append((field, zone))
+            zone.activate(parent_event=parent)
+        installed.append(zone)
 
     active = target.active_conditions["Restrained"]
     assert isinstance(active, Restrained)
     assert active.potency_rank == (18, 0)
     assert len(target.get_condition_application_leases("Restrained")) == 3
 
-    weak_field, weak_zone = installed[0]
+    weak_zone = installed[0]
     assert weak_zone.remove_restraint(target, parent_event=parent)
-    assert SpatialEffect.get_effect(weak_field.uuid) is weak_field
+    assert BaseCondition.get(weak_zone.uuid) is weak_zone
     active = target.active_conditions["Restrained"]
     assert isinstance(active, Restrained)
     assert active.potency_rank == (18, 0)
     assert len(target.get_condition_application_leases("Restrained")) == 2
 
-    _, strong_zone = installed[2]
+    strong_zone = installed[2]
     assert strong_zone.remove_restraint(target, parent_event=parent)
     promoted = target.active_conditions["Restrained"]
     assert isinstance(promoted, Restrained)
     assert promoted.potency_rank == (12, 0)
     assert len(target.get_condition_application_leases("Restrained")) == 1
 
-    _, middle_zone = installed[1]
+    middle_zone = installed[1]
     assert middle_zone.remove_restraint(target, parent_event=parent)
     assert "Restrained" not in target.active_conditions
     assert target.get_condition_application_leases("Restrained") == ()
@@ -367,16 +353,13 @@ def test_black_tentacles_share_one_entry_turn_fence_and_escape_source() -> None:
         template=False,
     ).apply()
     assert result is not None and not result.canceled
-    effect = next(
+    zone = next(
         candidate
-        for candidate in SpatialEffect.active_effects()
+        for candidate in get_map().get_spatial_conditions()
         if candidate.content_ref == EVARDS_BLACK_TENTACLES_FIELD_RECIPE.ref
     )
-    zone = cast(
-        BlackTentaclesZone,
-        _controller(effect, BlackTentaclesZone),
-    )
-    assert len(effect.affected_positions) == 16
+    assert isinstance(zone, BlackTentaclesZone)
+    assert len(zone.affected_positions) == 16
     assert zone.find_restraint(target) is None
     hp_before = get_hp(target)
     turn_execution_id = uuid4()

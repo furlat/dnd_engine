@@ -6,6 +6,14 @@ from uuid import UUID
 from dnd.blocks.base_item import (
     BaseItem,
 )
+from dnd.content.scenarios.scenario_catalog import (
+    AUTHORED_ENCOUNTERS,
+    encounter_definition,
+)
+from dnd.content.scenarios.scenario_deployment import (
+    AssembledScenario,
+    assemble_scenario,
+)
 from dnd.core.base_block import BaseBlock
 from dnd.types.world import LightLevel
 from dnd.core.base_actions import (
@@ -19,9 +27,11 @@ from dnd.core.events.events_registry import (
 )
 from dnd.types.damage import DamageType
 from dnd.core.gridmap import get_map
-from dnd.types.encounter import EncounterState
-from dnd.spatial.environmental_effects import SpikeTrapGroundEffect
-from dnd.entity import Entity
+from dnd.core.base_conditions import BaseCondition
+from dnd.types.encounter_state import EncounterState
+from dnd.spatial.environmental_conditions import SpikeTrap
+from dnd.entities.entity import Entity
+from dnd.game import Game
 from dnd.items.environment import DirectionalDoor
 from dnd.items.environment_interactables import StorageChest, TrapLever
 from dnd.actions.operations import execute_by_index
@@ -33,23 +43,15 @@ from dnd.maps.arena_layout import (
     WATER_POSITIONS,
 )
 from dnd.monsters.skeleton_abilities import MarkTargetAction
-from dnd.scenarios.encounter_assembler import (
-    AssembledEncounter,
-    assemble_encounter_recipe,
-)
-from dnd.scenarios.encounter_catalog import (
-    AUTHORED_ENCOUNTER_RECIPES,
-    encounter_recipe,
-)
-from dnd.spatial.effect_base import SpatialEffect
-from server.world_projection import project_grid
+from dnd.runtime_reset import reset_engine_runtime
+from dnd.spatial.area_conditions import SpatialCondition
 
 
 @dataclass(frozen=True)
 class CanonicalScenario:
     """Small test view over the product assembler result."""
 
-    assembled: AssembledEncounter
+    assembled: AssembledScenario
 
     @property
     def hero(self) -> Entity:
@@ -78,9 +80,11 @@ class CanonicalScenario:
 
 def create_authored_encounter(encounter_id: str) -> CanonicalScenario:
     """Assemble one authored encounter through the sole product path."""
+    reset_engine_runtime()
     return CanonicalScenario(
-        assemble_encounter_recipe(
-            encounter_recipe(f"encounter.{encounter_id}"),
+        assemble_scenario(
+            Game(),
+            encounter_definition(f"encounter.{encounter_id}"),
         ),
     )
 
@@ -129,7 +133,7 @@ def test_authored_encounter_catalog_has_complete_stable_inventory() -> None:
     """All retained authored encounters have stable unique product ids."""
     ids = [
         recipe.encounter_id.removeprefix("encounter.")
-        for recipe in AUTHORED_ENCOUNTER_RECIPES
+        for recipe in AUTHORED_ENCOUNTERS
     ]
 
     assert ids == [
@@ -174,13 +178,14 @@ def test_authored_encounter_catalog_has_complete_stable_inventory() -> None:
         "elevation_proving_ground",
     ]
     assert len(ids) == len(set(ids))
-    assert all(recipe.tags == ("authored",) for recipe in AUTHORED_ENCOUNTER_RECIPES)
+    assert all(recipe.tags == ("authored",) for recipe in AUTHORED_ENCOUNTERS)
 
 
 def test_each_authored_encounter_builds_started_with_unique_positions() -> None:
     """Every authored encounter assembles through the product runtime."""
-    for recipe in AUTHORED_ENCOUNTER_RECIPES:
-        arena = CanonicalScenario(assemble_encounter_recipe(recipe))
+    for recipe in AUTHORED_ENCOUNTERS:
+        reset_engine_runtime()
+        arena = CanonicalScenario(assemble_scenario(Game(), recipe))
         actors = (arena.hero, *arena.monsters)
         positions = [actor.position for actor in actors]
 
@@ -228,7 +233,7 @@ def test_standard_skeleton_door_arena_uses_current_baseline_content() -> None:
     }
 
 
-def test_standard_arena_water_uses_canonical_mechanics_and_projection() -> None:
+def test_standard_arena_water_uses_canonical_mechanics() -> None:
     """The product arena authors water through the canonical tile factory."""
     arena = create_authored_encounter("standard_skeleton_doors")
     grid = get_map()
@@ -237,7 +242,6 @@ def test_standard_arena_water_uses_canonical_mechanics_and_projection() -> None:
         tile = grid.get_tile(*position)
         assert tile is not None
         assert tile.name == "Water"
-        assert tile.sprite_name == "water.png"
         assert tile.get_movement_cost(MovementMode.WALKING) == 0
         assert tile.get_movement_cost(MovementMode.SWIMMING) == 1
         assert not grid.is_walkable(*position, mode=MovementMode.WALKING)
@@ -254,24 +258,6 @@ def test_standard_arena_water_uses_canonical_mechanics_and_projection() -> None:
         WATER_POSITIONS[1],
         movement_mode=MovementMode.SWIMMING,
     )
-
-    objective_tiles = {
-        (tile.x, tile.y): tile for tile in project_grid(grid).tiles
-    }
-    subjective_tiles = {
-        (tile.x, tile.y): tile
-        for tile in project_grid(
-            grid,
-            requesting_entity_uuid=arena.hero.uuid,
-        ).tiles
-    }
-    assert {
-        objective_tiles[position].visual_key for position in WATER_POSITIONS
-    } == {"water.png"}
-    assert {
-        subjective_tiles[position].visual_key for position in WATER_POSITIONS
-    } == {"water.png"}
-
 
 def test_goblin_water_skirmish_samples_goblins_caster_and_route_blockers() -> None:
     """The goblin arena includes skirmish actions and water path pressure."""
@@ -432,10 +418,10 @@ def test_forced_movement_hazard_bridge_places_thunderwave_near_hazards() -> None
     assert water_tile.walkable is False
     assert spike_tile is not None
     assert spike_tile.active_conditions == {}
-    spike_effect = SpatialEffect.get_effect(
-        arena.environment.spike_effect_uuid,
+    spike_effect = BaseCondition.get(
+        arena.environment.spike_condition_uuid,
     )
-    assert isinstance(spike_effect, SpikeTrapGroundEffect)
+    assert isinstance(spike_effect, SpikeTrap)
     assert arena.notable_positions["spike_zone_sample"] in (
         spike_effect.affected_positions
     )
@@ -646,13 +632,13 @@ def test_trap_lever_killzone_makes_hazard_object_use_available() -> None:
     assert any(name.startswith("Pull Lever") for name in available_action_display_names(lever_guard))
     assert spike_tile is not None
     assert spike_tile.active_conditions == {}
-    spike_effect = SpatialEffect.get_effect(
-        arena.environment.spike_effect_uuid,
+    spike_effect = BaseCondition.get(
+        arena.environment.spike_condition_uuid,
     )
-    assert isinstance(spike_effect, SpikeTrapGroundEffect)
+    assert isinstance(spike_effect, SpikeTrap)
     assert spike_effect.affected_positions == SPIKE_ZONE_POSITIONS
     assert (
-        get_map().get_spatial_effect_uuids_at(
+        get_map().get_spatial_condition_uuids_at(
             arena.notable_positions["spike_zone_sample"],
         )
         == {spike_effect.uuid}
@@ -687,7 +673,7 @@ def test_trap_lever_killzone_deactivates_handler_markers_and_hazard_routing() ->
     assert lever.charges == 0
     assert arena.environment is not None
     assert (
-        SpatialEffect.get_effect(arena.environment.spike_effect_uuid)
+        BaseCondition.get(arena.environment.spike_condition_uuid)
         is None
     )
     for position in SPIKE_ZONE_POSITIONS:
@@ -695,7 +681,7 @@ def test_trap_lever_killzone_deactivates_handler_markers_and_hazard_routing() ->
         assert tile is not None
         assert "Spike Trap" not in tile.active_conditions
         assert tile.is_hazardous_for(lever_guard.uuid) is False
-        assert get_map().get_spatial_effect_uuids_at(position) == set()
+        assert get_map().get_spatial_condition_uuids_at(position) == set()
 
 
 def test_condition_lock_sanctum_uses_disabling_and_support_spell_surface() -> None:
@@ -996,6 +982,6 @@ def test_unknown_authored_encounter_id_is_rejected() -> None:
     try:
         create_authored_encounter("not-a-real-arena")
     except ValueError as exc:
-        assert "Unknown authored encounter" in str(exc)
+        assert "unknown authored encounter" in str(exc).casefold()
     else:
         raise AssertionError("Expected unknown arena id to raise ValueError")

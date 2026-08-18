@@ -11,7 +11,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from dnd.analytics import GameSummary
-from dnd.encounter import Encounter
+from dnd.encounters.encounter import Encounter
 from server.canonical_json import canonical_json_bytes
 from server.event_stream import DndEventStream
 from server.game_replay import build_objective_replay

@@ -305,13 +305,13 @@ def test_level_one_sorcerer_installs_and_removes_all_exact_weapon_refs() -> None
         ref.identity_key for ref in _EXACT_WEAPON_REFS
     )
     assert all(
-        entity.creature_proficiencies.is_weapon_proficient((), ref)
+        entity.creature_proficiencies.is_weapon_proficient((), ref.identity_key)
         for ref in _EXACT_WEAPON_REFS
     )
     assert all(source.sources for source in exact_sources.values())
     assert not entity.creature_proficiencies.is_weapon_proficient(
         (WeaponProperty.SIMPLE,),
-        CLUB_REF,
+        CLUB_REF.identity_key,
     )
 
     runtime_entity_uuid = entity.uuid
@@ -320,6 +320,6 @@ def test_level_one_sorcerer_installs_and_removes_all_exact_weapon_refs() -> None
     assert entity.uuid == runtime_entity_uuid
     assert entity.creature_proficiencies.specific_weapon_sources == {}
     assert all(
-        not entity.creature_proficiencies.is_weapon_proficient((), ref)
+        not entity.creature_proficiencies.is_weapon_proficient((), ref.identity_key)
         for ref in _EXACT_WEAPON_REFS
     )

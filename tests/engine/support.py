@@ -7,13 +7,60 @@ and managing encounters for integration tests.
 from typing import Any, Dict, Optional, Tuple
 from uuid import UUID, uuid4
 
-from dnd.entity import Entity
-from dnd.encounter import Encounter
-from dnd.controller import HumanController
+from dnd.content.monsters.monster_builders import create_monster
+from dnd.entities.entity import Entity, EntityConfig
+from dnd.entities.entity_creation import compose_entity, create_entity
+from dnd.encounters.encounter import Encounter
+from dnd.encounters.controllers import HumanController
+from dnd.game import Game
 from dnd.types.damage import DamageType
 from dnd.core.modifiers import NumericalModifier, CriticalModifier, AutoHitModifier
 from dnd.types.rolls import CriticalStatus, AutoHitStatus
 from dnd.runtime_reset import reset_engine_runtime
+
+
+def create_test_monster(
+    monster_id: str,
+    *,
+    source_id: Optional[UUID] = None,
+    position: tuple[int, int] = (0, 0),
+    name: Optional[str] = None,
+    faction: Optional[str] = None,
+    caster_level: int = 5,
+    darkvision: Optional[bool] = None,
+    weight: Optional[int] = None,
+) -> Entity:
+    """Create and deploy one direct-content monster for engine tests."""
+    entity = create_monster(
+        monster_id,
+        source_id or uuid4(),
+        name=name,
+        faction=faction,
+        caster_level=caster_level,
+        darkvision=darkvision,
+        weight=weight,
+    )
+    Game().deploy_entity(entity, position)
+    return entity
+
+
+def create_test_entity(
+    *,
+    name: str,
+    config: EntityConfig,
+    entity_kind_id: str = "test.entity",
+    source_id: Optional[UUID] = None,
+) -> Entity:
+    """Create, commit, and deploy one configured low-level test entity."""
+    entity = create_entity(
+        source_id or uuid4(),
+        entity_kind_id=entity_kind_id,
+        name=name,
+        config=config,
+    )
+    compose_entity(entity)
+    Game().deploy_entity(entity, config.position)
+    return entity
 
 
 def reset_combat_state():

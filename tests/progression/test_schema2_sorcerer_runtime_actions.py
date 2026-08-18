@@ -27,7 +27,7 @@ from dnd.core.base_actions import (
     ActionSelectionParameterKind,
 )
 from dnd.types.abilities import AbilityName
-from dnd.entity import Entity, EntityConfig
+from dnd.entities.entity import Entity, EntityConfig
 from dnd.runtime_reset import reset_engine_runtime
 
 

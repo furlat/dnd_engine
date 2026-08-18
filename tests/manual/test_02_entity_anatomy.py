@@ -16,7 +16,7 @@ from dnd.core.events.events_registry import (
 )
 from dnd.core.gridmap import GridMap, get_map
 from dnd.core.values import BaseValue, ModifiableValue
-from dnd.entity import Entity, EntityConfig
+from dnd.entities.entity import Entity, EntityConfig
 
 
 def reset_entity_anatomy_state() -> None:

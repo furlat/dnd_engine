@@ -13,12 +13,13 @@ from dnd.core.events.resolution_events import (
     TakeDamageEvent,
 )
 from dnd.core.gridmap import get_map
+from dnd.core.base_conditions import BaseCondition
 from dnd.types.damage import DamageType
 from dnd.core.modifiers import ResistanceModifier
 from dnd.types.damage import ResistanceStatus
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from dnd.content.spatial_effect_recipes import ICE_STORM_SURFACE_RECIPE
-from dnd.spatial.effect_base import GroundEffect, SpatialEffect
+from dnd.spatial.area_conditions import SpatialCondition
 from dnd.spells.evocation import IceStorm
 from tests.engine.support import get_hp, has_condition
 from tests.manual.spell_regression_support import (
@@ -125,18 +126,18 @@ def test_ice_storm_executes_upcast_save_cylinder_and_terrain_lifecycle() -> None
     assert not has_condition(caster, "Concentrating")
     effects = [
         effect
-        for effect in SpatialEffect.active_effects()
+        for effect in get_map().get_spatial_conditions()
         if effect.content_ref == ICE_STORM_SURFACE_RECIPE.ref
     ]
     assert len(effects) == 1
     effect = effects[0]
-    assert isinstance(effect, GroundEffect)
-    assert "Ice Storm Terrain" in effect.active_conditions
+    assert isinstance(effect, SpatialCondition)
+    assert effect.name == "Ice Storm Terrain"
     center_tile = grid.get_tile(*failed.position)
     assert center_tile is not None
     assert center_tile.walking_cost.normalized_score == 2
 
-    assert effect.advance_duration("Ice Storm Terrain")
+    assert effect.progress_spatial_duration()
 
-    assert SpatialEffect.get_effect(effect.uuid) is None
+    assert BaseCondition.get(effect.uuid) is None
     assert center_tile.walking_cost.normalized_score == 1

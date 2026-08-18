@@ -89,7 +89,7 @@ from dnd.actions.standard import (
 from dnd.core.base_actions import (
     BaseAction,
 )
-from dnd.entity import Entity, EntityConfig
+from dnd.entities.entity import Entity, EntityConfig
 from dnd.player_character_body import PLAYER_CHARACTER_BODY_RECIPE
 from dnd.runtime_reset import reset_engine_runtime
 

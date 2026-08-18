@@ -1,6 +1,6 @@
 """Feat-style d20 processors installed by structural character grants."""
 
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from typing import Optional
 from dnd.core.events.resolution_events import (
     D20RollResultEvent,

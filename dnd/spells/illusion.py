@@ -46,20 +46,19 @@ from dnd.types.saving_throws import SavingThrowEffectTag
 from dnd.types.rolls import AttackOutcome
 from dnd.core.aoe import AoEShape, Cone, Cube
 from dnd.core.values import ModifiableValue
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from dnd.actions.standard import (
     SpellAction,
     SpellEvent,
     AttackEvent,
 )
 from dnd.conditions import Frightened, Charmed, Blinded, Deafened, InvisibilityEffect, GreaterInvisibilityEffect
-from dnd.creature_transforms import apply_incapacitated_transform
+from dnd.entities.creature_transforms import apply_incapacitated_transform
 from dnd.content.spatial_effect_materialization import (
-    materialize_spatial_effect,
+    materialize_spatial_condition,
 )
 from dnd.content.spatial_effect_recipes import SILENCE_FIELD_RECIPE
-from dnd.spatial.effect_base import FieldEffect
-from dnd.spatial.effect_controllers import AreaSpatialEffectController
+from dnd.spatial.area_conditions import AreaCondition
 from dnd.core.gridmap import get_map
 from dnd.core.events.world_events import (
     SpatialChangeEvent,
@@ -1146,7 +1145,7 @@ class MirrorImage(SpellAction):
         )
 
 
-class SilenceZone(AreaSpatialEffectController):
+class SilenceZone(AreaCondition):
     """Silence zone that blocks verbal spells and deafens creatures inside.
 
     20ft radius sphere, concentration, 10 rounds.
@@ -1163,11 +1162,6 @@ class SilenceZone(AreaSpatialEffectController):
     spell_dc: int = Field(default=0, description="Spell save DC placeholder for zone contracts.")
     _deafened_uuids: List[UUID] = []
     _spell_block_handler_uuid: Optional[UUID] = None
-
-    trigger_kinds: frozenset[SpatialEffectTriggerKind] = frozenset({
-        SpatialEffectTriggerKind.ENTER,
-        SpatialEffectTriggerKind.LEAVE,
-    })
 
     def _create_zone_entry_handler(self) -> EventHandler:
         """Apply Deafened when entity enters the silence zone."""
@@ -1284,8 +1278,12 @@ class SilenceZone(AreaSpatialEffectController):
             event_processor=processor
         )
 
-    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
-        """Remove deafened conditions from all entities in zone."""
+    def _release_owned_runtime_state(
+        self,
+        *,
+        parent_event: Optional[Event] = None,
+    ) -> None:
+        """Remove exact deafened leases after the removal effect is accepted."""
         grid = get_map()
         for pos in self.affected_positions:
             entity_uuids = grid.get_entities_at(pos)
@@ -1296,8 +1294,11 @@ class SilenceZone(AreaSpatialEffectController):
                 if "Silence Deafened" in ent.active_conditions:
                     active = ent.active_conditions.get("Silence Deafened")
                     if active and isinstance(active, _SilenceDeafened) and active.zone_uuid == self.uuid:
-                        ent.remove_condition("Silence Deafened", parent_event=event)
-        return super()._remove(event)
+                        ent.remove_condition(
+                            "Silence Deafened",
+                            parent_event=parent_event,
+                        )
+        super()._release_owned_runtime_state(parent_event=parent_event)
 
 
 class _SilenceDeafened(BaseCondition):
@@ -1405,23 +1406,24 @@ class Silence(SpellAction):
             status_message=f"{caster.name} casts Silence"
         )
 
-        field = materialize_spatial_effect(
+        zone = materialize_spatial_condition(
             SILENCE_FIELD_RECIPE,
             caster.uuid,
             position=position,
             faction=caster.faction,
-            expected_type=FieldEffect,
+            condition_type=SilenceZone,
+            condition_fields={
+                "effect_origin": execution_event.to_effect_origin(),
+            },
         )
-        zone = SilenceZone(
-            source_entity_uuid=caster.uuid,
-            target_entity_uuid=field.uuid,
-            zone_center=position,
-            effect_origin=execution_event.to_effect_origin(),
-        )
-        field.install_controller(zone, parent_event=effect_event)
+        activation = zone.activate(parent_event=effect_event)
+        if activation is None or activation.canceled or not zone.applied:
+            return effect_event.cancel(
+                status_message="Silence field could not be established",
+            )
 
         concentration = self.ensure_concentration(effect_event)
-        concentration.add_linked_condition(field.uuid, zone.uuid)
+        concentration.add_linked_condition(zone.uuid, zone.uuid)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,

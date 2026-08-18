@@ -15,8 +15,7 @@ from dnd.blocks.action_economy import ActionEconomyConfig, RechargeType
 from dnd.blocks.equipment import (
     Weapon,
 )
-from dnd.content_system.item_bindings import ItemRuntimeOrigin
-from dnd.content_system.item_materialization import materialize_item
+from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.types.equipment import WeaponSlot
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.saving_throws import SavingThrowConfig, SavingThrowSetConfig
@@ -52,10 +51,9 @@ from dnd.core.modifiers import NumericalModifier
 from dnd.types.rolls import AdvantageStatus
 from dnd.core.values import BaseValue, ModifiableValue
 from dnd.conditions import Exhaustion
-from dnd.entity import Entity, EntityConfig
-from dnd.items.weapons import SHORTSWORD_RECIPE
+from dnd.entities.entity import Entity, EntityConfig
 from dnd.spells.evocation import FireBolt
-from tests.engine.support import get_max_hp, reset_combat_state
+from tests.engine.support import create_test_entity, get_max_hp, reset_combat_state
 
 
 def reset_entity_state() -> None:
@@ -136,7 +134,7 @@ def configured_entity(
         creature_type=CreatureType.HUMANOID,
         size=Size.MEDIUM,
     )
-    return Entity.create(source_entity_uuid=source_uuid, name=name, config=config)
+    return create_test_entity(name=name, config=config, source_id=source_uuid)
 
 
 def entity_action_target_uuids(entity: Entity, template_name: str, target_filter: str) -> set:
@@ -391,8 +389,7 @@ def test_eb_06_007_standard_actions_register_templates_and_handlers() -> None:
 def test_eb_06_008_registered_spell_action_defines_spellcaster_status() -> None:
     """EB-06-008: registered spell actions make is_spellcaster true."""
     reset_entity_state()
-    entity = Entity.create(
-        source_entity_uuid=uuid4(),
+    entity = create_test_entity(
         name="Cantrip Only",
         config=EntityConfig(
             action_economy=ActionEconomyConfig(spell_slots={}),
@@ -417,7 +414,14 @@ def test_eb_06_009_bare_entity_creation_registers_and_normalizes_defaults() -> N
     reset_entity_state()
     source_uuid = uuid4()
 
-    entity = Entity.create(source_entity_uuid=source_uuid, name="Bare Entity")
+    entity = create_test_entity(
+        source_id=source_uuid,
+        name="Bare Entity",
+        config=EntityConfig(
+            health=HealthConfig(hit_dices=[HitDiceConfig()]),
+            proficiency_bonus=2,
+        ),
+    )
 
     assert entity.uuid == source_uuid
     assert entity.source_entity_uuid == source_uuid
@@ -436,13 +440,11 @@ def test_eb_06_010_configured_entity_defaults_to_zero_hit_points() -> None:
     """EB-06-010: configured entities have no HP unless health config grants it."""
     reset_entity_state()
 
-    no_hit_dice = Entity.create(
-        source_entity_uuid=uuid4(),
+    no_hit_dice = create_test_entity(
         name="No Hit Dice",
         config=EntityConfig(),
     )
-    bonus_only = Entity.create(
-        source_entity_uuid=uuid4(),
+    bonus_only = create_test_entity(
         name="Bonus Only",
         config=EntityConfig(
             health=HealthConfig(max_hit_points_bonus=3, temporary_hit_points=2)
@@ -505,12 +507,11 @@ def test_eb_06_012_equipped_weapons_create_and_remove_attack_templates() -> None
 
     assert entity.get_action_template("Attack_MELEE_MAIN") is None
 
-    sword = materialize_item(
-        SHORTSWORD_RECIPE,
+    sword = build_authored_item(
+        "weapon.shortsword",
         entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
     )
+    assert isinstance(sword, Weapon)
     assert entity.loot_item(sword) is True
     assert sword.uuid in entity.inventory.items
     assert entity.equip_item(sword.uuid, WeaponSlot.MELEE_MAIN) is True

@@ -26,8 +26,7 @@ from dnd.blocks.equipment import (
 )
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
-from dnd.content_system.item_bindings import ItemRuntimeOrigin
-from dnd.content_system.item_materialization import materialize_item
+from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.core.base_actions import (
     ActionAvailabilityStatus,
     ActionCategory,
@@ -45,12 +44,14 @@ from dnd.core.events.events_registry import (
 from dnd.core.gridmap import get_map
 from dnd.types.damage import DamageType
 from dnd.core.values import BaseValue
-from dnd.entity import Entity, EntityConfig
-from dnd.items.consumables import HEALING_POTION_RECIPE
-from dnd.monsters.bestiary import create_goblin, create_skeleton
+from dnd.entities.entity import Entity, EntityConfig
 from dnd.spells.transmutation import BonusDash, ExpeditiousRetreatEffect
 from tests.spell_test_exports import Fireball, MagicMissile
-from tests.engine.support import reset_combat_state
+from tests.engine.support import (
+    create_test_entity,
+    create_test_monster,
+    reset_combat_state,
+)
 
 
 def reset_action_state() -> None:
@@ -90,7 +91,7 @@ def configured_entity(
         position=position,
         faction=faction,
     )
-    entity = Entity.create(source_entity_uuid=source_uuid, name=name, config=config)
+    entity = create_test_entity(name=name, config=config, source_id=source_uuid)
     setup_standard_actions(entity)
     return entity
 
@@ -147,8 +148,8 @@ def test_eb_09_001_templates_must_be_registered_and_instantiated() -> None:
 def test_eb_09_002_standard_actions_discover_self_position_and_entity_groups() -> None:
     """EB-09-002: standard setup produces grouped available actions."""
     reset_action_state()
-    goblin = create_goblin(name="Goblin", position=(5, 5), faction="heroes")
-    skeleton = create_skeleton(name="Skeleton", position=(6, 5), faction="monsters")
+    goblin = create_test_monster("monster.goblin", name="Goblin", position=(5, 5), faction="heroes")
+    skeleton = create_test_monster("monster.skeleton", name="Skeleton", position=(6, 5), faction="monsters")
     Entity.update_all_entities_senses()
 
     available = get_available_actions(goblin)
@@ -227,10 +228,9 @@ def test_eb_09_004_floor_objects_create_object_actions_and_can_be_picked_up() ->
     """EB-09-004: visible floor objects surface OBJECT actions."""
     reset_action_state()
     entity = configured_entity(position=(3, 3))
-    potion = materialize_item(
-        HEALING_POTION_RECIPE,
+    potion = build_authored_item(
+        "consumable.healing_potion",
         uuid4(),
-        origin=ItemRuntimeOrigin.LOOT,
     )
     potion.place_on_grid((4, 3))
     Entity.update_all_entities_senses()
@@ -257,10 +257,9 @@ def test_eb_09_005_inventory_use_actions_are_routed_and_consume_charges() -> Non
     """EB-09-005: inventory use actions appear with item metadata and execute by index."""
     reset_action_state()
     entity = configured_entity(position=(3, 3))
-    potion = materialize_item(
-        HEALING_POTION_RECIPE,
+    potion = build_authored_item(
+        "consumable.healing_potion",
         entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
     )
     assert entity.loot_item(potion)
 
@@ -287,15 +286,13 @@ def test_eb_09_006_nearby_environment_use_actions_are_distance_gated() -> None:
     """EB-09-006: environment UsableItem actions only appear within 5 feet."""
     reset_action_state()
     entity = configured_entity(position=(3, 3))
-    nearby = materialize_item(
-        HEALING_POTION_RECIPE,
+    nearby = build_authored_item(
+        "consumable.healing_potion",
         uuid4(),
-        origin=ItemRuntimeOrigin.LOOT,
     )
-    far = materialize_item(
-        HEALING_POTION_RECIPE,
+    far = build_authored_item(
+        "consumable.healing_potion",
         uuid4(),
-        origin=ItemRuntimeOrigin.LOOT,
     )
     nearby.place_on_grid((4, 3))
     far.place_on_grid((8, 8))
@@ -344,10 +341,10 @@ def test_eb_09_007_action_overrides_change_cost_display_and_consumption() -> Non
 def test_eb_09_008_target_filters_and_dead_targets_shape_entity_actions() -> None:
     """EB-09-008: target_filter and include_dead control entity target pools."""
     reset_action_state()
-    hero = create_goblin(name="Hero", position=(5, 5), faction="heroes")
-    ally = create_goblin(name="Ally", position=(5, 6), faction="heroes")
-    enemy = create_skeleton(name="Enemy", position=(6, 5), faction="monsters")
-    dead_enemy = create_skeleton(name="Dead Enemy", position=(6, 6), faction="monsters")
+    hero = create_test_monster("monster.goblin", name="Hero", position=(5, 5), faction="heroes")
+    ally = create_test_monster("monster.goblin", name="Ally", position=(5, 6), faction="heroes")
+    enemy = create_test_monster("monster.skeleton", name="Enemy", position=(6, 5), faction="monsters")
+    dead_enemy = create_test_monster("monster.skeleton", name="Dead Enemy", position=(6, 6), faction="monsters")
     dead_enemy.receive_damage(999, DamageType.BLUDGEONING, hero.uuid)
     Entity.update_all_entities_senses()
 
@@ -389,16 +386,15 @@ def test_eb_09_009_registered_multi_entity_spell_discovers_and_executes() -> Non
         position=(1, 1),
         faction="heroes",
     )
-    caster = Entity.create(
-        source_entity_uuid=uuid4(),
+    caster = create_test_entity(
         name="Wizard",
         config=caster_config,
     )
     setup_standard_actions(caster)
     targets = [
-        create_skeleton(name="Target 1", position=(3, 1), faction="monsters"),
-        create_skeleton(name="Target 2", position=(3, 2), faction="monsters"),
-        create_skeleton(name="Target 3", position=(3, 3), faction="monsters"),
+        create_test_monster("monster.skeleton", name="Target 1", position=(3, 1), faction="monsters"),
+        create_test_monster("monster.skeleton", name="Target 2", position=(3, 2), faction="monsters"),
+        create_test_monster("monster.skeleton", name="Target 3", position=(3, 3), faction="monsters"),
     ]
     Entity.update_all_entities_senses()
     register_spell(caster, MagicMissile, caster_level=5)
@@ -465,8 +461,7 @@ def test_eb_09_010_registered_position_aoe_spell_previews_and_executes() -> None
         position=(1, 1),
         faction="heroes",
     )
-    caster = Entity.create(
-        source_entity_uuid=uuid4(),
+    caster = create_test_entity(
         name="Wizard",
         config=caster_config,
     )
@@ -485,24 +480,20 @@ def test_eb_09_010_registered_position_aoe_spell_previews_and_executes() -> None
         proficiency_bonus=2,
     )
     affected = [
-        Entity.create(
-            source_entity_uuid=uuid4(),
+        create_test_entity(
             name="Goblin 1",
             config=creature_config.model_copy(update={"position": (6, 6), "faction": "monsters"}),
         ),
-        Entity.create(
-            source_entity_uuid=uuid4(),
+        create_test_entity(
             name="Goblin 2",
             config=creature_config.model_copy(update={"position": (7, 6), "faction": "monsters"}),
         ),
-        Entity.create(
-            source_entity_uuid=uuid4(),
+        create_test_entity(
             name="Ally",
             config=creature_config.model_copy(update={"position": (6, 7), "faction": "heroes"}),
         ),
     ]
-    outsider = Entity.create(
-        source_entity_uuid=uuid4(),
+    outsider = create_test_entity(
         name="Outsider",
         config=creature_config.model_copy(update={"position": (12, 12), "faction": "monsters"}),
     )
@@ -581,7 +572,7 @@ def test_eb_09_011_move_discovery_marks_hazardous_and_safe_paths() -> None:
     )
     hazard_tile.add_condition(hazard)
 
-    scout = create_skeleton(name="Scout", position=(5, 3), faction="heroes")
+    scout = create_test_monster("monster.skeleton", name="Scout", position=(5, 3), faction="heroes")
     Entity.update_all_entities_senses()
 
     available = get_available_actions(scout)

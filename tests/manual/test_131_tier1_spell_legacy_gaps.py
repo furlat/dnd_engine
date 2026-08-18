@@ -39,7 +39,7 @@ from dnd.core.events.check_events import (
 from dnd.types.creatures import CreatureType
 from dnd.types.damage import DamageType
 from dnd.types.rolls import AdvantageStatus
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from dnd.spells.conjuration import PoisonSpray
 from dnd.spells.enchantment import HoldMonster, HoldPerson
 from dnd.spells.evocation import Sunburst

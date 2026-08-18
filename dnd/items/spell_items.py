@@ -54,7 +54,7 @@ from dnd.core.content.registration import (
     get_content_declaration,
     item_factory,
 )
-from dnd.core.content.runtime import RuntimeBehaviorKind
+from dnd.types.behaviors import RuntimeBehaviorKind
 from dnd.types.rolls import AttackOutcome
 from dnd.types.abilities import AbilityName
 from dnd.core.events.resolution_events import (
@@ -67,7 +67,7 @@ from dnd.core.events.events_registry import (
 )
 from dnd.types.damage import DamageType
 from dnd.core.values import ModifiableValue
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from dnd.spells.abjuration import (
     MageArmor,
 )
@@ -128,7 +128,7 @@ class SpellGrantingItem(UsableItem):
         if self.charges == 0 or not self.use_action_templates:
             return []
         result: list[BaseAction] = []
-        source_item_presentation = self.to_item_presentation_state()
+        source_item_state = self.to_item_state()
         for template in self.use_action_templates:
             template_charge_cost = template.charge_cost
             if (
@@ -158,7 +158,7 @@ class SpellGrantingItem(UsableItem):
                         ),
                     ],
                     source_item_uuid=self.uuid,
-                    source_item_presentation=source_item_presentation,
+                    source_item_state=source_item_state,
                     source_entity_uuid=user_entity_uuid,
                     template=True,
                     charge_cost=template_charge_cost,
@@ -171,7 +171,7 @@ class SpellGrantingItem(UsableItem):
                     "uuid": uuid4(),
                     "source_entity_uuid": user_entity_uuid,
                     "source_item_uuid": self.uuid,
-                    "source_item_presentation": source_item_presentation,
+                    "source_item_state": source_item_state,
                     "charge_cost": template_charge_cost,
                 },
             ))
@@ -1024,6 +1024,293 @@ def _build_scroll_of_invisibility(
         ),
         stack_suffix=f"scroll_invisibility_l{parameters.cast_level}",
     )
+
+
+def _bind_direct_item_action(
+    item: SpellGrantingItem,
+    action: BaseAction,
+) -> None:
+    """Bind one item-owned action to direct semantic identities."""
+    action.provided_by_id = item.semantic_key
+    action.origin_root_id = item.semantic_key
+    action.bind_behavior_owner(origin_root_id=item.semantic_key)
+
+
+def build_acid_flask(source_entity_uuid: UUID) -> SpellGrantingItem:
+    """Construct one Acid Flask without a recipe or content registry."""
+    action = _AcidFlaskSpell(
+        source_entity_uuid=source_entity_uuid,
+        caster_level=1,
+        template=True,
+        semantic_key="spell.item.acid_flask",
+        behavior_id="spell.item.acid_flask",
+    )
+    item = SpellGrantingItem(
+        source_entity_uuid=source_entity_uuid,
+        semantic_key="consumable.acid_flask",
+        name="Acid Flask",
+        description="Throw for a two-by-two 2d4 acid splash.",
+        scroll_cast_level=0,
+        use_action_templates=[action],
+        stack_id="acid_flask",
+        map_char="!",
+    )
+    _bind_direct_item_action(item, action)
+    return item
+
+
+def build_invisibility_scroll(
+    source_entity_uuid: UUID,
+    *,
+    cast_level: int = 2,
+) -> SpellGrantingItem:
+    """Construct one Invisibility scroll without a recipe lookup."""
+    if cast_level < 2:
+        raise ValueError("Invisibility scroll cast_level must be at least 2")
+    action = Invisibility(
+        source_entity_uuid=source_entity_uuid,
+        caster_level=max(3, cast_level),
+        cast_at_level=cast_level,
+        template=True,
+        semantic_key="spell.invisibility",
+        behavior_id="spell.invisibility",
+    )
+    item = SpellGrantingItem(
+        source_entity_uuid=source_entity_uuid,
+        semantic_key="spell_item.scroll_invisibility",
+        name="Scroll of Invisibility",
+        description="Casts Invisibility without expending a spell slot.",
+        scroll_cast_level=cast_level,
+        use_action_templates=[action],
+        stack_id=f"scroll_invisibility_l{cast_level}",
+    )
+    _bind_direct_item_action(item, action)
+    return item
+
+
+def _build_direct_scroll(
+    source_entity_uuid: UUID,
+    *,
+    item_id: str,
+    display_name: str,
+    description: str,
+    spell_id: str,
+    spell_type: type[SpellAction],
+    caster_level: int,
+    cast_level: int,
+) -> SpellGrantingItem:
+    action = spell_type(
+        source_entity_uuid=source_entity_uuid,
+        caster_level=caster_level,
+        cast_at_level=cast_level,
+        template=True,
+        semantic_key=spell_id,
+        behavior_id=spell_id,
+    )
+    item = SpellGrantingItem(
+        source_entity_uuid=source_entity_uuid,
+        semantic_key=item_id,
+        name=display_name,
+        description=description,
+        scroll_cast_level=cast_level,
+        use_action_templates=[action],
+        stack_id=f"{item_id}.level_{cast_level}",
+    )
+    _bind_direct_item_action(item, action)
+    return item
+
+
+def build_fireball_scroll(
+    source_entity_uuid: UUID,
+    *,
+    cast_level: int = 3,
+) -> SpellGrantingItem:
+    return _build_direct_scroll(
+        source_entity_uuid,
+        item_id="spell_item.scroll_fireball",
+        display_name="Scroll of Fireball",
+        description="Casts Fireball without expending a spell slot.",
+        spell_id="spell.fireball",
+        spell_type=Fireball,
+        caster_level=max(5, 2 * cast_level - 1),
+        cast_level=cast_level,
+    )
+
+
+def build_magic_missile_scroll(
+    source_entity_uuid: UUID,
+    *,
+    cast_level: int = 1,
+) -> SpellGrantingItem:
+    return _build_direct_scroll(
+        source_entity_uuid,
+        item_id="spell_item.scroll_magic_missile",
+        display_name="Scroll of Magic Missile",
+        description="Casts Magic Missile without expending a spell slot.",
+        spell_id="spell.magic_missile",
+        spell_type=MagicMissile,
+        caster_level=max(1, 2 * cast_level - 1),
+        cast_level=cast_level,
+    )
+
+
+def build_hold_person_scroll(
+    source_entity_uuid: UUID,
+    *,
+    cast_level: int = 2,
+) -> SpellGrantingItem:
+    return _build_direct_scroll(
+        source_entity_uuid,
+        item_id="spell_item.scroll_hold_person",
+        display_name="Scroll of Hold Person",
+        description="Casts Hold Person without expending a spell slot.",
+        spell_id="spell.hold_person",
+        spell_type=HoldPerson,
+        caster_level=max(3, 2 * cast_level - 1),
+        cast_level=cast_level,
+    )
+
+
+def build_mage_armor_scroll(
+    source_entity_uuid: UUID,
+    *,
+    cast_level: int = 1,
+) -> SpellGrantingItem:
+    if cast_level < 1:
+        raise ValueError("Mage Armor scroll cast_level must be positive")
+    return _build_direct_scroll(
+        source_entity_uuid,
+        item_id="spell_item.scroll_mage_armor",
+        display_name="Scroll of Mage Armor",
+        description="Casts Mage Armor without expending a spell slot.",
+        spell_id="spell.mage_armor",
+        spell_type=MageArmor,
+        caster_level=max(1, 2 * cast_level - 1),
+        cast_level=cast_level,
+    )
+
+
+def build_fire_bolt_scroll(
+    source_entity_uuid: UUID,
+    *,
+    caster_level: int = 5,
+) -> SpellGrantingItem:
+    if not 1 <= caster_level <= 20:
+        raise ValueError("Fire Bolt scroll caster_level must be between 1 and 20")
+    action = FireBolt(
+        source_entity_uuid=source_entity_uuid,
+        caster_level=caster_level,
+        cast_at_level=0,
+        template=True,
+        semantic_key="spell.fire_bolt",
+        behavior_id="spell.fire_bolt",
+    )
+    item = SpellGrantingItem(
+        source_entity_uuid=source_entity_uuid,
+        semantic_key="spell_item.scroll_fire_bolt",
+        name="Scroll of Fire Bolt",
+        description="Casts Fire Bolt without expending a spell slot.",
+        scroll_cast_level=0,
+        use_action_templates=[action],
+        stack_id=f"spell_item.scroll_fire_bolt.caster_{caster_level}",
+    )
+    _bind_direct_item_action(item, action)
+    return item
+
+
+def build_spike_growth_scroll(
+    source_entity_uuid: UUID,
+    *,
+    cast_level: int = 2,
+) -> SpellGrantingItem:
+    return _build_direct_scroll(
+        source_entity_uuid,
+        item_id="spell_item.scroll_spike_growth",
+        display_name="Scroll of Spike Growth",
+        description="Casts Spike Growth without expending a spell slot.",
+        spell_id="spell.spike_growth",
+        spell_type=SpikeGrowth,
+        caster_level=max(3, 2 * cast_level - 1),
+        cast_level=cast_level,
+    )
+
+
+def build_wand_of_magic_missiles(
+    source_entity_uuid: UUID,
+    *,
+    charges: int = 3,
+) -> SpellGrantingItem:
+    action = MagicMissile(
+        source_entity_uuid=source_entity_uuid,
+        caster_level=1,
+        cast_at_level=1,
+        template=True,
+        semantic_key="spell.magic_missile",
+        behavior_id="spell.magic_missile",
+    )
+    item = SpellGrantingItem(
+        source_entity_uuid=source_entity_uuid,
+        semantic_key="spell_item.wand_magic_missiles",
+        name="Wand of Magic Missiles",
+        description="Casts Magic Missile by spending one charge.",
+        scroll_cast_level=1,
+        charges=charges,
+        max_charges=charges,
+        is_consumable=False,
+        use_action_templates=[action],
+    )
+    _bind_direct_item_action(item, action)
+    return item
+
+
+def build_wand_of_fire(
+    source_entity_uuid: UUID,
+    *,
+    charges: int = 7,
+) -> SpellGrantingItem:
+    actions: list[SpellAction] = [
+        BurningHands(
+            source_entity_uuid=source_entity_uuid,
+            caster_level=1,
+            cast_at_level=1,
+            template=True,
+            charge_cost=1,
+            semantic_key="spell.burning_hands",
+            behavior_id="spell.burning_hands",
+        ),
+        Fireball(
+            source_entity_uuid=source_entity_uuid,
+            caster_level=5,
+            cast_at_level=3,
+            template=True,
+            charge_cost=3,
+            semantic_key="spell.fireball",
+            behavior_id="spell.fireball",
+        ),
+        Fireball(
+            source_entity_uuid=source_entity_uuid,
+            caster_level=7,
+            cast_at_level=4,
+            template=True,
+            charge_cost=4,
+            semantic_key="spell.fireball",
+            behavior_id="spell.fireball",
+        ),
+    ]
+    item = SpellGrantingItem(
+        source_entity_uuid=source_entity_uuid,
+        semantic_key="spell_item.wand_fire",
+        name="Wand of Fire",
+        description="Casts Burning Hands or Fireball at fixed charge costs.",
+        scroll_cast_level=1,
+        charges=charges,
+        max_charges=charges,
+        is_consumable=False,
+        use_action_templates=actions,
+    )
+    for action in actions:
+        _bind_direct_item_action(item, action)
+    return item
 
 
 FIREBALL_SCROLL_DECLARATION = get_content_declaration(

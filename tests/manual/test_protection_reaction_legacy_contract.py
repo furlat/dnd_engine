@@ -18,9 +18,9 @@ from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
 from dnd.types.equipment import WeaponSlot
 from dnd.types.rolls import AdvantageStatus
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from dnd.items.armors import SHIELD_RECIPE
-from dnd.monsters.bestiary import create_goblin, create_skeleton
+from tests.engine.support import create_test_monster
 from tests.engine.support import reset_combat_state
 from dnd.core.gridmap import get_map
 
@@ -35,7 +35,7 @@ class ProtectionScene:
 def _protection_scene(*, shield: bool = True) -> ProtectionScene:
     reset_combat_state()
     get_map().create_rectangle(0, 0, 14, 10)
-    protector = create_skeleton(
+    protector = create_test_monster("monster.skeleton", 
         name="Protection Fighter",
         position=(4, 4),
         faction="heroes",
@@ -51,12 +51,12 @@ def _protection_scene(*, shield: bool = True) -> ProtectionScene:
             WeaponSlot.MELEE_OFF,
         )
     protector.add_event_handler(create_protection_handler(protector.uuid))
-    ally = create_goblin(
+    ally = create_test_monster("monster.goblin", 
         name="Protection Ally",
         position=(4, 5),
         faction="heroes",
     )
-    enemy = create_skeleton(
+    enemy = create_test_monster("monster.skeleton", 
         name="Protection Enemy",
         position=(4, 6),
         faction="monsters",

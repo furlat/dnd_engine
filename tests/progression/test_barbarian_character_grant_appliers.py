@@ -58,11 +58,11 @@ from dnd.core.events.events_registry import (
 from dnd.types.damage import DamageType
 from dnd.types.rolls import AdvantageStatus
 from dnd.conditions import Charmed, Frightened
-from dnd.creature_transforms import (
+from dnd.entities.creature_transforms import (
     apply_incapacitated_transform,
     remove_modifier_ownership,
 )
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from dnd.runtime_reset import reset_engine_runtime
 
 

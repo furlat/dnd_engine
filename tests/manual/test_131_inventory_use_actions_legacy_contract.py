@@ -44,9 +44,10 @@ from dnd.core.dice import fixed_dice_faces
 from dnd.types.equipment import WeaponSlot
 from dnd.types.abilities import AbilityName
 from dnd.core.gridmap import get_map
+from dnd.core.base_conditions import BaseCondition
 from dnd.types.damage import DamageType
 from dnd.core.modifiers import NumericalModifier
-from dnd.entity import Entity, EntityConfig
+from dnd.entities.entity import Entity, EntityConfig
 from dnd.items.consumables import (
     CONCENTRATION_FIRE_WEAPON_COAT_RECIPE,
     FIRE_WEAPON_COAT_RECIPE,
@@ -72,8 +73,8 @@ from dnd.items.spell_items import (
 )
 from dnd.items.environment_interactables import ArcaneDevice
 from dnd.items.weapons import SHORTSWORD_RECIPE
-from dnd.spatial.effect_controllers import AreaSpatialEffectController
-from dnd.spatial.effect_base import SpatialEffect
+from dnd.spatial.area_conditions import AreaCondition
+from dnd.spatial.area_conditions import SpatialCondition
 from dnd.spells.evocation import Fireball
 from tests.engine.support import (
     force_attack_hit,
@@ -1100,14 +1101,14 @@ def test_spike_growth_scroll_owns_entry_damage_and_terrain_cleanup() -> None:
     assert result is not None and not result.canceled
     assert "Concentrating" in caster.active_conditions
     matches = [
-        (effect, effect.active_conditions["Spike Growth Zone"])
-        for effect in SpatialEffect.active_effects()
-        if "Spike Growth Zone" in effect.active_conditions
+        condition
+        for condition in get_map().get_spatial_conditions()
+        if condition.name == "Spike Growth Zone"
     ]
     assert len(matches) == 1
-    effect, controller = matches[0]
-    assert isinstance(controller, AreaSpatialEffectController)
-    assert (effect.uuid, controller.uuid) in caster.active_conditions[
+    condition = matches[0]
+    assert isinstance(condition, AreaCondition)
+    assert (condition.uuid, condition.uuid) in caster.active_conditions[
         "Concentrating"
     ].linked_conditions
     tile = grid.get_tile(*preview.position)
@@ -1123,7 +1124,7 @@ def test_spike_growth_scroll_owns_entry_damage_and_terrain_cleanup() -> None:
     caster.remove_condition("Concentrating")
 
     assert "Concentrating" not in caster.active_conditions
-    assert SpatialEffect.get_effect(effect.uuid) is None
+    assert BaseCondition.get(effect.uuid) is None
     assert tile.walking_cost.normalized_score == 1
 
 

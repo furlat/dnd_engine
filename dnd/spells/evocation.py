@@ -13,7 +13,7 @@ from uuid import UUID
 from pydantic import Field, PrivateAttr
 
 from dnd.content.spatial_effect_materialization import (
-    materialize_spatial_effect,
+    materialize_spatial_condition,
 )
 from dnd.core.base_actions import (
     ActionCategory,
@@ -79,7 +79,7 @@ from dnd.blocks.equipment import (
     Shield as ShieldItem,
 )
 
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from dnd.actions.standard import (
     Attack,
     AttackDamageContribution,
@@ -99,12 +99,8 @@ from dnd.content.spatial_effect_recipes import (
     GUST_OF_WIND_FIELD_RECIPE,
     ICE_STORM_SURFACE_RECIPE,
 )
-from dnd.spatial.effect_base import (
-    FieldEffect,
-    GroundEffect,
-    SpatialEffect,
-    SpatialEffectController,
-)
+from dnd.spatial.area_conditions import SpatialCondition
+from dnd.types.spatial_effects import SpatialEffectChangeOperation
 
 
 @srd_spell_identity(
@@ -2463,10 +2459,10 @@ class EldritchBlast(SpellAction):
             status_message=f"{self.name} hit for {damage_roll.total} force damage"
         )
 
-from dnd.spatial.effect_controllers import AreaSpatialEffectController
+from dnd.spatial.area_conditions import AreaCondition
 
 
-class GustOfWindZone(AreaSpatialEffectController):
+class GustOfWindZone(AreaCondition):
     """Zone for Gust of Wind - 60ft line of wind that pushes creatures."""
     name: str = Field(default="Gust of Wind Zone", description="Display name for the gust of wind zone zone condition.")
     description: str = Field(default="Strong wind pushes creatures and costs extra movement", description="Rules-facing summary for the gust of wind zone zone condition.")
@@ -2479,17 +2475,16 @@ class GustOfWindZone(AreaSpatialEffectController):
     hazard_filter: Optional[HazardFilter] = Field(default=HazardFilter.ALL, description="Creature relationship filter used for gust of wind zone hazard markers.")
 
     spell_dc: int = Field(default=10, description="Spell save DC used by gust of wind zone saving throws.")
-    caster_position: Tuple[int, int] = Field(default=(0, 0), description="Domain value for caster_position on gust of wind zone.")
     _pushes_in_flight: Set[UUID] = PrivateAttr(default_factory=set)
 
     def _compute_affected_positions(self) -> Set[Tuple[int, int]]:
         """Compute line from caster in the chosen direction."""
         if not self.zone_direction:
-            return {self.zone_center}
+            return {self.position}
         dx, dy = self.zone_direction
         length_tiles = self.zone_radius_feet // 5
-        target = (self.zone_center[0] + dx * length_tiles,
-                  self.zone_center[1] + dy * length_tiles)
+        target = (self.position[0] + dx * length_tiles,
+                  self.position[1] + dy * length_tiles)
 
         line = Line(
             source_entity_uuid=self.source_entity_uuid,
@@ -2497,18 +2492,13 @@ class GustOfWindZone(AreaSpatialEffectController):
             length_feet=self.zone_radius_feet,
             width_feet=10
         )
-        line.compute_objective(caster_pos=self.zone_center)
+        line.compute_objective(caster_pos=self.position)
         return set(line.affected_positions)
-
-    trigger_kinds: frozenset[SpatialEffectTriggerKind] = frozenset({
-        SpatialEffectTriggerKind.ENTER,
-        SpatialEffectTriggerKind.TURN_START,
-    })
 
     def _create_zone_entry_handler(self) -> EventHandler:
         source_uuid = self.source_entity_uuid
         dc = self.spell_dc
-        caster_pos = self.caster_position
+        caster_pos = self.position
 
         def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
             if not isinstance(event, SpatialChangeEvent) or not event.entity_uuid:
@@ -2539,7 +2529,7 @@ class GustOfWindZone(AreaSpatialEffectController):
     def _create_zone_turn_start_handler(self) -> EventHandler:
         source_uuid = self.source_entity_uuid
         dc = self.spell_dc
-        caster_pos = self.caster_position
+        caster_pos = self.position
         zone_condition = self
 
         def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
@@ -2765,29 +2755,27 @@ class GustOfWind(SpellAction):
         length = max(abs(dx), abs(dy), 1)
         direction = (round(dx / length), round(dy / length))
 
-        field = materialize_spatial_effect(
+        zone = materialize_spatial_condition(
             GUST_OF_WIND_FIELD_RECIPE,
             caster.uuid,
             position=caster.senses.position,
             faction=caster.faction,
-            expected_type=FieldEffect,
+            condition_type=GustOfWindZone,
+            condition_fields={
+                "zone_direction": direction,
+                "spell_dc": dc,
+                "effect_origin": parent_event.to_effect_origin(),
+            },
         )
-        zone = GustOfWindZone(
-            source_entity_uuid=caster.uuid,
-            target_entity_uuid=field.uuid,
-            zone_center=caster.senses.position,
-            zone_direction=direction,
-            spell_dc=dc,
-            caster_position=caster.senses.position,
-            effect_origin=parent_event.to_effect_origin(),
-        )
-        field.install_controller(zone, parent_event=parent_event)
+        activation = zone.activate(parent_event=parent_event)
+        if activation is None or activation.canceled or not zone.applied:
+            return
 
         concentration = self.ensure_concentration(parent_event)
-        concentration.add_linked_condition(field.uuid, zone.uuid)
+        concentration.add_linked_condition(zone.uuid, zone.uuid)
 
 
-class IceStormTerrain(AreaSpatialEffectController):
+class IceStormTerrain(AreaCondition):
     """Temporary difficult terrain from Ice Storm. Lasts 1 round."""
     name: str = Field(default="Ice Storm Terrain", description="Display name for the ice storm terrain zone condition.")
     description: str = Field(default="Ground covered in ice - difficult terrain", description="Rules-facing summary for the ice storm terrain zone condition.")
@@ -2925,22 +2913,19 @@ class IceStorm(SpellAction):
         if target_pos is None:
             return
 
-        surface = materialize_spatial_effect(
+        terrain = materialize_spatial_condition(
             ICE_STORM_SURFACE_RECIPE,
             caster.uuid,
             position=target_pos,
             faction=caster.faction,
-            expected_type=GroundEffect,
-        )
-        terrain = IceStormTerrain(
-            source_entity_uuid=caster.uuid,
-            target_entity_uuid=surface.uuid,
-            zone_center=target_pos,
-            effect_origin=effect_event.to_effect_origin(),
+            condition_type=IceStormTerrain,
+            condition_fields={
+                "effect_origin": effect_event.to_effect_origin(),
+            },
         )
         terrain.duration.duration_type = DurationType.ROUNDS
         terrain.duration.duration = 1
-        surface.install_controller(terrain, parent_event=effect_event)
+        terrain.activate(parent_event=effect_event)
 
 
 @srd_action_identity(
@@ -3782,7 +3767,7 @@ class Light(SpellAction):
         )
 
 
-class ContinualFlameController(SpatialEffectController):
+class ContinualFlameCondition(SpatialCondition):
     """Own the permanent light source attached to a continual-flame field."""
 
     name: str = Field(default="Continual Flame", description="Effect name.")
@@ -3795,12 +3780,9 @@ class ContinualFlameController(SpatialEffectController):
         frozen=True,
         description="The spatial effect itself is the public identity.",
     )
-    position: Tuple[int, int] = Field(
-        description="Exact grid cell occupied by the flame.",
-    )
     _light_source_uuid: Optional[UUID] = PrivateAttr(default=None)
 
-    def resolve_effect_footprint(self) -> Set[Tuple[int, int]]:
+    def resolve_condition_footprint(self) -> Set[Tuple[int, int]]:
         """Continual Flame occupies exactly its valid target cell."""
         return {self.position} if get_map().has_tile(*self.position) else set()
 
@@ -3808,6 +3790,21 @@ class ContinualFlameController(SpatialEffectController):
         """Remove any anchored light created before an exceptional failure."""
         if self._light_source_uuid is not None:
             get_map().remove_light_source(self._light_source_uuid)
+        self._light_source_uuid = None
+
+    def _release_owned_runtime_state(
+        self,
+        *,
+        parent_event: Optional[Event] = None,
+    ) -> None:
+        """Remove the anchored light after accepted removal or failed setup."""
+        if self._light_source_uuid is not None:
+            get_map().remove_light_source(
+                self._light_source_uuid,
+                parent_event=(
+                    parent_event.uuid if parent_event is not None else None
+                ),
+            )
         self._light_source_uuid = None
 
     def _apply(
@@ -3820,12 +3817,7 @@ class ContinualFlameController(SpatialEffectController):
         List[UUID],
         Optional[Event],
     ]:
-        if self.target_entity_uuid is None:
-            return [], [], [], [], declaration_event.cancel(
-                status_message="Continual Flame has no spatial owner",
-            )
-        effect = SpatialEffect.get_effect(self.target_entity_uuid)
-        if effect is None or effect.anchor_uuid is None:
+        if self.anchor_uuid is None:
             return [], [], [], [], declaration_event.cancel(
                 status_message="Continual Flame has no world-object anchor",
             )
@@ -3834,9 +3826,10 @@ class ContinualFlameController(SpatialEffectController):
             very_bright_radius_feet=0,
             bright_radius_feet=20,
             dim_radius_feet=20,
-            anchor_uuid=effect.anchor_uuid,
+            anchor_uuid=self.anchor_uuid,
             parent_event=declaration_event.uuid,
         )
+        self._commit_activation_footprint(parent_event=declaration_event)
         return (
             [],
             [],
@@ -3852,33 +3845,51 @@ class ContinualFlameController(SpatialEffectController):
         parent_event: Event,
     ) -> None:
         """Move the field footprint and light with its exact world object."""
-        if self.target_entity_uuid is None or self._light_source_uuid is None:
+        if self._light_source_uuid is None:
             raise RuntimeError("Continual Flame anchor runtime is unavailable")
-        effect = SpatialEffect.get_effect(self.target_entity_uuid)
-        if effect is None:
-            raise RuntimeError("Continual Flame lost its spatial owner")
-        self.position = position
-        effect.set_position(position)
-        get_map().move_light_source(
-            self._light_source_uuid,
-            position,
-            parent_event=parent_event.uuid,
+        grid = get_map()
+        previous = set(self.affected_positions)
+        grid.validate_spatial_condition_positions(
+            condition=self,
+            layer=self.layer,
+            occupancy_policy=self.occupancy_policy,
+            positions={position},
         )
-        effect.synchronize_footprint(
-            {position},
+        old_position = self.position
+        try:
+            grid.set_spatial_condition_positions(
+                condition=self,
+                layer=self.layer,
+                occupancy_policy=self.occupancy_policy,
+                positions={position},
+            )
+            grid.move_light_source(
+                self._light_source_uuid,
+                position,
+                parent_event=parent_event.uuid,
+            )
+            self.position = position
+            self.affected_positions = {position}
+        except BaseException:
+            grid.set_spatial_condition_positions(
+                condition=self,
+                layer=self.layer,
+                occupancy_policy=self.occupancy_policy,
+                positions=previous,
+            )
+            grid.move_light_source(
+                self._light_source_uuid,
+                old_position,
+                parent_event=parent_event.uuid,
+            )
+            self.position = old_position
+            self.affected_positions = previous
+            raise
+        self._publish_change(
+            SpatialEffectChangeOperation.FOOTPRINT_CHANGED,
+            previous_positions=previous,
             parent_event=parent_event,
         )
-
-    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
-        """Remove the object-attached light when the field retires."""
-        if self._light_source_uuid is not None:
-            get_map().remove_light_source(
-                self._light_source_uuid,
-                parent_event=event.uuid if event is not None else None,
-            )
-            self._light_source_uuid = None
-        return super()._remove(event)
-
 
 class ContinualFlame(SpellAction):
     """Continual Flame - 2nd level Evocation (NOT concentration)
@@ -3942,21 +3953,22 @@ class ContinualFlame(SpellAction):
             status_message=f"{caster.name} casts Continual Flame"
         )
 
-        flame = materialize_spatial_effect(
+        flame = materialize_spatial_condition(
             CONTINUAL_FLAME_FIELD_RECIPE,
             caster.uuid,
             position=position,
             faction=caster.faction,
             anchor_uuid=target.uuid,
-            expected_type=FieldEffect,
+            condition_type=ContinualFlameCondition,
+            condition_fields={
+                "effect_origin": execution_event.to_effect_origin(),
+            },
         )
-        controller = ContinualFlameController(
-            source_entity_uuid=caster.uuid,
-            target_entity_uuid=flame.uuid,
-            position=position,
-            effect_origin=execution_event.to_effect_origin(),
-        )
-        flame.install_controller(controller, parent_event=effect_event)
+        activation = flame.activate(parent_event=effect_event)
+        if activation is None or activation.canceled or not flame.applied:
+            return effect_event.cancel(
+                status_message="Continual Flame field could not be established",
+            )
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,

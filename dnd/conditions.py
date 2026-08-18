@@ -30,8 +30,8 @@ from dnd.core.content.registration import (
     behavior_identity,
     get_content_declaration,
 )
-from dnd.core.content.runtime import RuntimeBehaviorKind
-from dnd.entity import Entity
+from dnd.types.behaviors import RuntimeBehaviorKind
+from dnd.entities.entity import Entity
 from typing import Callable, Dict, Any, Optional, List, Literal, Tuple, TypeVar
 from dnd.types.damage import DamageType
 from dnd.core.modifiers import (
@@ -80,7 +80,7 @@ from dnd.core.events.action_events import (
 )
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_object import BaseObject
-from dnd.creature_transforms import (
+from dnd.entities.creature_transforms import (
     apply_incapacitated_transform,
     apply_opportunity_attack_immunity_transform,
     apply_paralyzed_transform,
@@ -1882,6 +1882,8 @@ class Concentrating(BaseCondition):
             block = BaseBlock.get(block_uuid)
             if block:
                 block.remove_condition_by_uuid(condition_uuid, parent_event=parent_event)
+            elif child is not None and isinstance(child, BaseCondition):
+                child.remove_from_runtime_owner(parent_event=parent_event)
 
         slot.remove_from_register()
         del self.concentration_slots[slot_uuid]
@@ -1900,6 +1902,25 @@ class Concentrating(BaseCondition):
 
         if self._active_slot_uuid and self._active_slot_uuid in self.concentration_slots:
             self.concentration_slots[self._active_slot_uuid].linked_entries.append((target_block_uuid, condition_uuid))
+
+    def unlink_runtime_child(self, condition_uuid: UUID) -> None:
+        """Remove an independently retired effect from its concentration slot."""
+        super().unlink_runtime_child(condition_uuid)
+        empty_slots: List[UUID] = []
+        for slot_uuid, slot in self.concentration_slots.items():
+            slot.linked_entries = [
+                pair
+                for pair in slot.linked_entries
+                if pair[1] != condition_uuid
+            ]
+            if not slot.linked_entries:
+                empty_slots.append(slot_uuid)
+        for slot_uuid in empty_slots:
+            self.concentration_slots[slot_uuid].remove_from_register()
+            del self.concentration_slots[slot_uuid]
+            if self._active_slot_uuid == slot_uuid:
+                self._active_slot_uuid = None
+        self._sync_spell_name()
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         if not self.target_entity_uuid:

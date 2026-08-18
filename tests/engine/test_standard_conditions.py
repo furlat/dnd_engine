@@ -37,7 +37,7 @@ from dnd.types.damage import DamageType
 from dnd.types.rolls import AdvantageStatus, AutoHitStatus, CriticalStatus
 from dnd.types.damage import ResistanceStatus
 from dnd.core.values import BaseValue
-from dnd.entity import Entity, EntityConfig
+from dnd.entities.entity import Entity, EntityConfig
 from dnd.conditions import (
     Blinded,
     Charmed,

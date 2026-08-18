@@ -25,7 +25,7 @@ from dnd.core.content.identities import (
 from dnd.core.content.origin_support import OriginRuntimeSupport
 from dnd.core.content.recipes import ContentRecipe
 from dnd.types.equipment import EquipmentSlot
-from dnd.types.progression import CasterProgression
+from dnd.types.progression import CasterProgression, RitualPreparationPolicy
 from dnd.types import abilities as ability_types
 from dnd.types.rolls import HitDieSize
 from dnd.core.progression import point_buy_cost
@@ -957,15 +957,6 @@ class ClassProficiencyPackage(BaseModel):
                 "proficiency choices must be unique and ordered",
             )
         return self
-
-
-class RitualPreparationPolicy(str, Enum):
-    """How one spellcasting source proves ritual entitlement."""
-
-    NONE = "none"
-    KNOWN = "known"
-    PREPARED = "prepared"
-    SPELLBOOK = "spellbook"
 
 
 class ClassSpellEntitlement(BaseModel):

@@ -17,8 +17,8 @@ from dnd.core.content.registration import get_content_declaration
 from dnd.core.dice import fixed_dice_faces
 from dnd.types.equipment import WeaponSlot
 from dnd.core.gridmap import get_map
-from dnd.types.encounter import EncounterState, TurnState
-from dnd.entity import Entity
+from dnd.types.encounter_state import EncounterState, TurnState
+from dnd.entities.entity import Entity
 from tests.manual.server_test_client import reset_server_test_runtime
 from server.event_server import (
     app,

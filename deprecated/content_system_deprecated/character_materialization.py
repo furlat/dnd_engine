@@ -85,7 +85,7 @@ from dnd.core.progression import (
     proficiency_bonus_for_level,
 )
 from dnd.core.values import ModifiableValue
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from dnd.items.torches import Torch
 
 
@@ -207,7 +207,7 @@ def _install_proficiency(
         if subject.content_ref is not None:
             entity.creature_proficiencies.add_specific_weapon_source(
                 resolved_source_id,
-                subject.content_ref,
+                subject.content_ref.identity_key,
             )
         elif subject_id == "weapon.simple":
             entity.creature_proficiencies.add_weapon_source(

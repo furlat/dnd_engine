@@ -18,11 +18,7 @@ from dnd.actions.operations import (
     get_available_actions,
     setup_standard_actions,
 )
-from dnd.blocks.equipment import (
-    Weapon,
-)
-from dnd.content_system.item_bindings import ItemRuntimeOrigin
-from dnd.content_system.item_materialization import materialize_item
+from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.core.dice import fixed_dice_faces
 from dnd.types.equipment import WeaponSlot
 from dnd.core.events.events_registry import (
@@ -36,8 +32,7 @@ from dnd.core.events.events_registry import (
 from dnd.types.damage import DamageType
 from dnd.core.modifiers import AutoHitModifier
 from dnd.types.rolls import AutoHitStatus
-from dnd.entity import Entity
-from dnd.items.weapons import DAGGER_RECIPE
+from dnd.entities.entity import Entity
 from dnd.spells.abjuration import (
     Banishment,
     GlobeOfInvulnerability,
@@ -47,7 +42,7 @@ from dnd.spells.conjuration import Web
 from dnd.spells.evocation import Fireball, FireBolt, register_true_strike
 from dnd.spells.necromancy import FingerOfDeath
 from dnd.spells.transmutation import Telekinesis
-from dnd.spatial.effect_base import FieldEffect, SpatialEffect
+from dnd.core.gridmap import get_map
 from tests.engine.support import get_hp, has_condition
 from tests.manual.spell_regression_support import (
     create_spell_regression_actor,
@@ -94,12 +89,7 @@ def _true_strike_scene(caster_level: int) -> tuple[Entity, Entity]:
         "monsters",
     )
     caster.equipment.equip(
-        materialize_item(
-            DAGGER_RECIPE,
-            caster.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
-        ),
+        build_authored_item("weapon.dagger", caster.uuid),
         WeaponSlot.MELEE_MAIN,
     )
     setup_standard_actions(caster)
@@ -442,13 +432,11 @@ def _globe_scene() -> tuple[Entity, Entity, Entity]:
     return globe_caster, inside, outside_caster
 
 
-def _active_globe_zone() -> tuple[FieldEffect, GlobeZone]:
-    """Resolve the one independently owned active Globe controller."""
+def _active_globe_zone() -> GlobeZone:
+    """Resolve the one independently owned active Globe condition."""
     matches = [
-        (effect, condition)
-        for effect in SpatialEffect.active_effects()
-        if isinstance(effect, FieldEffect)
-        for condition in effect.active_conditions.values()
+        condition
+        for condition in get_map().get_spatial_conditions()
         if isinstance(condition, GlobeZone)
     ]
     assert len(matches) == 1
@@ -509,8 +497,7 @@ def test_globe_direction_level_and_concentration_contract() -> None:
     assert not has_condition(globe_caster, "Globe of Invulnerability Zone")
     assert not any(
         isinstance(condition, GlobeZone)
-        for effect in SpatialEffect.active_effects()
-        for condition in effect.active_conditions.values()
+        for condition in get_map().get_spatial_conditions()
     )
     outside_caster.action_economy.reset_all_costs()
     post_cleanup_hp = get_hp(inside)
@@ -556,12 +543,12 @@ def test_globe_partially_filters_aoe_and_uses_base_spell_level() -> None:
 def test_globe_is_immobile() -> None:
     """Old case 17: the protected geometry remains anchored at cast time."""
     globe_caster, inside, outside_caster = _globe_scene()
-    _, zone = _active_globe_zone()
+    zone = _active_globe_zone()
     original_positions = set(zone.affected_positions)
 
     Entity.update_entity_position(globe_caster, (20, 12))
 
-    assert zone.zone_center == (10, 7)
+    assert zone.position == (10, 7)
     assert set(zone.affected_positions) == original_positions
     inside_hp = get_hp(inside)
     modifier_uuid = _force_attack_outcome(outside_caster, AutoHitStatus.AUTOHIT)

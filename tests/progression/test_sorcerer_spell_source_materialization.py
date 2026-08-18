@@ -41,7 +41,7 @@ from dnd.core.content.descriptors import (
     ContentDescriptorSpec,
     ContentVisibility,
 )
-from dnd.core.content.durable_characters import RitualPreparationPolicy
+from dnd.types.progression import RitualPreparationPolicy
 from dnd.core.content.durable_characters import (
     AbilityScoreAllocation,
     BackgroundDefinition,
@@ -85,7 +85,7 @@ from dnd.core.events.events_registry import (
     EventType,
 )
 from dnd.types.progression import CasterProgression
-from dnd.entity import Entity, EntityConfig
+from dnd.entities.entity import Entity, EntityConfig
 from dnd.player_character_body import PLAYER_CHARACTER_BODY_RECIPE
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.spells.evocation import FireBolt, MagicMissile

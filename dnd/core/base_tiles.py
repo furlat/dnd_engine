@@ -4,8 +4,10 @@ from typing import Dict, Optional, Tuple
 from uuid import UUID, uuid4
 from pydantic import Field, PrivateAttr, StrictInt, model_validator
 from dnd.core.base_block import BaseBlock
+from dnd.core.base_conditions import BaseCondition
 from dnd.types.world import MovementMode, LightLevel
 from dnd.types.senses import SensesType
+from dnd.types.spatial_effects import SpatialEffectLayer
 from dnd.core.values import ModifiableValue
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.events.world_events import (
@@ -137,6 +139,10 @@ class Tile(BaseBlock):
     )
     _illuminations: Dict[UUID, LightLevel] = PrivateAttr(default_factory=dict)
     _obscurements: Dict[UUID, LightLevel] = PrivateAttr(default_factory=dict)
+    _spatial_condition_uuids: Dict[
+        SpatialEffectLayer,
+        set[UUID],
+    ] = PrivateAttr(default_factory=dict)
 
     @model_validator(mode="after")
     def validate_elevation_surface(self) -> "Tile":
@@ -157,6 +163,60 @@ class Tile(BaseBlock):
             MovementMode.BURROWING: self.burrowing_cost,
         }
         return cost_map[mode].normalized_score
+
+    def add_spatial_condition_reference(
+        self,
+        condition_uuid: UUID,
+        layer: SpatialEffectLayer,
+    ) -> None:
+        """Index one independently owned condition affecting this Tile."""
+        self._spatial_condition_uuids.setdefault(layer, set()).add(
+            condition_uuid,
+        )
+
+    def remove_spatial_condition_reference(
+        self,
+        condition_uuid: UUID,
+        layer: SpatialEffectLayer,
+    ) -> None:
+        """Remove one independently owned condition reference from this Tile."""
+        condition_uuids = self._spatial_condition_uuids.get(layer)
+        if condition_uuids is None:
+            return
+        condition_uuids.discard(condition_uuid)
+        if not condition_uuids:
+            del self._spatial_condition_uuids[layer]
+
+    def get_spatial_condition_uuids(
+        self,
+        layer: Optional[SpatialEffectLayer] = None,
+    ) -> set[UUID]:
+        """Return independently owned condition UUIDs affecting this Tile."""
+        if layer is not None:
+            return set(self._spatial_condition_uuids.get(layer, set()))
+        return {
+            condition_uuid
+            for condition_uuids in self._spatial_condition_uuids.values()
+            for condition_uuid in condition_uuids
+        }
+
+    def get_conditions(self) -> Dict[UUID, BaseCondition]:
+        """Return every direct or spatial condition affecting this Tile."""
+        conditions = dict(self.active_conditions_by_uuid)
+        for condition_uuid in self.get_spatial_condition_uuids():
+            condition = BaseCondition.get(condition_uuid)
+            if not isinstance(condition, BaseCondition):
+                raise RuntimeError(
+                    "Tile spatial-condition index references a missing "
+                    f"condition {condition_uuid}",
+                )
+            if not condition.is_active_spatial_condition():
+                raise RuntimeError(
+                    "Tile spatial-condition index references an inactive "
+                    f"condition {condition_uuid}",
+                )
+            conditions[condition_uuid] = condition
+        return conditions
 
     def blocks_walking(self, requesting_entity_uuid: Optional['UUID'] = None,
                        mode: MovementMode = MovementMode.WALKING) -> bool:

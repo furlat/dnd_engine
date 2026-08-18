@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from pydantic import BaseModel, ConfigDict, Field
-
 from dnd.core.content.descriptors import (
     ContentDescriptorSpec,
     ContentOrdering,
@@ -17,7 +15,6 @@ from dnd.core.content.dependencies import (
     ContentDependencyPhase,
     ContentDependencyRelation,
 )
-from dnd.core.content.materialization import SpatialEffectBuildContext
 from dnd.core.content.provenance import (
     ContentFidelity,
     ContentProvenance,
@@ -28,11 +25,10 @@ from dnd.core.content.recipes import ContentRecipe
 from dnd.core.content.registration import (
     ContentDeclaration,
     get_content_declaration,
-    spatial_effect_factory,
+    spatial_effect_definition,
 )
 from dnd.core.content.spatial_effect_definitions import (
     SpatialEffectDefinition,
-    SpatialEffectLifetimePolicy,
     SpatialEffectTransitionDefinition,
 )
 from dnd.types.spatial_effects import (
@@ -45,35 +41,6 @@ from dnd.types.spatial_effects import (
     SpatialEffectTriggerKind,
     SpatialEffectTransitionAction,
 )
-from dnd.spatial.environmental_effects import (
-    BurningWebGroundEffect,
-    ElectrifiedWaterGroundEffect,
-    FireGroundEffect,
-    IceGroundEffect,
-    OilGroundEffect,
-    SpikeTrapGroundEffect,
-    SteamCloudEffect,
-    WaterGroundEffect,
-)
-from dnd.spatial.effect_base import CloudEffect, FieldEffect, GroundEffect, SpatialEffect
-
-
-class SpatialEffectParameters(BaseModel):
-    """Built-in spell effects have no authored construction variants."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-
-class SpikeTrapParameters(BaseModel):
-    """Authenticated construction parameters for one physical trap network."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    stealth_dc: int | None = Field(
-        default=None,
-        ge=0,
-        description="Passive-perception DC before the trap has been triggered.",
-    )
 
 
 def _descriptor(
@@ -160,7 +127,6 @@ def _definition(
     blocking_policy: SpatialEffectBlockingPolicy = (
         SpatialEffectBlockingPolicy.NONE
     ),
-    permanent: bool = False,
     trigger_kinds: frozenset[SpatialEffectTriggerKind] = frozenset(),
     first_per_turn_trigger_kinds: frozenset[
         SpatialEffectTriggerKind
@@ -171,11 +137,6 @@ def _definition(
         layer=layer,
         occupancy_policy=occupancy_policy,
         blocking_policy=blocking_policy,
-        lifetime_policy=(
-            SpatialEffectLifetimePolicy.PERMANENT_UNTIL_REMOVED
-            if permanent
-            else SpatialEffectLifetimePolicy.CONTROLLER_DURATION
-        ),
         trigger_kinds=trigger_kinds,
         first_per_turn_trigger_kinds=first_per_turn_trigger_kinds,
     )
@@ -193,49 +154,27 @@ _FIELD_DEFINITION = _definition(
     layer=SpatialEffectLayer.FIELD,
     occupancy_policy=SpatialEffectOccupancyPolicy.OVERLAPPING,
 )
-_PERMANENT_WORLD_OBJECT_FIELD_DEFINITION = _definition(
+_WORLD_OBJECT_FIELD_DEFINITION = _definition(
     anchor_kind=SpatialEffectAnchorKind.WORLD_OBJECT,
     layer=SpatialEffectLayer.FIELD,
     occupancy_policy=SpatialEffectOccupancyPolicy.OVERLAPPING,
-    permanent=True,
 )
 
 
-def _build_effect(
-    raw_context: object,
-    *,
-    effect_type: type[SpatialEffect],
-    display_name: str,
-) -> SpatialEffect:
-    context = SpatialEffectBuildContext.model_validate(raw_context)
-    common = {
-        "name": display_name,
-        "description": f"Persistent {display_name} spatial effect.",
-        "source_entity_uuid": context.source_entity_uuid,
-        "content_ref": context.requested_ref,
-        "position": context.position,
-        "faction": context.faction,
-        "anchor_kind": context.anchor_kind,
-        "anchor_uuid": context.anchor_uuid,
-    }
-    return effect_type(**common)
-
-
 def _declaration_and_recipe(
-    factory: Callable[..., SpatialEffect],
+    marker: Callable[[], None],
 ) -> tuple[ContentDeclaration, ContentRecipe]:
-    declaration = get_content_declaration(factory)
+    declaration = get_content_declaration(marker)
     return declaration, ContentRecipe.create(
         ref=declaration.ref,
         parameters={},
     )
 
 
-@spatial_effect_factory(
+@spatial_effect_definition(
     pack_id="content.srd_5_1_cc",
     content_id="spatial_effect.spell.grease",
     version=1,
-    parameters=SpatialEffectParameters,
     descriptor=_descriptor(
         display_name="Grease Surface",
         content_id="spatial_effect.spell.grease",
@@ -254,29 +193,20 @@ def _declaration_and_recipe(
         }),
     ),
 )
-def build_grease_surface(
-    raw_context: object,
-    parameters: SpatialEffectParameters,
-) -> SpatialEffect:
-    _ = parameters
-    return _build_effect(
-        raw_context,
-        effect_type=GroundEffect,
-        display_name="Grease",
-    )
+def define_grease_surface() -> None:
+    """Authored spatial metadata marker."""
 
 
 (
     GREASE_SURFACE_DECLARATION,
     GREASE_SURFACE_RECIPE,
-) = _declaration_and_recipe(build_grease_surface)
+) = _declaration_and_recipe(define_grease_surface)
 
 
-@spatial_effect_factory(
+@spatial_effect_definition(
     pack_id="content.neurodragon",
     content_id="spatial_effect.material.fire",
     version=1,
-    parameters=SpatialEffectParameters,
     descriptor=_descriptor(
         display_name="Fire Surface",
         content_id="spatial_effect.material.fire",
@@ -289,7 +219,6 @@ def build_grease_surface(
         occupancy_policy=(
             SpatialEffectOccupancyPolicy.EXCLUSIVE_TRANSFORMING
         ),
-        lifetime_policy=SpatialEffectLifetimePolicy.CONTROLLER_DURATION,
         trigger_kinds=frozenset({
             SpatialEffectTriggerKind.ENTER,
             SpatialEffectTriggerKind.TURN_START,
@@ -302,29 +231,20 @@ def build_grease_surface(
         ),
     ),
 )
-def build_fire_surface(
-    raw_context: object,
-    parameters: SpatialEffectParameters,
-) -> SpatialEffect:
-    _ = parameters
-    return _build_effect(
-        raw_context,
-        effect_type=FireGroundEffect,
-        display_name="Fire",
-    )
+def define_fire_surface() -> None:
+    """Authored spatial metadata marker."""
 
 
 (
     FIRE_SURFACE_DECLARATION,
     FIRE_SURFACE_RECIPE,
-) = _declaration_and_recipe(build_fire_surface)
+) = _declaration_and_recipe(define_fire_surface)
 
 
-@spatial_effect_factory(
+@spatial_effect_definition(
     pack_id="content.neurodragon",
     content_id="spatial_effect.material.steam",
     version=1,
-    parameters=SpatialEffectParameters,
     descriptor=_descriptor(
         display_name="Steam Cloud",
         content_id="spatial_effect.material.steam",
@@ -337,7 +257,6 @@ def build_fire_surface(
         occupancy_policy=(
             SpatialEffectOccupancyPolicy.EXCLUSIVE_TRANSFORMING
         ),
-        lifetime_policy=SpatialEffectLifetimePolicy.CONTROLLER_DURATION,
         trigger_kinds=frozenset({
             SpatialEffectTriggerKind.APPEAR,
             SpatialEffectTriggerKind.ENTER,
@@ -345,29 +264,20 @@ def build_fire_surface(
         }),
     ),
 )
-def build_steam_cloud(
-    raw_context: object,
-    parameters: SpatialEffectParameters,
-) -> SpatialEffect:
-    _ = parameters
-    return _build_effect(
-        raw_context,
-        effect_type=SteamCloudEffect,
-        display_name="Steam",
-    )
+def define_steam_cloud() -> None:
+    """Authored spatial metadata marker."""
 
 
 (
     STEAM_CLOUD_DECLARATION,
     STEAM_CLOUD_RECIPE,
-) = _declaration_and_recipe(build_steam_cloud)
+) = _declaration_and_recipe(define_steam_cloud)
 
 
-@spatial_effect_factory(
+@spatial_effect_definition(
     pack_id="content.neurodragon",
     content_id="spatial_effect.material.ice",
     version=1,
-    parameters=SpatialEffectParameters,
     descriptor=_descriptor(
         display_name="Ice Surface",
         content_id="spatial_effect.material.ice",
@@ -379,9 +289,6 @@ def build_steam_cloud(
         layer=SpatialEffectLayer.GROUND_SURFACE,
         occupancy_policy=(
             SpatialEffectOccupancyPolicy.EXCLUSIVE_TRANSFORMING
-        ),
-        lifetime_policy=(
-            SpatialEffectLifetimePolicy.PERMANENT_UNTIL_REMOVED
         ),
         trigger_kinds=frozenset({
             SpatialEffectTriggerKind.APPEAR,
@@ -414,29 +321,20 @@ def build_steam_cloud(
         ),
     ),
 )
-def build_ice_surface(
-    raw_context: object,
-    parameters: SpatialEffectParameters,
-) -> SpatialEffect:
-    _ = parameters
-    return _build_effect(
-        raw_context,
-        effect_type=IceGroundEffect,
-        display_name="Ice",
-    )
+def define_ice_surface() -> None:
+    """Authored spatial metadata marker."""
 
 
 (
     ICE_SURFACE_DECLARATION,
     ICE_SURFACE_RECIPE,
-) = _declaration_and_recipe(build_ice_surface)
+) = _declaration_and_recipe(define_ice_surface)
 
 
-@spatial_effect_factory(
+@spatial_effect_definition(
     pack_id="content.neurodragon",
     content_id="spatial_effect.material.electrified_water",
     version=1,
-    parameters=SpatialEffectParameters,
     descriptor=_descriptor(
         display_name="Electrified Water",
         content_id="spatial_effect.material.electrified_water",
@@ -449,7 +347,6 @@ def build_ice_surface(
         occupancy_policy=(
             SpatialEffectOccupancyPolicy.EXCLUSIVE_TRANSFORMING
         ),
-        lifetime_policy=SpatialEffectLifetimePolicy.CONTROLLER_DURATION,
         trigger_kinds=frozenset({
             SpatialEffectTriggerKind.APPEAR,
             SpatialEffectTriggerKind.ENTER,
@@ -496,29 +393,20 @@ def build_ice_surface(
         ),
     ),
 )
-def build_electrified_water(
-    raw_context: object,
-    parameters: SpatialEffectParameters,
-) -> SpatialEffect:
-    _ = parameters
-    return _build_effect(
-        raw_context,
-        effect_type=ElectrifiedWaterGroundEffect,
-        display_name="Electrified Water",
-    )
+def define_electrified_water() -> None:
+    """Authored spatial metadata marker."""
 
 
 (
     ELECTRIFIED_WATER_DECLARATION,
     ELECTRIFIED_WATER_RECIPE,
-) = _declaration_and_recipe(build_electrified_water)
+) = _declaration_and_recipe(define_electrified_water)
 
 
-@spatial_effect_factory(
+@spatial_effect_definition(
     pack_id="content.neurodragon",
     content_id="spatial_effect.material.water_surface",
     version=1,
-    parameters=SpatialEffectParameters,
     descriptor=_descriptor(
         display_name="Wet Surface",
         content_id="spatial_effect.material.water_surface",
@@ -530,9 +418,6 @@ def build_electrified_water(
         layer=SpatialEffectLayer.GROUND_SURFACE,
         occupancy_policy=(
             SpatialEffectOccupancyPolicy.EXCLUSIVE_TRANSFORMING
-        ),
-        lifetime_policy=(
-            SpatialEffectLifetimePolicy.PERMANENT_UNTIL_REMOVED
         ),
         trigger_kinds=frozenset({
             SpatialEffectTriggerKind.APPEAR,
@@ -587,29 +472,20 @@ def build_electrified_water(
         ),
     ),
 )
-def build_water_surface(
-    raw_context: object,
-    parameters: SpatialEffectParameters,
-) -> SpatialEffect:
-    _ = parameters
-    return _build_effect(
-        raw_context,
-        effect_type=WaterGroundEffect,
-        display_name="Wet Surface",
-    )
+def define_water_surface() -> None:
+    """Authored spatial metadata marker."""
 
 
 (
     WATER_SURFACE_DECLARATION,
     WATER_SURFACE_RECIPE,
-) = _declaration_and_recipe(build_water_surface)
+) = _declaration_and_recipe(define_water_surface)
 
 
-@spatial_effect_factory(
+@spatial_effect_definition(
     pack_id="content.srd_5_1_cc",
     content_id="spatial_effect.spell.web.burning",
     version=1,
-    parameters=SpatialEffectParameters,
     descriptor=_descriptor(
         display_name="Burning Web Fire",
         content_id="spatial_effect.spell.web.burning",
@@ -621,7 +497,6 @@ def build_water_surface(
         occupancy_policy=(
             SpatialEffectOccupancyPolicy.EXCLUSIVE_TRANSFORMING
         ),
-        lifetime_policy=SpatialEffectLifetimePolicy.CONTROLLER_DURATION,
         trigger_kinds=frozenset({
             SpatialEffectTriggerKind.TURN_START,
         }),
@@ -633,29 +508,20 @@ def build_water_surface(
         ),
     ),
 )
-def build_burning_web_fire(
-    raw_context: object,
-    parameters: SpatialEffectParameters,
-) -> SpatialEffect:
-    _ = parameters
-    return _build_effect(
-        raw_context,
-        effect_type=BurningWebGroundEffect,
-        display_name="Burning Web Fire",
-    )
+def define_burning_web_fire() -> None:
+    """Authored spatial metadata marker."""
 
 
 (
     BURNING_WEB_FIRE_DECLARATION,
     BURNING_WEB_FIRE_RECIPE,
-) = _declaration_and_recipe(build_burning_web_fire)
+) = _declaration_and_recipe(define_burning_web_fire)
 
 
-@spatial_effect_factory(
+@spatial_effect_definition(
     pack_id="content.neurodragon",
     content_id="spatial_effect.material.oil",
     version=1,
-    parameters=SpatialEffectParameters,
     descriptor=_descriptor(
         display_name="Oil Surface",
         content_id="spatial_effect.material.oil",
@@ -668,7 +534,6 @@ def build_burning_web_fire(
         occupancy_policy=(
             SpatialEffectOccupancyPolicy.EXCLUSIVE_TRANSFORMING
         ),
-        lifetime_policy=SpatialEffectLifetimePolicy.PERMANENT_UNTIL_REMOVED,
         transitions=(
             SpatialEffectTransitionDefinition(
                 operation=SpatialEffectInteractionOperation.IGNITE,
@@ -688,29 +553,20 @@ def build_burning_web_fire(
         ),
     ),
 )
-def build_oil_surface(
-    raw_context: object,
-    parameters: SpatialEffectParameters,
-) -> SpatialEffect:
-    _ = parameters
-    return _build_effect(
-        raw_context,
-        effect_type=OilGroundEffect,
-        display_name="Oil",
-    )
+def define_oil_surface() -> None:
+    """Authored spatial metadata marker."""
 
 
 (
     OIL_SURFACE_DECLARATION,
     OIL_SURFACE_RECIPE,
-) = _declaration_and_recipe(build_oil_surface)
+) = _declaration_and_recipe(define_oil_surface)
 
 
-@spatial_effect_factory(
+@spatial_effect_definition(
     pack_id="content.neurodragon",
     content_id="spatial_effect.environment.spike_trap",
     version=1,
-    parameters=SpikeTrapParameters,
     descriptor=_descriptor(
         display_name="Spike Trap",
         content_id="spatial_effect.environment.spike_trap",
@@ -723,52 +579,28 @@ def build_oil_surface(
         occupancy_policy=(
             SpatialEffectOccupancyPolicy.EXCLUSIVE_TRANSFORMING
         ),
-        permanent=True,
         trigger_kinds=frozenset({
             SpatialEffectTriggerKind.ENTER,
         }),
     ),
 )
-def build_spike_trap_effect(
-    raw_context: object,
-    parameters: SpikeTrapParameters,
-) -> SpatialEffect:
-    context = SpatialEffectBuildContext.model_validate(raw_context)
-    return SpikeTrapGroundEffect(
-        name="Spike Trap",
-        description="Persistent physical spike-trap network.",
-        source_entity_uuid=context.source_entity_uuid,
-        content_ref=context.requested_ref,
-        position=context.position,
-        faction=context.faction,
-        anchor_kind=context.anchor_kind,
-        anchor_uuid=context.anchor_uuid,
-        stealth_dc=parameters.stealth_dc,
-    )
+def define_spike_trap_effect() -> None:
+    """Authored spatial metadata marker."""
 
 
 SPIKE_TRAP_EFFECT_DECLARATION = get_content_declaration(
-    build_spike_trap_effect,
+    define_spike_trap_effect,
+)
+SPIKE_TRAP_EFFECT_RECIPE = ContentRecipe.create(
+    ref=SPIKE_TRAP_EFFECT_DECLARATION.ref,
+    parameters={},
 )
 
 
-def spike_trap_effect_recipe(
-    *,
-    stealth_dc: int | None = None,
-) -> ContentRecipe:
-    """Build the exact recipe for one physical trap-network instance."""
-    parameters = SpikeTrapParameters(stealth_dc=stealth_dc)
-    return ContentRecipe.create(
-        ref=SPIKE_TRAP_EFFECT_DECLARATION.ref,
-        parameters=parameters.model_dump(mode="json"),
-    )
-
-
-@spatial_effect_factory(
+@spatial_effect_definition(
     pack_id="content.srd_5_1_cc",
     content_id="spatial_effect.spell.web",
     version=1,
-    parameters=SpatialEffectParameters,
     descriptor=_descriptor(
         display_name="Web Surface",
         content_id="spatial_effect.spell.web",
@@ -780,7 +612,6 @@ def spike_trap_effect_recipe(
         occupancy_policy=(
             SpatialEffectOccupancyPolicy.EXCLUSIVE_TRANSFORMING
         ),
-        lifetime_policy=SpatialEffectLifetimePolicy.CONTROLLER_DURATION,
         trigger_kinds=frozenset({
             SpatialEffectTriggerKind.ENTER,
             SpatialEffectTriggerKind.LEAVE,
@@ -805,29 +636,20 @@ def spike_trap_effect_recipe(
         ),
     ),
 )
-def build_web_surface(
-    raw_context: object,
-    parameters: SpatialEffectParameters,
-) -> SpatialEffect:
-    _ = parameters
-    return _build_effect(
-        raw_context,
-        effect_type=GroundEffect,
-        display_name="Web",
-    )
+def define_web_surface() -> None:
+    """Authored spatial metadata marker."""
 
 
 (
     WEB_SURFACE_DECLARATION,
     WEB_SURFACE_RECIPE,
-) = _declaration_and_recipe(build_web_surface)
+) = _declaration_and_recipe(define_web_surface)
 
 
-@spatial_effect_factory(
+@spatial_effect_definition(
     pack_id="content.srd_5_1_cc",
     content_id="spatial_effect.spell.spike_growth",
     version=1,
-    parameters=SpatialEffectParameters,
     descriptor=_descriptor(
         display_name="Spike Growth Surface",
         content_id="spatial_effect.spell.spike_growth",
@@ -844,23 +666,14 @@ def build_web_surface(
         }),
     ),
 )
-def build_spike_growth_surface(
-    raw_context: object,
-    parameters: SpatialEffectParameters,
-) -> SpatialEffect:
-    _ = parameters
-    return _build_effect(
-        raw_context,
-        effect_type=GroundEffect,
-        display_name="Spike Growth",
-    )
+def define_spike_growth_surface() -> None:
+    """Authored spatial metadata marker."""
 
 
-@spatial_effect_factory(
+@spatial_effect_definition(
     pack_id="content.srd_5_1_cc",
     content_id="spatial_effect.spell.ice_storm",
     version=1,
-    parameters=SpatialEffectParameters,
     descriptor=_descriptor(
         display_name="Ice Storm Surface",
         content_id="spatial_effect.spell.ice_storm",
@@ -869,39 +682,30 @@ def build_spike_growth_surface(
     provenance=_provenance("Ice Storm"),
     spatial_effect_definition=_GROUND_DEFINITION,
 )
-def build_ice_storm_surface(
-    raw_context: object,
-    parameters: SpatialEffectParameters,
-) -> SpatialEffect:
-    _ = parameters
-    return _build_effect(
-        raw_context,
-        effect_type=GroundEffect,
-        display_name="Ice Storm",
-    )
+def define_ice_storm_surface() -> None:
+    """Authored spatial metadata marker."""
 
 
 (
     SPIKE_GROWTH_SURFACE_DECLARATION,
     SPIKE_GROWTH_SURFACE_RECIPE,
-) = _declaration_and_recipe(build_spike_growth_surface)
+) = _declaration_and_recipe(define_spike_growth_surface)
 (
     ICE_STORM_SURFACE_DECLARATION,
     ICE_STORM_SURFACE_RECIPE,
-) = _declaration_and_recipe(build_ice_storm_surface)
+) = _declaration_and_recipe(define_ice_storm_surface)
 
 
-def _cloud_factory(
+def _cloud_definition(
     *,
     display_name: str,
     content_id: str,
     definition: SpatialEffectDefinition = _CLOUD_DEFINITION,
-) -> Callable[[Callable[..., SpatialEffect]], Callable[..., SpatialEffect]]:
-    return spatial_effect_factory(
+) -> Callable[[Callable[[], None]], Callable[[], None]]:
+    return spatial_effect_definition(
         pack_id="content.srd_5_1_cc",
         content_id=content_id,
         version=1,
-        parameters=SpatialEffectParameters,
         descriptor=_descriptor(
             display_name=display_name,
             content_id=content_id,
@@ -912,13 +716,12 @@ def _cloud_factory(
     )
 
 
-@_cloud_factory(
+@_cloud_definition(
     display_name="Fog Cloud",
     content_id="spatial_effect.spell.fog_cloud",
     definition=SpatialEffectDefinition(
         layer=SpatialEffectLayer.CLOUD,
         occupancy_policy=SpatialEffectOccupancyPolicy.EXCLUSIVE_TRANSFORMING,
-        lifetime_policy=SpatialEffectLifetimePolicy.CONTROLLER_DURATION,
         transitions=(
             SpatialEffectTransitionDefinition(
                 operation=SpatialEffectInteractionOperation.DISPERSE,
@@ -930,26 +733,17 @@ def _cloud_factory(
         ),
     ),
 )
-def build_fog_cloud_effect(
-    raw_context: object,
-    parameters: SpatialEffectParameters,
-) -> SpatialEffect:
-    _ = parameters
-    return _build_effect(
-        raw_context,
-        effect_type=CloudEffect,
-        display_name="Fog Cloud",
-    )
+def define_fog_cloud_effect() -> None:
+    """Authored spatial metadata marker."""
 
 
-@_cloud_factory(
+@_cloud_definition(
     display_name="Cloudkill Cloud",
     content_id="spatial_effect.spell.cloudkill",
     definition=SpatialEffectDefinition(
         anchor_kind=SpatialEffectAnchorKind.INDEPENDENT_MOVABLE,
         layer=SpatialEffectLayer.CLOUD,
         occupancy_policy=SpatialEffectOccupancyPolicy.EXCLUSIVE_TRANSFORMING,
-        lifetime_policy=SpatialEffectLifetimePolicy.CONTROLLER_DURATION,
         trigger_kinds=frozenset({
             SpatialEffectTriggerKind.ENTER,
             SpatialEffectTriggerKind.TURN_START,
@@ -967,19 +761,11 @@ def build_fog_cloud_effect(
         ),
     ),
 )
-def build_cloudkill_effect(
-    raw_context: object,
-    parameters: SpatialEffectParameters,
-) -> SpatialEffect:
-    _ = parameters
-    return _build_effect(
-        raw_context,
-        effect_type=CloudEffect,
-        display_name="Cloudkill",
-    )
+def define_cloudkill_effect() -> None:
+    """Authored spatial metadata marker."""
 
 
-@_cloud_factory(
+@_cloud_definition(
     display_name="Incendiary Cloud",
     content_id="spatial_effect.spell.incendiary_cloud",
     definition=_definition(
@@ -1000,25 +786,16 @@ def build_cloudkill_effect(
         }),
     ),
 )
-def build_incendiary_cloud_effect(
-    raw_context: object,
-    parameters: SpatialEffectParameters,
-) -> SpatialEffect:
-    _ = parameters
-    return _build_effect(
-        raw_context,
-        effect_type=CloudEffect,
-        display_name="Incendiary Cloud",
-    )
+def define_incendiary_cloud_effect() -> None:
+    """Authored spatial metadata marker."""
 
 
-@_cloud_factory(
+@_cloud_definition(
     display_name="Stinking Cloud",
     content_id="spatial_effect.spell.stinking_cloud",
     definition=SpatialEffectDefinition(
         layer=SpatialEffectLayer.CLOUD,
         occupancy_policy=SpatialEffectOccupancyPolicy.EXCLUSIVE_TRANSFORMING,
-        lifetime_policy=SpatialEffectLifetimePolicy.CONTROLLER_DURATION,
         trigger_kinds=frozenset({
             SpatialEffectTriggerKind.TURN_START,
         }),
@@ -1040,47 +817,38 @@ def build_incendiary_cloud_effect(
         ),
     ),
 )
-def build_stinking_cloud_effect(
-    raw_context: object,
-    parameters: SpatialEffectParameters,
-) -> SpatialEffect:
-    _ = parameters
-    return _build_effect(
-        raw_context,
-        effect_type=CloudEffect,
-        display_name="Stinking Cloud",
-    )
+def define_stinking_cloud_effect() -> None:
+    """Authored spatial metadata marker."""
 
 
 (
     FOG_CLOUD_DECLARATION,
     FOG_CLOUD_RECIPE,
-) = _declaration_and_recipe(build_fog_cloud_effect)
+) = _declaration_and_recipe(define_fog_cloud_effect)
 (
     CLOUDKILL_CLOUD_DECLARATION,
     CLOUDKILL_CLOUD_RECIPE,
-) = _declaration_and_recipe(build_cloudkill_effect)
+) = _declaration_and_recipe(define_cloudkill_effect)
 (
     INCENDIARY_CLOUD_DECLARATION,
     INCENDIARY_CLOUD_RECIPE,
-) = _declaration_and_recipe(build_incendiary_cloud_effect)
+) = _declaration_and_recipe(define_incendiary_cloud_effect)
 (
     STINKING_CLOUD_DECLARATION,
     STINKING_CLOUD_RECIPE,
-) = _declaration_and_recipe(build_stinking_cloud_effect)
+) = _declaration_and_recipe(define_stinking_cloud_effect)
 
 
-def _field_factory(
+def _field_definition(
     *,
     display_name: str,
     content_id: str,
     definition: SpatialEffectDefinition = _FIELD_DEFINITION,
-) -> Callable[[Callable[..., SpatialEffect]], Callable[..., SpatialEffect]]:
-    return spatial_effect_factory(
+) -> Callable[[Callable[[], None]], Callable[[], None]]:
+    return spatial_effect_definition(
         pack_id="content.srd_5_1_cc",
         content_id=content_id,
         version=1,
-        parameters=SpatialEffectParameters,
         descriptor=_descriptor(
             display_name=display_name,
             content_id=content_id,
@@ -1091,7 +859,7 @@ def _field_factory(
     )
 
 
-@_field_factory(
+@_field_definition(
     display_name="Entangle Field",
     content_id="spatial_effect.spell.entangle",
     definition=_definition(
@@ -1102,20 +870,11 @@ def _field_factory(
         }),
     ),
 )
-def build_entangle_field(
-    raw_context: object,
-    parameters: SpatialEffectParameters,
-) -> SpatialEffect:
-    """Build Entangle's fixed difficult-terrain field."""
-    _ = parameters
-    return _build_effect(
-        raw_context,
-        effect_type=FieldEffect,
-        display_name="Entangle",
-    )
+def define_entangle_field() -> None:
+    """Authored spatial metadata marker."""
 
 
-@_field_factory(
+@_field_definition(
     display_name="Evard's Black Tentacles Field",
     content_id="spatial_effect.spell.evards_black_tentacles",
     definition=_definition(
@@ -1131,20 +890,11 @@ def build_entangle_field(
         }),
     ),
 )
-def build_evards_black_tentacles_field(
-    raw_context: object,
-    parameters: SpatialEffectParameters,
-) -> SpatialEffect:
-    """Build the fixed damaging and restraining tentacle field."""
-    _ = parameters
-    return _build_effect(
-        raw_context,
-        effect_type=FieldEffect,
-        display_name="Evard's Black Tentacles",
-    )
+def define_evards_black_tentacles_field() -> None:
+    """Authored spatial metadata marker."""
 
 
-@_field_factory(
+@_field_definition(
     display_name="Spirit Guardians Field",
     content_id="spatial_effect.spell.spirit_guardians",
     definition=_definition(
@@ -1165,19 +915,11 @@ def build_evards_black_tentacles_field(
         }),
     ),
 )
-def build_spirit_guardians_field(
-    raw_context: object,
-    parameters: SpatialEffectParameters,
-) -> SpatialEffect:
-    _ = parameters
-    return _build_effect(
-        raw_context,
-        effect_type=FieldEffect,
-        display_name="Spirit Guardians",
-    )
+def define_spirit_guardians_field() -> None:
+    """Authored spatial metadata marker."""
 
 
-@_field_factory(
+@_field_definition(
     display_name="Guardian of Faith Field",
     content_id="spatial_effect.spell.guardian_of_faith",
     definition=_definition(
@@ -1192,24 +934,14 @@ def build_spirit_guardians_field(
         }),
     ),
 )
-def build_guardian_of_faith_field(
-    raw_context: object,
-    parameters: SpatialEffectParameters,
-) -> SpatialEffect:
-    """Build the fixed spectral guardian and its damaging field."""
-    _ = parameters
-    return _build_effect(
-        raw_context,
-        effect_type=FieldEffect,
-        display_name="Guardian of Faith",
-    )
+def define_guardian_of_faith_field() -> None:
+    """Authored spatial metadata marker."""
 
 
-@spatial_effect_factory(
+@spatial_effect_definition(
     pack_id="content.srd_5_1_cc",
     content_id="spatial_effect.trait.leadership",
     version=1,
-    parameters=SpatialEffectParameters,
     descriptor=_descriptor(
         display_name="Leadership Field",
         content_id="spatial_effect.trait.leadership",
@@ -1229,24 +961,14 @@ def build_guardian_of_faith_field(
         }),
     ),
 )
-def build_leadership_field(
-    raw_context: object,
-    parameters: SpatialEffectParameters,
-) -> SpatialEffect:
-    """Build one entity-anchored Leadership membership field."""
-    _ = parameters
-    return _build_effect(
-        raw_context,
-        effect_type=FieldEffect,
-        display_name="Leadership",
-    )
+def define_leadership_field() -> None:
+    """Authored spatial metadata marker."""
 
 
-@spatial_effect_factory(
+@spatial_effect_definition(
     pack_id="content.srd_5_1_cc",
     content_id="spatial_effect.class_feature.draconic_presence",
     version=1,
-    parameters=SpatialEffectParameters,
     descriptor=_descriptor(
         display_name="Draconic Presence Field",
         content_id="spatial_effect.class_feature.draconic_presence",
@@ -1269,52 +991,27 @@ def build_leadership_field(
         }),
     ),
 )
-def build_draconic_presence_field(
-    raw_context: object,
-    parameters: SpatialEffectParameters,
-) -> SpatialEffect:
-    """Build one concentration-linked, entity-anchored presence field."""
-    _ = parameters
-    return _build_effect(
-        raw_context,
-        effect_type=FieldEffect,
-        display_name="Draconic Presence",
-    )
+def define_draconic_presence_field() -> None:
+    """Authored spatial metadata marker."""
 
 
-@_field_factory(
+@_field_definition(
     display_name="Darkness Field",
     content_id="spatial_effect.spell.darkness",
 )
-def build_darkness_field(
-    raw_context: object,
-    parameters: SpatialEffectParameters,
-) -> SpatialEffect:
-    _ = parameters
-    return _build_effect(
-        raw_context,
-        effect_type=FieldEffect,
-        display_name="Darkness",
-    )
+def define_darkness_field() -> None:
+    """Authored spatial metadata marker."""
 
 
-@_field_factory(
+@_field_definition(
     display_name="Daylight Field",
     content_id="spatial_effect.spell.daylight",
 )
-def build_daylight_field(
-    raw_context: object,
-    parameters: SpatialEffectParameters,
-) -> SpatialEffect:
-    _ = parameters
-    return _build_effect(
-        raw_context,
-        effect_type=FieldEffect,
-        display_name="Daylight",
-    )
+def define_daylight_field() -> None:
+    """Authored spatial metadata marker."""
 
 
-@_field_factory(
+@_field_definition(
     display_name="Insect Plague Field",
     content_id="spatial_effect.spell.insect_plague",
     definition=_definition(
@@ -1332,19 +1029,11 @@ def build_daylight_field(
         }),
     ),
 )
-def build_insect_plague_field(
-    raw_context: object,
-    parameters: SpatialEffectParameters,
-) -> SpatialEffect:
-    _ = parameters
-    return _build_effect(
-        raw_context,
-        effect_type=FieldEffect,
-        display_name="Insect Plague",
-    )
+def define_insect_plague_field() -> None:
+    """Authored spatial metadata marker."""
 
 
-@_field_factory(
+@_field_definition(
     display_name="Sleet Storm Field",
     content_id="spatial_effect.spell.sleet_storm",
     definition=_definition(
@@ -1360,19 +1049,11 @@ def build_insect_plague_field(
         }),
     ),
 )
-def build_sleet_storm_field(
-    raw_context: object,
-    parameters: SpatialEffectParameters,
-) -> SpatialEffect:
-    _ = parameters
-    return _build_effect(
-        raw_context,
-        effect_type=FieldEffect,
-        display_name="Sleet Storm",
-    )
+def define_sleet_storm_field() -> None:
+    """Authored spatial metadata marker."""
 
 
-@_field_factory(
+@_field_definition(
     display_name="Silence Field",
     content_id="spatial_effect.spell.silence",
     definition=_definition(
@@ -1384,19 +1065,11 @@ def build_sleet_storm_field(
         }),
     ),
 )
-def build_silence_field(
-    raw_context: object,
-    parameters: SpatialEffectParameters,
-) -> SpatialEffect:
-    _ = parameters
-    return _build_effect(
-        raw_context,
-        effect_type=FieldEffect,
-        display_name="Silence",
-    )
+def define_silence_field() -> None:
+    """Authored spatial metadata marker."""
 
 
-@_field_factory(
+@_field_definition(
     display_name="Gust of Wind Field",
     content_id="spatial_effect.spell.gust_of_wind",
     definition=_definition(
@@ -1408,35 +1081,19 @@ def build_silence_field(
         }),
     ),
 )
-def build_gust_of_wind_field(
-    raw_context: object,
-    parameters: SpatialEffectParameters,
-) -> SpatialEffect:
-    _ = parameters
-    return _build_effect(
-        raw_context,
-        effect_type=FieldEffect,
-        display_name="Gust of Wind",
-    )
+def define_gust_of_wind_field() -> None:
+    """Authored spatial metadata marker."""
 
 
-@_field_factory(
+@_field_definition(
     display_name="Globe of Invulnerability Field",
     content_id="spatial_effect.spell.globe_of_invulnerability",
 )
-def build_globe_of_invulnerability_field(
-    raw_context: object,
-    parameters: SpatialEffectParameters,
-) -> SpatialEffect:
-    _ = parameters
-    return _build_effect(
-        raw_context,
-        effect_type=FieldEffect,
-        display_name="Globe of Invulnerability",
-    )
+def define_globe_of_invulnerability_field() -> None:
+    """Authored spatial metadata marker."""
 
 
-@_field_factory(
+@_field_definition(
     display_name="Antimagic Field",
     content_id="spatial_effect.spell.antimagic_field",
     definition=_definition(
@@ -1445,95 +1102,79 @@ def build_globe_of_invulnerability_field(
         occupancy_policy=SpatialEffectOccupancyPolicy.OVERLAPPING,
     ),
 )
-def build_antimagic_field(
-    raw_context: object,
-    parameters: SpatialEffectParameters,
-) -> SpatialEffect:
-    _ = parameters
-    return _build_effect(
-        raw_context,
-        effect_type=FieldEffect,
-        display_name="Antimagic Field",
-    )
+def define_antimagic_field() -> None:
+    """Authored spatial metadata marker."""
 
 
-@_field_factory(
+@_field_definition(
     display_name="Continual Flame Field",
     content_id="spatial_effect.spell.continual_flame",
-    definition=_PERMANENT_WORLD_OBJECT_FIELD_DEFINITION,
+    definition=_WORLD_OBJECT_FIELD_DEFINITION,
 )
-def build_continual_flame_field(
-    raw_context: object,
-    parameters: SpatialEffectParameters,
-) -> SpatialEffect:
-    _ = parameters
-    return _build_effect(
-        raw_context,
-        effect_type=FieldEffect,
-        display_name="Continual Flame",
-    )
+def define_continual_flame_field() -> None:
+    """Authored spatial metadata marker."""
 
 
 (
     ENTANGLE_FIELD_DECLARATION,
     ENTANGLE_FIELD_RECIPE,
-) = _declaration_and_recipe(build_entangle_field)
+) = _declaration_and_recipe(define_entangle_field)
 (
     EVARDS_BLACK_TENTACLES_FIELD_DECLARATION,
     EVARDS_BLACK_TENTACLES_FIELD_RECIPE,
-) = _declaration_and_recipe(build_evards_black_tentacles_field)
+) = _declaration_and_recipe(define_evards_black_tentacles_field)
 (
     SPIRIT_GUARDIANS_FIELD_DECLARATION,
     SPIRIT_GUARDIANS_FIELD_RECIPE,
-) = _declaration_and_recipe(build_spirit_guardians_field)
+) = _declaration_and_recipe(define_spirit_guardians_field)
 (
     GUARDIAN_OF_FAITH_FIELD_DECLARATION,
     GUARDIAN_OF_FAITH_FIELD_RECIPE,
-) = _declaration_and_recipe(build_guardian_of_faith_field)
+) = _declaration_and_recipe(define_guardian_of_faith_field)
 (
     DRACONIC_PRESENCE_FIELD_DECLARATION,
     DRACONIC_PRESENCE_FIELD_RECIPE,
-) = _declaration_and_recipe(build_draconic_presence_field)
+) = _declaration_and_recipe(define_draconic_presence_field)
 (
     LEADERSHIP_FIELD_DECLARATION,
     LEADERSHIP_FIELD_RECIPE,
-) = _declaration_and_recipe(build_leadership_field)
+) = _declaration_and_recipe(define_leadership_field)
 (
     DARKNESS_FIELD_DECLARATION,
     DARKNESS_FIELD_RECIPE,
-) = _declaration_and_recipe(build_darkness_field)
+) = _declaration_and_recipe(define_darkness_field)
 (
     DAYLIGHT_FIELD_DECLARATION,
     DAYLIGHT_FIELD_RECIPE,
-) = _declaration_and_recipe(build_daylight_field)
+) = _declaration_and_recipe(define_daylight_field)
 (
     INSECT_PLAGUE_FIELD_DECLARATION,
     INSECT_PLAGUE_FIELD_RECIPE,
-) = _declaration_and_recipe(build_insect_plague_field)
+) = _declaration_and_recipe(define_insect_plague_field)
 (
     SLEET_STORM_FIELD_DECLARATION,
     SLEET_STORM_FIELD_RECIPE,
-) = _declaration_and_recipe(build_sleet_storm_field)
+) = _declaration_and_recipe(define_sleet_storm_field)
 (
     SILENCE_FIELD_DECLARATION,
     SILENCE_FIELD_RECIPE,
-) = _declaration_and_recipe(build_silence_field)
+) = _declaration_and_recipe(define_silence_field)
 (
     GUST_OF_WIND_FIELD_DECLARATION,
     GUST_OF_WIND_FIELD_RECIPE,
-) = _declaration_and_recipe(build_gust_of_wind_field)
+) = _declaration_and_recipe(define_gust_of_wind_field)
 (
     GLOBE_OF_INVULNERABILITY_FIELD_DECLARATION,
     GLOBE_OF_INVULNERABILITY_FIELD_RECIPE,
-) = _declaration_and_recipe(build_globe_of_invulnerability_field)
+) = _declaration_and_recipe(define_globe_of_invulnerability_field)
 (
     ANTIMAGIC_FIELD_DECLARATION,
     ANTIMAGIC_FIELD_RECIPE,
-) = _declaration_and_recipe(build_antimagic_field)
+) = _declaration_and_recipe(define_antimagic_field)
 (
     CONTINUAL_FLAME_FIELD_DECLARATION,
     CONTINUAL_FLAME_FIELD_RECIPE,
-) = _declaration_and_recipe(build_continual_flame_field)
+) = _declaration_and_recipe(define_continual_flame_field)
 
 BUILT_IN_SPATIAL_EFFECT_DECLARATIONS: tuple[ContentDeclaration, ...] = (
     GREASE_SURFACE_DECLARATION,
@@ -1603,5 +1244,5 @@ __all__ = [
     "WATER_SURFACE_RECIPE",
     "WEB_SURFACE_RECIPE",
     "BUILT_IN_SPATIAL_EFFECT_DECLARATIONS",
-    "spike_trap_effect_recipe",
+    "SPIKE_TRAP_EFFECT_RECIPE",
 ]

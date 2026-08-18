@@ -1,147 +1,173 @@
-"""Engine invariants for independently owned persistent spatial effects."""
+"""Observable contracts for independently owned spatial conditions."""
 
-import ast
-import inspect
 from typing import NoReturn
-from types import ModuleType
 from uuid import UUID, uuid4
 
 import pytest
 
-from dnd.content_system.bootstrap import bootstrap_content_system
-from dnd.content_system.item_bindings import ItemRuntimeOrigin
-from dnd.content_system.item_materialization import materialize_item
-from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
 from dnd.content.spatial_effect_materialization import (
-    materialize_spatial_effect,
+    materialize_spatial_condition,
 )
-from dnd.core.base_conditions import BaseCondition
-from dnd.types.damage import DamageType
-from dnd.types.damage import ResistanceStatus
-from dnd.core.events.events_registry import (
-    Event,
-    EventPhase,
-    EventQueue,
-    EventType,
-)
-from dnd.core.events.world_events import (
-    SpatialEffectChangeEvent,
-    SpatialEffectInteractionEvent,
-)
-from dnd.core.content.dependencies import ContentDependencyRelation
-from dnd.core.content.identities import ContentRef
-from dnd.core.content.recipes import ContentRecipe
-from dnd.core.content.registration import get_content_declaration
-from dnd.core.gridmap import get_map
-from dnd.core.base_tiles import water_factory
-from dnd.types.spatial_effects import (
-    SpatialEffectAnchorKind,
-    SpatialEffectInteractionIntensity,
-    SpatialEffectInteractionOperation,
-    SpatialEffectLayer,
-    SpatialEffectChangeOperation,
-)
-from dnd.items.environment_content import (
-    OIL_BARREL_RECIPE,
-    OilBarrel,
-)
-from dnd.runtime_reset import reset_engine_runtime
 from dnd.content.spatial_effect_recipes import (
     ANTIMAGIC_FIELD_RECIPE,
+    BUILT_IN_SPATIAL_EFFECT_DECLARATIONS,
+    BURNING_WEB_FIRE_RECIPE,
     CLOUDKILL_CLOUD_RECIPE,
     CONTINUAL_FLAME_FIELD_RECIPE,
-    DARKNESS_FIELD_RECIPE,
     DAYLIGHT_FIELD_RECIPE,
-    GLOBE_OF_INVULNERABILITY_FIELD_RECIPE,
+    ELECTRIFIED_WATER_RECIPE,
+    FIRE_SURFACE_RECIPE,
     FOG_CLOUD_RECIPE,
     GREASE_SURFACE_RECIPE,
-    GUST_OF_WIND_FIELD_RECIPE,
-    ICE_STORM_SURFACE_RECIPE,
-    INSECT_PLAGUE_FIELD_RECIPE,
-    INCENDIARY_CLOUD_RECIPE,
-    FIRE_SURFACE_RECIPE,
-    ELECTRIFIED_WATER_RECIPE,
     ICE_SURFACE_RECIPE,
     OIL_SURFACE_RECIPE,
     SILENCE_FIELD_RECIPE,
     SLEET_STORM_FIELD_RECIPE,
     SPIRIT_GUARDIANS_FIELD_RECIPE,
-    SPIKE_GROWTH_SURFACE_RECIPE,
-    STINKING_CLOUD_RECIPE,
     STEAM_CLOUD_RECIPE,
     WATER_SURFACE_DECLARATION,
     WATER_SURFACE_RECIPE,
-    WEB_SURFACE_RECIPE,
 )
-from dnd.spatial.effect_base import (
-    CloudEffect,
-    FieldEffect,
-    GroundEffect,
-    SpatialEffect,
+from dnd.blocks.base_item import BaseItem
+from dnd.core.base_conditions import BaseCondition, Duration
+from dnd.core.content.identities import ContentRef
+from dnd.core.content.recipes import ContentRecipe
+from dnd.core.content.registration import ContentDeclarationMode
+from dnd.core.dice import fixed_dice_faces
+from dnd.core.events.events_registry import (
+    Event,
+    EventHandler,
+    EventPhase,
+    EventQueue,
+    EventType,
+    Trigger,
 )
-from dnd.entity import Entity, EntityConfig
-from dnd.spatial.environmental_effects import IceSurfaceController
-from dnd.spells.abjuration import (
-    FreedomOfMovementEffect,
+from dnd.core.events.world_events import (
+    SpatialEffectChangeEvent,
+    SpatialEffectInteractionEvent,
 )
-from dnd.spells.conjuration import GreaseZone
-from server.world_projection import project_spatial_effect_summary
-import dnd.spells.abjuration as abjuration
-import dnd.spells.conjuration as conjuration
-import dnd.spells.evocation as evocation
-import dnd.spells.illusion as illusion
-import dnd.spells.transmutation as transmutation
-
-
-@pytest.fixture(scope="module", autouse=True)
-def _installed_content_system() -> None:
-    """Install the exact built-in registry used by material transition tests."""
-    SERVER_CONTENT_SYSTEM_RUNTIME.install(
-        bootstrap_content_system(),
-    )
+from dnd.core.gridmap import get_map
+from dnd.core.base_tiles import dark_floor_factory, water_factory
+from dnd.entities.entity import EntityConfig
+from dnd.runtime_reset import reset_engine_runtime
+from dnd.blocks.action_economy import RechargeType
+from dnd.classes.sorcerer import DraconicPresence, DraconicPresenceAura
+from dnd.spatial.area_conditions import SpatialCondition
+from dnd.spatial.environmental_conditions import (
+    ElectrifiedWater,
+    FireSurface,
+    IceSurface,
+    OilSurface,
+    SteamCloud,
+    WaterSurface,
+)
+from dnd.spells.conjuration import GreaseZone, SleetStormZone
+from dnd.spells.abjuration import FreedomOfMovementEffect
+from dnd.conditions import Concentrating
+from dnd.types.conditions import DurationType
+from dnd.types.damage import DamageType, ResistanceStatus
+from dnd.types.world import LightLevel
+from dnd.types.spatial_effects import (
+    SpatialEffectAnchorKind,
+    SpatialEffectChangeOperation,
+    SpatialEffectInteractionIntensity,
+    SpatialEffectInteractionOperation,
+    SpatialEffectLayer,
+    SpatialEffectTransitionAction,
+)
+from dnd.spells.evocation import ContinualFlameCondition
+from tests.engine.support import create_test_entity
 
 
 def _root_action(source_uuid: UUID) -> Event:
-    event = Event(
+    completed = EventQueue.publish_lifecycle(Event(
         source_entity_uuid=source_uuid,
         event_type=EventType.BASE_ACTION,
         phase=EventPhase.DECLARATION,
         use_register=False,
+    ))
+    assert completed is not None
+    return completed
+
+
+_DIRECT_CONDITION_TYPES: dict[str, type[SpatialCondition]] = {
+    OIL_SURFACE_RECIPE.ref.content_id: OilSurface,
+    FIRE_SURFACE_RECIPE.ref.content_id: FireSurface,
+    WATER_SURFACE_RECIPE.ref.content_id: WaterSurface,
+    ICE_SURFACE_RECIPE.ref.content_id: IceSurface,
+    ELECTRIFIED_WATER_RECIPE.ref.content_id: ElectrifiedWater,
+    STEAM_CLOUD_RECIPE.ref.content_id: SteamCloud,
+    BURNING_WEB_FIRE_RECIPE.ref.content_id: FireSurface,
+}
+
+
+def _materialize_test_condition(
+    recipe: ContentRecipe,
+    source_uuid: UUID,
+    positions: set[tuple[int, int]],
+    *,
+    condition_type: type[SpatialCondition] | None = None,
+    extra_fields: dict[str, object] | None = None,
+) -> SpatialCondition:
+    selected_type = condition_type or _DIRECT_CONDITION_TYPES.get(
+        recipe.ref.content_id,
+        SpatialCondition,
     )
-    completed = EventQueue.publish_lifecycle(event)
+    fields = dict(extra_fields or {})
+    fields["affected_positions"] = set(positions)
+    return materialize_spatial_condition(
+        recipe,
+        source_uuid,
+        position=min(positions),
+        faction="test-faction",
+        condition_type=selected_type,
+        condition_fields=fields,
+    )
+
+
+def _publish_interaction(
+    source_uuid: UUID,
+    operation: SpatialEffectInteractionOperation,
+    positions: set[tuple[int, int]],
+    intensity: SpatialEffectInteractionIntensity,
+) -> Event:
+    completed = EventQueue.publish_lifecycle(SpatialEffectInteractionEvent(
+        source_entity_uuid=source_uuid,
+        operation=operation,
+        positions=tuple(sorted(positions)),
+        intensity=intensity,
+        phase=EventPhase.DECLARATION,
+        use_register=False,
+    ))
     assert completed is not None
     return completed
 
 
 def test_spatial_trigger_sets_serialize_in_canonical_order() -> None:
-    """Cold workers must authenticate unordered trigger membership identically."""
+    """Cold definitions authenticate unordered trigger membership identically."""
     definition = WATER_SURFACE_DECLARATION.spatial_effect_definition
     assert definition is not None
-    dumped = definition.model_dump(mode="json")
-    assert dumped["trigger_kinds"] == ["appear", "enter", "leave"]
+    assert definition.model_dump(mode="json")["trigger_kinds"] == [
+        "appear",
+        "enter",
+        "leave",
+    ]
 
 
 @pytest.mark.parametrize(
-    ("recipe", "expected_kind", "attached_to_source"),
+    ("recipe", "expected_kind", "explicit_anchor"),
     (
-        (
-            GREASE_SURFACE_RECIPE,
-            SpatialEffectAnchorKind.FIXED_POSITION,
-            False,
-        ),
+        (GREASE_SURFACE_RECIPE, SpatialEffectAnchorKind.FIXED_POSITION, False),
         (
             CLOUDKILL_CLOUD_RECIPE,
             SpatialEffectAnchorKind.INDEPENDENT_MOVABLE,
             False,
         ),
+        (SPIRIT_GUARDIANS_FIELD_RECIPE, SpatialEffectAnchorKind.ENTITY, False),
+        (ANTIMAGIC_FIELD_RECIPE, SpatialEffectAnchorKind.ENTITY, False),
         (
-            SPIRIT_GUARDIANS_FIELD_RECIPE,
-            SpatialEffectAnchorKind.ENTITY,
-            True,
-        ),
-        (
-            ANTIMAGIC_FIELD_RECIPE,
-            SpatialEffectAnchorKind.ENTITY,
+            CONTINUAL_FLAME_FIELD_RECIPE,
+            SpatialEffectAnchorKind.WORLD_OBJECT,
             True,
         ),
     ),
@@ -149,215 +175,163 @@ def test_spatial_trigger_sets_serialize_in_canonical_order() -> None:
 def test_authored_anchor_policy_materializes_exact_runtime_identity(
     recipe: ContentRecipe,
     expected_kind: SpatialEffectAnchorKind,
-    attached_to_source: bool,
+    explicit_anchor: bool,
 ) -> None:
-    """Cold anchor policy is copied exactly without spell-side reconstruction."""
-    reset_engine_runtime(grid_size=(3, 3))
+    """Construction copies the authored anchor policy without reconstruction."""
     source_uuid = uuid4()
-
-    effect = materialize_spatial_effect(
+    anchor_uuid = uuid4() if explicit_anchor else None
+    condition = materialize_spatial_condition(
         recipe,
         source_uuid,
         position=(1, 1),
         faction="heroes",
+        condition_type=SpatialCondition,
+        anchor_uuid=anchor_uuid,
     )
 
-    assert effect.anchor_kind is expected_kind
-    assert effect.anchor_uuid == (source_uuid if attached_to_source else None)
-    projected = project_spatial_effect_summary(effect)
-    assert projected.anchor_kind == expected_kind.value
+    assert condition.anchor_kind is expected_kind
+    expected_anchor = (
+        anchor_uuid
+        if explicit_anchor
+        else source_uuid if expected_kind is SpatialEffectAnchorKind.ENTITY else None
+    )
+    assert condition.anchor_uuid == expected_anchor
 
 
-def test_oil_transition_replaces_only_intersecting_cells_and_douse_removes_fire() -> None:
-    """Typed material interactions shrink, replace, and remove exact cells."""
-    reset_engine_runtime(grid_size=(5, 5))
+def test_tile_query_exposes_direct_condition_and_hazard() -> None:
+    """A Tile reports the exact independently owned condition affecting it."""
+    reset_engine_runtime(grid_size=(4, 4))
     source_uuid = uuid4()
-    parent = _root_action(source_uuid)
-    oil = materialize_spatial_effect(
+    condition = _materialize_test_condition(
         OIL_SURFACE_RECIPE,
         source_uuid,
-        position=(2, 2),
-        faction=None,
+        {(1, 1), (1, 2)},
     )
-    oil.install_default_controller(
-        positions={(2, 2), (2, 3)},
-        duration_rounds=None,
-        parent_event=parent,
+    condition.activate(parent_event=_root_action(source_uuid))
+
+    tile = get_map().get_tile(1, 1)
+    assert tile is not None
+    assert condition in tile.get_conditions().values()
+    assert get_map().is_position_hazardous_for(1, 1)
+
+    condition.deactivate()
+    assert condition not in tile.get_conditions().values()
+    assert not get_map().is_position_hazardous_for(1, 1)
+
+
+def test_wet_membership_is_owned_by_each_exact_spatial_source() -> None:
+    """Removing one water-bearing condition preserves another source's Wet."""
+    reset_engine_runtime(grid_size=(5, 5))
+    entity = create_test_entity(
+        name="Wet target",
+        config=EntityConfig(position=(2, 2)),
     )
-
-    ignited = EventQueue.publish_lifecycle(SpatialEffectInteractionEvent(
-        source_entity_uuid=source_uuid,
-        operation=SpatialEffectInteractionOperation.IGNITE,
-        positions=((2, 2),),
-        intensity=SpatialEffectInteractionIntensity.STRONG,
-        damage_type=DamageType.FIRE,
-        phase=EventPhase.DECLARATION,
-        use_register=False,
-    ))
-    assert ignited is not None
-
-    grid = get_map()
-    remaining_oil_uuids = grid.get_spatial_effect_uuids_at(
-        (2, 3),
-        layer=SpatialEffectLayer.GROUND_SURFACE,
+    parent = _root_action(entity.uuid)
+    water = _materialize_test_condition(
+        WATER_SURFACE_RECIPE,
+        entity.uuid,
+        {(2, 2)},
     )
-    assert remaining_oil_uuids == {oil.uuid}
-    assert oil.affected_positions == {(2, 3)}
-    fire_uuids = grid.get_spatial_effect_uuids_at(
-        (2, 2),
-        layer=SpatialEffectLayer.GROUND_SURFACE,
+    steam = _materialize_test_condition(
+        STEAM_CLOUD_RECIPE,
+        entity.uuid,
+        {(2, 2)},
+        extra_fields={
+            "duration": Duration(
+                duration=2,
+                duration_type=DurationType.ROUNDS,
+            ),
+        },
     )
-    assert len(fire_uuids) == 1
-    fire = SpatialEffect.get_effect(next(iter(fire_uuids)))
-    assert fire is not None
-    assert fire.content_ref == FIRE_SURFACE_RECIPE.ref
+    water.activate(parent_event=parent)
+    steam.activate(parent_event=parent)
 
-    doused = EventQueue.publish_lifecycle(SpatialEffectInteractionEvent(
-        source_entity_uuid=source_uuid,
-        operation=SpatialEffectInteractionOperation.DOUSE,
-        positions=((2, 2),),
-        intensity=SpatialEffectInteractionIntensity.MODERATE,
-        phase=EventPhase.DECLARATION,
-        use_register=False,
-    ))
-    assert doused is not None
-    assert SpatialEffect.get_effect(fire.uuid) is None
-    assert grid.get_spatial_effect_uuids_at(
-        (2, 2),
-        layer=SpatialEffectLayer.GROUND_SURFACE,
-    ) == set()
-    assert SpatialEffect.get_effect(oil.uuid) is oil
+    assert len(entity.get_condition_application_leases("Wet")) == 2
+    assert entity.health.get_resistance(DamageType.FIRE) is ResistanceStatus.RESISTANCE
+    assert entity.health.get_resistance(DamageType.COLD) is ResistanceStatus.VULNERABILITY
+    assert entity.health.get_resistance(DamageType.LIGHTNING) is ResistanceStatus.VULNERABILITY
+
+    water.deactivate(parent_event=parent)
+    assert "Wet" in entity.active_conditions
+    assert len(entity.get_condition_application_leases("Wet")) == 1
+
+    steam.deactivate(parent_event=parent)
+    assert "Wet" not in entity.active_conditions
 
 
-def test_wet_surface_freezes_and_vaporizes_without_mutating_water_tile() -> None:
-    """Structural Water remains a swim tile while surface state transforms."""
+def test_partial_wet_footprint_release_removes_departed_membership() -> None:
+    """Shrinking a Wet source releases occupants in removed cells only."""
+    reset_engine_runtime(grid_size=(4, 4))
+    entity = create_test_entity(
+        name="Departed wet target",
+        config=EntityConfig(position=(1, 1)),
+    )
+    parent = _root_action(entity.uuid)
+    water = _materialize_test_condition(
+        WATER_SURFACE_RECIPE,
+        entity.uuid,
+        {(1, 1), (1, 2)},
+    )
+    water.activate(parent_event=parent)
+    assert "Wet" in entity.active_conditions
+
+    water.transition_footprint({(1, 2)}, parent_event=parent)
+
+    assert "Wet" not in entity.active_conditions
+    assert water.affected_positions == {(1, 2)}
+
+
+def test_water_transformations_do_not_replace_structural_water_tile() -> None:
+    """Surface state transforms while the Tile retains swimming mechanics."""
     reset_engine_runtime(grid_size=(5, 5))
     source_uuid = uuid4()
     parent = _root_action(source_uuid)
     grid = get_map()
     water_tile = water_factory((2, 2))
     grid.set_tile(2, 2, tile=water_tile, fire_event=False)
-
-    surface = materialize_spatial_effect(
+    surface = _materialize_test_condition(
         WATER_SURFACE_RECIPE,
         source_uuid,
-        position=(2, 2),
-        faction=None,
-        expected_type=GroundEffect,
+        {(2, 2)},
     )
-    surface.install_default_controller(
-        positions={(2, 2)},
-        duration_rounds=None,
-        parent_event=parent,
-    )
+    surface.activate(parent_event=parent)
 
-    EventQueue.publish_lifecycle(SpatialEffectInteractionEvent(
-        source_entity_uuid=source_uuid,
-        operation=SpatialEffectInteractionOperation.FREEZE,
-        positions=((2, 2),),
-        intensity=SpatialEffectInteractionIntensity.STRONG,
-        phase=EventPhase.DECLARATION,
-        use_register=False,
-    ))
-
-    frozen_uuids = grid.get_spatial_effect_uuids_at(
-        (2, 2),
-        layer=SpatialEffectLayer.GROUND_SURFACE,
+    _publish_interaction(
+        source_uuid,
+        SpatialEffectInteractionOperation.FREEZE,
+        {(2, 2)},
+        SpatialEffectInteractionIntensity.STRONG,
     )
-    assert len(frozen_uuids) == 1
-    frozen = SpatialEffect.get_effect(next(iter(frozen_uuids)))
-    assert frozen is not None
-    assert frozen.content_ref == ICE_SURFACE_RECIPE.ref
+    frozen = grid.get_spatial_conditions_at((2, 2))
+    assert len(frozen) == 1
+    assert frozen[0].content_ref == ICE_SURFACE_RECIPE.ref
     assert grid.get_tile(2, 2) is water_tile
     assert water_tile.swimming_cost.normalized_score == 1
 
-    EventQueue.publish_lifecycle(SpatialEffectInteractionEvent(
-        source_entity_uuid=source_uuid,
-        operation=SpatialEffectInteractionOperation.VAPORIZE,
-        positions=((2, 2),),
-        intensity=SpatialEffectInteractionIntensity.STRONG,
-        phase=EventPhase.DECLARATION,
-        use_register=False,
-    ))
-
-    assert grid.get_spatial_effect_uuids_at(
+    _publish_interaction(
+        source_uuid,
+        SpatialEffectInteractionOperation.VAPORIZE,
+        {(2, 2)},
+        SpatialEffectInteractionIntensity.STRONG,
+    )
+    assert grid.get_spatial_condition_uuids_at(
         (2, 2),
         layer=SpatialEffectLayer.GROUND_SURFACE,
     ) == set()
-    steam_uuids = grid.get_spatial_effect_uuids_at(
+    steam = grid.get_spatial_conditions_at(
         (2, 2),
         layer=SpatialEffectLayer.CLOUD,
     )
-    assert len(steam_uuids) == 1
-    steam = SpatialEffect.get_effect(next(iter(steam_uuids)))
-    assert isinstance(steam, CloudEffect)
-    assert steam.content_ref == STEAM_CLOUD_RECIPE.ref
+    assert len(steam) == 1
+    assert steam[0].content_ref == STEAM_CLOUD_RECIPE.ref
     assert grid.get_tile(2, 2) is water_tile
     assert water_tile.swimming_cost.normalized_score == 1
 
 
-def test_wet_membership_is_source_owned_across_ground_and_steam() -> None:
-    """Leaving one water-bearing layer cannot clear another source's Wet."""
+def test_freedom_of_movement_preserves_surface_slip_and_electricity() -> None:
+    """Freedom bypasses movement penalties, not surface conditions or damage."""
     reset_engine_runtime(grid_size=(5, 5))
-    entity = Entity.create(
-        source_entity_uuid=uuid4(),
-        name="Wet target",
-        config=EntityConfig(position=(2, 2)),
-    )
-    parent = _root_action(entity.uuid)
-    ground = materialize_spatial_effect(
-        WATER_SURFACE_RECIPE,
-        entity.uuid,
-        position=(2, 2),
-        faction=None,
-        expected_type=GroundEffect,
-    )
-    ground.install_default_controller(
-        positions={(2, 2)},
-        duration_rounds=None,
-        parent_event=parent,
-    )
-    steam = materialize_spatial_effect(
-        STEAM_CLOUD_RECIPE,
-        entity.uuid,
-        position=(2, 2),
-        faction=None,
-        expected_type=CloudEffect,
-    )
-    steam.install_default_controller(
-        positions={(2, 2)},
-        duration_rounds=2,
-        parent_event=parent,
-    )
-
-    assert "Wet" in entity.active_conditions
-    assert len(entity.get_condition_application_leases("Wet")) == 2
-    assert (
-        entity.health.get_resistance(DamageType.FIRE)
-        is ResistanceStatus.RESISTANCE
-    )
-    assert (
-        entity.health.get_resistance(DamageType.COLD)
-        is ResistanceStatus.VULNERABILITY
-    )
-    assert (
-        entity.health.get_resistance(DamageType.LIGHTNING)
-        is ResistanceStatus.VULNERABILITY
-    )
-
-    ground.retire(parent_event=parent)
-    assert "Wet" in entity.active_conditions
-    assert len(entity.get_condition_application_leases("Wet")) == 1
-
-    steam.retire(parent_event=parent)
-    assert "Wet" not in entity.active_conditions
-
-
-def test_freedom_of_movement_does_not_suppress_surface_slip_or_damage() -> None:
-    """FoM bypasses movement penalties, not Wet, ice slipping, or electricity."""
-    reset_engine_runtime(grid_size=(5, 5))
-    entity = Entity.create(
-        source_entity_uuid=uuid4(),
+    entity = create_test_entity(
         name="Protected target",
         config=EntityConfig(position=(2, 2)),
     )
@@ -365,22 +339,14 @@ def test_freedom_of_movement_does_not_suppress_surface_slip_or_damage() -> None:
     entity.add_condition(FreedomOfMovementEffect(
         source_entity_uuid=entity.uuid,
         target_entity_uuid=entity.uuid,
-    ))
-
-    ice = materialize_spatial_effect(
+    ), parent_event=parent)
+    ice = _materialize_test_condition(
         ICE_SURFACE_RECIPE,
         entity.uuid,
-        position=(2, 2),
-        faction=None,
-        expected_type=GroundEffect,
+        {(2, 2)},
+        extra_fields={"slip_save_dc": 100},
     )
-    ice_controller = IceSurfaceController(
-        source_entity_uuid=entity.uuid,
-        target_entity_uuid=ice.uuid,
-        fixed_positions={(2, 2)},
-        slip_save_dc=100,
-    )
-    ice.install_controller(ice_controller, parent_event=parent)
+    ice.activate(parent_event=parent)
 
     tile = get_map().get_tile(2, 2)
     assert tile is not None
@@ -388,493 +354,875 @@ def test_freedom_of_movement_does_not_suppress_surface_slip_or_damage() -> None:
     assert entity.ignore_difficult_terrain
     assert "Prone" in entity.active_conditions
 
-    ice.retire(parent_event=parent)
+    ice.deactivate(parent_event=parent)
     entity.remove_condition("Prone", parent_event=parent)
     hp_before = entity.get_hp()
-    water = materialize_spatial_effect(
+    water = _materialize_test_condition(
         WATER_SURFACE_RECIPE,
         entity.uuid,
-        position=(2, 2),
-        faction=None,
-        expected_type=GroundEffect,
+        {(2, 2)},
     )
-    water.install_default_controller(
-        positions={(2, 2)},
-        duration_rounds=None,
-        parent_event=parent,
+    water.activate(parent_event=parent)
+    _publish_interaction(
+        entity.uuid,
+        SpatialEffectInteractionOperation.ELECTRIFY,
+        {(2, 2)},
+        SpatialEffectInteractionIntensity.STRONG,
     )
-    EventQueue.publish_lifecycle(SpatialEffectInteractionEvent(
-        source_entity_uuid=entity.uuid,
-        operation=SpatialEffectInteractionOperation.ELECTRIFY,
-        positions=((2, 2),),
-        intensity=SpatialEffectInteractionIntensity.STRONG,
-        phase=EventPhase.DECLARATION,
-        use_register=False,
-    ))
 
-    effect_uuids = get_map().get_spatial_effect_uuids_at(
-        (2, 2),
-        layer=SpatialEffectLayer.GROUND_SURFACE,
-    )
-    assert len(effect_uuids) == 1
-    electrified = SpatialEffect.get_effect(next(iter(effect_uuids)))
-    assert electrified is not None
-    assert electrified.content_ref == ELECTRIFIED_WATER_RECIPE.ref
     assert "Wet" in entity.active_conditions
     assert entity.get_hp() < hp_before
 
 
-@pytest.mark.parametrize(
-    ("damage_type", "expected_ref"),
+def test_inherited_round_duration_expires_the_condition() -> None:
+    """Spatial duration uses BaseCondition's one ordinary duration value."""
+    reset_engine_runtime(grid_size=(3, 3))
+    source_uuid = uuid4()
+    condition = _materialize_test_condition(
+        FIRE_SURFACE_RECIPE,
+        source_uuid,
+        {(1, 1)},
+        extra_fields={
+            "duration": Duration(
+                duration=1,
+                duration_type=DurationType.ROUNDS,
+            ),
+        },
+    )
+    condition.activate(parent_event=_root_action(source_uuid))
+
+    assert condition.progress_spatial_duration()
+    assert BaseCondition.get(condition.uuid) is None
+    assert get_map().get_spatial_conditions() == []
+
+
+_TRANSITION_CASES = tuple(
     (
-        (DamageType.BLUDGEONING, OIL_SURFACE_RECIPE.ref),
-        (DamageType.FIRE, FIRE_SURFACE_RECIPE.ref),
-    ),
+        declaration.ref.content_id,
+        transition.operation,
+        transition.minimum_intensity,
+        transition.action,
+        (
+            transition.replacement_recipe.ref
+            if transition.replacement_recipe is not None
+            else None
+        ),
+        transition.delay_rounds,
+    )
+    for declaration in BUILT_IN_SPATIAL_EFFECT_DECLARATIONS
+    if declaration.spatial_effect_definition is not None
+    for transition in declaration.spatial_effect_definition.transitions
 )
-def test_oil_barrel_destruction_uses_material_transition_table(
-    damage_type: DamageType,
-    expected_ref: ContentRef,
+_RECIPES_BY_CONTENT_ID = {
+    declaration.ref.content_id: ContentRecipe.create(
+        ref=declaration.ref,
+        parameters={},
+    )
+    for declaration in BUILT_IN_SPATIAL_EFFECT_DECLARATIONS
+}
+
+
+@pytest.mark.parametrize(
+    (
+        "content_id",
+        "operation",
+        "intensity",
+        "action",
+        "replacement_ref",
+        "delay_rounds",
+    ),
+    _TRANSITION_CASES,
+)
+def test_every_authored_transition_executes_through_the_live_event(
+    content_id: str,
+    operation: SpatialEffectInteractionOperation,
+    intensity: SpatialEffectInteractionIntensity,
+    action: SpatialEffectTransitionAction,
+    replacement_ref: ContentRef | None,
+    delay_rounds: int | None,
 ) -> None:
-    """A barrel spills oil; accepted fire damage ignites it causally."""
-    reset_engine_runtime(grid_size=(5, 5))
-    source_uuid = uuid4()
-    barrel = materialize_item(
-        OIL_BARREL_RECIPE,
-        source_uuid,
-        origin=ItemRuntimeOrigin.ENVIRONMENT,
-        expected_type=OilBarrel,
-    )
-    barrel.place_on_grid((2, 2))
-    starting_hp = barrel.get_hp()
-
-    dealt = barrel.receive_damage(
-        starting_hp,
-        damage_type,
-        source_uuid,
-    )
-
-    assert dealt == starting_hp
-    effect_uuids = get_map().get_spatial_effect_uuids_at(
-        (2, 2),
-        layer=SpatialEffectLayer.GROUND_SURFACE,
-    )
-    assert len(effect_uuids) == 1
-    effect = SpatialEffect.get_effect(next(iter(effect_uuids)))
-    assert effect is not None
-    assert effect.content_ref == expected_ref
-
-
-def test_material_layers_reject_implicit_replacement_without_partial_indexing() -> None:
-    """Exclusive material cells require a declared transformation operation."""
+    """All fourteen authored rows transform exact intersected cells."""
     reset_engine_runtime(grid_size=(4, 4))
     source_uuid = uuid4()
-    oil = GroundEffect(
-        name="Oil",
-        source_entity_uuid=source_uuid,
-        content_ref=GREASE_SURFACE_RECIPE.ref,
-        position=(1, 1),
+    recipe = _RECIPES_BY_CONTENT_ID[content_id]
+    condition = _materialize_test_condition(
+        recipe,
+        source_uuid,
+        {(1, 1), (1, 2)},
     )
-    grease = GroundEffect(
-        name="Grease",
-        source_entity_uuid=source_uuid,
-        content_ref=GREASE_SURFACE_RECIPE.ref,
-        position=(1, 1),
-    )
+    condition.activate(parent_event=_root_action(source_uuid))
 
-    oil.synchronize_footprint({(1, 1), (1, 2)})
-
-    with pytest.raises(
-        ValueError,
-        match=r"ground_surface cell \(1, 1\) already has an effect",
-    ):
-        grease.synchronize_footprint({(1, 1)})
-
-    grid = get_map()
-    assert grid.get_spatial_effect_uuids_at(
-        (1, 1),
-        layer=SpatialEffectLayer.GROUND_SURFACE,
-    ) == {oil.uuid}
-    assert grid.get_spatial_effect_uuids_at(
-        (1, 2),
-        layer=SpatialEffectLayer.GROUND_SURFACE,
-    ) == {oil.uuid}
-    assert grease.affected_positions == set()
-
-
-def test_fields_overlap_and_retire_without_disturbing_each_other() -> None:
-    """Influence fields coexist and clean up only their own indexed cells."""
-    reset_engine_runtime(grid_size=(4, 4))
-    source_uuid = uuid4()
-    light = FieldEffect(
-        name="Daylight",
-        source_entity_uuid=source_uuid,
-        content_ref=DAYLIGHT_FIELD_RECIPE.ref,
-        position=(2, 2),
-    )
-    silence = FieldEffect(
-        name="Silence",
-        source_entity_uuid=source_uuid,
-        content_ref=SILENCE_FIELD_RECIPE.ref,
-        position=(2, 2),
+    _publish_interaction(
+        source_uuid,
+        operation,
+        {(1, 1)},
+        intensity,
     )
 
-    light.synchronize_footprint({(2, 2)})
-    silence.synchronize_footprint({(2, 2), (2, 3)})
+    if delay_rounds is not None:
+        assert condition.affected_positions == {(1, 1), (1, 2)}
+        assert condition.duration.duration_type is DurationType.ROUNDS
+        assert condition.duration.duration == delay_rounds
+        return
 
-    grid = get_map()
-    assert grid.get_spatial_effect_uuids_at(
-        (2, 2),
-        layer=SpatialEffectLayer.FIELD,
-    ) == {light.uuid, silence.uuid}
-
-    light.retire()
-
-    assert SpatialEffect.get_effect(light.uuid) is None
-    assert SpatialEffect.get_effect(silence.uuid) is silence
-    assert grid.get_spatial_effect_uuids_at(
-        (2, 2),
-        layer=SpatialEffectLayer.FIELD,
-    ) == {silence.uuid}
-    assert grid.get_spatial_effect_uuids_at(
-        (2, 3),
-        layer=SpatialEffectLayer.FIELD,
-    ) == {silence.uuid}
+    assert condition.affected_positions == {(1, 2)}
+    occupants = get_map().get_spatial_conditions_at((1, 1))
+    if action is SpatialEffectTransitionAction.REMOVE_AFFECTED:
+        assert occupants == []
+    else:
+        assert len(occupants) == 1
+        assert isinstance(occupants[0], SpatialCondition)
+        assert occupants[0].content_ref == replacement_ref
+        assert occupants[0].faction == condition.faction
 
 
-def test_retirement_event_preserves_removed_geometry_for_projection_and_log() -> None:
-    """Effect retirement reports the former cells after indexes are removed."""
+def test_material_collision_fails_without_partial_condition_or_events() -> None:
+    """An unauthored material collision leaves the incumbent untouched."""
     reset_engine_runtime(grid_size=(4, 4))
     source_uuid = uuid4()
     parent = _root_action(source_uuid)
-    effect = materialize_spatial_effect(
+    incumbent = _materialize_test_condition(
         OIL_SURFACE_RECIPE,
         source_uuid,
-        position=(1, 1),
-        faction=None,
+        {(1, 1), (1, 2)},
     )
-    effect.install_default_controller(
-        positions={(1, 1), (1, 2)},
-        duration_rounds=None,
-        parent_event=parent,
+    incumbent.activate(parent_event=parent)
+    cursor = EventQueue.event_cursor()
+    rejected = _materialize_test_condition(
+        GREASE_SURFACE_RECIPE,
+        source_uuid,
+        {(1, 1)},
     )
+
+    with pytest.raises(ValueError, match="authored material transformation"):
+        rejected.activate(parent_event=parent)
+
+    assert BaseCondition.get(rejected.uuid) is None
+    assert incumbent.affected_positions == {(1, 1), (1, 2)}
+    assert get_map().get_spatial_condition_uuids_at(
+        (1, 1),
+        layer=SpatialEffectLayer.GROUND_SURFACE,
+    ) == {incumbent.uuid}
+    assert EventQueue.event_cursor() == cursor
+
+
+def test_fields_overlap_and_deactivate_independently() -> None:
+    """Overlapping fields remove only their own Tile memberships."""
+    reset_engine_runtime(grid_size=(4, 4))
+    source_uuid = uuid4()
+    parent = _root_action(source_uuid)
+    daylight = _materialize_test_condition(
+        DAYLIGHT_FIELD_RECIPE,
+        source_uuid,
+        {(2, 2)},
+    )
+    silence = _materialize_test_condition(
+        SILENCE_FIELD_RECIPE,
+        source_uuid,
+        {(2, 2), (2, 3)},
+    )
+    daylight.activate(parent_event=parent)
+    silence.activate(parent_event=parent)
+
+    assert get_map().get_spatial_condition_uuids_at(
+        (2, 2),
+        layer=SpatialEffectLayer.FIELD,
+    ) == {daylight.uuid, silence.uuid}
+
+    daylight.deactivate(parent_event=parent)
+
+    assert BaseCondition.get(daylight.uuid) is None
+    assert BaseCondition.get(silence.uuid) is silence
+    assert get_map().get_spatial_condition_uuids_at(
+        (2, 2),
+        layer=SpatialEffectLayer.FIELD,
+    ) == {silence.uuid}
+
+
+def test_deactivation_event_preserves_removed_geometry() -> None:
+    """The existing removal fact reports the footprint after indexes are gone."""
+    reset_engine_runtime(grid_size=(4, 4))
+    source_uuid = uuid4()
+    parent = _root_action(source_uuid)
+    condition = _materialize_test_condition(
+        OIL_SURFACE_RECIPE,
+        source_uuid,
+        {(1, 1), (1, 2)},
+    )
+    condition.activate(parent_event=parent)
     cursor = EventQueue.event_cursor()
 
-    effect.retire(parent_event=parent)
+    condition.deactivate(parent_event=parent)
 
-    removed_events = [
+    removed = [
         event
         for _, event in EventQueue.iter_events_since(cursor)
         if isinstance(event, SpatialEffectChangeEvent)
         and event.phase is EventPhase.COMPLETION
         and event.operation is SpatialEffectChangeOperation.REMOVED
     ]
-    assert len(removed_events) == 1
-    removed = removed_events[0]
-    assert removed.affected_positions == ()
-    assert removed.previous_positions == ((1, 1), (1, 2))
-    assert removed.get_affected_positions() == {(1, 1), (1, 2)}
-    assert removed.combat_log is not None
-    assert removed.combat_log.data["affected_positions"] == [
-        [1, 1],
-        [1, 2],
-    ]
+    assert len(removed) == 1
+    assert removed[0].spatial_effect_uuid == condition.uuid
+    assert removed[0].affected_positions == ()
+    assert removed[0].previous_positions == ((1, 1), (1, 2))
+    assert removed[0].get_affected_positions() == {(1, 1), (1, 2)}
 
 
-def test_different_material_collision_fails_before_runtime_leases_are_added() -> None:
-    """Exclusive materials require an authored transition and leak no controller."""
-    reset_engine_runtime(grid_size=(7, 7))
-    source_uuid = uuid4()
-    parent_event = Event(
-        source_entity_uuid=source_uuid,
-        event_type=EventType.BASE_ACTION,
-        phase=EventPhase.COMPLETION,
-        use_register=False,
-    )
-    first = materialize_spatial_effect(
-        OIL_SURFACE_RECIPE,
-        source_uuid,
-        position=(3, 3),
-        faction=None,
-        expected_type=GroundEffect,
-    )
-    result = first.install_default_controller(
-        positions={(3, 3)},
-        duration_rounds=None,
-        parent_event=parent_event,
-    )
-    assert result is not None and not result.canceled
-    center = get_map().get_tile(3, 3)
-    assert center is not None
-    spatial_handler_count = len(EventQueue._handler_positions)
-    event_handler_count = len(EventQueue._event_handlers)
+class FixedGreaseZone(GreaseZone):
+    """Use exact cells while exercising Grease's real mechanics."""
 
-    second = materialize_spatial_effect(
-        GREASE_SURFACE_RECIPE,
-        source_uuid,
-        position=(3, 3),
-        faction=None,
-        expected_type=GroundEffect,
-    )
-    second_controller = GreaseZone(
-        source_entity_uuid=source_uuid,
-        target_entity_uuid=second.uuid,
-        zone_center=(3, 3),
-    )
-    with pytest.raises(ValueError, match="authored material transformation"):
-        second.install_controller(
-            second_controller,
-            parent_event=parent_event,
-        )
-
-    assert SpatialEffect.get_effect(second.uuid) is None
-    assert BaseCondition.get(second_controller.uuid) is None
-    assert len(EventQueue._handler_positions) == spatial_handler_count
-    assert len(EventQueue._event_handlers) == event_handler_count
+    def resolve_area_footprint(self) -> set[tuple[int, int]]:
+        return set(self.affected_positions)
 
 
-def test_equal_same_material_replaces_overlap_without_stacking_mechanics() -> None:
-    """A later equal surface owns overlap while non-overlap remains independent."""
+class MovingGreaseZone(GreaseZone):
+    """Use one center cell while exercising ordinary movement admission."""
+
+    def resolve_area_footprint(self) -> set[tuple[int, int]]:
+        return {self.position}
+
+    def _compute_affected_positions(self) -> set[tuple[int, int]]:
+        return {self.position}
+
+
+def test_equal_same_material_replaces_only_its_overlap() -> None:
+    """An equal later surface owns overlap while the remainder stays active."""
     reset_engine_runtime(grid_size=(8, 8))
     source_uuid = uuid4()
-    parent_event = Event(
-        source_entity_uuid=source_uuid,
-        event_type=EventType.BASE_ACTION,
-        phase=EventPhase.COMPLETION,
-        use_register=False,
-    )
-    first = materialize_spatial_effect(
+    parent = _root_action(source_uuid)
+    first = _materialize_test_condition(
         GREASE_SURFACE_RECIPE,
         source_uuid,
-        position=(2, 3),
-        faction=None,
-        expected_type=GroundEffect,
+        {(2, 2), (2, 3)},
+        condition_type=FixedGreaseZone,
+        extra_fields={"arbitration_potency": 15},
     )
-    first_controller = GreaseZone(
-        source_entity_uuid=source_uuid,
-        target_entity_uuid=first.uuid,
-        zone_center=(2, 3),
-        arbitration_potency=15,
-    )
-    assert first.install_controller(first_controller, parent_event=parent_event)
-    original_first = set(first.affected_positions)
-
-    second = materialize_spatial_effect(
+    second = _materialize_test_condition(
         GREASE_SURFACE_RECIPE,
         source_uuid,
-        position=(3, 3),
-        faction=None,
-        expected_type=GroundEffect,
+        {(2, 3), (3, 3)},
+        condition_type=FixedGreaseZone,
+        extra_fields={"arbitration_potency": 15},
     )
-    second_controller = GreaseZone(
-        source_entity_uuid=source_uuid,
-        target_entity_uuid=second.uuid,
-        zone_center=(3, 3),
-        arbitration_potency=15,
-    )
-    assert second.install_controller(second_controller, parent_event=parent_event)
+    first.activate(parent_event=parent)
+    second.activate(parent_event=parent)
 
-    assert first.affected_positions == original_first - second.affected_positions
-    assert first.affected_positions
+    assert first.affected_positions == {(2, 2)}
+    assert second.affected_positions == {(2, 3), (3, 3)}
     assert first.affected_positions.isdisjoint(second.affected_positions)
-    for position in original_first & second.affected_positions:
-        tile = get_map().get_tile(*position)
-        assert tile is not None
-        assert tile.walking_cost.normalized_score == 2
 
 
-def test_weaker_same_material_cannot_downgrade_the_active_surface() -> None:
-    """A weaker exact surface is suppressed rather than replacing a stronger DC."""
-    reset_engine_runtime(grid_size=(7, 7))
+def test_weaker_same_material_cannot_downgrade_the_incumbent() -> None:
+    """A weaker exact surface is rejected without changing the active one."""
+    reset_engine_runtime(grid_size=(5, 5))
     source_uuid = uuid4()
-    parent_event = Event(
-        source_entity_uuid=source_uuid,
-        event_type=EventType.BASE_ACTION,
-        phase=EventPhase.COMPLETION,
-        use_register=False,
-    )
-    stronger = materialize_spatial_effect(
+    parent = _root_action(source_uuid)
+    stronger = _materialize_test_condition(
         GREASE_SURFACE_RECIPE,
         source_uuid,
-        position=(3, 3),
-        faction=None,
-        expected_type=GroundEffect,
+        {(2, 2)},
+        condition_type=FixedGreaseZone,
+        extra_fields={"arbitration_potency": 18},
     )
-    strong_controller = GreaseZone(
-        source_entity_uuid=source_uuid,
-        target_entity_uuid=stronger.uuid,
-        zone_center=(3, 3),
-        spell_dc=18,
-        arbitration_potency=18,
-    )
-    assert stronger.install_controller(strong_controller, parent_event=parent_event)
-    strong_positions = set(stronger.affected_positions)
-
-    weaker = materialize_spatial_effect(
+    weaker = _materialize_test_condition(
         GREASE_SURFACE_RECIPE,
         source_uuid,
-        position=(3, 3),
-        faction=None,
-        expected_type=GroundEffect,
+        {(2, 2)},
+        condition_type=FixedGreaseZone,
+        extra_fields={"arbitration_potency": 12},
     )
-    weak_controller = GreaseZone(
+    stronger.activate(parent_event=parent)
+
+    result = weaker.activate(parent_event=parent)
+
+    assert result is parent
+    assert BaseCondition.get(weaker.uuid) is None
+    assert stronger.affected_positions == {(2, 2)}
+    tile = get_map().get_tile(2, 2)
+    assert tile is not None
+    assert tile.walking_cost.normalized_score == 2
+
+
+def test_declaration_veto_does_not_restore_an_undisplaced_incumbent() -> None:
+    """Admission bookkeeping cannot duplicate mechanics before a swap commits."""
+    reset_engine_runtime(grid_size=(5, 5))
+    source_uuid = uuid4()
+    parent = _root_action(source_uuid)
+    incumbent = _materialize_test_condition(
+        GREASE_SURFACE_RECIPE,
+        source_uuid,
+        {(2, 2)},
+        condition_type=FixedGreaseZone,
+        extra_fields={"arbitration_potency": 10},
+    )
+    incoming = _materialize_test_condition(
+        GREASE_SURFACE_RECIPE,
+        source_uuid,
+        {(2, 2)},
+        condition_type=FixedGreaseZone,
+        extra_fields={"arbitration_potency": 20},
+    )
+    incumbent.activate(parent_event=parent)
+
+    def reject_application(event: Event, _source_uuid: UUID) -> Event:
+        return event.cancel("test declaration veto")
+
+    blocker = EventHandler(
+        name="Reject spatial condition declaration",
         source_entity_uuid=source_uuid,
-        target_entity_uuid=weaker.uuid,
-        zone_center=(3, 3),
-        spell_dc=12,
-        arbitration_potency=12,
+        trigger_conditions=[Trigger(
+            event_type=EventType.CONDITION_APPLICATION,
+            event_phase=EventPhase.DECLARATION,
+        )],
+        event_processor=reject_application,
     )
-    result = weaker.install_controller(weak_controller, parent_event=parent_event)
+    EventQueue.add_event_handler(blocker)
+    result = incoming.activate(parent_event=parent)
+    blocker.remove()
 
-    assert result is parent_event
-    assert SpatialEffect.get_effect(weaker.uuid) is None
-    assert stronger.affected_positions == strong_positions
-    assert BaseCondition.get(strong_controller.uuid) is strong_controller
-    assert BaseCondition.get(weak_controller.uuid) is None
+    assert result is not None and result.canceled
+    tile = get_map().get_tile(2, 2)
+    assert tile is not None
+    assert tile.walking_cost.normalized_score == 2
+    assert incumbent.affected_positions == {(2, 2)}
+    assert get_map().get_spatial_condition_uuids_at((2, 2)) == {
+        incumbent.uuid,
+    }
 
 
-class FailingGreaseZone(GreaseZone):
-    """Test-only controller that fails after overlap indexes are staged."""
+def test_one_activation_cannot_partially_retire_multiple_material_owners() -> None:
+    """Ambiguous multi-owner merging is rejected before either owner changes."""
+    reset_engine_runtime(grid_size=(5, 3))
+    source_uuid = uuid4()
+    parent = _root_action(source_uuid)
+    first = _materialize_test_condition(
+        OIL_SURFACE_RECIPE,
+        source_uuid,
+        {(1, 1)},
+        extra_fields={"arbitration_potency": 10},
+    )
+    second = _materialize_test_condition(
+        OIL_SURFACE_RECIPE,
+        source_uuid,
+        {(3, 1)},
+        extra_fields={"arbitration_potency": 10},
+    )
+    replacement = _materialize_test_condition(
+        OIL_SURFACE_RECIPE,
+        source_uuid,
+        {(1, 1), (2, 1), (3, 1)},
+        extra_fields={"arbitration_potency": 20},
+    )
+    first.activate(parent_event=parent)
+    second.activate(parent_event=parent)
+
+    with pytest.raises(ValueError, match="several independent condition owners"):
+        replacement.activate(parent_event=parent)
+
+    assert BaseCondition.get(first.uuid) is first
+    assert BaseCondition.get(second.uuid) is second
+    assert BaseCondition.get(replacement.uuid) is None
+    assert first.affected_positions == {(1, 1)}
+    assert second.affected_positions == {(3, 1)}
+    assert {
+        condition.uuid for condition in get_map().get_spatial_conditions()
+    } == {first.uuid, second.uuid}
+
+
+class FailingGreaseZone(FixedGreaseZone):
+    """Fail after spatial mechanics are installed to prove local restoration."""
 
     def _apply(self, declaration_event: Event) -> NoReturn:
-        del declaration_event
-        raise RuntimeError("intentional controller failure")
+        super()._apply(declaration_event)
+        raise RuntimeError("intentional condition failure")
 
 
-def test_same_material_staging_restores_incumbent_when_install_fails() -> None:
-    """A failed replacement cannot strand the incumbent outside the grid index."""
+class FailingWaterSurface(WaterSurface):
+    """Fail after provisional installation to exercise membership rollback."""
+
+    def _apply(self, declaration_event: Event) -> NoReturn:
+        super()._apply(declaration_event)
+        raise RuntimeError("intentional water failure")
+
+
+def test_failed_same_material_activation_restores_the_incumbent() -> None:
+    """A failed replacement cannot strand or duplicate the previous surface."""
+    reset_engine_runtime(grid_size=(5, 5))
+    source_uuid = uuid4()
+    parent = _root_action(source_uuid)
+    incumbent = _materialize_test_condition(
+        GREASE_SURFACE_RECIPE,
+        source_uuid,
+        {(2, 2)},
+        condition_type=FixedGreaseZone,
+        extra_fields={"arbitration_potency": 10},
+    )
+    failed = _materialize_test_condition(
+        GREASE_SURFACE_RECIPE,
+        source_uuid,
+        {(2, 2)},
+        condition_type=FailingGreaseZone,
+        extra_fields={"arbitration_potency": 20},
+    )
+    incumbent.activate(parent_event=parent)
+
+    with pytest.raises(RuntimeError, match="intentional condition failure"):
+        failed.activate(parent_event=parent)
+
+    assert BaseCondition.get(failed.uuid) is None
+    assert incumbent.affected_positions == {(2, 2)}
+    assert get_map().get_spatial_condition_uuids_at((2, 2)) == {
+        incumbent.uuid,
+    }
+    tile = get_map().get_tile(2, 2)
+    assert tile is not None
+    assert tile.walking_cost.normalized_score == 2
+
+
+def test_failed_water_replacement_preserves_incumbent_membership() -> None:
+    """Provisional displacement cannot retire occupant-facing Wet state."""
+    reset_engine_runtime(grid_size=(5, 5))
+    entity = create_test_entity(
+        name="Wet replacement target",
+        config=EntityConfig(position=(2, 2)),
+    )
+    parent = _root_action(entity.uuid)
+    incumbent = _materialize_test_condition(
+        WATER_SURFACE_RECIPE,
+        entity.uuid,
+        {(2, 2)},
+        extra_fields={"arbitration_potency": 10},
+    )
+    failed = _materialize_test_condition(
+        WATER_SURFACE_RECIPE,
+        entity.uuid,
+        {(2, 2)},
+        condition_type=FailingWaterSurface,
+        extra_fields={"arbitration_potency": 20},
+    )
+    incumbent.activate(parent_event=parent)
+    membership = incumbent.find_membership(entity)
+    assert membership is not None
+
+    with pytest.raises(RuntimeError, match="intentional water failure"):
+        failed.activate(parent_event=parent)
+
+    assert incumbent.affected_positions == {(2, 2)}
+    assert incumbent.find_membership(entity) is membership
+    assert "Wet" in entity.active_conditions
+    assert get_map().get_spatial_condition_uuids_at((2, 2)) == {
+        incumbent.uuid,
+    }
+
+
+@pytest.mark.parametrize(
+    "removal_phase",
+    (EventPhase.DECLARATION, EventPhase.EFFECT),
+)
+def test_incumbent_removal_veto_rejects_replacement_before_completion(
+    removal_phase: EventPhase,
+) -> None:
+    """A veto keeps the installed owner and rejects the provisional newcomer."""
+    reset_engine_runtime(grid_size=(5, 5))
+    source_uuid = uuid4()
+    parent = _root_action(source_uuid)
+    incumbent = _materialize_test_condition(
+        GREASE_SURFACE_RECIPE,
+        source_uuid,
+        {(2, 2)},
+        condition_type=FixedGreaseZone,
+        extra_fields={"arbitration_potency": 10},
+    )
+    replacement = _materialize_test_condition(
+        GREASE_SURFACE_RECIPE,
+        source_uuid,
+        {(2, 2)},
+        condition_type=FixedGreaseZone,
+        extra_fields={"arbitration_potency": 20},
+    )
+    incumbent.activate(parent_event=parent)
+
+    blocker = EventHandler(
+        name="Reject incumbent retirement",
+        source_entity_uuid=source_uuid,
+        trigger_conditions=[Trigger(
+            event_type=EventType.CONDITION_REMOVAL,
+            event_phase=removal_phase,
+        )],
+        event_processor=lambda event, _source_uuid: event.cancel(
+            "test incumbent removal veto",
+        ),
+    )
+    EventQueue.add_event_handler(blocker)
+    with pytest.raises(
+        RuntimeError,
+        match="rejected retirement",
+    ):
+        replacement.activate(parent_event=parent)
+    blocker.remove()
+
+    assert BaseCondition.get(replacement.uuid) is None
+    assert incumbent.applied
+    assert incumbent.affected_positions == {(2, 2)}
+    assert get_map().get_spatial_condition_uuids_at((2, 2)) == {
+        incumbent.uuid,
+    }
+
+
+def test_committed_spatial_facts_do_not_reenter_vetoable_lifecycle() -> None:
+    """Creation is a completion fact after state commit, not a new proposal."""
+    reset_engine_runtime(grid_size=(4, 4))
+    source_uuid = uuid4()
+    parent = _root_action(source_uuid)
+    condition = _materialize_test_condition(
+        OIL_SURFACE_RECIPE,
+        source_uuid,
+        {(1, 1)},
+    )
+    declaration_calls = 0
+
+    def reject_change_declaration(event: Event, _source_uuid: UUID) -> Event:
+        nonlocal declaration_calls
+        declaration_calls += 1
+        return event.cancel("post-commit facts cannot be vetoed")
+
+    blocker = EventHandler(
+        name="Reject spatial change declaration",
+        source_entity_uuid=source_uuid,
+        trigger_conditions=[Trigger(
+            event_type=EventType.SPATIAL_EFFECT_CHANGED,
+            event_phase=EventPhase.DECLARATION,
+        )],
+        event_processor=reject_change_declaration,
+    )
+    EventQueue.add_event_handler(blocker)
+    cursor = EventQueue.event_cursor()
+    result = condition.activate(parent_event=parent)
+    blocker.remove()
+
+    assert result is not None and not result.canceled
+    assert declaration_calls == 0
+    created = [
+        event
+        for _, event in EventQueue.iter_events_since(cursor)
+        if isinstance(event, SpatialEffectChangeEvent)
+        and event.spatial_effect_uuid == condition.uuid
+        and event.operation is SpatialEffectChangeOperation.CREATED
+    ]
+    assert len(created) == 1
+    assert created[0].phase is EventPhase.COMPLETION
+
+
+def test_tile_replacement_and_removal_reject_live_condition_references() -> None:
+    """GridMap cannot strand a condition by discarding a covered Tile."""
+    reset_engine_runtime(grid_size=(4, 4))
+    source_uuid = uuid4()
+    condition = _materialize_test_condition(
+        OIL_SURFACE_RECIPE,
+        source_uuid,
+        {(1, 1)},
+    )
+    condition.activate(parent_event=_root_action(source_uuid))
+    grid = get_map()
+
+    with pytest.raises(ValueError, match="spatial conditions cover"):
+        grid.set_tile(1, 1, fire_event=False)
+    with pytest.raises(ValueError, match="spatial conditions cover"):
+        grid.remove_tile(1, 1, fire_event=False)
+    with pytest.raises(ValueError, match="spatial conditions cover"):
+        grid.create_rectangle(0, 0, 4, 4)
+
+    assert grid.get_spatial_condition_positions(condition.uuid) == {(1, 1)}
+    assert grid.get_spatial_condition_uuids_at((1, 1)) == {condition.uuid}
+
+
+def test_complete_same_material_replacement_reports_previous_geometry() -> None:
+    """A fully displaced condition retains its footprint in TRANSFORMED."""
+    reset_engine_runtime(grid_size=(5, 5))
+    source_uuid = uuid4()
+    parent = _root_action(source_uuid)
+    incumbent = _materialize_test_condition(
+        GREASE_SURFACE_RECIPE,
+        source_uuid,
+        {(2, 2)},
+        condition_type=FixedGreaseZone,
+        extra_fields={"arbitration_potency": 10},
+    )
+    replacement = _materialize_test_condition(
+        GREASE_SURFACE_RECIPE,
+        source_uuid,
+        {(2, 2)},
+        condition_type=FixedGreaseZone,
+        extra_fields={"arbitration_potency": 20},
+    )
+    incumbent.activate(parent_event=parent)
+    cursor = EventQueue.event_cursor()
+
+    replacement.activate(parent_event=parent)
+
+    transformed = [
+        event
+        for _, event in EventQueue.iter_events_since(cursor)
+        if isinstance(event, SpatialEffectChangeEvent)
+        and event.phase is EventPhase.COMPLETION
+        and event.operation is SpatialEffectChangeOperation.TRANSFORMED
+        and event.spatial_effect_uuid == incumbent.uuid
+    ]
+    assert len(transformed) == 1
+    assert transformed[0].previous_positions == ((2, 2),)
+    assert transformed[0].affected_positions == ()
+
+
+def test_zone_move_collision_is_rejected_before_any_state_changes() -> None:
+    """A conflicting destination leaves the moving zone and mechanics intact."""
+    reset_engine_runtime(grid_size=(5, 5))
+    source_uuid = uuid4()
+    parent = _root_action(source_uuid)
+    moving = _materialize_test_condition(
+        GREASE_SURFACE_RECIPE,
+        source_uuid,
+        {(1, 1)},
+        condition_type=MovingGreaseZone,
+    )
+    oil = _materialize_test_condition(
+        OIL_SURFACE_RECIPE,
+        source_uuid,
+        {(2, 1)},
+    )
+    moving.activate(parent_event=parent)
+    oil.activate(parent_event=parent)
+
+    with pytest.raises(ValueError, match="already has a condition"):
+        moving.move_zone((2, 1), parent_event=parent)
+
+    assert moving.position == (1, 1)
+    assert moving.position == (1, 1)
+    assert moving.affected_positions == {(1, 1)}
+    assert get_map().get_spatial_condition_uuids_at((1, 1)) == {moving.uuid}
+    origin = get_map().get_tile(1, 1)
+    assert origin is not None
+    assert origin.walking_cost.normalized_score == 2
+
+
+def test_independent_child_expiry_cleans_its_concentration_slot() -> None:
+    """A retired spatial child cannot leave a stale concentration slot."""
+    reset_engine_runtime(grid_size=(4, 4))
+    caster = create_test_entity(
+        name="Concentrating caster",
+        config=EntityConfig(position=(1, 1)),
+    )
+    parent = _root_action(caster.uuid)
+    concentration = Concentrating(
+        source_entity_uuid=caster.uuid,
+        target_entity_uuid=caster.uuid,
+        spell_name="Test field",
+    )
+    applied = caster.add_condition(concentration, parent_event=parent)
+    assert applied is not None and not applied.canceled
+    field = _materialize_test_condition(
+        FOG_CLOUD_RECIPE,
+        caster.uuid,
+        {(1, 1)},
+    )
+    field.activate(parent_event=parent)
+    concentration.add_linked_condition(field.uuid, field.uuid)
+
+    field.deactivate(expire=True, parent_event=parent)
+
+    assert "Concentrating" not in caster.active_conditions
+    assert concentration.linked_conditions == []
+    assert concentration.concentration_slots == {}
+
+
+def test_sleet_activation_emits_douse_for_spatial_materials() -> None:
+    """Sleet douses Fire through the typed interaction event used by all rows."""
     reset_engine_runtime(grid_size=(7, 7))
     source_uuid = uuid4()
-    parent_event = Event(
-        source_entity_uuid=source_uuid,
-        event_type=EventType.BASE_ACTION,
-        phase=EventPhase.COMPLETION,
-        use_register=False,
+    parent = _root_action(source_uuid)
+    fire = _materialize_test_condition(
+        FIRE_SURFACE_RECIPE,
+        source_uuid,
+        {(3, 3)},
     )
-    incumbent = materialize_spatial_effect(
-        GREASE_SURFACE_RECIPE,
+    fire.activate(parent_event=parent)
+    sleet = materialize_spatial_condition(
+        SLEET_STORM_FIELD_RECIPE,
         source_uuid,
         position=(3, 3),
-        faction=None,
-        expected_type=GroundEffect,
+        faction="test-faction",
+        condition_type=SleetStormZone,
     )
-    incumbent_controller = GreaseZone(
-        source_entity_uuid=source_uuid,
-        target_entity_uuid=incumbent.uuid,
-        zone_center=(3, 3),
-        arbitration_potency=10,
-    )
-    assert incumbent.install_controller(
-        incumbent_controller,
-        parent_event=parent_event,
-    )
-    original_positions = set(incumbent.affected_positions)
 
-    failed = materialize_spatial_effect(
-        GREASE_SURFACE_RECIPE,
-        source_uuid,
-        position=(3, 3),
-        faction=None,
-        expected_type=GroundEffect,
-    )
-    failed_controller = FailingGreaseZone(
-        source_entity_uuid=source_uuid,
-        target_entity_uuid=failed.uuid,
-        zone_center=(3, 3),
-        arbitration_potency=20,
-    )
-    with pytest.raises(RuntimeError, match="intentional controller failure"):
-        failed.install_controller(failed_controller, parent_event=parent_event)
+    sleet.activate(parent_event=parent)
 
-    assert SpatialEffect.get_effect(failed.uuid) is None
-    assert incumbent.affected_positions == original_positions
-    assert all(
-        get_map().get_spatial_effect_uuids_at(
-            position,
-            layer=SpatialEffectLayer.GROUND_SURFACE,
+    assert BaseCondition.get(fire.uuid) is None
+    interactions = [
+        event
+        for event in EventQueue.get_events_by_type(
+            EventType.SPATIAL_EFFECT_INTERACTION,
         )
-        == {incumbent.uuid}
-        for position in original_positions
-    )
-
-
-def test_runtime_reset_clears_effect_registry_and_grid_indexes() -> None:
-    """Encounter reset cannot leak effect ownership into the next game."""
-    reset_engine_runtime(grid_size=(3, 3))
-    effect = FieldEffect(
-        name="Probe",
-        source_entity_uuid=uuid4(),
-        content_ref=DAYLIGHT_FIELD_RECIPE.ref,
-        position=(1, 1),
-    )
-    effect.synchronize_footprint({(1, 1)})
-
-    reset_engine_runtime(grid_size=(3, 3))
-
-    assert SpatialEffect.active_effects() == ()
-    assert get_map().get_spatial_effect_uuids_at((1, 1)) == set()
-
-
-@pytest.mark.parametrize(
-    ("spell_type", "effect_ref"),
-    (
-        (conjuration.Grease, GREASE_SURFACE_RECIPE.ref),
-        (conjuration.Cloudkill, CLOUDKILL_CLOUD_RECIPE.ref),
-        (conjuration.FogCloud, FOG_CLOUD_RECIPE.ref),
-        (conjuration.IncendiaryCloud, INCENDIARY_CLOUD_RECIPE.ref),
-        (conjuration.StinkingCloud, STINKING_CLOUD_RECIPE.ref),
-        (conjuration.SpiritGuardians, SPIRIT_GUARDIANS_FIELD_RECIPE.ref),
-        (conjuration.Darkness, DARKNESS_FIELD_RECIPE.ref),
-        (conjuration.Daylight, DAYLIGHT_FIELD_RECIPE.ref),
-        (conjuration.InsectPlague, INSECT_PLAGUE_FIELD_RECIPE.ref),
-        (conjuration.SleetStorm, SLEET_STORM_FIELD_RECIPE.ref),
-        (illusion.Silence, SILENCE_FIELD_RECIPE.ref),
-        (evocation.GustOfWind, GUST_OF_WIND_FIELD_RECIPE.ref),
-        (evocation.IceStorm, ICE_STORM_SURFACE_RECIPE.ref),
-        (transmutation.SpikeGrowth, SPIKE_GROWTH_SURFACE_RECIPE.ref),
-        (conjuration.Web, WEB_SURFACE_RECIPE.ref),
-        (
-            abjuration.GlobeOfInvulnerability,
-            GLOBE_OF_INVULNERABILITY_FIELD_RECIPE.ref,
-        ),
-        (abjuration.AntimagicField, ANTIMAGIC_FIELD_RECIPE.ref),
-        (evocation.ContinualFlame, CONTINUAL_FLAME_FIELD_RECIPE.ref),
-    ),
-)
-def test_spatial_spell_dependencies_name_the_exact_created_effect(
-    spell_type: type[object],
-    effect_ref: ContentRef,
-) -> None:
-    """Every migrated spell statically declares its exact spatial output."""
-    declaration = get_content_declaration(spell_type)
-    created_refs = tuple(
-        dependency.target_ref
-        for dependency in declaration.dependencies
-        if dependency.relation
-        is ContentDependencyRelation.CREATES_SPATIAL_EFFECT
-    )
-    assert created_refs == (effect_ref,)
-
-
-@pytest.mark.parametrize(
-    "module",
-    (abjuration, conjuration, evocation, illusion, transmutation),
-)
-def test_spells_do_not_construct_spatial_owners_outside_the_materializer(
-    module: ModuleType,
-) -> None:
-    """Production spell code has one authenticated construction path."""
-    tree = ast.parse(inspect.getsource(module))
-    forbidden = {
-        "SpatialEffect",
-        "GroundEffect",
-        "CloudEffect",
-        "FieldEffect",
-    }
-    calls = [
-        node.func.id
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Name)
-        and node.func.id in forbidden
+        if isinstance(event, SpatialEffectInteractionEvent)
+        and event.phase is EventPhase.COMPLETION
+        and event.operation is SpatialEffectInteractionOperation.DOUSE
     ]
-    assert calls == []
+    assert len(interactions) == 1
+
+
+def test_runtime_reset_clears_condition_collection_and_tile_memberships() -> None:
+    """A new game cannot inherit independent condition ownership."""
+    reset_engine_runtime(grid_size=(3, 3))
+    source_uuid = uuid4()
+    condition = _materialize_test_condition(
+        DAYLIGHT_FIELD_RECIPE,
+        source_uuid,
+        {(1, 1)},
+    )
+    condition.activate(parent_event=_root_action(source_uuid))
+
+    reset_engine_runtime(grid_size=(3, 3))
+
+    assert BaseCondition.get(condition.uuid) is None
+    assert get_map().get_spatial_conditions() == []
+    tile = get_map().get_tile(1, 1)
+    assert tile is not None
+    assert tile.get_conditions() == {}
+
+
+def test_grid_clear_rejects_live_spatial_conditions() -> None:
+    """Clearing cannot strand live owners, handlers, or reverse footprints."""
+    reset_engine_runtime(grid_size=(3, 3))
+    source_uuid = uuid4()
+    condition = _materialize_test_condition(
+        DAYLIGHT_FIELD_RECIPE,
+        source_uuid,
+        {(1, 1)},
+    )
+    condition.activate(parent_event=_root_action(source_uuid))
+    grid = get_map()
+
+    with pytest.raises(ValueError, match="spatial conditions are active"):
+        grid.clear()
+
+    assert grid.get_spatial_conditions() == [condition]
+    assert grid.get_spatial_condition_positions(condition.uuid) == {(1, 1)}
+
+
+def test_world_object_anchor_moves_then_retires_with_its_object() -> None:
+    """Object reindexing moves Continual Flame; actual removal retires it."""
+    reset_engine_runtime(grid_size=(16, 6))
+    grid = get_map()
+    for x in range(16):
+        for y in range(6):
+            grid.set_tile(x, y, tile=dark_floor_factory((x, y)))
+    source_uuid = uuid4()
+    focus = BaseItem(source_entity_uuid=source_uuid, name="Flame focus")
+    focus.place_on_grid((2, 2))
+    flame = materialize_spatial_condition(
+        CONTINUAL_FLAME_FIELD_RECIPE,
+        source_uuid,
+        position=(2, 2),
+        faction=None,
+        condition_type=ContinualFlameCondition,
+        anchor_uuid=focus.uuid,
+    )
+    flame.activate(parent_event=_root_action(source_uuid))
+
+    focus.place_on_grid((12, 2))
+
+    assert flame.applied
+    assert flame.affected_positions == {(12, 2)}
+    assert grid.get_tile(2, 2).resolved_light_level is LightLevel.DARKNESS
+    assert grid.get_tile(12, 2).resolved_light_level is LightLevel.BRIGHT_LIGHT
+
+    grid.remove_object(focus.uuid)
+
+    assert BaseCondition.get(flame.uuid) is None
+    assert grid.get_tile(12, 2).resolved_light_level is LightLevel.DARKNESS
+
+
+def test_draconic_presence_direct_action_owns_aura_and_cleanup() -> None:
+    """The direct class action installs one aura and concentration owns it."""
+    reset_engine_runtime(grid_size=(30, 30))
+    caster = create_test_entity(
+        name="Draconic sorcerer",
+        config=EntityConfig(position=(10, 10), faction="heroes"),
+    )
+    target = create_test_entity(
+        name="Aura target",
+        config=EntityConfig(position=(11, 10), faction="monsters"),
+    )
+    caster.action_economy.add_resource_contribution(
+        "sorcery_points",
+        "test.draconic_presence",
+        maximum=18,
+        recharge_type=RechargeType.LONG_REST,
+    )
+
+    result = DraconicPresence(
+        source_entity_uuid=caster.uuid,
+        mode="awe",
+    ).apply()
+
+    assert result is not None and not result.canceled
+    assert caster.action_economy.get_resource_current("sorcery_points") == 13
+    aura = next(
+        condition
+        for condition in get_map().get_spatial_conditions()
+        if isinstance(condition, DraconicPresenceAura)
+    )
+    assert aura.anchor_uuid == caster.uuid
+    assert aura.duration.duration == 10
+    assert "Concentrating" in caster.active_conditions
+
+    with fixed_dice_faces(1):
+        target.on_turn_start()
+    assert "Charmed" in target.active_conditions
+
+    caster.remove_condition("Concentrating")
+
+    assert BaseCondition.get(aura.uuid) is None
+    assert "Charmed" not in target.active_conditions
+
+
+def test_draconic_presence_expires_with_concentration_after_ten_rounds() -> None:
+    """The inherited duration retires the exact concentration-owned aura."""
+    reset_engine_runtime(grid_size=(30, 30))
+    caster = create_test_entity(
+        name="Draconic sorcerer",
+        config=EntityConfig(position=(10, 10), faction="heroes"),
+    )
+    caster.action_economy.add_resource_contribution(
+        "sorcery_points",
+        "test.draconic_presence",
+        maximum=18,
+        recharge_type=RechargeType.LONG_REST,
+    )
+    result = DraconicPresence(
+        source_entity_uuid=caster.uuid,
+        mode="fear",
+    ).apply()
+    assert result is not None and not result.canceled
+    aura = next(
+        condition
+        for condition in get_map().get_spatial_conditions()
+        if isinstance(condition, DraconicPresenceAura)
+    )
+
+    for _ in range(9):
+        assert not aura.progress_spatial_duration()
+    assert aura.progress_spatial_duration()
+
+    assert BaseCondition.get(aura.uuid) is None
+    assert "Concentrating" not in caster.active_conditions
+
+
+def test_authored_inventory_retains_every_definition_and_transition() -> None:
+    """The hard cut preserves all authored mechanics rows."""
+    assert len(BUILT_IN_SPATIAL_EFFECT_DECLARATIONS) == 31
+    assert all(
+        declaration.mode is ContentDeclarationMode.TYPED_DEFINITION
+        and declaration.spatial_effect_definition is not None
+        and declaration.construction is None
+        for declaration in BUILT_IN_SPATIAL_EFFECT_DECLARATIONS
+    )
+    assert len(_TRANSITION_CASES) == 14

@@ -34,9 +34,9 @@ from dnd.core.events.events_registry import (
     EventType,
 )
 from dnd.actions.operations import get_available_actions
-from dnd.controller import PassController
-from dnd.entity import Entity
-from dnd.encounter import Encounter
+from dnd.encounters.controllers import PassController
+from dnd.entities.entity import Entity
+from dnd.encounters.encounter import Encounter
 from dnd.items.environment import DirectionalDoor
 from dnd.items.environment_content import directional_door_recipe
 from dnd.items.weapons import DAGGER_RECIPE

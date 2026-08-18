@@ -12,7 +12,7 @@ from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
 from dnd.types.senses import SenseMode, SensesType
 from dnd.core.gridmap import GridMap
-from dnd.entity import Entity, EntityConfig
+from dnd.entities.entity import Entity, EntityConfig
 from dnd.items.torches import TORCH_RECIPE, Torch
 from dnd.items.weapons import DAGGER_RECIPE
 from dnd.monsters.bestiary_content import (

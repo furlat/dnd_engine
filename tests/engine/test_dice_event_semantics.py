@@ -56,7 +56,7 @@ from dnd.core.modifiers import AdvantageModifier
 from dnd.types.rolls import AdvantageStatus
 from dnd.types.rolls import AutoHitStatus, CriticalStatus
 from dnd.core.values import BaseValue, ModifiableValue
-from dnd.entity import Entity, EntityConfig, determine_attack_outcome
+from dnd.entities.entity import Entity, EntityConfig, determine_attack_outcome
 from dnd.items.armors import WOODEN_SHIELD_RECIPE
 from dnd.items.weapons import (
     GREATSWORD_RECIPE,

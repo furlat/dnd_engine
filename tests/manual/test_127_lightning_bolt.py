@@ -14,7 +14,7 @@ from dnd.actions.standard import (
 )
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.gridmap import get_map
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from dnd.spells.evocation import LightningBolt
 from tests.manual.spell_regression_support import (
     create_spell_regression_actor,

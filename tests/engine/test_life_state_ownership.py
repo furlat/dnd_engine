@@ -11,7 +11,7 @@ from dnd.blocks.equipment import (
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.types.life import LifeState
 from dnd.types.damage import DamageType
-from dnd.entity import Entity, EntityConfig
+from dnd.entities.entity import Entity, EntityConfig
 from dnd.core.gridmap import get_map
 from tests.engine.test_combat_actions import (
     reset_core_action_state,

@@ -1,6 +1,5 @@
 """Dependency-neutral structural facts granted by character origins."""
 
-from enum import Enum
 from typing import Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -8,22 +7,9 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from dnd.types.abilities import AbilityName
 from dnd.core.content.durable_characters import ProficiencySubject
 from dnd.types.damage import DamageType
-from dnd.types.creatures import Size
+from dnd.types import creatures as creature_types
 from dnd.types.saving_throws import SavingThrowEffectTag
 from dnd.types.senses import SenseMode
-
-
-class OriginCapability(str, Enum):
-    """Durable non-numerical origin capabilities with exact rules identity."""
-
-    ARTIFICERS_LORE = "origin_capability.artificers_lore"
-    HALFLING_NIMBLENESS = "origin_capability.halfling_nimbleness"
-    MAGICAL_SLEEP_IMMUNITY = "origin_capability.magical_sleep_immunity"
-    NATURALLY_STEALTHY = "origin_capability.naturally_stealthy"
-    SHELTER_OF_THE_FAITHFUL = "origin_capability.shelter_of_the_faithful"
-    STONECUNNING = "origin_capability.stonecunning"
-    TINKER = "origin_capability.tinker"
-    TRANCE = "origin_capability.trance"
 
 
 class OriginSavingThrowAdvantageRule(BaseModel):
@@ -84,11 +70,11 @@ class OriginStructuralFeatureDefinition(BaseModel):
     automatic_proficiencies: tuple[ProficiencySubject, ...] = ()
     sense_modes: tuple[SenseMode, ...] = ()
     damage_resistances: tuple[DamageType, ...] = ()
-    size: Size | None = None
+    size: creature_types.Size | None = None
     walking_speed_feet: int | None = Field(default=None, ge=0)
     maximum_hit_points_per_character_level: int = Field(default=0, ge=0)
     melee_critical_extra_dice: int = Field(default=0, ge=0)
-    capabilities: tuple[OriginCapability, ...] = ()
+    capabilities: tuple[creature_types.OriginCapability, ...] = ()
     saving_throw_advantages: tuple[
         OriginSavingThrowAdvantageRule,
         ...,
@@ -141,7 +127,6 @@ class OriginStructuralFeatureDefinition(BaseModel):
 
 
 __all__ = [
-    "OriginCapability",
     "OriginSavingThrowAdvantageRule",
     "OriginStructuralFeatureDefinition",
 ]

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dnd.core.events import EventQueue
-from dnd.encounter import Encounter
+from dnd.encounters.encounter import Encounter
 from pydantic import ValidationError
 
 from server.combat_log_source import CombatLogSourceError

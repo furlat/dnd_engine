@@ -21,9 +21,9 @@ from dnd.core.events.events_registry import (
     EventQueue,
 )
 from dnd.types.rolls import AdvantageStatus
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from dnd.items.armors import SHIELD_RECIPE
-from dnd.monsters.bestiary import create_goblin, create_skeleton
+from tests.engine.support import create_test_monster
 from dnd.actions.reactions import add_opportunity_attack_handler
 from tests.engine.support import force_attack_miss, get_hp, remove_attack_modifier
 from tests.engine.test_combat_actions import (
@@ -130,12 +130,12 @@ def test_handler_toggle_manifest_accounts_for_all_10_cases() -> None:
 def test_opportunity_attack_toggle_preserves_registration_and_invisibility() -> None:
     """Disabling an OA is an opt-out, not handler deletion or execution."""
     reset_core_action_state()
-    attacker = create_skeleton(
+    attacker = create_test_monster("monster.skeleton", 
         name="Invisible Watcher",
         position=(5, 5),
         faction="monsters",
     )
-    mover = create_goblin(name="Mover", position=(5, 6), faction="heroes")
+    mover = create_test_monster("monster.goblin", name="Mover", position=(5, 6), faction="heroes")
     setup_standard_actions(mover)
     add_opportunity_attack_handler(attacker)
     invisible = InvisibilityEffect(
@@ -179,7 +179,7 @@ def test_opportunity_attack_toggle_preserves_registration_and_invisibility() -> 
 def test_protection_reaction_respects_disable_and_reenable() -> None:
     """Protection toggle controls both attack pressure and reaction spending."""
     reset_core_action_state()
-    protector = create_skeleton(
+    protector = create_test_monster("monster.skeleton", 
         name="Protector",
         position=(5, 5),
         faction="heroes",
@@ -194,8 +194,8 @@ def test_protection_reaction_respects_disable_and_reenable() -> None:
         WeaponSlot.MELEE_OFF,
     )
     protector.add_event_handler(create_protection_handler(protector.uuid))
-    ally = create_goblin(name="Ally", position=(5, 6), faction="heroes")
-    enemy = create_skeleton(
+    ally = create_test_monster("monster.goblin", name="Ally", position=(5, 6), faction="heroes")
+    enemy = create_test_monster("monster.skeleton", 
         name="Enemy",
         position=(5, 7),
         faction="monsters",

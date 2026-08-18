@@ -27,6 +27,7 @@ from dnd.core.events.item_events import (
     ShieldUnequipEvent,
     WeaponEquipEvent,
     WeaponUnequipEvent,
+    ItemState,
 )
 from dnd.types.abilities import AbilityName
 from dnd.types.equipment import (
@@ -39,7 +40,7 @@ from dnd.types.equipment import (
     WeaponSet,
     WeaponSlot,
 )
-from dnd.presentation import ItemPresentationKind, ItemPresentationState
+from dnd.types.items import ItemKind
 from dnd.types.rolls import DieSize
 
 import copy
@@ -48,6 +49,7 @@ from dnd.core.base_block import BaseBlock
 from dnd.blocks.base_item import (
     EquippableItem,
 )
+from dnd.blocks.inventory import Inventory
 
 
 _EQUIPMENT_EVENT_CLASS_BY_TYPE: dict[EventType, type[EquipmentEvent]] = {
@@ -133,17 +135,16 @@ class Armor(EquippableItem):
         """Body-part gear has one unambiguous default slot."""
         return self.body_part
 
-    def to_item_presentation_state(
+    def to_item_state(
         self,
         *,
         stack_count: Optional[int] = None,
-    ) -> ItemPresentationState:
-        """Add armor-owned presentation facts to the common item payload."""
-        state = super().to_item_presentation_state(stack_count=stack_count)
-        return state.model_copy(update={
-            "item_kind": ItemPresentationKind.ARMOR,
-            "armor_type": self.type.value,
-            "armor_ac": self.ac.score,
+    ) -> ItemState:
+        """Add armor mechanics to the renderer-independent item fact."""
+        return super().to_item_state(stack_count=stack_count).model_copy(update={
+            "item_kind": ItemKind.ARMOR,
+            "armor_type": self.type,
+            "armor_class": self.ac.normalized_score,
         })
 
 class Helmet(Armor):
@@ -255,16 +256,15 @@ class Shield(EquippableItem):
         """Preserve the domain-specific shield validation diagnostic."""
         return "Shields can only be equipped in MELEE_OFF slot"
 
-    def to_item_presentation_state(
+    def to_item_state(
         self,
         *,
         stack_count: Optional[int] = None,
-    ) -> ItemPresentationState:
-        """Add shield-owned presentation facts to the common item payload."""
-        state = super().to_item_presentation_state(stack_count=stack_count)
-        return state.model_copy(update={
-            "item_kind": ItemPresentationKind.SHIELD,
-            "shield_ac_bonus": self.ac_bonus.score,
+    ) -> ItemState:
+        """Add shield mechanics to the renderer-independent item fact."""
+        return super().to_item_state(stack_count=stack_count).model_copy(update={
+            "item_kind": ItemKind.SHIELD,
+            "shield_armor_class_bonus": self.ac_bonus.normalized_score,
         })
 
 
@@ -389,18 +389,27 @@ class Weapon(EquippableItem):
             return f"Only LIGHT weapons can be equipped in off-hand slot {slot}"
         return super().incompatible_equipment_slot_message(slot)
 
-    def to_item_presentation_state(
+    def to_item_state(
         self,
         *,
         stack_count: Optional[int] = None,
-    ) -> ItemPresentationState:
-        """Add weapon-owned presentation facts to the common item payload."""
-        state = super().to_item_presentation_state(stack_count=stack_count)
-        return state.model_copy(update={
-            "item_kind": ItemPresentationKind.WEAPON,
-            "damage_dice": f"{self.dice_numbers}d{self.damage_dice}",
-            "damage_type": self.damage_type.value,
-            "weapon_properties": tuple(prop.value for prop in self.properties),
+    ) -> ItemState:
+        """Add weapon mechanics to the renderer-independent item fact."""
+        return super().to_item_state(stack_count=stack_count).model_copy(update={
+            "item_kind": ItemKind.WEAPON,
+            "damage_die": self.damage_dice,
+            "damage_dice_count": self.dice_numbers,
+            "damage_bonus": (
+                self.damage_bonus.normalized_score
+                if self.damage_bonus is not None
+                else None
+            ),
+            "attack_bonus": self.attack_bonus.normalized_score,
+            "damage_type": self.damage_type,
+            "weapon_properties": tuple(self.properties),
+            "range_kind": self.range.type.value,
+            "normal_range_feet": self.range.normal,
+            "long_range_feet": self.range.long,
         })
 
     def get_base_damage(self, equipment_block: 'Equipment', ability_block: AbilityScores,
@@ -1356,6 +1365,63 @@ class Equipment(BaseBlock):
         if selected_slot not in item.compatible_equipment_slots():
             raise ValueError(item.incompatible_equipment_slot_message(selected_slot))
         return selected_slot
+
+    def _install_initial_item(
+        self,
+        inventory: Inventory,
+        item: EquippableItem,
+        slot: Optional[EquipmentSlot] = None,
+    ) -> Callable[[], None]:
+        """Equip one starting inventory item without publishing transitions.
+
+        Slot policy, physical footprints, and item hooks remain the same as a
+        gameplay equip. A collision is an authored-loadout error during birth;
+        construction never silently displaces another starting item.
+        """
+        if inventory.items.get(item.uuid) is not item:
+            raise ValueError("starting equipment must first be in inventory")
+        selected_slot = self.resolve_equipment_slot(item, slot)
+        conflicts = self._get_conflicts(item, selected_slot)
+        if conflicts:
+            occupied = ", ".join(row[0].value for row in conflicts)
+            raise ValueError(
+                f"starting equipment collides with occupied slots: {occupied}",
+            )
+
+        attribute_name = _SLOT_ATTRIBUTE_BY_SLOT[selected_slot]
+        previous_active_set = self.active_weapon_set
+        inventory.remove_item(item.uuid)
+        self._reparent_equippable_item(item)
+        setattr(self, attribute_name, item)
+        item.owner_uuid = self.source_entity_uuid
+        item.stored_in_uuid = self.uuid
+        try:
+            item.equip(selected_slot, self.source_entity_uuid)
+            if isinstance(selected_slot, WeaponSlot):
+                self._reconcile_active_weapon_set(preferred_slot=selected_slot)
+        except Exception:
+            if item.is_equipped:
+                item.unequip(selected_slot, self.source_entity_uuid)
+            setattr(self, attribute_name, None)
+            self.active_weapon_set = previous_active_set
+            item.owner_uuid = self.source_entity_uuid
+            item.stored_in_uuid = inventory.uuid
+            inventory.items[item.uuid] = item
+            raise
+
+        def undo() -> None:
+            if getattr(self, attribute_name) is not item:
+                raise RuntimeError(
+                    f"starting item {item.uuid} is no longer in {selected_slot.value}",
+                )
+            item.unequip(selected_slot, self.source_entity_uuid)
+            setattr(self, attribute_name, None)
+            self.active_weapon_set = previous_active_set
+            item.owner_uuid = self.source_entity_uuid
+            item.stored_in_uuid = inventory.uuid
+            inventory.items[item.uuid] = item
+
+        return undo
 
     def _get_conflicts(
         self,

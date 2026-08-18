@@ -32,7 +32,7 @@ from dnd.core.saving_throw_types import (
     SAVING_THROW_CONTEXT_KEY,
     SavingThrowContext,
 )
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 
 
 def _child_source_id(grant_id: UUID, identity: str) -> UUID:

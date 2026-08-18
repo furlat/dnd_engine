@@ -29,8 +29,8 @@ from dnd.core.gridmap import get_map
 from dnd.types.life import LifeState
 from dnd.core.positioning import PositionCommitError, PositionPublicationError
 from dnd.core.world_edges import ElevationSurfaceKind
-from dnd.entity import Entity
-from dnd.monsters.bestiary import create_skeleton
+from dnd.entities.entity import Entity
+from tests.engine.support import create_test_monster
 from dnd.actions.reactions import add_opportunity_attack_handler
 from tests.engine.support import (
     force_attack_crit,
@@ -170,7 +170,7 @@ def test_step_handler_cannot_rewrite_jump_root_to_underpay_landing() -> None:
 def test_jump_arc_does_not_recruit_intermediate_only_reactor() -> None:
     reset_core_action_state()
     jumper = strong_entity("Arc Jumper", (5, 5), "heroes", strength=18)
-    intermediate_reactor = create_skeleton(
+    intermediate_reactor = create_test_monster("monster.skeleton", 
         name="Intermediate Reactor",
         position=(6, 7),
         faction="monsters",
@@ -209,7 +209,7 @@ def test_lethal_takeoff_reaction_keeps_fixed_cost_but_not_movement_cost() -> Non
         strength=18,
     )
     set_hp(jumper, 1)
-    watcher = create_skeleton(
+    watcher = create_test_monster("monster.skeleton", 
         name="Takeoff Watcher",
         position=(5, 5),
         faction="monsters",

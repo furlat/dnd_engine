@@ -4,7 +4,7 @@ from typing import Optional, Set, Tuple
 from uuid import UUID, uuid4
 
 from dnd.content.spatial_effect_materialization import (
-    materialize_spatial_effect,
+    materialize_spatial_condition,
 )
 from dnd.core.events.events_registry import (
     Event,
@@ -12,11 +12,8 @@ from dnd.core.events.events_registry import (
     EventQueue,
     EventType,
 )
-from dnd.spatial.environmental_effects import (
-    SpikeTrapController,
-    SpikeTrapGroundEffect,
-)
-from dnd.content.spatial_effect_recipes import spike_trap_effect_recipe
+from dnd.spatial.environmental_conditions import SpikeTrap
+from dnd.content.spatial_effect_recipes import SPIKE_TRAP_EFFECT_RECIPE
 
 
 def _begin_environment_effect_event(
@@ -45,13 +42,13 @@ def _begin_environment_effect_event(
     return effect
 
 
-def materialize_spike_trap_effect(
+def materialize_spike_trap_condition(
     positions: Set[Tuple[int, int]],
     *,
     stealth_dc: Optional[int] = None,
     source_entity_uuid: Optional[UUID] = None,
     parent_event: Optional[Event] = None,
-) -> SpikeTrapGroundEffect:
+) -> SpikeTrap:
     """Materialize and install one exact physical spike-trap network."""
     if not positions:
         raise ValueError("Spike trap effect requires at least one position")
@@ -61,51 +58,44 @@ def materialize_spike_trap_effect(
         source_uuid,
         name="Install Spike Trap",
     )
-    effect = materialize_spatial_effect(
-        spike_trap_effect_recipe(stealth_dc=stealth_dc),
+    condition = materialize_spatial_condition(
+        SPIKE_TRAP_EFFECT_RECIPE,
         source_uuid,
         position=min(positions),
         faction=None,
-        expected_type=SpikeTrapGroundEffect,
+        condition_type=SpikeTrap,
+        condition_fields={
+            "affected_positions": set(positions),
+            "condition_stealth_dc": stealth_dc,
+        },
     )
-    result = effect.install_default_controller(
-        positions=set(positions),
-        duration_rounds=None,
-        parent_event=causal_event,
-    )
-    if result is None or result.canceled:
-        raise RuntimeError("Spike trap controller installation failed")
+    result = condition.activate(parent_event=causal_event)
+    if result is None or result.canceled or not condition.applied:
+        raise RuntimeError("Spike trap condition activation failed")
     if owns_root_event:
-        completed = causal_event.phase_to(EventPhase.COMPLETION)
-        if completed.canceled:
-            raise RuntimeError("Spike trap installation did not complete")
-    return effect
+        causal_event.phase_to(EventPhase.COMPLETION)
+    return condition
 
 
-def extend_spike_trap_effect(
-    effect: SpikeTrapGroundEffect,
+def extend_spike_trap_condition(
+    condition: SpikeTrap,
     positions: Set[Tuple[int, int]],
     *,
     source_entity_uuid: Optional[UUID] = None,
-) -> SpikeTrapGroundEffect:
+) -> SpikeTrap:
     """Extend an installed trap network under one causal lifecycle."""
     if not positions:
-        return effect
-    controller = effect.active_conditions.get("Spike Trap")
-    if not isinstance(controller, SpikeTrapController):
-        raise RuntimeError("Spike trap effect has no active controller")
+        return condition
     causal_event = _begin_environment_effect_event(
-        source_entity_uuid or effect.source_entity_uuid,
+        source_entity_uuid or condition.source_entity_uuid,
         name="Extend Spike Trap",
     )
-    controller.extend_footprint(positions, parent_event=causal_event)
-    completed = causal_event.phase_to(EventPhase.COMPLETION)
-    if completed.canceled:
-        raise RuntimeError("Spike trap extension did not complete")
-    return effect
+    condition.extend_footprint(positions, parent_event=causal_event)
+    causal_event.phase_to(EventPhase.COMPLETION)
+    return condition
 
 
 __all__ = [
-    "extend_spike_trap_effect",
-    "materialize_spike_trap_effect",
+    "extend_spike_trap_condition",
+    "materialize_spike_trap_condition",
 ]

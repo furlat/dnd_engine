@@ -12,7 +12,7 @@ from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.core.base_actions import (
     ActionOutcomeProfile,
 )
-from dnd.core.content.durable_characters import RitualPreparationPolicy
+from dnd.types.progression import RitualPreparationPolicy
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.types.abilities import AbilityName
 from dnd.core.events.events_registry import (
@@ -20,7 +20,7 @@ from dnd.core.events.events_registry import (
 )
 from dnd.types.damage import DamageType
 from dnd.types.progression import CasterProgression
-from dnd.entity import Entity, EntityConfig
+from dnd.entities.entity import Entity, EntityConfig
 from dnd.spells.evocation import FireBolt, MagicMissile, SacredFlame
 
 

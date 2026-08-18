@@ -9,7 +9,7 @@ from dnd.content_system.item_materialization import materialize_item
 from dnd.core.base_block import BaseBlock
 from dnd.types.conditions import DurationType
 from dnd.items.consumables import HASTE_POTION_RECIPE
-from dnd.monsters.bestiary import create_skeleton
+from tests.engine.support import create_test_monster
 from dnd.spells.transmutation import HasteEffect
 from tests.engine.test_monster_presets import (
     reset_monster_state,
@@ -159,7 +159,7 @@ def test_haste_legacy_manifests_account_for_all_15_cases() -> None:
 def test_potion_authored_haste_expires_after_exactly_ten_rounds() -> None:
     """The real potion duration survives nine ticks and expires on the tenth."""
     reset_monster_state(width=10, height=10)
-    actor = create_skeleton(
+    actor = create_test_monster("monster.skeleton", 
         name="Haste Potion Auditor",
         position=(1, 1),
         faction="heroes",

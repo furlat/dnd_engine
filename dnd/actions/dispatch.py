@@ -20,7 +20,7 @@ from dnd.core.base_actions import (
 from dnd.core.events.events_registry import (
     Event,
 )
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 
 
 class ActionDispatchError(ValueError):

@@ -21,7 +21,7 @@ from dnd.core.events.events_registry import (
 from dnd.types.life import LifeState
 from dnd.types.creatures import CreatureType
 from dnd.types.damage import DamageType
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from dnd.spells.abjuration import (
     ProtectionFromEnergy,
     Stoneskin,

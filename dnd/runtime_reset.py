@@ -2,9 +2,7 @@
 
 from typing import Optional
 
-from dnd.controller import Controller
-from dnd.content_system.creature_bindings import CREATURE_RUNTIME_BINDINGS
-from dnd.content_system.item_bindings import ITEM_RUNTIME_BINDINGS
+from dnd.encounters.controllers import Controller
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import SpellProtectionRegistry
 from dnd.core.base_object import BaseObject
@@ -14,9 +12,8 @@ from dnd.core.events.events_registry import (
 )
 from dnd.core.gridmap import GridMap, get_map
 from dnd.core.values import BaseValue
-from dnd.encounter import Encounter
-from dnd.entity import Entity
-from dnd.spatial.effect_base import SpatialEffect
+from dnd.encounters.encounter import Encounter
+from dnd.entities.entity import Entity
 
 
 def reset_engine_runtime(
@@ -55,13 +52,9 @@ def reset_engine_runtime(
     DiceRoll._registry.clear()
     Entity._entity_registry.clear()
     Entity._entity_by_position.clear()
-    SpatialEffect._effect_registry.clear()
     Controller.clear_registry()
     Encounter.clear_registry()
     Encounter._combat_log_listeners.clear()
-    CREATURE_RUNTIME_BINDINGS.reset()
-    ITEM_RUNTIME_BINDINGS.reset()
-
     GridMap.reset()
     grid = get_map()
     if grid_size is not None:

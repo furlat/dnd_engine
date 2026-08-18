@@ -26,7 +26,7 @@ from dnd.core.events.world_events import (
 )
 from dnd.core.gridmap import GridMap, get_map
 from dnd.core.values import BaseValue
-from dnd.entity import Entity, EntityConfig
+from dnd.entities.entity import Entity, EntityConfig
 from tests.manual.authored_encounter_support import (
     assemble_authored_encounter,
 )

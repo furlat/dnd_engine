@@ -18,8 +18,8 @@ from dnd.core.events.events_registry import (
     EventType,
 )
 from dnd.core.gridmap import GridMap, get_map
-from dnd.entity import Entity
-from dnd.encounter import Encounter
+from dnd.entities.entity import Entity
+from dnd.encounters.encounter import Encounter
 from dnd.runtime_reset import reset_engine_runtime
 from server.event_stream import event_stream
 from tests.manual.live_replication_support import (

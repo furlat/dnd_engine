@@ -1,7 +1,7 @@
 """Typed projection for the human-client available-actions API."""
 
 from dnd.core.base_actions import AvailableActionsResult
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from server.api_models import (
     APIAvailableActions,
     APIResourcePool,

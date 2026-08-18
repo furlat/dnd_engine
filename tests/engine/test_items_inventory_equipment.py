@@ -12,8 +12,7 @@ from dnd.blocks.equipment import (
     Shield,
     Weapon,
 )
-from dnd.content_system.item_bindings import ItemRuntimeOrigin
-from dnd.content_system.item_materialization import materialize_item
+from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.types.equipment import BodyPart, WeaponProperty, WeaponSlot
 from dnd.blocks.inventory import Inventory
 from dnd.core.base_block import BaseBlock
@@ -36,26 +35,18 @@ from dnd.types.damage import DamageType
 from dnd.types.rolls import AdvantageStatus
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import BaseValue
-from dnd.entity import Entity
-from dnd.items.armors import CHAIN_MAIL_RECIPE, SHIELD_RECIPE
-from dnd.items.consumables import (
-    HEALING_POTION_RECIPE,
-    healing_potion_recipe,
-)
-from dnd.items.environment_content import DOOR_RECIPE
+from dnd.entities.entity import Entity
 from dnd.items.environment_interactables import (
     StorageChest,
     DoorObject,
 )
-from dnd.items.torches import TORCH_RECIPE, Torch, WallTorch
-from dnd.items.weapons import (
-    GREATSWORD_RECIPE,
-    SHORTBOW_RECIPE,
-    SHORTSWORD_RECIPE,
-    WARHAMMER_RECIPE,
+from dnd.items.torches import Torch, WallTorch
+from tests.engine.support import (
+    create_test_monster,
+    get_hp,
+    reset_combat_state,
+    set_hp,
 )
-from dnd.monsters.bestiary import create_skeleton
-from tests.engine.support import get_hp, reset_combat_state, set_hp
 
 
 def reset_item_state(
@@ -85,7 +76,7 @@ def put_in_inventory(entity: Entity, item: BaseItem) -> None:
 def test_eb_13_001_floor_loot_and_drop_update_authoritative_location() -> None:
     """EB-13-001: floor, inventory, and dropped item state are mutually exclusive."""
     reset_item_state()
-    entity = create_skeleton(name="Collector", position=(0, 0), darkvision=False)
+    entity = create_test_monster("monster.skeleton", name="Collector", position=(0, 0), darkvision=False)
     item = BaseItem(source_entity_uuid=uuid4(), name="Silver Key", weight=1)
 
     item.place_on_grid((1, 0))
@@ -117,21 +108,18 @@ def test_eb_13_001_floor_loot_and_drop_update_authoritative_location() -> None:
 def test_eb_13_002_inventory_stack_merge_can_consume_or_split_items() -> None:
     """EB-13-002: same stack_id items merge up to max_stack and unregister consumed objects."""
     reset_item_state()
-    entity = create_skeleton(name="Alchemist", position=(0, 0), darkvision=False)
-    first = materialize_item(
-        HEALING_POTION_RECIPE,
+    entity = create_test_monster("monster.skeleton", name="Alchemist", position=(0, 0), darkvision=False)
+    first = build_authored_item(
+        "consumable.healing_potion",
         entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
     )
-    second = materialize_item(
-        HEALING_POTION_RECIPE,
+    second = build_authored_item(
+        "consumable.healing_potion",
         entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
     )
-    third = materialize_item(
-        HEALING_POTION_RECIPE,
+    third = build_authored_item(
+        "consumable.healing_potion",
         entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
     )
     first.stack_count = 8
     second.stack_count = 2
@@ -186,15 +174,13 @@ def test_eb_13_012_partial_stack_merge_is_atomic_on_capacity_failure() -> None:
     """EB-13-012: failed stack insertion leaves both stacks unchanged."""
     reset_item_state()
     inventory = Inventory(source_entity_uuid=uuid4(), name="Tight Pack", weight_capacity=10)
-    existing = materialize_item(
-        HEALING_POTION_RECIPE,
+    existing = build_authored_item(
+        "consumable.healing_potion",
         inventory.source_entity_uuid,
-        origin=ItemRuntimeOrigin.STARTER,
     )
-    incoming = materialize_item(
-        HEALING_POTION_RECIPE,
+    incoming = build_authored_item(
+        "consumable.healing_potion",
         inventory.source_entity_uuid,
-        origin=ItemRuntimeOrigin.STARTER,
     )
     existing.stack_count = 8
     incoming.stack_count = 5
@@ -219,15 +205,13 @@ def test_eb_13_017_transfer_to_existing_stack_consumes_incoming_location() -> No
     target_owner = uuid4()
     source = Inventory(source_entity_uuid=source_owner, name="Source")
     target = Inventory(source_entity_uuid=target_owner, name="Target")
-    incoming = materialize_item(
-        HEALING_POTION_RECIPE,
+    incoming = build_authored_item(
+        "consumable.healing_potion",
         source_owner,
-        origin=ItemRuntimeOrigin.STARTER,
     )
-    existing = materialize_item(
-        HEALING_POTION_RECIPE,
+    existing = build_authored_item(
+        "consumable.healing_potion",
         target_owner,
-        origin=ItemRuntimeOrigin.STARTER,
     )
     incoming.stack_count = 2
     existing.stack_count = 8
@@ -256,12 +240,10 @@ def test_eb_13_017_transfer_to_existing_stack_consumes_incoming_location() -> No
 def test_eb_13_004_equip_and_unequip_move_items_between_inventory_and_equipment() -> None:
     """EB-13-004: Entity equip helpers move item ownership between containers."""
     reset_item_state()
-    entity = create_skeleton(name="Duelist", position=(0, 0), darkvision=False)
-    sword = materialize_item(
-        SHORTSWORD_RECIPE,
+    entity = create_test_monster("monster.skeleton", name="Duelist", position=(0, 0), darkvision=False)
+    sword = build_authored_item(
+        "weapon.shortsword",
         uuid4(),
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
     )
     put_in_inventory(entity, sword)
 
@@ -288,30 +270,22 @@ def test_eb_13_004_equip_and_unequip_move_items_between_inventory_and_equipment(
 def test_eb_13_005_equipment_validates_weapon_slots_and_replaces_existing_items() -> None:
     """EB-13-005: weapon slots enforce type rules and auto-unequip replacements."""
     reset_item_state()
-    entity = create_skeleton(name="Armsmaster", position=(0, 0), darkvision=False)
-    sword = materialize_item(
-        SHORTSWORD_RECIPE,
+    entity = create_test_monster("monster.skeleton", name="Armsmaster", position=(0, 0), darkvision=False)
+    sword = build_authored_item(
+        "weapon.shortsword",
         entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
     )
-    replacement = materialize_item(
-        SHORTSWORD_RECIPE,
+    replacement = build_authored_item(
+        "weapon.shortsword",
         entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
     )
-    bow = materialize_item(
-        SHORTBOW_RECIPE,
+    bow = build_authored_item(
+        "weapon.shortbow",
         entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
     )
-    warhammer = materialize_item(
-        WARHAMMER_RECIPE,
+    warhammer = build_authored_item(
+        "weapon.warhammer",
         entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
     )
 
     entity.equipment.equip(sword, WeaponSlot.MELEE_MAIN)
@@ -337,18 +311,14 @@ def test_eb_13_005_equipment_validates_weapon_slots_and_replaces_existing_items(
 def test_eb_13_006_equipment_hooks_apply_and_remove_modifiers() -> None:
     """EB-13-006: equip hooks can add modifiers and unequip hooks clean them up."""
     reset_item_state()
-    entity = create_skeleton(name="Armored Scout", position=(0, 0), darkvision=False)
-    armor = materialize_item(
-        CHAIN_MAIL_RECIPE,
+    entity = create_test_monster("monster.skeleton", name="Armored Scout", position=(0, 0), darkvision=False)
+    armor = build_authored_item(
+        "armor.chain_mail",
         entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=BodyArmor,
     )
-    shield = materialize_item(
-        SHIELD_RECIPE,
+    shield = build_authored_item(
+        "shield.shield",
         entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Shield,
     )
 
     assert entity.skill_set.stealth.skill_bonus.advantage == AdvantageStatus.NONE
@@ -375,13 +345,11 @@ def test_eb_13_006_equipment_hooks_apply_and_remove_modifiers() -> None:
 def test_eb_13_013_canceled_high_level_equip_preserves_inventory_item() -> None:
     """EB-13-013: canceled high-level equip preserves both containers."""
     reset_item_state()
-    entity = create_skeleton(name="Interrupted Duelist", position=(0, 0), darkvision=False)
+    entity = create_test_monster("monster.skeleton", name="Interrupted Duelist", position=(0, 0), darkvision=False)
     original_weapon = entity.equipment.weapon_melee_main
-    sword = materialize_item(
-        SHORTSWORD_RECIPE,
+    sword = build_authored_item(
+        "weapon.shortsword",
         entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
     )
     put_in_inventory(entity, sword)
 
@@ -419,18 +387,14 @@ def test_eb_13_013_canceled_high_level_equip_preserves_inventory_item() -> None:
 def test_eb_13_014_two_handed_melee_conflicts_auto_displace_by_equip_order() -> None:
     """EB-13-014: newer equips displace conflicting melee hand items."""
     reset_item_state()
-    entity = create_skeleton(name="Overloaded Warrior", position=(0, 0), darkvision=False)
-    greatsword = materialize_item(
-        GREATSWORD_RECIPE,
+    entity = create_test_monster("monster.skeleton", name="Overloaded Warrior", position=(0, 0), darkvision=False)
+    greatsword = build_authored_item(
+        "weapon.greatsword",
         entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
     )
-    shield = materialize_item(
-        SHIELD_RECIPE,
+    shield = build_authored_item(
+        "shield.shield",
         entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Shield,
     )
     put_in_inventory(entity, greatsword)
     put_in_inventory(entity, shield)
@@ -448,19 +412,15 @@ def test_eb_13_014_two_handed_melee_conflicts_auto_displace_by_equip_order() -> 
     assert greatsword.owner_uuid == entity.uuid
     assert greatsword.stored_in_uuid == entity.inventory.uuid
 
-    second = create_skeleton(name="Shielded Warrior", position=(1, 0), darkvision=False)
+    second = create_test_monster("monster.skeleton", name="Shielded Warrior", position=(1, 0), darkvision=False)
     original_weapon = second.equipment.weapon_melee_main
-    second_greatsword = materialize_item(
-        GREATSWORD_RECIPE,
+    second_greatsword = build_authored_item(
+        "weapon.greatsword",
         second.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
     )
-    second_shield = materialize_item(
-        SHIELD_RECIPE,
+    second_shield = build_authored_item(
+        "shield.shield",
         second.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Shield,
     )
     put_in_inventory(second, second_greatsword)
     put_in_inventory(second, second_shield)
@@ -483,12 +443,10 @@ def test_eb_13_014_two_handed_melee_conflicts_auto_displace_by_equip_order() -> 
 def test_eb_13_015_heavy_armor_strength_requirement_reduces_speed() -> None:
     """EB-13-015: heavy armor strength requirements are contextual speed rules."""
     reset_item_state()
-    entity = create_skeleton(name="Armored Skeleton", position=(0, 0), darkvision=False)
-    chain_mail = materialize_item(
-        CHAIN_MAIL_RECIPE,
+    entity = create_test_monster("monster.skeleton", name="Armored Skeleton", position=(0, 0), darkvision=False)
+    chain_mail = build_authored_item(
+        "armor.chain_mail",
         entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=BodyArmor,
     )
 
     assert entity.ability_scores.strength.ability_score.score == 10
@@ -523,13 +481,11 @@ def test_eb_13_015_heavy_armor_strength_requirement_reduces_speed() -> None:
 def test_eb_13_016_canceled_direct_equip_preserves_existing_slot_item() -> None:
     """EB-13-016: direct Equipment.equip cancellation preserves the current slot."""
     reset_item_state()
-    entity = create_skeleton(name="Direct Equip Duelist", position=(0, 0), darkvision=False)
+    entity = create_test_monster("monster.skeleton", name="Direct Equip Duelist", position=(0, 0), darkvision=False)
     original_weapon = entity.equipment.weapon_melee_main
-    replacement = materialize_item(
-        SHORTSWORD_RECIPE,
+    replacement = build_authored_item(
+        "weapon.shortsword",
         entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
     )
     assert original_weapon is not None
     assert original_weapon.is_equipped
@@ -568,12 +524,10 @@ def test_eb_13_016_canceled_direct_equip_preserves_existing_slot_item() -> None:
 def test_eb_13_018_destroying_equipped_item_clears_slot_and_item_effects() -> None:
     """EB-13-018: equipped item destruction clears slots and derived values."""
     reset_item_state()
-    entity = create_skeleton(name="Shield Breaker", position=(0, 0), darkvision=False)
-    shield = materialize_item(
-        SHIELD_RECIPE,
+    entity = create_test_monster("monster.skeleton", name="Shield Breaker", position=(0, 0), darkvision=False)
+    shield = build_authored_item(
+        "shield.shield",
         entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Shield,
     )
     shield.is_targetable = True
     shield.health = BaseItem.create_item_health(entity.uuid, hp=4)
@@ -594,11 +548,9 @@ def test_eb_13_018_destroying_equipped_item_clears_slot_and_item_effects() -> No
     assert shield.stored_in_uuid is None
     assert BaseBlock.get(shield.uuid) is None
 
-    armor = materialize_item(
-        CHAIN_MAIL_RECIPE,
+    armor = build_authored_item(
+        "armor.chain_mail",
         entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=BodyArmor,
     )
     armor.is_targetable = True
     armor.health = BaseItem.create_item_health(entity.uuid, hp=4)
@@ -624,18 +576,14 @@ def test_eb_13_018_destroying_equipped_item_clears_slot_and_item_effects() -> No
 def test_eb_13_019_equipment_damage_bonuses_are_counted_once() -> None:
     """EB-13-019: weapon damage composes each equipment bonus once."""
     reset_item_state()
-    entity = create_skeleton(name="Damage Auditor", position=(0, 0), darkvision=False)
-    sword = materialize_item(
-        SHORTSWORD_RECIPE,
+    entity = create_test_monster("monster.skeleton", name="Damage Auditor", position=(0, 0), darkvision=False)
+    sword = build_authored_item(
+        "weapon.shortsword",
         entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
     )
-    bow = materialize_item(
-        SHORTBOW_RECIPE,
+    bow = build_authored_item(
+        "weapon.shortbow",
         entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
     )
 
     assert entity.equipment.equip(sword, WeaponSlot.MELEE_MAIN)
@@ -681,11 +629,11 @@ def test_eb_13_019_equipment_damage_bonuses_are_counted_once() -> None:
 def test_eb_13_007_usable_item_actions_inject_user_and_item_identity() -> None:
     """EB-13-007: use actions are item-bound copies and depleted items expose none."""
     reset_item_state()
-    entity = create_skeleton(name="Drinker", position=(0, 0), darkvision=False)
-    potion = materialize_item(
-        healing_potion_recipe(heal_amount=4),
+    entity = create_test_monster("monster.skeleton", name="Drinker", position=(0, 0), darkvision=False)
+    potion = build_authored_item(
+        "consumable.healing_potion",
         entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
+        parameters={"heal_amount": 4},
     )
     assert isinstance(potion, UsableItem)
     put_in_inventory(entity, potion)
@@ -705,11 +653,10 @@ def test_eb_13_007_usable_item_actions_inject_user_and_item_identity() -> None:
 def test_eb_13_008_consumable_use_actions_consume_charges_and_stacks() -> None:
     """EB-13-008: successful item use consumes charge, stack, and finally the item."""
     reset_item_state()
-    entity = create_skeleton(name="Patient", position=(0, 0), darkvision=False)
-    potion = materialize_item(
-        HEALING_POTION_RECIPE,
+    entity = create_test_monster("monster.skeleton", name="Patient", position=(0, 0), darkvision=False)
+    potion = build_authored_item(
+        "consumable.healing_potion",
         entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
     )
     assert isinstance(potion, UsableItem)
     potion.stack_count = 2
@@ -741,11 +688,10 @@ def test_eb_13_008_consumable_use_actions_consume_charges_and_stacks() -> None:
 def test_eb_13_020_generic_use_actions_require_sufficient_charges() -> None:
     """EB-13-020: generic usable actions cannot overspend item charges."""
     reset_item_state()
-    entity = create_skeleton(name="Careful Patient", position=(0, 0), darkvision=False)
-    potion = materialize_item(
-        HEALING_POTION_RECIPE,
+    entity = create_test_monster("monster.skeleton", name="Careful Patient", position=(0, 0), darkvision=False)
+    potion = build_authored_item(
+        "consumable.healing_potion",
         entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
     )
     assert isinstance(potion, UsableItem)
     potion.charges = 1
@@ -770,8 +716,8 @@ def test_eb_13_020_generic_use_actions_require_sufficient_charges() -> None:
 def test_eb_13_021_raw_inventory_add_rehomes_existing_locations() -> None:
     """EB-13-021: raw Inventory.add_item creates one authoritative location."""
     reset_item_state()
-    first_owner = create_skeleton(name="First Holder", position=(0, 0), darkvision=False)
-    second_owner = create_skeleton(name="Second Holder", position=(2, 0), darkvision=False)
+    first_owner = create_test_monster("monster.skeleton", name="First Holder", position=(0, 0), darkvision=False)
+    second_owner = create_test_monster("monster.skeleton", name="Second Holder", position=(2, 0), darkvision=False)
     floor_item = BaseItem(source_entity_uuid=uuid4(), name="Map Case", weight=1)
     transferred_item = BaseItem(source_entity_uuid=uuid4(), name="Coin Purse", weight=1)
 
@@ -800,25 +746,19 @@ def test_eb_13_021_raw_inventory_add_rehomes_existing_locations() -> None:
 def test_eb_13_022_melee_and_ranged_slots_are_parallel_loadouts() -> None:
     """EB-13-022: melee and ranged equipment slots are parallel loadout sets."""
     reset_item_state()
-    entity = create_skeleton(name="Loadout Switcher", position=(0, 0), darkvision=False)
-    target = create_skeleton(name="Practice Target", position=(1, 0), darkvision=False)
-    sword = materialize_item(
-        SHORTSWORD_RECIPE,
+    entity = create_test_monster("monster.skeleton", name="Loadout Switcher", position=(0, 0), darkvision=False)
+    target = create_test_monster("monster.skeleton", name="Practice Target", position=(1, 0), darkvision=False)
+    sword = build_authored_item(
+        "weapon.shortsword",
         entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
     )
-    shield = materialize_item(
-        SHIELD_RECIPE,
+    shield = build_authored_item(
+        "shield.shield",
         entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Shield,
     )
-    bow = materialize_item(
-        SHORTBOW_RECIPE,
+    bow = build_authored_item(
+        "weapon.shortbow",
         entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
     )
     base_ac = entity.ac_bonus().normalized_score
     put_in_inventory(entity, sword)
@@ -846,12 +786,10 @@ def test_eb_13_022_melee_and_ranged_slots_are_parallel_loadouts() -> None:
 def test_eb_13_009_environment_use_actions_are_stateful_and_spatial() -> None:
     """EB-13-009: environment items provide state-dependent use actions."""
     reset_item_state()
-    entity = create_skeleton(name="Explorer", position=(0, 0), darkvision=False)
-    door = materialize_item(
-        DOOR_RECIPE,
+    entity = create_test_monster("monster.skeleton", name="Explorer", position=(0, 0), darkvision=False)
+    door = build_authored_item(
+        "environment.door",
         uuid4(),
-        origin=ItemRuntimeOrigin.ENVIRONMENT,
-        expected_type=DoorObject,
     )
     get_map().place_object(door.uuid, (1, 0))
     entity.update_entity_senses(max_distance=5)
@@ -898,12 +836,10 @@ def test_eb_13_011_torch_lifecycle_manages_attached_light_sources() -> None:
     """EB-13-011: torch use creates anchored light and drop cleanup removes it."""
     reset_item_state(default_light=LightLevel.DARKNESS)
     grid = get_map()
-    entity = create_skeleton(name="Torchbearer", position=(0, 0), darkvision=False)
-    torch = materialize_item(
-        TORCH_RECIPE,
+    entity = create_test_monster("monster.skeleton", name="Torchbearer", position=(0, 0), darkvision=False)
+    torch = build_authored_item(
+        "equipment.portable_torch",
         entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Torch,
     )
     put_in_inventory(entity, torch)
     origin_tile = grid.get_tile(0, 0)
@@ -956,11 +892,9 @@ def test_eb_13_011_torch_lifecycle_manages_attached_light_sources() -> None:
 def test_torches_do_not_commit_lit_state_without_a_light_anchor() -> None:
     """Invalid portable and fixture anchors cannot create partial lit state."""
     reset_item_state(default_light=LightLevel.DARKNESS)
-    portable = materialize_item(
-        TORCH_RECIPE,
+    portable = build_authored_item(
+        "equipment.portable_torch",
         uuid4(),
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Torch,
     )
     fixture = WallTorch(source_entity_uuid=uuid4())
 
@@ -976,7 +910,7 @@ def test_torches_do_not_commit_lit_state_without_a_light_anchor() -> None:
 def test_item_damage_declaration_veto_prevents_breakage() -> None:
     """Breakable objects must honor the canonical damage declaration veto."""
     reset_item_state()
-    source = create_skeleton(name="Source", position=(0, 0))
+    source = create_test_monster("monster.skeleton", name="Source", position=(0, 0))
     item = BaseItem(
         source_entity_uuid=uuid4(),
         name="Protected Crate",

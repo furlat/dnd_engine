@@ -16,7 +16,7 @@ from dnd.content_system.runtime import ContentSystemRuntime
 from dnd.core.events.events_registry import (
     Event,
 )
-from dnd.entity import Entity, EntityConfig
+from dnd.entities.entity import Entity, EntityConfig
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.spells.transmutation import HasteEffect
 

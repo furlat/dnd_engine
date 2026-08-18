@@ -49,7 +49,7 @@ from dnd.core.content.registration import (
     get_content_declaration,
     item_factory,
 )
-from dnd.core.content.runtime import RuntimeBehaviorKind
+from dnd.types.behaviors import RuntimeBehaviorKind
 from dnd.core.events.events_registry import (
     Event,
     EventPhase,
@@ -61,7 +61,7 @@ from dnd.core.events.world_events import (
 from dnd.types.spatial_effects import SpatialEffectInteractionOperation
 from dnd.core.gridmap import get_map
 from dnd.types.items import ItemLightSourceState
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 
 
 def _torch_action_identity(
@@ -477,6 +477,14 @@ NEURODRAGON_TORCH_DECLARATIONS: tuple[ContentDeclaration, ...] = (
 )
 
 
+def build_torch(source_entity_uuid: UUID) -> Torch:
+    """Construct one unlit portable torch without a content recipe/runtime."""
+    return Torch(
+        source_entity_uuid=source_entity_uuid,
+        semantic_key="equipment.portable_torch",
+    )
+
+
 class IgniteWallTorchAction(BaseAction):
     """Light a fixed wall torch."""
 
@@ -742,5 +750,6 @@ __all__ = [
     "TORCH_REF",
     "Torch",
     "TorchParameters",
+    "build_torch",
     "WallTorch",
 ]

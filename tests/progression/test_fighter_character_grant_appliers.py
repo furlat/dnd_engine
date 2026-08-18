@@ -47,7 +47,7 @@ from dnd.core.events.events_registry import (
 from dnd.core.events.check_events import (
     SavingThrowEvent,
 )
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from dnd.runtime_reset import reset_engine_runtime
 
 

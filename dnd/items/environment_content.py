@@ -21,8 +21,9 @@ from dnd.content_system.action_definitions import (
     ACTION_BEHAVIOR_DECLARATIONS_BY_CLASS,
 )
 from dnd.content.spatial_effect_materialization import (
-    materialize_spatial_effect,
+    materialize_spatial_condition,
 )
+from dnd.spatial.environmental_conditions import OilSurface
 from dnd.core.base_actions import (
     BaseAction,
 )
@@ -502,17 +503,17 @@ class OilBarrel(BaseItem):
         if parent_event is None:
             raise ValueError("Oil Barrel destruction requires a causal event")
 
-        oil = materialize_spatial_effect(
+        oil = materialize_spatial_condition(
             OIL_SURFACE_RECIPE,
             parent_event.source_entity_uuid,
             position=spill_position,
             faction=None,
+            condition_type=OilSurface,
+            condition_fields={"affected_positions": {spill_position}},
         )
-        oil.install_default_controller(
-            positions={spill_position},
-            duration_rounds=None,
-            parent_event=parent_event,
-        )
+        activation = oil.activate(parent_event=parent_event)
+        if activation is None or activation.canceled or not oil.applied:
+            return
 
         if (
             not isinstance(parent_event, TakeDamageEvent)

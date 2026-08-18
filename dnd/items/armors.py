@@ -43,7 +43,7 @@ from dnd.core.modifiers import (
     NumericalModifier,
 )
 from dnd.types.rolls import AdvantageStatus
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from dnd.items.authored_presentations import (
     authored_item_factory as item_factory,
 )

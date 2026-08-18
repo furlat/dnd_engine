@@ -25,7 +25,7 @@ from dnd.core.events.events_registry import (
     EventType,
     Trigger,
 )
-from dnd.monsters.bestiary import create_skeleton
+from tests.engine.support import create_test_monster
 from dnd.runtime_reset import reset_engine_runtime
 
 
@@ -219,7 +219,7 @@ def test_bound_condition_events_reject_missing_or_mismatched_identity(
 def test_condition_identity_rewrite_cancels_before_storage_or_application() -> None:
     """A lifecycle handler cannot forge bound condition evidence."""
     reset_engine_runtime(grid_size=(4, 4))
-    skeleton = create_skeleton(
+    skeleton = create_test_monster("monster.skeleton", 
         name="Marked Skeleton",
         position=(1, 1),
         faction="monsters",
@@ -284,7 +284,7 @@ def test_condition_identity_rewrite_cancels_before_storage_or_application() -> N
 def test_posted_condition_cancel_is_validated_before_callbacks() -> None:
     """Canonical cancel cannot self-publish forged condition identity."""
     reset_engine_runtime(grid_size=(4, 4))
-    skeleton = create_skeleton(
+    skeleton = create_test_monster("monster.skeleton", 
         name="Posted Cancel Skeleton",
         position=(1, 1),
         faction="monsters",
@@ -356,7 +356,7 @@ def test_posted_condition_cancel_is_validated_before_callbacks() -> None:
 def test_posted_condition_completion_is_rejected_before_effect_commit() -> None:
     """An EFFECT handler cannot publish an unearned completion version."""
     reset_engine_runtime(grid_size=(4, 4))
-    skeleton = create_skeleton(
+    skeleton = create_test_monster("monster.skeleton", 
         name="Lifecycle Rewrite Skeleton",
         position=(1, 1),
         faction="monsters",
@@ -438,7 +438,7 @@ def test_posted_condition_completion_is_rejected_before_effect_commit() -> None:
 def test_in_place_condition_identity_rewrite_uses_detached_proposal() -> None:
     """Mutable handlers cannot alter the already-observed stored version."""
     reset_engine_runtime(grid_size=(4, 4))
-    skeleton = create_skeleton(
+    skeleton = create_test_monster("monster.skeleton", 
         name="In-place Rewrite Skeleton",
         position=(1, 1),
         faction="monsters",
@@ -496,7 +496,7 @@ def test_in_place_condition_identity_rewrite_uses_detached_proposal() -> None:
 def test_condition_disposition_rewrite_cannot_contradict_mechanics() -> None:
     """Handlers cannot relabel an installed condition as immune."""
     reset_engine_runtime(grid_size=(4, 4))
-    skeleton = create_skeleton(
+    skeleton = create_test_monster("monster.skeleton", 
         name="Disposition Rewrite Skeleton",
         position=(1, 1),
         faction="monsters",
@@ -612,7 +612,7 @@ def test_removal_identity_rewrite_cancels_before_storage() -> None:
 def test_immune_entity_application_returns_and_logs_typed_truth() -> None:
     """Rules immunity is a canceled application with one typed log."""
     reset_engine_runtime(grid_size=(4, 4))
-    skeleton = create_skeleton(
+    skeleton = create_test_monster("monster.skeleton", 
         name="Immune Skeleton",
         position=(1, 1),
         faction="monsters",

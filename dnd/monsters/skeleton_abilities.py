@@ -25,7 +25,7 @@ from dnd.core.events.resolution_events import (
 )
 from dnd.core.modifiers import AdvantageModifier
 from dnd.types.rolls import AdvantageStatus
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from dnd.actions.standard import (
     entity_action_economy_cost_evaluator,
 )

@@ -32,7 +32,7 @@ from dnd.core.gridmap import get_map
 from dnd.types.items import ItemRarity
 from dnd.types.damage import DamageType
 from dnd.core.modifiers import NumericalModifier
-from dnd.entity import Entity, EntityConfig
+from dnd.entities.entity import Entity, EntityConfig
 from tests.engine.support import get_hp, get_max_hp, reset_combat_state, set_hp
 
 

@@ -6,11 +6,6 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from dnd.core.base_block import BaseBlock
-from dnd.core.content.identities import (
-    ContentDefinitionKind,
-    ContentRef,
-    validate_namespaced_id,
-)
 from dnd.types.equipment import ArmorType, WeaponProperty
 from dnd.types.proficiency import ProficiencyMode, ProficiencySourceSet
 
@@ -26,12 +21,21 @@ _ARMOR_CATEGORIES = frozenset({
 })
 
 
+def _semantic_id(value: str, label: str) -> str:
+    """Validate one direct rules identity without a content contract."""
+    if not isinstance(value, str) or not value or value.strip() != value:
+        raise ValueError(f"{label} must be a non-empty trimmed string")
+    if "." not in value:
+        raise ValueError(f"{label} must be namespaced")
+    return value
+
+
 class CreatureProficienciesConfig(BaseModel):
     """Cold creature training installed before progression grants."""
 
     base_simple_weapons: bool = True
     base_martial_weapons: bool = True
-    base_weapon_refs: tuple[ContentRef, ...] = ()
+    base_weapon_ids: tuple[str, ...] = ()
     base_armor_types: tuple[ArmorType, ...] = (
         ArmorType.LIGHT,
         ArmorType.MEDIUM,
@@ -48,7 +52,7 @@ class CreatureProficiencies(BaseBlock):
     name: str = "Creature Proficiencies"
     base_simple_weapons: bool = True
     base_martial_weapons: bool = True
-    base_weapon_ref_keys: frozenset[str] = Field(default_factory=frozenset)
+    base_weapon_ids: frozenset[str] = Field(default_factory=frozenset)
     base_armor_types: frozenset[ArmorType] = Field(
         default_factory=lambda: frozenset(_ARMOR_CATEGORIES),
     )
@@ -93,30 +97,26 @@ class CreatureProficiencies(BaseBlock):
         if unsupported:
             values = ", ".join(sorted(row.value for row in unsupported))
             raise ValueError(f"unsupported armor proficiency categories: {values}")
-        base_weapon_ref_keys: set[str] = set()
-        for ref in resolved.base_weapon_refs:
-            if ref.definition_kind != ContentDefinitionKind.ITEM:
-                raise ValueError(
-                    "specific weapon proficiency must reference an item "
-                    "definition",
-                )
-            base_weapon_ref_keys.add(ref.identity_key)
+        base_weapon_ids = frozenset(
+            _semantic_id(weapon_id, "specific weapon proficiency")
+            for weapon_id in resolved.base_weapon_ids
+        )
         return cls(
             source_entity_uuid=source_entity_uuid,
             base_simple_weapons=resolved.base_simple_weapons,
             base_martial_weapons=resolved.base_martial_weapons,
-            base_weapon_ref_keys=frozenset(base_weapon_ref_keys),
+            base_weapon_ids=base_weapon_ids,
             base_armor_types=frozenset(resolved.base_armor_types),
             base_shields=resolved.base_shields,
             base_languages=frozenset(
-                validate_namespaced_id(
+                _semantic_id(
                     language,
                     "base language",
                 )
                 for language in resolved.base_languages
             ),
             base_tools=frozenset(
-                validate_namespaced_id(
+                _semantic_id(
                     tool,
                     "base tool",
                 )
@@ -139,16 +139,12 @@ class CreatureProficiencies(BaseBlock):
     def add_specific_weapon_source(
         self,
         source_id: UUID,
-        weapon_ref: ContentRef,
+        weapon_id: str,
     ) -> None:
-        """Grant proficiency with one exact authored weapon definition."""
-        if weapon_ref.definition_kind != ContentDefinitionKind.ITEM:
-            raise ValueError(
-                "specific weapon proficiency must reference an item "
-                "definition",
-            )
+        """Grant proficiency with one exact semantic weapon identity."""
+        weapon_key = _semantic_id(weapon_id, "specific weapon proficiency")
         sources = self.specific_weapon_sources.setdefault(
-            weapon_ref.identity_key,
+            weapon_key,
             ProficiencySourceSet(),
         )
         sources.add(source_id, ProficiencyMode.FULL)
@@ -175,7 +171,7 @@ class CreatureProficiencies(BaseBlock):
         language_id: str,
     ) -> None:
         """Grant knowledge of one exact language from one source."""
-        language_key = validate_namespaced_id(language_id, "language_id")
+        language_key = _semantic_id(language_id, "language_id")
         self.language_sources.setdefault(
             language_key,
             ProficiencySourceSet(),
@@ -187,7 +183,7 @@ class CreatureProficiencies(BaseBlock):
         tool_id: str,
     ) -> None:
         """Grant proficiency with one exact tool from one source."""
-        tool_key = validate_namespaced_id(tool_id, "tool_id")
+        tool_key = _semantic_id(tool_id, "tool_id")
         self.tool_sources.setdefault(
             tool_key,
             ProficiencySourceSet(),
@@ -220,14 +216,14 @@ class CreatureProficiencies(BaseBlock):
     def is_weapon_proficient(
         self,
         properties: Iterable[WeaponProperty] | None,
-        weapon_ref: ContentRef | None = None,
+        weapon_id: str | None = None,
     ) -> bool:
         """Return proficiency for an unarmed, simple, or martial attack."""
         if properties is None:
             return True
-        if weapon_ref is not None:
-            weapon_key = weapon_ref.identity_key
-            if weapon_key in self.base_weapon_ref_keys:
+        if weapon_id is not None:
+            weapon_key = _semantic_id(weapon_id, "weapon_id")
+            if weapon_key in self.base_weapon_ids:
                 return True
             exact_sources = self.specific_weapon_sources.get(weapon_key)
             if exact_sources is not None and exact_sources.sources:
@@ -263,7 +259,7 @@ class CreatureProficiencies(BaseBlock):
 
     def knows_language(self, language_id: str) -> bool:
         """Return whether a base or source-owned language is known."""
-        language_key = validate_namespaced_id(language_id, "language_id")
+        language_key = _semantic_id(language_id, "language_id")
         sources = self.language_sources.get(language_key)
         return (
             language_key in self.base_languages
@@ -272,7 +268,7 @@ class CreatureProficiencies(BaseBlock):
 
     def is_tool_proficient(self, tool_id: str) -> bool:
         """Return whether a base or source-owned tool proficiency exists."""
-        tool_key = validate_namespaced_id(tool_id, "tool_id")
+        tool_key = _semantic_id(tool_id, "tool_id")
         sources = self.tool_sources.get(tool_key)
         return (
             tool_key in self.base_tools

@@ -5,8 +5,8 @@ from uuid import uuid4
 from dnd.core.base_conditions import BaseCondition, Duration
 from dnd.types.conditions import DurationType
 from dnd.core.gridmap import get_map
-from dnd.entity import Entity
-from dnd.monsters.bestiary import create_skeleton
+from dnd.entities.entity import Entity
+from tests.engine.support import create_test_monster
 from tests.engine.support import reset_combat_state, setup_combat_arena
 
 
@@ -32,7 +32,7 @@ def test_tile_duration_expiry_removes_owned_cross_block_effect() -> None:
     reset_combat_state()
     grid = get_map()
     grid.create_rectangle(0, 0, 8, 8)
-    target = create_skeleton(
+    target = create_test_monster("monster.skeleton",
         name="Tile Duration Target",
         position=(3, 3),
     )
@@ -66,12 +66,12 @@ def test_encounter_round_boundary_advances_tile_durations() -> None:
     reset_combat_state()
     grid = get_map()
     grid.create_rectangle(0, 0, 8, 8)
-    first = create_skeleton(
+    first = create_test_monster("monster.skeleton",
         name="Tile Duration First",
         position=(0, 0),
         faction="first",
     )
-    second = create_skeleton(
+    second = create_test_monster("monster.skeleton",
         name="Tile Duration Second",
         position=(1, 0),
         faction="second",

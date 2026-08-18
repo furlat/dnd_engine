@@ -13,12 +13,13 @@ from dnd.core.events.world_events import (
 )
 from dnd.types.life import LifeState
 from dnd.core.gridmap import get_map
+from dnd.core.base_conditions import BaseCondition
 from dnd.types.spatial_effects import SpatialEffectChangeOperation
-from dnd.content.spike_trap_materialization import materialize_spike_trap_effect
-from dnd.spatial.environmental_effects import SpikeTrapController, SpikeTrapGroundEffect
-from dnd.entity import Entity
-from dnd.monsters.bestiary import create_skeleton
-from dnd.spatial.effect_base import SpatialEffect
+from dnd.content.spike_trap_materialization import materialize_spike_trap_condition
+from dnd.spatial.environmental_conditions import SpikeTrap, SpikeTrap
+from dnd.entities.entity import Entity
+from tests.engine.support import create_test_monster
+from dnd.spatial.area_conditions import SpatialCondition
 from tests.engine.support import get_hp, reset_combat_state, set_hp
 
 
@@ -44,17 +45,16 @@ def test_spike_zone_activation_uses_one_independent_spatial_effect() -> None:
     grid = get_map()
     grid.create_rectangle(0, 0, 10, 8)
     positions = {(2, 4), (3, 4), (4, 4)}
-    effect = materialize_spike_trap_effect(positions)
-    observer = create_skeleton(
+    effect = materialize_spike_trap_condition(positions)
+    observer = create_test_monster("monster.skeleton",
         name="Spike Hazard Observer",
         position=(0, 4),
     )
 
-    assert isinstance(effect, SpikeTrapGroundEffect)
-    assert SpatialEffect.get_effect(effect.uuid) is effect
+    assert isinstance(effect, SpikeTrap)
+    assert BaseCondition.get(effect.uuid) is effect
     assert effect.affected_positions == positions
-    controller = effect.active_conditions["Spike Trap"]
-    assert isinstance(controller, SpikeTrapController)
+    assert effect.applied
     for position in positions:
         tile = grid.get_tile(*position)
         assert tile is not None
@@ -64,7 +64,7 @@ def test_spike_zone_activation_uses_one_independent_spatial_effect() -> None:
         for position in positions
     )
     assert all(
-        grid.get_spatial_effect_uuids_at(position) == {effect.uuid}
+        grid.get_spatial_condition_uuids_at(position) == {effect.uuid}
         for position in positions
     )
     assert all(
@@ -75,22 +75,13 @@ def test_spike_zone_activation_uses_one_independent_spatial_effect() -> None:
         )) == 1
         for position in positions
     )
-    assert all(
-        len(EventQueue.get_spatial_handlers_at(
-            position,
-            EventType.SPATIAL_EFFECT_INTERACTION,
-            EventPhase.EFFECT,
-        )) == 1
-        for position in positions
-    )
-
 def test_spike_zone_applies_damage_for_each_committed_step() -> None:
     """A multi-cell traversal resolves the shared spatial handler per entry."""
     reset_combat_state()
     grid = get_map()
     grid.create_rectangle(0, 0, 10, 8)
-    materialize_spike_trap_effect({(2, 4), (3, 4), (4, 4)})
-    walker = create_skeleton(
+    materialize_spike_trap_condition({(2, 4), (3, 4), (4, 4)})
+    walker = create_test_monster("monster.skeleton",
         name="Spike Step Walker",
         position=(0, 4),
     )
@@ -126,8 +117,8 @@ def test_lethal_spike_step_stops_remaining_movement_with_life_state() -> None:
     reset_combat_state()
     grid = get_map()
     grid.create_rectangle(0, 0, 10, 8)
-    materialize_spike_trap_effect({(2, 4), (3, 4), (4, 4)})
-    walker = create_skeleton(
+    materialize_spike_trap_condition({(2, 4), (3, 4), (4, 4)})
+    walker = create_test_monster("monster.skeleton",
         name="Lethal Spike Walker",
         position=(0, 4),
     )
@@ -155,8 +146,8 @@ def test_hidden_spike_trap_reveals_its_exact_effect_once_when_triggered() -> Non
     reset_combat_state()
     grid = get_map()
     grid.create_rectangle(0, 0, 6, 3)
-    effect = materialize_spike_trap_effect({(2, 1), (3, 1)}, stealth_dc=30)
-    walker = create_skeleton(name="Trap Trigger", position=(1, 1))
+    effect = materialize_spike_trap_condition({(2, 1), (3, 1)}, stealth_dc=30)
+    walker = create_test_monster("monster.skeleton", name="Trap Trigger", position=(1, 1))
     Entity.update_all_entities_senses()
     cursor = EventQueue.event_cursor()
 
@@ -168,10 +159,7 @@ def test_hidden_spike_trap_reveals_its_exact_effect_once_when_triggered() -> Non
     assert result is not None and not result.canceled
     assert grid.is_position_hazardous_for(2, 1, walker.uuid)
     assert grid.is_position_hazardous_for(3, 1, walker.uuid)
-    controller = effect.active_conditions["Spike Trap"]
-    assert isinstance(controller, SpikeTrapController)
-    assert controller.condition_stealth_dc is None
-    assert effect.stealth_dc is None
+    assert effect.condition_stealth_dc is None
     reveal_events = [
         event
         for _, event in EventQueue.iter_events_since(cursor)

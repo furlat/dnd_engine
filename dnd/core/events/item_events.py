@@ -1,25 +1,94 @@
-"""Item placement, finite-resource, and equipment-transition event facts."""
+"""Item state, placement, finite-resource, and equipment-transition facts."""
 
-from typing import Optional, Tuple
+from typing import Optional, Protocol, Tuple, runtime_checkable
 from uuid import UUID
 
-from pydantic import Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from dnd.core.events.events_registry import Event, EventType
-from dnd.presentation import ItemPresentationState
-from dnd.types.equipment import EquipmentSlot
-from dnd.types.items import ItemLocation
+from dnd.types.damage import DamageType
+from dnd.types.equipment import ArmorType, EquipmentSlot, WeaponProperty
+from dnd.types.items import (
+    ItemChargeState,
+    ItemDirectionalStructureState,
+    ItemKind,
+    ItemLightSourceState,
+    ItemLocation,
+    ItemRarity,
+)
+from dnd.types.rolls import DieSize
+
+
+class ItemState(BaseModel):
+    """Renderer-independent state of one concrete item instance.
+
+    This is the item data carried by authoritative events. It deliberately
+    excludes content contracts and client asset/rendering vocabulary.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    item_uuid: UUID
+    semantic_key: str = Field(min_length=1)
+    name: str = Field(min_length=1)
+    description: Optional[str] = None
+    item_kind: ItemKind = ItemKind.ITEM
+    rarity: ItemRarity = ItemRarity.COMMON
+    weight: float = 0.0
+    value: int = 0
+    tags: Tuple[str, ...] = ()
+    is_pickable: bool = True
+    is_equippable: bool = False
+    is_usable: bool = False
+    is_consumable: bool = False
+    is_targetable: bool = False
+    stack_id: Optional[str] = None
+    stack_count: int = Field(default=1, ge=0)
+    max_stack: int = Field(default=1, ge=1)
+    current_hit_points: Optional[int] = Field(default=None, ge=0)
+    maximum_hit_points: Optional[int] = Field(default=None, ge=0)
+    charge_state: Optional[ItemChargeState] = None
+    directional_structure: Optional[ItemDirectionalStructureState] = None
+    light_source: Optional[ItemLightSourceState] = None
+    is_open: Optional[bool] = None
+    blocks_movement: bool = False
+    blocks_vision: bool = False
+    damage_die: Optional[DieSize] = None
+    damage_dice_count: Optional[int] = Field(default=None, ge=1)
+    damage_bonus: Optional[int] = None
+    attack_bonus: Optional[int] = None
+    damage_type: Optional[DamageType] = None
+    weapon_properties: Tuple[WeaponProperty, ...] = ()
+    range_kind: Optional[str] = None
+    normal_range_feet: Optional[int] = Field(default=None, ge=0)
+    long_range_feet: Optional[int] = Field(default=None, ge=0)
+    armor_type: Optional[ArmorType] = None
+    armor_class: Optional[int] = Field(default=None, ge=0)
+    shield_armor_class_bonus: Optional[int] = None
+
+
+@runtime_checkable
+class ItemStateProvider(Protocol):
+    """Structural boundary for capturing an authoritative item fact."""
+
+    def to_item_state(
+        self,
+        *,
+        stack_count: Optional[int] = None,
+    ) -> ItemState:
+        """Return the item's renderer-independent state."""
+        ...
 
 class ItemLocationStateEvent(Event):
-    """Post-commit, idempotent item placement and presentation fact."""
+    """Post-commit, idempotent item state and placement fact."""
 
     name: str = Field(default="Item Location State", description="Item location-state fact label.")
     event_type: EventType = Field(
         default=EventType.ITEM_LOCATION_STATE,
         description="Event category for authoritative item location snapshots.",
     )
-    item_state: ItemPresentationState = Field(
-        description="Cold item presentation/state required to materialize this item."
+    item_state: ItemState = Field(
+        description="Complete renderer-independent item state after the mutation."
     )
     location: ItemLocation = Field(description="Authoritative item placement after the mutation.")
     owner_uuid: Optional[UUID] = Field(
@@ -118,3 +187,18 @@ class ShieldUnequipEvent(EquipmentEvent):
 
     name: str = Field(default="Shield Unequip", description="A shield unequip event")
     event_type: EventType = Field(default=EventType.SHIELD_UNEQUIP, description="The type of event")
+
+
+__all__ = [
+    "ArmorEquipEvent",
+    "ArmorUnequipEvent",
+    "EquipmentEvent",
+    "ItemChargeConsumptionEvent",
+    "ItemLocationStateEvent",
+    "ItemState",
+    "ItemStateProvider",
+    "ShieldEquipEvent",
+    "ShieldUnequipEvent",
+    "WeaponEquipEvent",
+    "WeaponUnequipEvent",
+]

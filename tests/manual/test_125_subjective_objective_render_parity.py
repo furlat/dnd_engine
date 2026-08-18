@@ -39,9 +39,9 @@ from dnd.core.dice import fixed_dice_faces
 from dnd.core.events.events_registry import (
     EventPhase,
 )
-from dnd.entity import Entity
-from dnd.encounter import CombatantState, Encounter
-from dnd.types.encounter import EncounterState
+from dnd.entities.entity import Entity
+from dnd.encounters.encounter import CombatantState, Encounter
+from dnd.types.encounter_state import EncounterState
 from dnd.items.environment import DirectionalDoor
 from dnd.items.environment_content import directional_door_recipe
 from dnd.items.torches import TORCH_RECIPE, Torch

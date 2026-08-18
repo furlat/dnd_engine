@@ -14,14 +14,14 @@ from dnd.actions.standard import (
 from dnd.content_system.bootstrap import bootstrap_content_system
 from dnd.content_system.creature_materialization import materialize_creature
 from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
-from dnd.controller import Controller
+from dnd.encounters.controllers import Controller
 from dnd.core.content.materialization import (
     CreatureDeploymentRole,
     CreaturePossessionMode,
 )
 from dnd.core.dice import fixed_dice_faces
-from dnd.encounter import Encounter
-from dnd.entity import Entity
+from dnd.encounters.encounter import Encounter
+from dnd.entities.entity import Entity
 from dnd.monsters.bestiary_content import BESTIARY_CREATURE_RECIPES_BY_ID
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.spells.catalog_content import SPELL_CONTENT_DECLARATIONS_BY_NAME

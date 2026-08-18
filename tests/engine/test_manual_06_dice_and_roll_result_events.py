@@ -24,7 +24,7 @@ from dnd.types.damage import DamageType
 from dnd.core.modifiers import AdvantageModifier
 from dnd.types.rolls import AdvantageStatus, AutoHitStatus, CriticalStatus
 from dnd.core.values import BaseValue, ModifiableValue
-from dnd.entity import determine_attack_outcome
+from dnd.entities.entity import determine_attack_outcome
 
 
 def reset_dice_state() -> None:

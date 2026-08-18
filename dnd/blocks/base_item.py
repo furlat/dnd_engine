@@ -29,18 +29,14 @@ from dnd.core.events.world_events import (
 from dnd.core.events.item_events import (
     ItemChargeConsumptionEvent,
     ItemLocationStateEvent,
+    ItemState,
 )
 from dnd.types.equipment import EquipmentSlot
 from dnd.types.rolls import HitDieSize
-from dnd.presentation import (
-    EquippedVisualPolicy,
-    ItemContentRefSnapshot,
-    ItemPresentationKind,
-    ItemPresentationState,
-)
 from dnd.types.items import (
     ItemChargeState,
     ItemDirectionalStructureState,
+    ItemKind,
     ItemLightSourceState,
     ItemLocation,
     ItemObservationState,
@@ -54,10 +50,7 @@ from dnd.core.base_actions import (
     BaseAction,
 )
 from dnd.core.content.identities import ContentRef
-from dnd.core.content.runtime import (
-    RuntimeBehaviorKind,
-    bind_runtime_behavior_child,
-)
+from dnd.types.behaviors import RuntimeBehaviorKind
 
 
 class BaseItem(BaseBlock):
@@ -124,10 +117,6 @@ class BaseItem(BaseBlock):
         default=None,
         description="Renderer sub-item variant id under visual_item_name.",
     )
-    equipped_visual_policy: EquippedVisualPolicy = Field(
-        default=EquippedVisualPolicy.VISIBLE,
-        description="Whether this item renders as a separate equipment layer while equipped.",
-    )
     tags: List[str] = Field(
         default_factory=list,
         description="Free-form tags used by item queries and filtering.",
@@ -169,38 +158,38 @@ class BaseItem(BaseBlock):
             return self.semantic_key
         return f"{type(self).__module__}.{type(self).__name__}"
 
-    def to_item_presentation_state(
+    def to_item_state(
         self,
         *,
         stack_count: Optional[int] = None,
-    ) -> ItemPresentationState:
-        """Return a cold presentation/state payload owned by this item.
-
-        Concrete item families extend this common payload with their own
-        weapon, armor, shield, or finite-use facts. No transport/server model
-        participates in this engine contract.
-        """
-        return ItemPresentationState(
+    ) -> ItemState:
+        """Capture the item's renderer-independent authoritative state."""
+        return ItemState(
             item_uuid=self.uuid,
-            content_ref=(
-                ItemContentRefSnapshot.model_validate(
-                    self.content_ref.model_dump(mode="python")
-                )
-                if self.content_ref is not None
-                else None
-            ),
             semantic_key=self.get_semantic_key(),
             name=self.name,
             description=self.description,
-            item_kind=ItemPresentationKind.ITEM,
+            item_kind=ItemKind.ITEM,
             rarity=self.rarity,
             weight=self.weight,
-            visual_item_name=self.visual_item_name or self.name,
-            visual_variant_id=self.visual_variant_id,
-            equipped_visual_policy=self.equipped_visual_policy,
+            value=self.value,
+            tags=tuple(self.tags),
+            is_pickable=self.is_pickable,
+            is_equippable=self.is_equippable,
+            is_usable=self.is_usable,
+            is_consumable=self.is_consumable,
+            is_targetable=self.is_targetable,
+            stack_id=self.stack_id,
             stack_count=self.stack_count if stack_count is None else stack_count,
             max_stack=self.max_stack,
-            is_consumable=self.is_consumable,
+            current_hit_points=(max(0, self.get_hp()) if self.health is not None else None),
+            maximum_hit_points=(self.get_max_hp() if self.health is not None else None),
+            charge_state=self.get_charge_state(),
+            directional_structure=self.get_directional_structure_state(),
+            light_source=self.get_light_source_state(),
+            is_open=self.get_spatial_open_state(),
+            blocks_movement=self.blocks_walking(),
+            blocks_vision=self.blocks_vision(),
         )
 
     def publish_location_state(
@@ -224,7 +213,7 @@ class BaseItem(BaseBlock):
             source_entity_uuid=source_uuid,
             target_entity_uuid=owner_uuid,
             parent_event=parent_event.uuid if parent_event is not None else None,
-            item_state=self.to_item_presentation_state(stack_count=stack_count),
+            item_state=self.to_item_state(stack_count=stack_count),
             location=location,
             owner_uuid=owner_uuid,
             container_uuid=container_uuid,
@@ -861,25 +850,21 @@ class UsableItem(BaseItem):
         materialization. Overrides of ``get_use_actions`` use this narrow
         admission method before returning actions constructed on demand.
         """
-        bind_runtime_behavior_child(
-            action,
-            provider=self,
-            runtime_owner_uuid=self.uuid,
-        )
+        provider_id = self.get_semantic_key()
+        action.provided_by_id = provider_id
+        action.origin_root_id = provider_id
+        action.bind_behavior_owner(origin_root_id=provider_id)
         return action
 
-    def to_item_presentation_state(
+    def to_item_state(
         self,
         *,
         stack_count: Optional[int] = None,
-    ) -> ItemPresentationState:
-        """Add finite-use state to the common cold item presentation."""
-        state = super().to_item_presentation_state(stack_count=stack_count)
-        return state.model_copy(update={
-            "item_kind": ItemPresentationKind.USABLE,
-            "charges": self.charges,
-            "max_charges": self.max_charges,
-        })
+    ) -> ItemState:
+        """Classify the authoritative item fact as a usable item."""
+        return super().to_item_state(stack_count=stack_count).model_copy(
+            update={"item_kind": ItemKind.USABLE},
+        )
 
     def get_charge_state(self) -> ItemChargeState:
         """Return exact finite-use state for observation consumers."""
@@ -926,7 +911,7 @@ class UsableItem(BaseItem):
         if self.charges == 0:
             return []
         result = []
-        source_item_presentation = self.to_item_presentation_state()
+        source_item_state = self.to_item_state()
         for template in self.use_action_templates:
             if self.charges != -1 and self.charges < template.charge_cost:
                 continue
@@ -934,7 +919,7 @@ class UsableItem(BaseItem):
                 'uuid': uuid4(),
                 'source_entity_uuid': user_entity_uuid,
                 'source_item_uuid': self.uuid,
-                'source_item_presentation': source_item_presentation,
+                'source_item_state': source_item_state,
             })
             result.append(action)
         return result

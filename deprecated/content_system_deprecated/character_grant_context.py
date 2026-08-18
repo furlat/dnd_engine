@@ -5,7 +5,7 @@ from uuid import UUID
 
 from dnd.content_system.character_build_validation import CharacterBuildPreview
 from dnd.content_system.runtime import ContentSystemRuntime
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 
 
 @dataclass(frozen=True, slots=True)

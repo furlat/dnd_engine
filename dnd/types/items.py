@@ -9,13 +9,23 @@ from dnd.types.world import CardinalDirection, WorldEdgeChannel
 
 
 class ItemRarity(str, Enum):
-    """Stable rarity labels carried by item definitions and presentation facts."""
+    """Stable rarity labels carried by item definitions and event facts."""
 
     COMMON = "common"
     UNCOMMON = "uncommon"
     RARE = "rare"
     VERY_RARE = "very_rare"
     LEGENDARY = "legendary"
+
+
+class ItemKind(str, Enum):
+    """Mechanical item families used by rules and authoritative events."""
+
+    ITEM = "item"
+    USABLE = "usable"
+    WEAPON = "weapon"
+    ARMOR = "armor"
+    SHIELD = "shield"
 
 
 class ItemLocation(str, Enum):
@@ -82,6 +92,7 @@ class ItemObservationState(BaseModel):
 __all__ = [
     "ItemChargeState",
     "ItemDirectionalStructureState",
+    "ItemKind",
     "ItemLightSourceState",
     "ItemLocation",
     "ItemObservationState",

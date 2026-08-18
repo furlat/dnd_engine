@@ -24,8 +24,8 @@ from dnd.core.base_actions import (
 )
 from dnd.core.gridmap import get_map
 from dnd.core.modifiers import NumericalModifier
-from dnd.entity import Entity, EntityConfig
-from dnd.monsters.bestiary import create_skeleton
+from dnd.entities.entity import Entity, EntityConfig
+from tests.engine.support import create_test_monster
 from dnd.actions.reactions import add_opportunity_attack_handler
 from tests.engine.support import (
     force_attack_hit,
@@ -303,7 +303,7 @@ def test_jump_provokes_opportunity_attack_when_leaving_reach() -> None:
     """Legacy ``test_jump.py::test_jump_provokes_opportunity_attack``."""
     _reset_state()
     jumper = _create_jumper()
-    watcher = create_skeleton(
+    watcher = create_test_monster("monster.skeleton", 
         name="Jump Watcher",
         position=(6, 5),
         faction="monsters",
@@ -331,7 +331,7 @@ def test_disengage_prevents_opportunity_attack_during_jump() -> None:
     """Legacy ``test_jump.py::test_jump_disengage_prevents_oa``."""
     _reset_state()
     jumper = _create_jumper()
-    watcher = create_skeleton(
+    watcher = create_test_monster("monster.skeleton", 
         name="Disengaged Jump Watcher",
         position=(6, 5),
         faction="monsters",

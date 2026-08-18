@@ -43,9 +43,10 @@ from dnd.core.events.events_registry import (
     EventPhase,
 )
 from dnd.core.gridmap import get_map
+from dnd.core.base_conditions import BaseCondition
 from dnd.types.damage import DamageType
-from dnd.content.spike_trap_materialization import materialize_spike_trap_effect
-from dnd.entity import Entity, EntityConfig
+from dnd.content.spike_trap_materialization import materialize_spike_trap_condition
+from dnd.entities.entity import Entity, EntityConfig
 from dnd.items.consumables import (
     FIRE_WEAPON_COAT_RECIPE,
     HEALING_POTION_RECIPE,
@@ -70,7 +71,7 @@ from dnd.items.environment_interactables import (
     TrapLever,
 )
 from dnd.items.weapons import LONGSWORD_RECIPE, SHORTSWORD_RECIPE
-from dnd.spatial.effect_base import SpatialEffect
+from dnd.spatial.area_conditions import SpatialCondition
 from tests.engine.support import get_hp, reset_combat_state, set_hp
 
 
@@ -553,8 +554,8 @@ def test_lever_depletion_removes_only_its_linked_trap() -> None:
     """A lever retires only its exact linked spatial-effect owner."""
     reset_item_world()
     actor = create_actor((5, 5))
-    linked_effect = materialize_spike_trap_effect({(3, 3)})
-    other_effect = materialize_spike_trap_effect({(7, 7)})
+    linked_effect = materialize_spike_trap_condition({(3, 3)})
+    other_effect = materialize_spike_trap_condition({(7, 7)})
     lever = materialize_item(
         trap_lever_recipe(charges=1),
         uuid4(),
@@ -566,7 +567,7 @@ def test_lever_depletion_removes_only_its_linked_trap() -> None:
         lever.bind_dynamic_use_action(
             PullLeverAction(
                 source_entity_uuid=uuid4(),
-                trap_effect_uuid=linked_effect.uuid,
+                trap_condition_uuid=linked_effect.uuid,
                 template=True,
             ),
         ),
@@ -583,8 +584,8 @@ def test_lever_depletion_removes_only_its_linked_trap() -> None:
     assert result is not None and not result.canceled
     assert lever.charges == 0
     assert item_rows(actor, lever.uuid) == []
-    assert SpatialEffect.get_effect(linked_effect.uuid) is None
-    assert SpatialEffect.get_effect(other_effect.uuid) is other_effect
+    assert BaseCondition.get(linked_effect.uuid) is None
+    assert BaseCondition.get(other_effect.uuid) is other_effect
     assert not get_map().is_position_hazardous_for(3, 3, actor.uuid)
     assert get_map().is_position_hazardous_for(7, 7, actor.uuid)
 

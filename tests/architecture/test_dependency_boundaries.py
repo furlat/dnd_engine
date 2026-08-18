@@ -60,11 +60,13 @@ SAFE_LEAF_MODULES = frozenset({
     "dnd.presentation",
     "dnd.types.abilities",
     "dnd.types.actions",
+    "dnd.types.behaviors",
     "dnd.types.conditions",
     "dnd.types.creatures",
     "dnd.types.damage",
+    "dnd.types.dragonborn",
     "dnd.types.effects",
-    "dnd.types.encounter",
+    "dnd.types.encounter_state",
     "dnd.types.equipment",
     "dnd.types.items",
     "dnd.types.languages",
@@ -107,6 +109,12 @@ RETIRED_DOMAIN_MODULES = frozenset({
     "dnd.spatial_effects",
     "dnd.spatial_memberships",
     "dnd.spatial_restraints",
+    "dnd.core.spatial_effect_runtime",
+    "dnd.spatial.effect_base",
+    "dnd.spatial.effect_controllers",
+    "dnd.spatial.effect_memberships",
+    "dnd.spatial.effect_restraints",
+    "dnd.spatial.environmental_effects",
 })
 
 RETIRED_ROOT_DOMAIN_PATHS = (
@@ -122,6 +130,12 @@ RETIRED_ROOT_DOMAIN_PATHS = (
     "dnd/spatial_effects.py",
     "dnd/spatial_memberships.py",
     "dnd/spatial_restraints.py",
+    "dnd/core/spatial_effect_runtime.py",
+    "dnd/spatial/effect_base.py",
+    "dnd/spatial/effect_controllers.py",
+    "dnd/spatial/effect_memberships.py",
+    "dnd/spatial/effect_restraints.py",
+    "dnd/spatial/environmental_effects.py",
 )
 
 EVENT_REGISTRY_MODULE = "dnd.core.events.events_registry"
@@ -129,6 +143,7 @@ EVENT_FAMILY_MODULES = frozenset({
     "dnd.core.events.action_events",
     "dnd.core.events.check_events",
     "dnd.core.events.encounter_events",
+    "dnd.core.events.entity_events",
     "dnd.core.events.item_events",
     "dnd.core.events.resolution_events",
     "dnd.core.events.world_events",
@@ -141,8 +156,12 @@ MOVED_EVENT_SYMBOL_OWNERS = {
     "CounterspellReactionEvent": "dnd.core.events.action_events",
     "DragonbornBreathWeaponEvent": "dnd.core.events.action_events",
     "EquipmentEvent": "dnd.core.events.item_events",
+    "EntityCreatedEvent": "dnd.core.events.entity_events",
+    "EntityLevelAddedEvent": "dnd.core.events.entity_events",
+    "EntityLevelRemovedEvent": "dnd.core.events.entity_events",
     "ItemChargeConsumptionEvent": "dnd.core.events.item_events",
     "ItemLocationStateEvent": "dnd.core.events.item_events",
+    "ItemState": "dnd.core.events.item_events",
     "JumpEvent": "dnd.core.events.action_events",
     "ShieldEquipEvent": "dnd.core.events.item_events",
     "ShieldUnequipEvent": "dnd.core.events.item_events",
@@ -190,11 +209,10 @@ CANONICAL_NEUTRAL_SYMBOL_OWNERS = {
     "HitDieSize": "dnd.types.rolls",
     "ContentDefinitionKind": "dnd.core.content.identities",
     "ContentRef": "dnd.core.content.identities",
-    "BehaviorBinding": "dnd.core.content.runtime",
-    "RuntimeBehaviorKind": "dnd.core.content.runtime",
-    "HandlerDispatchOutcome": "dnd.core.content.runtime",
-    "HandlerDispatchEvidence": "dnd.core.content.runtime",
-    "EffectiveHandlerPresentation": "dnd.core.content.runtime",
+    "RuntimeBehaviorKind": "dnd.types.behaviors",
+    "HandlerDispatchOutcome": "dnd.types.behaviors",
+    "HandlerDispatchEvidence": "dnd.types.behaviors",
+    "EffectiveHandlerPresentation": "dnd.types.behaviors",
     "ConditionTag": "dnd.types.conditions",
     "CreatureType": "dnd.types.creatures",
     "DamageType": "dnd.types.damage",
@@ -206,24 +224,25 @@ CANONICAL_NEUTRAL_SYMBOL_OWNERS = {
     "EquipmentSlot": "dnd.types.equipment",
     "EffectOrigin": "dnd.types.effects",
     "ItemLocation": "dnd.types.items",
-    "ItemPresentationState": "dnd.presentation",
-    "EncounterState": "dnd.types.encounter",
-    "TurnState": "dnd.types.encounter",
-    "ControllerExecutionMode": "dnd.types.encounter",
-    "AdvanceStatus": "dnd.types.encounter",
+    "ItemKind": "dnd.types.items",
+    "EncounterState": "dnd.types.encounter_state",
+    "TurnState": "dnd.types.encounter_state",
+    "ControllerExecutionMode": "dnd.types.encounter_state",
+    "AdvanceStatus": "dnd.types.encounter_state",
     "CasterProgression": "dnd.types.progression",
     "MulticlassSlotRoundingPolicy": "dnd.types.progression",
     "MovementMode": "dnd.types.world",
     "LightLevel": "dnd.types.world",
     "CardinalDirection": "dnd.types.world",
     "WorldEdgeChannel": "dnd.types.world",
+    "SavingThrowContext": "dnd.types.saving_throws",
     "OriginRuntimeSupport": "dnd.core.content.origin_support",
     "OriginRuntimeSupportStatus": "dnd.core.content.origin_support",
 }
 
 RETIRED_SYMBOL_OWNER_IMPORTS = {
     "dnd.blocks.saving_throws": frozenset({"SavingThrowName"}),
-    "dnd.controller": frozenset({"ControllerExecutionMode"}),
+    "dnd.encounters.controllers": frozenset({"ControllerExecutionMode"}),
     "dnd.core.base_block": frozenset({"LightLevel", "MovementMode"}),
     "dnd.core.dice": frozenset({"AttackOutcome", "RollType"}),
     "dnd.core.events": frozenset({"AbilityName", "SkillName"}),
@@ -237,7 +256,7 @@ RETIRED_SYMBOL_OWNER_IMPORTS = {
         "MulticlassSlotRoundingPolicy",
     }),
     "dnd.core.world_edges": frozenset({"WorldEdgeChannel"}),
-    "dnd.encounter": frozenset({"EncounterState", "TurnState"}),
+    "dnd.encounters.encounter": frozenset({"EncounterState", "TurnState"}),
 }
 
 CONTENT_CONTRACT_MODULE_PREFIX = "dnd.core.content"
@@ -247,6 +266,7 @@ CONTENT_CONTRACT_ALLOWED_NEUTRAL_DEPENDENCIES = frozenset({
     "dnd.core.world_edges",
     "dnd.presentation",
     "dnd.types.abilities",
+    "dnd.types.behaviors",
     "dnd.types.conditions",
     "dnd.types.creatures",
     "dnd.types.damage",
@@ -260,9 +280,9 @@ CONTENT_CONTRACT_ALLOWED_NEUTRAL_DEPENDENCIES = frozenset({
 })
 
 MECHANISM_MODULES = frozenset({
-    "dnd.entity",
+    "dnd.entities.entity",
     "dnd.core.base_actions",
-    "dnd.encounter",
+    "dnd.encounters.encounter",
 })
 
 CONCRETE_CONDITION_NAMES = frozenset({
@@ -1020,6 +1040,33 @@ def test_root_action_and_spatial_modules_are_fully_retired() -> None:
     assert not messages, "\n\n".join(messages)
 
 
+def test_spell_modules_do_not_construct_retired_spatial_wrappers() -> None:
+    """Spell code cannot revive a deleted spatial wrapper through a local call."""
+    forbidden = {
+        "SpatialEffect",
+        "GroundEffect",
+        "CloudEffect",
+        "FieldEffect",
+        "SpatialEffectController",
+    }
+    findings: list[str] = []
+    for source_module in _source_modules().values():
+        if not source_module.name.startswith("dnd.spells."):
+            continue
+        for node in ast.walk(source_module.tree):
+            if not isinstance(node, ast.Call):
+                continue
+            if isinstance(node.func, ast.Name) and node.func.id in forbidden:
+                findings.append(
+                    f"- {source_module.display_path}:{node.lineno}: "
+                    f"calls {node.func.id}"
+                )
+    assert not findings, (
+        "Spell code calls retired spatial wrappers:\n"
+        + "\n".join(findings)
+    )
+
+
 def test_event_registry_never_imports_concrete_event_families() -> None:
     """The event registry is the one-way dependency root of every event family."""
     family_edges = [
@@ -1107,7 +1154,7 @@ def test_dependency_direction_is_respected() -> None:
         if importer_root == "dnd" and target_root == "server":
             violations.append(reference)
             continue
-        if reference.importer == "dnd.entity" and any(
+        if reference.importer == "dnd.entities.entity" and any(
             reference.target == prefix or reference.target.startswith(f"{prefix}.")
             for prefix in CONCRETE_ENTITY_DEPENDENCY_PREFIXES
         ):
@@ -1300,8 +1347,8 @@ def test_cold_type_and_presentation_imports_do_not_load_runtime_layers() -> None
         "for module in pkgutil.iter_modules(dnd.types.__path__, 'dnd.types.'):\n"
         "    importlib.import_module(module.name)\n"
         "import dnd.presentation\n"
-        "forbidden = ('server', 'dnd.entity', 'dnd.blocks', 'dnd.actions', "
-        "'dnd.conditions', 'dnd.encounter', 'dnd.controller', 'dnd.core.content')\n"
+        "forbidden = ('server', 'dnd.entities.entity', 'dnd.blocks', 'dnd.actions', "
+        "'dnd.conditions', 'dnd.encounters.encounter', 'dnd.encounters.controllers', 'dnd.core.content')\n"
         "loaded = sorted(name for name in sys.modules if any("
         "name == prefix or name.startswith(prefix + '.') for prefix in forbidden))\n"
         f"print({marker!r} + json.dumps(loaded))\n"
@@ -1393,9 +1440,10 @@ def test_cold_content_contract_imports_do_not_load_gameplay_or_server_layers() -
         "import json, sys\n"
         "import dnd.core.content.identities\n"
         "import dnd.core.content.origin_support\n"
-        "import dnd.core.content.runtime\n"
+        "import dnd.types.behaviors\n"
+        "import dnd.types.saving_throws\n"
         "import dnd.core.content.durable_characters\n"
-        "forbidden = ('server', 'dnd.entity', 'dnd.items', "
+        "forbidden = ('server', 'dnd.entities.entity', 'dnd.items', "
         "'dnd.monsters', 'dnd.actions', 'dnd.conditions', 'dnd.spells')\n"
         "loaded = sorted(name for name in sys.modules if any("
         "name == prefix or name.startswith(prefix + '.') for prefix in forbidden))\n"
@@ -1426,10 +1474,10 @@ def test_cold_content_contract_imports_do_not_load_gameplay_or_server_layers() -
 
 
 def test_persistent_spell_zones_receive_explicit_effect_provenance() -> None:
-    """Every concrete area-effect controller creation carries EffectOrigin."""
+    """Every concrete spell-area construction carries EffectOrigin."""
     zone_class_names: set[str] = set()
     for source_module in _source_modules().values():
-        if not source_module.name.startswith("dnd."):
+        if not source_module.name.startswith("dnd.spells."):
             continue
         for node in ast.walk(source_module.tree):
             if not isinstance(node, ast.ClassDef):
@@ -1437,11 +1485,19 @@ def test_persistent_spell_zones_receive_explicit_effect_provenance() -> None:
             if any(
                 (
                     isinstance(base, ast.Name)
-                    and base.id == "AreaSpatialEffectController"
+                    and base.id in {
+                        "AreaCondition",
+                        "MembershipAreaCondition",
+                        "RestrainingAreaCondition",
+                    }
                 )
                 or (
                     isinstance(base, ast.Attribute)
-                    and base.attr == "AreaSpatialEffectController"
+                    and base.attr in {
+                        "AreaCondition",
+                        "MembershipAreaCondition",
+                        "RestrainingAreaCondition",
+                    }
                 )
                 for base in node.bases
             ):
@@ -1454,20 +1510,34 @@ def test_persistent_spell_zones_receive_explicit_effect_provenance() -> None:
         for node in ast.walk(source_module.tree):
             if not isinstance(node, ast.Call):
                 continue
-            called_name: str | None = None
-            if isinstance(node.func, ast.Name):
-                called_name = node.func.id
-            elif isinstance(node.func, ast.Attribute):
-                called_name = node.func.attr
-            if called_name not in zone_class_names:
+            if not (
+                isinstance(node.func, ast.Name)
+                and node.func.id == "materialize_spatial_condition"
+            ):
                 continue
-            if "effect_origin" not in {keyword.arg for keyword in node.keywords}:
+            keywords = {keyword.arg: keyword.value for keyword in node.keywords}
+            condition_type = keywords.get("condition_type")
+            if not (
+                isinstance(condition_type, ast.Name)
+                and condition_type.id in zone_class_names
+            ):
+                continue
+            condition_fields = keywords.get("condition_fields")
+            field_names = {
+                key.value
+                for key in condition_fields.keys
+                if isinstance(condition_fields, ast.Dict)
+                and isinstance(key, ast.Constant)
+                and isinstance(key.value, str)
+            } if isinstance(condition_fields, ast.Dict) else set()
+            if "effect_origin" not in field_names:
                 missing_provenance.append(
-                    f"- {source_module.display_path}:{node.lineno}: {called_name}"
+                    f"- {source_module.display_path}:{node.lineno}: "
+                    f"{condition_type.id}"
                 )
 
     assert zone_class_names, (
-        "No concrete AreaSpatialEffectController subclasses were found"
+        "No concrete spell AreaCondition subclasses were found"
     )
     assert not missing_provenance, (
         "Persistent spell zones must receive explicit EffectOrigin provenance:\n"
@@ -1496,7 +1566,7 @@ def test_life_state_has_one_authoritative_writer_and_no_condition_mirror() -> No
         for line in _life_state_assignments(source_module):
             assignments.append(f"{source_module.name}:{line}")
 
-    assert len(assignments) == 1 and assignments[0].startswith("dnd.entity:"), (
+    assert len(assignments) == 1 and assignments[0].startswith("dnd.entities.entity:"), (
         "Entity must remain the sole authoritative health.life_state writer:\n- "
         + "\n- ".join(assignments)
     )

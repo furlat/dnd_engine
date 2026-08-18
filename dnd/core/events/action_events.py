@@ -30,15 +30,11 @@ from dnd.core.combat_log import (
     SpellInterruptionLogData,
     md_color,
 )
-from dnd.core.content.dragonborn import (
+from dnd.types.dragonborn import (
     DragonbornAncestry,
     DragonbornBreathGeometry,
 )
-from dnd.core.content.identities import ContentRef
-from dnd.core.content.runtime import (
-    BehaviorBinding,
-    active_runtime_behavior_binding,
-)
+from dnd.core.behavior_context import active_behavior
 from dnd.core.dice import DiceRoll
 from dnd.core.elevation import support_distance_feet
 from dnd.core.events.events_registry import (
@@ -49,6 +45,7 @@ from dnd.core.events.events_registry import (
     _exact_event_evidence_equal,
 )
 from dnd.core.events.resolution_events import Damage
+from dnd.core.events.item_events import ItemState
 from dnd.core.events.world_events import MovementTrajectory
 from dnd.core.traversal_connectors import (
     CONNECTOR_AUTHORED_ID_PATTERN,
@@ -58,14 +55,12 @@ from dnd.core.traversal_connectors import (
     TraversalConnectorKind,
 )
 from dnd.core.values import ModifiableValue
-from dnd.presentation import (
-    ActionPresentationKind,
-    ItemPresentationState,
-)
+from dnd.presentation import ActionPresentationKind
 from dnd.types.abilities import AbilityName
 from dnd.types.actions import CostType
 from dnd.types.damage import DamageType
 from dnd.types.effects import EffectOrigin, EffectOriginKind
+from dnd.types.behaviors import validate_behavior_id
 
 COUNTERSPELL_INTERRUPTION_OUTCOME_CODE = "spell.counterspell.interrupted"
 COUNTERSPELL_FAILURE_OUTCOME_CODE = "spell.counterspell.failed"
@@ -85,25 +80,28 @@ class BaseCost(BaseModel):
 class ActionEvent(Event):
     """Event emitted by the base action pipeline."""
 
-    behavior_binding: Optional[BehaviorBinding] = Field(
+    behavior_id: str = Field(
+        default="action.unclassified",
+        description="Direct semantic identity of the behavior producing this fact.",
+    )
+    provided_by_id: str = Field(
+        default="action.unclassified",
+        description="Direct semantic identity that installed the behavior.",
+    )
+    origin_root_id: Optional[str] = Field(
         default=None,
-        exclude=True,
-        repr=False,
-        description=(
-            "Immutable authored behavior identity captured before this event "
-            "version enters the queue."
-        ),
+        description="Optional durable semantic root of the behavior.",
     )
     costs: List[BaseCost] = Field(default_factory=list, description="Serializable action costs.")
     source_item_uuid: Optional[UUID] = Field(
         default=None,
         description="Usable item supplying this action when execution is item-bound.",
     )
-    source_item_presentation: Optional[ItemPresentationState] = Field(
+    source_item_state: Optional[ItemState] = Field(
         default=None,
         description=(
-            "Immutable source-item snapshot captured when the action was declared; "
-            "later phases and replay never need the live item registry."
+            "Authoritative source-item state captured when the action was "
+            "declared; replay never needs the live item registry."
         ),
     )
     item_charge_cost: int = Field(
@@ -148,21 +146,27 @@ class ActionEvent(Event):
     )
 
     def model_post_init(self, __context: Any) -> None:
-        """Freeze active authored identity before the event is registered."""
-        if self.behavior_binding is None:
-            self.behavior_binding = active_runtime_behavior_binding()
+        """Freeze active direct identity before the event is registered."""
+        active = active_behavior()
+        if active is not None and self.behavior_id == "action.unclassified":
+            self.behavior_id = active.behavior_id
+        if self.provided_by_id == "action.unclassified":
+            self.provided_by_id = (
+                active.provided_by_id if active is not None else self.behavior_id
+            )
+        if self.origin_root_id is None and active is not None:
+            self.origin_root_id = active.origin_root_id
+        validate_behavior_id(self.behavior_id)
+        validate_behavior_id(self.provided_by_id, "provided_by_id")
+        if self.origin_root_id is not None:
+            validate_behavior_id(self.origin_root_id, "origin_root_id")
         super().model_post_init(__context)
 
     def get_effect_origin(self) -> EffectOrigin:
         """Expose exact action provenance to persistent child effects."""
-        binding = self.behavior_binding
         return EffectOrigin(
             kind=EffectOriginKind.ACTION,
-            source_id=(
-                binding.definition_ref.identity_key
-                if binding is not None
-                else None
-            ),
+            source_id=self.behavior_id,
             source_event_lineage_uuid=str(self.lineage_uuid),
         )
 
@@ -175,10 +179,13 @@ class ActionEvent(Event):
         parent_event: Optional[Event] = None,
         use_register: bool = True,
         source_item_uuid: Optional[UUID] = None,
-        source_item_presentation: Optional[ItemPresentationState] = None,
+        source_item_state: Optional[ItemState] = None,
         item_charge_cost: int = 0,
         declared_target_entity_uuids: Optional[List[UUID]] = None,
         presentation_kind: ActionPresentationKind = ActionPresentationKind.DEFAULT,
+        behavior_id: str = "action.unclassified",
+        provided_by_id: str = "action.unclassified",
+        origin_root_id: Optional[str] = None,
     ) -> "ActionEvent":
         """Create an action event from runtime costs.
 
@@ -189,7 +196,7 @@ class ActionEvent(Event):
             parent_event: Optional parent event for event-tree nesting.
             use_register: Whether the event should be registered immediately.
             source_item_uuid: Optional usable item supplying this action.
-            source_item_presentation: Declaration-time cold item snapshot.
+            source_item_state: Declaration-time authoritative item state.
             item_charge_cost: Finite item charges consumed on completion.
             declared_target_entity_uuids: Complete entity target selection.
             presentation_kind: Stable presentation meaning for this action.
@@ -205,27 +212,30 @@ class ActionEvent(Event):
             parent_event=parent_event.uuid if parent_event else None,
             use_register=use_register,
             source_item_uuid=source_item_uuid,
-            source_item_presentation=source_item_presentation,
+            source_item_state=source_item_state,
             item_charge_cost=item_charge_cost,
             declared_target_entity_uuids=declared_target_entity_uuids or [],
+            behavior_id=behavior_id,
+            provided_by_id=provided_by_id,
+            origin_root_id=origin_root_id,
             presentation_kind=presentation_kind,
         )
         event.item_charge_action_lineage_uuid = event.lineage_uuid
         return event
 
     @model_validator(mode="after")
-    def validate_cold_presentation_facts(self) -> "ActionEvent":
+    def validate_item_state_facts(self) -> "ActionEvent":
         """Keep item and target-application identities internally coherent."""
-        if self.source_item_presentation is not None:
+        if self.source_item_state is not None:
             if self.source_item_uuid is None:
-                raise ValueError("source item presentation requires source_item_uuid")
-            if self.source_item_presentation.item_uuid != self.source_item_uuid:
-                raise ValueError("source item presentation UUID must match source_item_uuid")
+                raise ValueError("source item state requires source_item_uuid")
+            if self.source_item_state.item_uuid != self.source_item_uuid:
+                raise ValueError("source item state UUID must match source_item_uuid")
         if (
             self.presentation_kind is ActionPresentationKind.DRINK
-            and self.source_item_presentation is None
+            and self.source_item_state is None
         ):
-            raise ValueError("drink action requires a declaration-time item presentation")
+            raise ValueError("drink action requires declaration-time item state")
         if (self.application_index is None) != (self.application_id is None):
             raise ValueError("application_index and application_id must be set together")
         return self
@@ -893,7 +903,6 @@ class ShoveEvent(ActionEvent):
 class DragonbornBreathWeaponEvent(ActionEvent):
     """Cold typed facts produced by one Dragonborn Breath Weapon use."""
 
-    ancestry_ref: ContentRef
     ancestry: DragonbornAncestry
     damage_type: DamageType
     breath_geometry: DragonbornBreathGeometry
@@ -953,20 +962,15 @@ class CounterspellReactionEvent(ActionEvent):
             description="Stable Counterspell result code matching succeeded.",
         ),
     )
-    reaction_content_identity: Optional[str] = Field(
-        default=None,
+    reaction_behavior_id: str = Field(
+        default="reaction.spell.counterspell",
         min_length=1,
-        description=(
-            "Exact authored Counterspell reaction identity frozen at "
-            "declaration."
-        ),
+        description="Direct Counterspell reaction identity.",
     )
-    incoming_spell_content_identity: Optional[str] = Field(
-        default=None,
+    incoming_spell_behavior_id: str = Field(
+        default="action.unclassified",
         min_length=1,
-        description=(
-            "Exact authored incoming spell identity frozen at declaration."
-        ),
+        description="Direct semantic identity of the interrupted spell.",
     )
 
     @model_validator(mode="after")
@@ -974,15 +978,9 @@ class CounterspellReactionEvent(ActionEvent):
         self,
     ) -> "CounterspellReactionEvent":
         """Reject contradictory reaction, roll, and outcome-code facts."""
-        binding = self.behavior_binding
-        expected_reaction_identity = (
-            binding.definition_ref.identity_key
-            if isinstance(binding, BehaviorBinding)
-            else None
-        )
-        if self.reaction_content_identity != expected_reaction_identity:
+        if self.reaction_behavior_id != self.behavior_id:
             raise ValueError(
-                "reaction content identity must match its behavior binding",
+                "reaction behavior ID must match the action event behavior ID",
             )
 
         expected_outcome_code = (
@@ -1046,9 +1044,9 @@ class CounterspellReactionEvent(ActionEvent):
             check_total=self.check_total,
             check_dc=self.check_dc,
             succeeded=self.succeeded,
-            reaction_content_identity=self.reaction_content_identity,
-            incoming_spell_content_identity=(
-                self.incoming_spell_content_identity
+            reaction_behavior_id=self.reaction_behavior_id,
+            incoming_spell_behavior_id=(
+                self.incoming_spell_behavior_id
             ),
         )
         return CombatLogEntry(
@@ -1105,9 +1103,11 @@ class _CounterspellEvidenceSnapshot:
     check_dc: Optional[int]
     succeeded: bool
     outcome_code: str
-    reaction_content_identity: Optional[str]
-    incoming_spell_content_identity: Optional[str]
-    behavior_binding: Optional[BehaviorBinding]
+    reaction_behavior_id: str
+    incoming_spell_behavior_id: str
+    behavior_id: str
+    provided_by_id: str
+    origin_root_id: Optional[str]
 
     @classmethod
     def capture(
@@ -1135,11 +1135,11 @@ class _CounterspellEvidenceSnapshot:
             check_dc=event.check_dc,
             succeeded=event.succeeded,
             outcome_code=event.outcome_code,
-            reaction_content_identity=event.reaction_content_identity,
-            incoming_spell_content_identity=(
-                event.incoming_spell_content_identity
-            ),
-            behavior_binding=event.behavior_binding,
+            reaction_behavior_id=event.reaction_behavior_id,
+            incoming_spell_behavior_id=event.incoming_spell_behavior_id,
+            behavior_id=event.behavior_id,
+            provided_by_id=event.provided_by_id,
+            origin_root_id=event.origin_root_id,
         )
 
     def event_updates(self) -> Dict[str, Any]:
@@ -1164,11 +1164,11 @@ class _CounterspellEvidenceSnapshot:
             "check_dc": self.check_dc,
             "succeeded": self.succeeded,
             "outcome_code": self.outcome_code,
-            "reaction_content_identity": self.reaction_content_identity,
-            "incoming_spell_content_identity": (
-                self.incoming_spell_content_identity
-            ),
-            "behavior_binding": self.behavior_binding,
+            "reaction_behavior_id": self.reaction_behavior_id,
+            "incoming_spell_behavior_id": self.incoming_spell_behavior_id,
+            "behavior_id": self.behavior_id,
+            "provided_by_id": self.provided_by_id,
+            "origin_root_id": self.origin_root_id,
         }
 
     def matches(self, event: CounterspellReactionEvent) -> bool:

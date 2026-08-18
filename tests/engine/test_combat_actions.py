@@ -60,17 +60,18 @@ from dnd.core.events.resolution_events import (
     TakeDamageEvent,
 )
 from dnd.core.gridmap import get_map
-from dnd.content.spike_trap_materialization import materialize_spike_trap_effect
+from dnd.content.spike_trap_materialization import materialize_spike_trap_condition
 from dnd.types.life import LifeState
 from dnd.types.damage import DamageType
 from dnd.types.creatures import Size
 from dnd.core.modifiers import NumericalModifier
 from dnd.types.rolls import AdvantageStatus
 from dnd.core.values import BaseValue, ModifiableValue
-from dnd.entity import Entity, EntityConfig
-from dnd.monsters.bestiary import create_goblin, create_goblin_archer, create_skeleton
+from dnd.entities.entity import Entity, EntityConfig
 from dnd.actions.reactions import add_opportunity_attack_handler
 from tests.engine.support import (
+    create_test_entity,
+    create_test_monster,
     force_attack_crit,
     force_attack_hit,
     force_attack_miss,
@@ -163,7 +164,7 @@ def strong_entity(
         size=size,
         uses_death_saves=uses_death_saves,
     )
-    entity = Entity.create(source_entity_uuid=uuid4(), name=name, config=config)
+    entity = create_test_entity(name=name, config=config)
     if setup_actions:
         setup_standard_actions(entity)
     return entity
@@ -172,8 +173,8 @@ def strong_entity(
 def test_eb_10_001_invalid_attack_cancels_before_costs() -> None:
     """EB-10-001: attack validation cancellation preserves action economy."""
     reset_core_action_state()
-    attacker = create_goblin(name="Attacker", position=(2, 2), faction="heroes")
-    target = create_skeleton(name="Too Far", position=(12, 2), faction="monsters")
+    attacker = create_test_monster("monster.goblin", name="Attacker", position=(2, 2), faction="heroes")
+    target = create_test_monster("monster.skeleton", name="Too Far", position=(12, 2), faction="monsters")
     Entity.update_all_entities_senses(max_distance=20)
 
     starting_actions = attacker.action_economy.actions.normalized_score
@@ -193,9 +194,9 @@ def test_eb_10_001_invalid_attack_cancels_before_costs() -> None:
 def test_eb_10_015_melee_reach_validation_uses_weapon_range() -> None:
     """EB-10-015: melee attack validation respects weapon reach boundaries."""
     reset_core_action_state()
-    attacker = create_goblin(name="Melee Attacker", position=(5, 5), faction="heroes")
-    adjacent_target = create_skeleton(name="Adjacent Target", position=(6, 5), faction="monsters")
-    far_target = create_skeleton(name="Far Target", position=(7, 5), faction="monsters")
+    attacker = create_test_monster("monster.goblin", name="Melee Attacker", position=(5, 5), faction="heroes")
+    adjacent_target = create_test_monster("monster.skeleton", name="Adjacent Target", position=(6, 5), faction="monsters")
+    far_target = create_test_monster("monster.skeleton", name="Far Target", position=(7, 5), faction="monsters")
     Entity.update_all_entities_senses(max_distance=20)
 
     adjacent_attack = Attack(
@@ -230,8 +231,8 @@ def test_eb_10_015_melee_reach_validation_uses_weapon_range() -> None:
 def test_eb_10_020_diagonal_adjacency_counts_as_five_foot_threat() -> None:
     """EB-10-020: diagonal adjacency is melee reach and threat."""
     reset_core_action_state()
-    watcher = create_skeleton(name="Watcher", position=(5, 5), faction="monsters")
-    diagonal_mover = create_goblin(name="Diagonal Mover", position=(6, 6), faction="heroes")
+    watcher = create_test_monster("monster.skeleton", name="Watcher", position=(5, 5), faction="monsters")
+    diagonal_mover = create_test_monster("monster.goblin", name="Diagonal Mover", position=(6, 6), faction="heroes")
     add_opportunity_attack_handler(watcher)
     Entity.update_all_entities_senses(max_distance=20)
 
@@ -273,8 +274,8 @@ def test_eb_10_020_diagonal_adjacency_counts_as_five_foot_threat() -> None:
 def test_eb_10_002_attack_hit_rolls_damage_and_consumes_action() -> None:
     """EB-10-002: a successful weapon attack rolls damage and spends the action."""
     reset_core_action_state()
-    attacker = create_goblin(name="Attacker", position=(5, 5), faction="heroes")
-    target = create_skeleton(name="Target", position=(6, 5), faction="monsters")
+    attacker = create_test_monster("monster.goblin", name="Attacker", position=(5, 5), faction="heroes")
+    target = create_test_monster("monster.skeleton", name="Target", position=(6, 5), faction="monsters")
     Entity.update_all_entities_senses(max_distance=20)
 
     target_hp_before = target.get_hp()
@@ -302,8 +303,8 @@ def test_eb_10_002_attack_hit_rolls_damage_and_consumes_action() -> None:
 def test_attack_declaration_handlers_dispatch_once_per_attack() -> None:
     """Validation updates must not republish the attack declaration phase."""
     reset_core_action_state()
-    attacker = create_goblin(name="Attacker", position=(5, 5), faction="heroes")
-    target = create_skeleton(name="Target", position=(6, 5), faction="monsters")
+    attacker = create_test_monster("monster.goblin", name="Attacker", position=(5, 5), faction="heroes")
+    target = create_test_monster("monster.skeleton", name="Target", position=(6, 5), faction="monsters")
     Entity.update_all_entities_senses(max_distance=20)
     declaration_calls = 0
 
@@ -345,12 +346,12 @@ def test_attack_declaration_handlers_dispatch_once_per_attack() -> None:
 def test_damage_declaration_cancellation_prevents_application() -> None:
     """A declaration veto must stop the authoritative damage operation."""
     reset_core_action_state()
-    source = create_goblin(
+    source = create_test_monster("monster.goblin", 
         name="Damage Source",
         position=(5, 5),
         faction="heroes",
     )
-    target = create_skeleton(
+    target = create_test_monster("monster.skeleton", 
         name="Damage Target",
         position=(6, 5),
         faction="monsters",
@@ -450,8 +451,8 @@ def test_movement_declaration_handlers_dispatch_once_per_move() -> None:
 def test_eb_10_003_critical_hit_doubles_weapon_damage_dice() -> None:
     """EB-10-003: critical weapon hits roll the weapon damage dice twice."""
     reset_core_action_state()
-    attacker = create_goblin(name="Attacker", position=(5, 5), faction="heroes")
-    target = create_skeleton(name="Target", position=(6, 5), faction="monsters")
+    attacker = create_test_monster("monster.goblin", name="Attacker", position=(5, 5), faction="heroes")
+    target = create_test_monster("monster.skeleton", name="Target", position=(6, 5), faction="monsters")
     Entity.update_all_entities_senses(max_distance=20)
 
     hit_modifier = force_attack_hit(attacker)
@@ -477,7 +478,7 @@ def test_eb_10_003_critical_hit_doubles_weapon_damage_dice() -> None:
 def test_eb_10_004_move_consumes_movement_per_step_and_records_step_events() -> None:
     """EB-10-004: movement walks cell by cell and emits STEP_MOVEMENT events."""
     reset_core_action_state()
-    mover = create_goblin(name="Mover", position=(5, 5), faction="heroes")
+    mover = create_test_monster("monster.goblin", name="Mover", position=(5, 5), faction="heroes")
     Entity.update_all_entities_senses(max_distance=20)
 
     movement_before = mover.action_economy.movement.normalized_score
@@ -504,8 +505,8 @@ def test_eb_10_004_move_consumes_movement_per_step_and_records_step_events() -> 
 def test_eb_10_005_opportunity_attack_uses_reaction_on_step_movement() -> None:
     """EB-10-005: leaving hostile reach triggers a reaction melee attack."""
     reset_core_action_state()
-    attacker = create_skeleton(name="Watcher", position=(5, 5), faction="monsters")
-    mover = create_goblin(name="Mover", position=(5, 6), faction="heroes")
+    attacker = create_test_monster("monster.skeleton", name="Watcher", position=(5, 5), faction="monsters")
+    mover = create_test_monster("monster.goblin", name="Mover", position=(5, 6), faction="heroes")
     add_opportunity_attack_handler(attacker)
     Entity.update_all_entities_senses(max_distance=20)
 
@@ -527,8 +528,8 @@ def test_eb_10_005_opportunity_attack_uses_reaction_on_step_movement() -> None:
 def test_eb_10_017_lethal_opportunity_attack_stops_before_leaving_reach() -> None:
     """EB-10-017: lethal OA stops movement before the provoking step completes."""
     reset_core_action_state()
-    watcher = create_skeleton(name="Watcher", position=(5, 5), faction="monsters")
-    mover = create_goblin(name="Fragile Mover", position=(5, 6), faction="heroes")
+    watcher = create_test_monster("monster.skeleton", name="Watcher", position=(5, 5), faction="monsters")
+    mover = create_test_monster("monster.goblin", name="Fragile Mover", position=(5, 6), faction="heroes")
     add_opportunity_attack_handler(watcher)
     Entity.update_all_entities_senses(max_distance=20)
 
@@ -576,8 +577,8 @@ def test_eb_10_017_lethal_opportunity_attack_stops_before_leaving_reach() -> Non
 def test_eb_10_006_disengage_prevents_opportunity_attack() -> None:
     """EB-10-006: Disengage applies a condition that suppresses OA handlers."""
     reset_core_action_state()
-    attacker = create_skeleton(name="Watcher", position=(5, 5), faction="monsters")
-    mover = create_goblin(name="Mover", position=(5, 6), faction="heroes")
+    attacker = create_test_monster("monster.skeleton", name="Watcher", position=(5, 5), faction="monsters")
+    mover = create_test_monster("monster.goblin", name="Mover", position=(5, 6), faction="heroes")
     add_opportunity_attack_handler(attacker)
     Entity.update_all_entities_senses(max_distance=20)
 
@@ -600,9 +601,9 @@ def test_eb_10_006_disengage_prevents_opportunity_attack() -> None:
 def test_eb_10_014_opportunity_attack_reaction_limits_repeat_triggers() -> None:
     """EB-10-014: one reaction only pays for one opportunity attack."""
     reset_core_action_state()
-    watcher = create_skeleton(name="Watcher", position=(5, 5), faction="monsters")
-    first_mover = create_goblin(name="First Mover", position=(5, 6), faction="heroes")
-    second_mover = create_goblin(name="Second Mover", position=(6, 5), faction="heroes")
+    watcher = create_test_monster("monster.skeleton", name="Watcher", position=(5, 5), faction="monsters")
+    first_mover = create_test_monster("monster.goblin", name="First Mover", position=(5, 6), faction="heroes")
+    second_mover = create_test_monster("monster.goblin", name="Second Mover", position=(6, 5), faction="heroes")
     add_opportunity_attack_handler(watcher)
     Entity.update_all_entities_senses(max_distance=20)
 
@@ -635,7 +636,7 @@ def test_eb_10_007_shove_forced_movement_does_not_trigger_opportunity_attack() -
     reset_core_action_state()
     shover = strong_entity("Shover", (2, 2), "heroes", strength=18)
     target = strong_entity("Ally", (3, 2), "heroes", strength=12, weight=100)
-    watcher = create_skeleton(name="Watcher", position=(4, 3), faction="monsters")
+    watcher = create_test_monster("monster.skeleton", name="Watcher", position=(4, 3), faction="monsters")
     add_opportunity_attack_handler(watcher)
     Entity.update_all_entities_senses(max_distance=20)
 
@@ -726,7 +727,7 @@ def test_eb_10_021_forced_movement_traverses_terrain_without_step_costs() -> Non
     target = strong_entity(name="Pushed Ally", position=(6, 5), faction="heroes", strength=10)
     Entity.update_all_entities_senses(max_distance=20)
 
-    materialize_spike_trap_effect({(7, 5), (8, 5)})
+    materialize_spike_trap_condition({(7, 5), (8, 5)})
     cursor = EventQueue.event_cursor()
     hp_before = target.get_hp()
     target_movement_before = target.action_economy.movement.normalized_score
@@ -880,7 +881,7 @@ def test_eb_10_008_dash_damage_healing_and_death_use_events() -> None:
     """EB-10-008: core HP changes and Dash are event-backed state changes."""
     reset_core_action_state()
     hero = strong_entity("Hero", (5, 5), "heroes")
-    enemy = create_skeleton(name="Enemy", position=(6, 5), faction="monsters")
+    enemy = create_test_monster("monster.skeleton", name="Enemy", position=(6, 5), faction="monsters")
 
     movement_before = hero.action_economy.movement.normalized_score
     dash_event = Dash(source_entity_uuid=hero.uuid).apply()
@@ -904,7 +905,7 @@ def test_eb_10_008_dash_damage_healing_and_death_use_events() -> None:
     assert EventQueue.get_events_by_type(EventType.TAKE_DAMAGE)
     assert EventQueue.get_events_by_type(EventType.HEAL)
 
-    fatal_target = create_goblin(name="Fatal Target", position=(8, 8), faction="monsters")
+    fatal_target = create_test_monster("monster.goblin", name="Fatal Target", position=(8, 8), faction="monsters")
     fatal_target.receive_damage(
         amount=fatal_target.get_hp() + 5,
         damage_type=DamageType.SLASHING,
@@ -919,7 +920,7 @@ def test_eb_10_023_default_zero_hp_uses_monster_style_death() -> None:
     """EB-10-023: default 0 HP still uses monster-style immediate death."""
     reset_core_action_state()
     monster_style = strong_entity("Monster-Style Hero", (5, 5), "heroes")
-    enemy = create_skeleton(name="Enemy", position=(6, 5), faction="monsters")
+    enemy = create_test_monster("monster.skeleton", name="Enemy", position=(6, 5), faction="monsters")
 
     hp_before = monster_style.get_normal_hp()
     d20_events_before = len(EventQueue.get_events_by_type(EventType.D20_ROLL_RESULT))
@@ -961,7 +962,7 @@ def test_eb_10_025_player_style_death_saves_roll_at_turn_start() -> None:
     """EB-10-025: opted-in entities follow SRD death-save turn flow."""
     reset_core_action_state()
     hero = strong_entity("Dying Hero", (5, 5), "heroes", uses_death_saves=True)
-    enemy = create_skeleton(name="Enemy", position=(6, 5), faction="monsters")
+    enemy = create_test_monster("monster.skeleton", name="Enemy", position=(6, 5), faction="monsters")
 
     hp_before = hero.get_normal_hp()
     damage_taken = hero.receive_damage(
@@ -1021,7 +1022,7 @@ def test_eb_10_025_player_style_death_saves_roll_at_turn_start() -> None:
 def test_eb_10_026_player_style_stabilization_healing_and_massive_damage() -> None:
     """EB-10-026: player-style death saves stabilize, heal, and still die outright."""
     reset_core_action_state()
-    enemy = create_skeleton(name="Enemy", position=(6, 5), faction="monsters")
+    enemy = create_test_monster("monster.skeleton", name="Enemy", position=(6, 5), faction="monsters")
 
     natural_twenty = strong_entity("Natural Twenty Hero", (5, 5), "heroes", uses_death_saves=True)
     natural_twenty.receive_damage(
@@ -1091,7 +1092,7 @@ def test_eb_10_026_player_style_stabilization_healing_and_massive_damage() -> No
 def test_eb_10_016_mixed_weapon_damage_applies_resistance_per_component() -> None:
     """EB-10-016: mixed attack damage applies resistance per damage type."""
     reset_core_action_state()
-    attacker = create_goblin(name="Elemental Attacker", position=(5, 5), faction="heroes")
+    attacker = create_test_monster("monster.goblin", name="Elemental Attacker", position=(5, 5), faction="heroes")
     target_config = EntityConfig(
         ability_scores=AbilityScoresConfig(
             strength=AbilityConfig(ability_score=10),
@@ -1111,7 +1112,7 @@ def test_eb_10_016_mixed_weapon_damage_applies_resistance_per_component() -> Non
         position=(6, 5),
         faction="monsters",
     )
-    target = Entity.create(source_entity_uuid=uuid4(), name="Slash Resistant Target", config=target_config)
+    target = create_test_entity(name="Slash Resistant Target", config=target_config)
     setup_standard_actions(target)
 
     weapon = attacker.equipment._get_weapon_by_slot(WeaponSlot.MELEE_MAIN)
@@ -1166,7 +1167,7 @@ def test_eb_10_019_mixed_weapon_damage_applies_vulnerability_and_immunity_per_co
         immunities: list[DamageType] | None = None,
     ) -> tuple[int, AttackOutcome, list[int]]:
         reset_core_action_state()
-        attacker = create_goblin(name="Elemental Attacker", position=(5, 5), faction="heroes")
+        attacker = create_test_monster("monster.goblin", name="Elemental Attacker", position=(5, 5), faction="heroes")
         target_config = EntityConfig(
             ability_scores=AbilityScoresConfig(
                 strength=AbilityConfig(ability_score=10),
@@ -1187,7 +1188,7 @@ def test_eb_10_019_mixed_weapon_damage_applies_vulnerability_and_immunity_per_co
             position=(6, 5),
             faction="monsters",
         )
-        target = Entity.create(source_entity_uuid=uuid4(), name=name, config=target_config)
+        target = create_test_entity(name=name, config=target_config)
         setup_standard_actions(target)
 
         weapon = attacker.equipment._get_weapon_by_slot(WeaponSlot.MELEE_MAIN)
@@ -1242,8 +1243,8 @@ def test_eb_10_019_mixed_weapon_damage_applies_vulnerability_and_immunity_per_co
 def test_eb_10_009_attack_target_context_is_temporary_on_miss() -> None:
     """EB-10-009: attack cross-target context is cleaned even without damage."""
     reset_core_action_state()
-    attacker = create_goblin(name="Attacker", position=(5, 5), faction="heroes")
-    target = create_skeleton(name="Target", position=(6, 5), faction="monsters")
+    attacker = create_test_monster("monster.goblin", name="Attacker", position=(5, 5), faction="heroes")
+    target = create_test_monster("monster.skeleton", name="Target", position=(6, 5), faction="monsters")
     Entity.update_all_entities_senses(max_distance=20)
 
     miss_modifier = force_attack_miss(attacker)
@@ -1267,14 +1268,14 @@ def test_eb_10_009_attack_target_context_is_temporary_on_miss() -> None:
 def test_attack_restores_preexisting_cross_target_context() -> None:
     """Attack resolution restores both entities' prior contextual targets."""
     reset_core_action_state()
-    attacker = create_goblin(name="Attacker", position=(5, 5), faction="heroes")
-    target = create_skeleton(name="Target", position=(6, 5), faction="monsters")
-    prior_attacker_target = create_skeleton(
+    attacker = create_test_monster("monster.goblin", name="Attacker", position=(5, 5), faction="heroes")
+    target = create_test_monster("monster.skeleton", name="Target", position=(6, 5), faction="monsters")
+    prior_attacker_target = create_test_monster("monster.skeleton", 
         name="Prior attacker target",
         position=(7, 5),
         faction="monsters",
     )
-    prior_target_target = create_goblin(
+    prior_target_target = create_test_monster("monster.goblin", 
         name="Prior target target",
         position=(5, 6),
         faction="heroes",
@@ -1302,13 +1303,13 @@ def test_attack_restores_preexisting_cross_target_context() -> None:
 def test_get_damages_restores_preexisting_target_context() -> None:
     """Direct damage construction must not erase an outer target binding."""
     reset_core_action_state()
-    attacker = create_goblin(name="Attacker", position=(5, 5), faction="heroes")
-    requested_target = create_skeleton(
+    attacker = create_test_monster("monster.goblin", name="Attacker", position=(5, 5), faction="heroes")
+    requested_target = create_test_monster("monster.skeleton", 
         name="Requested target",
         position=(6, 5),
         faction="monsters",
     )
-    prior_target = create_skeleton(
+    prior_target = create_test_monster("monster.skeleton", 
         name="Prior target",
         position=(7, 5),
         faction="monsters",
@@ -1329,14 +1330,14 @@ def test_attack_restores_preexisting_context_when_resolution_raises(
 ) -> None:
     """Context restoration is exception-safe, not tied to individual returns."""
     reset_core_action_state()
-    attacker = create_goblin(name="Attacker", position=(5, 5), faction="heroes")
-    target = create_skeleton(name="Target", position=(6, 5), faction="monsters")
-    prior_attacker_target = create_skeleton(
+    attacker = create_test_monster("monster.goblin", name="Attacker", position=(5, 5), faction="heroes")
+    target = create_test_monster("monster.skeleton", name="Target", position=(6, 5), faction="monsters")
+    prior_attacker_target = create_test_monster("monster.skeleton", 
         name="Prior attacker target",
         position=(7, 5),
         faction="monsters",
     )
-    prior_target_target = create_goblin(
+    prior_target_target = create_test_monster("monster.goblin", 
         name="Prior target target",
         position=(5, 6),
         faction="heroes",
@@ -1378,8 +1379,8 @@ def test_attack_restores_preexisting_context_when_resolution_raises(
 def test_eb_10_010_natural_rolls_drive_crit_and_crit_miss_outcomes() -> None:
     """EB-10-010: natural d20 values are read from the attack roll."""
     reset_core_action_state()
-    attacker = create_goblin(name="Nat 20 Attacker", position=(5, 5), faction="heroes")
-    target = create_skeleton(name="Unreachable AC", position=(6, 5), faction="monsters")
+    attacker = create_test_monster("monster.goblin", name="Nat 20 Attacker", position=(5, 5), faction="heroes")
+    target = create_test_monster("monster.skeleton", name="Unreachable AC", position=(6, 5), faction="monsters")
     target.equipment.ac_bonus.self_static.add_value_modifier(
         NumericalModifier.create(
             source_entity_uuid=target.uuid,
@@ -1404,8 +1405,8 @@ def test_eb_10_010_natural_rolls_drive_crit_and_crit_miss_outcomes() -> None:
     assert EventQueue.get_events_by_type(EventType.TAKE_DAMAGE)
 
     reset_core_action_state()
-    attacker = create_goblin(name="Nat 1 Attacker", position=(5, 5), faction="heroes")
-    target = create_skeleton(name="Low AC", position=(6, 5), faction="monsters")
+    attacker = create_test_monster("monster.goblin", name="Nat 1 Attacker", position=(5, 5), faction="heroes")
+    target = create_test_monster("monster.skeleton", name="Low AC", position=(6, 5), faction="monsters")
     target.equipment.ac_bonus.self_static.add_value_modifier(
         NumericalModifier.create(
             source_entity_uuid=target.uuid,
@@ -1435,10 +1436,10 @@ def test_eb_10_011_ranged_range_flags_and_disadvantage() -> None:
     reset_core_action_state()
     get_map().create_rectangle(0, 0, 80, 5)
 
-    archer = create_goblin_archer(name="Archer", position=(0, 0), faction="heroes")
-    normal_target = create_skeleton(name="Normal Target", position=(16, 0), faction="monsters")
-    long_target = create_skeleton(name="Long Target", position=(17, 0), faction="monsters")
-    beyond_target = create_skeleton(name="Beyond Target", position=(65, 0), faction="monsters")
+    archer = create_test_monster("monster.goblin_archer", name="Archer", position=(0, 0), faction="heroes")
+    normal_target = create_test_monster("monster.skeleton", name="Normal Target", position=(16, 0), faction="monsters")
+    long_target = create_test_monster("monster.skeleton", name="Long Target", position=(17, 0), faction="monsters")
+    beyond_target = create_test_monster("monster.skeleton", name="Beyond Target", position=(65, 0), faction="monsters")
     Entity.update_all_entities_senses(max_distance=80)
 
     normal_attack = Attack(
@@ -1488,9 +1489,9 @@ def test_eb_10_013_threatened_ranged_attacks_roll_with_disadvantage() -> None:
     reset_core_action_state()
     get_map().create_rectangle(0, 0, 30, 10)
 
-    archer = create_goblin_archer(name="Threatened Archer", position=(5, 5), faction="heroes")
-    create_goblin(name="Adjacent Enemy", position=(5, 6), faction="monsters")
-    target = create_skeleton(name="Normal Target", position=(15, 5), faction="monsters")
+    archer = create_test_monster("monster.goblin_archer", name="Threatened Archer", position=(5, 5), faction="heroes")
+    create_test_monster("monster.goblin", name="Adjacent Enemy", position=(5, 6), faction="monsters")
+    target = create_test_monster("monster.skeleton", name="Normal Target", position=(15, 5), faction="monsters")
     Entity.update_all_entities_senses(max_distance=30)
 
     assert archer.is_threatened() is True
@@ -1514,9 +1515,9 @@ def test_eb_10_013_threatened_ranged_attacks_roll_with_disadvantage() -> None:
     reset_core_action_state()
     get_map().create_rectangle(0, 0, 30, 10)
 
-    archer = create_goblin_archer(name="Long Threatened Archer", position=(5, 5), faction="heroes")
-    create_goblin(name="Adjacent Enemy", position=(5, 6), faction="monsters")
-    target = create_skeleton(name="Long Target", position=(22, 5), faction="monsters")
+    archer = create_test_monster("monster.goblin_archer", name="Long Threatened Archer", position=(5, 5), faction="heroes")
+    create_test_monster("monster.goblin", name="Adjacent Enemy", position=(5, 6), faction="monsters")
+    target = create_test_monster("monster.skeleton", name="Long Target", position=(22, 5), faction="monsters")
     Entity.update_all_entities_senses(max_distance=30)
 
     with fixed_dice(18, 3):
@@ -1540,7 +1541,7 @@ def test_eb_10_012_jump_uses_step_events_and_opportunity_attacks() -> None:
     """EB-10-012: jump movement emits steps and can provoke opportunity attacks."""
     reset_core_action_state()
     jumper = strong_entity("Jumper", (5, 5), "heroes", strength=16)
-    watcher = create_skeleton(name="Watcher", position=(6, 5), faction="monsters")
+    watcher = create_test_monster("monster.skeleton", name="Watcher", position=(6, 5), faction="monsters")
     add_opportunity_attack_handler(watcher)
     Entity.update_all_entities_senses(max_distance=20)
 
@@ -1581,7 +1582,7 @@ def test_eb_10_012_jump_uses_step_events_and_opportunity_attacks() -> None:
 
     reset_core_action_state()
     jumper = strong_entity("Disengaging Jumper", (5, 5), "heroes", strength=16)
-    watcher = create_skeleton(name="Patient Watcher", position=(6, 5), faction="monsters")
+    watcher = create_test_monster("monster.skeleton", name="Patient Watcher", position=(6, 5), faction="monsters")
     add_opportunity_attack_handler(watcher)
     Entity.update_all_entities_senses(max_distance=20)
 
@@ -1626,9 +1627,9 @@ def test_eb_10_018_lethal_jump_opportunity_attack_completes_without_cost_error()
         position=(5, 6),
         faction="heroes",
     )
-    jumper = Entity.create(source_entity_uuid=uuid4(), name="Fragile Jumper", config=jumper_config)
+    jumper = create_test_entity(name="Fragile Jumper", config=jumper_config)
     setup_standard_actions(jumper)
-    watcher = create_skeleton(name="Watcher", position=(5, 5), faction="monsters")
+    watcher = create_test_monster("monster.skeleton", name="Watcher", position=(5, 5), faction="monsters")
     add_opportunity_attack_handler(watcher)
     Entity.update_all_entities_senses(max_distance=20)
 

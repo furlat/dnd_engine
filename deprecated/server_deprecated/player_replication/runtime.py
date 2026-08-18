@@ -26,8 +26,8 @@ from dnd.core.events import (
     StepMovementEvent,
 )
 from dnd.core.gridmap import GridMap, get_map
-from dnd.encounter import Encounter
-from dnd.entity import Entity
+from dnd.encounters.encounter import Encounter
+from dnd.entities.entity import Entity
 from server.combat_log_source import CombatLogSourceSlot, CombatLogSourceWindow
 from server.event_stream import event_stream
 from server.player_replay import SubjectiveReplaySegmentEnd

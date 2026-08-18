@@ -17,7 +17,7 @@ from dnd.core.events.events_registry import (
 from dnd.core.events.check_events import (
     SavingThrowEvent,
 )
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from dnd.spells.evocation import Fireball
 from tests.engine.test_combat_actions import (
     reset_core_action_state,

@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 import time
 from fastapi import HTTPException
 
-from dnd.encounter import Encounter, TurnState
+from dnd.encounters.encounter import Encounter, TurnState
 
 
 class PlayerType(str, Enum):

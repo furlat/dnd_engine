@@ -2,9 +2,9 @@
 
 from uuid import uuid4
 
-from dnd.types.encounter import ControllerExecutionMode
-from dnd.controller import HumanController, PassController
-from dnd.types.encounter import TurnState
+from dnd.types.encounter_state import ControllerExecutionMode
+from dnd.encounters.controllers import HumanController, PassController
+from dnd.types.encounter_state import TurnState
 from tests.manual.controller_test_support import (
     create_controller_pair,
     make_turn_context,

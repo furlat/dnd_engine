@@ -63,7 +63,7 @@ from dnd.core.events.events_registry import (
 from dnd.core.gridmap import get_map
 from dnd.types.creatures import CreatureType
 from dnd.core.modifiers import NumericalModifier
-from dnd.entity import Entity, EntityConfig
+from dnd.entities.entity import Entity, EntityConfig
 from dnd.spells.conjuration import Web
 from dnd.spells.enchantment import HoldPerson
 from dnd.spells.evocation import (
@@ -75,7 +75,7 @@ from dnd.spells.evocation import (
     MagicMissile,
 )
 from dnd.content.spatial_effect_recipes import ICE_STORM_SURFACE_RECIPE
-from dnd.spatial.effect_base import SpatialEffect
+from dnd.spatial.area_conditions import SpatialCondition
 from tests.engine.support import (
     deal_damage_to,
     force_spell_attack_hit,
@@ -1163,7 +1163,7 @@ def test_ice_storm_finalization_follows_effective_target_type(
     assert (
         any(
             effect.content_ref == ICE_STORM_SURFACE_RECIPE.ref
-            for effect in SpatialEffect.active_effects()
+            for effect in get_map().get_spatial_conditions()
         )
     ) is (not override_to_entity)
 

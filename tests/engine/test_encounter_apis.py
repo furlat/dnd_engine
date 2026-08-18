@@ -25,7 +25,7 @@ from dnd.blocks.equipment import (
 )
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
-from dnd.controller import (
+from dnd.encounters.controllers import (
     Controller,
     HumanController,
     PassController,
@@ -48,12 +48,12 @@ from dnd.core.gridmap import get_map
 from dnd.types.life import LifeState
 from dnd.types.damage import DamageType
 from dnd.core.values import BaseValue
-from dnd.encounter import Encounter
-from dnd.types.encounter import EncounterState, TurnState
-from dnd.entity import Entity
+from dnd.encounters.encounter import Encounter
+from dnd.types.encounter_state import EncounterState, TurnState
+from dnd.entities.entity import Entity
 from dnd.items.consumables import HEALING_POTION_RECIPE
 from dnd.items.weapons import DAGGER_RECIPE
-from dnd.monsters.bestiary import create_caster, create_goblin, create_skeleton
+from tests.engine.support import create_test_monster
 from dnd.monsters.bestiary_content import (
     BESTIARY_CREATURE_DECLARATIONS_BY_ID,
 )
@@ -142,13 +142,13 @@ def reset_chapter_18_state(width: int = 16, height: int = 10) -> None:
 
 def create_book_pair() -> tuple[Entity, Entity]:
     """Create two opposing combatants for Chapter 18 examples."""
-    hero = create_goblin(
+    hero = create_test_monster("monster.goblin", 
         name="Book Hero",
         position=(1, 1),
         faction="heroes",
         content_ref=BESTIARY_CREATURE_DECLARATIONS_BY_ID["goblin"].ref,
     )
-    monster = create_skeleton(
+    monster = create_test_monster("monster.skeleton", 
         name="Book Skeleton",
         position=(2, 1),
         faction="monsters",
@@ -173,7 +173,7 @@ def create_melee_only_skeleton(
     Returns:
         Skeleton with its ranged-main weapon removed.
     """
-    skeleton = create_skeleton(
+    skeleton = create_test_monster("monster.skeleton", 
         name=name,
         position=position,
         faction=faction,
@@ -452,7 +452,7 @@ def test_eb_18_034_available_move_paths_preserve_directional_blockers() -> None:
     reset_chapter_18_state(width=8, height=5)
     grid = get_map()
     melee_actor = create_melee_only_skeleton(name="Book Skeleton", position=(1, 1), faction="monsters")
-    distant_target = create_goblin(
+    distant_target = create_test_monster("monster.goblin", 
         name="Distant Hero",
         position=(5, 1),
         faction="heroes",
@@ -889,7 +889,7 @@ def test_eb_18_027_available_actions_serializes_spell_slot_variant_metadata() ->
     """EB-18-027: /available-actions serializes executable spell slot variants."""
     reset_chapter_18_state(width=12, height=8)
     client = TestClient(app)
-    caster = create_caster(
+    caster = create_test_monster("monster.generic_caster", 
         name="Book Caster",
         position=(1, 1),
         faction="heroes",
@@ -897,7 +897,7 @@ def test_eb_18_027_available_actions_serializes_spell_slot_variant_metadata() ->
             "generic_caster"
         ].ref,
     )
-    target = create_skeleton(
+    target = create_test_monster("monster.skeleton", 
         name="Book Target",
         position=(3, 1),
         faction="monsters",
@@ -2226,10 +2226,10 @@ def test_downed_external_combatant_does_not_hold_the_turn() -> None:
     the next combatant that can actually decide.
     """
     reset_chapter_18_state()
-    downed = create_goblin(name="Downed", position=(1, 1), faction="heroes")
+    downed = create_test_monster("monster.goblin", name="Downed", position=(1, 1), faction="heroes")
     downed.uses_death_saves = True
-    standing = create_goblin(name="Standing", position=(2, 2), faction="heroes")
-    monster = create_skeleton(name="Monster", position=(9, 6), faction="monsters")
+    standing = create_test_monster("monster.goblin", name="Standing", position=(2, 2), faction="heroes")
+    monster = create_test_monster("monster.skeleton", name="Monster", position=(9, 6), faction="monsters")
     Entity.update_all_entities_senses()
 
     encounter = Encounter(name="Downed Turn", source_entity_uuid=uuid4())

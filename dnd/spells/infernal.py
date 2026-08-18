@@ -23,9 +23,8 @@ from dnd.core.content.dependencies import (
     ContentDependencyPhase,
     ContentDependencyRelation,
 )
-from dnd.core.content.identities import ContentRef
 from dnd.core.content.registration import get_content_declaration
-from dnd.core.content.runtime import RuntimeBehaviorKind
+from dnd.types.behaviors import RuntimeBehaviorKind
 from dnd.types.rolls import AttackOutcome, RollType
 from dnd.core.dice import Dice
 from dnd.core.events.events_registry import (
@@ -42,9 +41,9 @@ from dnd.core.events.resolution_events import (
     TakeDamageEvent,
 )
 from dnd.types.damage import DamageType
-from dnd.core.content.saving_throws import SavingThrowContext
+from dnd.types.saving_throws import SavingThrowContext
 from dnd.core.values import ModifiableValue
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from dnd.spells.content_metadata import (
     SpellCatalogMetadata,
     attach_spell_catalog_metadata,
@@ -131,7 +130,7 @@ def _rebuke_processor(
     event: Event,
     source_entity_uuid: UUID,
     *,
-    spell_ref: ContentRef,
+    spell_id: str,
     spellcasting_source_id: UUID | None,
     fixed_cast_rank: int | None,
     resource_name: str | None,
@@ -152,7 +151,7 @@ def _rebuke_processor(
     if resolved_source_id is None:
         source_ids = (
             caster.spellcasting.learned_reaction_spell_source_ids(
-                spell_ref,
+                spell_id,
             )
         )
         if not source_ids:
@@ -212,7 +211,7 @@ def _rebuke_processor(
         ),
         parent_event=effect.uuid,
         saving_throw_context=SavingThrowContext(
-            cause_ref=spell_ref,
+            cause_id=spell_id,
             effect_id="spell.hellish_rebuke.damage",
             is_magical=True,
         ),
@@ -263,7 +262,7 @@ def create_hellish_rebuke_reaction_handler(
         ],
         event_processor=partial(
             _rebuke_processor,
-            spell_ref=HELLISH_REBUKE_SPELL_DECLARATION.ref,
+            spell_id=HELLISH_REBUKE_SPELL_DECLARATION.ref.content_id,
             spellcasting_source_id=spellcasting_source_id,
             fixed_cast_rank=fixed_cast_rank,
             resource_name=resource_name,

@@ -23,7 +23,7 @@ from dnd.types.conditions import (
     ConditionTag,
 )
 from dnd.types.abilities import AbilityName
-from dnd.core.content.origin_features import OriginCapability
+from dnd.types.creatures import OriginCapability
 from dnd.core.events.events_registry import (
     Event,
     EventPhase,
@@ -43,7 +43,7 @@ from dnd.types.rolls import AdvantageStatus
 from dnd.types.saving_throws import SavingThrowEffectTag
 from dnd.core.aoe import AoEShape, Sphere
 
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from dnd.actions.standard import (
     Move,
     SpellAction,
@@ -51,7 +51,7 @@ from dnd.actions.standard import (
     validate_line_of_sight,
 )
 from dnd.conditions import Paralyzed, Charmed, Stunned, Prone
-from dnd.creature_transforms import (
+from dnd.entities.creature_transforms import (
     apply_turn_spent_transform,
     apply_unconscious_transform,
 )

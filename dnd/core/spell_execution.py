@@ -14,7 +14,6 @@ from dataclasses import dataclass
 from typing import Iterator
 from uuid import UUID
 
-from dnd.core.content.identities import ContentRef
 from dnd.types.damage import DamageType
 from dnd.types.saving_throws import SavingThrowEffectTag
 
@@ -25,7 +24,7 @@ class SpellExecutionState:
 
     source_entity_uuid: UUID
     damage_type: DamageType | None
-    cause_ref: ContentRef | None = None
+    cause_id: str | None = None
     saving_throw_effect_id: str | None = None
     saving_throw_effect_tags: tuple[SavingThrowEffectTag, ...] = ()
     lineage_uuid: UUID | None = None
@@ -42,7 +41,7 @@ def spell_execution_scope(
     *,
     source_entity_uuid: UUID,
     damage_type: DamageType | None,
-    cause_ref: ContentRef | None = None,
+    cause_id: str | None = None,
     saving_throw_effect_id: str | None = None,
     saving_throw_effect_tags: tuple[SavingThrowEffectTag, ...] = (),
 ) -> Iterator[SpellExecutionState]:
@@ -51,7 +50,7 @@ def spell_execution_scope(
     state = SpellExecutionState(
         source_entity_uuid=source_entity_uuid,
         damage_type=damage_type,
-        cause_ref=cause_ref,
+        cause_id=cause_id,
         saving_throw_effect_id=saving_throw_effect_id,
         saving_throw_effect_tags=saving_throw_effect_tags,
     )

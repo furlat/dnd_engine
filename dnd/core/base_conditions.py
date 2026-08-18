@@ -30,12 +30,8 @@ from dnd.core.combat_log import (
     CombatLogEntryType,
     ConditionLogData,
 )
-from dnd.core.content.runtime import (
-    BehaviorBinding,
-    RuntimeBehaviorKind,
-    bind_runtime_behavior,
-    runtime_behavior_provider,
-)
+from dnd.core.behavior_context import active_behavior, behavior_scope
+from dnd.types.behaviors import RuntimeBehaviorKind, validate_behavior_id
 from dnd.types.effects import EffectOrigin
 from dnd.types.conditions import (
     ConditionAgencyDenial,
@@ -47,8 +43,7 @@ from dnd.types.conditions import (
     DurationType,
     HazardFilter,
 )
-from dnd.core.content.saving_throws import SavingThrowContext
-from dnd.types.saving_throws import SavingThrowEffectTag
+from dnd.types.saving_throws import SavingThrowContext, SavingThrowEffectTag
 
 
 class OutcomeProtection(BaseModel):
@@ -190,8 +185,8 @@ class ConditionApplicationEvent(Event):
         default=ConditionApplicationDisposition.APPLIED,
         description="Authoritative result of repeated-condition arbitration.",
     )
-    condition_content_identity: Optional[str] = Field(
-        default=None,
+    condition_behavior_id: str = Field(
+        default="condition.unclassified",
         min_length=1,
         description=(
             "Exact authored condition identity frozen when the declaration is "
@@ -200,17 +195,12 @@ class ConditionApplicationEvent(Event):
     )
 
     @model_validator(mode="after")
-    def validate_condition_content_identity(self) -> Self:
+    def validate_condition_behavior_id(self) -> Self:
         """Require the frozen scalar to match the live declaration binding."""
-        binding = self.condition.behavior_binding
-        expected_identity = (
-            binding.definition_ref.identity_key
-            if isinstance(binding, BehaviorBinding)
-            else None
-        )
-        if self.condition_content_identity != expected_identity:
+        expected_identity = self.condition.behavior_id
+        if self.condition_behavior_id != expected_identity:
             raise ValueError(
-                "condition content identity must match its behavior binding",
+                "condition identity must match its direct behavior ID",
             )
         return self
 
@@ -222,10 +212,10 @@ class ConditionApplicationEvent(Event):
             or not self.handler_result_preserves_lifecycle(result)
             or type(result.condition) is not type(self.condition)
             or result.condition != self.condition
-            or type(result.condition_content_identity)
-            is not type(self.condition_content_identity)
-            or result.condition_content_identity
-            != self.condition_content_identity
+            or type(result.condition_behavior_id)
+            is not type(self.condition_behavior_id)
+            or result.condition_behavior_id
+            != self.condition_behavior_id
             or type(result.application_disposition)
             is not type(self.application_disposition)
             or result.application_disposition
@@ -303,7 +293,7 @@ class ConditionApplicationEvent(Event):
             },
             data=ConditionLogData(
                 condition_name=cond.name or "Unknown",
-                condition_content_identity=self.condition_content_identity,
+                condition_behavior_id=self.condition_behavior_id,
                 application_disposition=self.application_disposition,
             ).model_dump(mode="json"),
         )
@@ -321,8 +311,8 @@ class ConditionRemovalEvent(Event):
     event_type: EventType = Field(default=EventType.CONDITION_REMOVAL, description="Condition removal event type.")
     source_entity_name: Optional[str] = Field(default=None, description="Display name of the source entity.")
     target_entity_name: Optional[str] = Field(default=None, description="Display name of the target entity.")
-    condition_content_identity: Optional[str] = Field(
-        default=None,
+    condition_behavior_id: str = Field(
+        default="condition.unclassified",
         min_length=1,
         description=(
             "Exact authored condition identity frozen when the declaration is "
@@ -331,17 +321,12 @@ class ConditionRemovalEvent(Event):
     )
 
     @model_validator(mode="after")
-    def validate_condition_content_identity(self) -> Self:
+    def validate_condition_behavior_id(self) -> Self:
         """Require the frozen scalar to match the live declaration binding."""
-        binding = self.condition.behavior_binding
-        expected_identity = (
-            binding.definition_ref.identity_key
-            if isinstance(binding, BehaviorBinding)
-            else None
-        )
-        if self.condition_content_identity != expected_identity:
+        expected_identity = self.condition.behavior_id
+        if self.condition_behavior_id != expected_identity:
             raise ValueError(
-                "condition content identity must match its behavior binding",
+                "condition identity must match its direct behavior ID",
             )
         return self
 
@@ -353,10 +338,10 @@ class ConditionRemovalEvent(Event):
             or not self.handler_result_preserves_lifecycle(result)
             or type(result.condition) is not type(self.condition)
             or result.condition != self.condition
-            or type(result.condition_content_identity)
-            is not type(self.condition_content_identity)
-            or result.condition_content_identity
-            != self.condition_content_identity
+            or type(result.condition_behavior_id)
+            is not type(self.condition_behavior_id)
+            or result.condition_behavior_id
+            != self.condition_behavior_id
         ):
             return self.invalid_handler_result_cancellation(
                 result,
@@ -403,7 +388,7 @@ class ConditionRemovalEvent(Event):
             success=True,
             data=ConditionLogData(
                 condition_name=condition_name,
-                condition_content_identity=self.condition_content_identity,
+                condition_behavior_id=self.condition_behavior_id,
                 reveals_target=cond.obscures_perceivability,
             ).model_dump(mode="json"),
         )
@@ -420,14 +405,17 @@ class BaseCondition(BaseObject):
         default=None,
         description="Stable rules-content identity; defaults to the condition class identity.",
     )
-    behavior_binding: Optional[BehaviorBinding] = Field(
+    behavior_id: str = Field(
+        default="condition.unclassified",
+        description="Direct renderer-independent condition identity.",
+    )
+    provided_by_id: Optional[str] = Field(
         default=None,
-        exclude=True,
-        repr=False,
-        description=(
-            "Validated runtime content binding installed once before this "
-            "condition becomes observable."
-        ),
+        description="Direct semantic identity that installed this condition.",
+    )
+    origin_root_id: Optional[str] = Field(
+        default=None,
+        description="Optional durable semantic root of this condition.",
     )
     content_kind: RuntimeBehaviorKind = Field(
         default=RuntimeBehaviorKind.CONDITION,
@@ -450,16 +438,10 @@ class BaseCondition(BaseObject):
         is_magical: Optional[bool] = None,
     ) -> SavingThrowContext:
         """Build exact typed context for a save caused by this live condition."""
-        binding = self.behavior_binding
-        if binding is None:
-            raise ValueError(
-                "Condition requires an exact runtime behavior binding before "
-                "it can request a saving throw",
-            )
         return SavingThrowContext(
-            cause_ref=binding.definition_ref,
+            cause_id=self.behavior_id,
             effect_id=effect_id,
-            condition_ref=binding.definition_ref,
+            condition_id=self.behavior_id,
             is_magical=(
                 ConditionTag.MAGICAL in self.tags
                 if is_magical is None
@@ -473,25 +455,26 @@ class BaseCondition(BaseObject):
         return f"{{cyan:{target_name}}} gains **{self.name or 'Unknown'}**"
 
     def get_semantic_key(self) -> str:
-        """Return authored identity, explicit legacy key, or an unbound marker."""
-        if self.behavior_binding is not None:
-            return self.behavior_binding.definition_ref.identity_key
-        if self.semantic_key:
-            return self.semantic_key
-        return f"unbound:{type(self).__module__}.{type(self).__name__}"
+        """Return this condition's direct semantic behavior identity."""
+        return self.behavior_id
 
-    def authored_content_identity(self) -> Optional[str]:
-        """Return exact bound authored identity, or ``None`` when unbound.
-
-        Names, semantic keys, UUIDs, and Python paths are intentionally not
-        accepted as content-identity fallbacks.
-        """
-        binding = self.behavior_binding
-        return (
-            binding.definition_ref.identity_key
-            if isinstance(binding, BehaviorBinding)
-            else None
-        )
+    def bind_behavior_owner(self, *, origin_root_id: Optional[str] = None) -> None:
+        """Finalize direct ownership without consulting a global gateway."""
+        if self.semantic_key is not None:
+            self.behavior_id = self.semantic_key
+        validate_behavior_id(self.behavior_id)
+        active = active_behavior()
+        if self.provided_by_id is None:
+            self.provided_by_id = (
+                active.behavior_id if active is not None else self.behavior_id
+            )
+        validate_behavior_id(self.provided_by_id, "provided_by_id")
+        if self.origin_root_id is None:
+            self.origin_root_id = (
+                active.origin_root_id if active is not None else origin_root_id
+            )
+        if self.origin_root_id is not None:
+            validate_behavior_id(self.origin_root_id, "origin_root_id")
 
     def get_content_kind(self) -> RuntimeBehaviorKind:
         """Return the declared or source-domain-derived rules-content family."""
@@ -551,7 +534,10 @@ class BaseCondition(BaseObject):
     )
     linked_conditions: List[Tuple[UUID, UUID]] = Field(
         default_factory=list,
-        description="Cross-block child condition pairs as (target_block_uuid, condition_uuid)."
+        description=(
+            "Cross-owner child condition pairs as "
+            "(runtime_owner_uuid, condition_uuid)."
+        ),
     )
     parent_link: Optional[Tuple[UUID, UUID]] = Field(
         default=None,
@@ -745,7 +731,7 @@ class BaseCondition(BaseObject):
             source_entity_name=self.source_entity_name,
             target_entity_name=self.target_entity_name,
             application_disposition=application_disposition,
-            condition_content_identity=self.authored_content_identity(),
+            condition_behavior_id=self.behavior_id,
             use_register=False,
         )
 
@@ -773,7 +759,7 @@ class BaseCondition(BaseObject):
             parent_event=parent_event.uuid if parent_event else None,
             source_entity_name=self.source_entity_name,
             target_entity_name=self.target_entity_name,
-            condition_content_identity=self.authored_content_identity(),
+            condition_behavior_id=self.behavior_id,
             use_register=False,
         )
 
@@ -838,6 +824,10 @@ class BaseCondition(BaseObject):
             self.applied = False
         self.modifers_uuids.clear()
 
+    def _finalize_application(self, effect_event: Event) -> None:
+        """Finalize subclass state before application completion is published."""
+        del effect_event
+
     def _post_removal_stats(self) -> Dict[str, Any]:
         """Return resulting stats to inject into the COMPLETION event after modifiers are removed.
 
@@ -864,15 +854,7 @@ class BaseCondition(BaseObject):
         """
         if self.applied or self.duration.is_expired:
             return None
-        runtime_owner_uuid = (
-            self.target_entity_uuid
-            if self.target_entity_uuid is not None
-            else self.source_entity_uuid
-        )
-        bind_runtime_behavior(
-            self,
-            runtime_owner_uuid=runtime_owner_uuid,
-        )
+        self.bind_behavior_owner()
         if declaration_event is None:
             declaration_event = self.declare_event(parent_event)
             declaration_event = EventQueue.publish_declaration(
@@ -891,7 +873,12 @@ class BaseCondition(BaseObject):
             return execution_event
 
         try:
-            with runtime_behavior_provider(self):
+            assert self.provided_by_id is not None
+            with behavior_scope(
+                behavior_id=self.behavior_id,
+                provided_by_id=self.provided_by_id,
+                origin_root_id=self.origin_root_id,
+            ):
                 (
                     modifers_uuids,
                     event_handlers_uuids,
@@ -931,6 +918,12 @@ class BaseCondition(BaseObject):
         if effect_event.canceled:
             self.discard_uncommitted_runtime_state()
             return effect_event
+
+        try:
+            self._finalize_application(effect_event)
+        except BaseException:
+            self.discard_uncommitted_runtime_state()
+            raise
 
         completed_event = effect_event.phase_to(EventPhase.COMPLETION)
         self.applied_source_event_cursor = EventQueue.event_cursor()
@@ -1010,6 +1003,22 @@ class BaseCondition(BaseObject):
         child = BaseCondition.get(condition_uuid)
         if child is not None and isinstance(child, BaseCondition) and self.target_entity_uuid is not None:
             child.parent_link = (self.target_entity_uuid, self.uuid)
+
+    def unlink_runtime_child(self, condition_uuid: UUID) -> None:
+        """Forget one independently removed linked child.
+
+        The child owns its own runtime removal.  This method only removes the
+        reverse bookkeeping retained by its parent condition.
+        """
+        self.linked_conditions = [
+            pair
+            for pair in self.linked_conditions
+            if pair[1] != condition_uuid
+        ]
+
+    def is_active_spatial_condition(self) -> bool:
+        """Return whether this condition is an active independent map owner."""
+        return False
 
     def remove_event_handlers(self) -> bool:
         """Remove owned trigger-based event handlers from the EventQueue.
@@ -1097,6 +1106,25 @@ class BaseCondition(BaseObject):
             **post_stats,
         )
         return True
+
+    def remove_from_runtime_owner(
+        self,
+        *,
+        expire: bool = False,
+        parent_event: Optional[Event] = None,
+    ) -> bool:
+        """Remove an independently owned condition from its runtime owner.
+
+        Ordinary conditions are removed by their BaseBlock and retain the
+        existing BaseBlock tree path. Independently owned condition families
+        override this narrow hook.
+        """
+        del expire, parent_event
+        return False
+
+    def discard_from_runtime_owner(self) -> bool:
+        """Discard an uncommitted independently owned condition tree."""
+        return False
 
     def progress(self) -> bool:
         """Progress condition duration without removing the condition.

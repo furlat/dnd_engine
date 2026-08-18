@@ -28,7 +28,7 @@ from dnd.core.events.resolution_events import (
 )
 from dnd.types.damage import DamageType
 from dnd.core.values import ModifiableValue
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from dnd.spells.abjuration import (
     GreaterRestoration,
     LesserRestoration,

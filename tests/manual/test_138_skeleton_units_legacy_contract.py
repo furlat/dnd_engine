@@ -24,13 +24,8 @@ from dnd.core.events.events_registry import (
     EventQueue,
 )
 from dnd.types.damage import DamageType
-from dnd.entity import Entity
-from dnd.monsters.bestiary import (
-    create_skeleton,
-    create_skeleton_archer,
-    create_skeleton_warlock,
-    create_skeleton_warrior,
-)
+from dnd.entities.entity import Entity
+from tests.engine.support import create_test_monster
 from dnd.monsters.skeleton_abilities import MarkTargetAction
 from dnd.spells.evocation import BurningHands, EldritchBlast
 from tests.engine.support import (
@@ -271,25 +266,25 @@ def _equipped_weapon_name(entity: Entity, slot: WeaponSlot) -> str:
 def test_specialized_skeleton_presets_preserve_identity_and_arena_interop() -> None:
     """All three presets retain their exact identities in one visible arena."""
     reset_monster_state(width=20, height=15)
-    warrior = create_skeleton_warrior(
+    warrior = create_test_monster("monster.skeleton_warrior", 
         name="Skeleton Warrior",
         position=(12, 5),
         faction="monsters",
         darkvision=True,
     )
-    archer = create_skeleton_archer(
+    archer = create_test_monster("monster.skeleton_archer", 
         name="Skeleton Archer",
         position=(12, 7),
         faction="monsters",
         darkvision=True,
     )
-    warlock = create_skeleton_warlock(
+    warlock = create_test_monster("monster.skeleton_warlock", 
         name="Skeleton Warlock",
         position=(12, 9),
         faction="monsters",
         darkvision=True,
     )
-    hero = create_skeleton(
+    hero = create_test_monster("monster.skeleton", 
         name="Hero",
         position=(3, 7),
         faction="heroes",
@@ -351,12 +346,12 @@ def test_specialized_skeleton_presets_preserve_identity_and_arena_interop() -> N
 def test_eldritch_blast_hit_miss_and_range() -> None:
     """The preset cantrip hits, misses, and enforces its 120-foot range."""
     reset_monster_state(width=30, height=30)
-    warlock = create_skeleton_warlock(
+    warlock = create_test_monster("monster.skeleton_warlock", 
         name="Warlock",
         position=(0, 0),
         faction="monsters",
     )
-    target = create_skeleton(
+    target = create_test_monster("monster.skeleton", 
         name="Target",
         position=(10, 0),
         faction="heroes",
@@ -397,12 +392,12 @@ def test_eldritch_blast_hit_miss_and_range() -> None:
     assert get_hp(target) == target.get_max_hp()
 
     reset_monster_state(width=30, height=30)
-    warlock = create_skeleton_warlock(
+    warlock = create_test_monster("monster.skeleton_warlock", 
         name="Warlock",
         position=(0, 0),
         faction="monsters",
     )
-    target = create_skeleton(
+    target = create_test_monster("monster.skeleton", 
         name="Distant Target",
         position=(25, 0),
         faction="heroes",
@@ -420,17 +415,17 @@ def test_eldritch_blast_hit_miss_and_range() -> None:
 def test_acid_flask_affects_every_creature_in_its_area() -> None:
     """The preset flask's area damages both occupied cells in its footprint."""
     reset_monster_state(width=15, height=15)
-    warrior = create_skeleton_warrior(
+    warrior = create_test_monster("monster.skeleton_warrior", 
         name="Warrior",
         position=(0, 0),
         faction="monsters",
     )
-    first = create_skeleton(
+    first = create_test_monster("monster.skeleton", 
         name="First Target",
         position=(5, 5),
         faction="heroes",
     )
-    second = create_skeleton(
+    second = create_test_monster("monster.skeleton", 
         name="Second Target",
         position=(5, 4),
         faction="heroes",
@@ -451,17 +446,17 @@ def test_acid_flask_affects_every_creature_in_its_area() -> None:
 def test_mark_target_strips_existing_hidden_and_rejects_second_use() -> None:
     """Mark removes an active Hidden state and cannot bypass its cooldown."""
     reset_monster_state(width=30, height=15)
-    archer = create_skeleton_archer(
+    archer = create_test_monster("monster.skeleton_archer", 
         name="Archer",
         position=(0, 0),
         faction="monsters",
     )
-    first = create_skeleton(
+    first = create_test_monster("monster.skeleton", 
         name="First Target",
         position=(5, 0),
         faction="heroes",
     )
-    second = create_skeleton(
+    second = create_test_monster("monster.skeleton", 
         name="Second Target",
         position=(3, 0),
         faction="heroes",
@@ -510,12 +505,12 @@ def test_mark_target_strips_existing_hidden_and_rejects_second_use() -> None:
 def test_mark_target_damage_death_and_range_boundaries() -> None:
     """Damage, death, and range all honor Mark Target ownership."""
     reset_monster_state(width=30, height=15)
-    archer = create_skeleton_archer(
+    archer = create_test_monster("monster.skeleton_archer", 
         name="Archer",
         position=(0, 0),
         faction="monsters",
     )
-    target = create_skeleton(
+    target = create_test_monster("monster.skeleton", 
         name="Target",
         position=(5, 0),
         faction="heroes",
@@ -550,12 +545,12 @@ def test_mark_target_damage_death_and_range_boundaries() -> None:
     assert damage_log_types.count(CombatLogEntryType.CONDITION_REMOVED) >= 2
 
     reset_monster_state(width=30, height=15)
-    archer = create_skeleton_archer(
+    archer = create_test_monster("monster.skeleton_archer", 
         name="Archer",
         position=(0, 0),
         faction="monsters",
     )
-    target = create_skeleton(
+    target = create_test_monster("monster.skeleton", 
         name="Target",
         position=(5, 0),
         faction="heroes",
@@ -585,12 +580,12 @@ def test_mark_target_damage_death_and_range_boundaries() -> None:
     assert death_log_types.count(CombatLogEntryType.CONDITION_REMOVED) >= 2
 
     reset_monster_state(width=30, height=15)
-    archer = create_skeleton_archer(
+    archer = create_test_monster("monster.skeleton_archer", 
         name="Archer",
         position=(0, 0),
         faction="monsters",
     )
-    distant = create_skeleton(
+    distant = create_test_monster("monster.skeleton", 
         name="Distant Target",
         position=(13, 0),
         faction="heroes",
@@ -606,12 +601,12 @@ def test_mark_target_damage_death_and_range_boundaries() -> None:
 def test_arcane_staff_modifier_and_melee_attack_lifecycle() -> None:
     """The staff owns one spell bonus and remains a functional melee weapon."""
     reset_monster_state(width=15, height=15)
-    warlock = create_skeleton_warlock(
+    warlock = create_test_monster("monster.skeleton_warlock", 
         name="Warlock",
         position=(0, 0),
         faction="monsters",
     )
-    target = create_skeleton(
+    target = create_test_monster("monster.skeleton", 
         name="Target",
         position=(1, 0),
         faction="heroes",
@@ -650,7 +645,7 @@ def test_arcane_staff_modifier_and_melee_attack_lifecycle() -> None:
 def test_warlock_invisibility_scroll_applies_effect_without_spell_slots() -> None:
     """The preset scroll applies Invisibility and consumes only itself."""
     reset_monster_state(width=15, height=15)
-    warlock = create_skeleton_warlock(
+    warlock = create_test_monster("monster.skeleton_warlock", 
         name="Warlock",
         position=(0, 0),
         faction="monsters",
@@ -695,12 +690,12 @@ def test_warlock_invisibility_scroll_applies_effect_without_spell_slots() -> Non
 def test_warlock_burning_hands_spends_only_its_selected_slot() -> None:
     """Preset spell variants spend level-one slots and retain level two."""
     reset_monster_state(width=15, height=15)
-    warlock = create_skeleton_warlock(
+    warlock = create_test_monster("monster.skeleton_warlock", 
         name="Warlock",
         position=(5, 5),
         faction="monsters",
     )
-    target = create_skeleton(
+    target = create_test_monster("monster.skeleton", 
         name="Target",
         position=(6, 5),
         faction="heroes",

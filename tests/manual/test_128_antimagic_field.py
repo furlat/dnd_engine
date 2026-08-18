@@ -12,8 +12,9 @@ from dnd.actions.standard import (
 from dnd.conditions import Blinded, Frightened, Poisoned
 from dnd.types.conditions import ConditionTag
 from dnd.core.gridmap import get_map
+from dnd.core.base_conditions import BaseCondition
 from dnd.types.spatial_effects import SpatialEffectAnchorKind
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from dnd.spells.abjuration import (
     AntimagicField,
     AntimagicFieldZone,
@@ -21,7 +22,7 @@ from dnd.spells.abjuration import (
 from dnd.spells.enchantment import BlessEffect
 from dnd.spells.evocation import FireBolt
 from dnd.spells.transmutation import Haste
-from dnd.spatial.effect_base import FieldEffect, SpatialEffect
+from dnd.spatial.area_conditions import SpatialCondition
 from tests.engine.support import has_condition
 from tests.manual.spell_regression_support import (
     create_spell_regression_actor,
@@ -53,13 +54,11 @@ def _cast_antimagic_field(caster: Entity) -> SpellEvent:
     return result
 
 
-def _active_antimagic_zone() -> tuple[FieldEffect, AntimagicFieldZone]:
-    """Resolve the one independently owned active Antimagic controller."""
+def _active_antimagic_zone() -> AntimagicFieldZone:
+    """Resolve the one independently owned active Antimagic condition."""
     matches = [
-        (effect, condition)
-        for effect in SpatialEffect.active_effects()
-        if isinstance(effect, FieldEffect)
-        for condition in effect.active_conditions.values()
+        condition
+        for condition in get_map().get_spatial_conditions()
         if isinstance(condition, AntimagicFieldZone)
     ]
     assert len(matches) == 1
@@ -88,7 +87,8 @@ def test_zone_creation() -> None:
     _cast_antimagic_field(caster)
 
     assert has_condition(caster, "Concentrating")
-    field, zone = _active_antimagic_zone()
+    zone = _active_antimagic_zone()
+    field = zone
     assert field.anchor_kind is SpatialEffectAnchorKind.ENTITY
     assert field.anchor_uuid == caster.uuid
     assert caster.position in zone.affected_positions
@@ -168,13 +168,13 @@ def test_restore_conditions_on_amf_end() -> None:
     _add_magical_blinded(caster, target)
     _cast_antimagic_field(caster)
     assert not has_condition(target, "Blinded")
-    field, _ = _active_antimagic_zone()
+    field = _active_antimagic_zone()
 
     caster.remove_condition("Concentrating")
 
     assert not has_condition(caster, "Concentrating")
     assert not has_condition(caster, "Antimagic Field Zone")
-    assert SpatialEffect.get_effect(field.uuid) is None
+    assert BaseCondition.get(field.uuid) is None
     assert has_condition(target, "Blinded")
     assert not has_condition(target, "Antimagic Suppression: Blinded")
 
@@ -229,8 +229,9 @@ def test_zone_follows_caster() -> None:
 
     get_map().move_entity(caster.uuid, (12, 4))
 
-    field, zone = _active_antimagic_zone()
-    assert zone.zone_center == (12, 4)
+    zone = _active_antimagic_zone()
+    field = zone
+    assert zone.position == (12, 4)
     assert field.position == (12, 4)
     assert target.position not in zone.affected_positions
     assert has_condition(target, "Blinded")
@@ -391,7 +392,8 @@ def test_zone_movement_suppress_new_entity() -> None:
 
     get_map().move_entity(caster.uuid, (12, 5))
 
-    field, zone = _active_antimagic_zone()
+    zone = _active_antimagic_zone()
+    field = zone
     assert target.position in zone.affected_positions
     assert field.position == (12, 5)
     assert not has_condition(target, "Blinded")

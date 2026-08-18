@@ -52,7 +52,7 @@ from dnd.core.events.item_events import (
 from dnd.blocks.equipment import (
     Armor,
 )
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from dnd.actions.standard import (
     entity_action_economy_cost_evaluator,
     entity_resource_cost_evaluator,

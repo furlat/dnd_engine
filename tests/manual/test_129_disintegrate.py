@@ -15,7 +15,7 @@ from dnd.actions.standard import (
 from dnd.core.dice import fixed_dice_faces
 from dnd.types.life import LifeState
 from dnd.types.damage import DamageType
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from dnd.spells.transmutation import Disintegrate
 from tests.engine.support import has_condition, set_hp
 from tests.manual.spell_regression_support import (

@@ -33,7 +33,7 @@ from dnd.core.gridmap import get_map
 from dnd.core.values import BaseValue
 from dnd.classes.sorcerer import QuickenedSpell
 from dnd.blocks.action_economy import RechargeType
-from dnd.entity import Entity, EntityConfig
+from dnd.entities.entity import Entity, EntityConfig
 from tests.spell_test_exports import Fireball, FireBolt, MagicMissile
 from dnd.core.events.action_events import (
     CounterspellReactionEvent,

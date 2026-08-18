@@ -2,37 +2,32 @@
 
 from __future__ import annotations
 
-from dnd.types.world import LightLevel
-from dnd.types.world import MovementMode
-from dnd.core.content.battlefields import BattlefieldDefinition
-from dnd.core.gridmap import get_map
-from dnd.runtime_reset import reset_engine_runtime
-from dnd.scenarios.battlefield_catalog import (
+from dnd.content.scenarios.battlefield_builders import (
     BATTLEFIELDS,
     build_battlefield,
     get_battlefield,
 )
-from dnd.scenarios.encounter_catalog import (
+from dnd.content.scenarios.scenario_catalog import (
     AUTHORED_DEPLOYMENTS,
-    AUTHORED_ENCOUNTER_RECIPES,
+    AUTHORED_ENCOUNTERS,
 )
-from dnd.scenarios.encounter_compatibility import (
+from dnd.content.scenarios.scenario_compatibility import (
     check_built_encounter_compatibility,
     check_encounter_compatibility,
 )
+from dnd.core.gridmap import get_map
+from dnd.runtime_reset import reset_engine_runtime
+from dnd.types.world import CardinalDirection, LightLevel, MovementMode
 
 
 def test_battlefield_catalog_has_ten_exact_mechanical_states() -> None:
     assert len(BATTLEFIELDS) == 10
     assert len({row.battlefield_id for row in BATTLEFIELDS}) == 10
-    assert len({row.content_digest for row in BATTLEFIELDS}) == 10
-    assert all(row.preview is not None for row in BATTLEFIELDS)
 
     bright = get_battlefield("battlefield.open_floor_bright")
     dark = get_battlefield("battlefield.open_floor_dark")
     assert bright.light_level == "bright"
     assert dark.light_level == "darkness"
-    assert bright.content_digest != dark.content_digest
 
     reset_engine_runtime()
     build_battlefield(bright.battlefield_id)
@@ -48,24 +43,24 @@ def test_battlefield_catalog_has_ten_exact_mechanical_states() -> None:
     assert dark_levels == {LightLevel.DARKNESS}
 
 
-def test_battlefield_previews_retain_terrain_barriers_and_objects() -> None:
+def test_battlefield_layouts_retain_terrain_barriers_and_objects() -> None:
     closed = get_battlefield("battlefield.standard_hazards_closed")
     terrain = {
-        (cell.position, cell.terrain) for cell in closed.preview.cells
+        (cell.position, cell.terrain) for cell in closed.layout.tiles
     }
     assert ((2, 0), "water") in terrain
     assert ((6, 0), "difficult_terrain") in terrain
     assert ((0, 11), "spikes") in terrain
     door = next(
-        obj for obj in closed.preview.objects if obj.kind == "door"
+        obj for obj in closed.layout.objects if obj.kind == "door"
     )
     assert door.position == (7, 7)
-    assert door.blocked_directions == ("west",)
+    assert door.blocked_directions == (CardinalDirection.WEST,)
     assert door.is_open is False
 
     opened = get_battlefield("battlefield.standard_hazards_open")
     open_door = next(
-        obj for obj in opened.preview.objects if obj.kind == "door"
+        obj for obj in opened.layout.objects if obj.kind == "door"
     )
     assert open_door.position == door.position
     assert open_door.blocked_directions == ()
@@ -74,13 +69,13 @@ def test_battlefield_previews_retain_terrain_barriers_and_objects() -> None:
     labyrinth = get_battlefield("battlefield.reveal_labyrinth_dark")
     assert {
         obj.position
-        for obj in labyrinth.preview.objects
+        for obj in labyrinth.layout.objects
         if obj.kind == "door"
     } == {(5, 6), (9, 8)}
 
     control_room = get_battlefield("battlefield.multi_object_dark")
     assert {
-        (obj.kind, obj.position) for obj in control_room.preview.objects
+        (obj.kind, obj.position) for obj in control_room.layout.objects
     } >= {
         ("fireball_cannon", (6, 11)),
         ("loot_chest", (5, 10)),
@@ -88,15 +83,13 @@ def test_battlefield_previews_retain_terrain_barriers_and_objects() -> None:
     }
 
 
-def test_every_battlefield_has_one_builder_and_preview_matches_runtime() -> None:
+def test_every_battlefield_has_one_builder_and_layout_matches_runtime() -> None:
     for definition in BATTLEFIELDS:
-        reset_engine_runtime(
-            grid_size=(definition.width, definition.height),
-        )
+        reset_engine_runtime()
         built = build_battlefield(definition.battlefield_id)
         assert built.definition is definition
         grid = get_map()
-        for cell in definition.preview.cells:
+        for cell in definition.layout.tiles:
             tile = grid.get_tile(*cell.position)
             assert tile is not None, (definition.battlefield_id, cell.position)
             assert tile.walkable is cell.walkable
@@ -111,7 +104,7 @@ def test_every_battlefield_has_one_builder_and_preview_matches_runtime() -> None
 def test_reusable_deployments_fit_every_authored_roster() -> None:
     largest = max(
         len(slot.roster.members)
-        for encounter in AUTHORED_ENCOUNTER_RECIPES
+        for encounter in AUTHORED_ENCOUNTERS
         for slot in encounter.roster_slots
     )
     assert len(AUTHORED_DEPLOYMENTS) == 10
@@ -124,13 +117,11 @@ def test_reusable_deployments_fit_every_authored_roster() -> None:
 
 
 def test_canonical_static_and_built_compatibility_agree() -> None:
-    for recipe in AUTHORED_ENCOUNTER_RECIPES:
+    for recipe in AUTHORED_ENCOUNTERS:
         definition = get_battlefield(recipe.battlefield_id)
         static = check_encounter_compatibility(recipe, definition)
         assert static.admitted, (recipe.encounter_id, static.issues)
-        reset_engine_runtime(
-            grid_size=(definition.width, definition.height),
-        )
+        reset_engine_runtime()
         build_battlefield(definition.battlefield_id)
         built = check_built_encounter_compatibility(
             static,
@@ -141,8 +132,9 @@ def test_canonical_static_and_built_compatibility_agree() -> None:
     reset_engine_runtime()
 
 
-def test_battlefield_contract_is_fully_described() -> None:
-    assert all(
-        field.description
-        for field in BattlefieldDefinition.model_fields.values()
-    )
+def test_battlefield_contract_is_renderer_neutral() -> None:
+    payload = [row.model_dump(mode="json") for row in BATTLEFIELDS]
+    serialized = repr(payload)
+    assert "content_digest" not in serialized
+    assert "sprite" not in serialized
+    assert "visual_key" not in serialized

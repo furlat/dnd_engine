@@ -3,7 +3,7 @@
 from typing import Any, cast
 from uuid import uuid4
 
-from dnd.controller import Controller
+from dnd.encounters.controllers import Controller
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import SpellProtectionRegistry
 from dnd.core.base_object import BaseObject
@@ -12,8 +12,8 @@ from dnd.core.events.events_registry import (
 )
 from dnd.core.gridmap import get_map
 from dnd.core.values import BaseValue
-from dnd.encounter import Encounter
-from dnd.entity import Entity
+from dnd.encounters.encounter import Encounter
+from dnd.entities.entity import Entity
 from dnd.runtime_reset import reset_engine_runtime
 
 

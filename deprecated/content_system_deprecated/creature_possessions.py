@@ -25,7 +25,7 @@ from dnd.core.content.dependencies import (
 from dnd.core.content.materialization import CreaturePossessionMode
 from dnd.core.content.recipes import ContentRecipe
 from dnd.core.equipment_types import EquipmentSlot
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 
 
 class CreaturePossessionDisposition(str, Enum):

@@ -22,7 +22,7 @@ from dnd.core.events.resolution_events import (
     RangeType,
 )
 from dnd.core.modifiers import NumericalModifier
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 
 
 class AegisSparkEffect(BaseCondition):

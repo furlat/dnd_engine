@@ -46,7 +46,7 @@ from dnd.types.spatial_effects import SpatialEffectTriggerKind
 from dnd.types.damage import DamageType
 from dnd.core.modifiers import ResistanceModifier
 from dnd.types.damage import ResistanceStatus
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from dnd.actions.standard import (
     entity_action_economy_cost_evaluator,
     entity_resource_cost_evaluator,
@@ -58,11 +58,10 @@ from dnd.actions.operations import apply_action_overrides, clear_action_override
 from dnd.types.world import MovementMode
 from dnd.conditions import Charmed, Concentrating, Frightened
 from dnd.content.spatial_effect_materialization import (
-    materialize_spatial_effect,
+    materialize_spatial_condition,
 )
 from dnd.content.spatial_effect_recipes import DRACONIC_PRESENCE_FIELD_RECIPE
-from dnd.spatial.effect_base import FieldEffect
-from dnd.spatial.effect_controllers import AreaSpatialEffectController
+from dnd.spatial.area_conditions import AreaCondition
 
 
 
@@ -403,7 +402,7 @@ class DraconicPresenceImmunity(BaseCondition):
         )
 
 
-class DraconicPresenceAura(AreaSpatialEffectController):
+class DraconicPresenceAura(AreaCondition):
     """Concentration-owned 60-foot aura of awe or fear."""
 
     name: str = Field(
@@ -427,10 +426,6 @@ class DraconicPresenceAura(AreaSpatialEffectController):
     )
     zone_shape: str = Field(default="sphere", description="Aura shape.")
     zone_radius_feet: int = Field(default=60, description="Aura radius.")
-    trigger_kinds: frozenset[SpatialEffectTriggerKind] = frozenset({
-        SpatialEffectTriggerKind.TURN_START,
-    })
-
     @staticmethod
     def _immunity_name(source_entity_uuid: UUID) -> str:
         return f"Draconic Presence Immunity:{source_entity_uuid}"
@@ -604,37 +599,31 @@ class DraconicPresence(BaseAction):
                 status_message="Draconic Presence concentration failed",
             )
 
-        field = materialize_spatial_effect(
+        aura = materialize_spatial_condition(
             DRACONIC_PRESENCE_FIELD_RECIPE,
             caster.uuid,
             position=caster.position,
             faction=caster.faction,
             anchor_uuid=caster.uuid,
-            expected_type=FieldEffect,
+            condition_type=DraconicPresenceAura,
+            condition_fields={
+                "mode": self.mode,
+                "duration": Duration(
+                    duration=10,
+                    duration_type=DurationType.ROUNDS,
+                    source_entity_uuid=caster.uuid,
+                    target_entity_uuid=caster.uuid,
+                ),
+                "effect_origin": execution_event.get_effect_origin(),
+            },
         )
-        aura = DraconicPresenceAura(
-            source_entity_uuid=caster.uuid,
-            target_entity_uuid=field.uuid,
-            mode=self.mode,
-            zone_center=caster.position,
-            duration=Duration(
-                duration=10,
-                duration_type=DurationType.ROUNDS,
-                source_entity_uuid=caster.uuid,
-                target_entity_uuid=field.uuid,
-            ),
-            effect_origin=execution_event.get_effect_origin(),
-        )
-        aura_result = field.install_controller(
-            aura,
-            parent_event=execution_event,
-        )
+        aura_result = aura.activate(parent_event=execution_event)
         if aura_result is None or aura_result.canceled or not aura.applied:
             installed.cleanup_if_no_effects(parent_event=execution_event)
             return execution_event.cancel(
                 status_message="Draconic Presence aura failed",
             )
-        installed.add_linked_condition(field.uuid, aura.uuid)
+        installed.add_linked_condition(aura.uuid, aura.uuid)
         return execution_event.phase_to(
             EventPhase.COMPLETION,
             status_message=(

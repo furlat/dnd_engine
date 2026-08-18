@@ -49,14 +49,14 @@ from dnd.core.gridmap import get_map
 from dnd.content_system.bootstrap import bootstrap_content_system
 from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
 from dnd.runtime_reset import reset_engine_runtime
-from dnd.entity import Entity
-from dnd.encounter import Encounter, EncounterState, TurnState
+from dnd.entities.entity import Entity
+from dnd.encounters.encounter import Encounter, EncounterState, TurnState
 from dnd.scenarios.encounter_assembler import (
     AssembledEncounter,
     IncompatibleEncounterError,
     prepare_encounter_recipe,
 )
-from dnd.controller import HumanController, PassController
+from dnd.encounters.controllers import HumanController, PassController
 from dnd.action_dispatch import dispatch_available_action
 from dnd.actions_functional import get_available_actions
 from server.runtime_performance import latency_sensitive_gc

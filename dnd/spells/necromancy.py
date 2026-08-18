@@ -56,7 +56,7 @@ from dnd.types.rolls import AdvantageStatus
 from dnd.core.values import ModifiableValue
 from functools import partial
 from typing import Any, Dict
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from dnd.actions.standard import (
     Dash,
     SpellAction,
@@ -69,7 +69,7 @@ from dnd.core.base_actions import (
     ActionCategory,
 )
 from dnd.conditions import Blinded, Deafened, Frightened, Concentrating, ConcentrationActionMarker
-from dnd.creature_transforms import apply_unconscious_transform
+from dnd.entities.creature_transforms import apply_unconscious_transform
 from dnd.spells.enchantment import BaneEffect, BlessEffect
 from dnd.spells.content_metadata import srd_action_identity
 from dnd.blocks.skills import SKILL_TO_ABILITY

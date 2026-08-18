@@ -36,7 +36,7 @@ from dnd.types.creatures import CreatureType
 from dnd.types.damage import DamageType
 from dnd.types.rolls import AdvantageStatus, AutoHitStatus
 from dnd.core.modifiers import AutoHitModifier, NumericalModifier
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from dnd.items.armors import CHAIN_MAIL_RECIPE
 from dnd.items.weapons import DAGGER_RECIPE
 from dnd.spells.conjuration import (

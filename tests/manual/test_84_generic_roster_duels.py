@@ -4,26 +4,23 @@ from __future__ import annotations
 
 import random
 
-from dnd.content_system.item_bindings import ITEM_RUNTIME_BINDINGS
-from dnd.core.content.encounters import (
-    EncounterRecipe,
+from dnd.content.scenarios.scenario_catalog import (
+    AUTHORED_DEPLOYMENTS_BY_ID,
+    roster_definition,
+)
+from dnd.content.scenarios.scenario_definitions import (
+    EncounterDefinition,
     EncounterRosterSlot,
     FixedRosterOpeningPolicy,
     InitiativeOpeningPolicy,
 )
-from dnd.entity import Entity
-from dnd.items.apparel_presets import (
-    DARK_CLOTH_SHOES_PRESET,
-    HEDGE_WIZARD_ROBE_PRESET,
+from dnd.content.scenarios.scenario_deployment import (
+    AssembledScenario,
+    assemble_scenario,
 )
-from dnd.scenarios.encounter_assembler import (
-    AssembledEncounter,
-    assemble_encounter_recipe,
-)
-from dnd.scenarios.encounter_catalog import (
-    AUTHORED_DEPLOYMENTS_BY_ID,
-    roster_recipe,
-)
+from dnd.entities.entity import Entity
+from dnd.game import Game
+from dnd.runtime_reset import reset_engine_runtime
 
 
 def _assemble_duel(
@@ -31,12 +28,12 @@ def _assemble_duel(
     second_roster_id: str,
     *,
     opening_roster_slot_id: str | None,
-) -> AssembledEncounter:
+) -> AssembledScenario:
     deployment = AUTHORED_DEPLOYMENTS_BY_ID[
         "neutral.battlefield.open_floor_bright"
     ]
-    first = roster_recipe(first_roster_id)
-    second = roster_recipe(second_roster_id)
+    first = roster_definition(first_roster_id)
+    second = roster_definition(second_roster_id)
     opening = (
         FixedRosterOpeningPolicy(
             roster_slot_id=opening_roster_slot_id,
@@ -44,8 +41,10 @@ def _assemble_duel(
         if opening_roster_slot_id is not None
         else InitiativeOpeningPolicy()
     )
-    return assemble_encounter_recipe(
-        EncounterRecipe.create(
+    reset_engine_runtime()
+    return assemble_scenario(
+        Game(),
+        EncounterDefinition(
             encounter_id="encounter.test.generic_roster_duel",
             title="Generic Roster Duel",
             roster_slots=(
@@ -95,24 +94,20 @@ def test_generic_duel_assembles_two_multi_actor_creature_rosters() -> None:
     assert current.faction == "faction_2"
     assert all(actor.senses.visible for actor in (*first, *second))
 
-    assert tuple(
-        actor.content_ref.content_id
-        for actor in second
-        if actor.content_ref is not None
-    ) == (
-        "creature.goblin",
-        "creature.goblin_archer",
-        "creature.goblin_caster",
+    assert tuple(actor.entity_kind_id for actor in second) == (
+        "monster.goblin",
+        "monster.goblin_archer",
+        "monster.goblin_caster",
     )
     goblin_caster = second[2]
     assert goblin_caster.equipment.body_armor is not None
-    assert ITEM_RUNTIME_BINDINGS.require(
-        goblin_caster.equipment.body_armor.uuid,
-    ).recipe == HEDGE_WIZARD_ROBE_PRESET.recipe
+    assert goblin_caster.equipment.body_armor.get_semantic_key() == (
+        "apparel.robes.hedge_wizard"
+    )
     assert goblin_caster.equipment.boots is not None
-    assert ITEM_RUNTIME_BINDINGS.require(
-        goblin_caster.equipment.boots.uuid,
-    ).recipe == DARK_CLOTH_SHOES_PRESET.recipe
+    assert goblin_caster.equipment.boots.get_semantic_key() == (
+        "apparel.cloth_shoes.dark"
+    )
 
 
 def test_mirrored_roster_keeps_runtime_identity_isolated_by_faction() -> None:

@@ -23,19 +23,12 @@ from dnd.types.damage import DamageType
 from dnd.types.rolls import AdvantageStatus
 from dnd.types.damage import ResistanceStatus
 from dnd.core.values import BaseValue
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from dnd.items.consumables import (
     GREATER_INVISIBILITY_POTION_RECIPE,
     HASTE_POTION_RECIPE,
 )
-from dnd.monsters.bestiary import (
-    create_caster,
-    create_goblin,
-    create_skeleton,
-    create_skeleton_archer,
-    create_skeleton_warlock,
-    create_skeleton_warrior,
-)
+from tests.engine.support import create_test_monster
 from dnd.monsters.circus_fighter import create_warrior
 from dnd.monsters.skeleton_abilities import MarkTargetAction
 from dnd.spells.evocation import EldritchBlast
@@ -110,9 +103,9 @@ def test_eb_17_001_goblin_and_skeleton_factories_encode_srd_trait_state() -> Non
     """EB-17-001: basic monster factories encode SRD-facing trait state."""
     reset_monster_state()
 
-    goblin = create_goblin(name="Book Goblin", position=(1, 1), faction="monsters")
-    skeleton = create_skeleton(name="Book Skeleton", position=(3, 1), faction="monsters")
-    skeleton_without_darkvision = create_skeleton(
+    goblin = create_test_monster("monster.goblin", name="Book Goblin", position=(1, 1), faction="monsters")
+    skeleton = create_test_monster("monster.skeleton", name="Book Skeleton", position=(3, 1), faction="monsters")
+    skeleton_without_darkvision = create_test_monster("monster.skeleton", 
         name="Book Skeleton Without Darkvision",
         position=(5, 1),
         faction="monsters",
@@ -146,7 +139,7 @@ def test_eb_17_007_base_goblin_factory_models_srd_senses_attacks_and_nimble_esca
     """EB-17-007: base goblin factory models SRD senses, attacks, and Nimble Escape."""
     reset_monster_state()
 
-    goblin = create_goblin(name="Book Goblin", position=(1, 1), faction="monsters")
+    goblin = create_test_monster("monster.goblin", name="Book Goblin", position=(1, 1), faction="monsters")
     Entity.update_all_entities_senses()
 
     action_names = action_template_names(goblin)
@@ -182,8 +175,8 @@ def test_eb_17_008_base_skeleton_factory_models_srd_senses_attacks_and_immunitie
     """EB-17-008: base skeleton factory models SRD senses, attacks, and immunities."""
     reset_monster_state()
 
-    skeleton = create_skeleton(name="Book Skeleton", position=(1, 1), faction="monsters")
-    skeleton_without_darkvision = create_skeleton(
+    skeleton = create_test_monster("monster.skeleton", name="Book Skeleton", position=(1, 1), faction="monsters")
+    skeleton_without_darkvision = create_test_monster("monster.skeleton", 
         name="Book Skeleton Without Darkvision",
         position=(3, 1),
         faction="monsters",
@@ -219,8 +212,8 @@ def test_eb_17_009_monster_average_hit_dice_use_first_die_maximum() -> None:
     """EB-17-009: monster average HP uses maximum first die plus fixed averages."""
     reset_monster_state()
 
-    goblin = create_goblin(name="Book Goblin", position=(1, 1), faction="monsters")
-    skeleton = create_skeleton(name="Book Skeleton", position=(3, 1), faction="monsters")
+    goblin = create_test_monster("monster.goblin", name="Book Goblin", position=(1, 1), faction="monsters")
+    skeleton = create_test_monster("monster.skeleton", name="Book Skeleton", position=(3, 1), faction="monsters")
 
     goblin_hit_dice = goblin.health.hit_dices[0]
     skeleton_hit_dice = skeleton.health.hit_dices[0]
@@ -247,7 +240,7 @@ def test_eb_17_010_create_caster_wires_generic_spellcaster_state() -> None:
     """EB-17-010: create_caster wires a generic engine spellcaster."""
     reset_monster_state()
 
-    caster = create_caster(name="Book Caster", position=(1, 1), faction="heroes", level=5)
+    caster = create_test_monster("monster.generic_caster", name="Book Caster", position=(1, 1), faction="heroes", level=5)
     Entity.update_all_entities_senses()
 
     action_names = action_template_names(caster)
@@ -294,7 +287,7 @@ def test_eb_17_011_create_caster_inventory_potions_are_item_use_actions() -> Non
     """EB-17-011: create_caster potions expose bonus-action item use."""
     reset_monster_state()
 
-    caster = create_caster(name="Book Caster", position=(1, 1), faction="heroes", level=5)
+    caster = create_test_monster("monster.generic_caster", name="Book Caster", position=(1, 1), faction="heroes", level=5)
     Entity.update_all_entities_senses()
 
     invisibility_potion = get_inventory_item(caster, "Potion of Greater Invisibility")
@@ -438,10 +431,10 @@ def test_eb_17_002_specialized_skeleton_presets_wire_equipment_items_and_actions
     """EB-17-002: specialized skeleton presets compose equipment, items, and actions."""
     reset_monster_state()
 
-    warrior = create_skeleton_warrior(name="Book Warrior", position=(1, 1), faction="monsters")
-    archer = create_skeleton_archer(name="Book Archer", position=(3, 1), faction="monsters")
-    warlock = create_skeleton_warlock(name="Book Warlock", position=(5, 1), faction="monsters")
-    create_skeleton(name="Target", position=(8, 1), faction="heroes")
+    warrior = create_test_monster("monster.skeleton_warrior", name="Book Warrior", position=(1, 1), faction="monsters")
+    archer = create_test_monster("monster.skeleton_archer", name="Book Archer", position=(3, 1), faction="monsters")
+    warlock = create_test_monster("monster.skeleton_warlock", name="Book Warlock", position=(5, 1), faction="monsters")
+    create_test_monster("monster.skeleton", name="Target", position=(8, 1), faction="heroes")
     Entity.update_all_entities_senses()
 
     assert get_max_hp(warrior) > get_max_hp(archer) > get_max_hp(warlock)
@@ -471,8 +464,8 @@ def test_eb_17_002_specialized_skeleton_presets_wire_equipment_items_and_actions
 def test_eb_17_003_mark_target_creates_concentration_link_and_cleans_target_state() -> None:
     """EB-17-003: Mark Target creates linked concentration and cleans on removal."""
     reset_monster_state()
-    archer = create_skeleton_archer(name="Book Archer", position=(1, 1), faction="monsters")
-    target = create_skeleton(name="Book Target", position=(5, 1), faction="heroes")
+    archer = create_test_monster("monster.skeleton_archer", name="Book Archer", position=(1, 1), faction="monsters")
+    target = create_test_monster("monster.skeleton", name="Book Target", position=(5, 1), faction="heroes")
     Entity.update_all_entities_senses()
 
     event = MarkTargetAction(
@@ -514,8 +507,8 @@ def test_eb_17_003_mark_target_creates_concentration_link_and_cleans_target_stat
 def test_eb_17_004_mark_target_strips_and_blocks_hidden_or_invisible_state() -> None:
     """EB-17-004: Mark Target strips existing stealth state and blocks future stealth state."""
     reset_monster_state()
-    archer = create_skeleton_archer(name="Book Archer", position=(1, 1), faction="monsters")
-    target = create_skeleton(name="Book Target", position=(5, 1), faction="heroes")
+    archer = create_test_monster("monster.skeleton_archer", name="Book Archer", position=(1, 1), faction="monsters")
+    target = create_test_monster("monster.skeleton", name="Book Target", position=(5, 1), faction="heroes")
     archer.senses.sense_modes.append(SenseMode(sense_type=SensesType.TRUESIGHT, range_feet=60))
     target.add_condition(Invisible(source_entity_uuid=target.uuid, target_entity_uuid=target.uuid))
     Entity.update_all_entities_senses()
@@ -545,8 +538,8 @@ def test_eb_17_004_mark_target_strips_and_blocks_hidden_or_invisible_state() -> 
 def test_eb_17_005_warlock_eldritch_blast_and_scroll_are_action_driven() -> None:
     """EB-17-005: skeleton warlock spells and scroll use normal action machinery."""
     reset_monster_state()
-    warlock = create_skeleton_warlock(name="Book Warlock", position=(1, 1), faction="monsters")
-    target = create_skeleton(name="Book Target", position=(8, 1), faction="heroes")
+    warlock = create_test_monster("monster.skeleton_warlock", name="Book Warlock", position=(1, 1), faction="monsters")
+    target = create_test_monster("monster.skeleton", name="Book Target", position=(8, 1), faction="heroes")
     Entity.update_all_entities_senses()
 
     initial_hp = get_hp(target)
@@ -594,8 +587,8 @@ def test_eb_17_005_warlock_eldritch_blast_and_scroll_are_action_driven() -> None
 def test_eb_17_006_warrior_acid_flask_is_a_consumable_spell_item() -> None:
     """EB-17-006: Acid Flask is inventory-backed and applies item spell damage."""
     reset_monster_state()
-    warrior = create_skeleton_warrior(name="Book Warrior", position=(1, 1), faction="monsters")
-    target = create_skeleton(name="Book Target", position=(5, 5), faction="heroes")
+    warrior = create_test_monster("monster.skeleton_warrior", name="Book Warrior", position=(1, 1), faction="monsters")
+    target = create_test_monster("monster.skeleton", name="Book Target", position=(5, 5), faction="heroes")
     Entity.update_all_entities_senses()
 
     flask = get_inventory_item(warrior, "Acid Flask")

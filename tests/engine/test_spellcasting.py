@@ -49,7 +49,7 @@ from dnd.core.gridmap import get_map
 from dnd.types.damage import DamageType
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import BaseValue
-from dnd.entity import Entity, EntityConfig
+from dnd.entities.entity import Entity, EntityConfig
 from tests.spell_test_exports import (
     ALL_SPELLS,
     CANTRIPS,

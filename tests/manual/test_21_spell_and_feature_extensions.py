@@ -16,7 +16,7 @@ from dnd.core.events.events_registry import (
 )
 from dnd.core.gridmap import GridMap, get_map
 from dnd.core.values import BaseValue
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from dnd.extensions.aegis_spark import (
     AegisSpark,
     AegisSparkEffect,

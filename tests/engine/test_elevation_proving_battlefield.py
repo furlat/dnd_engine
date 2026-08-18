@@ -1,7 +1,16 @@
 """Maintained product battlefield coverage for elevation traversal."""
 
+from uuid import uuid4
+
 import pytest
 
+import dnd.content.scenarios.battlefield_definitions as battlefield_contracts
+from dnd.content.monsters.monster_builders import create_monster
+from dnd.content.scenarios.battlefield_definitions import (
+    BattlefieldDefinition,
+    BattlefieldElevationDefinition,
+    BattlefieldLayoutDefinition,
+)
 from dnd.core.base_block import BaseBlock
 from dnd.types.world import MovementMode
 from dnd.types.equipment import WeaponSlot
@@ -12,13 +21,8 @@ from dnd.core.events.events_registry import (
     EventType,
 )
 from dnd.core.elevation import support_distance_feet
-from dnd.core.content import battlefields as battlefield_contracts
-from dnd.core.content.battlefields import (
-    BattlefieldDefinition,
-    BattlefieldElevationCell,
-    BattlefieldPreview,
-)
 from dnd.core.gridmap import get_map
+from dnd.core.base_conditions import BaseCondition
 from dnd.core.world_edges import ElevationSurfaceKind, SlopeAxis
 from dnd.core.traversal_connectors import TraversalConnectorKind
 from dnd.items.environment import DirectionalDoor, OpenDirectionalDoorAction
@@ -34,23 +38,22 @@ from dnd.core.events.action_events import (
     TraverseConnectorEvent,
 )
 from dnd.actions.operations import execute_available_action
-from dnd.types.encounter import EncounterState
-from dnd.entity import Entity
-from dnd.monsters.bestiary import create_skeleton
+from dnd.types.encounter_state import EncounterState
+from dnd.entities.entity import Entity
 from dnd.runtime_reset import reset_engine_runtime
-from dnd.scenarios.battlefield_catalog import build_battlefield, get_battlefield
-from dnd.scenarios.encounter_assembler import assemble_encounter_recipe
-from dnd.scenarios.encounter_catalog import encounter_recipe
-from dnd.spatial.effect_base import SpatialEffect
-from server.world_projection import project_encounter, project_grid
+from dnd.content.scenarios.battlefield_builders import build_battlefield, get_battlefield
+from dnd.content.scenarios.scenario_catalog import encounter_definition
+from dnd.content.scenarios.scenario_deployment import assemble_scenario
+from dnd.game import Game
+from dnd.spatial.area_conditions import SpatialCondition
 
 
 PROVING_BATTLEFIELD_ID = "battlefield.elevation_proving_ground"
 
 
-def test_elevation_proving_battlefield_cold_preview_matches_runtime() -> None:
+def test_elevation_proving_battlefield_cold_layout_matches_runtime() -> None:
     definition = get_battlefield(PROVING_BATTLEFIELD_ID)
-    reset_engine_runtime(grid_size=(definition.width, definition.height))
+    reset_engine_runtime()
     built = build_battlefield(PROVING_BATTLEFIELD_ID)
     grid = get_map()
 
@@ -69,7 +72,7 @@ def test_elevation_proving_battlefield_cold_preview_matches_runtime() -> None:
         "vertical-stairs",
         "passage",
     }
-    for authored in definition.preview.elevation_cells:
+    for authored in definition.layout.elevation:
         tile = grid.get_tile(*authored.position)
         assert tile is not None
         assert (
@@ -84,23 +87,17 @@ def test_elevation_proving_battlefield_cold_preview_matches_runtime() -> None:
 
     gap = grid.get_tile(10, 9)
     assert gap is not None and gap.walkable is False
-    preview_gap = next(
-        cell for cell in definition.preview.cells if cell.position == (10, 9)
+    authored_gap = next(
+        cell for cell in definition.layout.tiles if cell.position == (10, 9)
     )
-    projected_gap = next(
-        tile for tile in project_grid(grid).tiles if (tile.x, tile.y) == (10, 9)
-    )
-    assert preview_gap.terrain == "gap"
+    assert authored_gap.terrain == "gap"
     assert gap.name == "Gap"
-    assert gap.sprite_name == "gap.png"
     assert gap.get_movement_cost(MovementMode.WALKING) == 0
     assert gap.get_movement_cost(MovementMode.SWIMMING) == 0
-    assert projected_gap.visual_key == "gap.png"
-    assert projected_gap.walkable is False
     landing = grid.get_tile(11, 9)
     assert landing is not None and landing.height == 1
-    assert SpatialEffect.get_effect(built.object_uuids["landing_hazard"]) is not None
-    authored_connectors = definition.preview.connectors
+    assert BaseCondition.get(built.object_uuids["landing_hazard"]) is not None
+    authored_connectors = definition.layout.connectors
     runtime_connectors = grid.get_all_connectors()
     assert {row.kind for row in authored_connectors} == set(TraversalConnectorKind)
     assert [row.authored_id for row in runtime_connectors] == sorted(
@@ -113,22 +110,6 @@ def test_elevation_proving_battlefield_cold_preview_matches_runtime() -> None:
         row.authored_id: row
         for row in authored_connectors
     }
-    projected_by_id = {
-        row.authored_id: row
-        for row in project_grid(grid).connectors
-    }
-    assert set(projected_by_id) == {
-        row.authored_id for row in authored_connectors
-    }
-    for connector in runtime_connectors:
-        projected = projected_by_id[connector.authored_id]
-        assert projected.uuid == str(connector.uuid)
-        assert projected.objective_digest == connector.objective_digest
-        assert tuple(endpoint.position for endpoint in projected.endpoints) == tuple(
-            endpoint.position for endpoint in connector.endpoints
-        )
-
-
 def test_elevation_proving_battlefield_exercises_reciprocal_edge_rules() -> None:
     reset_engine_runtime()
     built = build_battlefield(PROVING_BATTLEFIELD_ID)
@@ -174,7 +155,7 @@ def test_elevation_proving_battlefield_exercises_reciprocal_edge_rules() -> None
 def test_elevation_proving_battlefield_surface_axes_are_authored_not_inferred() -> None:
     definition = get_battlefield(PROVING_BATTLEFIELD_ID)
     by_position = {
-        cell.position: cell for cell in definition.preview.elevation_cells
+        cell.position: cell for cell in definition.layout.elevation
     }
     assert by_position[(5, 4)].surface_kind is ElevationSurfaceKind.STAIRS
     assert by_position[(5, 4)].slope_axis is SlopeAxis.EAST_WEST
@@ -191,14 +172,14 @@ def test_cold_battlefield_rejects_contradictory_progressive_run() -> None:
             title="Invalid Progressive",
             width=3,
             height=1,
-            preview=BattlefieldPreview(elevation_cells=(
-                BattlefieldElevationCell(
+            layout=BattlefieldLayoutDefinition(elevation=(
+                BattlefieldElevationDefinition(
                     position=(0, 0),
                     elevation_steps=0,
                     surface_kind=ElevationSurfaceKind.RAMP,
                     slope_axis=SlopeAxis.EAST_WEST,
                 ),
-                BattlefieldElevationCell(
+                BattlefieldElevationDefinition(
                     position=(1, 0),
                     elevation_steps=2,
                     surface_kind=ElevationSurfaceKind.RAMP,
@@ -234,16 +215,22 @@ def test_empty_cold_battlefield_preflight_is_linear_in_authored_elevation(
 
 def test_proving_battlefield_traverses_every_connector_kind_through_one_action() -> None:
     definition = get_battlefield(PROVING_BATTLEFIELD_ID)
-    reset_engine_runtime(grid_size=(definition.width, definition.height))
+    reset_engine_runtime()
     build_battlefield(PROVING_BATTLEFIELD_ID)
-    actor = create_skeleton(
+    actor = create_monster(
+        "monster.skeleton",
+        uuid4(),
         name="Connector Prover",
-        position=definition.preview.connectors[0].endpoint_positions[0],
         faction="heroes",
+    )
+    game = Game()
+    game.deploy_entity(
+        actor,
+        definition.layout.connectors[0].endpoint_positions[0],
     )
 
     seen_kinds: set[TraversalConnectorKind] = set()
-    for authored in definition.preview.connectors:
+    for authored in definition.layout.connectors:
         Entity.update_entity_position(actor, authored.endpoint_positions[0])
         actor.action_economy.reset_all_costs()
         Entity.update_all_entities_senses(max_distance=30)
@@ -277,14 +264,15 @@ def test_proving_battlefield_traverses_every_connector_kind_through_one_action()
 
 def test_product_proving_encounter_plays_every_vertical_surface_and_terminates() -> None:
     """The participant-neutral composition remains playable through owners."""
-    recipe = encounter_recipe("encounter.elevation_proving_ground")
+    reset_engine_runtime()
+    recipe = encounter_definition("encounter.elevation_proving_ground")
     assert all(slot.participant_name for slot in recipe.roster_slots)
-    assembled = assemble_encounter_recipe(recipe, start_encounter=True)
+    assembled = assemble_scenario(Game(), recipe, start_encounter=True)
     encounter = assembled.encounter
     hero = assembled.entities_by_roster_slot["roster_1"][0]
     monsters = assembled.entities_by_roster_slot["roster_2"]
     grid = get_map()
-    landing_hazard = SpatialEffect.get_effect(
+    landing_hazard = BaseCondition.get(
         assembled.battlefield.object_uuids["landing_hazard"]
     )
     assert landing_hazard is not None
@@ -416,38 +404,6 @@ def test_product_proving_encounter_plays_every_vertical_surface_and_terminates()
         for entry in nested_logs(jumped.combat_log)
     )
 
-    for monster, position in zip(monsters, ((13, 1), (13, 2), (13, 3))):
-        Entity.update_entity_position(monster, position)
-    seen_kinds: set[TraversalConnectorKind] = set()
-    for authored in assembled.battlefield.definition.preview.connectors:
-        stage_actor(authored.endpoint_positions[0])
-        row = next(
-            row
-            for row in hero.get_available_actions(legal_only=True).self_actions
-            if row.connector_traversal is not None
-            and row.connector_traversal.authored_id == authored.authored_id
-        )
-        traversed = execute_available_action(hero, row, row.valid_targets[0])
-        assert type(traversed) is TraverseConnectorEvent
-        assert traversed.phase is EventPhase.COMPLETION
-        assert traversed.end_position == authored.endpoint_positions[1]
-        seen_kinds.add(traversed.connector_kind)
-    assert seen_kinds == set(TraversalConnectorKind)
-
-    projected_grid = project_grid(grid)
-    projected_encounter = project_encounter(encounter, (hero, *monsters))
-    assert type(projected_grid).model_validate_json(
-        projected_grid.model_dump_json(),
-    ) == projected_grid
-    assert type(projected_encounter).model_validate_json(
-        projected_encounter.model_dump_json(),
-    ) == projected_encounter
-    assert len(projected_grid.connectors) == len(TraversalConnectorKind)
-    assert projected_encounter.state == EncounterState.ACTIVE.value
-
     end_event = encounter.end_encounter("Elevation proving flow complete")
     assert end_event.phase is EventPhase.COMPLETION
     assert encounter.state is EncounterState.ENDED
-    assert project_encounter(encounter, (hero, *monsters)).state == (
-        EncounterState.ENDED.value
-    )

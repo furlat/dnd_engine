@@ -62,13 +62,13 @@ from dnd.types.rolls import AdvantageStatus
 from dnd.core.values import BaseValue
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
-from dnd.encounter import Encounter
-from dnd.entity import Entity
+from dnd.encounters.encounter import Encounter
+from dnd.entities.entity import Entity
 from dnd.items.armors import CHAIN_MAIL_RECIPE, LEATHER_ARMOR_RECIPE
 from dnd.items.consumables import GREATER_INVISIBILITY_POTION_RECIPE
 from dnd.items.torches import TORCH_RECIPE, Torch
 from dnd.items.weapons import ASSASSIN_DAGGER_RECIPE
-from dnd.monsters.bestiary import create_caster, create_skeleton
+from tests.engine.support import create_test_monster
 from dnd.spells.evocation import FireBolt
 from dnd.spells.illusion import GreaterInvisibility
 from tests.engine.support import get_max_hp, reset_combat_state, set_hp
@@ -541,31 +541,31 @@ def test_legacy_stealth_and_lighting_ledger_is_complete_and_resolved() -> None:
 def test_perceivability_boundaries_special_senses_and_objects() -> None:
     """Perceivability defaults, ties, bypass senses, and objects stay reactive."""
     reset_stealth_world(width=8)
-    observer = create_skeleton(
+    observer = create_test_monster("monster.skeleton", 
         name="Observer",
         position=(0, 1),
         faction="heroes",
         darkvision=False,
     )
-    target = create_skeleton(
+    target = create_test_monster("monster.skeleton", 
         name="Target",
         position=(3, 1),
         faction="monsters",
         darkvision=False,
     )
-    truesight = create_skeleton(
+    truesight = create_test_monster("monster.skeleton", 
         name="Truesight",
         position=(5, 1),
         faction="heroes",
         darkvision=False,
     )
-    blindsight = create_skeleton(
+    blindsight = create_test_monster("monster.skeleton", 
         name="Blindsight",
         position=(6, 1),
         faction="heroes",
         darkvision=False,
     )
-    tremorsense = create_skeleton(
+    tremorsense = create_test_monster("monster.skeleton", 
         name="Tremorsense",
         position=(7, 1),
         faction="heroes",
@@ -618,7 +618,7 @@ def test_perceivability_boundaries_special_senses_and_objects() -> None:
 def test_armor_stealth_traits_are_item_specific() -> None:
     """Leather remains neutral while chain mail owns reversible disadvantage."""
     reset_stealth_world()
-    actor = create_skeleton(name="Scout", position=(1, 1), darkvision=False)
+    actor = create_test_monster("monster.skeleton", name="Scout", position=(1, 1), darkvision=False)
     leather = materialize_item(
         LEATHER_ARMOR_RECIPE,
         actor.uuid,
@@ -656,13 +656,13 @@ def test_armor_stealth_traits_are_item_specific() -> None:
 def test_real_attack_reveals_hidden_and_spell_invisibility() -> None:
     """One real Attack lifecycle removes both revealable stealth conditions."""
     reset_stealth_world()
-    attacker = create_skeleton(
+    attacker = create_test_monster("monster.skeleton", 
         name="Ambusher",
         position=(1, 1),
         faction="heroes",
         darkvision=False,
     )
-    target = create_skeleton(
+    target = create_test_monster("monster.skeleton", 
         name="Target",
         position=(2, 1),
         faction="monsters",
@@ -700,8 +700,8 @@ def test_real_attack_reveals_hidden_and_spell_invisibility() -> None:
 def test_damage_incapacity_and_spell_events_reveal_hidden_state() -> None:
     """Damage, full-turn denial, and spell casting use their typed reveal edges."""
     reset_stealth_world()
-    source = create_skeleton(name="Source", position=(1, 1), faction="heroes")
-    hidden_target = create_skeleton(
+    source = create_test_monster("monster.skeleton", name="Source", position=(1, 1), faction="heroes")
+    hidden_target = create_test_monster("monster.skeleton", 
         name="Hidden Target",
         position=(2, 1),
         faction="monsters",
@@ -743,13 +743,13 @@ def test_damage_incapacity_and_spell_events_reveal_hidden_state() -> None:
     assert hidden_target.stealth_dc is None
 
     reset_stealth_world()
-    caster = create_caster(
+    caster = create_test_monster("monster.generic_caster", 
         name="Hidden Caster",
         position=(1, 1),
         faction="heroes",
         level=5,
     )
-    spell_target = create_skeleton(
+    spell_target = create_test_monster("monster.skeleton", 
         name="Spell Target",
         position=(4, 1),
         faction="monsters",
@@ -782,13 +782,13 @@ def test_damage_incapacity_and_spell_events_reveal_hidden_state() -> None:
 def test_hide_uses_subjective_enemy_visibility_and_emits_stealth_check() -> None:
     """Hide cancels while observed, then succeeds once the actor is unseen."""
     reset_stealth_world(width=8)
-    hider = create_skeleton(
+    hider = create_test_monster("monster.skeleton", 
         name="Hider",
         position=(3, 1),
         faction="heroes",
         darkvision=False,
     )
-    enemy = create_skeleton(
+    enemy = create_test_monster("monster.skeleton", 
         name="Enemy",
         position=(0, 1),
         faction="monsters",
@@ -832,13 +832,13 @@ def test_hide_uses_subjective_enemy_visibility_and_emits_stealth_check() -> None
 def test_hide_succeeds_in_darkness_or_without_enemy_observers() -> None:
     """Darkness and absence of enemy observers are both legal Hide contexts."""
     reset_stealth_world(default_light=LightLevel.DARKNESS)
-    dark_hider = create_skeleton(
+    dark_hider = create_test_monster("monster.skeleton", 
         name="Dark Hider",
         position=(4, 1),
         faction="heroes",
         darkvision=False,
     )
-    dark_enemy = create_skeleton(
+    dark_enemy = create_test_monster("monster.skeleton", 
         name="Dark Enemy",
         position=(0, 1),
         faction="monsters",
@@ -855,7 +855,7 @@ def test_hide_succeeds_in_darkness_or_without_enemy_observers() -> None:
     assert dark_hider.action_economy.actions.normalized_score == 0
 
     reset_stealth_world()
-    lone_hider = create_skeleton(
+    lone_hider = create_test_monster("monster.skeleton", 
         name="Lone Hider",
         position=(4, 1),
         faction="heroes",
@@ -875,7 +875,7 @@ def test_hide_succeeds_in_darkness_or_without_enemy_observers() -> None:
 def test_non_revealing_actions_and_movement_preserve_hidden() -> None:
     """Dodge, Disengage, and a completed step leave Hidden intact."""
     reset_stealth_world()
-    actor = create_skeleton(
+    actor = create_test_monster("monster.skeleton", 
         name="Hidden Mover",
         position=(1, 1),
         faction="heroes",
@@ -916,13 +916,13 @@ def test_non_revealing_actions_and_movement_preserve_hidden() -> None:
 def test_greater_invisibility_self_cast_owns_lineage_and_concentration() -> None:
     """A legal level-7 self-cast survives its own lineage and follows concentration."""
     reset_stealth_world()
-    caster = create_caster(
+    caster = create_test_monster("monster.generic_caster", 
         name="Illusionist",
         position=(1, 1),
         faction="heroes",
         level=7,
     )
-    observer = create_skeleton(
+    observer = create_test_monster("monster.skeleton", 
         name="Observer",
         position=(5, 1),
         faction="monsters",
@@ -960,7 +960,7 @@ def test_greater_invisibility_self_cast_owns_lineage_and_concentration() -> None
 def test_greater_invisibility_potion_stack_consumes_one_legal_use_at_a_time() -> None:
     """A stacked potion spends one item and one bonus action per legal use."""
     reset_stealth_world()
-    actor = create_skeleton(name="Drinker", position=(1, 1), darkvision=False)
+    actor = create_test_monster("monster.skeleton", name="Drinker", position=(1, 1), darkvision=False)
     first = materialize_item(
         GREATER_INVISIBILITY_POTION_RECIPE,
         actor.uuid,
@@ -1025,13 +1025,13 @@ def test_greater_invisibility_potion_stack_consumes_one_legal_use_at_a_time() ->
 def test_assassin_dagger_mutates_only_unseen_damage_and_cleans_handler() -> None:
     """Unseen Strike appends one die only when unseen and leaves no handler."""
     reset_stealth_world()
-    attacker = create_skeleton(
+    attacker = create_test_monster("monster.skeleton", 
         name="Assassin",
         position=(1, 1),
         faction="heroes",
         darkvision=False,
     )
-    target = create_skeleton(
+    target = create_test_monster("monster.skeleton", 
         name="Target",
         position=(2, 1),
         faction="monsters",
@@ -1105,13 +1105,13 @@ def test_assassin_dagger_mutates_only_unseen_damage_and_cleans_handler() -> None
 def test_magical_darkness_controls_attack_discovery_by_sense_mode() -> None:
     """Darkvision cannot target through magical darkness; Devil's Sight can."""
     reset_stealth_world(width=8)
-    attacker = create_skeleton(
+    attacker = create_test_monster("monster.skeleton", 
         name="Attacker",
         position=(1, 1),
         faction="heroes",
         darkvision=True,
     )
-    target = create_skeleton(
+    target = create_test_monster("monster.skeleton", 
         name="Target",
         position=(2, 1),
         faction="monsters",
@@ -1143,19 +1143,19 @@ def test_magical_darkness_controls_attack_discovery_by_sense_mode() -> None:
 def test_torch_zones_preserve_bright_hidden_and_reveal_very_bright_hidden() -> None:
     """One torch locks all three zones and their distinct Hidden semantics."""
     reset_stealth_world(width=12, default_light=LightLevel.DARKNESS)
-    carrier = create_skeleton(
+    carrier = create_test_monster("monster.skeleton", 
         name="Torchbearer",
         position=(0, 1),
         faction="heroes",
         darkvision=False,
     )
-    near_hidden = create_skeleton(
+    near_hidden = create_test_monster("monster.skeleton", 
         name="Near Hidden",
         position=(1, 1),
         faction="monsters",
         darkvision=False,
     )
-    bright_hidden = create_skeleton(
+    bright_hidden = create_test_monster("monster.skeleton", 
         name="Bright Hidden",
         position=(3, 1),
         faction="monsters",
@@ -1194,19 +1194,19 @@ def test_torch_zones_preserve_bright_hidden_and_reveal_very_bright_hidden() -> N
 def test_light_add_spots_only_the_hidden_enemy() -> None:
     """Lighting a subscribed dark cell logs the hidden enemy, not plain darkness."""
     reset_stealth_world(width=8, default_light=LightLevel.DARKNESS)
-    observer = create_skeleton(
+    observer = create_test_monster("monster.skeleton", 
         name="Observer",
         position=(0, 1),
         faction="heroes",
         darkvision=False,
     )
-    hidden_enemy = create_skeleton(
+    hidden_enemy = create_test_monster("monster.skeleton", 
         name="Lurker",
         position=(3, 1),
         faction="monsters",
         darkvision=False,
     )
-    plain_enemy = create_skeleton(
+    plain_enemy = create_test_monster("monster.skeleton", 
         name="Plain Enemy",
         position=(4, 1),
         faction="monsters",
@@ -1238,7 +1238,7 @@ def test_light_add_spots_only_the_hidden_enemy() -> None:
 def test_torch_light_change_refreshes_move_targets() -> None:
     """Authoritative illumination invalidates cached movement affordances."""
     reset_stealth_world(width=16, default_light=LightLevel.DARKNESS)
-    carrier = create_skeleton(
+    carrier = create_test_monster("monster.skeleton", 
         name="Torchbearer",
         position=(0, 1),
         faction="heroes",
@@ -1288,13 +1288,13 @@ def test_torch_light_change_refreshes_move_targets() -> None:
 def test_anchored_torch_movement_spots_hidden_enemy_reactively() -> None:
     """Moving an anchored torch produces one observation and one spotted fact."""
     reset_stealth_world(width=16, default_light=LightLevel.DARKNESS)
-    carrier = create_skeleton(
+    carrier = create_test_monster("monster.skeleton", 
         name="Torchbearer",
         position=(0, 1),
         faction="heroes",
         darkvision=False,
     )
-    hidden_enemy = create_skeleton(
+    hidden_enemy = create_test_monster("monster.skeleton", 
         name="Skulker",
         position=(10, 1),
         faction="monsters",
@@ -1336,13 +1336,13 @@ def test_anchored_torch_movement_spots_hidden_enemy_reactively() -> None:
 def test_light_toggle_spots_hidden_enemy_reactively() -> None:
     """Turning an existing light back on logs exactly the new hidden contact."""
     reset_stealth_world(width=8, default_light=LightLevel.DARKNESS)
-    observer = create_skeleton(
+    observer = create_test_monster("monster.skeleton", 
         name="Watcher",
         position=(0, 1),
         faction="heroes",
         darkvision=False,
     )
-    hidden_enemy = create_skeleton(
+    hidden_enemy = create_test_monster("monster.skeleton", 
         name="Sneaker",
         position=(3, 1),
         faction="monsters",

@@ -8,7 +8,7 @@ from dnd.actions.standard import (
     AttackEvent,
 )
 from dnd.conditions import Incapacitated
-from dnd.content_system.creature_materialization import materialize_creature
+from dnd.content.monsters.monster_builders import create_monster
 from dnd.core.events.action_events import (
     ActionEvent,
 )
@@ -35,33 +35,17 @@ from dnd.core.events.events_registry import (
 from dnd.core.gridmap import GridMap, get_map
 from dnd.types.damage import DamageType
 from dnd.types.rolls import AdvantageStatus
-from dnd.core.content.materialization import (
-    CreatureDeploymentRole,
-    CreaturePossessionMode,
-)
 from dnd.core.values import BaseValue
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
+from dnd.game import Game
 from dnd.monsters.traits import LeadershipAura, LeadershipMembership
-from dnd.monsters.srd_roster import (
-    SRD_CREATURE_DECLARATIONS_BY_ID,
-    SRD_CREATURE_RECIPES_BY_ID,
-)
-from dnd.spatial.effect_base import FieldEffect, SpatialEffect
+from dnd.spatial.area_conditions import SpatialCondition
+from dnd.runtime_reset import reset_engine_runtime
 
 
 def reset_srd_trait_state(width: int = 12, height: int = 12) -> None:
     """Clear global engine registries for isolated SRD trait tests."""
-    EventQueue.reset()
-    EventQueue.set_combat_log_callback(None)
-    BaseObject._registry.clear()
-    BaseBlock._registry.clear()
-    BaseCondition._registry.clear()
-    BaseValue._registry.clear()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
-    SpatialEffect._effect_registry.clear()
-    GridMap.reset()
-    get_map().create_rectangle(0, 0, width, height)
+    reset_engine_runtime(grid_size=(width, height))
 
 
 def registered_action_names(entity: Entity) -> set[str]:
@@ -95,19 +79,13 @@ def _materialize_srd_fixture(
     position: tuple[int, int],
     faction: str,
 ) -> Entity:
-    declaration = SRD_CREATURE_DECLARATIONS_BY_ID[creature_id]
-    role_suffix = f"{creature_id}_{position[0]}_{position[1]}"
-    return materialize_creature(
-        SRD_CREATURE_RECIPES_BY_ID[creature_id],
-        runtime_entity_uuid=uuid4(),
-        display_name=declaration.descriptor.display_name,
+    entity = create_monster(
+        f"creature.{creature_id}",
+        uuid4(),
         faction=faction,
-        position=position,
-        deployment_role=CreatureDeploymentRole(
-            role_id=f"tests.srd_traits.{role_suffix}",
-        ),
-        possession_mode=CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS,
     )
+    Game().deploy_entity(entity, position)
+    return entity
 
 
 def test_factory_trait_packages_are_installed() -> None:
@@ -636,15 +614,12 @@ def test_active_monster_actions_apply_their_marker_conditions() -> None:
     assert "Leadership Used" in knight.active_conditions
     leadership_fields = [
         effect
-        for effect in SpatialEffect.active_effects()
+        for effect in get_map().get_spatial_conditions()
         if effect.anchor_uuid == knight.uuid
-        and any(
-            isinstance(condition, LeadershipAura)
-            for condition in effect.active_conditions.values()
-        )
+        and isinstance(effect, LeadershipAura)
     ]
     assert len(leadership_fields) == 1
-    assert isinstance(leadership_fields[0], FieldEffect)
+    assert isinstance(leadership_fields[0], SpatialCondition)
     assert isinstance(
         ally.active_conditions.get("Leadership"),
         LeadershipMembership,
@@ -657,7 +632,7 @@ def test_active_monster_actions_apply_their_marker_conditions() -> None:
             target_entity_uuid=knight.uuid,
         ),
     )
-    assert SpatialEffect.get_effect(leadership_fields[0].uuid) is None
+    assert BaseCondition.get(leadership_fields[0].uuid) is None
     assert "Leadership" not in ally.active_conditions
     assert "Leadership Used" in knight.active_conditions
 
@@ -752,12 +727,12 @@ def test_overlapping_leadership_fields_keep_one_source_and_promote_fallback() ->
 
     second_field = next(
         effect
-        for effect in SpatialEffect.active_effects()
+        for effect in get_map().get_spatial_conditions()
         if effect.anchor_uuid == second_leader.uuid
     )
     for _ in range(9):
-        assert not second_field.advance_duration("Leadership Aura")
-    assert second_field.advance_duration("Leadership Aura")
-    assert SpatialEffect.get_effect(second_field.uuid) is None
+        assert not second_field.progress_spatial_duration()
+    assert second_field.progress_spatial_duration()
+    assert BaseCondition.get(second_field.uuid) is None
     assert "Leadership" not in ally.active_conditions
     assert ally.get_condition_application_leases("Leadership") == ()

@@ -1,6 +1,7 @@
 """Field Focus item, action, and condition content."""
 
 from typing import Optional
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -50,13 +51,13 @@ from dnd.core.content.registration import (
     get_content_declaration,
     item_factory,
 )
-from dnd.core.content.runtime import RuntimeBehaviorKind
+from dnd.types.behaviors import RuntimeBehaviorKind
 from dnd.core.events.events_registry import (
     Event,
     EventPhase,
 )
 from dnd.core.modifiers import NumericalModifier
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 
 
 class FieldFocus(BaseCondition):
@@ -300,6 +301,39 @@ def field_kit_recipe(*, charges: int = 1) -> ContentRecipe:
 
 
 FIELD_KIT_RECIPE = field_kit_recipe()
+
+
+def build_field_kit(
+    source_entity_uuid: UUID,
+    *,
+    charges: int = 1,
+) -> UsableItem:
+    """Construct one finite-use Field Kit without recipe installation."""
+    if charges < 0:
+        raise ValueError("field kit charges cannot be negative")
+    item_id = "gear.field_kit"
+    action_id = "action.item.field_kit.deploy"
+    action = DeployFieldFocus(
+        source_entity_uuid=source_entity_uuid,
+        template=True,
+        semantic_key=action_id,
+        behavior_id=action_id,
+        provided_by_id=item_id,
+        origin_root_id=item_id,
+    )
+    action.bind_behavior_owner(origin_root_id=item_id)
+    return UsableItem(
+        source_entity_uuid=source_entity_uuid,
+        semantic_key=item_id,
+        name="Field Kit",
+        description="A compact kit that deploys tactical focus gear.",
+        map_char="kit",
+        charges=charges,
+        max_charges=charges,
+        use_action_templates=[action],
+    )
+
+
 NEURODRAGON_FIELD_FOCUS_ITEM_DECLARATIONS: tuple[ContentDeclaration, ...] = (
     FIELD_KIT_DECLARATION,
 )
