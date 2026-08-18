@@ -2,12 +2,12 @@
 
 from fastapi.testclient import TestClient
 
-from dnd.controller import HumanController, PassController
+from dnd.encounters.controllers import HumanController, PassController
 from dnd.core.gridmap import get_map
 from dnd.types.life import LifeState
-from dnd.encounter import Encounter
-from dnd.entity import Entity
-from dnd.monsters.bestiary import create_goblin, create_skeleton
+from dnd.encounters.encounter import Encounter
+from dnd.entities.entity import Entity
+from tests.engine.support import create_test_monster
 from dnd.monsters.bestiary_content import (
     BESTIARY_CREATURE_DECLARATIONS_BY_ID,
 )
@@ -26,14 +26,14 @@ def _create_life_state_game() -> tuple[TestClient, str, Entity, Entity, Encounte
     reset_server_test_runtime()
     get_map().create_rectangle(0, 0, 6, 4)
 
-    hero = create_goblin(
+    hero = create_test_monster("monster.goblin", 
         name="Lifecycle Hero",
         position=(1, 1),
         faction="heroes",
         content_ref=BESTIARY_CREATURE_DECLARATIONS_BY_ID["goblin"].ref,
     )
     hero.uses_death_saves = True
-    monster = create_skeleton(
+    monster = create_test_monster("monster.skeleton", 
         name="Lifecycle Skeleton",
         position=(2, 1),
         faction="monsters",

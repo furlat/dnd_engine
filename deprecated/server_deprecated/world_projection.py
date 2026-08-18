@@ -26,8 +26,8 @@ from dnd.core.content.descriptors import (
 )
 from dnd.core.gridmap import GridMap
 from dnd.core.item_types import ItemPresentationKind, ItemPresentationState
-from dnd.encounter import Encounter
-from dnd.entity import Entity
+from dnd.encounters.encounter import Encounter
+from dnd.entities.entity import Entity
 from dnd.spatial_effects import SpatialEffect
 from server.world_contracts import (
     APIAppearance,

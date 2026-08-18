@@ -62,7 +62,7 @@ from dnd.items.weapons import (
     LIGHT_HAMMER_REF,
     WARHAMMER_REF,
 )
-from dnd.entity import Entity, EntityConfig
+from dnd.entities.entity import Entity, EntityConfig
 
 
 def test_acolyte_background_authenticates_one_exact_starting_holdings_package(
@@ -188,7 +188,7 @@ def test_dwarf_weapon_training_materializes_and_reverses_all_exact_refs(
         WARHAMMER_REF,
     )
     assert all(
-        entity.creature_proficiencies.is_weapon_proficient((), ref)
+        entity.creature_proficiencies.is_weapon_proficient((), ref.identity_key)
         for ref in expected_refs
     )
 
@@ -201,7 +201,7 @@ def test_dwarf_weapon_training_materializes_and_reverses_all_exact_refs(
         ),
     )
     assert all(
-        not entity.creature_proficiencies.is_weapon_proficient((), ref)
+        not entity.creature_proficiencies.is_weapon_proficient((), ref.identity_key)
         for ref in expected_refs
     )
 

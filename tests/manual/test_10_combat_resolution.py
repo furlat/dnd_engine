@@ -39,8 +39,8 @@ from dnd.core.modifiers import AutoHitModifier, CriticalModifier
 from dnd.types.rolls import AutoHitStatus, CriticalStatus
 from dnd.core.values import BaseValue
 from dnd.conditions import Incapacitated, Prone
-from dnd.entity import Entity, EntityConfig
-from dnd.monsters.bestiary import create_goblin, create_skeleton
+from dnd.entities.entity import Entity, EntityConfig
+from tests.engine.support import create_test_monster
 from dnd.actions.reactions import add_opportunity_attack_handler
 
 
@@ -124,8 +124,8 @@ def create_strong_actor(
 def test_first_combat_example_prints_visible_hit_damage_and_heal(capsys) -> None:
     """One attack prints outcome, HP changes, cost spending, and heal events."""
     reset_combat_tutorial_state()
-    attacker = create_goblin(name="Blade", position=(5, 5), faction="heroes")
-    target = create_skeleton(name="Bone Guard", position=(6, 5), faction="monsters")
+    attacker = create_test_monster("monster.goblin", name="Blade", position=(5, 5), faction="heroes")
+    target = create_test_monster("monster.skeleton", name="Bone Guard", position=(6, 5), faction="monsters")
     Entity.update_all_entities_senses(max_distance=20)
 
     target_hp_before = target.get_hp()
@@ -210,8 +210,8 @@ def test_prone_auto_stand_waits_when_movement_is_unavailable() -> None:
 def test_invalid_melee_attack_cancels_before_costs(capsys) -> None:
     """Invalid attack validation cancels without spending the action."""
     reset_combat_tutorial_state()
-    attacker = create_goblin(name="Attacker", position=(2, 2), faction="heroes")
-    target = create_skeleton(name="Too Far", position=(12, 2), faction="monsters")
+    attacker = create_test_monster("monster.goblin", name="Attacker", position=(2, 2), faction="heroes")
+    target = create_test_monster("monster.skeleton", name="Too Far", position=(12, 2), faction="monsters")
     Entity.update_all_entities_senses(max_distance=20)
 
     actions_before = attacker.action_economy.actions.normalized_score
@@ -251,8 +251,8 @@ def test_invalid_melee_attack_cancels_before_costs(capsys) -> None:
 def test_successful_attack_rolls_damage_spends_action_and_can_be_healed(capsys) -> None:
     """A hit rolls damage, applies HP loss, emits events, and can be healed."""
     reset_combat_tutorial_state()
-    attacker = create_goblin(name="Attacker", position=(5, 5), faction="heroes")
-    target = create_skeleton(name="Target", position=(6, 5), faction="monsters")
+    attacker = create_test_monster("monster.goblin", name="Attacker", position=(5, 5), faction="heroes")
+    target = create_test_monster("monster.skeleton", name="Target", position=(6, 5), faction="monsters")
     Entity.update_all_entities_senses(max_distance=20)
 
     target_hp_before = target.get_hp()
@@ -329,8 +329,8 @@ def test_successful_attack_rolls_damage_spends_action_and_can_be_healed(capsys) 
 def test_critical_hit_doubles_weapon_damage_dice(capsys) -> None:
     """A critical weapon hit rolls the weapon damage dice twice."""
     reset_combat_tutorial_state()
-    attacker = create_goblin(name="Attacker", position=(5, 5), faction="heroes")
-    target = create_skeleton(name="Target", position=(6, 5), faction="monsters")
+    attacker = create_test_monster("monster.goblin", name="Attacker", position=(5, 5), faction="heroes")
+    target = create_test_monster("monster.skeleton", name="Target", position=(6, 5), faction="monsters")
     Entity.update_all_entities_senses(max_distance=20)
 
     hit_modifier = make_melee_attack_auto_hit(attacker)
@@ -377,8 +377,8 @@ def test_critical_hit_doubles_weapon_damage_dice(capsys) -> None:
 def test_step_movement_can_trigger_opportunity_attack(capsys) -> None:
     """Voluntary step movement can trigger a hostile opportunity attack."""
     reset_combat_tutorial_state()
-    watcher = create_skeleton(name="Watcher", position=(5, 5), faction="monsters")
-    mover = create_goblin(name="Mover", position=(5, 6), faction="heroes")
+    watcher = create_test_monster("monster.skeleton", name="Watcher", position=(5, 5), faction="monsters")
+    mover = create_test_monster("monster.goblin", name="Mover", position=(5, 6), faction="heroes")
     add_opportunity_attack_handler(watcher)
     Entity.update_all_entities_senses(max_distance=20)
     setup_standard_actions(mover)
@@ -446,8 +446,8 @@ def test_step_movement_can_trigger_opportunity_attack(capsys) -> None:
 def test_diagonal_threat_exit_preview_matches_runtime_opportunity_attack() -> None:
     """The engine's five-foot diagonal metric owns preview and execution."""
     reset_combat_tutorial_state()
-    watcher = create_skeleton(name="Watcher", position=(5, 5), faction="monsters")
-    mover = create_goblin(name="Mover", position=(6, 6), faction="heroes")
+    watcher = create_test_monster("monster.skeleton", name="Watcher", position=(5, 5), faction="monsters")
+    mover = create_test_monster("monster.goblin", name="Mover", position=(6, 6), faction="heroes")
     add_opportunity_attack_handler(watcher)
     Entity.update_all_entities_senses(max_distance=20)
     setup_standard_actions(mover)
@@ -481,8 +481,8 @@ def test_extended_reach_exit_preview_matches_runtime_opportunity_attack(
 ) -> None:
     """Bounded preview candidates still cover an authored ten-foot reach."""
     reset_combat_tutorial_state()
-    watcher = create_skeleton(name="Watcher", position=(5, 5), faction="monsters")
-    mover = create_goblin(name="Mover", position=(7, 5), faction="heroes")
+    watcher = create_test_monster("monster.skeleton", name="Watcher", position=(5, 5), faction="monsters")
+    mover = create_test_monster("monster.goblin", name="Mover", position=(7, 5), faction="heroes")
     original_get_weapon_range = Entity.get_weapon_range
 
     def get_weapon_range(
@@ -533,7 +533,7 @@ def test_bg3_shove_uses_bonus_action_and_forced_movement_not_opportunity_attack(
         strength=8,
         weight=40,
     )
-    watcher = create_skeleton(name="Watcher", position=(6, 6), faction="monsters")
+    watcher = create_test_monster("monster.skeleton", name="Watcher", position=(6, 6), faction="monsters")
     add_opportunity_attack_handler(watcher)
     Entity.update_all_entities_senses(max_distance=20)
 

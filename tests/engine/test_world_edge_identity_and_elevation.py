@@ -25,7 +25,7 @@ from dnd.core.values import BaseValue
 from dnd.core.world_edges import AdjacentEdgeKey, ElevationSurfaceKind, SlopeAxis
 from dnd.types.world import WorldEdgeChannel
 from dnd.items.environment import DirectionalDoor, DirectionalWall
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from tests.engine.support import reset_combat_state
 from tests.engine.test_combat_actions import reset_core_action_state, strong_entity
 from server.api_models import (

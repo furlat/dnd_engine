@@ -56,7 +56,7 @@ def test_player_body_is_public_but_owns_no_progression_or_possessions() -> None:
     assert entity.inventory.items == {}
     assert entity.equipment.get_all_equipped_items() == []
     assert not entity.creature_proficiencies.is_shield_proficient()
-    assert entity.creature_proficiencies.base_weapon_ref_keys == frozenset()
+    assert entity.creature_proficiencies.base_weapon_ids == frozenset()
     assert not entity.creature_proficiencies.base_simple_weapons
     assert not entity.creature_proficiencies.base_martial_weapons
     assert not entity.uses_death_saves

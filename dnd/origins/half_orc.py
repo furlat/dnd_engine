@@ -20,7 +20,7 @@ from dnd.core.content.registration import (
     behavior_identity,
     get_content_declaration,
 )
-from dnd.core.content.runtime import RuntimeBehaviorKind
+from dnd.types.behaviors import RuntimeBehaviorKind
 from dnd.core.events.events_registry import (
     Event,
 )
@@ -28,7 +28,7 @@ from dnd.core.events.resolution_events import (
     TakeDamageEvent,
 )
 from dnd.types.life import LifeState
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 
 
 HALF_ORC_RELENTLESS_ENDURANCE_RESOURCE = (

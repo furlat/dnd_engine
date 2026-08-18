@@ -42,7 +42,7 @@ from dnd.types.life import LifeState
 from dnd.types.damage import DamageType
 from dnd.types.rolls import AdvantageStatus
 from dnd.core.modifiers import NumericalModifier
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from dnd.items.weapons import DAGGER_RECIPE
 from dnd.spells.abjuration import (
     Aid,

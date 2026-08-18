@@ -117,7 +117,7 @@ def _create_learned_counterspell_handler(
     """Create Counterspell bound to its exact learned-spell source set."""
     return create_counterspell_reaction_handler(
         source_entity_uuid,
-        learned_spell_ref=COUNTERSPELL_SPELL_DECLARATION.ref,
+        learned_spell_id=COUNTERSPELL_SPELL_DECLARATION.ref.content_id,
     )
 
 

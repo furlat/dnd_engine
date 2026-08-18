@@ -18,7 +18,7 @@ from dnd.core.events.world_events import (
     SpatialChangeType,
 )
 from dnd.core.gridmap import get_map
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from tests.manual.spell_regression_support import (
     create_spell_regression_actor,
     reset_spell_regression_arena,

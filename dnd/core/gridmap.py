@@ -13,6 +13,7 @@ from dnd.core.geometry import circle_positions, supercover_line, supercover_line
 from dnd.core.shadowcast import compute_fov
 from dnd.core.dijkstra import breadth_first_paths, dijkstra
 from dnd.core.base_block import BaseBlock
+from dnd.core.base_conditions import BaseCondition
 from dnd.types.world import MovementMode, LightLevel
 from dnd.core.base_tiles import Tile, validate_elevation_surface_tuple
 from dnd.core.events.events_registry import (
@@ -106,12 +107,15 @@ class GridMap:
         self._object_positions: Dict[UUID, Tuple[int, int]] = {}
         self._objects_by_position: DefaultDict[Tuple[int, int], Set[UUID]] = defaultdict(set)
 
-        self._spatial_effect_positions: Dict[UUID, Set[Tuple[int, int]]] = {}
-        self._spatial_effect_layers: Dict[UUID, SpatialEffectLayer] = {}
-        self._spatial_effects_by_position: DefaultDict[
-            Tuple[SpatialEffectLayer, Tuple[int, int]],
-            Set[UUID],
-        ] = defaultdict(set)
+        self._spatial_conditions: Dict[UUID, BaseCondition] = {}
+        self._spatial_condition_positions: Dict[
+            UUID,
+            Set[Tuple[int, int]],
+        ] = {}
+        self._spatial_condition_layers: Dict[
+            UUID,
+            SpatialEffectLayer,
+        ] = {}
 
         self._cell_subscribers: DefaultDict[Tuple[int, int], Set[UUID]] = defaultdict(set)
         self._entity_subscriptions: DefaultDict[UUID, Set[Tuple[int, int]]] = defaultdict(set)
@@ -225,13 +229,15 @@ class GridMap:
         effect = execution.phase_to(EventPhase.EFFECT)
         return effect.phase_to(EventPhase.COMPLETION, use_register=True)
 
-    def enable_events(self) -> None:
-        """Enable event firing and flush pending events through full lifecycle."""
+    def enable_events(self, *, flush_pending: bool = True) -> None:
+        """Enable events and either publish or discard buffered bootstrap facts."""
         self._events_enabled = True
         pending = self._pending_events.copy()
         pending_committed = self._pending_committed_events.copy()
         self._pending_events.clear()
         self._pending_committed_events.clear()
+        if not flush_pending:
+            return
         for event in pending:
             self._fire_spatial_event(event)
         for event in pending_committed:
@@ -414,6 +420,14 @@ class GridMap:
         )
         position = (x, y)
         old_tile = self._tiles.get(position)
+        if (
+            old_tile is not None
+            and tile is not old_tile
+            and old_tile.get_spatial_condition_uuids()
+        ):
+            raise ValueError(
+                "cannot replace a tile while spatial conditions cover it",
+            )
         if old_tile is not None and self._connector_uuids_by_endpoint.get(position):
             raise ValueError(
                 "cannot replace a support tile while a traversal connector is anchored"
@@ -761,6 +775,10 @@ class GridMap:
                     "cannot remove a support tile while a traversal connector is anchored"
                 )
             tile = self._tiles[position]
+            if tile.get_spatial_condition_uuids():
+                raise ValueError(
+                    "cannot remove a tile while spatial conditions cover it",
+                )
             self._tiles_by_uuid.pop(tile.uuid, None)
             del self._tiles[position]
             self._bounds_dirty = True
@@ -1140,8 +1158,8 @@ class GridMap:
             if obj is not None and obj.is_hazardous_for(entity_uuid):
                 return True
 
-        for effect in self.get_spatial_effect_blocks_at((x, y)):
-            if effect.is_hazardous_for(entity_uuid):
+        for condition in self.get_spatial_conditions_at((x, y)):
+            if condition.is_hazardous_for(entity_uuid):
                 return True
 
         return False
@@ -1149,112 +1167,170 @@ class GridMap:
     def has_any_hazards(self) -> bool:
         """Return whether any indexed world block currently declares a hazard."""
         for tile in self.get_tiles_with_conditions():
-            if any(condition.hazard_filter is not None for condition in tile.active_conditions.values()):
+            if any(
+                condition.hazard_filter is not None
+                for condition in tile.get_conditions().values()
+            ):
                 return True
         for obj in self.get_objects_with_conditions():
             if any(condition.hazard_filter is not None for condition in obj.active_conditions.values()):
                 return True
-        for effect in self.get_spatial_effects_with_conditions():
-            if any(
-                condition.hazard_filter is not None
-                for condition in effect.active_conditions.values()
-            ):
+        for condition in self.get_spatial_conditions():
+            if condition.hazard_filter is not None:
                 return True
         return False
 
-    def set_spatial_effect_positions(
+    def set_spatial_condition_positions(
         self,
         *,
-        effect_uuid: UUID,
+        condition: BaseCondition,
         layer: SpatialEffectLayer,
         occupancy_policy: SpatialEffectOccupancyPolicy,
         positions: Set[Tuple[int, int]],
     ) -> None:
-        """Replace one effect's indexed footprint after validating occupancy."""
-        if any(position not in self._tiles for position in positions):
-            raise ValueError("Spatial effect positions must identify existing tiles")
+        """Commit one independent condition's complete Tile footprint."""
+        normalized = set(positions)
+        self.validate_spatial_condition_positions(
+            condition=condition,
+            layer=layer,
+            occupancy_policy=occupancy_policy,
+            positions=normalized,
+        )
 
-        if occupancy_policy is SpatialEffectOccupancyPolicy.EXCLUSIVE_TRANSFORMING:
-            for position in positions:
-                occupants = self._spatial_effects_by_position.get(
-                    (layer, position),
-                    set(),
-                ) - {effect_uuid}
-                if occupants:
-                    raise ValueError(
-                        f"{layer.value} cell {position} already has an effect",
+        previous_layer = self._spatial_condition_layers.get(condition.uuid)
+        previous_positions = self._spatial_condition_positions.get(
+            condition.uuid,
+            set(),
+        )
+        if previous_layer is not None:
+            for position in previous_positions - normalized:
+                tile = self._tiles.get(position)
+                if tile is not None:
+                    tile.remove_spatial_condition_reference(
+                        condition.uuid,
+                        previous_layer,
+                    )
+            if previous_layer is not layer:
+                for position in previous_positions & normalized:
+                    tile = self._tiles[position]
+                    tile.remove_spatial_condition_reference(
+                        condition.uuid,
+                        previous_layer,
                     )
 
-        previous_layer = self._spatial_effect_layers.get(effect_uuid)
-        previous_positions = self._spatial_effect_positions.get(effect_uuid, set())
-        if previous_layer is not None:
-            for position in previous_positions:
-                key = (previous_layer, position)
-                self._spatial_effects_by_position[key].discard(effect_uuid)
-                if not self._spatial_effects_by_position[key]:
-                    del self._spatial_effects_by_position[key]
+        self._spatial_conditions[condition.uuid] = condition
+        self._spatial_condition_layers[condition.uuid] = layer
+        self._spatial_condition_positions[condition.uuid] = normalized
+        for position in normalized:
+            self._tiles[position].add_spatial_condition_reference(
+                condition.uuid,
+                layer,
+            )
 
-        self._spatial_effect_layers[effect_uuid] = layer
-        self._spatial_effect_positions[effect_uuid] = set(positions)
-        for position in positions:
-            self._spatial_effects_by_position[(layer, position)].add(effect_uuid)
+    def validate_spatial_condition_positions(
+        self,
+        *,
+        condition: BaseCondition,
+        layer: SpatialEffectLayer,
+        occupancy_policy: SpatialEffectOccupancyPolicy,
+        positions: Set[Tuple[int, int]],
+    ) -> None:
+        """Validate one complete footprint without mutating map indexes."""
+        normalized = set(positions)
+        if any(position not in self._tiles for position in normalized):
+            raise ValueError(
+                "Spatial condition positions must identify existing tiles",
+            )
 
-    def remove_spatial_effect(self, effect_uuid: UUID) -> None:
-        """Remove one effect from every layer/cell index."""
-        layer = self._spatial_effect_layers.pop(effect_uuid, None)
-        positions = self._spatial_effect_positions.pop(effect_uuid, set())
-        if layer is None:
-            return
-        for position in positions:
-            key = (layer, position)
-            self._spatial_effects_by_position[key].discard(effect_uuid)
-            if not self._spatial_effects_by_position[key]:
-                del self._spatial_effects_by_position[key]
+        existing = self._spatial_conditions.get(condition.uuid)
+        if existing is not None and existing is not condition:
+            raise ValueError(
+                f"Spatial condition UUID {condition.uuid} is already active",
+            )
 
-    def get_spatial_effect_uuids_at(
+        if occupancy_policy is SpatialEffectOccupancyPolicy.EXCLUSIVE_TRANSFORMING:
+            for position in normalized:
+                occupants = self._tiles[position].get_spatial_condition_uuids(
+                    layer,
+                ) - {condition.uuid}
+                if occupants:
+                    raise ValueError(
+                        f"{layer.value} cell {position} already has a condition",
+                    )
+
+    def remove_spatial_condition(self, condition_uuid: UUID) -> None:
+        """Remove one independent condition from GridMap and every Tile."""
+        layer = self._spatial_condition_layers.pop(condition_uuid, None)
+        positions = self._spatial_condition_positions.pop(
+            condition_uuid,
+            set(),
+        )
+        if layer is not None:
+            for position in positions:
+                tile = self._tiles.get(position)
+                if tile is not None:
+                    tile.remove_spatial_condition_reference(
+                        condition_uuid,
+                        layer,
+                    )
+        self._spatial_conditions.pop(condition_uuid, None)
+
+    def get_spatial_condition_positions(
+        self,
+        condition_uuid: UUID,
+    ) -> Set[Tuple[int, int]]:
+        """Return the authoritative footprint indexed for one condition."""
+        return set(self._spatial_condition_positions.get(condition_uuid, set()))
+
+    def has_spatial_condition(self, condition_uuid: UUID) -> bool:
+        """Return whether the exact condition UUID is active on this map."""
+        return condition_uuid in self._spatial_conditions
+
+    def get_spatial_condition(
+        self,
+        condition_uuid: UUID,
+    ) -> Optional[BaseCondition]:
+        """Return the exact active independent condition, if present."""
+        return self._spatial_conditions.get(condition_uuid)
+
+    def get_spatial_condition_uuids_at(
         self,
         position: Tuple[int, int],
         *,
         layer: Optional[SpatialEffectLayer] = None,
     ) -> Set[UUID]:
-        """Return indexed effect UUIDs at one position."""
-        if layer is not None:
-            return set(self._spatial_effects_by_position.get((layer, position), set()))
-        effect_uuids: Set[UUID] = set()
-        for candidate_layer in SpatialEffectLayer:
-            effect_uuids.update(
-                self._spatial_effects_by_position.get(
-                    (candidate_layer, position),
-                    set(),
-                )
-            )
-        return effect_uuids
+        """Return active independent condition UUIDs affecting one Tile."""
+        tile = self._tiles.get(position)
+        if tile is None:
+            return set()
+        return tile.get_spatial_condition_uuids(layer)
 
-    def get_spatial_effect_blocks_at(
+    def get_spatial_conditions_at(
         self,
         position: Tuple[int, int],
         *,
         layer: Optional[SpatialEffectLayer] = None,
-    ) -> List[BaseBlock]:
-        """Resolve indexed effects without importing concrete runtime classes."""
-        return [
-            block
-            for effect_uuid in sorted(
-                self.get_spatial_effect_uuids_at(position, layer=layer),
-                key=str,
-            )
-            if (block := BaseBlock.get(effect_uuid)) is not None
-        ]
+    ) -> List[BaseCondition]:
+        """Resolve active independent conditions affecting one Tile."""
+        conditions: List[BaseCondition] = []
+        for condition_uuid in sorted(
+            self.get_spatial_condition_uuids_at(position, layer=layer),
+            key=str,
+        ):
+            condition = self._spatial_conditions.get(condition_uuid)
+            if not isinstance(condition, BaseCondition):
+                raise RuntimeError(
+                    "Tile references a spatial condition missing from GridMap: "
+                    f"{condition_uuid}",
+                )
+            conditions.append(condition)
+        return conditions
 
-    def get_spatial_effects_with_conditions(self) -> List[BaseBlock]:
-        """Return each indexed effect block once for environment progression."""
+    def get_spatial_conditions(self) -> List[BaseCondition]:
+        """Return every active independent spatial condition once."""
         return [
-            block
-            for effect_uuid in sorted(self._spatial_effect_positions, key=str)
-            if (
-                (block := BaseBlock.get(effect_uuid)) is not None
-                and block.active_conditions
-            )
+            self._spatial_conditions[condition_uuid]
+            for condition_uuid in sorted(self._spatial_conditions, key=str)
         ]
 
     def is_walkable_for(self, x: int, y: int, requesting_entity_uuid: Optional[UUID] = None,
@@ -1289,15 +1365,15 @@ class GridMap:
                     continue
                 return False
 
-        for block in self.get_spatial_effect_blocks_at((x, y)):
-            if block.blocks_walking_at(
+        for condition in self.get_spatial_conditions_at((x, y)):
+            if condition.blocks_walking_at(
                 (x, y),
                 requesting_entity_uuid,
                 mode,
             ):
                 if (
                     subjective
-                    and not block.is_perceivable_by(requesting_entity_uuid)
+                    and not condition.is_perceivable_by(requesting_entity_uuid)
                 ):
                     continue
                 return False
@@ -1838,13 +1914,13 @@ class GridMap:
             if block is not None and block.blocks_walking(requesting_entity_uuid, mode):
                 return block.name
 
-        for block in self.get_spatial_effect_blocks_at(position):
-            if block.blocks_walking_at(
+        for condition in self.get_spatial_conditions_at(position):
+            if condition.blocks_walking_at(
                 position,
                 requesting_entity_uuid,
                 mode,
             ):
-                return block.name
+                return condition.name
 
         return "obstacle"
 
@@ -1891,6 +1967,20 @@ class GridMap:
                          walkable: bool = True, visible: bool = True,
                          name: str = "Floor", sprite_name: Optional[str] = None) -> None:
         """Create a rectangular area of tiles (batch operation, no events during)."""
+        positions = {
+            (tx, ty)
+            for tx in range(x, x + width)
+            for ty in range(y, y + height)
+        }
+        if any(
+            (tile := self._tiles.get(position)) is not None
+            and tile.get_spatial_condition_uuids()
+            for position in positions
+        ):
+            raise ValueError(
+                "cannot replace tiles while spatial conditions cover them",
+            )
+        events_were_enabled = self._events_enabled
         self.disable_events()
         try:
             for tx in range(x, x + width):
@@ -1911,7 +2001,8 @@ class GridMap:
             self._bounds_dirty = True
         finally:
             self._bump_all_spatial_revisions()
-            self.enable_events()
+            if events_were_enabled:
+                self.enable_events()
 
     def register_entity(self, entity_uuid: UUID, position: Tuple[int, int],
                          parent_event: Optional[UUID] = None) -> None:
@@ -3211,6 +3302,10 @@ class GridMap:
 
     def clear(self) -> None:
         """Clear all tiles, entity positions, object positions, subscriptions, and light sources."""
+        if self._spatial_conditions:
+            raise ValueError(
+                "cannot clear a map while spatial conditions are active",
+            )
         registered_objects = tuple(self._object_positions.items())
         for object_uuid, position in registered_objects:
             obj = BaseBlock.get(object_uuid)
@@ -3222,6 +3317,9 @@ class GridMap:
         self._entity_positions.clear()
         self._object_positions.clear()
         self._objects_by_position.clear()
+        self._spatial_conditions.clear()
+        self._spatial_condition_positions.clear()
+        self._spatial_condition_layers.clear()
         self._cell_subscribers.clear()
         self._entity_subscriptions.clear()
         self._light_sources.clear()

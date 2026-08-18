@@ -13,7 +13,6 @@ from dnd.core.content.identities import (
     ContentRef,
     validate_namespaced_id,
 )
-from dnd.types.spatial_effects import SpatialEffectAnchorKind
 
 
 class CreatureDeploymentRole(BaseModel):
@@ -99,38 +98,5 @@ class ItemBuildContext(BaseModel):
             raise ValueError(
                 "ItemBuildContext requires an item or environment_object "
                 "content reference",
-            )
-        return self
-
-
-class SpatialEffectBuildContext(BaseModel):
-    """Runtime source and exact identity supplied to a spatial-effect factory."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    source_entity_uuid: UUID
-    requested_ref: ContentRef
-    position: tuple[int, int]
-    faction: str | None = None
-    anchor_kind: SpatialEffectAnchorKind
-    anchor_uuid: UUID | None = None
-
-    @model_validator(mode="after")
-    def _validate_spatial_effect_definition(self) -> Self:
-        if (
-            self.requested_ref.definition_kind
-            != ContentDefinitionKind.SPATIAL_EFFECT
-        ):
-            raise ValueError(
-                "SpatialEffectBuildContext requires a spatial_effect "
-                "content reference",
-            )
-        attached = self.anchor_kind in {
-            SpatialEffectAnchorKind.ENTITY,
-            SpatialEffectAnchorKind.WORLD_OBJECT,
-        }
-        if attached is (self.anchor_uuid is None):
-            raise ValueError(
-                "Attached spatial effects require exactly one anchor UUID",
             )
         return self

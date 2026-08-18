@@ -16,11 +16,8 @@ from dnd.actions.standard import (
     entity_action_economy_cost_evaluator,
 )
 from dnd.actions.operations import get_available_actions, setup_standard_actions
-from dnd.blocks.equipment import (
-    Weapon,
-)
-from dnd.content_system.item_bindings import ItemRuntimeOrigin
-from dnd.content_system.item_materialization import materialize_item
+from dnd.blocks.base_item import BaseItem
+from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.conditions import Hidden
 from dnd.core.base_actions import (
     BaseAction,
@@ -41,18 +38,17 @@ from dnd.core.events.resolution_events import (
     TakeDamageEvent,
 )
 from dnd.core.gridmap import get_map
+from dnd.core.base_conditions import BaseCondition
 from dnd.types.spatial_effects import SpatialEffectAnchorKind
 from dnd.types.creatures import CreatureType
 from dnd.types.damage import DamageType
 from dnd.core.modifiers import ResistanceModifier
 from dnd.types.damage import ResistanceStatus
-from dnd.entity import Entity
-from dnd.items.weapons import DAGGER_RECIPE
-from dnd.items.environment_content import OIL_BARREL_RECIPE, OilBarrel
+from dnd.entities.entity import Entity
 from dnd.actions.reactions import add_opportunity_attack_handler
 from dnd.spells.conjuration import (
     GuardianOfFaith,
-    GuardianOfFaithController,
+    GuardianOfFaithCondition,
 )
 from dnd.spells.divination import Guidance
 from dnd.spells.enchantment import Command
@@ -66,7 +62,7 @@ from dnd.content.spatial_effect_recipes import (
     CONTINUAL_FLAME_FIELD_RECIPE,
     GUARDIAN_OF_FAITH_FIELD_RECIPE,
 )
-from dnd.spatial.effect_base import FieldEffect, SpatialEffect
+from dnd.spatial.area_conditions import SpatialCondition
 from dnd.spells.illusion import Silence
 from dnd.spells.transmutation import HasteEffect
 from tests.engine.support import (
@@ -344,11 +340,11 @@ def test_continual_flame_effect_owns_light_lifecycle() -> None:
         spell_slots={2: 1},
     )
     Entity.update_all_entities_senses(max_distance=100)
-    focus = materialize_item(
-        OIL_BARREL_RECIPE,
-        caster.uuid,
-        origin=ItemRuntimeOrigin.ENVIRONMENT,
-        expected_type=OilBarrel,
+    focus = BaseItem(
+        source_entity_uuid=caster.uuid,
+        semantic_key="test.continual_flame_focus",
+        name="Continual Flame Focus",
+        is_pickable=False,
     )
     focus.place_on_grid((3, 7))
     Entity.update_all_entities_senses(max_distance=100)
@@ -364,10 +360,10 @@ def test_continual_flame_effect_owns_light_lifecycle() -> None:
     assert not has_condition(caster, "Concentrating")
     flame = next(
         effect
-        for effect in SpatialEffect.active_effects()
+        for effect in get_map().get_spatial_conditions()
         if effect.content_ref == CONTINUAL_FLAME_FIELD_RECIPE.ref
     )
-    assert isinstance(flame, FieldEffect)
+    assert isinstance(flame, SpatialCondition)
     assert flame.anchor_kind is SpatialEffectAnchorKind.WORLD_OBJECT
     assert flame.anchor_uuid == focus.uuid
     assert flame.affected_positions == {(3, 7)}
@@ -386,7 +382,7 @@ def test_continual_flame_effect_owns_light_lifecycle() -> None:
 
     get_map().remove_object(focus.uuid)
 
-    assert SpatialEffect.get_effect(flame.uuid) is None
+    assert BaseCondition.get(flame.uuid) is None
     assert _tile((12, 7)).resolved_light_level is LightLevel.DARKNESS
 
 
@@ -537,12 +533,7 @@ def test_command_flee_uses_voluntary_movement_and_provokes_reactions() -> None:
         "monsters",
     )
     watcher.equipment.equip(
-        materialize_item(
-            DAGGER_RECIPE,
-            watcher.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
-        ),
+        build_authored_item("weapon.dagger", watcher.uuid),
         WeaponSlot.MELEE_MAIN,
     )
     add_opportunity_attack_handler(watcher)
@@ -602,12 +593,7 @@ def test_command_halt_closes_haste_and_zero_cost_paths_but_not_reactions() -> No
         "monsters",
     )
     target.equipment.equip(
-        materialize_item(
-            DAGGER_RECIPE,
-            target.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
-        ),
+        build_authored_item("weapon.dagger", target.uuid),
         WeaponSlot.MELEE_MAIN,
     )
     setup_standard_actions(target)
@@ -781,14 +767,13 @@ def test_guardian_placement_ward_and_damage_budget() -> None:
     assert not has_condition(caster, "Concentrating")
     guardian = next(
         effect
-        for effect in SpatialEffect.active_effects()
+        for effect in get_map().get_spatial_conditions()
         if effect.content_ref == GUARDIAN_OF_FAITH_FIELD_RECIPE.ref
     )
     assert not grid.is_walkable_for(10, 7, caster.uuid)
-    controller = guardian.active_conditions.get("Guardian of Faith")
-    assert isinstance(controller, GuardianOfFaithController)
-    assert controller.damage_budget == 60
-    assert controller.damage_dealt == 0
+    assert isinstance(guardian, GuardianOfFaithCondition)
+    assert guardian.damage_budget == 60
+    assert guardian.damage_dealt == 0
 
     turn_execution_id = uuid4()
     turn_event = EventQueue.publish_lifecycle(Event(
@@ -832,6 +817,6 @@ def test_guardian_placement_ward_and_damage_budget() -> None:
                 parent_event=turn_event.uuid,
             )
 
-    assert controller.damage_dealt == 60
-    assert SpatialEffect.get_effect(guardian.uuid) is None
+    assert guardian.damage_dealt == 60
+    assert BaseCondition.get(guardian.uuid) is None
     assert grid.is_walkable_for(10, 7, caster.uuid)

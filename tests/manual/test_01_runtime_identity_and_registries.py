@@ -11,7 +11,7 @@ from dnd.core.values import (
     ModifiableValue,
     StaticValue,
 )
-from dnd.entity import Entity, EntityConfig
+from dnd.entities.entity import Entity, EntityConfig
 
 
 class TutorialMarker(BaseObject):

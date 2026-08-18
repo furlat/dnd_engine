@@ -18,9 +18,9 @@ from dnd.core.events.events_registry import (
     EventType,
 )
 from dnd.types.damage import DamageType
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from dnd.conditions import Blinded, Incapacitated, Paralyzed, Stunned, Unconscious
-from dnd.monsters.bestiary import create_skeleton
+from tests.engine.support import create_test_monster
 from dnd.actions.reactions import add_opportunity_attack_handler
 from dnd.spells.abjuration import (
     BanishedCondition,
@@ -191,7 +191,7 @@ def test_action_permission_blocks_zero_cost_and_reaction_actions_when_capped(
 def test_disengaging_owns_opportunity_attack_provocation_constraint() -> None:
     """Disengaging toggles provenance and the opportunity-attack outcome together."""
     reset_core_action_state()
-    watcher = create_skeleton(
+    watcher = create_test_monster("monster.skeleton", 
         name="Watcher",
         position=(5, 5),
         faction="monsters",
@@ -250,7 +250,7 @@ def test_disengaging_owns_opportunity_attack_provocation_constraint() -> None:
 def test_magical_sleep_remains_after_healing_removes_life_state_transform() -> None:
     """Sleep remains after healing removes only life-state-owned modifiers."""
     reset_core_action_state()
-    source = create_skeleton(
+    source = create_test_monster("monster.skeleton", 
         name="Source",
         position=(1, 1),
         faction="monsters",

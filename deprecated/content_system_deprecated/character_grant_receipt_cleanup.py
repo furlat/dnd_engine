@@ -12,7 +12,7 @@ from dnd.content_system.character_grant_types import (
 from dnd.core.base_block import BaseBlock
 from dnd.core.content.durable_characters import ProficiencySubjectKind
 from dnd.core.events import AbilityName, SkillName
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 
 
 def _remove_transient_conditions(

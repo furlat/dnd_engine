@@ -51,13 +51,13 @@ from dnd.core.gridmap import GridMap, get_map
 from dnd.types.damage import DamageType
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import BaseValue
-from dnd.entity import Entity, EntityConfig
+from dnd.entities.entity import Entity, EntityConfig
 from dnd.conditions import Invisible
 from dnd.items.consumables import HEALING_POTION_RECIPE
 from dnd.items.spell_items import fireball_scroll_recipe, fire_bolt_scroll_recipe
 from tests.manual.reactive_fixture_support import PrepareIntercept
 from dnd.items.weapons import CLUB_RECIPE
-from dnd.monsters.bestiary import create_goblin, create_skeleton
+from tests.engine.support import create_test_monster
 from dnd.spells.evocation import Fireball
 from dnd.spells.conjuration import MistyStep
 
@@ -181,8 +181,8 @@ def unexpected_discovery_work(*args: object, **kwargs: object) -> None:
 def test_first_action_example_prints_visible_turn_menu(capsys) -> None:
     """One actor prints grouped choices, target previews, and paid Dash state."""
     reset_action_state()
-    hero = create_goblin(name="Scout", position=(5, 5), faction="heroes")
-    create_skeleton(name="Skeleton", position=(6, 5), faction="monsters")
+    hero = create_test_monster("monster.goblin", name="Scout", position=(5, 5), faction="heroes")
+    create_test_monster("monster.skeleton", name="Skeleton", position=(6, 5), faction="monsters")
     Entity.update_all_entities_senses()
 
     available = get_available_actions(hero)
@@ -323,8 +323,8 @@ def test_action_templates_instantiate_into_executable_actions(capsys) -> None:
 def test_standard_action_discovery_groups_choices_for_clients(capsys) -> None:
     """Available actions are grouped into entity, position, self, and object rows."""
     reset_action_state()
-    hero = create_goblin(name="Scout", position=(5, 5), faction="heroes")
-    skeleton = create_skeleton(name="Skeleton", position=(6, 5), faction="monsters")
+    hero = create_test_monster("monster.goblin", name="Scout", position=(5, 5), faction="heroes")
+    skeleton = create_test_monster("monster.skeleton", name="Skeleton", position=(6, 5), faction="monsters")
     Entity.update_all_entities_senses()
 
     available = get_available_actions(hero)
@@ -413,8 +413,8 @@ def test_standard_action_discovery_groups_choices_for_clients(capsys) -> None:
 def test_authored_entity_action_remains_without_targets_when_cost_is_exhausted() -> None:
     """Default discovery keeps identity while short-circuiting target work."""
     reset_action_state()
-    hero = create_goblin(name="Spent Hero", position=(5, 5), faction="heroes")
-    enemy = create_skeleton(
+    hero = create_test_monster("monster.goblin", name="Spent Hero", position=(5, 5), faction="heroes")
+    enemy = create_test_monster("monster.skeleton", 
         name="Still Valid Target",
         position=(6, 5),
         faction="monsters",
@@ -432,7 +432,7 @@ def test_authored_entity_action_remains_without_targets_when_cost_is_exhausted()
 def test_affordable_authored_entity_action_remains_with_no_valid_targets() -> None:
     """An authored targeted action remains discoverable before a target exists."""
     reset_action_state()
-    hero = create_goblin(name="Lonely Hero", position=(5, 5), faction="heroes")
+    hero = create_test_monster("monster.goblin", name="Lonely Hero", position=(5, 5), faction="heroes")
     Entity.update_all_entities_senses()
 
     attack = find_attack_action(get_available_actions(hero))
@@ -444,7 +444,7 @@ def test_affordable_authored_entity_action_remains_with_no_valid_targets() -> No
 def test_affordable_self_action_remains_when_its_rule_prerequisite_fails() -> None:
     """Self-action identity remains visible while its prerequisite disables it."""
     reset_action_state()
-    hero = create_goblin(name="Unfocused Hero", position=(5, 5), faction="heroes")
+    hero = create_test_monster("monster.goblin", name="Unfocused Hero", position=(5, 5), faction="heroes")
     Entity.update_all_entities_senses()
 
     drop_concentration = find_action(
@@ -459,8 +459,8 @@ def test_affordable_self_action_remains_when_its_rule_prerequisite_fails() -> No
 def test_legal_only_action_discovery_omits_cost_and_requirement_blockers() -> None:
     """The controller view remains sparse when an action cannot execute now."""
     reset_action_state()
-    hero = create_goblin(name="Blocked Hero", position=(5, 5), faction="heroes")
-    enemy = create_skeleton(
+    hero = create_test_monster("monster.goblin", name="Blocked Hero", position=(5, 5), faction="heroes")
+    enemy = create_test_monster("monster.skeleton", 
         name="Visible Target",
         position=(6, 5),
         faction="monsters",
@@ -616,8 +616,8 @@ def test_entity_action_discovery_does_not_retain_candidate_targets() -> None:
     """Discovery validates target-specialized copies, never live templates."""
     reset_action_state()
     actor = create_tutorial_actor(position=(2, 2))
-    create_skeleton(name="First Target", position=(3, 2), faction="monsters")
-    create_skeleton(name="Second Target", position=(2, 3), faction="monsters")
+    create_test_monster("monster.skeleton", name="First Target", position=(3, 2), faction="monsters")
+    create_test_monster("monster.skeleton", name="Second Target", position=(2, 3), faction="monsters")
     Entity.update_all_entities_senses()
     shake_awake = actor.get_action_template("Shake Awake")
     shove = actor.get_action_template("Shove")
@@ -726,12 +726,12 @@ def test_entity_row_reports_target_cost_unaffordable(
 ) -> None:
     """A rules-valid enemy blocked only by target cost gets the exact status."""
     reset_action_state()
-    actor = create_goblin(
+    actor = create_test_monster("monster.goblin", 
         name="Cost-bound Attacker",
         position=(2, 2),
         faction="heroes",
     )
-    create_skeleton(name="Adjacent Enemy", position=(3, 2), faction="monsters")
+    create_test_monster("monster.skeleton", name="Adjacent Enemy", position=(3, 2), faction="monsters")
     Entity.update_all_entities_senses()
 
     def impossible_target_cost(self: Attack) -> list[Cost]:
@@ -807,7 +807,7 @@ def test_unaffordable_contextual_entity_item_stays_stable_without_target_work(
         origin=ItemRuntimeOrigin.STARTER,
     )
     assert hero.loot_item(scroll)
-    create_skeleton(name="Scroll Target", position=(4, 3), faction="monsters")
+    create_test_monster("monster.skeleton", name="Scroll Target", position=(4, 3), faction="monsters")
     Entity.update_all_entities_senses()
     monkeypatch.setattr(Entity, "_compute_target_pool", unexpected_discovery_work)
     deny_nonreaction_actions(hero)
@@ -842,7 +842,7 @@ def test_unaffordable_contextual_aoe_item_stays_stable_without_preview_work(
         origin=ItemRuntimeOrigin.STARTER,
     )
     assert hero.loot_item(scroll)
-    create_skeleton(name="Blast Target", position=(5, 3), faction="monsters")
+    create_test_monster("monster.skeleton", name="Blast Target", position=(5, 3), faction="monsters")
     Entity.update_all_entities_senses()
     monkeypatch.setattr(Fireball, "get_valid_positions", unexpected_discovery_work)
     monkeypatch.setattr(
@@ -1048,7 +1048,7 @@ def test_item_bound_spell_consumes_its_charge_before_action_completion() -> None
     """Specialized spell events retain the canonical finite-item child lineage."""
     reset_action_state()
     actor = create_tutorial_actor(position=(2, 2))
-    target = create_skeleton(
+    target = create_test_monster("monster.skeleton", 
         name="Scroll Target",
         position=(4, 2),
         faction="monsters",
@@ -1148,10 +1148,10 @@ def test_action_overrides_change_discovery_and_consumed_costs(capsys) -> None:
 def test_target_filters_shape_entity_target_pools(capsys) -> None:
     """Discovery can narrow entity targets by relationship and death state."""
     reset_action_state()
-    hero = create_goblin(name="Hero", position=(5, 5), faction="heroes")
-    ally = create_goblin(name="Ally", position=(5, 6), faction="heroes")
-    enemy = create_skeleton(name="Enemy", position=(6, 5), faction="monsters")
-    dead_enemy = create_skeleton(name="Dead Enemy", position=(6, 6), faction="monsters")
+    hero = create_test_monster("monster.goblin", name="Hero", position=(5, 5), faction="heroes")
+    ally = create_test_monster("monster.goblin", name="Ally", position=(5, 6), faction="heroes")
+    enemy = create_test_monster("monster.skeleton", name="Enemy", position=(6, 5), faction="monsters")
+    dead_enemy = create_test_monster("monster.skeleton", name="Dead Enemy", position=(6, 6), faction="monsters")
     dead_enemy.receive_damage(999, DamageType.BLUDGEONING, hero.uuid)
     Entity.update_all_entities_senses()
 
@@ -1212,7 +1212,7 @@ def test_safe_movement_metadata_shapes_path_choice(capsys) -> None:
     )
     hazard_tile.add_condition(hazard)
 
-    scout = create_skeleton(name="Scout", position=(5, 3), faction="heroes")
+    scout = create_test_monster("monster.skeleton", name="Scout", position=(5, 3), faction="heroes")
     Entity.update_all_entities_senses()
 
     available = get_available_actions(scout)
@@ -1282,7 +1282,7 @@ def test_safe_movement_metadata_shapes_path_choice(capsys) -> None:
 def test_move_executes_affordable_disclosed_path_when_safe_alternative_is_too_costly() -> None:
     """Execution must not replace a legal epoch path with an unaffordable route."""
     reset_action_state()
-    scout = create_skeleton(name="Scout", position=(5, 3), faction="heroes")
+    scout = create_test_monster("monster.skeleton", name="Scout", position=(5, 3), faction="heroes")
     Entity.update_all_entities_senses()
 
     available = get_available_actions(scout)

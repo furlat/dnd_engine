@@ -20,7 +20,7 @@ from dnd.core.content.provenance import (
     ContentReviewStatus,
 )
 from dnd.core.content.registration import behavior_identity
-from dnd.core.content.runtime import RuntimeBehaviorKind
+from dnd.types.behaviors import RuntimeBehaviorKind
 from dnd.types.abilities import AbilityName
 from dnd.types.damage import DamageType
 

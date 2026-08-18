@@ -19,7 +19,7 @@ from dnd.content_system.creature_materialization import materialize_creature
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
 from dnd.conditions import GreaterInvisibilityEffect
-from dnd.controller import Controller
+from dnd.encounters.controllers import Controller
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.events.events_registry import (
@@ -42,9 +42,9 @@ from dnd.core.content.materialization import (
     CreatureDeploymentRole,
     CreaturePossessionMode,
 )
-from dnd.encounter import Encounter
-from dnd.entity import Entity
-from dnd.content.spike_trap_materialization import materialize_spike_trap_effect
+from dnd.encounters.encounter import Encounter
+from dnd.entities.entity import Entity
+from dnd.content.spike_trap_materialization import materialize_spike_trap_condition
 from dnd.items.consumables import GREATER_INVISIBILITY_POTION_RECIPE
 from dnd.items.torches import TORCH_RECIPE, Torch
 from dnd.monsters.bestiary_content import BESTIARY_CREATURE_RECIPES_BY_ID
@@ -553,7 +553,7 @@ def test_spike_damage_is_scheduled_after_its_destination_arrival(
     """Real entry damage follows its exact committed destination segment."""
     scene = runtime_scene
     starting_cursor = scene.context.journal.watermarks.observation_cursor
-    materialize_spike_trap_effect({(1, 0)})
+    materialize_spike_trap_condition({(1, 0)})
     Entity.update_all_entities_senses(max_distance=10)
 
     with fixed_dice_faces(1, 1):

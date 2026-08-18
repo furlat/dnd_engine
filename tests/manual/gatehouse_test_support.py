@@ -5,12 +5,12 @@ from uuid import UUID, uuid4
 
 from pydantic import Field
 
-from dnd.controller import HumanController, PassController, TurnContext
+from dnd.encounters.controllers import HumanController, PassController, TurnContext
 from dnd.core.modifiers import AutoHitModifier
 from dnd.types.rolls import AutoHitStatus
-from dnd.encounter import Encounter
-from dnd.entity import Entity
-from dnd.monsters.bestiary import create_goblin, create_skeleton
+from dnd.encounters.encounter import Encounter
+from dnd.entities.entity import Entity
+from tests.engine.support import create_test_monster
 from dnd.runtime_reset import reset_engine_runtime
 
 
@@ -117,8 +117,8 @@ def create_gatehouse_scenario() -> GatehouseScenario:
         Gatehouse scenario bundle containing encounter, actors, and controllers.
     """
     reset_playable_scenario_state()
-    hero = create_goblin(name="Gatehouse Hero", position=(1, 1), faction="heroes")
-    monster = create_skeleton(name="Gatehouse Skeleton", position=(2, 1), faction="monsters")
+    hero = create_test_monster("monster.goblin", name="Gatehouse Hero", position=(1, 1), faction="heroes")
+    monster = create_test_monster("monster.skeleton", name="Gatehouse Skeleton", position=(2, 1), faction="monsters")
     Entity.update_all_entities_senses(max_distance=20)
 
     hero_controller = ScenarioHumanController(source_entity_uuid=hero.uuid)

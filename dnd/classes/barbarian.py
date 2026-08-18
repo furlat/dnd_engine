@@ -22,7 +22,7 @@ Level 20: Primal Champion
 from dnd.core.base_conditions import BaseCondition
 from dnd.types.conditions import DurationType
 from dnd.types.abilities import AbilityName
-from dnd.core.content.runtime import RuntimeBehaviorKind
+from dnd.types.behaviors import RuntimeBehaviorKind
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_actions import (
     BaseAction,
@@ -55,7 +55,7 @@ from dnd.core.modifiers import (
 )
 from dnd.types.rolls import AdvantageStatus
 from dnd.types.rolls import RollType
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from dnd.actions.standard import (
     entity_action_economy_cost_evaluator,
     Attack,

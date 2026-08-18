@@ -25,7 +25,7 @@ from dnd.types.damage import ResistanceStatus
 from dnd.types.saving_throws import SAVING_THROW_CONTEXT_KEY, SavingThrowEffectTag
 from dnd.core.content.saving_throws import SavingThrowContext
 from dnd.types.senses import SenseMode, SensesType
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 
 
 def _feature_ref() -> ContentRef:

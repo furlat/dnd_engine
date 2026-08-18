@@ -35,7 +35,7 @@ from dnd.core.events.events_registry import (
 from dnd.core.gridmap import GridMap, get_map
 from dnd.types.creatures import CreatureType
 from dnd.core.values import BaseValue
-from dnd.entity import Entity, EntityConfig
+from dnd.entities.entity import Entity, EntityConfig
 from tests.spell_test_exports import (
     BurningHands,
     ChillTouch,

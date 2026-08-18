@@ -21,7 +21,7 @@ from dnd.core.modifiers import (
     ResistanceModifier,
     ResistanceStatus,
 )
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from dnd.origins.dragonborn import (
     DRAGONBORN_BREATH_RESOURCE,
     DragonbornBreathWeapon,

@@ -31,7 +31,7 @@ from dnd.core.events.resolution_events import (
     RangeType,
     D20RollResultEvent,
 )
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from dnd.actions.standard import (
     SpellAction,
     SpellEvent,

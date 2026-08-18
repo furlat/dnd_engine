@@ -35,7 +35,7 @@ from dnd.core.gridmap import get_map
 from dnd.types.items import ItemLocation
 from dnd.presentation import ItemPresentationKind
 from dnd.types.damage import DamageType
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from dnd.items.armors import SHIELD_RECIPE
 from dnd.items.consumables import (
     HEALING_POTION_RECIPE,

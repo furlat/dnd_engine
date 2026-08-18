@@ -14,6 +14,7 @@ from dnd.core.events.action_events import (
     ActionEvent,
 )
 from dnd.core.base_block import BaseBlock
+from dnd.core.base_conditions import BaseCondition
 from dnd.core.events.events_registry import (
     Event,
     EventPhase,
@@ -24,9 +25,8 @@ from dnd.blocks.base_item import (
     UsableItem,
 )
 from dnd.blocks.inventory import Inventory
-from dnd.spatial.environmental_effects import SpikeTrapGroundEffect
-from dnd.entity import Entity
-from dnd.spatial.effect_base import SpatialEffect
+from dnd.spatial.environmental_conditions import SpikeTrap
+from dnd.entities.entity import Entity
 
 
 class OpenDoorAction(BaseAction):
@@ -146,6 +146,8 @@ class DoorObject(UsableItem):
                         source_entity_uuid=user_entity_uuid,
                         source_item_uuid=self.uuid,
                         template=True,
+                        semantic_key="action.environment.door.close",
+                        behavior_id="action.environment.door.close",
                     ),
                 )
             ]
@@ -155,11 +157,13 @@ class DoorObject(UsableItem):
                     source_entity_uuid=user_entity_uuid,
                     source_item_uuid=self.uuid,
                     template=True,
+                    semantic_key="action.environment.door.open",
+                    behavior_id="action.environment.door.open",
                 ),
             )
         ]
 class PullLeverAction(BaseAction):
-    """Deactivate one linked, independently owned spike-trap effect."""
+    """Deactivate one linked, independently owned spike condition."""
 
     name: str = Field(default="Pull Lever", description="Action name for pulling a trap lever.")
     description: str = Field(default="Deactivates a trap", description="Action description shown for trap levers.")
@@ -175,26 +179,26 @@ class PullLeverAction(BaseAction):
         default=None,
         description="UUID of the lever item this action pulls.",
     )
-    trap_effect_uuid: Optional[UUID] = Field(
+    trap_condition_uuid: Optional[UUID] = Field(
         default=None,
-        description="Exact spike-trap effect UUID retired when this lever is pulled.",
+        description="Exact spike condition UUID removed when this lever is pulled.",
     )
 
     def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
-        if self.trap_effect_uuid is None:
+        if self.trap_condition_uuid is None:
             return declaration_event.cancel(status_message="No trap linked")
-        effect = SpatialEffect.get_effect(self.trap_effect_uuid)
-        if not isinstance(effect, SpikeTrapGroundEffect):
+        condition = BaseCondition.get(self.trap_condition_uuid)
+        if not isinstance(condition, SpikeTrap) or not condition.applied:
             return declaration_event.cancel(status_message="Linked trap is unavailable")
         return declaration_event.phase_to(EventPhase.EXECUTION, status_message="Validated")
 
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
-        if self.trap_effect_uuid is None:
+        if self.trap_condition_uuid is None:
             return execution_event.cancel(status_message="No trap linked")
-        effect_owner = SpatialEffect.get_effect(self.trap_effect_uuid)
-        if not isinstance(effect_owner, SpikeTrapGroundEffect):
+        condition = BaseCondition.get(self.trap_condition_uuid)
+        if not isinstance(condition, SpikeTrap) or not condition.applied:
             return execution_event.cancel(status_message="Linked trap is unavailable")
-        effect_owner.retire(parent_event=execution_event)
+        condition.deactivate(parent_event=execution_event)
         effect = execution_event.phase_to(EventPhase.EFFECT, status_message="Trap deactivated")
         return effect.phase_to(EventPhase.COMPLETION, status_message="Lever pulled")
 

@@ -23,7 +23,7 @@ from dnd.core.events.world_events import (
 )
 from dnd.core.gridmap import get_map
 from dnd.types.damage import DamageType
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from dnd.spells.divination import SeeInvisibility, TrueSeeing
 from dnd.spells.evocation import FireBolt
 from dnd.spells.illusion import Invisibility

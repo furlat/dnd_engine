@@ -5,8 +5,6 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 
 from dnd.core.base_block import BaseBlock
-from dnd.core.content.durable_characters import RitualPreparationPolicy
-from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.values import ModifiableValue
 from dnd.types.damage import DamageType
 from dnd.core.modifiers import NumericalModifier
@@ -14,7 +12,7 @@ from dnd.types.abilities import AbilityName
 from dnd.core.events.resolution_events import (
     Damage,
 )
-from dnd.types.progression import CasterProgression
+from dnd.types.progression import CasterProgression, RitualPreparationPolicy
 from dnd.types.rolls import DieSize
 from dnd.core.progression import (
     SpellcastingClassContribution,
@@ -84,8 +82,9 @@ class SpellcastingSource(BaseModel):
     source_kind: Literal["class", "innate"] = "class"
     source_id: UUID = Field(description="Owning progression grant UUID.")
     ability: AbilityName = Field(description="Ability used by this source.")
-    provider_ref: ContentRef = Field(
-        description="Exact authored class or origin providing this source.",
+    provider_id: str = Field(
+        min_length=3,
+        description="Direct semantic class or origin providing this source.",
     )
     caster_progression: CasterProgression | None = Field(
         default=None,
@@ -108,13 +107,12 @@ class SpellcastingSource(BaseModel):
 
     @model_validator(mode="after")
     def _validate_provider(self) -> Self:
+        if "." not in self.provider_id or self.provider_id.strip() != self.provider_id:
+            raise ValueError("provider_id must be a namespaced semantic ID")
         if self.source_kind == "innate":
-            if self.provider_ref.definition_kind not in {
-                ContentDefinitionKind.SPECIES,
-                ContentDefinitionKind.SPECIES_VARIANT,
-            }:
+            if not self.provider_id.startswith(("species.", "species_variant.")):
                 raise ValueError(
-                    "innate spellcasting provider_ref must identify a "
+                    "innate spellcasting provider_id must identify a "
                     "species or species variant",
                 )
             if (
@@ -126,8 +124,8 @@ class SpellcastingSource(BaseModel):
                     "class ritual entitlement",
                 )
             return self
-        if self.provider_ref.definition_kind != ContentDefinitionKind.CLASS:
-            raise ValueError("class spellcasting provider_ref must identify a class")
+        if not self.provider_id.startswith("class."):
+            raise ValueError("class spellcasting provider_id must identify a class")
         if self.caster_progression is None or self.ritual_policy is None:
             raise ValueError(
                 "class spellcasting requires progression and ritual policy",
@@ -152,8 +150,9 @@ class SpellcastingSource(BaseModel):
 class LearnedReactionSpellOwnership(BaseModel):
     """Shared runtime handler owned by one or more exact casting sources."""
 
-    spell_ref: ContentRef = Field(
-        description="Exact learned spell definition owning the handler.",
+    spell_id: str = Field(
+        min_length=3,
+        description="Direct learned-spell identity owning the handler.",
     )
     handler_uuid: UUID = Field(
         description="Single live reaction handler installed for this spell.",
@@ -165,8 +164,8 @@ class LearnedReactionSpellOwnership(BaseModel):
 
     @model_validator(mode="after")
     def _validate_spell_ownership(self) -> Self:
-        if self.spell_ref.definition_kind != ContentDefinitionKind.SPELL:
-            raise ValueError("learned reaction ownership requires a spell ref")
+        if not self.spell_id.startswith("spell."):
+            raise ValueError("learned reaction ownership requires a spell ID")
         if not self.source_ids:
             raise ValueError(
                 "learned reaction ownership requires at least one source",
@@ -304,7 +303,7 @@ class SpellcastingBlock(BaseBlock):
         source_id: UUID,
         ability: AbilityName,
         *,
-        provider_ref: ContentRef,
+        provider_id: str,
         caster_progression: CasterProgression,
         provider_level: int,
         maximum_spell_rank: int,
@@ -314,7 +313,7 @@ class SpellcastingBlock(BaseBlock):
         incoming = SpellcastingSource(
             source_id=source_id,
             ability=ability,
-            provider_ref=provider_ref,
+            provider_id=provider_id,
             caster_progression=caster_progression,
             provider_level=provider_level,
             maximum_spell_rank=maximum_spell_rank,
@@ -333,7 +332,7 @@ class SpellcastingBlock(BaseBlock):
         source_id: UUID,
         ability: AbilityName,
         *,
-        provider_ref: ContentRef,
+        provider_id: str,
         provider_level: int,
         maximum_spell_rank: int,
     ) -> None:
@@ -342,7 +341,7 @@ class SpellcastingBlock(BaseBlock):
             source_kind="innate",
             source_id=source_id,
             ability=ability,
-            provider_ref=provider_ref,
+            provider_id=provider_id,
             provider_level=provider_level,
             maximum_spell_rank=maximum_spell_rank,
         )
@@ -373,7 +372,7 @@ class SpellcastingBlock(BaseBlock):
     def add_learned_reaction_spell_source(
         self,
         *,
-        spell_ref: ContentRef,
+        spell_id: str,
         source_id: UUID,
         handler_uuid: UUID,
     ) -> UUID:
@@ -382,21 +381,21 @@ class SpellcastingBlock(BaseBlock):
             raise KeyError(
                 f"spellcasting source {source_id} is not registered",
             )
-        key = spell_ref.identity_key
+        if not spell_id.startswith("spell."):
+            raise ValueError("spell_id must be a direct spell identity")
+        key = spell_id
         existing = self.learned_reaction_spell_handlers.get(key)
         if existing is None:
             self.learned_reaction_spell_handlers[key] = (
                 LearnedReactionSpellOwnership(
-                    spell_ref=spell_ref,
+                    spell_id=spell_id,
                     handler_uuid=handler_uuid,
                     source_ids={source_id},
                 )
             )
             return handler_uuid
-        if existing.spell_ref != spell_ref:
-            raise ValueError(
-                "learned reaction spell identity key has conflicting ref",
-            )
+        if existing.spell_id != spell_id:
+            raise ValueError("learned reaction spell identity conflict")
         if existing.handler_uuid != handler_uuid:
             raise ValueError(
                 "learned reaction spell already owns a different handler",
@@ -406,18 +405,16 @@ class SpellcastingBlock(BaseBlock):
 
     def learned_reaction_spell_handler_uuid(
         self,
-        spell_ref: ContentRef,
+        spell_id: str,
     ) -> UUID | None:
         """Return the live handler for one exact learned reaction spell."""
         ownership = self.learned_reaction_spell_handlers.get(
-            spell_ref.identity_key,
+            spell_id,
         )
         if ownership is None:
             return None
-        if ownership.spell_ref != spell_ref:
-            raise ValueError(
-                "learned reaction spell identity key has conflicting ref",
-            )
+        if ownership.spell_id != spell_id:
+            raise ValueError("learned reaction spell identity conflict")
         return ownership.handler_uuid
 
     def add_spell_damage_affinity_contribution(
@@ -499,36 +496,34 @@ class SpellcastingBlock(BaseBlock):
 
     def learned_reaction_spell_source_ids(
         self,
-        spell_ref: ContentRef,
+        spell_id: str,
     ) -> tuple[UUID, ...]:
         """Return exact owning casting sources in deterministic order."""
         ownership = self.learned_reaction_spell_handlers.get(
-            spell_ref.identity_key,
+            spell_id,
         )
         if ownership is None:
             return ()
-        if ownership.spell_ref != spell_ref:
-            raise ValueError(
-                "learned reaction spell identity key has conflicting ref",
-            )
+        if ownership.spell_id != spell_id:
+            raise ValueError("learned reaction spell identity conflict")
         return tuple(sorted(ownership.source_ids, key=str))
 
     def remove_learned_reaction_spell_source(
         self,
         *,
-        spell_ref: ContentRef,
+        spell_id: str,
         source_id: UUID,
         handler_uuid: UUID,
     ) -> bool:
         """Remove one owner and report whether the handler must be removed."""
-        key = spell_ref.identity_key
+        key = spell_id
         ownership = self.learned_reaction_spell_handlers.get(key)
         if ownership is None:
             raise KeyError(
                 f"learned reaction spell {key} is not registered",
             )
         if (
-            ownership.spell_ref != spell_ref
+            ownership.spell_id != spell_id
             or ownership.handler_uuid != handler_uuid
         ):
             raise ValueError(

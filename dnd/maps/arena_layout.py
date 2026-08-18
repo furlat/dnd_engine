@@ -7,23 +7,19 @@ from uuid import UUID, uuid4
 from dnd.types.world import LightLevel
 from dnd.core.gridmap import GridMap
 from dnd.types.world import WorldEdgeChannel, CardinalDirection
-from dnd.content_system.item_bindings import ItemRuntimeOrigin
-from dnd.content_system.item_materialization import materialize_item
-from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
-from dnd.items.consumables import healing_potion_recipe
+from dnd.content.items.authored_item_builders import build_authored_item
+from dnd.content.items.environment_item_builders import (
+    build_directional_door,
+    build_directional_wall,
+    build_trap_lever,
+    build_wall_torch,
+)
 from dnd.items.environment import DIRECTIONAL_CHANNELS, DirectionalDoor, DirectionalWall
-from dnd.items.environment_content import (
-    WALL_TORCH_RECIPE,
-    directional_door_recipe,
-    directional_wall_recipe,
-    trap_lever_recipe,
-)
-from dnd.items.environment_interactables import (
-    PullLeverAction,
-    TrapLever,
-)
+from dnd.items.environment_interactables import TrapLever
 from dnd.items.torches import WallTorch
-from dnd.content.spike_trap_materialization import materialize_spike_trap_effect
+from dnd.content.spike_trap_materialization import (
+    materialize_spike_trap_condition,
+)
 from dnd.core.base_tiles import difficult_terrain_factory, water_factory
 
 ARENA_WIDTH = 15
@@ -71,7 +67,7 @@ class StandardArenaObjects:
     wall_torches: Tuple[WallTorch, ...]
     healing_potion_uuids: Tuple[UUID, ...]
     trap_lever: TrapLever
-    spike_effect_uuid: UUID
+    spike_condition_uuid: UUID
 
 
 def create_standard_arena_floor(grid: GridMap) -> None:
@@ -84,29 +80,19 @@ def place_standard_directional_barrier(grid: GridMap) -> StandardBarrierObjects:
     walls = []
     for position in WALL_POSITIONS:
         grid.set_tile(position[0], position[1], walkable=True, visible=True, name="Floor")
-        wall = materialize_item(
-            directional_wall_recipe(
-                blocked_directions=WALL_DIRECTIONS,
-                blocked_channels=STANDARD_BLOCKING_CHANNELS,
-            ),
-            uuid4(),
-            origin=ItemRuntimeOrigin.ENVIRONMENT,
-            expected_type=DirectionalWall,
+        wall = build_directional_wall(
+            blocked_directions=WALL_DIRECTIONS,
+            blocked_channels=STANDARD_BLOCKING_CHANNELS,
         )
         wall.place_on_grid(position)
         walls.append(wall)
 
     grid.set_tile(DOOR_POSITION[0], DOOR_POSITION[1], walkable=True, visible=True, name="Floor")
-    door = materialize_item(
-        directional_door_recipe(
-            display_name="Door",
-            blocked_directions=DOOR_DIRECTIONS,
-            blocked_channels=STANDARD_BLOCKING_CHANNELS,
-            is_open=False,
-        ),
-        uuid4(),
-        origin=ItemRuntimeOrigin.ENVIRONMENT,
-        expected_type=DirectionalDoor,
+    door = build_directional_door(
+        display_name="Door",
+        blocked_directions=DOOR_DIRECTIONS,
+        blocked_channels=STANDARD_BLOCKING_CHANNELS,
+        is_open=False,
     )
     door.place_on_grid(DOOR_POSITION)
 
@@ -132,7 +118,7 @@ def build_standard_arena_environment(grid: GridMap) -> StandardArenaObjects:
             fire_event=False,
         )
 
-    spike_effect = materialize_spike_trap_effect(
+    spike_condition = materialize_spike_trap_condition(
         set(SPIKE_ZONE_POSITIONS),
     )
 
@@ -144,43 +130,21 @@ def build_standard_arena_environment(grid: GridMap) -> StandardArenaObjects:
 
     wall_torches_list = []
     for position in WALL_TORCH_POSITIONS:
-        wall_torch = materialize_item(
-            WALL_TORCH_RECIPE,
-            uuid4(),
-            origin=ItemRuntimeOrigin.ENVIRONMENT,
-            expected_type=WallTorch,
-        )
+        wall_torch = build_wall_torch()
         wall_torch.mount(position, lit=True)
         wall_torches_list.append(wall_torch)
     wall_torches = tuple(wall_torches_list)
 
     healing_potion_uuids = []
     for position in HEALING_POTION_POSITIONS:
-        potion = materialize_item(
-            healing_potion_recipe(heal_amount=10),
+        potion = build_authored_item(
+            "consumable.healing_potion",
             uuid4(),
-            origin=ItemRuntimeOrigin.LOOT,
         )
         potion.place_on_grid(position)
         healing_potion_uuids.append(potion.uuid)
 
-    lever_action = PullLeverAction(
-        source_entity_uuid=uuid4(),
-        trap_effect_uuid=spike_effect.uuid,
-        template=True,
-    )
-    lever = materialize_item(
-        trap_lever_recipe(charges=1),
-        uuid4(),
-        origin=ItemRuntimeOrigin.ENVIRONMENT,
-        expected_type=TrapLever,
-    )
-    SERVER_CONTENT_SYSTEM_RUNTIME.bind_child(
-        lever_action,
-        provider=lever,
-        runtime_owner_uuid=lever.uuid,
-    )
-    lever.use_action_templates.append(lever_action)
+    lever = build_trap_lever(spike_condition.uuid, charges=1)
     lever.place_on_grid(TRAP_LEVER_POSITION)
 
     return StandardArenaObjects(
@@ -188,5 +152,5 @@ def build_standard_arena_environment(grid: GridMap) -> StandardArenaObjects:
         wall_torches=wall_torches,
         healing_potion_uuids=tuple(healing_potion_uuids),
         trap_lever=lever,
-        spike_effect_uuid=spike_effect.uuid,
+        spike_condition_uuid=spike_condition.uuid,
     )

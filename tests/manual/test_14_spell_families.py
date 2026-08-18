@@ -35,7 +35,7 @@ from dnd.types.rolls import AdvantageStatus
 from dnd.core.modifiers import NumericalModifier
 from dnd.types.damage import ResistanceStatus
 from dnd.core.values import BaseValue
-from dnd.entity import Entity, EntityConfig
+from dnd.entities.entity import Entity, EntityConfig
 from tests.spell_test_exports import (
     ALL_SPELLS,
     CANTRIPS,
@@ -63,8 +63,8 @@ from dnd.spells.illusion import HypnoticPatternEffect, MirrorImage, MirrorImageE
 from dnd.spells.necromancy import FalseLife
 from dnd.spells.transmutation import SpikeGrowth
 from dnd.content.spatial_effect_recipes import SPIKE_GROWTH_SURFACE_RECIPE
-from dnd.spatial.effect_base import SpatialEffect
-from dnd.spatial.effect_controllers import AreaSpatialEffectController
+from dnd.spatial.area_conditions import SpatialCondition
+from dnd.spatial.area_conditions import AreaCondition
 
 
 def reset_spell_family_state(width: int = 12, height: int = 8) -> None:
@@ -624,12 +624,12 @@ def test_zone_spell_family_owns_spatial_handlers_and_concentration_cleanup(
 
     surface = next(
         effect
-        for effect in SpatialEffect.active_effects()
+        for effect in get_map().get_spatial_conditions()
         if effect.content_ref == SPIKE_GROWTH_SURFACE_RECIPE.ref
     )
     zone = cast(
-        AreaSpatialEffectController,
-        surface.active_conditions["Spike Growth Zone"],
+        AreaCondition,
+        surface,
     )
     concentration = cast(Concentrating, caster.active_conditions["Concentrating"])
     assert len(zone.affected_positions) > 0
@@ -637,7 +637,7 @@ def test_zone_spell_family_owns_spatial_handlers_and_concentration_cleanup(
     assert (surface.uuid, zone.uuid) in concentration.linked_conditions
     readout_lines = [
         (
-            f"spike growth: effect={SpatialEffect.get_effect(surface.uuid) is surface}, "
+            f"spike growth: effect={BaseCondition.get(surface.uuid) is surface}, "
             f"concentrating={'Concentrating' in caster.active_conditions}, "
             f"positions={len(zone.affected_positions)}, "
             f"handlers={len(zone.spatial_handler_uuids)}, "
@@ -659,11 +659,11 @@ def test_zone_spell_family_owns_spatial_handlers_and_concentration_cleanup(
 
     caster.remove_condition("Concentrating")
 
-    assert SpatialEffect.get_effect(surface.uuid) is None
+    assert BaseCondition.get(surface.uuid) is None
     assert "Concentrating" not in caster.active_conditions
     readout_lines.append(
         (
-            f"cleanup: effect={SpatialEffect.get_effect(surface.uuid) is not None}, "
+            f"cleanup: effect={BaseCondition.get(surface.uuid) is not None}, "
             f"concentrating={'Concentrating' in caster.active_conditions}"
         )
     )

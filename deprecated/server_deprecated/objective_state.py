@@ -11,8 +11,8 @@ from typing import Any
 
 from dnd.core.base_block import BaseBlock
 from dnd.core.gridmap import GridMap, get_map
-from dnd.encounter import Encounter
-from dnd.entity import Entity
+from dnd.encounters.encounter import Encounter
+from dnd.entities.entity import Entity
 from server.world_contracts import (
     APIEquipmentOverview,
     APIEntityVisibility,

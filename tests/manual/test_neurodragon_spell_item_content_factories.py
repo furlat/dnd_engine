@@ -25,7 +25,7 @@ from dnd.core.content.runtime import BehaviorBinding
 from dnd.core.content.item_definitions import ItemPersistencePolicy
 from dnd.core.content.provenance import ContentReviewStatus
 from dnd.core.content.registration import get_content_declaration
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.spells.abjuration import (
     MageArmor,

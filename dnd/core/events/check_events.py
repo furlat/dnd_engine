@@ -16,7 +16,7 @@ from dnd.core.combat_log import (
     md_color,
     md_d20_roll,
 )
-from dnd.core.content.saving_throws import SavingThrowContext
+from dnd.types.saving_throws import SavingThrowContext
 from dnd.core.dice import Dice, DiceRoll
 from dnd.core.events.events_registry import Event, EventType
 from dnd.core.values import ModifiableValue

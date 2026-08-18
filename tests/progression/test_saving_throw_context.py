@@ -18,7 +18,7 @@ from dnd.types.saving_throws import SAVING_THROW_CONTEXT_KEY, SavingThrowEffectT
 from dnd.core.content.saving_throws import SavingThrowContext
 from dnd.core.spell_execution import spell_execution_scope
 from dnd.core.values import ContextualAdvantageModifier
-from dnd.entity import Entity, EntityConfig
+from dnd.entities.entity import Entity, EntityConfig
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.spells.conjuration import Cloudkill, PoisonSpray, StinkingCloud
 from dnd.spells.enchantment import CharmPerson, Sleep

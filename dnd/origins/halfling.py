@@ -22,7 +22,7 @@ from dnd.core.content.registration import (
     behavior_identity,
     get_content_declaration,
 )
-from dnd.core.content.runtime import RuntimeBehaviorKind
+from dnd.types.behaviors import RuntimeBehaviorKind
 from dnd.core.dice import Dice, DiceRoll
 from dnd.core.events.resolution_events import (
     D20RollResultEvent,

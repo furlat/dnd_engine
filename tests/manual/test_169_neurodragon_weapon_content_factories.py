@@ -34,7 +34,7 @@ from dnd.core.events.resolution_events import (
     RangeType,
 )
 from dnd.types.damage import DamageType
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from dnd.runtime_reset import reset_engine_runtime
 
 

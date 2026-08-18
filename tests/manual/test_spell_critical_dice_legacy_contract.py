@@ -10,7 +10,7 @@ from dnd.actions.standard import (
 )
 from dnd.core.dice import DiceRoll, fixed_dice_faces
 from dnd.types.rolls import RollType
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from dnd.spells.evocation import (
     EldritchBlast,
     FireBolt,

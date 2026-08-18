@@ -34,9 +34,9 @@ from dnd.core.traversal_connectors import (
     TraversalConnectorKind,
 )
 from dnd.core.world_edges import ElevationSurfaceKind
-from dnd.encounter import CombatantState, Encounter
-from dnd.types.encounter import EncounterState
-from dnd.entity import Entity
+from dnd.encounters.encounter import CombatantState, Encounter
+from dnd.types.encounter_state import EncounterState
+from dnd.entities.entity import Entity
 from dnd.items.environment_interactables import StorageChest
 from dnd.items.torches import TORCH_RECIPE, Torch
 from dnd.items.environment import DirectionalDoor, DirectionalWall

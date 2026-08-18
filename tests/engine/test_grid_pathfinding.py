@@ -42,11 +42,13 @@ from dnd.actions.standard import (
     Move,
     Shove,
 )
-from dnd.entity import Entity
-from dnd.monsters.bestiary import create_skeleton
-from dnd.content.spatial_effect_recipes import GREASE_SURFACE_RECIPE
-from dnd.spatial.effect_base import GroundEffect
-from dnd.spatial.effect_controllers import AreaSpatialEffectController
+from dnd.entities.entity import Entity
+from tests.engine.support import create_test_monster
+from dnd.content.spatial_effect_materialization import (
+    materialize_spatial_condition,
+)
+from dnd.content.spatial_effect_recipes import SPIKE_GROWTH_SURFACE_RECIPE
+from dnd.spatial.area_conditions import AreaCondition
 from tests.engine.support import reset_combat_state
 
 
@@ -77,7 +79,7 @@ class PerceptionBoost(BaseCondition):
         return [(skill.skill_bonus.uuid, modifier_uuid)], [], [], [], effect_event
 
 
-class EntryCleanupZone(AreaSpatialEffectController):
+class EntryCleanupZone(AreaCondition):
     """Test region with terrain and one position-indexed entry handler."""
 
     name: str = "Entry Cleanup Zone"
@@ -103,19 +105,14 @@ def install_entry_cleanup_effect(
     caster: Entity,
     *,
     center: tuple[int, int],
-) -> tuple[GroundEffect, EntryCleanupZone]:
+) -> EntryCleanupZone:
     """Install the cleanup fixture through the production spatial owner."""
-    zone = EntryCleanupZone(
-        source_entity_uuid=caster.uuid,
-        zone_center=center,
-    )
-    effect = GroundEffect(
-        name="Entry Cleanup Effect",
-        source_entity_uuid=caster.uuid,
-        content_ref=GREASE_SURFACE_RECIPE.ref,
+    zone = materialize_spatial_condition(
+        SPIKE_GROWTH_SURFACE_RECIPE,
+        caster.uuid,
         position=center,
-        trigger_kinds=zone.trigger_kinds,
-        first_per_turn_trigger_kinds=zone.first_per_turn_trigger_kinds,
+        faction=caster.faction,
+        condition_type=EntryCleanupZone,
     )
     parent = Event(
         source_entity_uuid=caster.uuid,
@@ -123,10 +120,10 @@ def install_entry_cleanup_effect(
         phase=EventPhase.COMPLETION,
         use_register=False,
     )
-    result = effect.install_controller(zone, parent_event=parent)
+    result = zone.activate(parent_event=parent)
     assert result is not None
     assert not result.canceled
-    return effect, zone
+    return zone
 
 
 def reset_grid_state(width: int = 8, height: int = 8, x: int = 0, y: int = 0) -> None:
@@ -348,7 +345,7 @@ def test_eb_11_004_move_action_converts_tile_cost_units_to_feet() -> None:
             value=1,
         )
     )
-    entity = create_skeleton(name="Mover", position=(0, 0), faction="heroes")
+    entity = create_test_monster("monster.skeleton", name="Mover", position=(0, 0), faction="heroes")
     Entity.update_all_entities_senses(max_distance=20)
 
     move = Move(source_entity_uuid=entity.uuid, end_position=(4, 0))
@@ -366,8 +363,8 @@ def test_eb_11_005_occupants_and_objects_block_walkable_tiles_polymorphically() 
     """EB-11-005: tiles stay walkable while occupants or objects can block an entity."""
     reset_grid_state(width=4, height=1)
     grid = get_map()
-    mover = create_skeleton(name="Mover", position=(0, 0), faction="heroes")
-    blocker = create_skeleton(name="Blocker", position=(1, 0), faction="monsters")
+    mover = create_test_monster("monster.skeleton", name="Mover", position=(0, 0), faction="heroes")
+    blocker = create_test_monster("monster.skeleton", name="Blocker", position=(1, 0), faction="monsters")
     Entity.update_all_entities_senses(max_distance=20)
 
     assert grid.is_walkable(1, 0)
@@ -395,8 +392,8 @@ def test_eb_11_015_dead_entities_become_non_blocking_for_paths() -> None:
     """EB-11-015: dead entities stay positioned but no longer block walking."""
     reset_grid_state(width=5, height=1)
     grid = get_map()
-    mover = create_skeleton(name="Mover", position=(0, 0), faction="heroes")
-    blocker = create_skeleton(name="Blocker", position=(2, 0), faction="monsters")
+    mover = create_test_monster("monster.skeleton", name="Mover", position=(0, 0), faction="heroes")
+    blocker = create_test_monster("monster.skeleton", name="Blocker", position=(2, 0), faction="monsters")
     Entity.update_all_entities_senses(max_distance=20)
 
     assert blocker.blocks_walking(requesting_entity_uuid=mover.uuid) is True
@@ -537,7 +534,7 @@ def test_eb_11_017_forced_movement_and_jump_respect_directional_blockers() -> No
     """EB-11-017: push movement and Jump both consult directional blockers."""
     reset_grid_state(width=4, height=3)
     grid = get_map()
-    actor = create_skeleton(name="Actor", position=(1, 1), faction="heroes")
+    actor = create_test_monster("monster.skeleton", name="Actor", position=(1, 1), faction="heroes")
     wall = BaseItem(
         source_entity_uuid=uuid4(),
         name="Directional Force Wall",
@@ -580,7 +577,7 @@ def test_eb_11_008_hazards_can_be_excluded_from_safe_paths() -> None:
     """EB-11-008: hazard-aware pathfinding treats dangerous cells as blocked."""
     reset_grid_state(width=3, height=2)
     grid = get_map()
-    entity = create_skeleton(name="Pathfinder", position=(0, 0), faction="heroes")
+    entity = create_test_monster("monster.skeleton", name="Pathfinder", position=(0, 0), faction="heroes")
     hazard_tile = grid.get_tile(1, 0)
     assert hazard_tile is not None
     hazard = BaseCondition(
@@ -615,7 +612,7 @@ def test_eb_11_014_hidden_hazard_perception_change_recomputes_safe_paths() -> No
     """EB-11-014: hidden hazards become safe-path blockers after perception changes."""
     reset_grid_state(width=5, height=3)
     grid = get_map()
-    observer = create_skeleton(name="Observer", position=(0, 1), faction="heroes")
+    observer = create_test_monster("monster.skeleton", name="Observer", position=(0, 1), faction="heroes")
     trap_tile = grid.get_tile(2, 1)
     assert trap_tile is not None
 
@@ -666,8 +663,8 @@ def test_eb_11_009_geometry_and_aoe_are_grid_aware_where_needed() -> None:
     reset_grid_state(width=5, height=3)
     grid = get_map()
     grid.set_tile(2, 1, walkable=False, visible=False, name="Wall")
-    caster = create_skeleton(name="Caster", position=(0, 1), faction="heroes")
-    target = create_skeleton(name="Behind Wall", position=(3, 1), faction="monsters")
+    caster = create_test_monster("monster.skeleton", name="Caster", position=(0, 1), faction="heroes")
+    target = create_test_monster("monster.skeleton", name="Behind Wall", position=(3, 1), faction="monsters")
 
     assert circle_positions((1, 1), radius=1) == {
         (1, 1),
@@ -700,21 +697,29 @@ def test_eb_11_018_zone_control_cone_and_line_use_directional_geometry() -> None
     direct_line = Line(source_entity_uuid=source_uuid, target=(8, 2), length_feet=30, width_feet=5)
     direct_line.compute_objective(caster_pos=(2, 2))
 
-    generic_cone_zone = AreaSpatialEffectController(
-        source_entity_uuid=source_uuid,
-        target_entity_uuid=source_uuid,
-        zone_shape="cone",
-        zone_center=(2, 2),
-        zone_radius_feet=30,
-        zone_direction=(1, 0),
+    generic_cone_zone = materialize_spatial_condition(
+        SPIKE_GROWTH_SURFACE_RECIPE,
+        source_uuid,
+        position=(2, 2),
+        faction=None,
+        condition_type=AreaCondition,
+        condition_fields={
+            "zone_shape": "cone",
+            "zone_radius_feet": 30,
+            "zone_direction": (1, 0),
+        },
     )
-    generic_line_zone = AreaSpatialEffectController(
-        source_entity_uuid=source_uuid,
-        target_entity_uuid=source_uuid,
-        zone_shape="line",
-        zone_center=(2, 2),
-        zone_radius_feet=30,
-        zone_direction=(1, 0),
+    generic_line_zone = materialize_spatial_condition(
+        SPIKE_GROWTH_SURFACE_RECIPE,
+        source_uuid,
+        position=(2, 2),
+        faction=None,
+        condition_type=AreaCondition,
+        condition_fields={
+            "zone_shape": "line",
+            "zone_radius_feet": 30,
+            "zone_direction": (1, 0),
+        },
     )
 
     assert (3, 2) in direct_cone.affected_positions
@@ -733,8 +738,8 @@ def test_eb_11_019_cylinder_subjective_preview_matches_targeting_footprint() -> 
     reset_grid_state(width=5, height=3)
     grid = get_map()
     grid.set_tile(2, 1, walkable=False, visible=False, name="Wall")
-    caster = create_skeleton(name="Caster", position=(0, 1), faction="heroes")
-    target = create_skeleton(name="Behind Wall", position=(3, 1), faction="monsters")
+    caster = create_test_monster("monster.skeleton", name="Caster", position=(0, 1), faction="heroes")
+    target = create_test_monster("monster.skeleton", name="Behind Wall", position=(3, 1), faction="monsters")
     Entity.update_all_entities_senses(max_distance=20)
 
     subjective = Cylinder(source_entity_uuid=caster.uuid, target=(1, 1), radius_feet=15)
@@ -770,8 +775,8 @@ def test_eb_11_020_region_retirement_cleans_spatial_handlers_and_terrain() -> No
     """EB-11-020: retiring a spatial effect clears its handlers and terrain."""
     reset_grid_state(width=6, height=3)
     grid = get_map()
-    caster = create_skeleton(name="Zone Caster", position=(0, 1), faction="heroes")
-    effect, zone = install_entry_cleanup_effect(caster, center=(2, 1))
+    caster = create_test_monster("monster.skeleton", name="Zone Caster", position=(0, 1), faction="heroes")
+    zone = install_entry_cleanup_effect(caster, center=(2, 1))
 
     affected_positions = set(zone.affected_positions)
     center_tile = grid.get_tile(2, 1)
@@ -797,15 +802,15 @@ def test_eb_11_020_region_retirement_cleans_spatial_handlers_and_terrain() -> No
     moved_positions = set(zone.affected_positions)
     moved_center = grid.get_tile(4, 1)
     assert moved_center is not None
-    assert zone.zone_center == (4, 1)
+    assert zone.position == (4, 1)
     assert moved_positions != affected_positions
     assert center_tile.get_movement_cost(MovementMode.WALKING) == 1
     assert moved_center.get_movement_cost(MovementMode.WALKING) == 2
     assert EventQueue.get_spatial_handlers_at((4, 1))
 
-    effect.retire()
+    zone.deactivate()
 
-    assert zone.name not in effect.active_conditions
+    assert BaseCondition.get(zone.uuid) is None
     assert center_tile.get_movement_cost(MovementMode.WALKING) == 1
     assert moved_center.get_movement_cost(MovementMode.WALKING) == 1
     assert zone.spatial_handler_uuids == []
@@ -818,7 +823,7 @@ def test_eb_11_020_region_retirement_cleans_spatial_handlers_and_terrain() -> No
 def test_zone_terrain_changes_publish_one_complete_spatial_lifecycle() -> None:
     """Zone-owned terrain notifications use the canonical spatial lifecycle."""
     reset_grid_state(width=6, height=3)
-    caster = create_skeleton(
+    caster = create_test_monster("monster.skeleton", 
         name="Zone Caster",
         position=(0, 1),
         faction="heroes",
@@ -888,7 +893,7 @@ def test_eb_11_016_raw_object_removal_clears_item_floor_location_state() -> None
     """EB-11-016: GridMap removal clears floor location without destroying items."""
     reset_grid_state(width=4, height=1)
     grid = get_map()
-    observer = create_skeleton(name="Observer", position=(0, 0), faction="heroes")
+    observer = create_test_monster("monster.skeleton", name="Observer", position=(0, 0), faction="heroes")
     raw_item = BaseItem(source_entity_uuid=uuid4(), name="Raw Floor Item")
     raw_item.place_on_grid((1, 0))
     Entity.update_all_entities_senses(max_distance=20)

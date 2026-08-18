@@ -20,12 +20,9 @@ from dnd.actions.standard import (
 from dnd.core.base_actions import (
     Cost,
 )
-from dnd.core.content.runtime import (
-    RuntimeBehaviorKind,
-    active_runtime_behavior_binding,
-)
+from dnd.types.behaviors import RuntimeBehaviorKind
 from dnd.types.life import LifeState
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from uuid import UUID
 from typing import Optional
 
@@ -97,9 +94,10 @@ def opportunity_attack_processor(event: StepMovementEvent, source_entity_uuid: U
                 cost_type="reactions",
                 cost=1,
                 evaluator=entity_action_economy_cost_evaluator
-            )]
+            )],
+            behavior_id="reaction.opportunity_attack",
+            provided_by_id="reaction.opportunity_attack",
         )
-        reaction_attack.behavior_binding = active_runtime_behavior_binding()
         if reaction_attack.pre_validate():
             reaction_attack.add_to_register()
             reaction_attack.apply(parent_event=event)

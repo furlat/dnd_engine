@@ -9,7 +9,11 @@ from dnd.core.base_conditions import BaseCondition
 from dnd.types.conditions import ConditionTag
 from dnd.types.effects import EffectOriginKind
 from dnd.runtime_reset import reset_engine_runtime
-from dnd.spatial.effect_controllers import AreaSpatialEffectController
+from dnd.spatial.area_conditions import AreaCondition
+from dnd.content.spatial_effect_materialization import (
+    materialize_spatial_condition,
+)
+from dnd.content.spatial_effect_recipes import WEB_SURFACE_RECIPE
 
 
 def test_spell_event_exports_frozen_base_and_effective_spell_provenance() -> None:
@@ -45,10 +49,15 @@ def test_zone_protection_uses_explicit_base_level_even_when_upcast() -> None:
         spell_level=2,
         cast_at_level=6,
     )
-    zone = AreaSpatialEffectController(
-        source_entity_uuid=source_uuid,
-        target_entity_uuid=source_uuid,
-        effect_origin=cast_event.to_effect_origin(),
+    zone = materialize_spatial_condition(
+        WEB_SURFACE_RECIPE,
+        source_uuid,
+        position=(0, 0),
+        faction=None,
+        condition_type=AreaCondition,
+        condition_fields={
+            "effect_origin": cast_event.to_effect_origin(),
+        },
     )
 
     assert zone.effect_origin is not None
@@ -61,9 +70,12 @@ def test_non_spell_or_missing_provenance_disables_spell_level_filtering() -> Non
     reset_engine_runtime()
     source_uuid = uuid4()
 
-    zone = AreaSpatialEffectController(
-        source_entity_uuid=source_uuid,
-        target_entity_uuid=source_uuid,
+    zone = materialize_spatial_condition(
+        WEB_SURFACE_RECIPE,
+        source_uuid,
+        position=(0, 0),
+        faction=None,
+        condition_type=AreaCondition,
     )
 
     assert zone._protection_spell_level() is None

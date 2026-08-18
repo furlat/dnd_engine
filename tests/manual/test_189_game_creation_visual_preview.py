@@ -8,7 +8,7 @@ from dnd.core.base_object import BaseObject
 from dnd.core.events.events_registry import (
     EventQueue,
 )
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from server import event_server
 from tests.manual.server_test_client import (
     ServerTestClient,

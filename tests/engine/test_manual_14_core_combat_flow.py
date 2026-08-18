@@ -40,7 +40,7 @@ from dnd.core.gridmap import get_map
 from dnd.types.life import LifeState
 from dnd.types.damage import DamageType
 from dnd.core.values import BaseValue
-from dnd.entity import Entity, EntityConfig
+from dnd.entities.entity import Entity, EntityConfig
 from dnd.items.weapons import SCIMITAR_RECIPE, SHORTBOW_RECIPE
 from tests.engine.support import reset_combat_state
 

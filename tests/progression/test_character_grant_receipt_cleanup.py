@@ -24,7 +24,7 @@ from dnd.core.modifiers import (
     NumericalModifier,
 )
 from dnd.types.rolls import AdvantageStatus
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 
 
 def test_receipt_removes_each_modifier_collection_from_its_exact_channel() -> None:

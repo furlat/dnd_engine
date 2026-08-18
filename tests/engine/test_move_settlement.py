@@ -42,10 +42,10 @@ from dnd.core.modifiers import NumericalModifier
 from dnd.core.gridmap import get_map
 from dnd.types.life import LifeState
 from dnd.core.positioning import PositionCommitError, PositionPublicationError
-from dnd.creature_transforms import (
+from dnd.entities.creature_transforms import (
     apply_opportunity_attack_immunity_transform,
 )
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from dnd.monsters.traits import AggressiveMoveAction
 from dnd.actions.reactions import add_opportunity_attack_handler
 from tests.engine.support import force_attack_crit, force_attack_hit, set_hp

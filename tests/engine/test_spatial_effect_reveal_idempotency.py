@@ -8,7 +8,7 @@ from uuid import UUID, uuid4
 import pytest
 
 from dnd.content.spatial_effect_materialization import (
-    materialize_spatial_effect,
+    materialize_spatial_condition,
 )
 from dnd.core.events.events_registry import (
     Event,
@@ -22,10 +22,10 @@ from dnd.core.events.world_events import (
     SpatialEffectChangeEvent,
 )
 from dnd.types.spatial_effects import SpatialEffectChangeOperation
-from dnd.content.spike_trap_materialization import materialize_spike_trap_effect
-from dnd.spatial.environmental_effects import SpikeTrapGroundEffect
+from dnd.content.spike_trap_materialization import materialize_spike_trap_condition
+from dnd.spatial.environmental_conditions import SpikeTrap
 from dnd.runtime_reset import reset_engine_runtime
-from dnd.content.spatial_effect_recipes import spike_trap_effect_recipe
+from dnd.content.spatial_effect_recipes import SPIKE_TRAP_EFFECT_RECIPE
 
 
 def _begin_parent_effect(source_entity_uuid: UUID) -> Event:
@@ -66,11 +66,11 @@ def test_hidden_effect_reveals_once_then_becomes_a_true_noop() -> None:
     """The effect DC is the one-way latch for one typed reveal lifecycle."""
     reset_engine_runtime(grid_size=(4, 4))
     positions = {(1, 1), (2, 1)}
-    effect = materialize_spike_trap_effect(positions, stealth_dc=20)
+    effect = materialize_spike_trap_condition(positions, stealth_dc=20)
     parent = _begin_parent_effect(effect.source_entity_uuid)
     cursor_before_reveal = EventQueue.event_cursor()
 
-    assert effect.stealth_dc == 20
+    assert effect.condition_stealth_dc == 20
 
     first = effect.publish_revealed(parent_event=parent)
 
@@ -84,13 +84,13 @@ def test_hidden_effect_reveals_once_then_becomes_a_true_noop() -> None:
     assert first.previous_positions == tuple(sorted(positions))
     assert first.combat_log is not None
     assert first.combat_log.data["operation"] == "revealed"
-    assert effect.stealth_dc is None
+    assert effect.condition_stealth_dc is None
 
     cursor_after_first = EventQueue.event_cursor()
     second = effect.publish_revealed(parent_event=parent)
 
     assert second is None
-    assert effect.stealth_dc is None
+    assert effect.condition_stealth_dc is None
     assert EventQueue.event_cursor() == cursor_after_first
     assert list(_completed_reveals_since(
         cursor_before_reveal,
@@ -104,13 +104,13 @@ def test_hidden_effect_reveals_once_then_becomes_a_true_noop() -> None:
 def test_installed_visible_effect_does_not_invent_a_reveal() -> None:
     """An effect authored without concealment has no reveal transition."""
     reset_engine_runtime(grid_size=(4, 4))
-    effect = materialize_spike_trap_effect({(1, 1)}, stealth_dc=None)
+    effect = materialize_spike_trap_condition({(1, 1)}, stealth_dc=None)
     parent = _begin_parent_effect(effect.source_entity_uuid)
     cursor = EventQueue.event_cursor()
 
-    assert effect.stealth_dc is None
+    assert effect.condition_stealth_dc is None
     assert effect.publish_revealed(parent_event=parent) is None
-    assert effect.stealth_dc is None
+    assert effect.condition_stealth_dc is None
     assert EventQueue.event_cursor() == cursor
     assert list(_completed_reveals_since(cursor, effect.uuid)) == []
 
@@ -122,24 +122,27 @@ def test_uninstalled_effect_cannot_be_revealed() -> None:
     """Installation truth takes precedence over the concealment latch."""
     reset_engine_runtime(grid_size=(4, 4))
     source_entity_uuid = uuid4()
-    effect = materialize_spatial_effect(
-        spike_trap_effect_recipe(stealth_dc=20),
+    effect = materialize_spatial_condition(
+        SPIKE_TRAP_EFFECT_RECIPE,
         source_entity_uuid,
         position=(1, 1),
         faction=None,
-        expected_type=SpikeTrapGroundEffect,
+        condition_type=SpikeTrap,
+        condition_fields={
+            "condition_stealth_dc": 20,
+        },
     )
     parent = _begin_parent_effect(source_entity_uuid)
     cursor = EventQueue.event_cursor()
 
-    assert effect.stealth_dc == 20
+    assert effect.condition_stealth_dc == 20
     with pytest.raises(
         RuntimeError,
-        match="Cannot reveal an uninstalled spatial effect",
+        match="Cannot reveal an inactive spatial condition",
     ):
         effect.publish_revealed(parent_event=parent)
 
-    assert effect.stealth_dc == 20
+    assert effect.condition_stealth_dc == 20
     assert EventQueue.event_cursor() == cursor
     assert list(_completed_reveals_since(cursor, effect.uuid)) == []
 
@@ -150,7 +153,7 @@ def test_uninstalled_effect_cannot_be_revealed() -> None:
 def test_reveal_veto_preserves_concealment_and_allows_one_later_reveal() -> None:
     """A canceled reveal leaves objective state unchanged for a clean retry."""
     reset_engine_runtime(grid_size=(4, 4))
-    effect = materialize_spike_trap_effect({(1, 1)}, stealth_dc=20)
+    effect = materialize_spike_trap_condition({(1, 1)}, stealth_dc=20)
     parent = _begin_parent_effect(effect.source_entity_uuid)
     cursor_before_veto = EventQueue.event_cursor()
 
@@ -181,7 +184,7 @@ def test_reveal_veto_preserves_concealment_and_allows_one_later_reveal() -> None
     EventQueue.add_event_handler(veto)
 
     assert effect.publish_revealed(parent_event=parent) is None
-    assert effect.stealth_dc == 20
+    assert effect.condition_stealth_dc == 20
     assert list(_completed_reveals_since(
         cursor_before_veto,
         effect.uuid,
@@ -191,7 +194,7 @@ def test_reveal_veto_preserves_concealment_and_allows_one_later_reveal() -> None
     revealed = effect.publish_revealed(parent_event=parent)
 
     assert revealed is not None
-    assert effect.stealth_dc is None
+    assert effect.condition_stealth_dc is None
     assert list(_completed_reveals_since(
         cursor_before_veto,
         effect.uuid,
@@ -208,10 +211,11 @@ def test_reveal_veto_preserves_concealment_and_allows_one_later_reveal() -> None
 def test_reentrant_reveal_request_does_not_create_a_nested_lifecycle() -> None:
     """Reveal handlers cannot recursively manufacture a second transition."""
     reset_engine_runtime(grid_size=(4, 4))
-    effect = materialize_spike_trap_effect({(1, 1)}, stealth_dc=20)
+    effect = materialize_spike_trap_condition({(1, 1)}, stealth_dc=20)
     parent = _begin_parent_effect(effect.source_entity_uuid)
     cursor = EventQueue.event_cursor()
     handler_calls: list[EventPhase] = []
+    observed_stealth_dcs: list[int | None] = []
     nested_results: list[SpatialEffectChangeEvent | None] = []
 
     def request_nested_reveal(
@@ -219,6 +223,7 @@ def test_reentrant_reveal_request_does_not_create_a_nested_lifecycle() -> None:
         _handler_source_uuid: UUID,
     ) -> None:
         handler_calls.append(event.phase)
+        observed_stealth_dcs.append(effect.condition_stealth_dc)
         if len(handler_calls) == 1:
             nested_results.append(effect.publish_revealed(parent_event=event))
 
@@ -239,8 +244,9 @@ def test_reentrant_reveal_request_does_not_create_a_nested_lifecycle() -> None:
     revealed = effect.publish_revealed(parent_event=parent)
 
     assert revealed is not None
-    assert effect.stealth_dc is None
+    assert effect.condition_stealth_dc is None
     assert handler_calls == [EventPhase.EFFECT]
+    assert observed_stealth_dcs == [20]
     assert nested_results == [None]
     assert list(_completed_reveals_since(cursor, effect.uuid)) == [revealed]
 
@@ -251,22 +257,22 @@ def test_reentrant_reveal_request_does_not_create_a_nested_lifecycle() -> None:
 def test_retired_revealed_effect_still_fails_installation_check_first() -> None:
     """Retirement remains an error even after concealment has been cleared."""
     reset_engine_runtime(grid_size=(4, 4))
-    effect = materialize_spike_trap_effect({(1, 1)}, stealth_dc=20)
+    effect = materialize_spike_trap_condition({(1, 1)}, stealth_dc=20)
     parent = _begin_parent_effect(effect.source_entity_uuid)
 
     revealed = effect.publish_revealed(parent_event=parent)
     assert revealed is not None
-    assert effect.stealth_dc is None
-    effect.retire(parent_event=parent)
+    assert effect.condition_stealth_dc is None
+    effect.deactivate(parent_event=parent)
     cursor = EventQueue.event_cursor()
 
     with pytest.raises(
         RuntimeError,
-        match="Cannot reveal an uninstalled spatial effect",
+        match="Cannot reveal an inactive spatial condition",
     ):
         effect.publish_revealed(parent_event=parent)
 
-    assert effect.stealth_dc is None
+    assert effect.condition_stealth_dc is None
     assert EventQueue.event_cursor() == cursor
     assert list(_completed_reveals_since(cursor, effect.uuid)) == []
 

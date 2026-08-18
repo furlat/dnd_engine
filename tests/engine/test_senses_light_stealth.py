@@ -13,10 +13,10 @@ from dnd.blocks.base_item import (
 )
 from dnd.blocks.sensory import spatial_senses_system
 from dnd.content.spatial_effect_materialization import (
-    materialize_spatial_effect,
+    materialize_spatial_condition,
 )
 from dnd.conditions import Hidden, Invisible, InvisibilityEffect
-from dnd.controller import PassController
+from dnd.encounters.controllers import PassController
 from dnd.core.events.action_events import (
     ActionEvent,
 )
@@ -43,20 +43,19 @@ from dnd.core.events.world_events import (
 from dnd.core.gridmap import get_map
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import BaseValue
-from dnd.encounter import Encounter
-from dnd.entity import Entity
-from dnd.monsters.bestiary import create_caster, create_skeleton
+from dnd.encounters.encounter import Encounter
+from dnd.entities.entity import Entity
+from tests.engine.support import create_test_monster
 from dnd.spells.divination import SeeInvisibilityEffect
 from dnd.spells.enchantment import Bane, Bless
 from dnd.spells.evocation import Fireball, MagicMissile
 from dnd.spells.necromancy import NecroticBless
 from dnd.content.spatial_effect_recipes import DARKNESS_FIELD_RECIPE
-from dnd.spatial.effect_controllers import AreaSpatialEffectController
-from dnd.spatial.effect_base import FieldEffect
+from dnd.spatial.area_conditions import AreaCondition
 from tests.engine.support import reset_combat_state
 
 
-class MagicalDarknessCellZone(AreaSpatialEffectController):
+class MagicalDarknessCellZone(AreaCondition):
     """Single-cell magical darkness zone for senses reactivity tests."""
 
     name: str = "Magical Darkness Cell"
@@ -145,8 +144,8 @@ def completed_sensory_updates(observer_uuid: UUID) -> list[SensoryUpdateEvent]:
 def test_eb_12_001_geometric_fov_is_filtered_by_effective_light() -> None:
     """EB-12-001: senses subscribe to FOV even when darkness hides the cell."""
     reset_senses_state(width=6, height=1, default_light=LightLevel.DARKNESS)
-    observer = create_skeleton(name="Observer", position=(0, 0), darkvision=False)
-    target = create_skeleton(name="Target", position=(3, 0), darkvision=False)
+    observer = create_test_monster("monster.skeleton", name="Observer", position=(0, 0), darkvision=False)
+    target = create_test_monster("monster.skeleton", name="Target", position=(3, 0), darkvision=False)
 
     observer.update_entity_senses(max_distance=5)
 
@@ -161,7 +160,7 @@ def test_eb_12_001_geometric_fov_is_filtered_by_effective_light() -> None:
 def test_eb_12_002_sense_modes_subjectively_upgrade_light() -> None:
     """EB-12-002: darkvision, Devil's Sight, and truesight change effective light."""
     reset_senses_state(width=16, height=1, default_light=LightLevel.BRIGHT_LIGHT)
-    observer = create_skeleton(name="Observer", position=(0, 0), darkvision=False)
+    observer = create_test_monster("monster.skeleton", name="Observer", position=(0, 0), darkvision=False)
     observer.senses.sense_modes = [
         SenseMode(sense_type=SensesType.DARKVISION, range_feet=60)
     ]
@@ -217,8 +216,8 @@ def test_eb_12_003_light_sources_use_light_fov_and_respect_light_blockers() -> N
 def test_eb_12_004_light_change_reveals_subscribed_dark_cells_reactively() -> None:
     """EB-12-004: a light event updates subscribed observer senses without bulk refresh."""
     reset_senses_state(width=6, height=1, default_light=LightLevel.DARKNESS)
-    observer = create_skeleton(name="Observer", position=(0, 0), darkvision=False)
-    target = create_skeleton(name="Target", position=(3, 0), darkvision=False)
+    observer = create_test_monster("monster.skeleton", name="Observer", position=(0, 0), darkvision=False)
+    target = create_test_monster("monster.skeleton", name="Target", position=(3, 0), darkvision=False)
     observer.update_entity_senses(max_distance=5)
 
     assert target.uuid not in observer.senses.entities
@@ -237,9 +236,9 @@ def test_eb_12_004_light_change_reveals_subscribed_dark_cells_reactively() -> No
 def test_eb_12_005_perceivability_flags_filter_hidden_and_invisible_blocks() -> None:
     """EB-12-005: stealth DC and invisibility flags are observer-relative filters."""
     reset_senses_state(width=5, height=1)
-    target = create_skeleton(name="Target", position=(2, 0), darkvision=False)
-    observer = create_skeleton(name="Observer", position=(0, 0), darkvision=False)
-    truesight = create_skeleton(name="Truesight", position=(4, 0), darkvision=False)
+    target = create_test_monster("monster.skeleton", name="Target", position=(2, 0), darkvision=False)
+    observer = create_test_monster("monster.skeleton", name="Observer", position=(0, 0), darkvision=False)
+    truesight = create_test_monster("monster.skeleton", name="Truesight", position=(4, 0), darkvision=False)
     truesight.senses.sense_modes = [
         SenseMode(sense_type=SensesType.TRUESIGHT, range_feet=60)
     ]
@@ -260,8 +259,8 @@ def test_eb_12_005_perceivability_flags_filter_hidden_and_invisible_blocks() -> 
 def test_eb_12_006_perceivability_events_refilter_visible_entities() -> None:
     """EB-12-006: hidden-state changes update subscribed observer senses."""
     reset_senses_state(width=5, height=1)
-    observer = create_skeleton(name="Observer", position=(0, 0), darkvision=False)
-    target = create_skeleton(name="Target", position=(2, 0), darkvision=False)
+    observer = create_test_monster("monster.skeleton", name="Observer", position=(0, 0), darkvision=False)
+    target = create_test_monster("monster.skeleton", name="Target", position=(2, 0), darkvision=False)
     Entity.update_all_entities_senses(max_distance=5)
 
     assert target.uuid in observer.senses.entities
@@ -289,8 +288,8 @@ def test_eb_12_006_perceivability_events_refilter_visible_entities() -> None:
 def test_eb_12_007_subjective_paths_do_not_leak_imperceivable_blockers() -> None:
     """EB-12-007: subjective pathfinding ignores blockers the observer cannot perceive."""
     reset_senses_state(width=5, height=1)
-    observer = create_skeleton(name="Observer", position=(0, 0), darkvision=False)
-    invisible = create_skeleton(name="Invisible", position=(2, 0), darkvision=False)
+    observer = create_test_monster("monster.skeleton", name="Observer", position=(0, 0), darkvision=False)
+    invisible = create_test_monster("monster.skeleton", name="Invisible", position=(2, 0), darkvision=False)
     invisible.add_condition(Invisible(source_entity_uuid=invisible.uuid, target_entity_uuid=invisible.uuid))
 
     Entity.update_all_entities_senses(max_distance=5)
@@ -312,8 +311,8 @@ def test_eb_12_007_subjective_paths_do_not_leak_imperceivable_blockers() -> None
 def test_eb_12_008_self_movement_updates_visibility_and_marks_paths_dirty() -> None:
     """EB-12-008: self movement refreshes visibility but defers Dijkstra."""
     reset_senses_state(width=7, height=2)
-    mover = create_skeleton(name="Mover", position=(0, 0), darkvision=False)
-    target = create_skeleton(name="Target", position=(6, 0), darkvision=False)
+    mover = create_test_monster("monster.skeleton", name="Mover", position=(0, 0), darkvision=False)
+    target = create_test_monster("monster.skeleton", name="Target", position=(6, 0), darkvision=False)
     mover.update_entity_senses(max_distance=5)
 
     assert mover.senses._paths_dirty is False
@@ -334,8 +333,8 @@ def test_eb_12_008_self_movement_updates_visibility_and_marks_paths_dirty() -> N
 def test_eb_12_009_sense_mode_changes_emit_replacement_payloads() -> None:
     """EB-12-009: sense-mode grant and removal emit replacement payloads."""
     reset_senses_state(width=6, height=1)
-    observer = create_skeleton(name="Observer", position=(0, 0), darkvision=False)
-    invisible = create_skeleton(name="Invisible", position=(3, 0), darkvision=False)
+    observer = create_test_monster("monster.skeleton", name="Observer", position=(0, 0), darkvision=False)
+    invisible = create_test_monster("monster.skeleton", name="Invisible", position=(3, 0), darkvision=False)
     invisible.add_condition(Invisible(source_entity_uuid=invisible.uuid, target_entity_uuid=invisible.uuid))
     Entity.update_all_entities_senses(max_distance=5)
 
@@ -370,7 +369,7 @@ def test_eb_12_009_sense_mode_changes_emit_replacement_payloads() -> None:
 def test_temporary_sense_removal_preserves_an_innate_sense_of_the_same_type() -> None:
     """Removing a spell-owned sense must not erase an innate creature sense."""
     reset_senses_state(width=6, height=1)
-    observer = create_skeleton(name="Observer", position=(0, 0), darkvision=False)
+    observer = create_test_monster("monster.skeleton", name="Observer", position=(0, 0), darkvision=False)
     innate = SenseMode(
         sense_type=SensesType.SEE_INVISIBLE,
         range_feet=30,
@@ -391,8 +390,8 @@ def test_temporary_sense_removal_preserves_an_innate_sense_of_the_same_type() ->
 def test_eb_12_010_very_bright_light_reveals_hidden_entities() -> None:
     """EB-12-010: hidden is removed when the entity's tile becomes very bright."""
     reset_senses_state(width=6, height=1, default_light=LightLevel.DARKNESS)
-    observer = create_skeleton(name="Observer", position=(0, 0), darkvision=False)
-    hidden = create_skeleton(name="Hidden", position=(3, 0), darkvision=False)
+    observer = create_test_monster("monster.skeleton", name="Observer", position=(0, 0), darkvision=False)
+    hidden = create_test_monster("monster.skeleton", name="Hidden", position=(3, 0), darkvision=False)
     hidden.add_condition(
         Hidden(source_entity_uuid=hidden.uuid, target_entity_uuid=hidden.uuid, stealth_result=30)
     )
@@ -416,8 +415,8 @@ def test_eb_12_010_very_bright_light_reveals_hidden_entities() -> None:
 def test_eb_12_011_magical_darkness_zone_removal_recomputes_behind_cells() -> None:
     """EB-12-011: magical darkness removal recomputes FOV and restores behind cells."""
     reset_senses_state(width=5, height=1)
-    observer = create_skeleton(name="Observer", position=(0, 0), darkvision=False)
-    target = create_skeleton(name="Behind Darkness", position=(3, 0), darkvision=False)
+    observer = create_test_monster("monster.skeleton", name="Observer", position=(0, 0), darkvision=False)
+    target = create_test_monster("monster.skeleton", name="Behind Darkness", position=(3, 0), darkvision=False)
     Entity.update_all_entities_senses(max_distance=5)
 
     assert target.uuid in observer.senses.entities
@@ -430,19 +429,14 @@ def test_eb_12_011_magical_darkness_zone_removal_recomputes_behind_cells() -> No
         use_register=False,
     ))
     assert parent_event is not None
-    darkness = materialize_spatial_effect(
+    darkness = materialize_spatial_condition(
         DARKNESS_FIELD_RECIPE,
         observer.uuid,
         position=(2, 0),
         faction=observer.faction,
-        expected_type=FieldEffect,
+        condition_type=MagicalDarknessCellZone,
     )
-    zone = MagicalDarknessCellZone(
-        source_entity_uuid=observer.uuid,
-        target_entity_uuid=darkness.uuid,
-        zone_center=(2, 0),
-    )
-    darkness.install_controller(zone, parent_event=parent_event)
+    darkness.activate(parent_event=parent_event)
 
     darkness_tile = get_map().get_tile(2, 0)
     assert darkness_tile is not None
@@ -456,7 +450,7 @@ def test_eb_12_011_magical_darkness_zone_removal_recomputes_behind_cells() -> No
     ]
     assert add_updates
 
-    darkness.retire(parent_event=parent_event)
+    darkness.deactivate(parent_event=parent_event)
 
     restored_tile = get_map().get_tile(2, 0)
     assert restored_tile is not None
@@ -480,8 +474,8 @@ def test_eb_12_011_magical_darkness_zone_removal_recomputes_behind_cells() -> No
 def test_eb_12_012_passive_perception_changes_emit_replacement_payloads() -> None:
     """EB-12-012: passive perception changes emit replacement values and refilter hidden entities."""
     reset_senses_state(width=5, height=1)
-    observer = create_skeleton(name="Observer", position=(0, 0), darkvision=False)
-    hidden = create_skeleton(name="Hidden", position=(3, 0), darkvision=False)
+    observer = create_test_monster("monster.skeleton", name="Observer", position=(0, 0), darkvision=False)
+    hidden = create_test_monster("monster.skeleton", name="Hidden", position=(3, 0), darkvision=False)
     Entity.update_all_entities_senses(max_distance=5)
 
     base_passive = observer.get_passive_perception()
@@ -519,8 +513,8 @@ def test_eb_12_019_passive_perception_decrease_removes_hidden_entity_payload() -
     EventQueue.set_combat_log_callback(
         lambda event: captured_logs.append(event.combat_log) if event.combat_log else None
     )
-    observer = create_skeleton(name="Observer", position=(0, 0), darkvision=False)
-    hidden = create_skeleton(name="Hidden", position=(3, 0), darkvision=False)
+    observer = create_test_monster("monster.skeleton", name="Observer", position=(0, 0), darkvision=False)
+    hidden = create_test_monster("monster.skeleton", name="Hidden", position=(3, 0), darkvision=False)
     Entity.update_all_entities_senses(max_distance=5)
 
     base_passive = observer.get_passive_perception()
@@ -559,8 +553,8 @@ def test_eb_12_013_turn_start_clears_positional_and_directional_collision_memory
     """EB-12-013: turn start clears cell and directional collision memory."""
     reset_senses_state(width=3, height=2)
     grid = get_map()
-    mover = create_skeleton(name="Mover", position=(0, 0), faction="heroes")
-    other = create_skeleton(name="Other", position=(2, 1), faction="monsters")
+    mover = create_test_monster("monster.skeleton", name="Mover", position=(0, 0), faction="heroes")
+    other = create_test_monster("monster.skeleton", name="Other", position=(2, 1), faction="monsters")
     hidden_shutter = BaseItem(
         source_entity_uuid=uuid4(),
         name="Hidden Shutter",
@@ -609,9 +603,9 @@ def test_eb_12_013_turn_start_clears_positional_and_directional_collision_memory
 def test_eb_12_014_plain_invisible_and_spell_invisibility_have_different_reveal_contracts() -> None:
     """EB-12-014: plain Invisible has no reveal handler; InvisibilityEffect does."""
     reset_senses_state(width=6, height=1)
-    observer = create_skeleton(name="Observer", position=(0, 0), darkvision=False)
-    plain_target = create_skeleton(name="Plain Invisible", position=(2, 0), darkvision=False)
-    spell_target = create_skeleton(name="Spell Invisible", position=(4, 0), darkvision=False)
+    observer = create_test_monster("monster.skeleton", name="Observer", position=(0, 0), darkvision=False)
+    plain_target = create_test_monster("monster.skeleton", name="Plain Invisible", position=(2, 0), darkvision=False)
+    spell_target = create_test_monster("monster.skeleton", name="Spell Invisible", position=(4, 0), darkvision=False)
     Entity.update_all_entities_senses(max_distance=5)
 
     plain_target.add_condition(
@@ -656,8 +650,8 @@ def test_eb_12_014_plain_invisible_and_spell_invisibility_have_different_reveal_
 def test_eb_12_015_hidden_cell_blocker_reveals_on_movement_collision() -> None:
     """EB-12-015: bumping into a hidden creature reveals that creature."""
     reset_senses_state(width=4, height=1)
-    mover = create_skeleton(name="Mover", position=(0, 0), faction="heroes")
-    hidden_blocker = create_skeleton(name="Hidden Blocker", position=(1, 0), faction="monsters")
+    mover = create_test_monster("monster.skeleton", name="Mover", position=(0, 0), faction="heroes")
+    hidden_blocker = create_test_monster("monster.skeleton", name="Hidden Blocker", position=(1, 0), faction="monsters")
 
     hidden_blocker.add_condition(
         Hidden(
@@ -701,9 +695,9 @@ def test_eb_12_015_hidden_cell_blocker_reveals_on_movement_collision() -> None:
 def test_eb_12_016_hidden_and_invisible_flags_stack_independently() -> None:
     """EB-12-016: removing Hidden does not reveal a still-invisible creature."""
     reset_senses_state(width=6, height=1)
-    observer = create_skeleton(name="Observer", position=(0, 0), darkvision=False)
-    truesight = create_skeleton(name="Truesight", position=(5, 0), darkvision=False)
-    target = create_skeleton(name="Stacked Target", position=(3, 0), darkvision=False)
+    observer = create_test_monster("monster.skeleton", name="Observer", position=(0, 0), darkvision=False)
+    truesight = create_test_monster("monster.skeleton", name="Truesight", position=(5, 0), darkvision=False)
+    target = create_test_monster("monster.skeleton", name="Stacked Target", position=(3, 0), darkvision=False)
     truesight.senses.sense_modes = [
         SenseMode(sense_type=SensesType.TRUESIGHT, range_feet=60)
     ]
@@ -754,9 +748,9 @@ def test_eb_12_016_hidden_and_invisible_flags_stack_independently() -> None:
 def test_eb_12_017_multi_entity_spell_cancels_when_target_becomes_hidden() -> None:
     """EB-12-017: direct MULTI_ENTITY execution revalidates stale visibility."""
     reset_senses_state(width=6, height=2)
-    caster = create_caster(name="Wizard", position=(0, 0), faction="heroes")
-    visible_target = create_skeleton(name="Visible Target", position=(2, 0), faction="monsters")
-    stale_target = create_skeleton(name="Stale Target", position=(3, 0), faction="monsters")
+    caster = create_test_monster("monster.generic_caster", name="Wizard", position=(0, 0), faction="heroes")
+    visible_target = create_test_monster("monster.skeleton", name="Visible Target", position=(2, 0), faction="monsters")
+    stale_target = create_test_monster("monster.skeleton", name="Stale Target", position=(3, 0), faction="monsters")
     Entity.update_all_entities_senses(max_distance=10)
 
     assert visible_target.uuid in caster.senses.entities
@@ -795,9 +789,9 @@ def test_eb_12_017_multi_entity_spell_cancels_when_target_becomes_hidden() -> No
 def test_eb_12_018_aoe_preview_hides_hidden_entities_but_execution_hits_them() -> None:
     """EB-12-018: subjective AoE previews hide hidden entities; execution is objective."""
     reset_senses_state(width=10, height=2)
-    caster = create_caster(name="Wizard", position=(0, 0), faction="heroes")
-    hidden_target = create_skeleton(name="Hidden Target", position=(7, 0), faction="monsters")
-    visible_target = create_skeleton(name="Visible Target", position=(8, 0), faction="monsters")
+    caster = create_test_monster("monster.generic_caster", name="Wizard", position=(0, 0), faction="heroes")
+    hidden_target = create_test_monster("monster.skeleton", name="Hidden Target", position=(7, 0), faction="monsters")
+    visible_target = create_test_monster("monster.skeleton", name="Visible Target", position=(8, 0), faction="monsters")
     hidden_target.add_condition(
         Hidden(
             source_entity_uuid=hidden_target.uuid,
@@ -852,8 +846,8 @@ def test_eb_12_018_aoe_preview_hides_hidden_entities_but_execution_hits_them() -
 def test_eb_12_020_distant_movement_does_not_dirty_unrelated_observer_paths() -> None:
     """EB-12-020: off-screen movement does not invalidate unrelated observer paths."""
     reset_senses_state(width=16, height=1)
-    observer = create_skeleton(name="Observer", position=(0, 0), darkvision=False)
-    distant_mover = create_skeleton(name="Distant Mover", position=(12, 0), darkvision=False)
+    observer = create_test_monster("monster.skeleton", name="Observer", position=(0, 0), darkvision=False)
+    distant_mover = create_test_monster("monster.skeleton", name="Distant Mover", position=(12, 0), darkvision=False)
     observer.update_entity_senses(max_distance=3)
 
     assert distant_mover.uuid not in observer.senses.entities
@@ -871,8 +865,8 @@ def test_eb_12_021_final_movement_refresh_can_reuse_last_visibility_cache() -> N
     """EB-12-021: movement-end senses reuse matches a cold full recompute."""
     reset_senses_state(width=8, height=3)
     grid = get_map()
-    mover = create_skeleton(name="Mover", position=(0, 1), darkvision=False)
-    target = create_skeleton(name="Target", position=(4, 1), darkvision=False)
+    mover = create_test_monster("monster.skeleton", name="Mover", position=(0, 1), darkvision=False)
+    target = create_test_monster("monster.skeleton", name="Target", position=(4, 1), darkvision=False)
     marker = BaseItem(
         source_entity_uuid=uuid4(),
         name="Visible Marker",
@@ -919,8 +913,8 @@ def test_eb_12_021_final_movement_refresh_can_reuse_last_visibility_cache() -> N
 def test_eb_12_022_paired_movement_emits_one_subjective_transition() -> None:
     """EB-12-022: one step keeps two objective events but one sensory delta."""
     reset_senses_state(width=6, height=1)
-    observer = create_skeleton(name="Observer", position=(0, 0), darkvision=False)
-    mover = create_skeleton(name="Mover", position=(2, 0), darkvision=False)
+    observer = create_test_monster("monster.skeleton", name="Observer", position=(0, 0), darkvision=False)
+    mover = create_test_monster("monster.skeleton", name="Mover", position=(2, 0), darkvision=False)
     Entity.update_all_entities_senses(max_distance=5)
 
     assert mover.uuid in observer.senses.entities
@@ -956,13 +950,13 @@ def test_eb_12_022_paired_movement_emits_one_subjective_transition() -> None:
 def test_eb_12_023_sensory_dispatch_indexes_local_spatial_candidates() -> None:
     """EB-12-023: distant observers are excluded before sensory recomputation."""
     reset_senses_state(width=20, height=1)
-    local_observer = create_skeleton(
+    local_observer = create_test_monster("monster.skeleton", 
         name="Local Observer",
         position=(0, 0),
         darkvision=False,
     )
-    mover = create_skeleton(name="Mover", position=(2, 0), darkvision=False)
-    distant_observer = create_skeleton(
+    mover = create_test_monster("monster.skeleton", name="Mover", position=(2, 0), darkvision=False)
+    distant_observer = create_test_monster("monster.skeleton", 
         name="Distant Observer",
         position=(15, 0),
         darkvision=False,
@@ -984,8 +978,8 @@ def test_eb_12_023_sensory_dispatch_indexes_local_spatial_candidates() -> None:
 def test_eb_12_024_sensory_dispatch_targets_own_perception_conditions() -> None:
     """EB-12-024: perception conditions select only their target observer."""
     reset_senses_state(width=4, height=1)
-    target = create_skeleton(name="Target", position=(0, 0), darkvision=False)
-    unrelated = create_skeleton(name="Unrelated", position=(2, 0), darkvision=False)
+    target = create_test_monster("monster.skeleton", name="Target", position=(0, 0), darkvision=False)
+    unrelated = create_test_monster("monster.skeleton", name="Unrelated", position=(2, 0), darkvision=False)
     Entity.update_all_entities_senses(max_distance=3)
     condition_event = Event(
         source_entity_uuid=target.uuid,
@@ -1004,8 +998,8 @@ def test_eb_12_025_attached_light_emits_one_batched_lifecycle_per_step() -> None
     """EB-12-025: one torch step publishes one complete light-change event."""
     reset_senses_state(width=7, height=1, default_light=LightLevel.DARKNESS)
     grid = get_map()
-    mover = create_skeleton(name="Torchbearer", position=(1, 0), darkvision=False)
-    create_skeleton(name="Light-change Witness", position=(3, 0), darkvision=False)
+    mover = create_test_monster("monster.skeleton", name="Torchbearer", position=(1, 0), darkvision=False)
+    create_test_monster("monster.skeleton", name="Light-change Witness", position=(3, 0), darkvision=False)
     grid.add_light_source(
         mover.position,
         bright_radius_feet=5,
@@ -1035,7 +1029,7 @@ def test_eb_12_026_batched_light_positions_reveal_hidden_entities() -> None:
     """EB-12-026: hidden reveal checks every tile in a batched light event."""
     reset_senses_state(width=6, height=1, default_light=LightLevel.DARKNESS)
     grid = get_map()
-    hidden = create_skeleton(name="Hidden Target", position=(4, 0), darkvision=False)
+    hidden = create_test_monster("monster.skeleton", name="Hidden Target", position=(4, 0), darkvision=False)
     hidden.add_condition(
         Hidden(
             source_entity_uuid=hidden.uuid,
@@ -1068,7 +1062,7 @@ def test_eb_12_027_equivalent_light_and_vision_channels_share_directional_fov(
     """EB-12-027: equivalent directional channels reuse one geometric scan."""
     reset_senses_state(width=7, height=1)
     grid = get_map()
-    observer = create_skeleton(name="Observer", position=(0, 0), darkvision=False)
+    observer = create_test_monster("monster.skeleton", name="Observer", position=(0, 0), darkvision=False)
     grid.set_tile_directional_border((3, 0), "vision", "east", False)
     grid.set_tile_directional_border((3, 0), "light", "east", False)
     directional_calls: list[str] = []
@@ -1106,7 +1100,7 @@ def test_eb_12_028_directional_transition_cache_is_revision_scoped(
     """EB-12-028: repeated scans reuse edges until vision topology changes."""
     reset_senses_state(width=7, height=3)
     grid = get_map()
-    observer = create_skeleton(name="Observer", position=(0, 1), darkvision=False)
+    observer = create_test_monster("monster.skeleton", name="Observer", position=(0, 1), darkvision=False)
     grid.set_tile_directional_border((3, 1), "vision", "east", False)
     transition_calls = 0
     original = grid.can_see_transition
@@ -1146,13 +1140,13 @@ def test_eb_12_028_directional_transition_cache_is_revision_scoped(
 def test_eb_12_029_invisible_collision_stops_repaths_and_preserves_invisibility() -> None:
     """EB-12-029: objective collision corrects an unsafe subjective path."""
     reset_senses_state(width=6, height=3)
-    mover = create_skeleton(
+    mover = create_test_monster("monster.skeleton", 
         name="Mover",
         position=(0, 1),
         faction="heroes",
         darkvision=False,
     )
-    invisible = create_skeleton(
+    invisible = create_test_monster("monster.skeleton", 
         name="Invisible Blocker",
         position=(2, 1),
         faction="monsters",
@@ -1222,37 +1216,37 @@ def test_eb_12_030_multi_entity_spells_reject_unperceived_explicit_targets(
 ) -> None:
     """EB-12-030: every explicit multi-target branch revalidates perception."""
     reset_senses_state(width=7, height=3)
-    caster = create_caster(
+    caster = create_test_monster("monster.generic_caster", 
         name="Caster",
         position=(0, 1),
         faction="heroes",
         level=5,
     )
-    visible_enemy = create_skeleton(
+    visible_enemy = create_test_monster("monster.skeleton", 
         name="Visible Enemy",
         position=(2, 1),
         faction="monsters",
         darkvision=False,
     )
-    second_visible_enemy = create_skeleton(
+    second_visible_enemy = create_test_monster("monster.skeleton", 
         name="Second Visible Enemy",
         position=(2, 0),
         faction="monsters",
         darkvision=False,
     )
-    invisible_enemy = create_skeleton(
+    invisible_enemy = create_test_monster("monster.skeleton", 
         name="Invisible Enemy",
         position=(2, 2),
         faction="monsters",
         darkvision=False,
     )
-    visible_ally = create_skeleton(
+    visible_ally = create_test_monster("monster.skeleton", 
         name="Visible Ally",
         position=(1, 0),
         faction="heroes",
         darkvision=False,
     )
-    invisible_ally = create_skeleton(
+    invisible_ally = create_test_monster("monster.skeleton", 
         name="Invisible Ally",
         position=(1, 2),
         faction="heroes",
@@ -1358,19 +1352,19 @@ def test_eb_12_031_perception_thresholds_refilter_contacts_hazards_and_logs() ->
         if event.combat_log
         else None
     )
-    observer = create_skeleton(
+    observer = create_test_monster("monster.skeleton", 
         name="Observer",
         position=(0, 1),
         faction="heroes",
         darkvision=False,
     )
-    easy_hidden = create_skeleton(
+    easy_hidden = create_test_monster("monster.skeleton", 
         name="Easy Hidden",
         position=(2, 0),
         faction="monsters",
         darkvision=False,
     )
-    hard_hidden = create_skeleton(
+    hard_hidden = create_test_monster("monster.skeleton", 
         name="Hard Hidden",
         position=(2, 2),
         faction="monsters",
@@ -1504,13 +1498,13 @@ def test_eb_12_031_perception_thresholds_refilter_contacts_hazards_and_logs() ->
 def test_eb_12_032_hidden_transition_invalidates_subjective_occupancy_paths() -> None:
     """EB-12-032: hiding and revealing immediately invalidate cached paths."""
     reset_senses_state(width=5, height=1)
-    observer = create_skeleton(
+    observer = create_test_monster("monster.skeleton", 
         name="Observer",
         position=(0, 0),
         faction="heroes",
         darkvision=False,
     )
-    target = create_skeleton(
+    target = create_test_monster("monster.skeleton", 
         name="Target",
         position=(2, 0),
         faction="monsters",

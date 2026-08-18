@@ -38,8 +38,8 @@ from dnd.types.spatial_effects import (
     SpatialEffectInteractionIntensity,
     SpatialEffectInteractionOperation,
 )
-from dnd.entity import Entity
-from dnd.monsters.bestiary import create_goblin
+from dnd.entities.entity import Entity
+from tests.engine.support import create_test_monster
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.spells.abjuration import (
     ShieldBuff,
@@ -102,17 +102,17 @@ def test_event_contract_generator_checks_the_canonical_server_manifest() -> None
 def test_executed_event_lineages_round_trip_typed_values_through_json() -> None:
     """Real movement and save lineages remain valid JSON-backed wire events."""
     reset_engine_runtime(grid_size=(20, 20))
-    mover = create_goblin(
+    mover = create_test_monster("monster.goblin", 
         name="Wire Mover",
         position=(1, 1),
         faction="heroes",
     )
-    saver = create_goblin(
+    saver = create_test_monster("monster.goblin", 
         name="Wire Saver",
         position=(5, 5),
         faction="heroes",
     )
-    caster = create_goblin(
+    caster = create_test_monster("monster.goblin", 
         name="Wire Caster",
         position=(6, 5),
         faction="monsters",

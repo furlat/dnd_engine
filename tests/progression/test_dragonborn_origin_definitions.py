@@ -1,186 +1,86 @@
-"""Exact authored contracts for the ten SRD Dragonborn ancestries."""
+"""Cold direct rules for the ten SRD Dragonborn ancestries."""
 
-from pydantic import TypeAdapter, ValidationError
+from dataclasses import FrozenInstanceError
+
 import pytest
 
-from dnd.content_system.dragonborn_origin_definitions import (
-    DRAGONBORN_ANCESTRY_DECLARATIONS,
+from dnd.content.characters.dragonborn_definitions import (
+    DRAGONBORN_ANCESTRY_DEFINITIONS,
+    DragonbornAncestryDefinition,
 )
-from dnd.core.content.dependencies import ContentDependencyRelation
-from dnd.core.content.dragonborn import (
+from dnd.content.characters.origin_content import resolve_origin_transforms
+from dnd.types.abilities import AbilityName
+from dnd.types.creatures import Background, Species
+from dnd.types.damage import DamageType
+from dnd.types.dragonborn import (
     DragonbornAncestry,
-    DragonbornAncestryFeatureDefinition,
     DragonbornBreathGeometry,
 )
-from dnd.core.content.durable_characters import (
-    BuildChoiceSelection,
-    ChoiceRequirementKind,
-    OriginTraitChoice,
-)
-from dnd.core.content.identities import ContentDefinitionKind
-from dnd.types.damage import DamageType
-from dnd.origins.dragonborn import (
-    DRAGONBORN_BREATH_WEAPON_REF,
-)
+from dnd.types.progression import AppliedOriginState, OriginChoiceSelection
 
 
 _EXPECTED_ANCESTRIES = {
-    DragonbornAncestry.BLACK: (
-        DamageType.ACID.value,
-        DragonbornBreathGeometry.LINE,
-        "dexterity",
-    ),
-    DragonbornAncestry.BLUE: (
-        DamageType.LIGHTNING.value,
-        DragonbornBreathGeometry.LINE,
-        "dexterity",
-    ),
-    DragonbornAncestry.BRASS: (
-        DamageType.FIRE.value,
-        DragonbornBreathGeometry.LINE,
-        "dexterity",
-    ),
-    DragonbornAncestry.BRONZE: (
-        DamageType.LIGHTNING.value,
-        DragonbornBreathGeometry.LINE,
-        "dexterity",
-    ),
-    DragonbornAncestry.COPPER: (
-        DamageType.ACID.value,
-        DragonbornBreathGeometry.LINE,
-        "dexterity",
-    ),
-    DragonbornAncestry.GOLD: (
-        DamageType.FIRE.value,
-        DragonbornBreathGeometry.CONE,
-        "dexterity",
-    ),
-    DragonbornAncestry.GREEN: (
-        DamageType.POISON.value,
-        DragonbornBreathGeometry.CONE,
-        "constitution",
-    ),
-    DragonbornAncestry.RED: (
-        DamageType.FIRE.value,
-        DragonbornBreathGeometry.CONE,
-        "dexterity",
-    ),
-    DragonbornAncestry.SILVER: (
-        DamageType.COLD.value,
-        DragonbornBreathGeometry.CONE,
-        "constitution",
-    ),
-    DragonbornAncestry.WHITE: (
-        DamageType.COLD.value,
-        DragonbornBreathGeometry.CONE,
-        "constitution",
-    ),
+    DragonbornAncestry.BLACK: (DamageType.ACID, DragonbornBreathGeometry.LINE, AbilityName.DEXTERITY),
+    DragonbornAncestry.BLUE: (DamageType.LIGHTNING, DragonbornBreathGeometry.LINE, AbilityName.DEXTERITY),
+    DragonbornAncestry.BRASS: (DamageType.FIRE, DragonbornBreathGeometry.LINE, AbilityName.DEXTERITY),
+    DragonbornAncestry.BRONZE: (DamageType.LIGHTNING, DragonbornBreathGeometry.LINE, AbilityName.DEXTERITY),
+    DragonbornAncestry.COPPER: (DamageType.ACID, DragonbornBreathGeometry.LINE, AbilityName.DEXTERITY),
+    DragonbornAncestry.GOLD: (DamageType.FIRE, DragonbornBreathGeometry.CONE, AbilityName.DEXTERITY),
+    DragonbornAncestry.GREEN: (DamageType.POISON, DragonbornBreathGeometry.CONE, AbilityName.CONSTITUTION),
+    DragonbornAncestry.RED: (DamageType.FIRE, DragonbornBreathGeometry.CONE, AbilityName.DEXTERITY),
+    DragonbornAncestry.SILVER: (DamageType.COLD, DragonbornBreathGeometry.CONE, AbilityName.CONSTITUTION),
+    DragonbornAncestry.WHITE: (DamageType.COLD, DragonbornBreathGeometry.CONE, AbilityName.CONSTITUTION),
 }
 
 
-def test_dragonborn_ancestry_inventory_is_exact_typed_srd_data() -> None:
-    declarations = DRAGONBORN_ANCESTRY_DECLARATIONS
-
-    assert len(declarations) == 10
-    assert {
-        row.definition_payload.ancestry
-        for row in declarations
-        if isinstance(
-            row.definition_payload,
-            DragonbornAncestryFeatureDefinition,
-        )
-    } == set(DragonbornAncestry)
-    assert tuple(row.ref.identity_key for row in declarations) == tuple(
-        sorted(row.ref.identity_key for row in declarations),
+def _state(ancestry: str) -> AppliedOriginState:
+    return AppliedOriginState(
+        base_ability_scores=tuple((ability, 10) for ability in AbilityName),
+        flexible_ability_bonuses=(
+            (AbilityName.STRENGTH, 2),
+            (AbilityName.DEXTERITY, 1),
+        ),
+        choices=(OriginChoiceSelection(
+            "species.dragonborn.draconic_ancestry",
+            (ancestry,),
+        ),),
     )
 
-    for declaration in declarations:
-        assert declaration.ref.pack_id == "content.srd_5_1_cc"
-        assert declaration.ref.definition_kind is ContentDefinitionKind.TRAIT
-        assert declaration.ref.content_version == 1
-        assert declaration.descriptor.visibility.value == "public"
-        assert declaration.provenance.primary_source_id == "wotc.srd_5_1_cc"
-        definition = declaration.definition_payload
-        assert isinstance(definition, DragonbornAncestryFeatureDefinition)
-        expected = _EXPECTED_ANCESTRIES[definition.ancestry]
+
+def test_dragonborn_ancestry_inventory_is_exact_typed_srd_data() -> None:
+    assert set(DRAGONBORN_ANCESTRY_DEFINITIONS) == set(DragonbornAncestry)
+
+    for ancestry, definition in DRAGONBORN_ANCESTRY_DEFINITIONS.items():
+        assert isinstance(definition, DragonbornAncestryDefinition)
+        assert definition.ancestry is ancestry
         assert (
             definition.damage_type,
             definition.breath_geometry,
             definition.save_ability,
-        ) == expected
-        assert definition.line_length_feet == (
-            30 if definition.breath_geometry is DragonbornBreathGeometry.LINE
-            else None
+        ) == _EXPECTED_ANCESTRIES[ancestry]
+        if definition.breath_geometry is DragonbornBreathGeometry.LINE:
+            assert definition.line_length_feet == 30
+            assert definition.line_width_feet == 5
+            assert definition.cone_length_feet is None
+        else:
+            assert definition.cone_length_feet == 15
+            assert definition.line_length_feet is None
+            assert definition.line_width_feet is None
+
+
+def test_dragonborn_ancestry_definitions_are_cold_and_immutable() -> None:
+    definition = DRAGONBORN_ANCESTRY_DEFINITIONS[DragonbornAncestry.BLACK]
+    with pytest.raises(FrozenInstanceError):
+        definition.damage_type = DamageType.FIRE  # type: ignore[misc]
+    with pytest.raises(TypeError):
+        DRAGONBORN_ANCESTRY_DEFINITIONS[DragonbornAncestry.BLACK] = definition
+
+
+def test_invalid_dragonborn_ancestry_choice_fails_before_entity_mutation() -> None:
+    with pytest.raises(ValueError, match="contains"):
+        resolve_origin_transforms(
+            species=Species.DRAGONBORN,
+            species_variant=None,
+            background=Background.ADVENTURER,
+            state=_state("purple"),
         )
-        assert definition.line_width_feet == (
-            5 if definition.breath_geometry is DragonbornBreathGeometry.LINE
-            else None
-        )
-        assert definition.cone_length_feet == (
-            15 if definition.breath_geometry is DragonbornBreathGeometry.CONE
-            else None
-        )
-        assert len(declaration.dependencies) == 1
-        dependency = declaration.dependencies[0]
-        assert dependency.relation is ContentDependencyRelation.GRANTS_ACTION
-        assert dependency.target_ref == DRAGONBORN_BREATH_WEAPON_REF
-
-
-def test_general_origin_trait_choice_is_not_the_sorcerer_choice() -> None:
-    selected_ref = DRAGONBORN_ANCESTRY_DECLARATIONS[0].ref
-    choice = OriginTraitChoice(
-        choice_id="species.dragonborn.draconic_ancestry",
-        selected_ref=selected_ref,
-    )
-
-    assert choice.choice_type == "origin_trait"
-    assert ChoiceRequirementKind(choice.choice_type) is (
-        ChoiceRequirementKind.ORIGIN_TRAIT
-    )
-    restored = TypeAdapter(BuildChoiceSelection).validate_python(
-        choice.model_dump(mode="json"),
-    )
-    assert restored == choice
-
-    with pytest.raises(
-        ValidationError,
-        match="origin trait choice must reference a trait",
-    ):
-        OriginTraitChoice(
-            choice_id="species.dragonborn.draconic_ancestry",
-            selected_ref=DRAGONBORN_BREATH_WEAPON_REF,
-        )
-
-
-@pytest.mark.parametrize(
-    ("payload", "message"),
-    (
-        (
-            {
-                "ancestry": "black",
-                "damage_type": "Acid",
-                "breath_geometry": "line",
-                "save_ability": "dexterity",
-                "cone_length_feet": 15,
-            },
-            "line breath",
-        ),
-        (
-            {
-                "ancestry": "gold",
-                "damage_type": "Fire",
-                "breath_geometry": "cone",
-                "save_ability": "dexterity",
-                "line_length_feet": 30,
-                "line_width_feet": 5,
-            },
-            "cone breath",
-        ),
-    ),
-)
-def test_dragonborn_geometry_contract_fails_closed(
-    payload: dict[str, object],
-    message: str,
-) -> None:
-    with pytest.raises(ValidationError, match=message):
-        DragonbornAncestryFeatureDefinition.model_validate(payload)

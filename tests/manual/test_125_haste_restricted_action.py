@@ -56,7 +56,7 @@ from dnd.core.gridmap import get_map
 from dnd.types.damage import DamageType
 from dnd.core.modifiers import NumericalModifier
 from dnd.types.actions import HasteActionPolicy
-from dnd.entity import Entity, EntityConfig
+from dnd.entities.entity import Entity, EntityConfig
 from dnd.items.weapons import DAGGER_RECIPE, GREATSWORD_RECIPE
 from dnd.spells.transmutation import HasteEffect
 from dnd.spells.transmutation import SlowedEffect

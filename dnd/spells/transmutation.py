@@ -9,7 +9,7 @@ from uuid import UUID
 from pydantic import Field, PrivateAttr
 
 from dnd.content.spatial_effect_materialization import (
-    materialize_spatial_effect,
+    materialize_spatial_condition,
 )
 from dnd.core.base_actions import (
     ActionCategory,
@@ -81,7 +81,7 @@ from dnd.types.rolls import AdvantageStatus
 from dnd.core.values import ModifiableValue
 from dnd.core.aoe import AoEShape, Cube
 from dnd.core.gridmap import get_map
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from dnd.conditions import (
     Concentrating,
     ConcentrationActionMarker,
@@ -89,32 +89,31 @@ from dnd.conditions import (
     GrantedSenseModeCondition,
     Restrained,
 )
-from dnd.creature_transforms import apply_incapacitated_transform
+from dnd.entities.creature_transforms import apply_incapacitated_transform
 from dnd.actions.standard import (
     SpellAction,
     SpellEvent,
     entity_action_economy_cost_evaluator,
 )
-from dnd.spatial.effect_controllers import AreaSpatialEffectController
+from dnd.spatial.area_conditions import AreaCondition
 from dnd.spells.content_metadata import srd_action_identity, srd_spell_identity
 from dnd.spells.spell_utils import fire_heal_roll_result
 from dnd.content.spatial_effect_recipes import SPIKE_GROWTH_SURFACE_RECIPE
-from dnd.spatial.effect_base import GroundEffect
 
 
 def _parse_damage_dice(dice_expression: str) -> tuple[int, int]:
-    """Parse the controller's validated ``NdS`` damage expression."""
+    """Parse the condition's validated ``NdS`` damage expression."""
     count_text, separator, sides_text = dice_expression.lower().partition("d")
     if separator != "d" or not count_text.isdigit() or not sides_text.isdigit():
         raise ValueError(f"Invalid damage dice expression: {dice_expression!r}")
     return int(count_text), int(sides_text)
 
 
-class SpikeGrowthZone(AreaSpatialEffectController):
+class SpikeGrowthZone(AreaCondition):
     """Manage the hidden damaging terrain created by Spike Growth.
 
-    The controller lives on an independent ``GroundEffect`` and registers
-    position-indexed entry handlers. Entering creatures other than the caster
+    The condition independently owns position-indexed entry handlers. Entering
+    creatures other than the caster
     take the configured piercing damage.
     """
     name: str = Field(default="Spike Growth Zone", description="Condition name.")
@@ -140,10 +139,6 @@ class SpikeGrowthZone(AreaSpatialEffectController):
         """Synchronize the marker stealth DC with the caster's spell save DC."""
         super().model_post_init(__context)
         self.condition_stealth_dc = self.spell_dc
-
-    trigger_kinds: frozenset[SpatialEffectTriggerKind] = frozenset({
-        SpatialEffectTriggerKind.ENTER,
-    })
 
     def _create_zone_entry_handler(self) -> EventHandler:
         """Create handler for entry damage (2d4 piercing per tile entered)."""
@@ -246,25 +241,26 @@ class SpikeGrowth(SpellAction):
             status_message=f"{caster.name} casts Spike Growth at {target_pos}"
         )
 
-        surface = materialize_spatial_effect(
+        zone = materialize_spatial_condition(
             SPIKE_GROWTH_SURFACE_RECIPE,
             caster.uuid,
             position=target_pos,
             faction=caster.faction,
-            expected_type=GroundEffect,
+            condition_type=SpikeGrowthZone,
+            condition_fields={
+                "spell_dc": dc,
+                "arbitration_potency": dc,
+                "effect_origin": execution_event.to_effect_origin(),
+            },
         )
-        zone = SpikeGrowthZone(
-            source_entity_uuid=caster.uuid,
-            target_entity_uuid=surface.uuid,
-            zone_center=target_pos,
-            spell_dc=dc,
-            arbitration_potency=dc,
-            effect_origin=execution_event.to_effect_origin(),
-        )
-        surface.install_controller(zone, parent_event=effect_event)
+        activation = zone.activate(parent_event=effect_event)
+        if activation is None or activation.canceled or not zone.applied:
+            return effect_event.cancel(
+                status_message="Spike Growth field could not be established",
+            )
 
         concentration = self.ensure_concentration(effect_event)
-        concentration.add_linked_condition(surface.uuid, zone.uuid)
+        concentration.add_linked_condition(zone.uuid, zone.uuid)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,

@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from typing import ClassVar
 
-from dnd.controller import PassController
-from dnd.types.encounter import EncounterState
-from dnd.entity import Entity
-from dnd.scenarios.encounter_assembler import prepare_encounter_recipe
-from dnd.scenarios.encounter_catalog import (
-    encounter_recipe,
-)
+from dnd.content.scenarios.scenario_catalog import encounter_definition
+from dnd.content.scenarios.scenario_deployment import prepare_scenario
+from dnd.encounters.controllers import PassController
+from dnd.types.encounter_state import EncounterState
+from dnd.entities.entity import Entity
+from dnd.game import Game
+from dnd.runtime_reset import reset_engine_runtime
 
 
 class _RecordingController(PassController):
@@ -24,8 +24,10 @@ class _RecordingController(PassController):
 
 def test_prepared_scenario_does_not_start_before_final_controllers_are_installed() -> None:
     _RecordingController.started_entities.clear()
-    assembled = prepare_encounter_recipe(
-        encounter_recipe("encounter.standard_skeleton_doors"),
+    reset_engine_runtime()
+    assembled = prepare_scenario(
+        Game(),
+        encounter_definition("encounter.standard_skeleton_doors"),
     )
     encounter = assembled.encounter
 

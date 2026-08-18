@@ -42,7 +42,7 @@ from dnd.types.equipment import WeaponSlot
 from dnd.core.modifiers import AdvantageModifier
 from dnd.types.rolls import AdvantageStatus
 from dnd.core.gridmap import get_map
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from dnd.actions.standard import (
     Attack,
     AttackEvent,

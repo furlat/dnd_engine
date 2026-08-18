@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from enum import Enum
-
 from pydantic import BaseModel, ConfigDict, Field, field_serializer
 
 from dnd.core.content.recipes import ContentRecipe
@@ -17,13 +15,6 @@ from dnd.types.spatial_effects import (
     SpatialEffectTriggerKind,
     SpatialEffectTransitionAction,
 )
-
-
-class SpatialEffectLifetimePolicy(str, Enum):
-    """How an effect's independent lifetime is terminated."""
-
-    CONTROLLER_DURATION = "controller_duration"
-    PERMANENT_UNTIL_REMOVED = "permanent_until_removed"
 
 
 class SpatialEffectTransitionDefinition(BaseModel):
@@ -75,7 +66,6 @@ class SpatialEffectDefinition(BaseModel):
     blocking_policy: SpatialEffectBlockingPolicy = (
         SpatialEffectBlockingPolicy.NONE
     )
-    lifetime_policy: SpatialEffectLifetimePolicy
     trigger_kinds: frozenset[SpatialEffectTriggerKind] = frozenset()
     first_per_turn_trigger_kinds: frozenset[
         SpatialEffectTriggerKind
@@ -110,6 +100,5 @@ class SpatialEffectDefinition(BaseModel):
 
 __all__ = [
     "SpatialEffectDefinition",
-    "SpatialEffectLifetimePolicy",
     "SpatialEffectTransitionDefinition",
 ]

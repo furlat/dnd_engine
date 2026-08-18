@@ -22,7 +22,7 @@ from dnd.core.content.materialization import (
 )
 from dnd.core.content.recipes import ContentRecipe
 from dnd.core.content.registration import ContentDeclaration
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 
 
 _EntityT = TypeVar("_EntityT", bound=Entity)

@@ -61,7 +61,7 @@ from dnd.core.content.registry import FrozenContentRegistry
 from dnd.types.damage import DamageType
 from dnd.types.damage import ResistanceStatus
 from dnd.types.senses import SensesType
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from dnd.runtime_reset import reset_engine_runtime
 
 

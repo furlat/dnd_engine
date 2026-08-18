@@ -37,14 +37,13 @@ from dnd.core.combat_log import (
     CombatLogEntryType,
     damage_total_from_log_data,
 )
-from dnd.core.content.runtime import (
-    BehaviorBinding,
+from dnd.core.behavior_context import active_behavior, behavior_scope
+from dnd.types.behaviors import (
     EffectiveHandlerPresentation,
     HandlerDispatchEvidence,
     HandlerDispatchOutcome,
     RuntimeBehaviorKind,
-    bind_runtime_handler_before_admission,
-    runtime_behavior_provider,
+    validate_behavior_id,
 )
 from dnd.types.effects import EffectOrigin
 
@@ -137,6 +136,7 @@ class EventType(str, Enum):
     MOVEMENT_COLLISION = "movement_collision"
     SENSORY_UPDATE = "sensory_update"
     SPATIAL_EFFECT_INTERACTION = "spatial_effect_interaction"
+    WORLD_INITIALIZED = "world_initialized"
 
     ENCOUNTER_START = "encounter_start"
     ENCOUNTER_END = "encounter_end"
@@ -149,6 +149,10 @@ class EventType(str, Enum):
     DEATH_SAVE = "death_save"
     INSTANT_DEATH = "instant_death"
     DEATH = "death"
+
+    ENTITY_CREATED = "entity_created"
+    ENTITY_LEVEL_ADDED = "entity_level_added"
+    ENTITY_LEVEL_REMOVED = "entity_level_removed"
 
 class EventPhase(str, Enum):
     """Lifecycle phase for one logical event lineage.
@@ -410,92 +414,102 @@ class Event(BaseObject):
             phase_updates['is_last'] = True
 
         if new_phase == EventPhase.COMPLETION:
-            EventQueue.run_pre_completion_callbacks(self)
-            if EventQueue._identified_entity_observer_computer is not None:
-                phase_updates["located_entity_observer_uuids"] = {
-                    entity_uuid: set(observer_uuids)
-                    for entity_uuid, observer_uuids in (
-                        EventQueue._identified_entity_observer_computer(self).items()
-                    )
-                }
-            completion_locations = phase_updates.get(
-                "located_entity_observer_uuids",
-                self.located_entity_observer_uuids,
-            )
-            phase_updates["located_position_observer_uuids"] = (
-                self.completion_position_observer_evidence(completion_locations)
-            )
-
-            all_children = list(dict.fromkeys(self.lineage_children_events + self.children_events))
-            phase_updates['lineage_children_events'] = all_children
-            phase_updates['children_events'] = all_children
-
-            if self.parent_event:
-                parent = EventQueue.get_event_by_uuid(self.parent_event)
-                if parent:
-                    phase_updates['parent_lineage'] = parent.lineage_uuid
-
-            child_lineages: List[UUID] = []
-            seen_lineages: Set[UUID] = set()
-            for child_uuid in all_children:
-                child = EventQueue.get_event_by_uuid(child_uuid)
-                if child and child.lineage_uuid not in seen_lineages:
-                    child_lineages.append(child.lineage_uuid)
-                    seen_lineages.add(child.lineage_uuid)
-            phase_updates['children_lineages'] = child_lineages
+            phase_updates = self._completion_updates(phase_updates)
         else:
             phase_updates['lineage_children_events'] = self.lineage_children_events + self.children_events
             phase_updates['children_events'] = []
 
-        if new_phase == EventPhase.COMPLETION:
-            try:
-                temp_event = self.model_copy(update=phase_updates)
-                combat_log = temp_event.generate_combat_log()
-                if combat_log is not None:
-                    combat_log.identified_entity_observer_uuids = {
-                        entity_uuid: set(observer_uuids)
-                        for entity_uuid, observer_uuids in temp_event.identified_entity_observer_uuids.items()
-                    }
-                    combat_log.located_entity_observer_uuids = {
-                        entity_uuid: set(observer_uuids)
-                        for entity_uuid, observer_uuids in temp_event.located_entity_observer_uuids.items()
-                    }
-                    combat_log.located_position_observer_uuids = {
-                        position: set(observer_uuids)
-                        for position, observer_uuids in temp_event.located_position_observer_uuids.items()
-                    }
-                    if EventQueue._perceiver_computer:
-                        combat_log.perceiver_uuids = EventQueue._perceiver_computer(temp_event)
-
-                    child_logs = temp_event._collect_child_combat_logs()
-                    if child_logs:
-                        combat_log.sub_entries = child_logs
-                        for child_log in child_logs:
-                            combat_log.perceiver_uuids |= child_log.perceiver_uuids
-                            combat_log.revealed_entity_uuids |= child_log.revealed_entity_uuids
-                            for entity_uuid, observer_uuids in child_log.identified_entity_observer_uuids.items():
-                                combat_log.identified_entity_observer_uuids.setdefault(entity_uuid, set()).update(
-                                    observer_uuids
-                                )
-                        _enrich_multi_entity_log_from_children(combat_log, child_logs)
-
-                    if EventQueue._revealed_computer:
-                        combat_log.revealed_entity_uuids |= EventQueue._revealed_computer(temp_event, child_logs or [])
-
-                    phase_updates['combat_log'] = combat_log
-
-                    if self.parent_event is None and EventQueue._combat_log_callback:
-                        final_event = self.model_copy(update=phase_updates)
-                        EventQueue._combat_log_callback(final_event)
-            except Exception:
-                logger.exception(
-                    "Combat-log projection failed for %s event %s at phase %s",
-                    type(self).__name__,
-                    self.uuid,
-                    new_phase,
-                )
-
         return self.post(**phase_updates)
+
+    def _completion_updates(self, updates: Dict[str, Any]) -> Dict[str, Any]:
+        """Return the existing completion metadata for one terminal version."""
+        completion_updates = dict(updates)
+        EventQueue.run_pre_completion_callbacks(self)
+        if EventQueue._identified_entity_observer_computer is not None:
+            completion_updates["located_entity_observer_uuids"] = {
+                entity_uuid: set(observer_uuids)
+                for entity_uuid, observer_uuids in (
+                    EventQueue._identified_entity_observer_computer(self).items()
+                )
+            }
+        completion_locations = completion_updates.get(
+            "located_entity_observer_uuids",
+            self.located_entity_observer_uuids,
+        )
+        completion_updates["located_position_observer_uuids"] = (
+            self.completion_position_observer_evidence(completion_locations)
+        )
+
+        all_children = list(dict.fromkeys(
+            self.lineage_children_events + self.children_events,
+        ))
+        completion_updates["lineage_children_events"] = all_children
+        completion_updates["children_events"] = all_children
+
+        if self.parent_event:
+            parent = EventQueue.get_event_by_uuid(self.parent_event)
+            if parent:
+                completion_updates["parent_lineage"] = parent.lineage_uuid
+
+        child_lineages: List[UUID] = []
+        seen_lineages: Set[UUID] = set()
+        for child_uuid in all_children:
+            child = EventQueue.get_event_by_uuid(child_uuid)
+            if child and child.lineage_uuid not in seen_lineages:
+                child_lineages.append(child.lineage_uuid)
+                seen_lineages.add(child.lineage_uuid)
+        completion_updates["children_lineages"] = child_lineages
+
+        try:
+            temp_event = self.model_copy(update=completion_updates)
+            combat_log = temp_event.generate_combat_log()
+            if combat_log is not None:
+                combat_log.identified_entity_observer_uuids = {
+                    entity_uuid: set(observer_uuids)
+                    for entity_uuid, observer_uuids in temp_event.identified_entity_observer_uuids.items()
+                }
+                combat_log.located_entity_observer_uuids = {
+                    entity_uuid: set(observer_uuids)
+                    for entity_uuid, observer_uuids in temp_event.located_entity_observer_uuids.items()
+                }
+                combat_log.located_position_observer_uuids = {
+                    position: set(observer_uuids)
+                    for position, observer_uuids in temp_event.located_position_observer_uuids.items()
+                }
+                if EventQueue._perceiver_computer:
+                    combat_log.perceiver_uuids = EventQueue._perceiver_computer(temp_event)
+
+                child_logs = temp_event._collect_child_combat_logs()
+                if child_logs:
+                    combat_log.sub_entries = child_logs
+                    for child_log in child_logs:
+                        combat_log.perceiver_uuids |= child_log.perceiver_uuids
+                        combat_log.revealed_entity_uuids |= child_log.revealed_entity_uuids
+                        for entity_uuid, observer_uuids in child_log.identified_entity_observer_uuids.items():
+                            combat_log.identified_entity_observer_uuids.setdefault(entity_uuid, set()).update(
+                                observer_uuids
+                            )
+                    _enrich_multi_entity_log_from_children(combat_log, child_logs)
+
+                if EventQueue._revealed_computer:
+                    combat_log.revealed_entity_uuids |= EventQueue._revealed_computer(
+                        temp_event,
+                        child_logs or [],
+                    )
+
+                completion_updates["combat_log"] = combat_log
+
+                if self.parent_event is None and EventQueue._combat_log_callback:
+                    final_event = self.model_copy(update=completion_updates)
+                    EventQueue._combat_log_callback(final_event)
+        except Exception:
+            logger.exception(
+                "Combat-log projection failed for %s event %s at phase %s",
+                type(self).__name__,
+                self.uuid,
+                EventPhase.COMPLETION,
+            )
+        return completion_updates
 
     def cancel(self, status_message: Optional[str] = None, **updates) -> Self:
         """Mark this event as canceled and post the cancel version.
@@ -946,14 +960,17 @@ class BaseHandler(BaseObject):
         default=None,
         description="Stable rules-content identity; defaults to the processor's code identity.",
     )
-    behavior_binding: Optional[BehaviorBinding] = Field(
+    behavior_id: str = Field(
+        default="system.unclassified",
+        description="Direct renderer-independent handler identity.",
+    )
+    provided_by_id: Optional[str] = Field(
         default=None,
-        exclude=True,
-        repr=False,
-        description=(
-            "Validated runtime content binding installed once before queue "
-            "admission."
-        ),
+        description="Direct semantic identity that installed this handler.",
+    )
+    origin_root_id: Optional[str] = Field(
+        default=None,
+        description="Optional durable semantic root of this handler.",
     )
     content_kind: RuntimeBehaviorKind = Field(
         default=RuntimeBehaviorKind.UNCLASSIFIED,
@@ -986,15 +1003,26 @@ class BaseHandler(BaseObject):
     )
 
     def get_semantic_key(self) -> str:
-        """Return an explicit/bound key or an explicit unbound diagnostic."""
-        if self.semantic_key:
-            return self.semantic_key
-        if self.behavior_binding is not None:
-            return self.behavior_binding.definition_ref.identity_key
-        module = getattr(self.event_processor, "__module__", type(self.event_processor).__module__)
-        qualname = getattr(self.event_processor, "__qualname__", type(self.event_processor).__qualname__)
-        code_identity = f"{module}.{qualname}".replace(".<locals>.", ".")
-        return f"unbound:{code_identity}"
+        """Return the handler's direct semantic identity."""
+        return self.behavior_id
+
+    def bind_behavior_owner(self) -> None:
+        """Finalize direct ownership before queue or block admission."""
+        active = active_behavior()
+        if self.semantic_key is not None:
+            self.behavior_id = self.semantic_key
+        elif self.behavior_id == "system.unclassified" and active is not None:
+            self.behavior_id = active.behavior_id
+        validate_behavior_id(self.behavior_id)
+        if self.provided_by_id is None:
+            self.provided_by_id = (
+                active.behavior_id if active is not None else self.behavior_id
+            )
+        validate_behavior_id(self.provided_by_id, "provided_by_id")
+        if self.origin_root_id is None and active is not None:
+            self.origin_root_id = active.origin_root_id
+        if self.origin_root_id is not None:
+            validate_behavior_id(self.origin_root_id, "origin_root_id")
 
     def __call__(self, event: Event, source_entity_uuid: Optional[UUID] = None) -> Optional[Event]:
         """Execute the stored event processor if this handler is enabled.
@@ -1370,7 +1398,13 @@ class EventQueue:
         stored_input_tampered = False
         tampered_candidate: Optional[Event] = None
         try:
-            with runtime_behavior_provider(handler):
+            handler.bind_behavior_owner()
+            assert handler.provided_by_id is not None
+            with behavior_scope(
+                behavior_id=handler.behavior_id,
+                provided_by_id=handler.provided_by_id,
+                origin_root_id=handler.origin_root_id,
+            ):
                 result = handler(handler_input)
         finally:
             detached_storage_result = cls._active_handler_storage_result.get()
@@ -1462,12 +1496,10 @@ class EventQueue:
             outcome=outcome,
             emitted_event_count=emitted_event_count,
         )
-        binding = handler.behavior_binding
         if (
             result is not None
             and evidence.effected
             and handler.content_kind is RuntimeBehaviorKind.REACTION
-            and isinstance(binding, BehaviorBinding)
         ):
             emitted_lineages = tuple(dict.fromkeys(
                 emitted.lineage_uuid
@@ -1478,7 +1510,11 @@ class EventQueue:
                 EffectiveHandlerPresentation(
                     dispatch_index=evidence.dispatch_index,
                     handler_name=handler.name,
-                    behavior_binding=binding,
+                    behavior_id=handler.behavior_id,
+                    provided_by_id=(
+                        handler.provided_by_id or handler.behavior_id
+                    ),
+                    origin_root_id=handler.origin_root_id,
                     source_entity_uuid=handler.source_entity_uuid,
                     triggering_event_uuid=event.uuid,
                     triggering_lineage_uuid=event.lineage_uuid,
@@ -2023,6 +2059,26 @@ class EventQueue:
         return event
 
     @classmethod
+    def publish_completed_fact(cls, event: EventT) -> EventT:
+        """Store one non-cancelable fact after its domain mutation commits."""
+        if event.use_register:
+            raise ValueError("Completed facts must be constructed unregistered")
+        if event.phase is not EventPhase.COMPLETION:
+            raise ValueError("Completed facts must already be in completion phase")
+        completion_updates = event._completion_updates({
+            "phase": EventPhase.COMPLETION,
+            "is_first": True,
+            "is_last": True,
+        })
+        committed = event.model_copy(update={
+            **completion_updates,
+            "use_register": True,
+            "timestamp": datetime.now(UTC),
+        })
+        cls._store_event(committed)
+        return cast(EventT, committed)
+
+    @classmethod
     def register_completion_sequence(
         cls,
         events: Sequence[Event],
@@ -2269,7 +2325,7 @@ class EventQueue:
         Args:
             event_handler: Handler containing one or more trigger conditions.
         """
-        bind_runtime_handler_before_admission(event_handler)
+        event_handler.bind_behavior_owner()
         for trigger in event_handler.trigger_conditions:
             if trigger.is_simple():
                 cls._event_handlers_by_simple_trigger[trigger.get_simple_trigger()].append(event_handler)
@@ -2333,7 +2389,7 @@ class EventQueue:
             event_type: Spatial event type for legacy handlers.
             event_phase: Spatial event phase for legacy handlers.
         """
-        bind_runtime_handler_before_admission(handler)
+        handler.bind_behavior_owner()
         if isinstance(handler, SpatialHandler):
             actual_positions = handler.positions if not positions else positions
             event_key = (handler.event_type, handler.event_phase)

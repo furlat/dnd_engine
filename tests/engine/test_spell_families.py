@@ -17,6 +17,7 @@ from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.equipment import (
     Weapon,
 )
+from dnd.blocks.base_item import BaseItem
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
 from dnd.conditions import Blinded, Concentrating, Exhaustion, Grappled, Paralyzed, Petrified, Poisoned, Restrained, Stunned, Underwater, Unconscious
@@ -58,7 +59,6 @@ from dnd.types.spatial_effects import (
     SpatialEffectInteractionOperation,
 )
 from dnd.core.gridmap import get_map
-from server.world_projection import project_observed_tile
 from dnd.types.life import LifeState
 from dnd.types.creatures import CreatureType
 from dnd.types.damage import DamageType
@@ -66,17 +66,11 @@ from dnd.types.rolls import AdvantageStatus, AutoHitStatus
 from dnd.core.modifiers import NumericalModifier, ResistanceModifier
 from dnd.types.damage import ResistanceStatus
 from dnd.core.values import BaseValue
-from dnd.entity import Entity, EntityConfig
+from dnd.entities.entity import Entity, EntityConfig
 from dnd.actions.operations import execute_by_index, setup_standard_actions
-from dnd.items.environment_content import (
-    OIL_BARREL_RECIPE,
-    WALL_TORCH_RECIPE,
-    OilBarrel,
-)
-from dnd.items.torches import TORCH_RECIPE, Torch, WallTorch
-from dnd.content_system.item_materialization import materialize_item
-from dnd.content_system.item_bindings import ItemRuntimeOrigin
-from dnd.items.weapons import CLUB_RECIPE, LONGBOW_RECIPE
+from dnd.items.torches import Torch, WallTorch, build_torch
+from dnd.content.items.authored_item_builders import build_authored_item
+from dnd.content.items.environment_item_builders import build_wall_torch
 from tests.spell_test_exports import (
     ALL_SPELLS,
     FireBolt,
@@ -122,19 +116,15 @@ from dnd.spells.illusion import MirrorImageEffect
 from dnd.spells.necromancy import AbilityCurseEffect, Eyebite, FalseLife
 from dnd.spells.transmutation import Haste, Slow, SlowedEffect, SpikeGrowth
 from dnd.spells.enchantment import Bane, Bless, HoldMonster, HoldPerson, PowerWordKill, Sleep
-from dnd.spatial.effect_base import (
-    CloudEffect,
-    FieldEffect,
-    GroundEffect,
-    SpatialEffect,
-)
+from dnd.spatial.area_conditions import SpatialCondition
 from dnd.content.spatial_effect_recipes import (
     BURNING_WEB_FIRE_RECIPE,
     GREASE_SURFACE_RECIPE,
     WEB_SURFACE_RECIPE,
 )
-from dnd.spatial.effect_controllers import AreaSpatialEffectController
+from dnd.spatial.area_conditions import AreaCondition
 from tests.engine.support import (
+    create_test_entity,
     deal_damage_to,
     force_attack_hit,
     force_attack_miss,
@@ -157,14 +147,14 @@ def reset_spell_family_state(width: int = 12, height: int = 8) -> None:
     get_map().create_rectangle(0, 0, width, height)
 
 
-def active_spatial_controller(
+def active_spatial_condition(
     condition_name: str,
-) -> tuple[SpatialEffect, BaseCondition]:
-    """Resolve the one active independent effect owning a named controller."""
+) -> SpatialCondition:
+    """Resolve the one active independent spatial condition by name."""
     matches = [
-        (effect, effect.active_conditions[condition_name])
-        for effect in SpatialEffect.active_effects()
-        if condition_name in effect.active_conditions
+        condition
+        for condition in get_map().get_spatial_conditions()
+        if condition.name == condition_name
     ]
     assert len(matches) == 1
     return matches[0]
@@ -197,7 +187,7 @@ def create_family_caster(
         position=position,
         faction=faction,
     )
-    return Entity.create(source_entity_uuid=uuid4(), name=name, config=config)
+    return create_test_entity(name=name, config=config)
 
 
 def create_family_target(
@@ -224,7 +214,7 @@ def create_family_target(
         faction=faction,
         requires_breathing=requires_breathing,
     )
-    return Entity.create(source_entity_uuid=uuid4(), name=name, config=config)
+    return create_test_entity(name=name, config=config)
 
 
 def penalize_save(entity: Entity, ability_name: AbilityName, value: int = -100) -> None:
@@ -1179,12 +1169,7 @@ def test_eb_15_025_protective_abjurations_prevent_and_absorb_effects() -> None:
     ally.action_economy.reset_all_costs()
 
     ally.equipment.equip(
-        materialize_item(
-            LONGBOW_RECIPE,
-            ally.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
-        ),
+        cast(Weapon, build_authored_item("weapon.longbow", ally.uuid)),
         WeaponSlot.RANGED_MAIN,
     )
     ally.add_condition(Underwater(source_entity_uuid=caster.uuid, target_entity_uuid=ally.uuid))
@@ -1296,12 +1281,7 @@ def test_eb_15_025_protective_abjurations_prevent_and_absorb_effects() -> None:
     unprotected_ranged_attack.clear_context()
 
     ally.equipment.equip(
-        materialize_item(
-            CLUB_RECIPE,
-            ally.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
-        ),
+        cast(Weapon, build_authored_item("weapon.club", ally.uuid)),
         WeaponSlot.MELEE_MAIN,
     )
     melee_underwater_context = {
@@ -2241,12 +2221,12 @@ def test_eb_15_006_zone_spells_create_spatial_handlers_and_cleanup_links() -> No
     ).apply()
 
     event = assert_completed_spell(event)
-    effect, controller = active_spatial_controller("Spike Growth Zone")
-    assert isinstance(effect, GroundEffect)
+    effect = active_spatial_condition("Spike Growth Zone")
+    assert isinstance(effect, SpatialCondition)
     assert "Spike Growth Zone" not in caster.active_conditions
     assert "Concentrating" in caster.active_conditions
 
-    zone = cast(AreaSpatialEffectController, controller)
+    zone = cast(AreaCondition, effect)
     concentration = caster.active_conditions["Concentrating"]
     assert isinstance(concentration, Concentrating)
     assert len(zone.affected_positions) > 0
@@ -2256,7 +2236,7 @@ def test_eb_15_006_zone_spells_create_spatial_handlers_and_cleanup_links() -> No
     caster.remove_condition("Concentrating")
 
     assert "Spike Growth Zone" not in caster.active_conditions
-    assert SpatialEffect.get_effect(effect.uuid) is None
+    assert BaseCondition.get(effect.uuid) is None
     assert "Concentrating" not in caster.active_conditions
 
 
@@ -2277,34 +2257,16 @@ def test_eb_15_021_zone_spell_family_entry_turn_start_and_cleanup_edges() -> Non
     ).apply()
 
     grease_event = assert_completed_spell(grease_event)
-    grease_effect_uuids = get_map().get_spatial_effect_uuids_at((5, 5))
+    grease_effect_uuids = get_map().get_spatial_condition_uuids_at((5, 5))
     assert len(grease_effect_uuids) == 1
-    grease_effect = SpatialEffect.get_effect(next(iter(grease_effect_uuids)))
-    assert isinstance(grease_effect, GroundEffect)
-    observed_tile = project_observed_tile(
-        get_map(),
-        (5, 5),
-        (caster.uuid,),
-    )
-    assert [
-        (
-            fact.uuid,
-            fact.content_ref.model_dump(),
-            fact.layer,
-            fact.anchor_kind,
-        )
-        for fact in observed_tile.spatial_effects
-    ] == [
-        (
-            str(grease_effect.uuid),
-            grease_effect.content_ref.model_dump(),
-            "ground_surface",
-            "fixed_position",
-        ),
-    ]
+    grease_effect = BaseCondition.get(next(iter(grease_effect_uuids)))
+    assert isinstance(grease_effect, SpatialCondition)
+    grease_tile = get_map().get_tile(5, 5)
+    assert grease_tile is not None
+    assert grease_tile.get_conditions()[grease_effect.uuid] is grease_effect
     grease_zone = cast(
-        AreaSpatialEffectController,
-        grease_effect.active_conditions["Grease Zone"],
+        AreaCondition,
+        grease_effect,
     )
     assert grease_zone.adds_difficult_terrain
     assert len(grease_zone.spatial_handler_uuids) == 1
@@ -2334,12 +2296,12 @@ def test_eb_15_021_zone_spell_family_entry_turn_start_and_cleanup_edges() -> Non
         ).apply()
 
     web_event = assert_completed_spell(web_event)
-    web_effect, web_controller = active_spatial_controller("Web Zone")
-    assert isinstance(web_effect, GroundEffect)
+    web_effect = active_spatial_condition("Web Zone")
+    assert isinstance(web_effect, SpatialCondition)
     assert web_effect.content_ref == WEB_SURFACE_RECIPE.ref
-    web_zone = cast(WebZone, web_controller)
+    web_zone = cast(WebZone, web_effect)
     assert web_zone.adds_difficult_terrain
-    assert len(web_zone.spatial_handler_uuids) == 2
+    assert len(web_zone.spatial_handler_uuids) == 3
     assert {
         EventQueue._event_handlers[handler_uuid].name
         for handler_uuid in web_zone.event_handlers_uuids
@@ -2379,13 +2341,13 @@ def test_eb_15_021_zone_spell_family_entry_turn_start_and_cleanup_edges() -> Non
         ).apply()
 
     cloudkill_event = assert_completed_spell(cloudkill_event)
-    cloudkill_effect, cloudkill_controller = active_spatial_controller(
+    cloudkill_effect = active_spatial_condition(
         "Cloudkill Zone",
     )
-    assert isinstance(cloudkill_effect, CloudEffect)
-    cloudkill_zone = cast(AreaSpatialEffectController, cloudkill_controller)
+    assert isinstance(cloudkill_effect, SpatialCondition)
+    cloudkill_zone = cast(AreaCondition, cloudkill_effect)
     assert not cloudkill_zone.adds_difficult_terrain
-    assert len(cloudkill_zone.spatial_handler_uuids) == 1
+    assert len(cloudkill_zone.spatial_handler_uuids) == 2
     assert len(cloudkill_zone.event_handlers_uuids) == 2
 
     hp_before_entry = get_hp(target)
@@ -2398,10 +2360,10 @@ def test_eb_15_021_zone_spell_family_entry_turn_start_and_cleanup_edges() -> Non
         target.on_turn_start(round_number=1, turn_index=0)
     assert hp_before_start - get_hp(target) == 15
 
-    old_center = cloudkill_zone.zone_center
+    old_center = cloudkill_zone.position
     with patch("dnd.core.dice.random.randint", side_effect=fixed_zone_randint):
         caster.on_turn_start(round_number=1, turn_index=0)
-    assert cloudkill_zone.zone_center != old_center
+    assert cloudkill_zone.position != old_center
 
     reset_spell_family_state(width=18, height=18)
     caster = create_family_caster(position=(5, 5), spell_slots={3: 1}, faction="heroes")
@@ -2427,17 +2389,16 @@ def test_eb_15_021_zone_spell_family_entry_turn_start_and_cleanup_edges() -> Non
         ).apply()
 
     spirit_event = assert_completed_spell(spirit_event)
-    spirit_effect, spirit_controller = active_spatial_controller(
+    spirit_effect = active_spatial_condition(
         "Spirit Guardians Zone",
     )
-    assert isinstance(spirit_effect, FieldEffect)
+    assert isinstance(spirit_effect, SpatialCondition)
     assert spirit_effect.anchor_kind is SpatialEffectAnchorKind.ENTITY
     assert spirit_effect.anchor_uuid == caster.uuid
-    spirit_zone = cast(AreaSpatialEffectController, spirit_controller)
-    assert spirit_zone.zone_center == caster.position
+    spirit_zone = cast(AreaCondition, spirit_effect)
+    assert spirit_zone.position == caster.position
     assert len(spirit_zone.spatial_handler_uuids) == 2
-    assert len(spirit_zone.event_handlers_uuids) == 1
-    assert len(spirit_effect.event_handlers) == 1
+    assert len(spirit_zone.event_handlers_uuids) == 2
 
     enemy_hp_before = get_hp(enemy)
     ally_hp_before = get_hp(ally)
@@ -2470,7 +2431,7 @@ def test_eb_15_021_zone_spell_family_entry_turn_start_and_cleanup_edges() -> Non
 
     caster.remove_condition("Concentrating")
     assert "Spirit Guardians Zone" not in caster.active_conditions
-    assert SpatialEffect.get_effect(spirit_effect.uuid) is None
+    assert BaseCondition.get(spirit_effect.uuid) is None
     assert all(
         handler_uuid not in EventQueue._handler_positions
         for handler_uuid in spirit_zone.spatial_handler_uuids
@@ -2715,13 +2676,13 @@ def test_grease_has_an_independent_lifetime_and_checks_occupants_at_turn_end() -
     grease_event = assert_completed_spell(grease_event)
     assert "Concentrating" not in caster.active_conditions
     assert "Grease Zone" not in caster.active_conditions
-    grease_effect_uuids = get_map().get_spatial_effect_uuids_at((10, 10))
+    grease_effect_uuids = get_map().get_spatial_condition_uuids_at((10, 10))
     assert len(grease_effect_uuids) == 1
-    grease_effect = SpatialEffect.get_effect(next(iter(grease_effect_uuids)))
-    assert isinstance(grease_effect, GroundEffect)
+    grease_effect = BaseCondition.get(next(iter(grease_effect_uuids)))
+    assert isinstance(grease_effect, SpatialCondition)
     grease_zone = cast(
-        AreaSpatialEffectController,
-        grease_effect.active_conditions["Grease Zone"],
+        AreaCondition,
+        grease_effect,
     )
     assert grease_zone.duration.duration_type is DurationType.ROUNDS
     assert grease_zone.duration.duration == 10
@@ -2766,11 +2727,11 @@ def test_grease_has_an_independent_lifetime_and_checks_occupants_at_turn_end() -
     assert grease_tile is not None
     assert grease_tile.walking_cost.normalized_score == 2
     for _ in range(9):
-        assert not grease_effect.advance_duration("Grease Zone")
+        assert not grease_effect.progress_spatial_duration()
     assert grease_zone.duration.duration == 1
-    assert grease_effect.advance_duration("Grease Zone")
-    assert SpatialEffect.get_effect(grease_effect.uuid) is None
-    assert get_map().get_spatial_effect_uuids_at((10, 10)) == set()
+    assert grease_effect.progress_spatial_duration()
+    assert BaseCondition.get(grease_effect.uuid) is None
+    assert get_map().get_spatial_condition_uuids_at((10, 10)) == set()
     assert grease_tile.walking_cost.normalized_score == 1
     removed_events = [
         event
@@ -2817,7 +2778,7 @@ def test_second_overlapping_grease_replaces_exact_material_without_raw_error() -
     assert_completed_spell(second_event)
     active = [
         effect
-        for effect in SpatialEffect.active_effects()
+        for effect in get_map().get_spatial_conditions()
         if effect.content_ref == GREASE_SURFACE_RECIPE.ref
     ]
     assert len(active) == 1
@@ -2844,13 +2805,13 @@ def test_daylight_has_an_independent_lifetime_from_caster_concentration() -> Non
     assert_completed_spell(daylight_event)
     assert "Concentrating" not in caster.active_conditions
     assert "Daylight Zone" not in caster.active_conditions
-    daylight_effect_uuids = get_map().get_spatial_effect_uuids_at((12, 12))
+    daylight_effect_uuids = get_map().get_spatial_condition_uuids_at((12, 12))
     assert len(daylight_effect_uuids) == 1
-    daylight_effect = SpatialEffect.get_effect(next(iter(daylight_effect_uuids)))
-    assert isinstance(daylight_effect, FieldEffect)
+    daylight_effect = BaseCondition.get(next(iter(daylight_effect_uuids)))
+    assert isinstance(daylight_effect, SpatialCondition)
     daylight_zone = cast(
-        AreaSpatialEffectController,
-        daylight_effect.active_conditions["Daylight Zone"],
+        AreaCondition,
+        daylight_effect,
     )
     assert daylight_zone.duration.duration_type is DurationType.ROUNDS
     assert daylight_zone.duration.duration == 600
@@ -2872,10 +2833,10 @@ def test_daylight_has_an_independent_lifetime_from_caster_concentration() -> Non
 
     assert center_tile.resolved_light_level == LightLevel.VERY_BRIGHT
     for _ in range(599):
-        assert not daylight_effect.advance_duration("Daylight Zone")
-    assert daylight_effect.advance_duration("Daylight Zone")
-    assert SpatialEffect.get_effect(daylight_effect.uuid) is None
-    assert get_map().get_spatial_effect_uuids_at((12, 12)) == set()
+        assert not daylight_effect.progress_spatial_duration()
+    assert daylight_effect.progress_spatial_duration()
+    assert BaseCondition.get(daylight_effect.uuid) is None
+    assert get_map().get_spatial_condition_uuids_at((12, 12)) == set()
     assert center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
 
 
@@ -2893,9 +2854,9 @@ def test_eb_15_026_light_zone_spells_apply_obscurement_and_dispel_darkness() -> 
     ).apply()
 
     fog_event = assert_completed_spell(fog_event)
-    fog_effect, fog_controller = active_spatial_controller("Fog Cloud Zone")
-    assert isinstance(fog_effect, CloudEffect)
-    fog_zone = cast(AreaSpatialEffectController, fog_controller)
+    fog_effect = active_spatial_condition("Fog Cloud Zone")
+    assert isinstance(fog_effect, SpatialCondition)
+    fog_zone = cast(AreaCondition, fog_effect)
     fog_center_tile = get_map().get_tile(16, 16)
     fog_edge_tile = get_map().get_tile(24, 16)
     fog_outside_tile = get_map().get_tile(25, 16)
@@ -2911,7 +2872,7 @@ def test_eb_15_026_light_zone_spells_apply_obscurement_and_dispel_darkness() -> 
 
     caster.remove_condition("Concentrating")
     assert "Fog Cloud Zone" not in caster.active_conditions
-    assert SpatialEffect.get_effect(fog_effect.uuid) is None
+    assert BaseCondition.get(fog_effect.uuid) is None
     assert fog_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
 
     reset_spell_family_state(width=24, height=24)
@@ -2944,11 +2905,11 @@ def test_eb_15_026_light_zone_spells_apply_obscurement_and_dispel_darkness() -> 
     ).apply()
 
     darkness_event = assert_completed_spell(darkness_event)
-    darkness_effect, darkness_controller = active_spatial_controller(
+    darkness_effect = active_spatial_condition(
         "Darkness Zone",
     )
-    assert isinstance(darkness_effect, FieldEffect)
-    darkness_zone = cast(AreaSpatialEffectController, darkness_controller)
+    assert isinstance(darkness_effect, SpatialCondition)
+    darkness_zone = cast(AreaCondition, darkness_effect)
     center_tile = get_map().get_tile(11, 10)
     assert center_tile is not None
     assert center_tile.resolved_light_level == LightLevel.MAGICAL_DARKNESS
@@ -2969,17 +2930,17 @@ def test_eb_15_026_light_zone_spells_apply_obscurement_and_dispel_darkness() -> 
     ).apply()
 
     daylight_event = assert_completed_spell(daylight_event)
-    daylight_effect_uuids = get_map().get_spatial_effect_uuids_at((11, 10))
+    daylight_effect_uuids = get_map().get_spatial_condition_uuids_at((11, 10))
     assert len(daylight_effect_uuids) == 1
-    daylight_effect = SpatialEffect.get_effect(next(iter(daylight_effect_uuids)))
-    assert isinstance(daylight_effect, FieldEffect)
+    daylight_effect = BaseCondition.get(next(iter(daylight_effect_uuids)))
+    assert isinstance(daylight_effect, SpatialCondition)
     daylight_zone = cast(
-        AreaSpatialEffectController,
-        daylight_effect.active_conditions["Daylight Zone"],
+        AreaCondition,
+        daylight_effect,
     )
     assert darkness_zone.uuid not in dark_caster.active_conditions_by_uuid
     assert "Darkness Zone" not in dark_caster.active_conditions
-    assert SpatialEffect.get_effect(darkness_effect.uuid) is None
+    assert BaseCondition.get(darkness_effect.uuid) is None
     assert "Concentrating" not in dark_caster.active_conditions
     assert center_tile.resolved_light_level == LightLevel.VERY_BRIGHT
     assert (11, 10) in daylight_zone.affected_positions
@@ -3005,11 +2966,11 @@ def test_eb_15_027_damage_zones_cover_upcast_obscurement_and_movement() -> None:
         ).apply()
 
     plague_event = assert_completed_spell(plague_event)
-    plague_effect, plague_controller = active_spatial_controller(
+    plague_effect = active_spatial_condition(
         "Insect Plague Zone",
     )
-    assert isinstance(plague_effect, FieldEffect)
-    plague_zone = cast(AreaSpatialEffectController, plague_controller)
+    assert isinstance(plague_effect, SpatialCondition)
+    plague_zone = cast(AreaCondition, plague_effect)
     plague_center_tile = get_map().get_tile(10, 5)
     assert plague_center_tile is not None
     assert plague_zone.adds_difficult_terrain
@@ -3022,7 +2983,7 @@ def test_eb_15_027_damage_zones_cover_upcast_obscurement_and_movement() -> None:
 
     caster.remove_condition("Concentrating")
     assert "Insect Plague Zone" not in caster.active_conditions
-    assert SpatialEffect.get_effect(plague_effect.uuid) is None
+    assert BaseCondition.get(plague_effect.uuid) is None
     assert plague_center_tile.walking_cost.normalized_score == 1
     assert plague_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
 
@@ -3042,12 +3003,12 @@ def test_eb_15_027_damage_zones_cover_upcast_obscurement_and_movement() -> None:
         ).apply()
 
     cloud_event = assert_completed_spell(cloud_event)
-    cloud_effect, cloud_controller = active_spatial_controller(
+    cloud_effect = active_spatial_condition(
         "Incendiary Cloud Zone",
     )
-    assert isinstance(cloud_effect, CloudEffect)
-    cloud_zone = cast(AreaSpatialEffectController, cloud_controller)
-    old_center = cloud_zone.zone_center
+    assert isinstance(cloud_effect, SpatialCondition)
+    cloud_zone = cast(AreaCondition, cloud_effect)
+    old_center = cloud_zone.position
     old_center_tile = get_map().get_tile(*old_center)
     old_trailing_tile = get_map().get_tile(6, 10)
     assert old_center_tile is not None
@@ -3062,7 +3023,7 @@ def test_eb_15_027_damage_zones_cover_upcast_obscurement_and_movement() -> None:
     with patch("dnd.core.dice.random.randint", side_effect=fixed_zone_randint):
         caster.on_turn_start(round_number=1, turn_index=0)
 
-    new_center = cloud_zone.zone_center
+    new_center = cloud_zone.position
     new_center_tile = get_map().get_tile(*new_center)
     new_leading_tile = get_map().get_tile(16, 10)
     assert new_center != old_center
@@ -3100,11 +3061,11 @@ def test_eb_15_028_gas_and_ice_zones_match_srd_turn_start_edges() -> None:
         ).apply()
 
     cloud_event = assert_completed_spell(cloud_event)
-    cloud_effect, cloud_controller = active_spatial_controller(
+    cloud_effect = active_spatial_condition(
         "Stinking Cloud Zone",
     )
-    assert isinstance(cloud_effect, CloudEffect)
-    cloud_zone = cast(AreaSpatialEffectController, cloud_controller)
+    assert isinstance(cloud_effect, SpatialCondition)
+    cloud_zone = cast(AreaCondition, cloud_effect)
     cloud_center_tile = get_map().get_tile(10, 5)
     assert cloud_center_tile is not None
     assert not cloud_zone.adds_difficult_terrain
@@ -3128,7 +3089,7 @@ def test_eb_15_028_gas_and_ice_zones_match_srd_turn_start_edges() -> None:
     assert "Nauseated" not in immune_target.active_conditions
     caster.remove_condition("Concentrating")
     assert "Stinking Cloud Zone" not in caster.active_conditions
-    assert SpatialEffect.get_effect(cloud_effect.uuid) is None
+    assert BaseCondition.get(cloud_effect.uuid) is None
     assert cloud_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
 
     reset_spell_family_state(width=24, height=18)
@@ -3151,11 +3112,11 @@ def test_eb_15_028_gas_and_ice_zones_match_srd_turn_start_edges() -> None:
         ).apply()
 
     storm_event = assert_completed_spell(storm_event)
-    storm_effect, storm_controller = active_spatial_controller(
+    storm_effect = active_spatial_condition(
         "Sleet Storm Zone",
     )
-    assert isinstance(storm_effect, FieldEffect)
-    storm_zone = cast(AreaSpatialEffectController, storm_controller)
+    assert isinstance(storm_effect, SpatialCondition)
+    storm_zone = cast(AreaCondition, storm_effect)
     storm_center_tile = get_map().get_tile(10, 10)
     assert storm_center_tile is not None
     assert storm_zone.zone_shape == "cylinder"
@@ -3180,7 +3141,7 @@ def test_eb_15_028_gas_and_ice_zones_match_srd_turn_start_edges() -> None:
     assert "Concentrating" not in concentrating_target.active_conditions
     caster.remove_condition("Concentrating")
     assert "Sleet Storm Zone" not in caster.active_conditions
-    assert SpatialEffect.get_effect(storm_effect.uuid) is None
+    assert BaseCondition.get(storm_effect.uuid) is None
     assert storm_center_tile.walking_cost.normalized_score == 1
     assert storm_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
 
@@ -3212,11 +3173,11 @@ def test_eb_15_041_stinking_cloud_skips_breathless_creatures() -> None:
         ).apply()
 
     cloud_event = assert_completed_spell(cloud_event)
-    cloud_effect, cloud_controller = active_spatial_controller(
+    cloud_effect = active_spatial_condition(
         "Stinking Cloud Zone",
     )
-    assert isinstance(cloud_effect, CloudEffect)
-    cloud_zone = cast(AreaSpatialEffectController, cloud_controller)
+    assert isinstance(cloud_effect, SpatialCondition)
+    cloud_zone = cast(AreaCondition, cloud_effect)
     assert breathing_target.position in cloud_zone.affected_positions
     assert breathless_target.position in cloud_zone.affected_positions
     assert breathing_target.requires_breathing is True
@@ -3284,11 +3245,12 @@ def test_object_spell_shared_validator_rejects_out_of_reach_target() -> None:
         position=(1, 1),
         spell_slots={2: 1},
     )
-    focus = materialize_item(
-        OIL_BARREL_RECIPE,
-        caster.uuid,
-        origin=ItemRuntimeOrigin.ENVIRONMENT,
-        expected_type=OilBarrel,
+    focus = BaseItem(
+        source_entity_uuid=caster.uuid,
+        semantic_key="environment.blocker.oil_barrel",
+        name="Oil Barrel",
+        is_pickable=False,
+        is_targetable=True,
     )
     focus.place_on_grid((4, 1))
     Entity.update_all_entities_senses(max_distance=120)
@@ -3377,11 +3339,11 @@ def test_eb_15_044_stinking_cloud_wind_dispersal_uses_srd_rounds() -> None:
     ).apply()
 
     cloud_event = assert_completed_spell(cloud_event)
-    cloud_effect, cloud_controller = active_spatial_controller(
+    cloud_effect = active_spatial_condition(
         "Stinking Cloud Zone",
     )
-    assert isinstance(cloud_effect, CloudEffect)
-    cloud_zone = cast(StinkingCloudZone, cloud_controller)
+    assert isinstance(cloud_effect, SpatialCondition)
+    cloud_zone = cast(StinkingCloudZone, cloud_effect)
     assert (10, 5) in cloud_zone.affected_positions
     assert len(cloud_zone.event_handlers_uuids) == 1
 
@@ -3396,18 +3358,14 @@ def test_eb_15_044_stinking_cloud_wind_dispersal_uses_srd_rounds() -> None:
     moderate_wind = moderate_wind.phase_to(EventPhase.COMPLETION)
 
     assert moderate_wind.phase == EventPhase.COMPLETION
-    assert SpatialEffect.get_effect(cloud_effect.uuid) is cloud_effect
+    assert BaseCondition.get(cloud_effect.uuid) is cloud_effect
     for _ in range(1, 4):
-        assert not cloud_effect.advance_duration(
-            "Spatial Effect Retirement Countdown",
-        )
-        assert SpatialEffect.get_effect(cloud_effect.uuid) is cloud_effect
+        assert not cloud_effect.progress_spatial_duration()
+        assert BaseCondition.get(cloud_effect.uuid) is cloud_effect
 
-    assert cloud_effect.advance_duration(
-        "Spatial Effect Retirement Countdown",
-    )
+    assert cloud_effect.progress_spatial_duration()
     assert "Stinking Cloud Zone" not in caster.active_conditions
-    assert SpatialEffect.get_effect(cloud_effect.uuid) is None
+    assert BaseCondition.get(cloud_effect.uuid) is None
     assert "Concentrating" not in caster.active_conditions
     assert cloud_zone.event_handlers_uuids == []
 
@@ -3423,29 +3381,29 @@ def test_eb_15_044_stinking_cloud_wind_dispersal_uses_srd_rounds() -> None:
     ).apply()
 
     cloud_event = assert_completed_spell(cloud_event)
-    cloud_effect, cloud_controller = active_spatial_controller(
+    cloud_effect = active_spatial_condition(
         "Stinking Cloud Zone",
     )
-    assert isinstance(cloud_effect, CloudEffect)
-    cloud_zone = cast(StinkingCloudZone, cloud_controller)
+    assert isinstance(cloud_effect, SpatialCondition)
+    cloud_zone = cast(StinkingCloudZone, cloud_effect)
     wind_event = GustOfWind(
         source_entity_uuid=wind_caster.uuid,
         end_position=(12, 5),
         template=False,
     ).apply()
     assert_completed_spell(wind_event)
-    _, gust_controller = active_spatial_controller("Gust of Wind Zone")
-    gust_zone = cast(GustOfWindZone, gust_controller)
-
-    assert (8, 5) in gust_zone.affected_positions
-    assert SpatialEffect.get_effect(cloud_effect.uuid) is cloud_effect
-
-    assert cloud_effect.advance_duration(
-        "Spatial Effect Retirement Countdown",
+    gust_zone = cast(
+        GustOfWindZone,
+        active_spatial_condition("Gust of Wind Zone"),
     )
 
+    assert (8, 5) in gust_zone.affected_positions
+    assert BaseCondition.get(cloud_effect.uuid) is cloud_effect
+
+    assert cloud_effect.progress_spatial_duration()
+
     assert "Stinking Cloud Zone" not in cloud_caster.active_conditions
-    assert SpatialEffect.get_effect(cloud_effect.uuid) is None
+    assert BaseCondition.get(cloud_effect.uuid) is None
     assert "Concentrating" not in cloud_caster.active_conditions
     assert cloud_zone.event_handlers_uuids == []
 
@@ -3516,27 +3474,12 @@ def test_eb_15_043_sleet_storm_douses_exposed_flames() -> None:
     caster = create_family_caster(position=(5, 5), spell_slots={3: 1})
     torchbearer = create_family_target(name="Torchbearer", position=(10, 5), hp_dice=8)
     penalize_save(torchbearer, "dexterity")
-    carried_torch = materialize_item(
-        TORCH_RECIPE,
-        torchbearer.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Torch,
-    )
+    carried_torch = build_torch(torchbearer.uuid)
     torchbearer.loot_item(carried_torch)
     carried_torch.ignite(torchbearer.uuid)
-    wall_torch = materialize_item(
-        WALL_TORCH_RECIPE,
-        uuid4(),
-        origin=ItemRuntimeOrigin.ENVIRONMENT,
-        expected_type=WallTorch,
-    )
+    wall_torch = build_wall_torch()
     wall_torch.mount((10, 6), lit=True)
-    outside_torch = materialize_item(
-        WALL_TORCH_RECIPE,
-        uuid4(),
-        origin=ItemRuntimeOrigin.ENVIRONMENT,
-        expected_type=WallTorch,
-    )
+    outside_torch = build_wall_torch()
     outside_torch.mount((1, 1), lit=True)
     carried_light_uuid = carried_torch._light_source_uuid
     wall_light_uuid = wall_torch._light_source_uuid
@@ -3554,11 +3497,11 @@ def test_eb_15_043_sleet_storm_douses_exposed_flames() -> None:
         ).apply()
 
     storm_event = assert_completed_spell(storm_event)
-    storm_effect, storm_controller = active_spatial_controller(
+    storm_effect = active_spatial_condition(
         "Sleet Storm Zone",
     )
-    assert isinstance(storm_effect, FieldEffect)
-    storm_zone = cast(SleetStormZone, storm_controller)
+    assert isinstance(storm_effect, SpatialCondition)
+    storm_zone = cast(SleetStormZone, storm_effect)
     storm_center_tile = get_map().get_tile(10, 5)
     assert storm_center_tile is not None
     assert torchbearer.position in storm_zone.affected_positions
@@ -3589,7 +3532,7 @@ def test_eb_15_043_sleet_storm_douses_exposed_flames() -> None:
 
     caster.remove_condition("Concentrating")
     assert "Sleet Storm Zone" not in caster.active_conditions
-    assert SpatialEffect.get_effect(storm_effect.uuid) is None
+    assert BaseCondition.get(storm_effect.uuid) is None
     assert storm_zone.event_handlers_uuids == []
     assert outside_torch.is_lit is True
     assert outside_torch._light_source_uuid in grid._light_sources
@@ -3621,10 +3564,10 @@ def test_eb_15_029_web_models_obscurement_grounding_and_escape_cleanup() -> None
         ).apply()
 
     web_event = assert_completed_spell(web_event)
-    web_effect, web_controller = active_spatial_controller("Web Zone")
-    assert isinstance(web_effect, GroundEffect)
+    web_effect = active_spatial_condition("Web Zone")
+    assert isinstance(web_effect, SpatialCondition)
     assert web_effect.content_ref == WEB_SURFACE_RECIPE.ref
-    web_zone = cast(AreaSpatialEffectController, web_controller)
+    web_zone = cast(AreaCondition, web_effect)
     web_center_tile = get_map().get_tile(5, 5)
     assert web_center_tile is not None
     assert web_zone.zone_shape == "cube"
@@ -3644,7 +3587,7 @@ def test_eb_15_029_web_models_obscurement_grounding_and_escape_cleanup() -> None
         for condition in target.active_conditions_by_uuid.values()
     )
     assert "Restrained" in target.active_conditions
-    assert SpatialEffect.get_effect(web_effect.uuid) is web_effect
+    assert BaseCondition.get(web_effect.uuid) is web_effect
     escape = next(
         action for action in target.registered_actions if action.name == "Escape Web"
     ).instantiate()
@@ -3662,7 +3605,7 @@ def test_eb_15_029_web_models_obscurement_grounding_and_escape_cleanup() -> None
 
     caster.remove_condition("Concentrating")
     assert "Web Zone" not in caster.active_conditions
-    assert SpatialEffect.get_effect(web_effect.uuid) is None
+    assert BaseCondition.get(web_effect.uuid) is None
     assert web_center_tile.walking_cost.normalized_score == 1
     assert web_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
 
@@ -3682,8 +3625,8 @@ def test_eb_15_037_web_unanchored_cast_collapses_on_caster_turn_start() -> None:
         ).apply()
 
     web_event = assert_completed_spell(web_event)
-    web_effect, web_controller = active_spatial_controller("Web Zone")
-    web_zone = cast(WebZone, web_controller)
+    web_effect = active_spatial_condition("Web Zone")
+    web_zone = cast(WebZone, web_effect)
     web_center_tile = get_map().get_tile(5, 5)
     assert web_center_tile is not None
     assert not web_zone.anchored_or_layered
@@ -3700,7 +3643,7 @@ def test_eb_15_037_web_unanchored_cast_collapses_on_caster_turn_start() -> None:
     assert turn_start.phase == EventPhase.COMPLETION
     assert "Web Zone" not in caster.active_conditions
     assert "Concentrating" not in caster.active_conditions
-    assert SpatialEffect.get_effect(web_effect.uuid) is None
+    assert BaseCondition.get(web_effect.uuid) is None
     assert web_zone.event_handlers_uuids == []
     assert web_center_tile.walking_cost.normalized_score == 1
     assert web_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
@@ -3722,8 +3665,8 @@ def test_eb_15_042_web_fire_exposure_burns_one_cube_for_one_round() -> None:
         ).apply()
 
     web_event = assert_completed_spell(web_event)
-    web_effect, web_controller = active_spatial_controller("Web Zone")
-    web_zone = cast(WebZone, web_controller)
+    web_effect = active_spatial_condition("Web Zone")
+    web_zone = cast(WebZone, web_effect)
     web_center_tile = get_map().get_tile(5, 5)
     adjacent_web_tile = get_map().get_tile(6, 5)
     assert web_center_tile is not None
@@ -3739,12 +3682,8 @@ def test_eb_15_042_web_fire_exposure_burns_one_cube_for_one_round() -> None:
     ]
     assert {handler.name for handler in web_handlers} == {"Web Turn Start Save"}
     assert all(
-        handler.behavior_binding is not None
-        and web_zone.behavior_binding is not None
-        and handler.behavior_binding.definition_ref
-        == web_zone.behavior_binding.definition_ref
-        and handler.behavior_binding.provided_by_ref
-        == web_zone.behavior_binding.provided_by_ref
+        handler.behavior_id == web_zone.behavior_id
+        and handler.provided_by_id == web_zone.behavior_id
         for handler in web_handlers
     )
 
@@ -3773,7 +3712,7 @@ def test_eb_15_042_web_fire_exposure_burns_one_cube_for_one_round() -> None:
 
     burning_effects = [
         effect
-        for effect in SpatialEffect.active_effects()
+        for effect in get_map().get_spatial_conditions()
         if effect.content_ref == BURNING_WEB_FIRE_RECIPE.ref
     ]
     assert len(burning_effects) == 1
@@ -3788,18 +3727,18 @@ def test_eb_15_042_web_fire_exposure_burns_one_cube_for_one_round() -> None:
     assert hp_before_fire - hp_after_fire == 6
     assert "Web Restrained" not in target.active_conditions
 
-    assert burning_effect.advance_duration("Burning Web Fire")
-    assert SpatialEffect.get_effect(burning_effect.uuid) is None
+    assert burning_effect.progress_spatial_duration()
+    assert BaseCondition.get(burning_effect.uuid) is None
     with patch("dnd.core.dice.random.randint", side_effect=fixed_zone_randint):
         target.on_turn_start(round_number=2, turn_index=0)
 
     assert get_hp(target) == hp_after_fire
-    assert SpatialEffect.get_effect(web_effect.uuid) is web_effect
+    assert BaseCondition.get(web_effect.uuid) is web_effect
     assert "Concentrating" in caster.active_conditions
 
     caster.remove_condition("Concentrating")
     assert "Web Zone" not in caster.active_conditions
-    assert SpatialEffect.get_effect(web_effect.uuid) is None
+    assert BaseCondition.get(web_effect.uuid) is None
     assert web_zone.event_handlers_uuids == []
     assert adjacent_web_tile.walking_cost.normalized_score == 1
     assert adjacent_web_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT

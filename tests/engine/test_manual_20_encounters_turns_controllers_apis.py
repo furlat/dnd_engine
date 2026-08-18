@@ -15,7 +15,7 @@ from pydantic import Field
 from dnd.actions.standard import (
     Attack,
 )
-from dnd.controller import (
+from dnd.encounters.controllers import (
     Controller,
     HumanController,
     PassController,
@@ -33,10 +33,10 @@ from dnd.core.events.events_registry import (
 from dnd.core.gridmap import get_map
 from dnd.types.life import LifeState
 from dnd.core.values import BaseValue
-from dnd.encounter import Encounter
-from dnd.types.encounter import EncounterState, TurnState
-from dnd.entity import Entity
-from dnd.monsters.bestiary import create_caster, create_goblin, create_skeleton
+from dnd.encounters.encounter import Encounter
+from dnd.types.encounter_state import EncounterState, TurnState
+from dnd.entities.entity import Entity
+from tests.engine.support import create_test_monster
 from dnd.monsters.bestiary_content import (
     BESTIARY_CREATURE_DECLARATIONS_BY_ID,
 )
@@ -118,13 +118,13 @@ def reset_runtime_tutorial_state(width: int = 16, height: int = 10) -> None:
 
 def create_runtime_pair() -> tuple[Entity, Entity]:
     """Create two opposing tutorial combatants."""
-    hero = create_goblin(
+    hero = create_test_monster("monster.goblin", 
         name="Runtime Hero",
         position=(1, 1),
         faction="heroes",
         content_ref=BESTIARY_CREATURE_DECLARATIONS_BY_ID["goblin"].ref,
     )
-    monster = create_skeleton(
+    monster = create_test_monster("monster.skeleton", 
         name="Runtime Skeleton",
         position=(2, 1),
         faction="monsters",
@@ -487,7 +487,7 @@ def test_session_api_exposes_authoritative_turn_actions_and_results() -> None:
 def test_lethal_multi_entity_command_reports_causal_death_and_primary_hp() -> None:
     """Lethal Magic Missile reports its nested death without fallback duplication."""
     reset_runtime_tutorial_state()
-    caster = create_caster(
+    caster = create_test_monster("monster.generic_caster", 
         name="Runtime Caster",
         position=(1, 1),
         faction="heroes",
@@ -495,7 +495,7 @@ def test_lethal_multi_entity_command_reports_causal_death_and_primary_hp() -> No
             "generic_caster"
         ].ref,
     )
-    monster = create_skeleton(
+    monster = create_test_monster("monster.skeleton", 
         name="Runtime Target",
         position=(2, 1),
         faction="monsters",

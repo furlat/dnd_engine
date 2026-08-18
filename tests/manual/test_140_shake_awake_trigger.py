@@ -2,7 +2,7 @@
 
 from dnd.actions.operations import setup_standard_actions
 from dnd.types.conditions import ConditionRemovalTrigger
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from dnd.spells.enchantment import SleepEffect
 from dnd.spells.illusion import HypnoticPatternEffect
 from dnd.spells.necromancy import EyebiteAsleepEffect

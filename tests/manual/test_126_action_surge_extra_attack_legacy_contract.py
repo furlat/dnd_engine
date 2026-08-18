@@ -22,8 +22,8 @@ from dnd.content_system.extra_attack_character_grant_appliers import (
 from dnd.types.equipment import WeaponSlot
 from dnd.core.feature_grants import AttackMultiplicityGrant
 from dnd.core.gridmap import get_map
-from dnd.entity import Entity
-from dnd.monsters.bestiary import create_goblin, create_skeleton
+from dnd.entities.entity import Entity
+from tests.engine.support import create_test_monster
 from tests.engine.support import force_attack_miss, reset_combat_state, set_hp
 
 
@@ -33,7 +33,7 @@ def _reset_state() -> None:
 
 
 def _create_fighter(*, extra_attacks: int) -> Entity:
-    fighter = create_skeleton(
+    fighter = create_test_monster("monster.skeleton", 
         name="Action Surge Fighter",
         position=(5, 5),
         faction="heroes",
@@ -68,7 +68,7 @@ def _create_fighter(*, extra_attacks: int) -> Entity:
 
 
 def _create_target() -> Entity:
-    target = create_goblin(
+    target = create_test_monster("monster.goblin", 
         name="Action Surge Target",
         position=(5, 6),
         faction="monsters",

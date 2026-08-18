@@ -21,7 +21,7 @@ from dnd.core.events.events_registry import (
     EventQueue,
     EventType,
 )
-from dnd.encounter import Encounter
+from dnd.encounters.encounter import Encounter
 from tests.manual import live_replication_support as live_replication
 from server.event_stream import (
     BoundedSubscription,

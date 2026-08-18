@@ -10,8 +10,8 @@ from dnd.types.abilities import AbilityName
 from dnd.core.gridmap import get_map
 from dnd.types.creatures import CreatureType
 from dnd.core.modifiers import NumericalModifier
-from dnd.entity import Entity, EntityConfig
-from tests.engine.support import reset_combat_state
+from dnd.entities.entity import Entity, EntityConfig
+from tests.engine.support import create_test_entity, reset_combat_state
 
 
 def reset_spell_regression_arena(width: int, height: int) -> None:
@@ -45,8 +45,8 @@ def create_spell_regression_actor(
     asked to spend sixth-, eighth-, or ninth-level slots.
     """
     actor_uuid = uuid4()
-    return Entity.create(
-        source_entity_uuid=actor_uuid,
+    return create_test_entity(
+        source_id=actor_uuid,
         name=name,
         config=EntityConfig(
             ability_scores=AbilityScoresConfig(

@@ -28,7 +28,7 @@ from dnd.types.equipment import WeaponSlot
 from dnd.core.gridmap import get_map
 from dnd.types.items import ItemRarity
 from dnd.types.damage import DamageType
-from dnd.entity import Entity, EntityConfig
+from dnd.entities.entity import Entity, EntityConfig
 from dnd.items.weapons import LONGSWORD_RECIPE
 from tests.engine.support import reset_combat_state
 

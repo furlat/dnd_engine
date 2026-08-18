@@ -37,10 +37,10 @@ from dnd.core.events.resolution_events import (
 from dnd.types.damage import DamageType
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import ModifiableValue
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from dnd.items.armors import LEATHER_ARMOR_RECIPE, WOODEN_SHIELD_RECIPE
 from dnd.items.weapons import LONGSWORD_RECIPE
-from dnd.monsters.bestiary import create_skeleton
+from tests.engine.support import create_test_monster
 from tests.engine.test_items_inventory_equipment import (
     put_in_inventory,
     reset_item_state,
@@ -340,7 +340,7 @@ def test_item_equip_hook_manifest_accounts_for_all_15_cases() -> None:
 def test_direct_equipment_tracks_concrete_items_slots_containers_and_positions() -> None:
     """Direct and high-level equipment paths retain one location authority."""
     reset_item_state()
-    entity = create_skeleton(
+    entity = create_test_monster("monster.skeleton", 
         name="Equipment Auditor",
         position=(2, 2),
         darkvision=False,
@@ -430,7 +430,7 @@ def test_direct_equipment_tracks_concrete_items_slots_containers_and_positions()
 def test_direct_modifier_and_condition_equipment_hooks_clean_exact_state() -> None:
     """Direct and condition-owned hooks both restore their exact baseline."""
     reset_item_state()
-    entity = create_skeleton(
+    entity = create_test_monster("monster.skeleton", 
         name="Hook Auditor",
         position=(2, 2),
         darkvision=False,

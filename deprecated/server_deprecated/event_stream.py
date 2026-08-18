@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field
 
 from dnd.core.combat_log import CombatLogEntry
 from dnd.core.events import Event, EventPhase, EventQueue
-from dnd.encounter import Encounter
+from dnd.encounters.encounter import Encounter
 from server.api_models import SessionPingResponse
 from server.combat_log_source import (
     CombatLogSourceError,

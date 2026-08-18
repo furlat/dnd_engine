@@ -44,7 +44,7 @@ from dnd.core.gridmap import GridMap, get_map
 from dnd.types.damage import DamageType
 from dnd.types.rolls import AdvantageStatus
 from dnd.core.values import BaseValue, ModifiableValue
-from dnd.entity import Entity, EntityConfig
+from dnd.entities.entity import Entity, EntityConfig
 from dnd.items.consumables import (
     GREATER_INVISIBILITY_POTION_RECIPE,
     HASTE_POTION_RECIPE,

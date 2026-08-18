@@ -40,7 +40,7 @@ from dnd.items.weapons import (
     SHORTBOW_RECIPE,
     SHORTSWORD_RECIPE,
 )
-from dnd.monsters.bestiary import create_skeleton
+from tests.engine.support import create_test_monster
 from dnd.spells.abjuration import (
     MageArmorCondition,
 )
@@ -111,7 +111,7 @@ def test_equippable_items_declare_compatible_and_default_slots() -> None:
 def test_equipment_resolves_defaults_but_requires_an_explicit_ring_slot() -> None:
     """Equipment, rather than Entity or transport code, resolves optional slots."""
     reset_combat_state()
-    entity = create_skeleton(name="Equipment Owner", position=(0, 0), darkvision=False)
+    entity = create_test_monster("monster.skeleton", name="Equipment Owner", position=(0, 0), darkvision=False)
     sword = materialize_item(
         SHORTSWORD_RECIPE,
         entity.uuid,
@@ -142,7 +142,7 @@ def test_equipment_resolves_defaults_but_requires_an_explicit_ring_slot() -> Non
 def test_conflict_cancellation_keeps_the_equipment_transaction_atomic() -> None:
     """A canceled displacement cannot leave a partially changed loadout."""
     reset_combat_state()
-    entity = create_skeleton(name="Atomic Loadout", position=(0, 0), darkvision=False)
+    entity = create_test_monster("monster.skeleton", name="Atomic Loadout", position=(0, 0), darkvision=False)
     original_weapon = entity.equipment.weapon_melee_main
     shield = materialize_item(
         SHIELD_RECIPE,
@@ -188,7 +188,7 @@ def test_conflict_cancellation_keeps_the_equipment_transaction_atomic() -> None:
 def test_canceled_multislot_equip_has_no_public_events_or_location_mutation() -> None:
     """Rejected conflict preflight is invisible and leaves every owner field intact."""
     reset_combat_state()
-    entity = create_skeleton(name="Atomic Observer", position=(0, 0), darkvision=False)
+    entity = create_test_monster("monster.skeleton", name="Atomic Observer", position=(0, 0), darkvision=False)
     original_weapon = entity.equipment.weapon_melee_main
     shield = materialize_item(
         SHIELD_RECIPE,
@@ -292,7 +292,7 @@ def test_canceled_multislot_equip_has_no_public_events_or_location_mutation() ->
 def test_successful_multislot_equip_publishes_one_complete_lifecycle_per_step() -> None:
     """Accepted gear transactions publish each committed transition exactly once."""
     reset_combat_state()
-    entity = create_skeleton(name="Atomic Commit", position=(0, 0), darkvision=False)
+    entity = create_test_monster("monster.skeleton", name="Atomic Commit", position=(0, 0), darkvision=False)
     original_weapon = entity.equipment.weapon_melee_main
     shield = materialize_item(
         SHIELD_RECIPE,
@@ -371,7 +371,7 @@ def test_successful_multislot_equip_publishes_one_complete_lifecycle_per_step() 
 def test_transaction_rejects_impure_execution_handlers_before_publication() -> None:
     """Transactional execution hooks must explicitly obey the pure guard contract."""
     reset_combat_state()
-    entity = create_skeleton(name="Guard Contract", position=(0, 0), darkvision=False)
+    entity = create_test_monster("monster.skeleton", name="Guard Contract", position=(0, 0), darkvision=False)
     original_weapon = entity.equipment.weapon_melee_main
     replacement = materialize_item(
         SHORTSWORD_RECIPE,
@@ -408,7 +408,7 @@ def test_transaction_rejects_impure_execution_handlers_before_publication() -> N
 def test_validation_only_handler_cannot_emit_a_child_event() -> None:
     """Preflight blocks attempted event publication before it reaches the registry."""
     reset_combat_state()
-    entity = create_skeleton(name="Guard Isolation", position=(0, 0), darkvision=False)
+    entity = create_test_monster("monster.skeleton", name="Guard Isolation", position=(0, 0), darkvision=False)
     original_weapon = entity.equipment.weapon_melee_main
     replacement = materialize_item(
         SHORTSWORD_RECIPE,
@@ -451,7 +451,7 @@ def test_validation_only_handler_cannot_emit_a_child_event() -> None:
 def test_committed_armor_effect_handlers_observe_the_final_loadout() -> None:
     """Reactive gear rules run at EFFECT after the whole loadout is committed."""
     reset_combat_state()
-    entity = create_skeleton(name="Armor Effect Owner", position=(0, 0), darkvision=False)
+    entity = create_test_monster("monster.skeleton", name="Armor Effect Owner", position=(0, 0), darkvision=False)
     chain_mail = materialize_item(
         CHAIN_MAIL_RECIPE,
         entity.uuid,
@@ -500,7 +500,7 @@ def test_committed_armor_effect_handlers_observe_the_final_loadout() -> None:
 def test_equipment_groups_inventory_projection_from_declared_slot_policy() -> None:
     """Grouped discovery uses the same authoritative policy as equip validation."""
     reset_combat_state()
-    entity = create_skeleton(name="Loadout Owner", position=(0, 0), darkvision=False)
+    entity = create_test_monster("monster.skeleton", name="Loadout Owner", position=(0, 0), darkvision=False)
     sword = materialize_item(
         SHORTSWORD_RECIPE,
         entity.uuid,
@@ -540,7 +540,7 @@ def test_equipment_groups_inventory_projection_from_declared_slot_policy() -> No
 def test_equipment_projection_reports_every_authoritative_footprint_conflict() -> None:
     """Discovery and commit use one conflict calculation, including two-hand reach."""
     reset_combat_state()
-    entity = create_skeleton(name="Footprint Projection", position=(0, 0), darkvision=False)
+    entity = create_test_monster("monster.skeleton", name="Footprint Projection", position=(0, 0), darkvision=False)
     original_weapon = entity.equipment.weapon_melee_main
     shield = materialize_item(
         SHIELD_RECIPE,

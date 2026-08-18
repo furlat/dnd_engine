@@ -19,7 +19,7 @@ from dnd.core.content.materialization import (
     CreaturePossessionMode,
 )
 from dnd.types.equipment import WeaponSet, WeaponSlot
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from dnd.items.weapons import DAGGER_RECIPE, SHORTBOW_RECIPE
 from dnd.monsters.bestiary_content import BESTIARY_CREATURE_RECIPES_BY_ID
 from dnd.runtime_reset import reset_engine_runtime

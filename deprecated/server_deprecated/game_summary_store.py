@@ -30,8 +30,8 @@ from dnd.core.events import (
     EventPhase,
     EventQueue,
 )
-from dnd.encounter import Encounter
-from dnd.entity import Entity
+from dnd.encounters.encounter import Encounter
+from dnd.entities.entity import Entity
 from server.objective_replay import ObjectiveReplaySeed
 from server.objective_state import build_current_objective_world
 from server.canonical_json import canonical_json_sha256

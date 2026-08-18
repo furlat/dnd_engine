@@ -24,7 +24,7 @@ from dnd.core.events.world_events import (
 )
 from dnd.core.gridmap import get_map
 from dnd.core.world_edges import ElevationSurfaceKind, SlopeAxis
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from tests.engine.test_combat_actions import reset_core_action_state, strong_entity
 
 

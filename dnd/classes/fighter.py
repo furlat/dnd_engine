@@ -26,7 +26,7 @@ from dnd.core.base_actions import (
 from dnd.core.events.action_events import (
     ActionEvent,
 )
-from dnd.core.content.runtime import RuntimeBehaviorKind
+from dnd.types.behaviors import RuntimeBehaviorKind
 from dnd.core.events.events_registry import (
     Event,
     EventPhase,
@@ -52,7 +52,7 @@ from dnd.blocks.equipment import (
     Weapon,
     Shield,
 )
-from dnd.entity import Entity, determine_attack_outcome
+from dnd.entities.entity import Entity, determine_attack_outcome
 from dnd.actions.standard import (
     entity_action_economy_cost_evaluator,
     entity_resource_cost_evaluator,

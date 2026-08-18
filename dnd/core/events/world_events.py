@@ -32,9 +32,13 @@ from dnd.core.events.events_registry import (
     _exact_event_evidence_equal,
 )
 from dnd.core.traversal_connectors import (
+    ConnectorActionCostType,
+    ConnectorProvocationPolicy,
     TraversalConnector,
     TraversalConnectorChangeOperation,
+    TraversalConnectorKind,
 )
+from dnd.core.events.item_events import ItemState
 from dnd.core.world_edges import ElevationSurfaceKind, SlopeAxis
 from dnd.types.damage import DamageType
 from dnd.types.senses import SenseMode
@@ -44,6 +48,75 @@ from dnd.types.spatial_effects import (
     SpatialEffectInteractionOperation,
     SpatialEffectLayer,
 )
+from dnd.types.world import CardinalDirection, LightLevel
+
+
+class WorldTileState(BaseModel):
+    """Complete renderer-independent initial state of one world tile."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    tile_uuid: UUID
+    position: Tuple[int, int]
+    name: str
+    walkable: bool
+    visible: bool
+    walking_cost: float
+    flying_cost: float
+    swimming_cost: float
+    burrowing_cost: float
+    elevation_steps: int
+    surface_kind: ElevationSurfaceKind
+    slope_axis: Optional[SlopeAxis] = None
+    default_light: LightLevel
+    resolved_light: LightLevel
+    movement_open: Tuple[CardinalDirection, ...]
+    vision_open: Tuple[CardinalDirection, ...]
+    light_open: Tuple[CardinalDirection, ...]
+    propagation_open: Tuple[CardinalDirection, ...]
+
+
+class WorldObjectState(BaseModel):
+    """Initial floor object and any item state stored inside it."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    position: Tuple[int, int]
+    item: ItemState
+    contained_items: Tuple[ItemState, ...] = ()
+
+
+class WorldConnectorState(BaseModel):
+    """Initial traversal connector without renderer binding or digest fields."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    connector_uuid: UUID
+    authored_id: str
+    kind: TraversalConnectorKind
+    endpoints: Tuple[Tuple[int, int], Tuple[int, int]]
+    endpoint_elevations_feet: Tuple[int, int]
+    movement_cost_feet: int
+    action_cost_type: Optional[ConnectorActionCostType] = None
+    action_cost_amount: int = 0
+    bidirectional: bool
+    enabled: bool
+    provocation_policy: ConnectorProvocationPolicy
+
+
+class WorldInitializedEvent(Event):
+    """Single terminal fact for deterministic map bootstrap."""
+
+    name: str = Field(default="World Initialized")
+    event_type: EventType = Field(default=EventType.WORLD_INITIALIZED, frozen=True)
+    battlefield_id: str
+    battlefield_name: str
+    bounds: Tuple[int, int, int, int]
+    width: int = Field(ge=1)
+    height: int = Field(ge=1)
+    tiles: Tuple[WorldTileState, ...]
+    objects: Tuple[WorldObjectState, ...] = ()
+    connectors: Tuple[WorldConnectorState, ...] = ()
 
 def _preserve_nullable_unique_array_schema(schema: Dict[str, Any]) -> None:
     """Retain set uniqueness metadata after a JSON-only list serializer."""

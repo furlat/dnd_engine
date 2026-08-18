@@ -22,7 +22,7 @@ from dnd.types.damage import DamageType
 from dnd.core.modifiers import ResistanceModifier
 from dnd.types.damage import ResistanceStatus
 from dnd.types.senses import SenseMode, SensesType
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from server.world_projection import project_entity_summary
 
 

@@ -4,7 +4,7 @@ from uuid import UUID, uuid4
 
 from pydantic import Field
 
-from dnd.controller import (
+from dnd.encounters.controllers import (
     Controller,
     HumanController,
     PassController,
@@ -29,10 +29,10 @@ from dnd.types.damage import DamageType
 from dnd.core.modifiers import AutoHitModifier
 from dnd.types.rolls import AutoHitStatus
 from dnd.core.values import BaseValue
-from dnd.encounter import Encounter
-from dnd.types.encounter import EncounterState, TurnState
-from dnd.entity import Entity
-from dnd.monsters.bestiary import create_goblin, create_skeleton
+from dnd.encounters.encounter import Encounter
+from dnd.types.encounter_state import EncounterState, TurnState
+from dnd.entities.entity import Entity
+from tests.engine.support import create_test_monster
 
 
 class RecordingController(Controller):
@@ -96,8 +96,8 @@ def reset_encounter_tutorial_state(width: int = 16, height: int = 10) -> None:
 
 def create_encounter_pair() -> tuple[Entity, Entity]:
     """Create a nearby hero and monster with opposing factions."""
-    hero = create_goblin(name="Manual Hero", position=(1, 1), faction="heroes")
-    monster = create_skeleton(name="Manual Skeleton", position=(2, 1), faction="monsters")
+    hero = create_test_monster("monster.goblin", name="Manual Hero", position=(1, 1), faction="heroes")
+    monster = create_test_monster("monster.skeleton", name="Manual Skeleton", position=(2, 1), faction="monsters")
     Entity.update_all_entities_senses(max_distance=20)
     return hero, monster
 
@@ -141,8 +141,8 @@ def clear_melee_attack_modifier(entity: Entity, modifier_uuid: UUID) -> None:
 def test_turn_start_full_senses_refresh_emits_seen_cell_delta() -> None:
     """A turn-start recompute reaches event-first subjective replication."""
     reset_encounter_tutorial_state(width=8, height=3)
-    hero = create_goblin(name="Turn Observer", position=(1, 1), faction="heroes")
-    monster = create_skeleton(name="Turn Target", position=(5, 1), faction="monsters")
+    hero = create_test_monster("monster.goblin", name="Turn Observer", position=(1, 1), faction="heroes")
+    monster = create_test_monster("monster.skeleton", name="Turn Target", position=(5, 1), faction="monsters")
     hero.senses.visible.clear()
     hero.senses.seen.clear()
     hero.senses.entities.clear()

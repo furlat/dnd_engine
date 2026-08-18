@@ -14,7 +14,7 @@ from dnd.core.events.resolution_events import (
     Healing,
     HealRollResultEvent,
 )
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 
 
 def fire_heal_roll_result(

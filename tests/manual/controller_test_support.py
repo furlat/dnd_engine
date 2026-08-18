@@ -2,11 +2,11 @@
 
 from uuid import uuid4
 
-from dnd.controller import Controller, TurnContext
+from dnd.encounters.controllers import Controller, TurnContext
 from dnd.types.equipment import WeaponSlot
-from dnd.encounter import Encounter
-from dnd.entity import Entity
-from dnd.monsters.bestiary import create_goblin, create_skeleton
+from dnd.encounters.encounter import Encounter
+from dnd.entities.entity import Entity
+from tests.engine.support import create_test_monster
 from dnd.runtime_reset import reset_engine_runtime
 
 
@@ -33,8 +33,8 @@ def create_controller_pair(
     Returns:
         Hero and monster entities with current senses.
     """
-    hero = create_goblin(name="Controller Hero", position=hero_position, faction="heroes")
-    monster = create_skeleton(
+    hero = create_test_monster("monster.goblin", name="Controller Hero", position=hero_position, faction="heroes")
+    monster = create_test_monster("monster.skeleton", 
         name="Controller Skeleton",
         position=monster_position,
         faction="monsters",
@@ -58,7 +58,7 @@ def create_melee_only_skeleton(
     Returns:
         Skeleton entity with its ranged weapon unequipped.
     """
-    skeleton = create_skeleton(name=name, position=position, faction=faction)
+    skeleton = create_test_monster("monster.skeleton", name=name, position=position, faction=faction)
     removed = skeleton.equipment.unequip(WeaponSlot.RANGED_MAIN)
     if removed is None:
         raise RuntimeError("Expected skeleton to start with a ranged weapon")

@@ -93,8 +93,8 @@ from dnd.core.traversal_connectors import (
     ConnectorProvocationPolicy,
     TraversalConnectorKind,
 )
-from dnd.entity import Entity, EntityConfig
-from dnd.monsters.bestiary import create_goblin, create_skeleton
+from dnd.entities.entity import Entity, EntityConfig
+from tests.engine.support import create_test_monster
 from dnd.monsters.traits import ParryFeature
 from dnd.actions.reactions import add_opportunity_attack_handler
 from dnd.core.events.action_events import (
@@ -412,7 +412,7 @@ def _project_real_multi_reaction_movement(
     reset_combat_state()
     get_map().create_rectangle(0, 0, 12, 6)
     try:
-        mover = create_goblin(
+        mover = create_test_monster("monster.goblin", 
             name=f"{movement_kind.value.title()} Mover",
             position=(1, 2),
             faction="heroes",
@@ -431,7 +431,7 @@ def _project_real_multi_reaction_movement(
             reactor_specs,
             start=1,
         ):
-            reactor = create_skeleton(
+            reactor = create_test_monster("monster.skeleton", 
                 name=f"Reaction Watcher {reactor_number}",
                 position=position,
                 faction="monsters",
@@ -1564,7 +1564,7 @@ def test_real_shield_handler_reaches_the_canonical_action_root() -> None:
                 faction="heroes",
             ),
         )
-        attacker = create_goblin(
+        attacker = create_test_monster("monster.goblin", 
             name="Shield Attacker",
             position=(2, 3),
             faction="monsters",
@@ -1645,12 +1645,12 @@ def test_real_parry_handler_uses_public_reaction_identity_for_action_root() -> N
     get_map().create_rectangle(0, 0, 6, 6)
     try:
         SERVER_CONTENT_SYSTEM_RUNTIME.install(bootstrap_content_system())
-        defender = create_goblin(
+        defender = create_test_monster("monster.goblin", 
             name="Parry Defender",
             position=(2, 2),
             faction="heroes",
         )
-        attacker = create_goblin(
+        attacker = create_test_monster("monster.goblin", 
             name="Parry Attacker",
             position=(2, 3),
             faction="monsters",
@@ -1857,12 +1857,12 @@ def test_real_divine_smite_handler_reaches_the_canonical_action_root() -> None:
     get_map().create_rectangle(0, 0, 6, 6)
     try:
         SERVER_CONTENT_SYSTEM_RUNTIME.install(bootstrap_content_system())
-        paladin = create_goblin(
+        paladin = create_test_monster("monster.goblin", 
             name="Smite Attacker",
             position=(2, 2),
             faction="heroes",
         )
-        target = create_skeleton(
+        target = create_test_monster("monster.skeleton", 
             name="Smite Target",
             position=(2, 3),
             faction="monsters",
@@ -2197,12 +2197,12 @@ def test_real_shove_keeps_child_before_root_forced_movement(
     reset_combat_state()
     get_map().create_rectangle(0, 0, 8, 8)
     try:
-        shover = create_goblin(
+        shover = create_test_monster("monster.goblin", 
             name="Spectated Shove Hero",
             position=(2, 2),
             faction="heroes",
         )
-        target = create_goblin(
+        target = create_test_monster("monster.goblin", 
             name="Spectated Shove Target",
             position=(3, 2),
             faction="monsters",
@@ -2372,12 +2372,12 @@ def test_real_telekinesis_move_owns_visible_forced_movement() -> None:
     get_map().create_rectangle(0, 0, 10, 10)
     try:
         SERVER_CONTENT_SYSTEM_RUNTIME.install(bootstrap_content_system())
-        caster = create_goblin(
+        caster = create_test_monster("monster.goblin", 
             name="Telekinesis Caster",
             position=(2, 2),
             faction="heroes",
         )
-        target = create_goblin(
+        target = create_test_monster("monster.goblin", 
             name="Telekinesis Target",
             position=(3, 2),
             faction="monsters",
@@ -3325,12 +3325,12 @@ def test_real_lethal_opportunity_attack_projects_attempt_before_death() -> None:
     reset_combat_state()
     get_map().create_rectangle(0, 0, 12, 12)
     try:
-        watcher = create_skeleton(
+        watcher = create_test_monster("monster.skeleton", 
             name="Lethal Reaction Watcher",
             position=(5, 5),
             faction="monsters",
         )
-        mover = create_goblin(
+        mover = create_test_monster("monster.goblin", 
             name="Fragile Observable Mover",
             position=(5, 6),
             faction="heroes",

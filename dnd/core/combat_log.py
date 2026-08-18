@@ -98,8 +98,8 @@ class ConditionLogData(BaseModel):
         min_length=1,
         description="Human-readable condition name captured for display.",
     )
-    condition_content_identity: Optional[str] = Field(
-        default=None,
+    condition_behavior_id: str = Field(
+        default="condition.unclassified",
         min_length=1,
         description=(
             "Exact bound authored condition identity; absent only for "
@@ -564,21 +564,13 @@ class SpellInterruptionLogData(BaseModel):
     succeeded: bool = Field(
         description="Whether the reaction interrupted the incoming spell.",
     )
-    reaction_content_identity: Optional[str] = Field(
-        default=None,
+    reaction_behavior_id: str = Field(
         min_length=1,
-        description=(
-            "Exact authenticated authored reaction identity; absent only "
-            "from legacy diagnostic events."
-        ),
+        description="Direct semantic identity of the Counterspell reaction.",
     )
-    incoming_spell_content_identity: Optional[str] = Field(
-        default=None,
+    incoming_spell_behavior_id: str = Field(
         min_length=1,
-        description=(
-            "Exact authenticated authored identity of the incoming spell; "
-            "absent only from legacy diagnostic events."
-        ),
+        description="Direct semantic identity of the interrupted spell.",
     )
 
     @model_validator(mode="after")

@@ -18,7 +18,7 @@ from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
 from dnd.types.equipment import BodyPart, UnarmoredAc, WeaponSlot
-from dnd.entity import Entity, EntityConfig
+from dnd.entities.entity import Entity, EntityConfig
 from dnd.items.armors import (
     CHAIN_SHIRT_RECIPE,
     CLOTH_ARMOR_RECIPE,

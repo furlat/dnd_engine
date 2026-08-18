@@ -15,9 +15,9 @@ from dnd.core.traversal_connectors import (
 from dnd.actions.standard import (
     TraverseConnector,
 )
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from dnd.runtime_reset import reset_engine_runtime
-from dnd.scenarios.battlefield_catalog import build_battlefield, get_battlefield
+from dnd.content.scenarios.battlefield_builders import build_battlefield, get_battlefield
 from tests.engine.test_combat_actions import reset_core_action_state, strong_entity
 
 

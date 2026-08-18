@@ -6,15 +6,15 @@ from dataclasses import dataclass
 from typing import Any
 from uuid import UUID, uuid4
 
-from dnd.controller import HumanController, PassController
+from dnd.encounters.controllers import HumanController, PassController
 from dnd.core.events.events_registry import (
     EventQueue,
 )
 from dnd.core.modifiers import AutoHitModifier
 from dnd.types.rolls import AutoHitStatus
-from dnd.encounter import Encounter
-from dnd.entity import Entity
-from dnd.monsters.bestiary import create_goblin, create_skeleton
+from dnd.encounters.encounter import Encounter
+from dnd.entities.entity import Entity
+from tests.engine.support import create_test_monster
 from dnd.monsters.bestiary_content import (
     BESTIARY_CREATURE_DECLARATIONS_BY_ID,
 )
@@ -49,13 +49,13 @@ def create_stream_pair() -> tuple[Entity, Entity]:
     Returns:
         Hero and monster entities with current senses.
     """
-    hero = create_goblin(
+    hero = create_test_monster("monster.goblin", 
         name="Stream Hero",
         position=(1, 1),
         faction="heroes",
         content_ref=BESTIARY_CREATURE_DECLARATIONS_BY_ID["goblin"].ref,
     )
-    monster = create_skeleton(
+    monster = create_test_monster("monster.skeleton", 
         name="Stream Skeleton",
         position=(2, 1),
         faction="monsters",

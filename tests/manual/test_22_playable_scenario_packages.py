@@ -5,8 +5,8 @@ from uuid import uuid4
 from dnd.core.dice import fixed_dice_faces
 from dnd.types.life import LifeState
 from dnd.types.damage import DamageType
-from dnd.encounter import Encounter
-from dnd.types.encounter import EncounterState, TurnState
+from dnd.encounters.encounter import Encounter
+from dnd.types.encounter_state import EncounterState, TurnState
 from tests.manual.gatehouse_test_support import (
     ScenarioHumanController,
     ScenarioPassController,

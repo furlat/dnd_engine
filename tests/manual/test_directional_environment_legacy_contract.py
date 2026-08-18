@@ -25,7 +25,7 @@ from dnd.core.events.world_events import (
 from dnd.types.equipment import WeaponSlot
 from dnd.core.gridmap import get_map
 from dnd.runtime_reset import reset_engine_runtime
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from dnd.items.environment import (
     CloseDirectionalDoorAction,
     DirectionalDoor,
@@ -38,7 +38,7 @@ from dnd.maps.arena_layout import (
     WALL_POSITIONS,
     build_standard_arena_environment,
 )
-from dnd.monsters.bestiary import create_goblin, create_skeleton
+from tests.engine.support import create_test_monster
 from dnd.items.weapons import SHORTBOW_RECIPE
 from dnd.actions.reactions import opportunity_attack_processor
 from server.mapeditor_support import (
@@ -97,7 +97,7 @@ def test_directional_wall_blocks_only_declared_sides_and_stays_structural() -> N
     """Walls route four spatial channels but never become player actions."""
     _reset_directional_scene()
     grid = get_map()
-    hero = create_goblin(
+    hero = create_test_monster("monster.goblin", 
         name="Directional Observer",
         position=(1, 3),
         faction="heroes",
@@ -141,13 +141,13 @@ def test_directional_door_open_event_preserves_other_sides_and_rejects_close_occ
     """Opening changes its configured plane; occupied closing is atomic."""
     _reset_directional_scene()
     grid = get_map()
-    hero = create_goblin(
+    hero = create_test_monster("monster.goblin", 
         name="Door User",
         position=(1, 3),
         faction="heroes",
     )
     setup_standard_actions(hero)
-    hidden_target = create_skeleton(
+    hidden_target = create_test_monster("monster.skeleton", 
         name="Behind Door",
         position=(5, 3),
         faction="monsters",
@@ -219,12 +219,12 @@ def test_directional_propagation_wall_removes_threat_and_opportunity_attack() ->
     """Threat, OA, and ranged-threat state all use the propagation channel."""
     _reset_directional_scene()
     grid = get_map()
-    threatening_enemy = create_skeleton(
+    threatening_enemy = create_test_monster("monster.skeleton", 
         name="Directional Threat",
         position=(3, 3),
         faction="monsters",
     )
-    mover = create_goblin(
+    mover = create_test_monster("monster.goblin", 
         name="Directional Mover",
         position=(4, 3),
         faction="heroes",
@@ -261,7 +261,7 @@ def test_directional_propagation_wall_removes_threat_and_opportunity_attack() ->
 
     _reset_directional_scene()
     grid = get_map()
-    archer = create_skeleton(
+    archer = create_test_monster("monster.skeleton", 
         name="Directional Archer",
         position=(4, 3),
         faction="heroes",
@@ -275,12 +275,12 @@ def test_directional_propagation_wall_removes_threat_and_opportunity_attack() ->
         ),
         WeaponSlot.RANGED_MAIN,
     )
-    adjacent_enemy = create_goblin(
+    adjacent_enemy = create_test_monster("monster.goblin", 
         name="Directional Adjacent Enemy",
         position=(3, 3),
         faction="monsters",
     )
-    far_target = create_goblin(
+    far_target = create_test_monster("monster.goblin", 
         name="Directional Far Target",
         position=(7, 3),
         faction="monsters",

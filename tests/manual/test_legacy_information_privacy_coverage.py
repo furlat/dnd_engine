@@ -20,8 +20,8 @@ from dnd.core.events.events_registry import (
     EventPhase,
 )
 from dnd.core.gridmap import get_map
-from dnd.entity import Entity
-from dnd.monsters.bestiary import create_caster, create_skeleton
+from dnd.entities.entity import Entity
+from tests.engine.support import create_test_monster
 from dnd.spells.evocation import Fireball
 from tests.engine.support import get_hp, reset_combat_state
 
@@ -117,13 +117,13 @@ def test_position_aoe_can_resolve_with_zero_affected_entities() -> None:
     """Fireball can spend its action and slot on a legal empty grid position."""
     reset_combat_state()
     get_map().create_rectangle(0, 0, 15, 15)
-    caster = create_caster(
+    caster = create_test_monster("monster.generic_caster", 
         name="Wizard",
         position=(2, 2),
         faction="heroes",
         level=5,
     )
-    distant_target = create_skeleton(
+    distant_target = create_test_monster("monster.skeleton", 
         name="Distant Target",
         position=(14, 14),
         faction="monsters",

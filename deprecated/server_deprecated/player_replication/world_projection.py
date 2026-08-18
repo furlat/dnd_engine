@@ -11,8 +11,8 @@ from dnd.core.base_block import BaseBlock
 from dnd.core.gridmap import GridMap
 from dnd.core.item_types import EquippedVisualPolicy, ItemPresentationKind
 from dnd.core.life_types import LifeState
-from dnd.encounter import Encounter
-from dnd.entity import Entity
+from dnd.encounters.encounter import Encounter
+from dnd.entities.entity import Entity
 from server.world_contracts import (
     APIEntityVisibility,
     APIEntitySummary,

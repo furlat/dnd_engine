@@ -51,7 +51,7 @@ from dnd.core.feature_grants import AttackMultiplicityGrant
 from dnd.core.gridmap import get_map
 from dnd.types.damage import DamageType
 from dnd.core.modifiers import NumericalModifier
-from dnd.entity import Entity, EntityConfig
+from dnd.entities.entity import Entity, EntityConfig
 from dnd.items.weapons import GREATSWORD_RECIPE
 from tests.spell_test_exports import FireBolt
 from dnd.spells.transmutation import Slow

@@ -39,7 +39,7 @@ from dnd.core.events.events_registry import (
     EventType,
 )
 from dnd.types.damage import DamageType
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from dnd.items.weapons import SHORTSWORD_RECIPE
 from dnd.runtime_reset import reset_engine_runtime
 

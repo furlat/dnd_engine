@@ -49,7 +49,7 @@ from dnd.core.events.events_registry import (
 from dnd.types.damage import DamageType
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import ModifiableValue
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from dnd.items.authored_presentations import (
     authored_item_factory as item_factory,
 )
@@ -925,6 +925,10 @@ class _UnseenStrikeDagger(Weapon):
             handler = EventHandler(
                 name="Unseen Strike",
                 source_entity_uuid=entity_uuid,
+                semantic_key="handler.item.assassin_dagger.unseen_strike",
+                behavior_id="handler.item.assassin_dagger.unseen_strike",
+                provided_by_id=self.get_semantic_key(),
+                origin_root_id=self.get_semantic_key(),
                 trigger_conditions=[
                     Trigger(
                         event_type=EventType.DAMAGE_ROLL_RESULT,

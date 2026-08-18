@@ -63,10 +63,7 @@ from dnd.core.content.registration import (
     get_content_declaration,
     item_factory,
 )
-from dnd.core.content.runtime import (
-    RuntimeBehaviorKind,
-    bind_runtime_behavior_child,
-)
+from dnd.types.behaviors import RuntimeBehaviorKind
 from dnd.types.equipment import WeaponSlot
 from dnd.core.events.events_registry import (
     Event,
@@ -74,53 +71,42 @@ from dnd.core.events.events_registry import (
 )
 from dnd.types.damage import DamageType
 from dnd.core.values import ModifiableValue
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from dnd.spells.transmutation import HasteEffect
 
 
 HEALING_POTION_DRINK_SEMANTIC_KEY = (
-    "content.neurodragon:action:"
-    "action.consumable.healing_potion.drink@1"
+    "action.item.potion_healing.drink"
 )
 FIRE_WEAPON_COAT_APPLY_SEMANTIC_KEY = (
-    "content.neurodragon:action:"
-    "action.consumable.weapon_coat.fire.apply@1"
+    "action.item.weapon_coat.fire.apply"
 )
 LIGHTNING_WEAPON_COAT_APPLY_SEMANTIC_KEY = (
-    "content.neurodragon:action:"
-    "action.consumable.weapon_coat.lightning.apply@1"
+    "action.item.weapon_coat.lightning.apply"
 )
 CONCENTRATION_FIRE_WEAPON_COAT_APPLY_SEMANTIC_KEY = (
-    "content.neurodragon:action:"
-    "action.consumable.weapon_coat.concentration_fire.apply@1"
+    "action.item.weapon_coat.concentration_fire.apply"
 )
 TIMED_FIRE_WEAPON_COAT_APPLY_SEMANTIC_KEY = (
-    "content.neurodragon:action:"
-    "action.consumable.weapon_coat.timed_fire.apply@1"
+    "action.item.weapon_coat.timed_fire.apply"
 )
 GREATER_INVISIBILITY_POTION_DRINK_SEMANTIC_KEY = (
-    "content.neurodragon:action:"
-    "action.consumable.potion_greater_invisibility.drink@1"
+    "action.item.potion_greater_invisibility.drink"
 )
 HASTE_POTION_DRINK_SEMANTIC_KEY = (
-    "content.neurodragon:action:"
-    "action.consumable.potion_haste.drink@1"
+    "action.item.potion_haste.drink"
 )
 FIRE_WEAPON_COAT_CONDITION_SEMANTIC_KEY = (
-    "content.neurodragon:condition:"
-    "condition.consumable.weapon_coat.fire@1"
+    "condition.item.weapon_coat.fire"
 )
 LIGHTNING_WEAPON_COAT_CONDITION_SEMANTIC_KEY = (
-    "content.neurodragon:condition:"
-    "condition.consumable.weapon_coat.lightning@1"
+    "condition.item.weapon_coat.lightning"
 )
 CONCENTRATION_FIRE_WEAPON_COAT_CONDITION_SEMANTIC_KEY = (
-    "content.neurodragon:condition:"
-    "condition.consumable.weapon_coat.concentration_fire@1"
+    "condition.item.weapon_coat.concentration_fire"
 )
 TIMED_FIRE_WEAPON_COAT_CONDITION_SEMANTIC_KEY = (
-    "content.neurodragon:condition:"
-    "condition.consumable.weapon_coat.timed_fire@1"
+    "condition.item.weapon_coat.timed_fire"
 )
 
 
@@ -652,14 +638,6 @@ _WEAPON_COAT_CONDITION_TYPES_BY_SEMANTIC_KEY = MappingProxyType({
     TIMED_FIRE_WEAPON_COAT_CONDITION_SEMANTIC_KEY:
         _TimedFireWeaponCoatCondition,
 })
-if any(
-    get_content_declaration(condition_type).ref.identity_key != semantic_key
-    for semantic_key, condition_type
-    in _WEAPON_COAT_CONDITION_TYPES_BY_SEMANTIC_KEY.items()
-):
-    raise ValueError("Weapon-coat condition identity map is inconsistent")
-
-
 @_consumable_action_identity(
     content_id="action.item.weapon_coat.apply",
     display_name="Coat Main Hand",
@@ -769,11 +747,10 @@ class _ApplyWeaponCoatAction(BaseAction):
             coat_damage_type=self.coat_damage_type,
             duration=duration,
         )
-        bind_runtime_behavior_child(
-            coat,
-            provider=self,
-            runtime_owner_uuid=entity.uuid,
-        )
+        provider_id = self.behavior_id
+        coat.provided_by_id = provider_id
+        coat.origin_root_id = self.origin_root_id
+        coat.bind_behavior_owner(origin_root_id=self.origin_root_id)
         entity.add_condition(coat, parent_event=execution_event)
 
         if self.use_concentration:
@@ -1319,6 +1296,184 @@ class _PotionOfHaste(UsableItem):
     max_stack: int = Field(
         default=5,
         description="Maximum number of potions in one stack.",
+    )
+
+
+def build_healing_potion(
+    source_entity_uuid: UUID,
+    *,
+    stack_count: int = 1,
+    heal_amount: int = 7,
+) -> UsableItem:
+    """Construct a healing-potion stack without a content recipe/runtime."""
+    action = _DrinkHealingPotionAction(
+        source_entity_uuid=source_entity_uuid,
+        source_item_uuid=uuid4(),
+        heal_amount=heal_amount,
+        template=True,
+        behavior_id="action.item.potion_healing.drink",
+    )
+    item = _HealingPotion(
+        source_entity_uuid=source_entity_uuid,
+        semantic_key="consumable.healing_potion",
+        use_action_templates=[action],
+        stack_id=f"healing_potion_{heal_amount}",
+        stack_count=stack_count,
+    )
+    action.provided_by_id = item.semantic_key
+    action.origin_root_id = item.semantic_key
+    action.bind_behavior_owner(origin_root_id=item.semantic_key)
+    return item
+
+
+def build_haste_potion(source_entity_uuid: UUID) -> UsableItem:
+    """Construct one Haste potion without a content recipe/runtime."""
+    action = _DrinkHastePotionAction(
+        source_entity_uuid=source_entity_uuid,
+        source_item_uuid=uuid4(),
+        template=True,
+        behavior_id="action.item.potion_haste.drink",
+    )
+    item = _PotionOfHaste(
+        source_entity_uuid=source_entity_uuid,
+        semantic_key="consumable.potion_haste",
+        use_action_templates=[action],
+        stack_id="potion_of_haste",
+    )
+    action.provided_by_id = item.semantic_key
+    action.origin_root_id = item.semantic_key
+    action.bind_behavior_owner(origin_root_id=item.semantic_key)
+    return item
+
+
+def build_greater_invisibility_potion(
+    source_entity_uuid: UUID,
+) -> UsableItem:
+    """Construct one Greater Invisibility potion without recipe lookup."""
+    action = _DrinkGreaterInvisibilityPotionAction(
+        source_entity_uuid=source_entity_uuid,
+        source_item_uuid=uuid4(),
+        template=True,
+        behavior_id="action.item.potion_greater_invisibility.drink",
+    )
+    item = _PotionOfGreaterInvisibility(
+        source_entity_uuid=source_entity_uuid,
+        semantic_key="consumable.potion_greater_invisibility",
+        use_action_templates=[action],
+        stack_id="potion_of_greater_invisibility",
+    )
+    action.provided_by_id = item.semantic_key
+    action.origin_root_id = item.semantic_key
+    action.bind_behavior_owner(origin_root_id=item.semantic_key)
+    return item
+
+
+def _build_direct_weapon_coat(
+    source_entity_uuid: UUID,
+    *,
+    item_id: str,
+    display_name: str,
+    damage_type: DamageType,
+    action_id: str,
+    condition_id: str,
+    stack_id: str,
+    include_off_hand: bool = True,
+    duration: Optional[int] = None,
+    concentration: bool = False,
+) -> UsableItem:
+    """Construct one migrated weapon coating directly."""
+    item = _WeaponCoat(
+        source_entity_uuid=source_entity_uuid,
+        semantic_key=item_id,
+        name=display_name,
+        stack_id=stack_id,
+        use_action_templates=[],
+    )
+    slots = [("Coat Main Hand", "MELEE_MAIN")]
+    if include_off_hand:
+        slots.append(("Coat Off Hand", "MELEE_OFF"))
+    for name, slot in slots:
+        action = _ApplyWeaponCoatAction(
+            source_entity_uuid=source_entity_uuid,
+            source_item_uuid=item.uuid,
+            name=name,
+            semantic_key=action_id,
+            behavior_id=action_id,
+            provided_by_id=item_id,
+            origin_root_id=item_id,
+            condition_semantic_key=condition_id,
+            weapon_slot=slot,
+            coat_damage_type=damage_type,
+            coat_duration=duration,
+            use_concentration=concentration,
+            template=True,
+        )
+        action.bind_behavior_owner(origin_root_id=item_id)
+        item.use_action_templates.append(action)
+    return item
+
+
+def build_fire_weapon_coat(source_entity_uuid: UUID) -> UsableItem:
+    """Construct one permanent fire coating without a recipe/runtime."""
+    return _build_direct_weapon_coat(
+        source_entity_uuid,
+        item_id="consumable.weapon_coat.fire",
+        display_name="Weapon Coat of Flame",
+        damage_type=DamageType.FIRE,
+        action_id=FIRE_WEAPON_COAT_APPLY_SEMANTIC_KEY,
+        condition_id=FIRE_WEAPON_COAT_CONDITION_SEMANTIC_KEY,
+        stack_id="weapon_coat_fire",
+    )
+
+
+def build_lightning_weapon_coat(source_entity_uuid: UUID) -> UsableItem:
+    """Construct one permanent lightning coating without a recipe/runtime."""
+    return _build_direct_weapon_coat(
+        source_entity_uuid,
+        item_id="consumable.weapon_coat.lightning",
+        display_name="Weapon Coat of Lightning",
+        damage_type=DamageType.LIGHTNING,
+        action_id=LIGHTNING_WEAPON_COAT_APPLY_SEMANTIC_KEY,
+        condition_id=LIGHTNING_WEAPON_COAT_CONDITION_SEMANTIC_KEY,
+        stack_id="weapon_coat_lightning",
+    )
+
+
+def build_concentration_fire_weapon_coat(
+    source_entity_uuid: UUID,
+) -> UsableItem:
+    """Construct one concentration-bound fire coating directly."""
+    return _build_direct_weapon_coat(
+        source_entity_uuid,
+        item_id="consumable.weapon_coat.concentration_fire",
+        display_name="Concentrated Weapon Coat of Flame",
+        damage_type=DamageType.FIRE,
+        action_id=CONCENTRATION_FIRE_WEAPON_COAT_APPLY_SEMANTIC_KEY,
+        condition_id=CONCENTRATION_FIRE_WEAPON_COAT_CONDITION_SEMANTIC_KEY,
+        stack_id="weapon_coat_fire",
+        include_off_hand=False,
+        concentration=True,
+    )
+
+
+def build_timed_fire_weapon_coat(
+    source_entity_uuid: UUID,
+    *,
+    rounds: int = 3,
+) -> UsableItem:
+    """Construct one round-limited fire coating directly."""
+    if rounds < 1:
+        raise ValueError("timed fire weapon coat rounds must be positive")
+    return _build_direct_weapon_coat(
+        source_entity_uuid,
+        item_id="consumable.weapon_coat.timed_fire",
+        display_name="Timed Weapon Coat of Flame",
+        damage_type=DamageType.FIRE,
+        action_id=TIMED_FIRE_WEAPON_COAT_APPLY_SEMANTIC_KEY,
+        condition_id=TIMED_FIRE_WEAPON_COAT_CONDITION_SEMANTIC_KEY,
+        stack_id="weapon_coat_fire",
+        include_off_hand=False,
+        duration=rounds,
     )
 
 

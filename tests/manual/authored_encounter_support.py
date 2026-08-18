@@ -5,21 +5,22 @@ from __future__ import annotations
 from dataclasses import dataclass
 from uuid import UUID
 
-from dnd.encounter import Encounter
-from dnd.entity import Entity
-from dnd.runtime_reset import reset_engine_runtime
-from dnd.scenarios.encounter_assembler import (
-    AssembledEncounter,
-    assemble_encounter_recipe,
+from dnd.encounters.encounter import Encounter
+from dnd.content.scenarios.scenario_catalog import encounter_definition
+from dnd.content.scenarios.scenario_deployment import (
+    AssembledScenario,
+    assemble_scenario,
 )
-from dnd.scenarios.encounter_catalog import encounter_recipe
+from dnd.entities.entity import Entity
+from dnd.game import Game
+from dnd.runtime_reset import reset_engine_runtime
 
 
 @dataclass(frozen=True, slots=True)
 class AuthoredEncounterView:
     """Convenience projection for mechanics tests, never a runtime path."""
 
-    assembled: AssembledEncounter
+    assembled: AssembledScenario
 
     @property
     def hero(self) -> Entity:
@@ -48,9 +49,11 @@ class AuthoredEncounterView:
 
 def assemble_authored_encounter(arena_id: str) -> AuthoredEncounterView:
     """Assemble one retained authored encounter through the product path."""
+    reset_engine_runtime()
     return AuthoredEncounterView(
-        assemble_encounter_recipe(
-            encounter_recipe(f"encounter.{arena_id}"),
+        assemble_scenario(
+            Game(),
+            encounter_definition(f"encounter.{arena_id}"),
         ),
     )
 
@@ -58,4 +61,3 @@ def assemble_authored_encounter(arena_id: str) -> AuthoredEncounterView:
 def reset_authored_encounter_state() -> None:
     """Reset the ordinary engine runtime used by authored encounter tests."""
     reset_engine_runtime()
-

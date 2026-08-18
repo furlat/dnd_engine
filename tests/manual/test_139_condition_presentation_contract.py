@@ -10,7 +10,7 @@ from pydantic import Field, ValidationError
 from devtools.generate_event_contract import import_dnd_modules
 from dnd.content_system.bootstrap import bootstrap_content_system
 from dnd.content.spatial_effect_materialization import (
-    materialize_spatial_effect,
+    materialize_spatial_condition,
 )
 from dnd.conditions import (
     Blinded,
@@ -30,13 +30,13 @@ from dnd.core.events.events_registry import (
 )
 from dnd.core.gridmap import GridMap
 from dnd.core.modifiers import ContextAwareCondition
-from dnd.entity import Entity, EntityConfig
+from dnd.entities.entity import Entity, EntityConfig
 from dnd.items.consumables import _WeaponCoatCondition
 from dnd.monsters.traits import SimpleMarkerCondition
 from dnd.player_character_body import PLAYER_CHARACTER_BODY_DECLARATION
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.content.spatial_effect_recipes import GREASE_SURFACE_RECIPE
-from dnd.spatial.effect_base import GroundEffect, SpatialEffect
+from dnd.spatial.area_conditions import SpatialCondition
 from dnd.spells.conjuration import GreaseZone
 from server.player_replication.world_projection import (
     SubjectiveSpatialMemory,
@@ -373,7 +373,7 @@ def test_tile_details_share_name_visibility_and_subjective_memory_policy(
         type(subjective_tile).model_validate(mismatched)
 
 
-def test_spatial_effect_footprint_projects_without_tile_marker_conditions(
+def test_spatial_condition_footprint_projects_without_tile_marker_conditions(
     presentation_grid: GridMap,
 ) -> None:
     """An indexed ground effect is visible without duplicating its lifetime per tile."""
@@ -387,17 +387,12 @@ def test_spatial_effect_footprint_projects_without_tile_marker_conditions(
     observer.senses.visible = {(0, 0): True, (1, 0): True}
     observer.senses.seen = {(0, 0), (1, 0)}
 
-    surface = materialize_spatial_effect(
+    surface = materialize_spatial_condition(
         GREASE_SURFACE_RECIPE,
         source_uuid,
         position=(1, 0),
         faction=None,
-        expected_type=GroundEffect,
-    )
-    zone = GreaseZone(
-        source_entity_uuid=source_uuid,
-        target_entity_uuid=surface.uuid,
-        zone_center=(1, 0),
+        condition_type=GreaseZone,
     )
     parent = Event(
         source_entity_uuid=source_uuid,
@@ -405,7 +400,7 @@ def test_spatial_effect_footprint_projects_without_tile_marker_conditions(
         phase=EventPhase.COMPLETION,
         use_register=False,
     )
-    result = surface.install_controller(zone, parent_event=parent)
+    result = surface.activate(parent_event=parent)
     assert result is not None
     assert not result.canceled
 
@@ -413,7 +408,7 @@ def test_spatial_effect_footprint_projects_without_tile_marker_conditions(
     assert tile is not None
     assert "Grease" not in tile.active_conditions
     assert "Grease Zone" not in tile.active_conditions
-    assert presentation_grid.get_spatial_effect_uuids_at((1, 0)) == {
+    assert presentation_grid.get_spatial_condition_uuids_at((1, 0)) == {
         surface.uuid,
     }
 
@@ -435,9 +430,9 @@ def test_spatial_effect_footprint_projects_without_tile_marker_conditions(
         )
     )
 
-    surface.retire()
-    assert SpatialEffect.get_effect(surface.uuid) is None
-    assert presentation_grid.get_spatial_effect_uuids_at((1, 0)) == set()
+    surface.deactivate()
+    assert BaseCondition.get(surface.uuid) is None
+    assert presentation_grid.get_spatial_condition_uuids_at((1, 0)) == set()
     assert tile.walking_cost.normalized_score == 1
 
 

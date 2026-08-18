@@ -79,7 +79,7 @@ from dnd.core.content.registration import (
     behavior_identity,
     get_content_declaration,
 )
-from dnd.core.content.runtime import RuntimeBehaviorKind
+from dnd.types.behaviors import RuntimeBehaviorKind
 from dnd.types.life import LifeState
 from dnd.core.spell_execution import (
     SpellExecutionState,
@@ -133,7 +133,7 @@ from dnd.core.combat_log import (
 from pydantic import BaseModel, Field, StrictBool, StrictInt, TypeAdapter, model_validator
 from typing import Any, Callable, ClassVar, Dict, Iterable, Mapping, Optional, List, Set, TypeVar, Tuple, Self, cast
 from uuid import UUID, uuid4
-from dnd.entity import Entity, determine_attack_outcome
+from dnd.entities.entity import Entity, determine_attack_outcome
 from dnd.blocks.action_economy import (
     ActionEconomyChannelCost,
     FixedCostCommitError,
@@ -2070,7 +2070,7 @@ def create_weapon_attack_declaration_event(
     weapon_name: Optional[str] = None
     damage_types: List[DamageType] = []
     source_item_uuid: Optional[UUID] = None
-    source_item_presentation = None
+    source_item_state = None
     if source_entity is not None:
         weapon_name, immutable_damage_types = (
             source_entity.equipment.snapshot_attack_event_metadata(
@@ -2081,7 +2081,7 @@ def create_weapon_attack_declaration_event(
         weapon = source_entity.equipment.get_weapon(weapon_slot)
         if weapon is not None:
             source_item_uuid = weapon.uuid
-            source_item_presentation = weapon.to_item_presentation_state()
+            source_item_state = weapon.to_item_state()
 
     damage_types = list(dict.fromkeys((
         *damage_types,
@@ -2115,7 +2115,7 @@ def create_weapon_attack_declaration_event(
         override_ability=override_ability,
         damage_types=damage_types,
         source_item_uuid=source_item_uuid,
-        source_item_presentation=source_item_presentation,
+        source_item_state=source_item_state,
     )
 
 
@@ -5210,17 +5210,13 @@ class SpellAction(BaseAction):
     def spell_execution_scope(self):
         """Open the cast-local context used by low-level damage contributors."""
 
-        binding = self.behavior_binding
-        cause_ref = binding.definition_ref if binding is not None else None
         saving_throw_effect_id = self.saving_throw_effect_id
-        if saving_throw_effect_id is None and cause_ref is not None:
-            saving_throw_effect_id = (
-                f"{cause_ref.content_id}.saving_throw"
-            )
+        if saving_throw_effect_id is None:
+            saving_throw_effect_id = f"{self.behavior_id}.saving_throw"
         return spell_execution_scope(
             source_entity_uuid=self.source_entity_uuid,
             damage_type=self.spell_damage_type,
-            cause_ref=cause_ref,
+            cause_id=self.behavior_id,
             saving_throw_effect_id=saving_throw_effect_id,
             saving_throw_effect_tags=self.saving_throw_effect_tags,
         )
@@ -5847,7 +5843,7 @@ class SpellAction(BaseAction):
             projectile_type=self.projectile_type,
             damage_types=[self.spell_damage_type] if self.spell_damage_type else [],
             source_item_uuid=self.source_item_uuid,
-            source_item_presentation=self.source_item_presentation,
+            source_item_state=self.source_item_state,
             item_charge_cost=self.charge_cost if self.source_item_uuid is not None else 0,
             item_charge_action_lineage_uuid=None,
             declared_target_entity_uuids=self._declared_target_entity_uuids(),

@@ -14,13 +14,13 @@ from dnd.content_system.item_materialization import materialize_item
 from dnd.core.base_actions import (
     AvailableActionInfo,
 )
-from dnd.entity import Entity, EntityConfig
+from dnd.entities.entity import Entity, EntityConfig
 from dnd.extensions.aegis_spark import AegisSpark
 from dnd.extensions.field_focus import (
     DeployFieldFocus,
     FIELD_KIT_RECIPE,
 )
-from dnd.monsters.bestiary import create_goblin
+from tests.engine.support import create_test_monster
 
 
 def create_spell_feature_actor(
@@ -81,7 +81,7 @@ def create_field_medic(
     position: tuple[int, int] = (1, 1),
     faction: str = "heroes",
 ) -> Entity:
-    medic = create_goblin(name=name, position=position, faction=faction)
+    medic = create_test_monster("monster.goblin", name=name, position=position, faction=faction)
     medic.register_action(
         DeployFieldFocus(source_entity_uuid=medic.uuid, template=True),
     )
@@ -98,7 +98,7 @@ def create_field_medic(
 
 def create_field_training_scene() -> tuple[Entity, Entity, UsableItem]:
     medic = create_field_medic()
-    ally = create_goblin(name="Field Ally", position=(2, 1), faction="heroes")
+    ally = create_test_monster("monster.goblin", name="Field Ally", position=(2, 1), faction="heroes")
     floor_kit = materialize_item(
         FIELD_KIT_RECIPE,
         medic.uuid,

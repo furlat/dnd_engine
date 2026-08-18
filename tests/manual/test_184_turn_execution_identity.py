@@ -2,7 +2,7 @@
 
 import asyncio
 
-from dnd.controller import PassController
+from dnd.encounters.controllers import PassController
 from dnd.core.events.events_registry import (
     Event,
     EventPhase,

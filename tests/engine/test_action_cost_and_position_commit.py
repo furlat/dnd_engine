@@ -22,7 +22,7 @@ from dnd.core.gridmap import get_map
 from dnd.core.positioning import PositionCommitError, PositionPublicationError
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import StaticValue
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from tests.engine.test_combat_actions import reset_core_action_state, strong_entity
 
 

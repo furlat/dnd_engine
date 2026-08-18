@@ -19,7 +19,7 @@ from dnd.content_system.item_materialization import materialize_item
 from dnd.content_system.spell_catalog_composition import (
     SPELL_CATALOG_COMPOSITION_ROWS,
 )
-from dnd.controller import Controller, HumanController, PassController
+from dnd.encounters.controllers import Controller, HumanController, PassController
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition, SpellProtectionRegistry
 from dnd.core.dice import fixed_dice_faces
@@ -36,8 +36,8 @@ from dnd.types.equipment import WeaponSlot
 from dnd.core.modifiers import AutoHitModifier
 from dnd.types.rolls import AutoHitStatus
 from dnd.core.values import BaseValue
-from dnd.encounter import Encounter
-from dnd.entity import Entity
+from dnd.encounters.encounter import Encounter
+from dnd.entities.entity import Entity
 from dnd.items.weapons import SCIMITAR_RECIPE, SHORTSWORD_RECIPE
 from dnd.monsters.bestiary_content import BESTIARY_CREATURE_RECIPES_BY_ID
 from dnd.actions.reactions import add_opportunity_attack_handler

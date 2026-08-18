@@ -1,7 +1,7 @@
 """Inventory block for entity item storage."""
 
 from dataclasses import dataclass
-from typing import Optional, List, Dict
+from typing import Callable, Optional, List, Dict
 from uuid import UUID
 from pydantic import Field
 
@@ -161,6 +161,52 @@ class Inventory(BaseBlock):
     def add_item(self, item: BaseItem) -> bool:
         """Add an item stack while preserving the historical boolean API."""
         return self.add_item_with_result(item).succeeded
+
+    def _install_initial_item(self, item: BaseItem) -> Callable[[], None]:
+        """Install one authored starting item without gameplay publication.
+
+        This operation is reserved for an undeployed entity's composition
+        transaction. Starting holdings must already be authored as their final
+        stacks; merging two provisional item objects would leave an ambiguous
+        object identity in the creation fact.
+        """
+        if (
+            item.owner_uuid is not None
+            or item.stored_in_uuid is not None
+            or item.tile_uuid is not None
+            or item.is_equipped
+        ):
+            raise ValueError("starting item must not already have a location")
+        if item.uuid in self.items:
+            raise ValueError(f"starting item {item.uuid} is already in inventory")
+        if self.would_merge(item):
+            raise ValueError(
+                "starting holdings must use one authored item per stack_id",
+            )
+        if not self.can_add(item):
+            raise ValueError(f"inventory cannot accept starting item {item.name}")
+
+        previous_source = item.source_entity_uuid
+        previous_owner = item.owner_uuid
+        previous_storage = item.stored_in_uuid
+        previous_tile = item.tile_uuid
+        item.source_entity_uuid = self.source_entity_uuid
+        self.items[item.uuid] = item
+        self._stamp_item_location(item)
+        item.tile_uuid = None
+
+        def undo() -> None:
+            if self.items.get(item.uuid) is not item:
+                raise RuntimeError(
+                    f"starting item {item.uuid} is no longer in its inventory",
+                )
+            del self.items[item.uuid]
+            item.source_entity_uuid = previous_source
+            item.owner_uuid = previous_owner
+            item.stored_in_uuid = previous_storage
+            item.tile_uuid = previous_tile
+
+        return undo
 
     def remove_item(self, item_uuid: UUID) -> Optional[BaseItem]:
         """Remove and return item by UUID, or None if not found."""

@@ -33,7 +33,8 @@ from dnd.core.events.item_events import (
     WeaponUnequipEvent,
 )
 from dnd.types.equipment import WeaponSlot
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
+from dnd.entities.creature_transforms import EntityTransform
 from dnd.actions.standard import (
     Move,
     Swim,
@@ -97,6 +98,38 @@ def setup_standard_actions(entity: Entity) -> None:
         create_has_taken_damage_handler(entity.uuid),
         _create_prone_auto_stand_handler(entity.uuid),
     ))
+
+
+def standard_actions_transform(transform_id: str) -> EntityTransform:
+    """Create a reversible transform that installs the standard action surface.
+
+    Authored builders place this transform after their silent starting-item
+    transforms so weapon templates reflect the committed initial equipment.
+    """
+    if not transform_id:
+        raise ValueError("standard-actions transform_id cannot be empty")
+
+    def apply(entity: Entity) -> Callable[[], None]:
+        if entity.registered_actions or entity.event_handlers:
+            raise ValueError(
+                "standard actions require an empty behavior surface",
+            )
+        setup_standard_actions(entity)
+        action_uuids = tuple(
+            action.uuid for action in entity.registered_actions
+        )
+        handlers = tuple(entity.event_handlers.values())
+
+        def undo() -> None:
+            for action_uuid in reversed(action_uuids):
+                entity.unregister_action_by_uuid(action_uuid)
+            for handler in reversed(handlers):
+                entity.remove_event_handler(handler)
+                handler.remove_from_register()
+
+        return undo
+
+    return EntityTransform(transform_id, apply)
 
 
 def _create_prone_auto_stand_handler(entity_uuid: UUID) -> EventHandler:

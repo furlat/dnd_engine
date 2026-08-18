@@ -15,8 +15,7 @@ from dnd.blocks.base_item import (
 )
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
-from dnd.content_system.item_bindings import ItemRuntimeOrigin
-from dnd.content_system.item_materialization import materialize_item
+from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.presentation import ActionPresentationKind
 from dnd.core.aoe import (
     Cone,
@@ -34,7 +33,6 @@ from dnd.core.events.events_registry import (
     EventQueue,
     EventType,
 )
-from dnd.presentation import ItemPresentationKind
 from dnd.core.presentation_geometry import (
     ConePresentationGeometry,
     CubePresentationGeometry,
@@ -42,12 +40,13 @@ from dnd.core.presentation_geometry import (
     LinePresentationGeometry,
     SpherePresentationGeometry,
 )
-from dnd.entity import Entity, EntityConfig
-from dnd.items.consumables import HEALING_POTION_RECIPE
-from dnd.items.spell_items import FIREBALL_SCROLL_RECIPE, SpellGrantingItem
+from dnd.entities.entity import Entity, EntityConfig
+from dnd.items.spell_items import SpellGrantingItem
+from dnd.types.items import ItemKind
 from dnd.runtime_reset import reset_engine_runtime
 from tests.spell_test_exports import Fireball, MagicMissile
 from dnd.core.gridmap import get_map
+from tests.engine.support import create_test_entity
 
 
 def _create_actor(
@@ -58,8 +57,7 @@ def _create_actor(
     spell_slots: dict[int, int] | None = None,
 ) -> Entity:
     """Create one durable spell-capable actor for event integration checks."""
-    return Entity.create(
-        source_entity_uuid=uuid4(),
+    return create_test_entity(
         name=name,
         config=EntityConfig(
             ability_scores=AbilityScoresConfig(
@@ -262,13 +260,12 @@ def test_duplicate_spell_targets_receive_stable_ordered_application_ids() -> Non
 
 
 def test_drink_event_carries_immutable_declaration_time_item_state() -> None:
-    """Item-use presentation survives consumption without a registry lookup."""
+    """Authoritative item state survives consumption without a registry lookup."""
     _reset_grid()
     user_uuid = uuid4()
-    potion = materialize_item(
-        HEALING_POTION_RECIPE,
+    potion = build_authored_item(
+        "consumable.healing_potion",
         user_uuid,
-        origin=ItemRuntimeOrigin.STARTER,
     )
     assert isinstance(potion, UsableItem)
     action = potion.get_use_actions(user_uuid)[0]
@@ -278,14 +275,17 @@ def test_drink_event_carries_immutable_declaration_time_item_state() -> None:
     assert isinstance(declaration, ActionEvent)
     assert declaration.presentation_kind is ActionPresentationKind.DRINK
     assert declaration.source_item_uuid == potion.uuid
-    assert declaration.source_item_presentation is not None
-    assert declaration.source_item_presentation.item_uuid == potion.uuid
-    assert (
-        declaration.source_item_presentation.item_kind
-        is ItemPresentationKind.USABLE
-    )
-    assert declaration.source_item_presentation.name == "Potion of Healing"
-    assert declaration.source_item_presentation.charges == 1
+    assert declaration.source_item_state is not None
+    assert declaration.source_item_state.item_uuid == potion.uuid
+    assert declaration.source_item_state.item_kind is ItemKind.USABLE
+    assert declaration.source_item_state.name == "Potion of Healing"
+    assert declaration.source_item_state.charge_state is not None
+    assert declaration.source_item_state.charge_state.charges == 1
+    item_payload = declaration.source_item_state.model_dump(mode="json")
+    assert "content_ref" not in item_payload
+    assert "visual_item_name" not in item_payload
+    assert "visual_variant_id" not in item_payload
+    assert "equipped_visual_policy" not in item_payload
 
     potion.name = "Mutated after declaration"
     potion.charges = 0
@@ -293,16 +293,17 @@ def test_drink_event_carries_immutable_declaration_time_item_state() -> None:
         EventPhase.EFFECT
     ).phase_to(EventPhase.COMPLETION)
 
-    assert completion.source_item_presentation == declaration.source_item_presentation
-    assert completion.source_item_presentation is not None
-    assert completion.source_item_presentation.name == "Potion of Healing"
-    assert completion.source_item_presentation.charges == 1
+    assert completion.source_item_state == declaration.source_item_state
+    assert completion.source_item_state is not None
+    assert completion.source_item_state.name == "Potion of Healing"
+    assert completion.source_item_state.charge_state is not None
+    assert completion.source_item_state.charge_state.charges == 1
 
 
-def test_drink_event_rejects_missing_or_mismatched_item_snapshot() -> None:
-    """The presentation-bearing action cannot silently fall back to live state."""
+def test_drink_event_rejects_missing_or_mismatched_item_state() -> None:
+    """An item-bound action cannot silently fall back to live state."""
     _reset_grid()
-    with pytest.raises(ValidationError, match="declaration-time item presentation"):
+    with pytest.raises(ValidationError, match="declaration-time item state"):
         ActionEvent(
             source_entity_uuid=uuid4(),
             source_item_uuid=uuid4(),
@@ -310,30 +311,28 @@ def test_drink_event_rejects_missing_or_mismatched_item_snapshot() -> None:
             use_register=False,
         )
 
-    potion = materialize_item(
-        HEALING_POTION_RECIPE,
+    potion = build_authored_item(
+        "consumable.healing_potion",
         uuid4(),
-        origin=ItemRuntimeOrigin.STARTER,
     )
     with pytest.raises(ValidationError, match="must match source_item_uuid"):
         ActionEvent(
             source_entity_uuid=uuid4(),
             source_item_uuid=uuid4(),
-            source_item_presentation=potion.to_item_presentation_state(),
+            source_item_state=potion.to_item_state(),
             use_register=False,
         )
 
 
-def test_item_backed_spell_variant_carries_its_scroll_snapshot() -> None:
-    """Model-copy spell variants retain the same cold item-use guarantee."""
+def test_item_backed_spell_variant_carries_its_scroll_state() -> None:
+    """Model-copy spell variants retain the same item-state guarantee."""
     _reset_grid()
     user = _create_actor("Scroll Reader", (1, 1), "heroes")
-    scroll = materialize_item(
-        FIREBALL_SCROLL_RECIPE,
+    scroll = build_authored_item(
+        "spell_item.scroll_fireball",
         user.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=SpellGrantingItem,
     )
+    assert isinstance(scroll, SpellGrantingItem)
     action = scroll.get_use_actions(user.uuid)[0]
     action.end_position = (4, 2)
 
@@ -341,10 +340,7 @@ def test_item_backed_spell_variant_carries_its_scroll_snapshot() -> None:
 
     assert isinstance(declaration, SpellEvent)
     assert declaration.source_item_uuid == scroll.uuid
-    assert declaration.source_item_presentation is not None
-    assert declaration.source_item_presentation.item_uuid == scroll.uuid
-    assert (
-        declaration.source_item_presentation.item_kind
-        is ItemPresentationKind.USABLE
-    )
-    assert declaration.source_item_presentation.name == "Scroll of Fireball"
+    assert declaration.source_item_state is not None
+    assert declaration.source_item_state.item_uuid == scroll.uuid
+    assert declaration.source_item_state.item_kind is ItemKind.USABLE
+    assert declaration.source_item_state.name == "Scroll of Fireball"

@@ -52,7 +52,7 @@ from dnd.core.base_conditions import (
     MostPotentCondition,
 )
 from dnd.core.content.identities import ContentRef
-from dnd.core.content.runtime import RuntimeBehaviorKind
+from dnd.types.behaviors import RuntimeBehaviorKind
 from dnd.types.rolls import AttackOutcome, RollType
 from dnd.core.dice import Dice
 from dnd.core.events.resolution_events import (
@@ -87,17 +87,16 @@ from dnd.core.modifiers import (
 )
 from dnd.types.rolls import AdvantageStatus
 from dnd.core.values import ModifiableValue
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from dnd.classes.barbarian import RecklessAttack
 from dnd.types.conditions import ConditionAgencyDenial, ConditionCategory, DurationType
 from dnd.types.life import LifeState
 from dnd.types.spatial_effects import SpatialEffectTriggerKind
 from dnd.content.spatial_effect_materialization import (
-    materialize_spatial_effect,
+    materialize_spatial_condition,
 )
 from dnd.content.spatial_effect_recipes import LEADERSHIP_FIELD_RECIPE
-from dnd.spatial.effect_base import FieldEffect, SpatialEffect
-from dnd.spatial.effect_controllers import AreaSpatialEffectController
+from dnd.spatial.area_conditions import AreaCondition
 
 
 def register_pack_tactics(entity: Entity) -> None:
@@ -1319,24 +1318,19 @@ class LeadershipAction(BaseAction):
         if actor is None:
             return execution_event.cancel(status_message="Actor not found")
         effect_event = execution_event.phase_to(EventPhase.EFFECT, status_message=f"{actor.name} uses Leadership")
-        field = materialize_spatial_effect(
+        aura = materialize_spatial_condition(
             LEADERSHIP_FIELD_RECIPE,
             actor.uuid,
             position=actor.position,
             faction=actor.faction,
             anchor_uuid=actor.uuid,
-            expected_type=FieldEffect,
+            condition_type=LeadershipAura,
+            condition_fields={
+                "effect_origin": effect_event.get_effect_origin(),
+            },
         )
-        aura_result = field.install_controller(
-            LeadershipAura(
-                source_entity_uuid=actor.uuid,
-                target_entity_uuid=field.uuid,
-                zone_center=actor.position,
-                effect_origin=effect_event.get_effect_origin(),
-            ),
-            parent_event=effect_event,
-        )
-        if aura_result is None or aura_result.canceled:
+        aura_result = aura.activate(parent_event=effect_event)
+        if aura_result is None or aura_result.canceled or not aura.applied:
             return execution_event.cancel(
                 status_message="Leadership field could not be installed",
             )
@@ -1461,7 +1455,7 @@ class LeadershipMembership(MostPotentCondition):
         )
 
 
-class LeadershipAura(AreaSpatialEffectController):
+class LeadershipAura(AreaCondition):
     """Entity-anchored Leadership field that owns exact ally membership."""
 
     name: str = Field(default="Leadership Aura", description="Condition name.")
@@ -1470,18 +1464,12 @@ class LeadershipAura(AreaSpatialEffectController):
         default=ConditionCategory.INTERNAL,
         frozen=True,
         description=(
-            "Internal spatial controller; LeadershipMembership is the "
+            "Independent spatial condition; LeadershipMembership is the "
             "player-visible rules state."
         ),
     )
     zone_shape: str = Field(default="sphere", description="Aura shape.")
     zone_radius_feet: int = Field(default=30, description="Aura radius.")
-    trigger_kinds: frozenset[SpatialEffectTriggerKind] = frozenset({
-        SpatialEffectTriggerKind.APPEAR,
-        SpatialEffectTriggerKind.EFFECT_ENTERS_OCCUPANT,
-        SpatialEffectTriggerKind.ENTER,
-        SpatialEffectTriggerKind.LEAVE,
-    })
     _membership_condition_uuids: Dict[UUID, UUID] = PrivateAttr(
         default_factory=dict,
     )
@@ -1609,15 +1597,24 @@ class LeadershipAura(AreaSpatialEffectController):
                     parent_event=parent_event,
                 )
 
-    def relocate_anchor(
+    def apply_effect_exit_trigger(
         self,
-        position: Tuple[int, int],
+        positions: Set[Tuple[int, int]],
         *,
         parent_event: Event,
     ) -> None:
-        """Move the field and reconcile exact membership leases."""
-        super().relocate_anchor(position, parent_event=parent_event)
-        self._reconcile_membership(parent_event=parent_event)
+        """Retire ally memberships no longer covered after the leader moves."""
+        for entity_uuid in tuple(self._membership_condition_uuids):
+            entity = Entity.get(entity_uuid)
+            if (
+                entity is None
+                or entity.position in positions
+                and entity.position not in self.affected_positions
+            ):
+                self._remove_membership(
+                    entity_uuid,
+                    parent_event=parent_event,
+                )
 
     def _apply(
         self,
@@ -1639,7 +1636,7 @@ class LeadershipAura(AreaSpatialEffectController):
             effect_event,
         ) = super()._apply(declaration_event)
         leader_uuid = self.source_entity_uuid
-        effect_uuid = self.target_entity_uuid
+        condition_uuid = self.uuid
 
         def retire_when_source_loses_agency(
             event: Event,
@@ -1658,13 +1655,9 @@ class LeadershipAura(AreaSpatialEffectController):
             )
             if not source_lost_agency and not source_left_play:
                 return None
-            field = (
-                SpatialEffect.get_effect(effect_uuid)
-                if effect_uuid is not None
-                else None
-            )
-            if field is not None:
-                field.retire(parent_event=event)
+            condition = BaseCondition.get(condition_uuid)
+            if isinstance(condition, LeadershipAura):
+                condition.deactivate(parent_event=event)
             return None
 
         retirement_handler = EventHandler(
@@ -1694,11 +1687,15 @@ class LeadershipAura(AreaSpatialEffectController):
             effect_event,
         )
 
-    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
-        """Remove only this field's exact leases, allowing weaker fallback."""
+    def _release_owned_runtime_state(
+        self,
+        *,
+        parent_event: Optional[Event] = None,
+    ) -> None:
+        """Remove exact field leases after the removal effect is accepted."""
         for entity_uuid in tuple(self._membership_condition_uuids):
-            self._remove_membership(entity_uuid, parent_event=event)
-        return super()._remove(event)
+            self._remove_membership(entity_uuid, parent_event=parent_event)
+        super()._release_owned_runtime_state(parent_event=parent_event)
 
 
 class RampageFeature(BaseCondition):

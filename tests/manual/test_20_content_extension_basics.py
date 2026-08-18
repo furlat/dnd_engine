@@ -24,7 +24,7 @@ from dnd.core.events.events_registry import (
 )
 from dnd.core.gridmap import GridMap, get_map
 from dnd.core.values import BaseValue
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from dnd.extensions.field_focus import (
     DeployFieldFocus,
     FIELD_KIT_RECIPE,
@@ -38,7 +38,7 @@ from tests.manual.extension_scenario_support import (
     find_item_action,
     inventory_item_named,
 )
-from dnd.monsters.bestiary import create_goblin
+from tests.engine.support import create_test_monster
 
 
 def reset_content_extension_state(width: int = 8, height: int = 6) -> None:
@@ -125,7 +125,7 @@ def test_builtin_extension_module_exposes_expected_surfaces(capsys) -> None:
 def test_custom_condition_applies_and_cleans_up_owned_modifiers(capsys) -> None:
     """A custom condition can own value modifiers and clean them up."""
     reset_content_extension_state()
-    hero = create_goblin(name="Focus Tester", position=(1, 1), faction="heroes")
+    hero = create_test_monster("monster.goblin", name="Focus Tester", position=(1, 1), faction="heroes")
     base_movement = hero.action_economy.movement.normalized_score
     base_ac = hero.ac_bonus().normalized_score
 
@@ -179,7 +179,7 @@ def test_custom_condition_applies_and_cleans_up_owned_modifiers(capsys) -> None:
 def test_custom_action_registers_discovers_executes_and_spends_cost(capsys) -> None:
     """A custom action template can be registered, discovered, and executed."""
     reset_content_extension_state()
-    hero = create_goblin(name="Focus Runner", position=(1, 1), faction="heroes")
+    hero = create_test_monster("monster.goblin", name="Focus Runner", position=(1, 1), faction="heroes")
     hero.register_action(DeployFieldFocus(source_entity_uuid=hero.uuid, template=True))
 
     actions = get_available_actions(hero)
@@ -246,7 +246,7 @@ def test_custom_action_registers_discovers_executes_and_spends_cost(capsys) -> N
 def test_usable_item_packages_the_same_action_template(capsys) -> None:
     """A usable item can expose the custom action through discovery."""
     reset_content_extension_state()
-    hero = create_goblin(name="Kit Carrier", position=(1, 1), faction="heroes")
+    hero = create_test_monster("monster.goblin", name="Kit Carrier", position=(1, 1), faction="heroes")
     kit = _materialize_field_kit(hero.uuid)
     loot_result = hero.loot_item(kit)
     assert loot_result
@@ -313,7 +313,7 @@ def test_usable_item_packages_the_same_action_template(capsys) -> None:
 def test_floor_object_use_action_comes_from_nearby_sensed_item(capsys) -> None:
     """A floor item can expose the custom use action when the actor is nearby."""
     reset_content_extension_state()
-    hero = create_goblin(name="Floor Kit User", position=(1, 1), faction="heroes")
+    hero = create_test_monster("monster.goblin", name="Floor Kit User", position=(1, 1), faction="heroes")
     kit = _materialize_field_kit(hero.uuid)
     kit.place_on_grid((1, 2))
     Entity.update_all_entities_senses(max_distance=20)

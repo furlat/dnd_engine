@@ -24,7 +24,7 @@ from dnd.core.content.effects import (
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.content.item_definitions import ItemDefinition
 from dnd.core.content.provenance import ContentProvenance
-from dnd.core.content.runtime import RuntimeBehaviorKind
+from dnd.types.behaviors import RuntimeBehaviorKind
 from dnd.core.content.spatial_effect_definitions import SpatialEffectDefinition
 
 
@@ -170,6 +170,7 @@ _TYPED_DEFINITION_KINDS = frozenset({
     ContentDefinitionKind.BACKGROUND,
     ContentDefinitionKind.STARTING_EQUIPMENT_PACKAGE,
     ContentDefinitionKind.TRAIT,
+    ContentDefinitionKind.SPATIAL_EFFECT,
 })
 
 
@@ -210,6 +211,11 @@ class ContentDeclaration(BaseModel):
             self.ref.definition_kind is ContentDefinitionKind.SPATIAL_EFFECT
         )
         if self.mode == ContentDeclarationMode.FACTORY:
+            if spatial_effect_owned_kind:
+                raise ValueError(
+                    "spatial effects are metadata definitions, not generic "
+                    "content factories",
+                )
             if self.construction is None:
                 raise ValueError(
                     "factory declaration requires a construction contract",
@@ -230,21 +236,9 @@ class ContentDeclaration(BaseModel):
                     "item_definition is reserved for item and "
                     "environment_object declarations",
                 )
-            if (
-                spatial_effect_owned_kind
-                and self.spatial_effect_definition is None
-            ):
+            if self.spatial_effect_definition is not None:
                 raise ValueError(
-                    "spatial_effect declarations require "
-                    "spatial_effect_definition",
-                )
-            if (
-                not spatial_effect_owned_kind
-                and self.spatial_effect_definition is not None
-            ):
-                raise ValueError(
-                    "spatial_effect_definition is reserved for spatial_effect "
-                    "declarations",
+                    "factory declaration cannot own spatial effect metadata",
                 )
             if self.definition_payload is not None:
                 raise ValueError(
@@ -288,24 +282,41 @@ class ContentDeclaration(BaseModel):
                     "typed_definition mode is reserved for structural build "
                     "definitions and authored action configurations",
                 )
-            if self.definition_payload is None:
-                raise ValueError(
-                    "typed_definition declaration requires definition_payload",
-                )
-            if (
-                self.construction is not None
-                or self.item_definition is not None
-                or self.spatial_effect_definition is not None
-                or self.runtime_behavior_kind is not None
-            ):
+            if self.construction is not None or self.item_definition is not None:
                 raise ValueError(
                     "typed_definition declaration cannot construct runtime "
                     "behavior",
                 )
+            if spatial_effect_owned_kind:
+                if (
+                    self.spatial_effect_definition is None
+                    or self.definition_payload is not None
+                    or self.runtime_behavior_kind is not None
+                ):
+                    raise ValueError(
+                        "typed spatial definitions require only "
+                        "spatial_effect_definition metadata",
+                    )
+                definition_model = type(self.spatial_effect_definition)
+            else:
+                if self.definition_payload is None:
+                    raise ValueError(
+                        "typed_definition declaration requires "
+                        "definition_payload",
+                    )
+                if (
+                    self.spatial_effect_definition is not None
+                    or self.runtime_behavior_kind is not None
+                ):
+                    raise ValueError(
+                        "typed_definition declaration cannot own runtime "
+                        "behavior metadata",
+                    )
+                definition_model = type(self.definition_payload)
             expected_contract_hash = compute_definition_contract_hash(
                 mode=self.mode,
                 definition_kind=self.ref.definition_kind,
-                definition_model=type(self.definition_payload),
+                definition_model=definition_model,
             )
         if self.ref.definition_contract_hash != expected_contract_hash:
             raise ValueError(
@@ -358,12 +369,15 @@ def content_factory(
     provenance: ContentProvenance,
     runtime_behavior_kind: RuntimeBehaviorKind | None = None,
     item_definition: ItemDefinition | None = None,
-    spatial_effect_definition: SpatialEffectDefinition | None = None,
     dependencies: tuple[ContentDependency, ...] = (),
     condition_effect_profile: AuthoredConditionEffectProfile | None = None,
     condition_lifecycle: AuthoredConditionLifecycle | None = None,
 ) -> Callable[[_Factory], _Factory]:
     """Return a pure decorator for one typed factory definition."""
+    if definition_kind is ContentDefinitionKind.SPATIAL_EFFECT:
+        raise ValueError(
+            "spatial effects must use metadata-only definitions",
+        )
     mode = ContentDeclarationMode.FACTORY
     contract_hash = compute_definition_contract_hash(
         mode=mode,
@@ -390,7 +404,6 @@ def content_factory(
             provenance=provenance,
             runtime_behavior_kind=runtime_behavior_kind,
             item_definition=item_definition,
-            spatial_effect_definition=spatial_effect_definition,
             dependencies=dependencies,
             condition_effect_coverage=(
                 ConditionEffectCoverage.PROFILED
@@ -551,6 +564,11 @@ def behavior_identity(
             condition_lifecycle=resolved_condition_lifecycle,
         )
         setattr(definition, _DECLARATION_ATTRIBUTE, declaration)
+        if isinstance(definition, type) and issubclass(definition, BaseModel):
+            behavior_field = definition.model_fields.get("behavior_id")
+            if behavior_field is not None:
+                behavior_field.default = content_id
+                definition.model_rebuild(force=True)
         return definition
 
     return decorate
@@ -610,30 +628,46 @@ def environment_object_factory(
     )
 
 
-def spatial_effect_factory(
+def spatial_effect_definition(
     *,
     pack_id: str,
     content_id: str,
     version: int,
-    parameters: type[BaseModel],
     descriptor: ContentDescriptorSpec,
     provenance: ContentProvenance,
     spatial_effect_definition: SpatialEffectDefinition,
     dependencies: tuple[ContentDependency, ...] = (),
-) -> Callable[[_Factory], _Factory]:
-    """Declare one persistent ground, cloud, or field reconstruction factory."""
-    return content_factory(
-        definition_kind=ContentDefinitionKind.SPATIAL_EFFECT,
+) -> Callable[[_Definition], _Definition]:
+    """Attach immutable spatial metadata to a declaration marker."""
+    mode = ContentDeclarationMode.TYPED_DEFINITION
+    ref = ContentRef(
         pack_id=pack_id,
+        definition_kind=ContentDefinitionKind.SPATIAL_EFFECT,
         content_id=content_id,
-        version=version,
-        parameters=parameters,
-        descriptor=descriptor,
-        provenance=provenance,
-        runtime_behavior_kind=RuntimeBehaviorKind.SPATIAL_EFFECT,
-        spatial_effect_definition=spatial_effect_definition,
-        dependencies=dependencies,
+        content_version=version,
+        definition_contract_hash=compute_definition_contract_hash(
+            mode=mode,
+            definition_kind=ContentDefinitionKind.SPATIAL_EFFECT,
+            definition_model=type(spatial_effect_definition),
+        ),
     )
+    bound_descriptor = ContentDescriptor.from_spec(ref, descriptor)
+
+    def decorate(marker: _Definition) -> _Definition:
+        if _direct_content_declaration(marker) is not None:
+            raise ValueError(f"{marker!r} already has a content declaration")
+        declaration = ContentDeclaration(
+            ref=ref,
+            mode=mode,
+            descriptor=bound_descriptor,
+            provenance=provenance,
+            spatial_effect_definition=spatial_effect_definition,
+            dependencies=dependencies,
+        )
+        setattr(marker, _DECLARATION_ATTRIBUTE, declaration)
+        return marker
+
+    return decorate
 
 
 def creature_factory(

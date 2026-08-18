@@ -18,6 +18,7 @@ from dnd.core.action_outcomes import (
     OutcomeResolution as OutcomeResolution,
 )
 from dnd.core.events.action_events import ActionEvent, ActionEventT, BaseCost
+from dnd.core.events.item_events import ItemState, ItemStateProvider
 from dnd.core.events.events_registry import (
     Event,
     EventType,
@@ -30,16 +31,11 @@ from dnd.core.events.resolution_events import (
 from dnd.core.base_object import BaseObject
 from dnd.core.base_block import BaseBlock
 from dnd.types.world import MovementMode
+from dnd.types.behaviors import validate_behavior_id
 from dnd.core.combat_log import ActionLogData, CombatLogEntry, CombatLogEntryType, MultiEntityLogData, md_color
 from dnd.core.content.identities import ContentRef
-from dnd.core.content.runtime import (
-    AuthoredBehaviorAttribution,
-    BehaviorBinding,
-    active_runtime_behavior_binding,
-    runtime_behavior_provider,
-)
+from dnd.core.behavior_context import active_behavior, behavior_scope
 from dnd.core.aoe import AoEShape
-from dnd.presentation import ItemPresentationProvider, ItemPresentationState
 from dnd.types.equipment import WeaponSlot
 from dnd.types.effects import EffectOrigin, EffectOriginKind
 from dnd.types.rolls import AdvantageStatus
@@ -522,21 +518,24 @@ class BaseAction(BaseObject):
         default=None,
         description="Optional stable semantic registry key overriding the action's class identity.",
     )
-    behavior_binding: Optional[BehaviorBinding] = Field(
+    behavior_id: str = Field(
+        default="action.unclassified",
+        description="Direct renderer-independent identity of this behavior.",
+    )
+    provided_by_id: Optional[str] = Field(
         default=None,
-        exclude=True,
-        repr=False,
-        description=(
-            "Validated runtime content binding installed once before this "
-            "action becomes observable."
-        ),
+        description="Direct semantic identity that installed this behavior.",
+    )
+    origin_root_id: Optional[str] = Field(
+        default=None,
+        description="Optional durable semantic root of this behavior grant.",
     )
     configured_action_ref: Optional[ContentRef] = Field(
         default=None,
         description=(
             "Exact authored configuration specializing a reusable action "
             "behavior. When present, this is the catalog identity of the "
-            "configured affordance; behavior_binding remains the engine "
+            "configured affordance; behavior_id remains the engine "
             "implementation identity."
         ),
     )
@@ -623,16 +622,24 @@ class BaseAction(BaseObject):
         return None
 
     def get_semantic_key(self) -> str:
-        """Return the rules-family key used by mechanics and policy.
+        """Return the action's direct rules identity."""
+        return self.behavior_id
 
-        Authored catalog identity is carried separately by
-        ``behavior_binding``.  Keeping the two axes independent prevents
-        content attribution from changing action dispatch or decision support.
-        """
-        if self.semantic_key is not None:
-            return self.semantic_key
-        action_class = type(self)
-        return f"{action_class.__module__}.{action_class.__qualname__}"
+    def bind_behavior_owner(self, *, origin_root_id: Optional[str] = None) -> None:
+        """Finalize direct ownership without consulting a global gateway."""
+        validate_behavior_id(self.behavior_id)
+        active = active_behavior()
+        if self.provided_by_id is None:
+            self.provided_by_id = (
+                active.behavior_id if active is not None else self.behavior_id
+            )
+        validate_behavior_id(self.provided_by_id, "provided_by_id")
+        if self.origin_root_id is None:
+            self.origin_root_id = (
+                active.origin_root_id if active is not None else origin_root_id
+            )
+        if self.origin_root_id is not None:
+            validate_behavior_id(self.origin_root_id, "origin_root_id")
 
     def get_outcome_profile(self, actor: Any) -> Optional[ActionOutcomeProfile]:
         """Return actor-known stochastic action data when the rule defines it.
@@ -703,9 +710,9 @@ class BaseAction(BaseObject):
         default=None,
         description="UUID of the item providing this action when it is an item-use action.",
     )
-    source_item_presentation: Optional[ItemPresentationState] = Field(
+    source_item_state: Optional[ItemState] = Field(
         default=None,
-        description="Cold source-item state bound before an item action is declared.",
+        description="Authoritative item state bound before an item action is declared.",
     )
     charge_cost: int = Field(default=1, description="Charges consumed when this action is used from an item")
     end_position: Optional[Tuple[int, int]] = Field(
@@ -749,16 +756,17 @@ class BaseAction(BaseObject):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def model_post_init(self, __context: Any) -> None:
-        """Capture an item source before the action can outlive that item."""
+        """Freeze direct identity and item state before the action can escape."""
+        if self.semantic_key is not None:
+            self.behavior_id = self.semantic_key
+        validate_behavior_id(self.behavior_id)
         if (
             self.source_item_uuid is not None
-            and self.source_item_presentation is None
+            and self.source_item_state is None
         ):
             source_item = BaseBlock.get(self.source_item_uuid)
-            if isinstance(source_item, ItemPresentationProvider):
-                self.source_item_presentation = (
-                    source_item.to_item_presentation_state()
-                )
+            if isinstance(source_item, ItemStateProvider):
+                self.source_item_state = source_item.to_item_state()
         super().model_post_init(__context)
 
     @property
@@ -1277,10 +1285,13 @@ class BaseAction(BaseObject):
             parent_event,
             use_register=use_register,
             source_item_uuid=self.source_item_uuid,
-            source_item_presentation=self.source_item_presentation,
+            source_item_state=self.source_item_state,
             item_charge_cost=self.charge_cost if self.source_item_uuid is not None else 0,
             declared_target_entity_uuids=self._declared_target_entity_uuids(),
             presentation_kind=self.presentation_kind,
+            behavior_id=self.behavior_id,
+            provided_by_id=self.provided_by_id or self.behavior_id,
+            origin_root_id=self.origin_root_id,
         )
         event.name = self.name or "Action"
         event.description = self.description
@@ -1490,7 +1501,13 @@ class BaseAction(BaseObject):
         Returns:
             The terminal action event, or None when application cannot begin.
         """
-        with runtime_behavior_provider(self):
+        self.bind_behavior_owner()
+        assert self.provided_by_id is not None
+        with behavior_scope(
+            behavior_id=self.behavior_id,
+            provided_by_id=self.provided_by_id,
+            origin_root_id=self.origin_root_id,
+        ):
             with EventQueue.batch_on_event_callbacks():
                 return self._apply_action(parent_event)
 
@@ -1668,11 +1685,11 @@ class AvailableActionInfo(BaseModel):
             "never authored presentation identity."
         ),
     )
-    behavior_attribution: AuthoredBehaviorAttribution = Field(
-        description=(
-            "Exact authored behavior identity used for catalog-backed "
-            "presentation; execution and display names are not identity."
-        ),
+    behavior_id: str = Field(description="Direct semantic behavior identity.")
+    provided_by_id: str = Field(description="Direct semantic provider identity.")
+    origin_root_id: Optional[str] = Field(
+        default=None,
+        description="Optional durable semantic root identity.",
     )
     configured_action_ref: Optional[ContentRef] = Field(
         default=None,
@@ -1821,11 +1838,11 @@ class AvailableHandlerInfo(BaseModel):
     """Player-toggleable event handler exposed with available actions."""
 
     name: str = Field(description="Handler display name.")
-    behavior_attribution: AuthoredBehaviorAttribution = Field(
-        description=(
-            "Exact authored behavior identity used for catalog-backed "
-            "reaction presentation."
-        ),
+    behavior_id: str = Field(description="Direct semantic handler identity.")
+    provided_by_id: str = Field(description="Direct semantic provider identity.")
+    origin_root_id: Optional[str] = Field(
+        default=None,
+        description="Optional durable semantic root identity.",
     )
     uuid: UUID = Field(description="Stable handler UUID.")
     enabled: bool = Field(description="Whether the handler is currently enabled.")

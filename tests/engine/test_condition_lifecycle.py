@@ -33,7 +33,7 @@ from dnd.core.events.check_events import (
 from dnd.core.gridmap import get_map
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import BaseValue, ModifiableValue
-from dnd.entity import Entity, EntityConfig
+from dnd.entities.entity import Entity, EntityConfig
 from tests.engine.support import reset_combat_state
 
 

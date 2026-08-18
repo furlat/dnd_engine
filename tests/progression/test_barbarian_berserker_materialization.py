@@ -78,7 +78,7 @@ from dnd.actions.standard import (
 from dnd.blocks.equipment import (
     Weapon,
 )
-from dnd.entity import Entity, EntityConfig
+from dnd.entities.entity import Entity, EntityConfig
 from dnd.items.weapons import GREATSWORD_RECIPE
 from dnd.player_character_body import PLAYER_CHARACTER_BODY_RECIPE
 from dnd.runtime_reset import reset_engine_runtime

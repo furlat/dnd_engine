@@ -13,7 +13,7 @@ from dnd.core.action_execution import (
     MovementTerminationReason,
     movement_continuation_scope,
 )
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from tests.manual.test_09_action_discovery_and_costs import (
     create_tutorial_actor,
     reset_action_state,

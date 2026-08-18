@@ -298,7 +298,7 @@ def execute_zero_application_spell_probe() -> dict[str, list[tuple[str, int]]]:
     from dnd.content_system.item_materialization import materialize_item
     from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
     from dnd.core.events import EventQueue
-    from dnd.entity import Entity
+    from dnd.entities.entity import Entity
     from dnd.items.environment_content import OIL_BARREL_RECIPE, OilBarrel
     from dnd.spells.conjuration import DimensionDoor, HeroesFeast
     from dnd.spells.evocation import ContinualFlame

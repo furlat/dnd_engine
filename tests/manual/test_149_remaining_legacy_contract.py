@@ -18,7 +18,7 @@ from dnd.core.events.events_registry import (
     EventQueue,
 )
 from dnd.core.gridmap import get_map
-from dnd.encounter import Encounter
+from dnd.encounters.encounter import Encounter
 from server.event_server import (
     get_objective_diagnostics_events,
     sim,

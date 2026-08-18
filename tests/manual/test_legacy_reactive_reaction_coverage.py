@@ -54,7 +54,7 @@ from dnd.core.events.world_events import (
 from dnd.core.gridmap import get_map
 from dnd.types.damage import DamageType
 from dnd.core.modifiers import NumericalModifier
-from dnd.entity import Entity, EntityConfig
+from dnd.entities.entity import Entity, EntityConfig
 from dnd.items.consumables import GREATER_INVISIBILITY_POTION_RECIPE
 from dnd.items.environment_content import door_recipe
 from dnd.items.spell_items import SpellGrantingItem, invisibility_scroll_recipe
@@ -67,7 +67,7 @@ from tests.manual.reactive_fixture_support import (
     Intercepting,
     PrepareIntercept,
 )
-from dnd.monsters.bestiary import create_caster, create_skeleton
+from tests.engine.support import create_test_monster
 from dnd.actions.reactions import add_opportunity_attack_handler
 from dnd.spells.illusion import GreaterInvisibility, Invisibility
 from tests.engine.support import (
@@ -454,7 +454,7 @@ def apply_greater_invisibility_origin(actor: Entity, origin: str) -> None:
 def setup_oa_pair() -> tuple[Entity, Entity]:
     """Create adjacent hostile actors with OA enabled on the first."""
     reset_arena(width=8, height=8)
-    reactor = create_caster(
+    reactor = create_test_monster("monster.generic_caster", 
         name="Invisible Reactor",
         position=(2, 2),
         faction="heroes",
@@ -462,7 +462,7 @@ def setup_oa_pair() -> tuple[Entity, Entity]:
     )
     setup_standard_actions(reactor)
     add_opportunity_attack_handler(reactor)
-    mover = create_skeleton(
+    mover = create_test_monster("monster.skeleton", 
         name="Provoking Mover",
         position=(2, 3),
         faction="monsters",
@@ -494,7 +494,7 @@ def test_indexed_sensory_system_registers_one_callback_per_observer() -> None:
     """Entity creation binds one observer callback through the indexed system."""
     reset_arena(width=3, height=1)
     before_callbacks = len(EventQueue._pre_completion_callbacks)
-    observer = create_skeleton(name="Observer", position=(0, 0))
+    observer = create_test_monster("monster.skeleton", name="Observer", position=(0, 0))
 
     callback = spatial_senses_system.callbacks_by_observer.get(observer.uuid)
     assert callback is not None
@@ -506,9 +506,9 @@ def test_indexed_sensory_system_registers_one_callback_per_observer() -> None:
 def test_reactive_visibility_adds_and_removes_for_multiple_observers() -> None:
     """One spatial move publishes observer-local additions and later removals."""
     reset_arena(width=12, height=3)
-    first = create_skeleton(name="First Observer", position=(0, 0))
-    second = create_skeleton(name="Second Observer", position=(0, 2))
-    mover = create_skeleton(name="Mover", position=(10, 1))
+    first = create_test_monster("monster.skeleton", name="First Observer", position=(0, 0))
+    second = create_test_monster("monster.skeleton", name="Second Observer", position=(0, 2))
+    mover = create_test_monster("monster.skeleton", name="Mover", position=(10, 1))
     first.update_entity_senses(max_distance=4)
     second.update_entity_senses(max_distance=4)
 
@@ -549,7 +549,7 @@ def test_reactive_visibility_adds_and_removes_for_multiple_observers() -> None:
 def test_effect_phase_step_handler_cancels_before_position_and_cost_commit() -> None:
     """Canceling the attempted step leaves actor and movement at the prior cell."""
     reset_arena(width=10, height=1)
-    mover = create_skeleton(name="Mover", position=(0, 0), faction="heroes")
+    mover = create_test_monster("monster.skeleton", name="Mover", position=(0, 0), faction="heroes")
     canceled_steps: list[StepMovementEvent] = []
 
     def block_trap(
@@ -594,7 +594,7 @@ def test_effect_phase_step_handler_cancels_before_position_and_cost_commit() -> 
 def test_effect_phase_speed_reduction_limits_the_remaining_path() -> None:
     """A speed change during a committed step constrains subsequent steps."""
     reset_arena(width=10, height=1)
-    mover = create_skeleton(name="Mover", position=(0, 0), faction="heroes")
+    mover = create_test_monster("monster.skeleton", name="Mover", position=(0, 0), faction="heroes")
     mover.action_economy.movement.self_static.add_value_modifier(
         NumericalModifier.create(
             source_entity_uuid=mover.uuid,

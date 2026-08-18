@@ -13,7 +13,7 @@ from dnd.core.events.events_registry import (
     EventQueue,
 )
 from dnd.types.damage import DamageType
-from dnd.entity import Entity
+from dnd.entities.entity import Entity
 from dnd.scenarios.encounter_catalog import (
     AUTHORED_DEPLOYMENTS,
     AUTHORED_ENCOUNTER_RECIPES,

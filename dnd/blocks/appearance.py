@@ -5,7 +5,7 @@ skin, hair, and beard taxonomy needed to build sprite layers without guessing
 from entity names or classes.
 """
 
-from typing import Literal, Optional
+from typing import Dict, Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -18,6 +18,13 @@ PresentationKind = Literal["layered", "placeholder"]
 
 
 class AppearanceConfig(BaseModel):
+    semantic_properties: Dict[str, str] = Field(
+        default_factory=dict,
+        description=(
+            "Renderer-independent authored body, build, palette, hair, and "
+            "beard semantics."
+        ),
+    )
     portrait_key: Optional[str] = Field(
         default=None,
         description="Stable authored-portrait key assigned by scenario composition.",
@@ -81,6 +88,13 @@ class AppearanceConfig(BaseModel):
 
 class Appearance(BaseBlock):
     name: str = Field(default="Appearance", description="Block name used in entity composition indexes.")
+    semantic_properties: Dict[str, str] = Field(
+        default_factory=dict,
+        description=(
+            "Renderer-independent authored body, build, palette, hair, and "
+            "beard semantics."
+        ),
+    )
     portrait_key: Optional[str] = Field(
         default=None,
         description="Stable authored-portrait key assigned by scenario composition.",
@@ -143,6 +157,7 @@ class Appearance(BaseBlock):
 
     def apply_config(self, config: AppearanceConfig) -> None:
         """Commit exact authored appearance facts without reflective copying."""
+        self.semantic_properties = dict(config.semantic_properties)
         self.portrait_key = config.portrait_key
         self.presentation_kind = config.presentation_kind
         self.visual_scale = config.visual_scale

@@ -11,7 +11,7 @@ from dnd.actions.standard import (
 )
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.types.damage import DamageType
-from dnd.entity import Entity, EntityConfig
+from dnd.entities.entity import Entity, EntityConfig
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.spells.evocation import FireBolt, RayOfFrost
 
