@@ -151,7 +151,14 @@ def test_shatter_range_validation() -> None:
 def test_shatter_wall_blocks() -> None:
     """Archived group 6: sphere propagation cannot damage through a wall."""
     reset_spell_regression_arena(14, 9)
-    get_map().set_tile(8, 4, walkable=False, visible=False, name="Wall")
+    get_map().set_tile(
+        8,
+        4,
+        walkable=False,
+        blocks_optics=True,
+        blocks_propagation=True,
+        name="Wall",
+    )
     caster = create_spell_regression_actor(
         "Shatter Caster",
         (2, 4),
@@ -181,7 +188,14 @@ def test_shatter_wall_blocks() -> None:
 def test_shatter_los_to_center() -> None:
     """Archived group 7: the caster must see the sphere's origin."""
     reset_spell_regression_arena(14, 9)
-    get_map().set_tile(5, 4, walkable=False, visible=False, name="Wall")
+    get_map().set_tile(
+        5,
+        4,
+        walkable=False,
+        blocks_optics=True,
+        blocks_propagation=True,
+        name="Wall",
+    )
     caster = create_spell_regression_actor(
         "Shatter Caster",
         (2, 4),

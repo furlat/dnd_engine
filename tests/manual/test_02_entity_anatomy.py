@@ -17,6 +17,7 @@ from dnd.core.events.events_registry import (
 from dnd.core.gridmap import GridMap, get_map
 from dnd.core.values import BaseValue, ModifiableValue
 from dnd.entities.entity import Entity, EntityConfig
+from tests.engine.support import create_test_entity
 
 
 def reset_entity_anatomy_state() -> None:
@@ -34,8 +35,7 @@ def create_tutorial_hero() -> Entity:
     """Create the complete Aria actor used by the anatomy examples."""
     hero_id = uuid4()
 
-    return Entity.create(
-        source_entity_uuid=hero_id,
+    return create_test_entity(
         name="Aria",
         config=EntityConfig(
             ability_scores=AbilityScoresConfig(
@@ -87,6 +87,8 @@ def create_tutorial_hero() -> Entity:
             faction="heroes",
             weight=180,
         ),
+        entity_kind_id="test.aria",
+        source_id=hero_id,
     )
 
 
@@ -95,8 +97,7 @@ def test_first_actor_example_prints_runtime_shape(capsys) -> None:
     reset_entity_anatomy_state()
 
     hero_id = uuid4()
-    hero = Entity.create(
-        source_entity_uuid=hero_id,
+    hero = create_test_entity(
         name="Aria",
         config=EntityConfig(
             ability_scores=AbilityScoresConfig(
@@ -117,6 +118,8 @@ def test_first_actor_example_prints_runtime_shape(capsys) -> None:
             faction="heroes",
             weight=180,
         ),
+        entity_kind_id="test.aria",
+        source_id=hero_id,
     )
 
     readout_lines = [

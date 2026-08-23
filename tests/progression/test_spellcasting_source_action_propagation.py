@@ -13,7 +13,6 @@ from dnd.core.base_actions import (
     ActionOutcomeProfile,
 )
 from dnd.types.progression import RitualPreparationPolicy
-from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.types.abilities import AbilityName
 from dnd.core.events.events_registry import (
     EventPhase,
@@ -21,6 +20,7 @@ from dnd.core.events.events_registry import (
 from dnd.types.damage import DamageType
 from dnd.types.progression import CasterProgression
 from dnd.entities.entity import Entity, EntityConfig
+from dnd.entities.entity_creation import create_entity
 from dnd.spells.evocation import FireBolt, MagicMissile, SacredFlame
 
 
@@ -45,8 +45,9 @@ class _SourceSaveSpell(SpellAction):
 
 
 def _multiclass_caster() -> tuple[Entity, UUID, UUID]:
-    caster = Entity.create(
-        source_entity_uuid=uuid4(),
+    caster = create_entity(
+        uuid4(),
+        entity_kind_id="test.multiclass_caster",
         config=EntityConfig(
             ability_scores=AbilityScoresConfig(
                 charisma=AbilityConfig(ability_score=8),
@@ -64,13 +65,7 @@ def _multiclass_caster() -> tuple[Entity, UUID, UUID]:
         caster.spellcasting.add_source(
             source_id,
             cast(AbilityName, ability),
-            provider_ref=ContentRef(
-                pack_id="fixture.spell_source_propagation",
-                definition_kind=ContentDefinitionKind.CLASS,
-                content_id=content_id,
-                content_version=1,
-                definition_contract_hash="a" * 64,
-            ),
+            provider_id=content_id,
             caster_progression=CasterProgression.FULL_CASTER,
             provider_level=5,
             maximum_spell_rank=3,
@@ -141,7 +136,7 @@ def test_same_save_spell_uses_distinct_source_owned_dcs() -> None:
 
 def test_concrete_save_spell_execution_uses_exact_casting_source() -> None:
     caster, charisma_source, wisdom_source = _multiclass_caster()
-    target = Entity.create(source_entity_uuid=uuid4())
+    target = create_entity(uuid4(), entity_kind_id="test.save_target")
     spells = [
         SacredFlame(
             source_entity_uuid=caster.uuid,

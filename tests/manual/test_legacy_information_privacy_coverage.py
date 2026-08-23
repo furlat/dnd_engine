@@ -121,7 +121,7 @@ def test_position_aoe_can_resolve_with_zero_affected_entities() -> None:
         name="Wizard",
         position=(2, 2),
         faction="heroes",
-        level=5,
+        caster_level=5,
     )
     distant_target = create_test_monster("monster.skeleton", 
         name="Distant Target",
@@ -165,6 +165,7 @@ def test_condition_removal_log_carries_typed_identity_and_reveal_fact() -> None:
         target_entity_uuid=target_uuid,
         source_entity_name="Rogue",
         target_entity_name="Rogue",
+        condition_behavior_id=condition.behavior_id,
         phase=EventPhase.COMPLETION,
     )
 
@@ -176,7 +177,7 @@ def test_condition_removal_log_carries_typed_identity_and_reveal_fact() -> None:
     assert log.target_uuid == str(target_uuid)
     assert log.data == {
         "condition_name": "Hidden",
-        "condition_content_identity": None,
+        "condition_behavior_id": condition.behavior_id,
         "reveals_target": True,
         "application_disposition": None,
     }

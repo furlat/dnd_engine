@@ -12,6 +12,7 @@ from dnd.core.values import (
     StaticValue,
 )
 from dnd.entities.entity import Entity, EntityConfig
+from tests.engine.support import create_test_entity
 
 
 class TutorialMarker(BaseObject):
@@ -201,10 +202,11 @@ def test_entity_creation_prints_actor_position_and_map_lookup(capsys) -> None:
     reset_identity_state()
     hero_id = uuid4()
 
-    hero = Entity.create(
-        source_entity_uuid=hero_id,
+    hero = create_test_entity(
         name="Hero",
         config=EntityConfig(position=(2, 3)),
+        entity_kind_id="test.hero",
+        source_id=hero_id,
     )
 
     creation_lines = [

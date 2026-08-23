@@ -38,6 +38,7 @@ from dnd.types.damage import DamageType
 from dnd.types.proficiency import ProficiencyMode
 from dnd.types.progression import CasterProgression
 from dnd.entities.entity import Entity, EntityConfig
+from dnd.entities.entity_creation import create_entity
 
 
 class _OwnedAction(BaseAction):
@@ -45,7 +46,7 @@ class _OwnedAction(BaseAction):
 
 
 def test_action_unregister_by_uuid_preserves_same_name_sibling() -> None:
-    owner = Entity.create(source_entity_uuid=uuid4())
+    owner = create_entity(uuid4(), entity_kind_id="test.source_owned_owner")
     first = _OwnedAction(
         source_entity_uuid=owner.uuid,
         name="Shared Name",
@@ -121,8 +122,9 @@ def test_imperative_skill_and_save_setters_write_owned_sources() -> None:
 
 
 def test_ability_check_source_applies_to_untrained_skills_without_stacking() -> None:
-    entity = Entity.create(
-        source_entity_uuid=uuid4(),
+    entity = create_entity(
+        uuid4(),
+        entity_kind_id="test.ability_check_entity",
         config=EntityConfig(
             ability_scores=AbilityScoresConfig(
                 strength=AbilityConfig(ability_score=14),
@@ -172,7 +174,7 @@ def test_extra_attack_uses_highest_applicable_rank_and_exact_removal() -> None:
     economy.add_attack_multiplicity_grant(
         AttackMultiplicityGrant(
             grant_id=lower_source,
-            provider_ref=lower_ref,
+            provider_id=lower_ref.content_id,
             attacks_per_attack_action=2,
             acquisition_ordinal=5,
         ),
@@ -180,7 +182,7 @@ def test_extra_attack_uses_highest_applicable_rank_and_exact_removal() -> None:
     economy.add_attack_multiplicity_grant(
         AttackMultiplicityGrant(
             grant_id=higher_source,
-            provider_ref=higher_ref,
+            provider_id=higher_ref.content_id,
             attacks_per_attack_action=3,
             acquisition_ordinal=11,
         ),
@@ -242,8 +244,9 @@ def test_hit_dice_remove_by_uuid_preserves_other_blocks_and_spend() -> None:
 
 
 def test_equipment_selects_highest_owned_ac_formula_and_reverts_exactly() -> None:
-    entity = Entity.create(
-        source_entity_uuid=uuid4(),
+    entity = create_entity(
+        uuid4(),
+        entity_kind_id="test.equipment_entity",
         config=EntityConfig(
             ability_scores=AbilityScoresConfig(
                 dexterity=AbilityConfig(ability_score=14),
@@ -269,8 +272,9 @@ def test_equipment_selects_highest_owned_ac_formula_and_reverts_exactly() -> Non
 
 
 def test_spellcasting_sources_resolve_ability_without_replacing_legacy_default() -> None:
-    entity = Entity.create(
-        source_entity_uuid=uuid4(),
+    entity = create_entity(
+        uuid4(),
+        entity_kind_id="test.spellcasting_entity",
         config=EntityConfig(
             ability_scores=AbilityScoresConfig(
                 charisma=AbilityConfig(ability_score=8),
@@ -288,13 +292,7 @@ def test_spellcasting_sources_resolve_ability_without_replacing_legacy_default()
         entity.spellcasting.add_source(
             source_id,
             cast(AbilityName, ability),
-            provider_ref=ContentRef(
-                pack_id="fixture.source_owned_primitives",
-                definition_kind=ContentDefinitionKind.CLASS,
-                content_id=content_id,
-                content_version=1,
-                definition_contract_hash="a" * 64,
-            ),
+            provider_id=content_id,
             caster_progression=CasterProgression.FULL_CASTER,
             provider_level=5,
             maximum_spell_rank=3,
@@ -316,8 +314,9 @@ def test_spellcasting_sources_resolve_ability_without_replacing_legacy_default()
 
 
 def test_creature_training_owns_weapon_armor_and_shield_proficiency() -> None:
-    entity = Entity.create(
-        source_entity_uuid=uuid4(),
+    entity = create_entity(
+        uuid4(),
+        entity_kind_id="test.creature_training_entity",
         config=EntityConfig(
             ability_scores=AbilityScoresConfig(
                 strength=AbilityConfig(ability_score=14),
@@ -384,8 +383,9 @@ def test_exact_weapon_training_does_not_overgrant_a_whole_category() -> None:
         definition_contract_hash="b" * 64,
     )
     source = uuid4()
-    entity = Entity.create(
-        source_entity_uuid=uuid4(),
+    entity = create_entity(
+        uuid4(),
+        entity_kind_id="test.weapon_training_entity",
         config=EntityConfig(
             ability_scores=AbilityScoresConfig(
                 strength=AbilityConfig(ability_score=14),
@@ -435,8 +435,9 @@ def test_exact_weapon_training_does_not_overgrant_a_whole_category() -> None:
 
 
 def test_existing_entities_remain_trained_and_unarmed_is_always_proficient() -> None:
-    entity = Entity.create(
-        source_entity_uuid=uuid4(),
+    entity = create_entity(
+        uuid4(),
+        entity_kind_id="test.existing_entity",
         config=EntityConfig(
             ability_scores=AbilityScoresConfig(
                 strength=AbilityConfig(ability_score=14),

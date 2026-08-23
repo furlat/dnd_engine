@@ -7,6 +7,7 @@ from dnd.actions.standard import (
 )
 from dnd.actions.operations import setup_standard_actions
 from dnd.conditions import Prone
+from dnd.types.senses import OpticalObscurement
 from dnd.types.world import LightLevel, MovementMode
 from dnd.core.base_conditions import BaseCondition
 from dnd.types.conditions import ConditionCategory, HazardFilter
@@ -675,7 +676,14 @@ def test_gust_of_wind_executes_cast_entry_turn_wall_and_cleanup_edges() -> None:
         (7, 5),
         "monsters",
     )
-    grid.set_tile(9, 5, walkable=False, visible=False, name="Wall")
+    grid.set_tile(
+        9,
+        5,
+        walkable=False,
+        blocks_optics=True,
+        blocks_propagation=True,
+        name="Wall",
+    )
     force_save_result(blocked, "strength", succeeds=False)
     Entity.materialize_all_navigation(max_distance=90)
 
@@ -816,9 +824,13 @@ def test_incendiary_cloud_executes_initial_entry_turn_move_and_cleanup() -> None
     added_tile = get_map().get_tile(*added_position)
     assert old_only_tile is not None
     assert added_tile is not None
-    assert old_only_tile.resolved_light_level == LightLevel.DARKNESS
+    assert old_only_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
+    assert get_map().get_optical_obscurements_at(old_only_position) == (
+        OpticalObscurement.HEAVY,
+    )
     assert old_only_tile.active_conditions == {}
     assert added_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
+    assert get_map().get_optical_obscurements_at(added_position) == ()
     assert added_tile.active_conditions == {}
 
     entrant = create_spell_regression_actor(
@@ -842,14 +854,19 @@ def test_incendiary_cloud_executes_initial_entry_turn_move_and_cleanup() -> None
     assert old_only_position not in zone.affected_positions
     assert added_position in zone.affected_positions
     assert old_only_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
+    assert get_map().get_optical_obscurements_at(old_only_position) == ()
     assert old_only_tile.active_conditions == {}
-    assert added_tile.resolved_light_level == LightLevel.DARKNESS
+    assert added_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
+    assert get_map().get_optical_obscurements_at(added_position) == (
+        OpticalObscurement.HEAVY,
+    )
     assert added_tile.active_conditions == {}
 
     caster.remove_condition("Concentrating")
 
     assert BaseCondition.get(cloud.uuid) is None
     assert added_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
+    assert get_map().get_optical_obscurements_at(added_position) == ()
     assert added_tile.active_conditions == {}
     Entity.update_entity_position(entrant, (2, 2))
     hp_after_cleanup = get_hp(entrant)

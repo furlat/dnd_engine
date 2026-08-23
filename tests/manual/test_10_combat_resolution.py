@@ -40,7 +40,7 @@ from dnd.types.rolls import AutoHitStatus, CriticalStatus
 from dnd.core.values import BaseValue
 from dnd.conditions import Incapacitated, Prone
 from dnd.entities.entity import Entity, EntityConfig
-from tests.engine.support import create_test_monster
+from tests.engine.support import create_test_entity, create_test_monster
 from dnd.actions.reactions import add_opportunity_attack_handler
 
 
@@ -116,7 +116,12 @@ def create_strong_actor(
         weight=weight,
         size=size,
     )
-    actor = Entity.create(source_entity_uuid=uuid4(), name=name, config=config)
+    actor = create_test_entity(
+        name=name,
+        config=config,
+        entity_kind_id="test.strong_actor",
+        source_id=uuid4(),
+    )
     setup_standard_actions(actor)
     return actor
 

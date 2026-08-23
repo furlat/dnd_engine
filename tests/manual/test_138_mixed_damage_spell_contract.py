@@ -105,7 +105,14 @@ def test_ice_storm_executes_upcast_save_cylinder_and_terrain_lifecycle() -> None
         (10, 4),
         "monsters",
     )
-    grid.set_tile(9, 4, walkable=False, visible=False, name="Wall")
+    grid.set_tile(
+        9,
+        4,
+        walkable=False,
+        blocks_optics=True,
+        blocks_propagation=True,
+        name="Wall",
+    )
     force_save_result(failed, "dexterity", succeeds=False)
     force_save_result(behind_wall, "dexterity", succeeds=True)
     Entity.materialize_all_navigation(max_distance=100)

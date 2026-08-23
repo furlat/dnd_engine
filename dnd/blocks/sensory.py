@@ -489,6 +489,7 @@ class SpatialSensesSystem:
         EventType.CONDITION_APPLICATION,
         EventType.CONDITION_REMOVAL,
         EventType.LIFE_STATE_CHANGE,
+        EventType.TURN_START,
         *SPATIAL_EVENTS,
     }
 
@@ -828,6 +829,12 @@ class SpatialSensesSystem:
         self.footprints_by_observer[observer_uuid] = new
 
     def candidate_observer_uuids(self, event: Event) -> Set[UUID]:
+        if event.event_type is EventType.TURN_START:
+            return (
+                {event.source_entity_uuid}
+                if event.source_entity_uuid in self.senses_by_observer
+                else set()
+            )
         registered = set(self.senses_by_observer)
         if event.event_type in {
             EventType.CONDITION_APPLICATION,
@@ -900,8 +907,21 @@ class SpatialSensesSystem:
                 continue
             before = capture_senses_snapshot(senses)
             self.recompute_observer(observer_uuid)
-            senses._paths_dirty = True
-            after = capture_senses_snapshot(senses)
+            if event.event_type is EventType.TURN_START:
+                after = capture_senses_snapshot(senses)
+                navigation_projection_changed = (
+                    before.position != after.position
+                    or before.visible != after.visible
+                    or before.seen != after.seen
+                    or before.entities != after.entities
+                    or before.objects != after.objects
+                )
+                if navigation_projection_changed:
+                    senses._paths_dirty = True
+                    after = capture_senses_snapshot(senses)
+            else:
+                senses._paths_dirty = True
+                after = capture_senses_snapshot(senses)
             sensory_event = emit_sensory_update_delta(
                 senses,
                 observer_uuid,
@@ -918,6 +938,8 @@ class SpatialSensesSystem:
 
     @staticmethod
     def _reason_for(event: Event, observer_uuid: UUID) -> SensoryUpdateReason:
+        if event.event_type is EventType.TURN_START:
+            return SensoryUpdateReason.TURN_START
         if event.event_type is EventType.SPATIAL_LIGHT_CHANGED:
             return SensoryUpdateReason.LIGHT
         if event.event_type is EventType.SPATIAL_PERCEIVABILITY_CHANGED:

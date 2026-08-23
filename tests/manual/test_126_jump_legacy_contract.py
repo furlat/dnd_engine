@@ -25,7 +25,7 @@ from dnd.core.base_actions import (
 from dnd.core.gridmap import get_map
 from dnd.core.modifiers import NumericalModifier
 from dnd.entities.entity import Entity, EntityConfig
-from tests.engine.support import create_test_monster
+from tests.engine.support import create_test_entity, create_test_monster
 from dnd.actions.reactions import add_opportunity_attack_handler
 from tests.engine.support import (
     force_attack_hit,
@@ -71,10 +71,11 @@ def _create_jumper(
         position=position,
         faction=faction,
     )
-    jumper = Entity.create(
-        source_entity_uuid=uuid4(),
+    jumper = create_test_entity(
         name="Legacy Jump Tester",
         config=config,
+        entity_kind_id="test.jump_tester",
+        source_id=uuid4(),
     )
     setup_standard_actions(jumper)
     return jumper
@@ -110,17 +111,38 @@ def test_jump_reaches_visible_island_that_move_cannot_path_to() -> None:
     grid = get_map()
     for x in range(5):
         for y in range(5):
-            grid.set_tile(x, y, walkable=True, visible=True, name="Floor")
+            grid.set_tile(
+                x,
+                y,
+                walkable=True,
+                blocks_optics=False,
+                blocks_propagation=False,
+                name="Floor",
+            )
     for x in range(5, 8):
         for y in range(5):
-            grid.set_tile(x, y, walkable=False, visible=True, name="Water")
+            grid.set_tile(
+                x,
+                y,
+                walkable=False,
+                blocks_optics=False,
+                blocks_propagation=False,
+                name="Water",
+            )
     island_positions = {
         (x, y)
         for x in range(8, 11)
         for y in range(2, 5)
     }
     for x, y in island_positions:
-        grid.set_tile(x, y, walkable=True, visible=True, name="Island")
+        grid.set_tile(
+            x,
+            y,
+            walkable=True,
+            blocks_optics=False,
+            blocks_propagation=False,
+            name="Island",
+        )
 
     jumper = _create_jumper(strength=18, position=(2, 2))
     Entity.materialize_all_navigation()

@@ -46,6 +46,7 @@ from dnd.core.events.action_events import (
     COUNTERSPELL_INTERRUPTION_OUTCOME_CODE,
 )
 from tests.engine.support import reset_combat_state
+from tests.engine.support import create_test_entity
 
 
 def reset_counterspell_state(*, width: int = 40, height: int = 8) -> None:
@@ -65,8 +66,7 @@ def create_counterspell_caster(
     spell_slots: dict[int, int],
 ) -> Entity:
     """Create a visible spellcaster with explicit action-economy resources."""
-    return Entity.create(
-        source_entity_uuid=uuid4(),
+    return create_test_entity(
         name=name,
         config=EntityConfig(
             ability_scores=AbilityScoresConfig(
@@ -86,6 +86,8 @@ def create_counterspell_caster(
             position=position,
             faction=faction,
         ),
+        entity_kind_id="test.counterspell_caster",
+        source_id=uuid4(),
     )
 
 
@@ -141,7 +143,7 @@ def test_counterspell_spends_both_casters_resources_and_records_one_cancel() -> 
     assert interruption_logs[0].data["outcome_code"] == COUNTERSPELL_INTERRUPTION_OUTCOME_CODE
     assert interruption_logs[0].data["counterspell_slot_level"] == 3
     assert interruption_logs[0].data["succeeded"] is True
-    assert interruption_logs[0].data["reaction_content_identity"] is not None
+    assert interruption_logs[0].data["reaction_behavior_id"] is not None
 
 
 def test_counterspell_declaration_veto_preserves_reaction_and_slot() -> None:
@@ -221,10 +223,10 @@ def test_counterspell_declaration_veto_preserves_reaction_and_slot() -> None:
         (
             EventPhase.EFFECT,
             {
-                "reaction_content_identity": (
+                "reaction_behavior_id": (
                     "fixture.counterspell:reaction:reaction.forged@1"
                 ),
-                "incoming_spell_content_identity": (
+                "incoming_spell_behavior_id": (
                     "fixture.counterspell:spell:spell.forged@1"
                 ),
             },
@@ -300,7 +302,7 @@ def test_counterspell_evidence_mutation_fails_closed_before_resource_commit(
                     event.canceled,
                     event.canceled_from_phase,
                     event.counterspell_slot_level,
-                    event.reaction_content_identity,
+                    event.reaction_behavior_id,
                 ),
             )
 
@@ -324,7 +326,7 @@ def test_counterspell_evidence_mutation_fails_closed_before_resource_commit(
                 return event.cancel(
                     status_message="forged Counterspell cancel",
                     counterspell_slot_level=4,
-                    reaction_content_identity=(
+                    reaction_behavior_id=(
                         "fixture.counterspell:reaction:reaction.forged@1"
                     ),
                 )
@@ -334,7 +336,7 @@ def test_counterspell_evidence_mutation_fails_closed_before_resource_commit(
                 return event.phase_to(
                     EventPhase.COMPLETION,
                     lineage_uuid=uuid4(),
-                    reaction_content_identity=(
+                    reaction_behavior_id=(
                         "fixture.counterspell:reaction:reaction.forged@1"
                     ),
                 )
@@ -343,7 +345,6 @@ def test_counterspell_evidence_mutation_fails_closed_before_resource_commit(
                     pass
 
                 payload = event.model_dump()
-                payload["behavior_binding"] = event.behavior_binding
                 payload["use_register"] = False
                 replacement = CounterspellSubtype(**payload)
                 return replacement.model_copy(
@@ -418,9 +419,11 @@ def test_counterspell_evidence_mutation_fails_closed_before_resource_commit(
             "check_dc",
             "succeeded",
             "outcome_code",
-            "reaction_content_identity",
-            "incoming_spell_content_identity",
-            "behavior_binding",
+            "reaction_behavior_id",
+            "incoming_spell_behavior_id",
+            "behavior_id",
+            "provided_by_id",
+            "origin_root_id",
         ):
             assert getattr(row, field_name) == getattr(
                 declaration,
@@ -430,7 +433,7 @@ def test_counterspell_evidence_mutation_fails_closed_before_resource_commit(
     assert all(
         row_type is CounterspellReactionEvent
         and slot_level == declaration.counterspell_slot_level
-        and reaction_identity == declaration.reaction_content_identity
+        and reaction_identity == declaration.reaction_behavior_id
         and (
             (
                 not canceled
@@ -481,8 +484,8 @@ def test_registered_counterspell_freezes_both_reaction_and_spell_bindings() -> N
     assert isinstance(template, SpellAction)
     handler = counterspeller.get_event_handler_by_name("Counterspell")
     assert handler is not None
-    assert template.behavior_binding is not None
-    assert handler.behavior_binding is not None
+    assert template.behavior_id
+    assert handler.behavior_id
 
     event = template.instantiate(
         target_entity_uuid=counterspeller.uuid,
@@ -498,7 +501,7 @@ def test_registered_counterspell_freezes_both_reaction_and_spell_bindings() -> N
     ]
     assert incoming_versions
     assert all(
-        row.behavior_binding == template.behavior_binding
+        row.behavior_id == template.behavior_id
         for row in incoming_versions
     )
     reaction = next(
@@ -509,27 +512,17 @@ def test_registered_counterspell_freezes_both_reaction_and_spell_bindings() -> N
     )
     trigger = EventQueue.get_event_by_uuid(reaction.triggered_event_uuid)
     assert isinstance(trigger, SpellEvent)
-    assert reaction.behavior_binding == handler.behavior_binding
-    assert trigger.behavior_binding == template.behavior_binding
-    assert reaction.reaction_content_identity == (
-        handler.behavior_binding.definition_ref.identity_key
-    )
-    assert reaction.incoming_spell_content_identity == (
-        template.behavior_binding.definition_ref.identity_key
-    )
+    assert reaction.behavior_id == handler.behavior_id
+    assert trigger.behavior_id == template.behavior_id
+    assert reaction.reaction_behavior_id == handler.behavior_id
+    assert reaction.incoming_spell_behavior_id == template.behavior_id
     assert reaction.outcome_code == COUNTERSPELL_INTERRUPTION_OUTCOME_CODE
     assert reaction.combat_log is not None
     typed_log = SpellInterruptionLogData.model_validate(
         reaction.combat_log.data,
     )
-    assert typed_log.reaction_content_identity == (
-        reaction.reaction_content_identity
-    )
-    assert typed_log.incoming_spell_content_identity == (
-        reaction.incoming_spell_content_identity
-    )
-    assert "behavior_binding" not in reaction.model_dump()
-    assert "behavior_binding" not in trigger.model_dump()
+    assert typed_log.reaction_behavior_id == reaction.reaction_behavior_id
+    assert typed_log.incoming_spell_behavior_id == reaction.incoming_spell_behavior_id
 
 
 def test_counterspell_does_not_interrupt_an_allied_spell() -> None:

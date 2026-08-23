@@ -42,6 +42,7 @@ from dnd.blocks.action_economy import (
     RechargeType,
 )
 from dnd.blocks.health import HealthConfig, HitDiceConfig
+from dnd.blocks.sensory import spatial_senses_system
 from dnd.blocks.spellcasting import SpellcastingConfig
 from dnd.classes.sorcerer import MetamagicActive
 from dnd.core.aoe import Sphere
@@ -62,6 +63,7 @@ from dnd.core.events.events_registry import (
 )
 from dnd.core.gridmap import get_map
 from dnd.types.creatures import CreatureType
+from dnd.types.senses import SenseMode, SensesType
 from dnd.core.modifiers import NumericalModifier
 from dnd.entities.entity import Entity, EntityConfig
 from dnd.spells.conjuration import Web
@@ -82,6 +84,7 @@ from tests.engine.support import (
     remove_spell_attack_modifier,
     reset_combat_state,
 )
+from tests.engine.support import create_test_entity
 
 
 def reset_override_state(width: int = 12, height: int = 6) -> None:
@@ -125,10 +128,11 @@ def create_caster(
         position=position,
         faction="heroes",
     )
-    caster = Entity.create(
-        source_entity_uuid=uuid4(),
+    caster = create_test_entity(
         name=name,
         config=config,
+        entity_kind_id="test.override_caster",
+        source_id=uuid4(),
     )
     caster.creature_type = CreatureType.HUMANOID
     return caster
@@ -162,10 +166,11 @@ def create_target(
         position=position,
         faction=faction,
     )
-    target = Entity.create(
-        source_entity_uuid=uuid4(),
+    target = create_test_entity(
         name=name,
         config=config,
+        entity_kind_id="test.override_target",
+        source_id=uuid4(),
     )
     target.creature_type = CreatureType.HUMANOID
     return target
@@ -244,6 +249,11 @@ def test_range_override_controls_discovery_execution_scaling_and_clear() -> None
     reset_override_state(width=30, height=2)
     caster = create_caster()
     far_target = create_target("Far Target", (26, 0))
+    caster.senses.add_sense_mode_source(
+        uuid4(),
+        SenseMode(sense_type=SensesType.DARKVISION, range_feet=150),
+    )
+    spatial_senses_system.recompute_observer(caster.uuid)
     register_spell(caster, FireBolt, caster_level=11)
     Entity.materialize_all_navigation(max_distance=30)
 

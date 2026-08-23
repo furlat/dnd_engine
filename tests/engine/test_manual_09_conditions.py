@@ -18,6 +18,7 @@ from dnd.core.events.events_registry import (
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import BaseValue, ModifiableValue
 from dnd.entities.entity import Entity, EntityConfig
+from dnd.entities.entity_creation import create_entity
 from tests.engine.support import reset_combat_state
 
 
@@ -39,8 +40,9 @@ def create_tutorial_entity(
 ) -> Entity:
     """Create a minimal actor for condition examples."""
     entity_id = uuid4()
-    return Entity.create(
-        source_entity_uuid=entity_id,
+    return create_entity(
+        entity_id,
+        entity_kind_id="test.tutorial_entity",
         name=name,
         config=EntityConfig(
             position=position,

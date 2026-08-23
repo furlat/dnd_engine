@@ -160,7 +160,14 @@ def test_lightning_bolt_misses_off_line() -> None:
 def test_lightning_bolt_wall_stops_line() -> None:
     """Archived group 6: a wall clips the line before creatures behind it."""
     reset_spell_regression_arena(28, 9)
-    get_map().set_tile(10, 4, walkable=False, visible=False, name="Wall")
+    get_map().set_tile(
+        10,
+        4,
+        walkable=False,
+        blocks_optics=True,
+        blocks_propagation=True,
+        name="Wall",
+    )
     caster = create_spell_regression_actor(
         "Lightning Caster",
         (2, 4),

@@ -357,7 +357,14 @@ def test_batch_tile_creation_does_not_emit_tile_change_events(capsys) -> None:
     assert EventQueue.get_events_by_type(EventType.SPATIAL_TILE_CHANGED) == []
     setup_tile_changes = EventQueue.get_events_by_type(EventType.SPATIAL_TILE_CHANGED)
 
-    grid.set_tile(1, 1, walkable=False, visible=False, name="Wall")
+    grid.set_tile(
+        1,
+        1,
+        walkable=False,
+        blocks_optics=True,
+        blocks_propagation=True,
+        name="Wall",
+    )
 
     tile_change_completions = [
         event
