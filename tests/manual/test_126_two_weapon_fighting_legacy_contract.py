@@ -30,7 +30,7 @@ from dnd.types.damage import DamageType
 from dnd.core.modifiers import ContextualNumericalModifier
 from dnd.core.values import ModifiableValue
 from dnd.entities.entity import Entity, EntityConfig
-from tests.engine.support import create_test_monster
+from tests.engine.support import create_test_entity, create_test_monster
 from tests.engine.support import force_attack_miss, reset_combat_state, set_hp
 
 
@@ -138,10 +138,11 @@ def _create_finesse_actor(
         position=(0, 0),
         faction="heroes",
     )
-    return Entity.create(
-        source_entity_uuid=uuid4(),
+    return create_test_entity(
         name="Legacy Finesse Fighter",
         config=config,
+        entity_kind_id="test.finesse_fighter",
+        source_id=uuid4(),
     )
 
 

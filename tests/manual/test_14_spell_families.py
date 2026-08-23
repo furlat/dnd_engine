@@ -36,6 +36,8 @@ from dnd.core.modifiers import NumericalModifier
 from dnd.types.damage import ResistanceStatus
 from dnd.core.values import BaseValue
 from dnd.entities.entity import Entity, EntityConfig
+from dnd.entities.entity_creation import create_entity
+from tests.engine.support import create_test_entity
 from tests.spell_test_exports import (
     ALL_SPELLS,
     CANTRIPS,
@@ -93,8 +95,7 @@ def create_spell_family_actor(
 ) -> Entity:
     """Create a durable actor for spell family checks."""
     actor_id = uuid4()
-    return Entity.create(
-        source_entity_uuid=actor_id,
+    return create_test_entity(
         name=name,
         config=EntityConfig(
             ability_scores=AbilityScoresConfig(
@@ -120,6 +121,8 @@ def create_spell_family_actor(
             position=position,
             faction=faction,
         ),
+        entity_kind_id="test.spell_family_actor",
+        source_id=actor_id,
     )
 
 
@@ -840,8 +843,9 @@ def test_damage_applied_event_is_post_mitigation_and_drives_damage_consequences(
     """Only positive post-mitigation damage satisfies takes-damage rules."""
     reset_spell_family_state()
     caster = create_spell_family_actor("Pattern Caster", (1, 1), "heroes")
-    target = Entity.create(
-        source_entity_uuid=uuid4(),
+    target = create_entity(
+        uuid4(),
+        entity_kind_id="test.force_immune_target",
         name="Force-Immune Target",
         config=EntityConfig(
             ability_scores=AbilityScoresConfig(),
@@ -957,8 +961,9 @@ def test_concentration_check_uses_applied_damage_not_incoming_damage() -> None:
     """Mitigated packets do not roll concentration saves; applied damage does."""
     reset_spell_family_state()
     attacker = create_spell_family_actor("Attacker", (1, 1), "heroes")
-    caster = Entity.create(
-        source_entity_uuid=uuid4(),
+    caster = create_entity(
+        uuid4(),
+        entity_kind_id="test.concentrating_caster",
         name="Concentrating Caster",
         config=EntityConfig(
             ability_scores=AbilityScoresConfig(),
@@ -998,8 +1003,9 @@ def test_damage_reducing_a_death_save_actor_to_zero_ends_concentration_without_s
     """A caster at zero normal HP cannot preserve concentration with a damage save."""
     reset_spell_family_state()
     attacker = create_spell_family_actor("Attacker", (1, 1), "heroes")
-    caster = Entity.create(
-        source_entity_uuid=uuid4(),
+    caster = create_entity(
+        uuid4(),
+        entity_kind_id="test.dying_caster",
         name="Dying Caster",
         config=EntityConfig(
             ability_scores=AbilityScoresConfig(),
@@ -1035,8 +1041,9 @@ def test_death_ward_uses_post_mitigation_lethality_and_leaves_one_normal_hp() ->
     attacker = create_spell_family_actor("Attacker", (1, 1), "heroes")
 
     def create_warded_target(name: str) -> Entity:
-        target = Entity.create(
-            source_entity_uuid=uuid4(),
+        target = create_entity(
+            uuid4(),
+            entity_kind_id="test.warded_target",
             name=name,
             config=EntityConfig(
                 ability_scores=AbilityScoresConfig(),

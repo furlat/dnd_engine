@@ -12,6 +12,7 @@ from dnd.actions.standard import (
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.types.damage import DamageType
 from dnd.entities.entity import Entity, EntityConfig
+from tests.engine.support import create_test_entity
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.spells.evocation import FireBolt, RayOfFrost
 
@@ -24,8 +25,7 @@ def _reset_engine() -> Iterator[None]:
 
 
 def _caster() -> Entity:
-    return Entity.create(
-        source_entity_uuid=uuid4(),
+    return create_test_entity(
         name="Affinity Sorcerer",
         config=EntityConfig(
             ability_scores=AbilityScoresConfig(
@@ -34,17 +34,20 @@ def _caster() -> Entity:
             position=(1, 1),
             faction="heroes",
         ),
+        entity_kind_id="test.affinity_caster",
+        source_id=uuid4(),
     )
 
 
 def _target(*, position: tuple[int, int] = (2, 1)) -> Entity:
-    return Entity.create(
-        source_entity_uuid=uuid4(),
+    return create_test_entity(
         name="Target",
         config=EntityConfig(
             position=position,
             faction="enemies",
         ),
+        entity_kind_id="test.affinity_target",
+        source_id=uuid4(),
     )
 
 

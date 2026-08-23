@@ -33,7 +33,13 @@ from dnd.types.items import ItemRarity
 from dnd.types.damage import DamageType
 from dnd.core.modifiers import NumericalModifier
 from dnd.entities.entity import Entity, EntityConfig
-from tests.engine.support import get_hp, get_max_hp, reset_combat_state, set_hp
+from tests.engine.support import (
+    create_test_entity,
+    get_hp,
+    get_max_hp,
+    reset_combat_state,
+    set_hp,
+)
 
 
 THIS_FILE = "tests/manual/test_133_item_core_lifecycle_legacy_contract.py"
@@ -313,8 +319,7 @@ def create_actor(
 ) -> Entity:
     """Create a current-architecture actor for item lifecycle tests."""
     actor_uuid = uuid4()
-    return Entity.create(
-        source_entity_uuid=actor_uuid,
+    return create_test_entity(
         name=name,
         config=EntityConfig(
             ability_scores=AbilityScoresConfig(
@@ -336,6 +341,8 @@ def create_actor(
             position=position,
             faction=faction,
         ),
+        entity_kind_id="test.item_actor",
+        source_id=actor_uuid,
     )
 
 
@@ -373,7 +380,7 @@ def test_base_item_value_damage_affinity_and_destroy_contract() -> None:
         source_entity_uuid=uuid4(),
         name="Barricade",
         blocks_movement=True,
-        blocks_vision_field=True,
+        blocks_optics_field=True,
     )
 
     assert (
@@ -385,9 +392,9 @@ def test_base_item_value_damage_affinity_and_destroy_contract() -> None:
         inert.is_equippable,
         inert.is_usable,
         inert.blocks_movement,
-        inert.blocks_vision_field,
+        inert.blocks_optics_field,
         inert.blocks_walking(),
-        inert.blocks_vision(),
+        inert.blocks_optics_at_center(),
         inert.get_position(),
     ) == (
         "Unplaced Relic",
@@ -405,7 +412,7 @@ def test_base_item_value_damage_affinity_and_destroy_contract() -> None:
     )
     assert equippable.is_equippable and equippable.is_pickable
     assert usable.is_usable
-    assert blocker.blocks_walking() and blocker.blocks_vision()
+    assert blocker.blocks_walking() and blocker.blocks_optics_at_center()
 
     source_uuid = uuid4()
     breakable = BaseItem(

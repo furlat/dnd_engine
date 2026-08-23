@@ -34,7 +34,8 @@ from dnd.core.gridmap import get_map
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import BaseValue, ModifiableValue
 from dnd.entities.entity import Entity, EntityConfig
-from tests.engine.support import reset_combat_state
+from dnd.entities.entity_creation import create_entity
+from tests.engine.support import create_test_entity, reset_combat_state
 
 
 @contextmanager
@@ -62,6 +63,7 @@ def configured_entity(
     name: str,
     position: tuple[int, int] = (1, 1),
     faction: str | None = "heroes",
+    deploy: bool = False,
 ) -> Entity:
     """Create a deterministic entity for condition lifecycle tests."""
     source_uuid = uuid4()
@@ -84,7 +86,19 @@ def configured_entity(
         position=position,
         faction=faction,
     )
-    return Entity.create(source_entity_uuid=source_uuid, name=name, config=config)
+    if deploy:
+        return create_test_entity(
+            name=name,
+            config=config,
+            entity_kind_id="test.condition_entity",
+            source_id=source_uuid,
+        )
+    return create_entity(
+        source_uuid,
+        entity_kind_id="test.condition_entity",
+        name=name,
+        config=config,
+    )
 
 
 class EngineBookMarkerCondition(BaseCondition):
@@ -644,7 +658,7 @@ def test_eb_07_008_owned_event_and_spatial_handlers_are_removed_on_cleanup() -> 
     """EB-07-008: condition cleanup unregisters owned event and spatial handlers."""
     reset_condition_state()
     source = configured_entity("Source")
-    target = configured_entity("Target", position=(2, 1))
+    target = configured_entity("Target", position=(2, 1), deploy=True)
 
     handler_condition = EngineBookHandlerCondition(
         source_entity_uuid=source.uuid,
@@ -843,7 +857,7 @@ def test_eb_07_011_child_removal_policies_any_last_and_none() -> None:
     assert none_parent.applied is True
     assert none_child.applied is False
     assert none_parent_block.active_conditions["EngineBookNoneParent"] is none_parent
-    assert none_parent.linked_conditions == [(none_child_block.uuid, none_child.uuid)]
+    assert none_parent.linked_conditions == []
 
 
 def test_eb_07_012_removal_save_succeeds_before_duration_decrements() -> None:

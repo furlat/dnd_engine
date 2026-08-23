@@ -26,6 +26,7 @@ from dnd.core.events.world_events import (
 from dnd.core.gridmap import GridMap, get_map
 from dnd.types.life import LifeState
 from dnd.types.damage import DamageType
+from dnd.types.senses import SenseMode, SensesType
 from dnd.core.modifiers import AutoHitModifier
 from dnd.types.rolls import AutoHitStatus
 from dnd.core.values import BaseValue
@@ -140,12 +141,18 @@ def clear_melee_attack_modifier(entity: Entity, modifier_uuid: UUID) -> None:
 
 def test_turn_start_full_senses_refresh_emits_seen_cell_delta() -> None:
     """A turn-start recompute reaches event-first subjective replication."""
-    reset_encounter_tutorial_state(width=8, height=3)
+    reset_encounter_tutorial_state(width=26, height=3)
     hero = create_test_monster("monster.goblin", name="Turn Observer", position=(1, 1), faction="heroes")
-    monster = create_test_monster("monster.skeleton", name="Turn Target", position=(5, 1), faction="monsters")
-    hero.senses.visible.clear()
-    hero.senses.seen.clear()
-    hero.senses.entities.clear()
+    monster = create_test_monster("monster.skeleton", name="Turn Target", position=(23, 1), faction="monsters")
+    assert monster.uuid not in hero.senses.entities
+    hero.senses.add_sense_mode_source(
+        uuid4(),
+        SenseMode(sense_type=SensesType.DARKVISION, range_feet=120),
+    )
+    monster.senses.add_sense_mode_source(
+        uuid4(),
+        SenseMode(sense_type=SensesType.DARKVISION, range_feet=120),
+    )
     encounter = start_ordered_encounter(
         hero,
         monster,
@@ -155,7 +162,8 @@ def test_turn_start_full_senses_refresh_emits_seen_cell_delta() -> None:
     )
     source_cursor = EventQueue.event_cursor()
 
-    encounter.start_turn()
+    turn_start = encounter.start_turn()
+    assert turn_start is not None
 
     updates = [
         event
@@ -166,12 +174,35 @@ def test_turn_start_full_senses_refresh_emits_seen_cell_delta() -> None:
         and event.update_reason == SensoryUpdateReason.TURN_START
     ]
     assert updates
-    assert (5, 1) in {
+    assert (23, 1) in {
         position
         for update in updates
         for position in update.seen_cells_added
     }
+    assert all(update.uuid in turn_start.children_events for update in updates)
+    assert not [
+        event
+        for _, event in EventQueue.iter_events_since(source_cursor)
+        if isinstance(event, SensoryUpdateEvent)
+        and event.observer_uuid == monster.uuid
+        and event.update_reason == SensoryUpdateReason.TURN_START
+    ]
     assert EventQueue.get_events_by_type(EventType.SENSORY_UPDATE)
+
+    encounter.end_turn()
+    clean_cursor = EventQueue.event_cursor()
+    hero.on_turn_start(
+        encounter_uuid=encounter.uuid,
+        round_number=encounter.round_number,
+        turn_index=encounter.current_turn_index,
+    )
+    assert not [
+        event
+        for _, event in EventQueue.iter_events_since(clean_cursor)
+        if isinstance(event, SensoryUpdateEvent)
+        and event.observer_uuid == hero.uuid
+        and event.update_reason == SensoryUpdateReason.TURN_START
+    ]
 
 
 def test_first_encounter_example_prints_turn_and_combat_log(capsys) -> None:

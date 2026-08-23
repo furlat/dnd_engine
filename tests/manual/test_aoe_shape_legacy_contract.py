@@ -130,7 +130,14 @@ def test_aoe_shapes_preserve_extent_width_entities_and_wall_occlusion() -> None:
         for y in range(2, 6)
     }
 
-    grid.set_tile(5, 11, walkable=False, visible=False, name="Line Wall")
+    grid.set_tile(
+        5,
+        11,
+        walkable=False,
+        blocks_optics=True,
+        blocks_propagation=True,
+        name="Line Wall",
+    )
     blocked_line = Line(
         source_entity_uuid=source_uuid,
         target=(15, 11),
@@ -141,7 +148,14 @@ def test_aoe_shapes_preserve_extent_width_entities_and_wall_occlusion() -> None:
     assert (4, 11) in blocked_line.affected_positions
     assert (6, 11) not in blocked_line.affected_positions
 
-    grid.set_tile(7, 5, walkable=False, visible=False, name="Sphere Wall")
+    grid.set_tile(
+        7,
+        5,
+        walkable=False,
+        blocks_optics=True,
+        blocks_propagation=True,
+        name="Sphere Wall",
+    )
     blocked_sphere = Sphere(
         source_entity_uuid=source_uuid,
         target=(5, 5),

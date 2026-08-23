@@ -2538,7 +2538,7 @@ class GustOfWindZone(AreaCondition):
             entity = Entity.get(event.source_entity_uuid)
             if not entity or not entity.has_hp:
                 return None
-            if entity.senses.position not in zone_condition.affected_positions:
+            if entity.position not in zone_condition.affected_positions:
                 return None
 
             if entity.uuid in zone_condition._pushes_in_flight:
@@ -2624,7 +2624,7 @@ def _apply_gust_push(entity: Entity, dc: int, caster_pos: Tuple[int, int],
     if success:
         return
 
-    entity_pos = entity.senses.position
+    entity_pos = entity.position
     dx = entity_pos[0] - caster_pos[0]
     dy = entity_pos[1] - caster_pos[1]
     length = max(abs(dx), abs(dy), 1)

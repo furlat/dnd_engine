@@ -11,6 +11,7 @@ import pytest
 from dnd.actions.standard import (
     SpellEvent,
 )
+from dnd.blocks.sensory import spatial_senses_system
 from dnd.core.aoe import Cone, Sphere
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.events.events_registry import (
@@ -21,6 +22,7 @@ from dnd.core.events.events_registry import (
 from dnd.types.life import LifeState
 from dnd.types.creatures import CreatureType
 from dnd.types.damage import DamageType
+from dnd.types.senses import SenseMode, SensesType
 from dnd.entities.entity import Entity
 from dnd.spells.abjuration import (
     ProtectionFromEnergy,
@@ -112,6 +114,11 @@ def test_circle_of_death_range() -> None:
     )
     target = create_spell_regression_actor("At 150 feet", (31, 1), "monsters")
     force_save_result(target, "constitution", succeeds=False)
+    caster.senses.add_sense_mode_source(
+        uuid4(),
+        SenseMode(sense_type=SensesType.DARKVISION, range_feet=200),
+    )
+    spatial_senses_system.recompute_observer(caster.uuid)
     Entity.materialize_all_navigation(max_distance=200)
 
     too_far = CircleOfDeath(

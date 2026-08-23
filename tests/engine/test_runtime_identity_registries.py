@@ -11,7 +11,7 @@ from dnd.core.values import (
     StaticValue,
 )
 from dnd.entities.entity import Entity, EntityConfig
-from tests.engine.support import reset_combat_state
+from tests.engine.support import create_test_entity, reset_combat_state
 
 
 class RegistryProbe(BaseObject):
@@ -90,10 +90,11 @@ def test_eb_01_004_entity_registers_as_block_and_entity() -> None:
     entity_uuid = uuid4()
     config = EntityConfig(position=(2, 3))
 
-    entity = Entity.create(
-        source_entity_uuid=entity_uuid,
+    entity = create_test_entity(
         name="Registry Hero",
         config=config,
+        entity_kind_id="test.registry_hero",
+        source_id=entity_uuid,
     )
 
     assert Entity.get(entity_uuid) is entity

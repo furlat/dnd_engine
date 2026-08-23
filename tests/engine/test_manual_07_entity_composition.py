@@ -14,7 +14,7 @@ from dnd.core.gridmap import get_map
 from dnd.types.creatures import CreatureType, Size
 from dnd.core.values import BaseValue
 from dnd.entities.entity import Entity, EntityConfig
-from tests.engine.support import reset_combat_state
+from tests.engine.support import create_test_entity, reset_combat_state
 
 
 def reset_entity_state() -> None:
@@ -73,10 +73,11 @@ def create_tutorial_hero() -> Entity:
         size=Size.MEDIUM,
     )
 
-    return Entity.create(
-        source_entity_uuid=hero_id,
+    return create_test_entity(
         name="Tutorial Hero",
         config=hero_config,
+        entity_kind_id="test.tutorial_hero",
+        source_id=hero_id,
     )
 
 

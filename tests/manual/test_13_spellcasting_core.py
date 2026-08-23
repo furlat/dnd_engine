@@ -36,6 +36,7 @@ from dnd.core.gridmap import GridMap, get_map
 from dnd.types.creatures import CreatureType
 from dnd.core.values import BaseValue
 from dnd.entities.entity import Entity, EntityConfig
+from tests.engine.support import create_test_entity
 from tests.spell_test_exports import (
     BurningHands,
     ChillTouch,
@@ -391,8 +392,7 @@ def create_spell_actor(
 ) -> Entity:
     """Create an actor with spellcasting stats, HP, and optional spell slots."""
     actor_id = uuid4()
-    return Entity.create(
-        source_entity_uuid=actor_id,
+    return create_test_entity(
         name=name,
         config=EntityConfig(
             ability_scores=AbilityScoresConfig(
@@ -419,6 +419,8 @@ def create_spell_actor(
             position=position,
             faction=faction,
         ),
+        entity_kind_id="test.spell_actor",
+        source_id=actor_id,
     )
 
 
