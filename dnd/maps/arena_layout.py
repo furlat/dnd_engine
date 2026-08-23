@@ -79,7 +79,7 @@ def place_standard_directional_barrier(grid: GridMap) -> StandardBarrierObjects:
     """Place the standard arena directional wall strip and door."""
     walls = []
     for position in WALL_POSITIONS:
-        grid.set_tile(position[0], position[1], walkable=True, visible=True, name="Floor")
+        grid.set_tile(position[0], position[1], walkable=True, name="Floor")
         wall = build_directional_wall(
             blocked_directions=WALL_DIRECTIONS,
             blocked_channels=STANDARD_BLOCKING_CHANNELS,
@@ -87,7 +87,7 @@ def place_standard_directional_barrier(grid: GridMap) -> StandardBarrierObjects:
         wall.place_on_grid(position)
         walls.append(wall)
 
-    grid.set_tile(DOOR_POSITION[0], DOOR_POSITION[1], walkable=True, visible=True, name="Floor")
+    grid.set_tile(DOOR_POSITION[0], DOOR_POSITION[1], walkable=True, name="Floor")
     door = build_directional_door(
         display_name="Door",
         blocked_directions=DOOR_DIRECTIONS,
@@ -101,8 +101,8 @@ def place_standard_directional_barrier(grid: GridMap) -> StandardBarrierObjects:
 
 def darken_arena(grid: GridMap) -> None:
     """Set every current arena tile to darkness."""
-    for tile in grid.get_all_tiles().values():
-        tile.default_light = LightLevel.DARKNESS
+    for position in grid.get_all_tiles():
+        grid.set_tile_base_light(position, LightLevel.DARKNESS)
 
 
 def build_standard_arena_environment(grid: GridMap) -> StandardArenaObjects:

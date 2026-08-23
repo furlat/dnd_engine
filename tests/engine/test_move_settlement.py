@@ -60,7 +60,7 @@ def _open_movement_world() -> Entity:
     """Build one disclosed floor lane with a fully configured mover."""
     reset_core_action_state()
     mover = strong_entity("Mover", (0, 0), "heroes")
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     return mover
 
 
@@ -550,7 +550,7 @@ def test_lethal_opportunity_attack_leaves_a_free_logless_false_step() -> None:
     watcher = strong_entity("Watcher", (0, 0), "monsters")
     mover = strong_entity("Fragile Mover", (0, 1), "heroes")
     add_opportunity_attack_handler(watcher)
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     set_hp(mover, 1)
     force_attack_hit(watcher)
     force_attack_crit(watcher)
@@ -589,7 +589,7 @@ def test_committed_step_and_root_logs_retain_opportunity_attack_child() -> None:
     watcher = strong_entity("Watcher", (0, 0), "monsters")
     mover = strong_entity("Mover", (0, 1), "heroes")
     add_opportunity_attack_handler(watcher)
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     force_attack_hit(watcher)
 
     with fixed_dice(10, 1):
@@ -627,7 +627,7 @@ def test_later_opportunity_attack_skips_after_first_reactor_kills_mover() -> Non
     mover = strong_entity("Fragile Mover", (0, 1), "heroes")
     add_opportunity_attack_handler(first)
     add_opportunity_attack_handler(second)
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     set_hp(mover, 1)
     force_attack_hit(first)
     force_attack_crit(first)
@@ -658,7 +658,7 @@ def test_aggressive_instantiation_and_retarget_preserve_fixed_cost() -> None:
     reset_core_action_state()
     actor = strong_entity("Aggressive Actor", (0, 0), "monsters")
     strong_entity("Visible Enemy", (4, 0), "heroes")
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     template = AggressiveMoveAction(
         source_entity_uuid=actor.uuid,
         template=True,
@@ -723,7 +723,7 @@ def test_differently_named_neutral_suppression_blocks_opportunity_attack() -> No
         name="Ethereal Withdrawal",
         effect_source_uuid=mover.uuid,
     )
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
 
     result = Move(source_entity_uuid=mover.uuid, end_position=(0, 3)).apply()
 

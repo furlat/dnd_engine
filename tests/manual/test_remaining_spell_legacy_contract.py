@@ -110,7 +110,7 @@ def test_call_lightning_grants_repeatable_strike_and_cleans_on_replacement() -> 
         "monsters",
     )
     force_save_result(target, "dexterity", succeeds=False)
-    Entity.update_all_entities_senses(max_distance=120)
+    Entity.materialize_all_navigation(max_distance=120)
     hp_before = get_hp(target)
 
     with fixed_dice_faces(10, 4, 4, 4):
@@ -192,7 +192,7 @@ def test_shocking_grasp_damage_scaling_metal_advantage_and_reaction_lifecycle() 
             expected_type=BodyArmor,
         ),
     )
-    Entity.update_all_entities_senses(max_distance=60)
+    Entity.materialize_all_navigation(max_distance=60)
     hp_before = get_hp(target)
     hit_modifier = _force_spell_attack_hit(caster, target)
 
@@ -227,7 +227,7 @@ def test_shocking_grasp_damage_scaling_metal_advantage_and_reaction_lifecycle() 
         (5, 3),
         "monsters",
     )
-    Entity.update_all_entities_senses(max_distance=60)
+    Entity.materialize_all_navigation(max_distance=60)
     caster.action_economy.reset_all_costs()
     out_of_range = ShockingGrasp(
         source_entity_uuid=caster.uuid,
@@ -272,7 +272,7 @@ def test_guiding_bolt_hit_upcast_mark_and_first_attack_cleanup() -> None:
         WeaponSlot.MELEE_MAIN,
     )
     setup_standard_actions(attacker)
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
     hit_modifier = _force_spell_attack_hit(caster, target)
 
     with fixed_dice_faces(10, *([3] * 6)):
@@ -318,7 +318,7 @@ def test_guiding_bolt_actual_cast_expires_at_end_of_casters_next_turn() -> None:
         (7, 3),
         "monsters",
     )
-    Entity.update_all_entities_senses(max_distance=90)
+    Entity.materialize_all_navigation(max_distance=90)
     hit_modifier = _force_spell_attack_hit(caster, target)
 
     with fixed_dice_faces(10, 3, 3, 3, 3):
@@ -371,7 +371,7 @@ def test_power_word_stun_threshold_range_and_repeat_save_cleanup() -> None:
     )
     set_hp(threshold_target, 150)
     force_save_result(threshold_target, "constitution", succeeds=True)
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
 
     result = PowerWordStun(
         source_entity_uuid=caster.uuid,
@@ -396,7 +396,7 @@ def test_power_word_stun_threshold_range_and_repeat_save_cleanup() -> None:
         "monsters",
     )
     set_hp(above_target, 151)
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
     unaffected = PowerWordStun(
         source_entity_uuid=caster.uuid,
         target_entity_uuid=above_target.uuid,
@@ -416,7 +416,7 @@ def test_power_word_stun_threshold_range_and_repeat_save_cleanup() -> None:
         "monsters",
     )
     set_hp(distant, 100)
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
     out_of_range = PowerWordStun(
         source_entity_uuid=caster.uuid,
         target_entity_uuid=distant.uuid,
@@ -438,7 +438,7 @@ def test_expeditious_retreat_grant_cost_discovery_and_concentration_cleanup() ->
         "heroes",
         spell_slots={1: 1, 2: 1},
     )
-    Entity.update_all_entities_senses(max_distance=70)
+    Entity.materialize_all_navigation(max_distance=70)
     spell = ExpeditiousRetreat(
         source_entity_uuid=caster.uuid,
         cast_at_level=1,
@@ -502,7 +502,7 @@ def test_jump_spell_composes_modifiers_targets_ally_and_expands_discovery() -> N
             target_entity_uuid=ally.uuid,
         )
     )
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
     jump_template = ally.get_action_template("Jump")
     assert isinstance(jump_template, Jump)
     base_range = jump_template.get_range()
@@ -564,7 +564,7 @@ def test_ray_of_frost_hit_and_slow_expire_on_caster_turn_not_target_turn() -> No
         (7, 4),
         "monsters",
     )
-    Entity.update_all_entities_senses(max_distance=80)
+    Entity.materialize_all_navigation(max_distance=80)
     base_speed = target.action_economy.movement.normalized_score
     hp_before = get_hp(target)
     hit_modifier = _force_spell_attack_hit(caster, target)
@@ -617,7 +617,7 @@ def test_acid_splash_two_target_damage_and_proximity_validation() -> None:
     )
     force_save_result(first, "dexterity", succeeds=False)
     force_save_result(second, "dexterity", succeeds=False)
-    Entity.update_all_entities_senses(max_distance=90)
+    Entity.materialize_all_navigation(max_distance=90)
     hp_before = {first.uuid: get_hp(first), second.uuid: get_hp(second)}
 
     with fixed_dice_faces(10, 3, 10, 4):
@@ -650,7 +650,7 @@ def test_acid_splash_two_target_damage_and_proximity_validation() -> None:
         (9, 4),
         "monsters",
     )
-    Entity.update_all_entities_senses(max_distance=90)
+    Entity.materialize_all_navigation(max_distance=90)
     separated = AcidSplash(
         source_entity_uuid=caster.uuid,
         target_entity_uuid=first.uuid,
@@ -692,7 +692,7 @@ def test_multi_target_ally_filter_is_unique_bounded_and_atomic() -> None:
         (5, 4),
         "monsters",
     )
-    Entity.update_all_entities_senses(max_distance=80)
+    Entity.materialize_all_navigation(max_distance=80)
     valid = AllyFilterSpell(
         source_entity_uuid=caster.uuid,
         target_entity_uuid=caster.uuid,
@@ -755,7 +755,7 @@ def test_necrotic_bless_executes_undead_failure_and_success_branches() -> None:
     )
     force_save_result(failed, "charisma", succeeds=False)
     force_save_result(passed, "charisma", succeeds=True)
-    Entity.update_all_entities_senses(max_distance=80)
+    Entity.materialize_all_navigation(max_distance=80)
 
     with fixed_dice_faces(10, 10):
         result = NecroticBless(
@@ -808,7 +808,7 @@ def test_sunbeam_initial_and_repeat_line_share_concentration_owned_action() -> N
     )
     force_save_result(failed, "constitution", succeeds=False)
     force_save_result(passed, "constitution", succeeds=True)
-    Entity.update_all_entities_senses(max_distance=120)
+    Entity.materialize_all_navigation(max_distance=120)
     hp_before = {failed.uuid: get_hp(failed), passed.uuid: get_hp(passed)}
 
     with fixed_dice_faces(
@@ -880,7 +880,7 @@ def test_scorching_ray_executes_every_base_and_upcast_projectile() -> None:
         (8, 3),
         "monsters",
     )
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
     hit_modifier = _force_spell_attack_hit(caster, target)
     hp_before = get_hp(target)
     spell = ScorchingRay(
@@ -920,7 +920,7 @@ def test_blur_and_blindness_deafness_execute_distinct_lifecycles() -> None:
         (3, 3),
         "monsters",
     )
-    Entity.update_all_entities_senses(max_distance=80)
+    Entity.materialize_all_navigation(max_distance=80)
 
     blur_result = Blur(
         source_entity_uuid=blur_caster.uuid,
@@ -963,7 +963,7 @@ def test_blur_and_blindness_deafness_execute_distinct_lifecycles() -> None:
     )
     force_save_result(first, "constitution", succeeds=False)
     force_save_result(second, "constitution", succeeds=False)
-    Entity.update_all_entities_senses(max_distance=80)
+    Entity.materialize_all_navigation(max_distance=80)
 
     with fixed_dice_faces(10, 10):
         blindness_result = BlindnessDeafness(
@@ -1018,7 +1018,7 @@ def test_fear_and_hypnotic_pattern_execute_area_and_cleanup_rules() -> None:
     )
     force_save_result(in_cone, "wisdom", succeeds=False)
     force_save_result(behind, "wisdom", succeeds=False)
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
 
     with fixed_dice_faces(10):
         fear_result = Fear(
@@ -1058,7 +1058,7 @@ def test_fear_and_hypnotic_pattern_execute_area_and_cleanup_rules() -> None:
     )
     force_save_result(target, "wisdom", succeeds=False)
     force_save_result(outside, "wisdom", succeeds=False)
-    Entity.update_all_entities_senses(max_distance=120)
+    Entity.materialize_all_navigation(max_distance=120)
 
     with fixed_dice_faces(10):
         pattern_result = HypnoticPattern(
@@ -1119,7 +1119,7 @@ def test_position_aoe_preview_execution_preserves_filters_and_cardinality() -> N
     )
     for enemy in enemies:
         force_save_result(enemy, "dexterity", succeeds=False)
-    Entity.update_all_entities_senses(max_distance=90)
+    Entity.materialize_all_navigation(max_distance=90)
 
     all_targets = Fireball(
         source_entity_uuid=caster.uuid,
@@ -1201,7 +1201,7 @@ def test_position_aoe_preview_execution_preserves_filters_and_cardinality() -> N
         (15, 10),
         "monsters",
     )
-    Entity.update_all_entities_senses(max_distance=90)
+    Entity.materialize_all_navigation(max_distance=90)
     register_spell(caster, Fireball, caster_level=5)
 
     available = get_available_actions(caster)
@@ -1269,7 +1269,7 @@ def test_magic_missile_preserves_dart_distribution_upcast_and_enemy_filter() -> 
         (3, 3),
         "heroes",
     )
-    Entity.update_all_entities_senses(max_distance=80)
+    Entity.materialize_all_navigation(max_distance=80)
 
     single_target = MagicMissile(
         source_entity_uuid=caster.uuid,
@@ -1367,7 +1367,7 @@ def test_self_range_aoe_discovery_survives_zero_visible_enemies() -> None:
     setup_standard_actions(caster)
     for spell_type in (BurningHands, Thunderwave, LightningBolt, Fireball):
         register_spell(caster, spell_type, caster_level=5)
-    Entity.update_all_entities_senses(max_distance=80)
+    Entity.materialize_all_navigation(max_distance=80)
 
     available = get_available_actions(caster)
     legal = get_available_actions(caster, legal_only=True)
@@ -1408,7 +1408,7 @@ def test_self_range_aoe_discovery_survives_zero_visible_enemies() -> None:
         (5, 7),
         "monsters",
     )
-    Entity.update_all_entities_senses(max_distance=80)
+    Entity.materialize_all_navigation(max_distance=80)
     with_enemy = get_available_actions(caster)
     burning_hands = next(
         action
@@ -1450,7 +1450,7 @@ def test_close_area_spells_execute_save_geometry_damage_and_push_rules() -> None
     force_save_result(failed, "dexterity", succeeds=False)
     force_save_result(passed, "dexterity", succeeds=True)
     force_save_result(behind, "dexterity", succeeds=False)
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
     hp_before = {
         entity.uuid: get_hp(entity)
         for entity in (caster, failed, passed, behind)
@@ -1487,7 +1487,7 @@ def test_close_area_spells_execute_save_geometry_damage_and_push_rules() -> None
         "monsters",
     )
     force_save_result(blocked, "dexterity", succeeds=False)
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
     blocked_hp = get_hp(blocked)
 
     with fixed_dice_faces(*([4] * 20)):
@@ -1521,7 +1521,7 @@ def test_close_area_spells_execute_save_geometry_damage_and_push_rules() -> None
     )
     force_save_result(failed, "constitution", succeeds=False)
     force_save_result(passed, "constitution", succeeds=True)
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
     failed_hp = get_hp(failed)
     passed_hp = get_hp(passed)
     passed_position = passed.position
@@ -1574,7 +1574,7 @@ def test_fireball_executes_save_upcast_relationship_and_aggregation_matrix() -> 
     for target in (caster, ally, failed):
         force_save_result(target, "dexterity", succeeds=False)
     force_save_result(passed, "dexterity", succeeds=True)
-    Entity.update_all_entities_senses(max_distance=120)
+    Entity.materialize_all_navigation(max_distance=120)
     hp_before = {
         target.uuid: get_hp(target)
         for target in (caster, ally, failed, passed)
@@ -1622,7 +1622,7 @@ def test_fireball_executes_save_upcast_relationship_and_aggregation_matrix() -> 
         "monsters",
     )
     force_save_result(only_enemy, "dexterity", succeeds=False)
-    Entity.update_all_entities_senses(max_distance=80)
+    Entity.materialize_all_navigation(max_distance=80)
     careful_hp = get_hp(careful)
     ally_hp = get_hp(protected_ally)
     enemy_hp = get_hp(only_enemy)
@@ -1661,7 +1661,7 @@ def test_fireball_enforces_cast_los_range_and_explosion_occlusion() -> None:
     )
     for y in range(12):
         grid.set_tile(5, y, walkable=False, visible=False, name="Wall")
-    Entity.update_all_entities_senses(max_distance=250)
+    Entity.materialize_all_navigation(max_distance=250)
 
     blocked = Fireball(
         source_entity_uuid=caster.uuid,
@@ -1685,7 +1685,7 @@ def test_fireball_enforces_cast_los_range_and_explosion_occlusion() -> None:
         (33, 5),
         "monsters",
     )
-    Entity.update_all_entities_senses(max_distance=250)
+    Entity.materialize_all_navigation(max_distance=250)
     out_of_range = Fireball(
         source_entity_uuid=caster.uuid,
         end_position=distant.position,
@@ -1718,7 +1718,7 @@ def test_fireball_enforces_cast_los_range_and_explosion_occlusion() -> None:
     grid.set_tile(7, 5, walkable=False, visible=False, name="Explosion Wall")
     force_save_result(visible, "dexterity", succeeds=False)
     force_save_result(behind_wall, "dexterity", succeeds=False)
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
     visible_hp = get_hp(visible)
     occluded_hp = get_hp(behind_wall)
 
@@ -1753,7 +1753,7 @@ def test_thunderwave_push_stops_before_walls_and_occupied_cells() -> None:
     )
     grid.set_tile(8, 4, walkable=False, visible=True, name="Push Wall")
     force_save_result(target, "constitution", succeeds=False)
-    Entity.update_all_entities_senses(max_distance=80)
+    Entity.materialize_all_navigation(max_distance=80)
     caster_hp = get_hp(caster)
     target_hp = get_hp(target)
 
@@ -1789,7 +1789,7 @@ def test_thunderwave_push_stops_before_walls_and_occupied_cells() -> None:
     )
     force_save_result(target, "constitution", succeeds=False)
     force_save_result(blocker, "constitution", succeeds=True)
-    Entity.update_all_entities_senses(max_distance=80)
+    Entity.materialize_all_navigation(max_distance=80)
     blocker_position = blocker.position
 
     with fixed_dice_faces(*([4] * 40)):

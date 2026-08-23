@@ -31,7 +31,7 @@ from tests.engine.test_combat_actions import reset_core_action_state, strong_ent
 def _mover() -> Entity:
     reset_core_action_state()
     mover = strong_entity("Mover", (0, 0), "heroes")
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     return mover
 
 
@@ -88,7 +88,7 @@ def test_forced_movement_revalidates_each_leg_after_effect_topology_change() -> 
     reset_core_action_state()
     shover = strong_entity("Shove Source", (0, 0), "heroes", strength=18)
     target = strong_entity("Shove Target", (1, 0), "heroes", strength=10)
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
 
     def raise_destination(event: Event, _source_uuid: UUID) -> Event:
         if type(event) is ForcedMovementEvent:
@@ -168,7 +168,7 @@ def test_fly_path_and_move_settlement_use_one_support_distance_cost() -> None:
     mover = _mover()
     grid = get_map()
     _set_elevation((1, 0), 2)
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
 
     distances, paths = grid.compute_paths(
         mover.position,
@@ -200,7 +200,7 @@ def test_flying_discovery_uses_directed_edge_costs_and_affordability() -> None:
     grid = get_map()
     _set_elevation((1, 0), 2)
     _set_elevation((2, 1), 2)
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     _, paths = grid.compute_paths(
         mover.position,
         requesting_entity_uuid=mover.uuid,
@@ -239,7 +239,7 @@ def test_progressive_walking_cost_uses_destination_terrain_not_vertical_distance
     mover = _mover()
     _set_elevation((0, 0), 0, ElevationSurfaceKind.RAMP, SlopeAxis.EAST_WEST)
     _set_elevation((1, 0), 1, ElevationSurfaceKind.RAMP, SlopeAxis.EAST_WEST)
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
 
     result = Move(
         source_entity_uuid=mover.uuid,

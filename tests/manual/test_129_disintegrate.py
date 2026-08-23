@@ -45,7 +45,7 @@ def _cast_disintegrate(
     )
     set_hp(target, target_hp)
     force_save_result(target, "dexterity", succeeds=save_succeeds)
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
     hp_before = target.get_hp()
 
     faces = (10,) if save_succeeds else (10, *([4] * 10))
@@ -107,7 +107,7 @@ def test_disintegrate_range() -> None:
     at_limit = create_spell_regression_actor("At 60 feet", (14, 4), "monsters")
     beyond_limit = create_spell_regression_actor("At 65 feet", (15, 4), "monsters")
     force_save_result(at_limit, "dexterity", succeeds=True)
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
 
     too_far = Disintegrate(
         source_entity_uuid=caster.uuid,

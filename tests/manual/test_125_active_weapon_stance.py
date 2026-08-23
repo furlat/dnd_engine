@@ -135,7 +135,7 @@ def test_accepted_attacks_switch_stance_but_canceled_attacks_do_not(
         position=(69, 1),
         faction="monsters",
     )
-    Entity.update_all_entities_senses(max_distance=80)
+    Entity.materialize_all_navigation(max_distance=80)
     monkeypatch.setattr(dice_module.random, "randint", lambda _low, _high: 2)
 
     try:
@@ -187,7 +187,7 @@ def test_live_patch_and_fresh_reset_project_the_same_persisted_stance(
         position=(2, 1),
         faction="monsters",
     )
-    Entity.update_all_entities_senses(max_distance=10)
+    Entity.materialize_all_navigation(max_distance=10)
     monkeypatch.setattr(dice_module.random, "randint", lambda _low, _high: 2)
     initial_perspective = _controlled_perspective(
         attacker,

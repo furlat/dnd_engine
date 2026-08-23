@@ -75,7 +75,7 @@ def test_entity_distance_and_threat_use_creature_volume_not_support_points() -> 
         surface_kind=ElevationSurfaceKind.ORDINARY,
         slope_axis=None,
     )
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
 
     assert source.distance_to_position(target.position) == 10
     assert source.distance_to_entity(target) == 5
@@ -102,7 +102,7 @@ def test_entity_action_discovery_reports_creature_volume_distance() -> None:
         surface_kind=ElevationSurfaceKind.ORDINARY,
         slope_axis=None,
     )
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
 
     shove = next(
         action

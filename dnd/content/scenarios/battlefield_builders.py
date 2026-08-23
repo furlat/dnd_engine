@@ -518,7 +518,7 @@ def _place_directional_barrier(
     door: DirectionalDoor | None = None
     for y in range(3, 12):
         position = (column, y)
-        grid.set_tile(column, y, walkable=True, visible=True, name="Floor")
+        grid.set_tile(column, y, walkable=True, name="Floor")
         if y == door_y:
             door = build_directional_door(
                 display_name=f"{label} Door",
@@ -702,7 +702,6 @@ def _build_elevation_proving_ground(
                 cell.position[0],
                 cell.position[1],
                 walkable=False,
-                visible=True,
                 name="Gap",
             )
     for elevation in layout.elevation:
@@ -831,7 +830,8 @@ def _world_initialized_event(
             position=position,
             name=tile.name,
             walkable=tile.walkable,
-            visible=tile.visible,
+            blocks_optics=tile.blocks_optics,
+            blocks_propagation=tile.blocks_propagation_field,
             walking_cost=tile.get_movement_cost(MovementMode.WALKING),
             flying_cost=tile.get_movement_cost(MovementMode.FLYING),
             swimming_cost=tile.get_movement_cost(MovementMode.SWIMMING),
@@ -847,17 +847,11 @@ def _world_initialized_event(
                 tile.border_east,
                 tile.border_west,
             ),
-            vision_open=_open_directions(
-                tile.vision_border_north,
-                tile.vision_border_south,
-                tile.vision_border_east,
-                tile.vision_border_west,
-            ),
-            light_open=_open_directions(
-                tile.light_border_north,
-                tile.light_border_south,
-                tile.light_border_east,
-                tile.light_border_west,
+            optical_open=_open_directions(
+                tile.optical_border_north,
+                tile.optical_border_south,
+                tile.optical_border_east,
+                tile.optical_border_west,
             ),
             propagation_open=_open_directions(
                 tile.propagation_border_north,

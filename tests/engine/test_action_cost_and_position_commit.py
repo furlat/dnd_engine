@@ -243,7 +243,7 @@ def test_position_staging_failure_restores_all_four_position_owners(monkeypatch:
     assert EventQueue.event_cursor() == before_events
 
 
-def test_spatial_publication_failure_keeps_committed_position_and_raises_typed_error() -> None:
+def test_spatial_publication_failure_keeps_committed_objective_position_and_raises() -> None:
     reset_core_action_state()
     entity = strong_entity("Mover", (1, 1), "heroes")
     grid = get_map()
@@ -271,7 +271,7 @@ def test_spatial_publication_failure_keeps_committed_position_and_raises_typed_e
 
     assert error.value.position_committed is True
     assert entity.position == (2, 1)
-    assert entity.senses.position == (2, 1)
+    assert entity.senses.position == (1, 1)
     assert Entity.get_all_entities_at_position((2, 1)) == [entity]
     assert grid.get_entity_position(entity.uuid) == (2, 1)
     assert grid.get_entities_at((2, 1)) == {entity.uuid}

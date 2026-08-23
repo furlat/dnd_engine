@@ -111,7 +111,7 @@ def test_eb_17_001_goblin_and_skeleton_factories_encode_srd_trait_state() -> Non
         faction="monsters",
         darkvision=False,
     )
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     assert get_max_hp(goblin) == 10
     assert goblin.ac_bonus().normalized_score == 15
@@ -140,7 +140,7 @@ def test_eb_17_007_base_goblin_factory_models_srd_senses_attacks_and_nimble_esca
     reset_monster_state()
 
     goblin = create_test_monster("monster.goblin", name="Book Goblin", position=(1, 1), faction="monsters")
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     action_names = action_template_names(goblin)
     hide_template = goblin.get_action_template("Hide")
@@ -182,7 +182,7 @@ def test_eb_17_008_base_skeleton_factory_models_srd_senses_attacks_and_immunitie
         faction="monsters",
         darkvision=False,
     )
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     action_names = action_template_names(skeleton)
     poisoned_event = skeleton.add_condition(
@@ -241,7 +241,7 @@ def test_eb_17_010_create_caster_wires_generic_spellcaster_state() -> None:
     reset_monster_state()
 
     caster = create_test_monster("monster.generic_caster", name="Book Caster", position=(1, 1), faction="heroes", level=5)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     action_names = action_template_names(caster)
     hit_dice = caster.health.hit_dices[0]
@@ -288,7 +288,7 @@ def test_eb_17_011_create_caster_inventory_potions_are_item_use_actions() -> Non
     reset_monster_state()
 
     caster = create_test_monster("monster.generic_caster", name="Book Caster", position=(1, 1), faction="heroes", level=5)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     invisibility_potion = get_inventory_item(caster, "Potion of Greater Invisibility")
     haste_potion = get_inventory_item(caster, "Potion of Haste")
@@ -358,7 +358,7 @@ def test_eb_17_012_circus_warrior_preset_applies_custom_condition_bundle() -> No
         name="Book Performer",
         position=(1, 1),
     )
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     main_weapon = performer.equipment.get_item_by_slot(WeaponSlot.MELEE_MAIN)
     off_weapon = performer.equipment.get_item_by_slot(WeaponSlot.MELEE_OFF)
@@ -435,7 +435,7 @@ def test_eb_17_002_specialized_skeleton_presets_wire_equipment_items_and_actions
     archer = create_test_monster("monster.skeleton_archer", name="Book Archer", position=(3, 1), faction="monsters")
     warlock = create_test_monster("monster.skeleton_warlock", name="Book Warlock", position=(5, 1), faction="monsters")
     create_test_monster("monster.skeleton", name="Target", position=(8, 1), faction="heroes")
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     assert get_max_hp(warrior) > get_max_hp(archer) > get_max_hp(warlock)
     assert warrior.ac_bonus().normalized_score == 15
@@ -466,7 +466,7 @@ def test_eb_17_003_mark_target_creates_concentration_link_and_cleans_target_stat
     reset_monster_state()
     archer = create_test_monster("monster.skeleton_archer", name="Book Archer", position=(1, 1), faction="monsters")
     target = create_test_monster("monster.skeleton", name="Book Target", position=(5, 1), faction="heroes")
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     event = MarkTargetAction(
         source_entity_uuid=archer.uuid,
@@ -511,7 +511,7 @@ def test_eb_17_004_mark_target_strips_and_blocks_hidden_or_invisible_state() -> 
     target = create_test_monster("monster.skeleton", name="Book Target", position=(5, 1), faction="heroes")
     archer.senses.sense_modes.append(SenseMode(sense_type=SensesType.TRUESIGHT, range_feet=60))
     target.add_condition(Invisible(source_entity_uuid=target.uuid, target_entity_uuid=target.uuid))
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     assert target.is_invisible
 
@@ -540,7 +540,7 @@ def test_eb_17_005_warlock_eldritch_blast_and_scroll_are_action_driven() -> None
     reset_monster_state()
     warlock = create_test_monster("monster.skeleton_warlock", name="Book Warlock", position=(1, 1), faction="monsters")
     target = create_test_monster("monster.skeleton", name="Book Target", position=(8, 1), faction="heroes")
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     initial_hp = get_hp(target)
     modifier_uuid = force_spell_attack_hit(warlock)
@@ -589,7 +589,7 @@ def test_eb_17_006_warrior_acid_flask_is_a_consumable_spell_item() -> None:
     reset_monster_state()
     warrior = create_test_monster("monster.skeleton_warrior", name="Book Warrior", position=(1, 1), faction="monsters")
     target = create_test_monster("monster.skeleton", name="Book Target", position=(5, 5), faction="heroes")
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     flask = get_inventory_item(warrior, "Acid Flask")
     use_actions = flask.get_use_actions(warrior.uuid)

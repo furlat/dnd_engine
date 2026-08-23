@@ -146,7 +146,7 @@ def test_parry_does_not_spend_reaction_on_a_missed_attack() -> None:
         position=(2, 3),
         faction="heroes",
     )
-    Entity.update_all_entities_senses(max_distance=30)
+    Entity.materialize_all_navigation(max_distance=30)
 
     with fixed_dice_faces(1):
         event = Attack(
@@ -173,7 +173,7 @@ def test_parry_spends_reaction_when_its_ac_bonus_blocks_a_hit() -> None:
         position=(2, 3),
         faction="heroes",
     )
-    Entity.update_all_entities_senses(max_distance=30)
+    Entity.materialize_all_navigation(max_distance=30)
     attack_bonus = attacker.attack_bonus(
         WeaponSlot.MELEE_MAIN,
         defender.uuid,
@@ -199,7 +199,7 @@ def test_gnoll_keeps_shield_and_gets_natural_bite_action() -> None:
     reset_srd_trait_state()
     gnoll = _materialize_srd_fixture("gnoll", position=(1, 1), faction="monsters")
     target = _materialize_srd_fixture("commoner", position=(2, 1), faction="heroes")
-    Entity.update_all_entities_senses(max_distance=30)
+    Entity.materialize_all_navigation(max_distance=30)
 
     offhand = gnoll.equipment._get_weapon_by_slot(WeaponSlot.MELEE_OFF)
     assert offhand is not None
@@ -221,7 +221,7 @@ def test_natural_bite_discloses_natural_attack_outcome_profile() -> None:
     reset_srd_trait_state()
     gnoll = _materialize_srd_fixture("gnoll", position=(1, 1), faction="monsters")
     _target = _materialize_srd_fixture("commoner", position=(2, 1), faction="heroes")
-    Entity.update_all_entities_senses(max_distance=30)
+    Entity.materialize_all_navigation(max_distance=30)
 
     bite = gnoll.get_action_template("Bite")
     assert bite is not None
@@ -249,7 +249,7 @@ def test_natural_bite_never_impersonates_the_equipped_weapon() -> None:
         position=(2, 1),
         faction="heroes",
     )
-    Entity.update_all_entities_senses(max_distance=30)
+    Entity.materialize_all_navigation(max_distance=30)
     equipped_weapon = gnoll.equipment.weapon_melee_main
     unarmed_facts = (
         gnoll.equipment.unarmed_damage_dice,
@@ -305,7 +305,7 @@ def test_pack_tactics_sunlight_and_keen_senses_use_contextual_values() -> None:
     kobold = _materialize_srd_fixture("kobold", position=(1, 1), faction="monsters")
     ally = _materialize_srd_fixture("commoner", position=(2, 1), faction="monsters")
     target = _materialize_srd_fixture("commoner", position=(3, 1), faction="heroes")
-    Entity.update_all_entities_senses(max_distance=30)
+    Entity.materialize_all_navigation(max_distance=30)
 
     attack_bonus = kobold.attack_bonus(WeaponSlot.MELEE_MAIN, target.uuid)
     assert attack_bonus.advantage == AdvantageStatus.ADVANTAGE
@@ -329,7 +329,7 @@ def test_uniform_multiattack_discloses_repeated_attack_profile() -> None:
     reset_srd_trait_state()
     scout = _materialize_srd_fixture("scout", position=(1, 1), faction="monsters")
     _target = _materialize_srd_fixture("commoner", position=(6, 1), faction="heroes")
-    Entity.update_all_entities_senses(max_distance=60)
+    Entity.materialize_all_navigation(max_distance=60)
 
     longbow = next(
         row
@@ -361,7 +361,7 @@ def test_off_hand_multiattack_children_use_parent_cost_after_bonus_is_spent() ->
             position=(2, 1),
             faction="heroes",
         )
-        Entity.update_all_entities_senses(max_distance=30)
+        Entity.materialize_all_navigation(max_distance=30)
         actor.action_economy.consume(
             "bonus_actions",
             1,
@@ -406,7 +406,7 @@ def test_actor_known_bonus_damage_reaches_attack_outcome_profiles() -> None:
     reset_srd_trait_state()
     bugbear = _materialize_srd_fixture("bugbear", position=(1, 1), faction="monsters")
     _target = _materialize_srd_fixture("commoner", position=(2, 1), faction="heroes")
-    Entity.update_all_entities_senses(max_distance=30)
+    Entity.materialize_all_navigation(max_distance=30)
 
     bugbear_attack = next(
         row
@@ -422,7 +422,7 @@ def test_actor_known_bonus_damage_reaches_attack_outcome_profiles() -> None:
     reset_srd_trait_state()
     priest = _materialize_srd_fixture("priest", position=(1, 1), faction="monsters")
     _foe = _materialize_srd_fixture("commoner", position=(2, 1), faction="heroes")
-    Entity.update_all_entities_senses(max_distance=30)
+    Entity.materialize_all_navigation(max_distance=30)
     divine = priest.get_action_template("Divine Eminence")
     assert divine is not None
 
@@ -468,7 +468,7 @@ def test_wolf_bite_and_ghoul_claws_apply_failed_save_riders() -> None:
     reset_srd_trait_state()
     wolf = _materialize_srd_fixture("wolf", position=(1, 1), faction="monsters")
     target = _materialize_srd_fixture("commoner", position=(2, 1), faction="heroes")
-    Entity.update_all_entities_senses(max_distance=30)
+    Entity.materialize_all_navigation(max_distance=30)
 
     wolf_bite = next(row for row in wolf.get_available_actions().entity_actions if row.weapon_name == "Bite")
     assert wolf_bite.target_effect_profile is not None
@@ -484,7 +484,7 @@ def test_wolf_bite_and_ghoul_claws_apply_failed_save_riders() -> None:
     reset_srd_trait_state()
     ghoul = _materialize_srd_fixture("ghoul", position=(1, 1), faction="monsters")
     victim = _materialize_srd_fixture("commoner", position=(2, 1), faction="heroes")
-    Entity.update_all_entities_senses(max_distance=30)
+    Entity.materialize_all_navigation(max_distance=30)
 
     claws = next(row for row in ghoul.get_available_actions().entity_actions if row.weapon_name == "Claws")
     assert claws.target_effect_profile is not None
@@ -507,7 +507,7 @@ def test_large_srd_monster_size_damage_has_explicit_bonus() -> None:
     reset_srd_trait_state()
     ogre_zombie = _materialize_srd_fixture("ogre_zombie", position=(1, 1), faction="monsters")
     target = _materialize_srd_fixture("commoner", position=(2, 1), faction="heroes")
-    Entity.update_all_entities_senses(max_distance=30)
+    Entity.materialize_all_navigation(max_distance=30)
 
     with fixed_dice_faces(15, 1, 1, 1):
         event = Attack(source_entity_uuid=ogre_zombie.uuid, target_entity_uuid=target.uuid, weapon_slot=WeaponSlot.MELEE_MAIN).apply()
@@ -523,7 +523,7 @@ def test_brute_surprise_attack_and_martial_advantage_add_damage_dice() -> None:
     reset_srd_trait_state()
     bugbear = _materialize_srd_fixture("bugbear", position=(1, 1), faction="monsters")
     target = _materialize_srd_fixture("commoner", position=(2, 1), faction="heroes")
-    Entity.update_all_entities_senses(max_distance=30)
+    Entity.materialize_all_navigation(max_distance=30)
     target.senses.entities.pop(bugbear.uuid, None)
 
     with fixed_dice_faces(15, 1, 1, 1, 1):
@@ -544,7 +544,7 @@ def test_brute_surprise_attack_and_martial_advantage_add_damage_dice() -> None:
     hobgoblin = _materialize_srd_fixture("hobgoblin", position=(1, 1), faction="monsters")
     ally = _materialize_srd_fixture("commoner", position=(2, 2), faction="monsters")
     foe = _materialize_srd_fixture("commoner", position=(2, 1), faction="heroes")
-    Entity.update_all_entities_senses(max_distance=30)
+    Entity.materialize_all_navigation(max_distance=30)
     assert ally.get_hp() > 0
 
     with fixed_dice_faces(15, 1, 1, 1):
@@ -660,7 +660,7 @@ def test_overlapping_leadership_fields_keep_one_source_and_promote_fallback() ->
         position=(5, 2),
         faction="heroes",
     )
-    Entity.update_all_entities_senses(max_distance=60)
+    Entity.materialize_all_navigation(max_distance=60)
 
     for leader in (first_leader, second_leader):
         action = leader.get_action_template("Leadership")

@@ -468,7 +468,7 @@ def setup_oa_pair() -> tuple[Entity, Entity]:
         faction="monsters",
     )
     setup_standard_actions(mover)
-    Entity.update_all_entities_senses(max_distance=8)
+    Entity.materialize_all_navigation(max_distance=8)
     return reactor, mover
 
 
@@ -509,8 +509,8 @@ def test_reactive_visibility_adds_and_removes_for_multiple_observers() -> None:
     first = create_test_monster("monster.skeleton", name="First Observer", position=(0, 0))
     second = create_test_monster("monster.skeleton", name="Second Observer", position=(0, 2))
     mover = create_test_monster("monster.skeleton", name="Mover", position=(10, 1))
-    first.update_entity_senses(max_distance=4)
-    second.update_entity_senses(max_distance=4)
+    first.materialize_navigation(max_distance=4)
+    second.materialize_navigation(max_distance=4)
 
     assert mover.uuid not in first.senses.entities
     assert mover.uuid not in second.senses.entities
@@ -576,7 +576,7 @@ def test_effect_phase_step_handler_cancels_before_position_and_cost_commit() -> 
             event_processor=block_trap,
         )
     )
-    Entity.update_all_entities_senses(max_distance=10)
+    Entity.materialize_all_navigation(max_distance=10)
     movement_before = mover.action_economy.movement.normalized_score
 
     result = Move(source_entity_uuid=mover.uuid, end_position=(5, 0)).apply()
@@ -634,7 +634,7 @@ def test_effect_phase_speed_reduction_limits_the_remaining_path() -> None:
             event_processor=slow_on_entry,
         )
     )
-    Entity.update_all_entities_senses(max_distance=10)
+    Entity.materialize_all_navigation(max_distance=10)
 
     result = Move(source_entity_uuid=mover.uuid, end_position=(7, 0)).apply()
 
@@ -779,7 +779,7 @@ def test_prepare_intercept_prepays_action_and_distance() -> None:
     """Preparing intercept pays one action and the declared charge distance."""
     reset_arena()
     fighter = create_melee_fighter("Fighter", (2, 2), "heroes")
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     action_before = fighter.action_economy.actions.normalized_score
     movement_before = fighter.action_economy.movement.normalized_score
     prepare = PrepareIntercept(source_entity_uuid=fighter.uuid)
@@ -804,7 +804,7 @@ def test_prepare_intercept_rejects_unaffordable_distance_before_effects() -> Non
     """The typed movement cost blocks preparation without spending the action."""
     reset_arena()
     fighter = create_melee_fighter("Tired Fighter", (2, 2), "heroes")
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     fighter.action_economy.movement.self_static.add_value_modifier(
         NumericalModifier.create(
             source_entity_uuid=fighter.uuid,
@@ -831,7 +831,7 @@ def test_intercept_blocks_the_triggering_step_and_charges_only_committed_steps()
     interceptor = create_melee_fighter("Interceptor", (2, 2), "heroes")
     enemy = create_melee_fighter("Enemy", (8, 2), "monsters")
     arm_intercept(interceptor, (5, 2))
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     movement_before = enemy.action_economy.movement.normalized_score
 
     result = Move(source_entity_uuid=enemy.uuid, end_position=(3, 2)).apply()
@@ -856,7 +856,7 @@ def test_intercept_ignores_allies_and_cannot_fire_twice_on_one_reaction() -> Non
     interceptor = create_melee_fighter("Interceptor", (2, 2), "heroes")
     ally = create_melee_fighter("Ally", (8, 2), "heroes")
     arm_intercept(interceptor, (5, 2))
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
 
     Move(source_entity_uuid=ally.uuid, end_position=(3, 2)).apply()
 
@@ -869,7 +869,7 @@ def test_intercept_ignores_allies_and_cannot_fire_twice_on_one_reaction() -> Non
     first_enemy = create_melee_fighter("First Enemy", (8, 2), "monsters")
     second_enemy = create_melee_fighter("Second Enemy", (10, 2), "monsters")
     arm_intercept(interceptor, (5, 2))
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
 
     Move(source_entity_uuid=first_enemy.uuid, end_position=(3, 2)).apply()
     assert interceptor.position == (5, 2)
@@ -894,7 +894,7 @@ def test_intercept_and_opportunity_attack_share_an_explicit_two_reaction_budget(
     )
     add_opportunity_attack_handler(interceptor)
     arm_intercept(interceptor, (5, 2))
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     hit_modifier = force_attack_hit(interceptor)
 
     try:
@@ -926,7 +926,7 @@ def test_closed_door_invalidates_prepared_intercept_path_at_trigger_time() -> No
     )
     door.place_on_grid((4, 2))
     arm_intercept(interceptor, (6, 2))
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
 
     result = execute_use_action(door_closer, door.uuid, "Close Door")
 
@@ -948,7 +948,7 @@ def test_removed_intercept_condition_removes_its_handler() -> None:
     interceptor = create_melee_fighter("Interceptor", (2, 2), "heroes")
     enemy = create_melee_fighter("Enemy", (8, 2), "monsters")
     arm_intercept(interceptor, (5, 2))
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     assert interceptor.get_event_handler_by_name("Intercept") is not None
 
     interceptor.remove_condition("Intercepting")
@@ -970,7 +970,7 @@ def test_dodge_roll_moves_and_consumes_one_reaction() -> None:
             target_entity_uuid=defender.uuid,
         )
     )
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     modifier_uuid = force_attack_hit(attacker)
 
     try:
@@ -994,7 +994,7 @@ def test_dodge_roll_handles_fully_blocked_and_partial_retreats() -> None:
             target_entity_uuid=defender.uuid,
         )
     )
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     modifier_uuid = force_attack_hit(attacker)
     try:
         execute_attack(attacker, defender)
@@ -1014,7 +1014,7 @@ def test_dodge_roll_handles_fully_blocked_and_partial_retreats() -> None:
             target_entity_uuid=defender.uuid,
         )
     )
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     modifier_uuid = force_attack_hit(attacker)
     try:
         execute_attack(attacker, defender)
@@ -1044,7 +1044,7 @@ def test_open_door_is_authoritative_when_dodge_roll_triggers() -> None:
             target_entity_uuid=defender.uuid,
         )
     )
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
 
     result = execute_use_action(opener, door.uuid, "Open Door")
 
@@ -1071,7 +1071,7 @@ def test_removed_dodge_roll_condition_removes_its_handler() -> None:
             target_entity_uuid=defender.uuid,
         )
     )
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     assert defender.get_event_handler_by_name("Dodge Roll") is not None
 
     defender.remove_condition("Dodge Roll")

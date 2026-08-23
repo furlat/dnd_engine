@@ -698,7 +698,8 @@ class FrenziedStrike(BaseAction):
         if not target:
             return declaration_event.cancel(status_message="Target not found")
 
-        if self.target_entity_uuid not in entity.senses.entities:
+        contact = entity.senses.entities.get(self.target_entity_uuid)
+        if contact is None or not contact.visual:
             return declaration_event.cancel(status_message="Target not visible")
 
         attack_event = cast(AttackEvent, declaration_event)

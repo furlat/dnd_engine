@@ -323,7 +323,7 @@ def test_magical_sleep_immunity_excludes_target_without_charm_proxy() -> None:
         OriginCapability.MAGICAL_SLEEP_IMMUNITY,
         uuid4(),
     )
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     sleep = Sleep(
         source_entity_uuid=caster.uuid,

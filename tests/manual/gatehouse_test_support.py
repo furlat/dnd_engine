@@ -119,7 +119,7 @@ def create_gatehouse_scenario() -> GatehouseScenario:
     reset_playable_scenario_state()
     hero = create_test_monster("monster.goblin", name="Gatehouse Hero", position=(1, 1), faction="heroes")
     monster = create_test_monster("monster.skeleton", name="Gatehouse Skeleton", position=(2, 1), faction="monsters")
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
 
     hero_controller = ScenarioHumanController(source_entity_uuid=hero.uuid)
     monster_controller = ScenarioPassController(source_entity_uuid=monster.uuid)

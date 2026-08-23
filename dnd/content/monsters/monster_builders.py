@@ -118,7 +118,7 @@ def _senses_transform(
     def apply(entity: Entity) -> Undo:
         added: list[SenseMode] = []
         for sense in definition.senses:
-            if darkvision is False and sense.sense_type.value == "darkvision":
+            if darkvision is False and sense.sense_type is SensesType.DARKVISION:
                 continue
             mode = SenseMode(
                 sense_type=sense.sense_type,
@@ -127,7 +127,7 @@ def _senses_transform(
             entity.senses.sense_modes.append(mode)
             added.append(mode)
         if darkvision is True and not any(
-            mode.sense_type.value == "darkvision"
+            mode.sense_type is SensesType.DARKVISION
             for mode in added
         ):
             mode = SenseMode(

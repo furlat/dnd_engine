@@ -115,7 +115,7 @@ def test_halfling_nimbleness_allows_traversal_but_not_ending_in_larger_space() -
         source_id,
     )
 
-    halfling.update_entity_senses(max_distance=20)
+    halfling.materialize_navigation(max_distance=20)
 
     assert not larger.blocks_walking(halfling.uuid)
     assert (2, 0) not in halfling.senses.paths
@@ -129,7 +129,7 @@ def test_halfling_nimbleness_allows_traversal_but_not_ending_in_larger_space() -
         OriginCapability.HALFLING_NIMBLENESS,
         source_id,
     )
-    halfling.update_entity_senses(max_distance=20)
+    halfling.materialize_navigation(max_distance=20)
 
     assert larger.blocks_walking(halfling.uuid)
     assert (3, 0) not in halfling.senses.paths
@@ -159,7 +159,7 @@ def test_halfling_nimbleness_does_not_bypass_same_size_creatures() -> None:
         uuid4(),
     )
 
-    halfling.update_entity_senses(max_distance=20)
+    halfling.materialize_navigation(max_distance=20)
 
     assert same_size.blocks_walking(halfling.uuid)
     assert (2, 0) not in halfling.senses.paths
@@ -192,7 +192,7 @@ def test_naturally_stealthy_allows_hide_behind_one_larger_creature() -> None:
             size=Size.MEDIUM,
         ),
     )
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     assert hider.uuid in observer.senses.entities
 
     denied = Hide(source_entity_uuid=hider.uuid).apply()
@@ -241,7 +241,7 @@ def test_naturally_stealthy_requires_intervening_creature_to_be_larger() -> None
         OriginCapability.NATURALLY_STEALTHY,
         uuid4(),
     )
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
 
     assert hider.uuid in observer.senses.entities
     denied = Hide(source_entity_uuid=hider.uuid).apply()

@@ -123,7 +123,7 @@ def test_jump_reaches_visible_island_that_move_cannot_path_to() -> None:
         grid.set_tile(x, y, walkable=True, visible=True, name="Island")
 
     jumper = _create_jumper(strength=18, position=(2, 2))
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     jump_positions = set(_jump_template(jumper).get_valid_positions())
     available = get_available_actions(jumper)
     move_positions = {
@@ -142,7 +142,7 @@ def test_jump_moves_and_spends_bonus_action_and_distance() -> None:
     """Legacy ``test_jump.py::test_jump_execution``."""
     _reset_state()
     jumper = _create_jumper(strength=16)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     initial_bonus_actions = jumper.action_economy.bonus_actions.normalized_score
     initial_movement = jumper.action_economy.movement.normalized_score
 
@@ -166,7 +166,7 @@ def test_jump_declares_bonus_action_before_target_distance_cost() -> None:
     """Jump owns one ordered typed cost list before the event enters the queue."""
     _reset_state()
     jumper = _create_jumper(strength=16)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     jump = Jump(
         source_entity_uuid=jumper.uuid,
         end_position=(8, 5),
@@ -204,7 +204,7 @@ def test_jump_pays_named_resources_without_double_spending_movement() -> None:
         maximum=1,
         recharge_type=RechargeType.LONG_REST,
     )
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     jump = Jump(
         source_entity_uuid=jumper.uuid,
         end_position=(8, 5),
@@ -233,7 +233,7 @@ def test_jump_rejects_an_occupied_landing_position() -> None:
     _reset_state()
     jumper = _create_jumper()
     blocker = _create_jumper(position=(8, 5), faction="monsters")
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     event = Jump(
         source_entity_uuid=jumper.uuid,
@@ -249,7 +249,7 @@ def test_jump_range_is_capped_by_remaining_movement_budget() -> None:
     """Legacy ``test_jump.py::test_jump_movement_budget``."""
     _reset_state(width=30, height=30)
     jumper = _create_jumper(strength=20)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     jumper.action_economy.movement.self_static.add_value_modifier(
         NumericalModifier.create(
             source_entity_uuid=jumper.uuid,
@@ -286,7 +286,7 @@ def test_jump_discovery_uses_position_los_targets() -> None:
     """Legacy ``test_jump.py::test_jump_in_available_actions``."""
     _reset_state()
     jumper = _create_jumper(strength=14)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     available = get_available_actions(jumper)
     jump_row = next(
@@ -309,7 +309,7 @@ def test_jump_provokes_opportunity_attack_when_leaving_reach() -> None:
         faction="monsters",
     )
     add_opportunity_attack_handler(watcher)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     hit_modifier = force_attack_hit(watcher)
     hp_before = get_hp(jumper)
 
@@ -337,7 +337,7 @@ def test_disengage_prevents_opportunity_attack_during_jump() -> None:
         faction="monsters",
     )
     add_opportunity_attack_handler(watcher)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     disengage_event = Disengage(
         source_entity_uuid=jumper.uuid,
         template=False,

@@ -63,11 +63,18 @@ class OpenDoorAction(BaseAction):
         if not isinstance(door, DoorObject):
             return execution_event.cancel(status_message="Door not found")
         old_blocks_movement = door.blocks_movement
-        old_blocks_vision = door.blocks_vision_field
+        old_blocks_optics = door.blocks_optics_field
+        old_blocks_propagation = door.blocks_propagation_field
         door.is_open = True
         door.blocks_movement = False
-        door.blocks_vision_field = False
-        door._notify_blocking_changed(old_blocks_movement, old_blocks_vision, parent_event=execution_event.uuid)
+        door.blocks_optics_field = False
+        door.blocks_propagation_field = False
+        door._notify_blocking_changed(
+            old_blocks_movement,
+            old_blocks_optics,
+            old_blocks_propagation,
+            parent_event=execution_event.uuid,
+        )
         effect = execution_event.phase_to(EventPhase.EFFECT, status_message="Door opened")
         return effect.phase_to(EventPhase.COMPLETION, status_message="Door opened")
 
@@ -110,11 +117,18 @@ class CloseDoorAction(BaseAction):
         if not isinstance(door, DoorObject):
             return execution_event.cancel(status_message="Door not found")
         old_blocks_movement = door.blocks_movement
-        old_blocks_vision = door.blocks_vision_field
+        old_blocks_optics = door.blocks_optics_field
+        old_blocks_propagation = door.blocks_propagation_field
         door.is_open = False
         door.blocks_movement = True
-        door.blocks_vision_field = True
-        door._notify_blocking_changed(old_blocks_movement, old_blocks_vision, parent_event=execution_event.uuid)
+        door.blocks_optics_field = True
+        door.blocks_propagation_field = True
+        door._notify_blocking_changed(
+            old_blocks_movement,
+            old_blocks_optics,
+            old_blocks_propagation,
+            parent_event=execution_event.uuid,
+        )
         effect = execution_event.phase_to(EventPhase.EFFECT, status_message="Door closed")
         return effect.phase_to(EventPhase.COMPLETION, status_message="Door closed")
 
@@ -126,7 +140,8 @@ class DoorObject(UsableItem):
     is_pickable: bool = Field(default=False, description="Doors are fixed environment objects.")
     map_char: str = Field(default="\u03c0", description="Map glyph for the test door.")
     blocks_movement: bool = Field(default=True, description="Closed doors block movement.")
-    blocks_vision_field: bool = Field(default=True, description="Closed doors block line of sight.")
+    blocks_optics_field: bool = Field(default=True, description="Closed doors block ordinary optics.")
+    blocks_propagation_field: bool = Field(default=True, description="Closed doors block physical propagation.")
     is_open: bool = Field(default=False, description="Whether the door is currently open.")
 
     def get_spatial_open_state(self) -> Optional[bool]:

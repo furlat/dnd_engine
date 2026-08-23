@@ -122,22 +122,18 @@ class BaseItem(BaseBlock):
         description="Free-form tags used by item queries and filtering.",
     )
     include_in_senses_objects: bool = Field(default=True, description="Whether entity senses should list this floor object")
-    include_in_adjacent_senses_objects: bool = Field(default=False, description="Whether adjacent entities can sense this floor object without cell visibility")
     include_in_available_object_actions: bool = Field(default=True, description="Whether object/use action discovery should consider this floor object")
     blocks_movement: bool = Field(default=False, description="Blocks entity movement when on grid")
-    blocks_vision_field: bool = Field(default=False, description="Blocks line of sight when on grid")
+    blocks_optics_field: bool = Field(default=False, description="Blocks ordinary optics when on grid")
+    blocks_propagation_field: bool = Field(default=False, description="Blocks physical propagation when on grid")
     blocks_movement_north: bool = Field(default=False, description="Blocks movement crossing north from this tile")
     blocks_movement_south: bool = Field(default=False, description="Blocks movement crossing south from this tile")
     blocks_movement_east: bool = Field(default=False, description="Blocks movement crossing east from this tile")
     blocks_movement_west: bool = Field(default=False, description="Blocks movement crossing west from this tile")
-    blocks_vision_north: bool = Field(default=False, description="Blocks vision crossing north from this tile")
-    blocks_vision_south: bool = Field(default=False, description="Blocks vision crossing south from this tile")
-    blocks_vision_east: bool = Field(default=False, description="Blocks vision crossing east from this tile")
-    blocks_vision_west: bool = Field(default=False, description="Blocks vision crossing west from this tile")
-    blocks_light_north: bool = Field(default=False, description="Blocks light crossing north from this tile")
-    blocks_light_south: bool = Field(default=False, description="Blocks light crossing south from this tile")
-    blocks_light_east: bool = Field(default=False, description="Blocks light crossing east from this tile")
-    blocks_light_west: bool = Field(default=False, description="Blocks light crossing west from this tile")
+    blocks_optics_north: bool = Field(default=False, description="Blocks ordinary optics crossing north")
+    blocks_optics_south: bool = Field(default=False, description="Blocks ordinary optics crossing south")
+    blocks_optics_east: bool = Field(default=False, description="Blocks ordinary optics crossing east")
+    blocks_optics_west: bool = Field(default=False, description="Blocks ordinary optics crossing west")
     blocks_propagation_north: bool = Field(default=False, description="Blocks physical propagation crossing north from this tile")
     blocks_propagation_south: bool = Field(default=False, description="Blocks physical propagation crossing south from this tile")
     blocks_propagation_east: bool = Field(default=False, description="Blocks physical propagation crossing east from this tile")
@@ -189,7 +185,8 @@ class BaseItem(BaseBlock):
             light_source=self.get_light_source_state(),
             is_open=self.get_spatial_open_state(),
             blocks_movement=self.blocks_walking(),
-            blocks_vision=self.blocks_vision(),
+            blocks_optics=self.blocks_optics_at_center(),
+            blocks_propagation=self.blocks_propagation(),
         )
 
     def publish_location_state(
@@ -233,9 +230,13 @@ class BaseItem(BaseBlock):
         """Whether this item blocks walking through its grid position."""
         return self.blocks_movement
 
-    def blocks_vision(self, requesting_entity_uuid: Optional[UUID] = None) -> bool:
-        """Whether this item blocks line of sight through its grid position."""
-        return self.blocks_vision_field
+    def blocks_optics_at_center(self) -> bool:
+        """Whether this item blocks ordinary optics through its cell center."""
+        return self.blocks_optics_field
+
+    def blocks_propagation(self) -> bool:
+        """Whether this item blocks physical propagation through its grid position."""
+        return self.blocks_propagation_field
 
     def get_map_char(self) -> Optional[str]:
         """Return the glyph used to render this item on text maps."""
@@ -244,10 +245,6 @@ class BaseItem(BaseBlock):
     def should_include_in_senses_objects(self) -> bool:
         """Return whether senses should list this floor object."""
         return self.include_in_senses_objects
-
-    def should_include_in_adjacent_senses_objects(self) -> bool:
-        """Return whether adjacent-object sensing may include this item."""
-        return self.include_in_adjacent_senses_objects
 
     def should_include_in_available_object_actions(self) -> bool:
         """Return whether object/action discovery may expose this item."""
@@ -290,7 +287,8 @@ class BaseItem(BaseBlock):
         """Return one closed observer-relative spatial item snapshot."""
         return ItemObservationState(
             blocks_movement=self.blocks_walking(requesting_entity_uuid),
-            blocks_vision=self.blocks_vision(requesting_entity_uuid),
+            blocks_optics=self.blocks_optics_at_center(),
+            blocks_propagation=self.blocks_propagation(),
             is_pickable=self.is_pickable,
             is_usable=self.is_usable,
             stack_count=self.stack_count,
@@ -322,24 +320,15 @@ class BaseItem(BaseBlock):
                 return self.blocks_movement_east
             if direction == "west":
                 return self.blocks_movement_west
-        elif channel == "vision":
+        elif channel == "optical":
             if direction == "north":
-                return self.blocks_vision_north
+                return self.blocks_optics_north
             if direction == "south":
-                return self.blocks_vision_south
+                return self.blocks_optics_south
             if direction == "east":
-                return self.blocks_vision_east
+                return self.blocks_optics_east
             if direction == "west":
-                return self.blocks_vision_west
-        elif channel == "light":
-            if direction == "north":
-                return self.blocks_light_north
-            if direction == "south":
-                return self.blocks_light_south
-            if direction == "east":
-                return self.blocks_light_east
-            if direction == "west":
-                return self.blocks_light_west
+                return self.blocks_optics_west
         elif channel == "propagation":
             if direction == "north":
                 return self.blocks_propagation_north
@@ -366,26 +355,15 @@ class BaseItem(BaseBlock):
                 self.blocks_movement_west = blocked
             else:
                 return False
-        elif channel == "vision":
+        elif channel == "optical":
             if direction == "north":
-                self.blocks_vision_north = blocked
+                self.blocks_optics_north = blocked
             elif direction == "south":
-                self.blocks_vision_south = blocked
+                self.blocks_optics_south = blocked
             elif direction == "east":
-                self.blocks_vision_east = blocked
+                self.blocks_optics_east = blocked
             elif direction == "west":
-                self.blocks_vision_west = blocked
-            else:
-                return False
-        elif channel == "light":
-            if direction == "north":
-                self.blocks_light_north = blocked
-            elif direction == "south":
-                self.blocks_light_south = blocked
-            elif direction == "east":
-                self.blocks_light_east = blocked
-            elif direction == "west":
-                self.blocks_light_west = blocked
+                self.blocks_optics_west = blocked
             else:
                 return False
         elif channel == "propagation":
@@ -410,17 +388,9 @@ class BaseItem(BaseBlock):
         """Whether this item blocks movement crossing a tile-relative direction."""
         return self._blocks_direction("movement", direction)
 
-    def blocks_directional_vision(self, direction: str,
-                                  observer_uuid: Optional[UUID] = None,
-                                  subjective: bool = False) -> bool:
-        """Whether this item blocks vision crossing a tile-relative direction."""
-        return self._blocks_direction("vision", direction)
-
-    def blocks_directional_light(self, direction: str,
-                                 observer_uuid: Optional[UUID] = None,
-                                 subjective: bool = False) -> bool:
-        """Whether this item blocks light crossing a tile-relative direction."""
-        return self._blocks_direction("light", direction)
+    def blocks_directional_optics(self, direction: str) -> bool:
+        """Whether this item blocks ordinary optics across one boundary."""
+        return self._blocks_direction("optical", direction)
 
     def blocks_directional_propagation(self, direction: str,
                                        requesting_entity_uuid: Optional[UUID] = None,
@@ -431,12 +401,17 @@ class BaseItem(BaseBlock):
     def set_directional_blocking(self, channel: str, direction: str, blocked: bool,
                                  parent_event: Optional[UUID] = None) -> None:
         """Update one tile-relative directional blocker and notify the grid if placed."""
-        if channel not in {"movement", "vision", "light", "propagation"}:
+        if channel not in {"movement", "optical", "propagation"}:
             raise ValueError(f"Unsupported directional blocking channel: {channel}")
         if direction not in {"north", "south", "east", "west"}:
             raise ValueError(f"Unsupported direction: {direction}")
         if self._set_directional_blocking_field(channel, direction, blocked):
-            self._notify_blocking_changed(self.blocks_movement, self.blocks_vision_field, parent_event)
+            self._notify_blocking_changed(
+                self.blocks_movement,
+                self.blocks_optics_field,
+                self.blocks_propagation_field,
+                parent_event,
+            )
 
     def set_directional_blocking_bulk(
         self,
@@ -446,7 +421,7 @@ class BaseItem(BaseBlock):
         """Apply multiple directional blocker updates and emit at most one spatial event."""
         normalized_updates = list(updates)
         for channel, direction, _blocked in normalized_updates:
-            if channel not in {"movement", "vision", "light", "propagation"}:
+            if channel not in {"movement", "optical", "propagation"}:
                 raise ValueError(f"Unsupported directional blocking channel: {channel}")
             if direction not in {"north", "south", "east", "west"}:
                 raise ValueError(f"Unsupported direction: {direction}")
@@ -456,44 +431,64 @@ class BaseItem(BaseBlock):
             changed = self._set_directional_blocking_field(channel, direction, blocked) or changed
 
         if changed:
-            self._notify_blocking_changed(self.blocks_movement, self.blocks_vision_field, parent_event)
+            self._notify_blocking_changed(
+                self.blocks_movement,
+                self.blocks_optics_field,
+                self.blocks_propagation_field,
+                parent_event,
+            )
 
-    def _notify_blocking_changed(self, old_blocks_movement: bool, old_blocks_vision: bool,
-                                     parent_event: Optional[UUID] = None) -> None:
+    def _notify_blocking_changed(
+        self,
+        old_blocks_movement: bool,
+        old_blocks_optics: bool,
+        old_blocks_propagation: bool,
+        parent_event: Optional[UUID] = None,
+    ) -> None:
         """Fire SPATIAL_OBJECT_CHANGED if blocking state changed while on grid.
 
-        Called after modifying blocks_movement or blocks_vision_field on an item
+        Called after modifying movement, optical, or propagation policy on an item
         that is placed on the grid. Fires an event with hint indicating which
-        senses layers are affected, replacing brute-force update_all_entities_senses().
+        senses layers are affected, replacing the old brute-force global refresh.
 
-        Light recomputation is handled by GridMap's _on_vision_blocking_changed
-        callback which reacts to any spatial event with requires_fov=True.
+        Light recomputation is handled by GridMap's optical-blocking callback.
         """
         grid = get_map()
         position = grid.get_object_position(self.uuid)
         if position is None:
             return
-        vision_changed = self.blocks_vision_field != old_blocks_vision
+        optics_changed = self.blocks_optics_field != old_blocks_optics
+        propagation_changed = (
+            self.blocks_propagation_field != old_blocks_propagation
+        )
         walking_changed = self.blocks_movement != old_blocks_movement
         directional_metadata = grid.recompute_tile_directional_blocking(position)
         directional_channels = directional_metadata.get("directional_channels") or []
         direction_changed = bool(directional_channels)
         revision_channels = set(directional_channels)
-        if vision_changed:
-            revision_channels.update({"vision", "propagation"})
+        if optics_changed:
+            revision_channels.add("optical")
+        if propagation_changed:
+            revision_channels.add("propagation")
         if walking_changed:
             revision_channels.add("movement")
         grid.invalidate_spatial_caches(revision_channels)
-        if vision_changed or walking_changed or direction_changed:
+        if optics_changed or propagation_changed or walking_changed or direction_changed:
             event = SpatialChangeEvent.object_changed(
                 position, self.uuid,
-                blocks_vision_changed=vision_changed or "vision" in directional_channels,
+                blocks_optics_changed=(
+                    optics_changed or "optical" in directional_channels
+                ),
+                blocks_propagation_changed=(
+                    propagation_changed or "propagation" in directional_channels
+                ),
                 blocks_walking_changed=walking_changed or "movement" in directional_channels,
                 parent_event=parent_event,
                 object_name=self.name,
                 object_map_char=self.get_map_char(),
                 object_blocks_movement=self.blocks_movement,
-                object_blocks_vision=self.blocks_vision_field,
+                object_blocks_optics=self.blocks_optics_field,
+                object_blocks_propagation=self.blocks_propagation_field,
                 object_is_open=self.get_spatial_open_state(),
                 **directional_metadata,
             )

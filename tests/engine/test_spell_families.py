@@ -27,7 +27,7 @@ from dnd.core.base_actions import (
 )
 from dnd.core.base_block import BaseBlock
 from dnd.types.world import LightLevel
-from dnd.types.senses import SenseMode, SensesType
+from dnd.types.senses import OpticalObscurement, SenseMode, SensesType
 from dnd.core.base_conditions import BaseCondition
 from dnd.types.conditions import ConditionTag, DurationType
 from dnd.core.base_object import BaseObject
@@ -246,7 +246,7 @@ def boost_save(entity: Entity, ability_name: AbilityName, value: int = 100) -> N
 def assert_completed_spell(event: Event | None) -> SpellEvent:
     """Assert a spell application produced an uncanceled completion event."""
     assert isinstance(event, SpellEvent)
-    assert not event.canceled
+    assert not event.canceled, event.status_message
     return event
 
 
@@ -436,7 +436,7 @@ def test_spell_validation_dispatches_execution_handlers_once() -> None:
     reset_spell_family_state()
     caster = create_family_caster()
     target = create_family_target(position=(4, 1))
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     execution_calls = 0
 
     def count_execution(event: Event, _: UUID) -> Event:
@@ -477,7 +477,7 @@ def test_position_spell_accepts_visible_map_origin() -> None:
         position=(1, 0),
         spell_slots={3: 1},
     )
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     spell = Fireball(
         source_entity_uuid=caster.uuid,
         end_position=(0, 0),
@@ -498,7 +498,7 @@ def test_spell_save_updates_do_not_redispatch_effect_handlers() -> None:
     reset_spell_family_state()
     caster = create_family_caster(spell_slots={2: 1})
     target = create_family_target(position=(3, 1))
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     penalize_save(target, "wisdom")
     effect_calls = 0
 
@@ -538,7 +538,7 @@ def test_eb_15_002_evocation_attack_save_and_area_damage_patterns() -> None:
     reset_spell_family_state()
     caster = create_family_caster(spell_slots={3: 1})
     target = create_family_target(position=(4, 1))
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     force_spell_attack_hit(caster)
     fire_bolt_hp = get_hp(target)
@@ -574,7 +574,7 @@ def test_eb_15_002_evocation_attack_save_and_area_damage_patterns() -> None:
     caster.action_economy.reset_all_costs()
     area_target = create_family_target(name="Area Target", position=(7, 1))
     penalize_save(area_target, "dexterity")
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     area_hp = get_hp(area_target)
     fireball_event = Fireball(
         source_entity_uuid=caster.uuid,
@@ -600,7 +600,7 @@ def test_eb_15_003_auto_hit_and_healing_spell_patterns() -> None:
         faction="heroes",
         hp_dice=4,
     )
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     missile_hp = get_hp(target)
     missile_event = MagicMissile(
@@ -646,7 +646,7 @@ def test_eb_15_004_abjuration_buffs_and_restoration_remove_conditions() -> None:
     """EB-15-004: abjuration includes protective buffs and condition removal."""
     reset_spell_family_state()
     caster = create_family_caster(spell_slots={1: 1, 2: 1})
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     base_ac = caster.equipment.ac_bonus.normalized_score
     mage_armor_event = MageArmor(
@@ -680,7 +680,7 @@ def test_eb_15_023_restoration_spells_remove_supported_effects_only() -> None:
     reset_spell_family_state()
     caster = create_family_caster(spell_slots={2: 2, 3: 1, 5: 2})
     ally = create_family_target(name="Restoration Ally", position=(2, 1), faction="heroes")
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     ally.add_condition(Poisoned(source_entity_uuid=caster.uuid, target_entity_uuid=ally.uuid))
     ally.add_condition(LingeringDiseaseEffect(source_entity_uuid=caster.uuid, target_entity_uuid=ally.uuid))
@@ -794,7 +794,7 @@ def test_eb_15_038_greater_restoration_removes_srd_tagged_effect_surfaces() -> N
     reset_spell_family_state()
     caster = create_family_caster(spell_slots={5: 3})
     ally = create_family_target(name="Restoration Ally", position=(2, 1), faction="heroes")
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     base_strength_score = ally.ability_scores.strength.ability_score.score
     base_max_hp = get_max_hp(ally)
@@ -870,7 +870,7 @@ def test_eb_15_039_greater_restoration_removes_standard_petrified_condition() ->
     reset_spell_family_state()
     caster = create_family_caster(spell_slots={5: 1})
     ally = create_family_target(name="Petrified Ally", position=(2, 1), faction="heroes")
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     ally.add_condition(
         Petrified(
@@ -907,7 +907,7 @@ def test_eb_15_040_greater_restoration_reduces_exhaustion_one_level() -> None:
     reset_spell_family_state()
     caster = create_family_caster(spell_slots={5: 3})
     ally = create_family_target(name="Exhausted Ally", position=(2, 1), faction="heroes")
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     base_movement = ally.action_economy.movement.normalized_score
 
     ally.add_condition(
@@ -981,7 +981,7 @@ def test_eb_15_025_protective_abjurations_prevent_and_absorb_effects() -> None:
     ally = create_family_target(name="Protected Ally", position=(2, 1), faction="heroes")
     doomed = create_family_target(name="Doomed Target", position=(3, 1), faction="monsters")
     setup_standard_actions(doomed)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     ally.add_condition(Poisoned(source_entity_uuid=caster.uuid, target_entity_uuid=ally.uuid))
     assert "Poisoned" in ally.active_conditions
@@ -1193,7 +1193,7 @@ def test_eb_15_025_protective_abjurations_prevent_and_absorb_effects() -> None:
         grid.set_tile(position[0], position[1], tile=water_factory(position), fire_event=False)
 
     Entity.update_entity_position(ally, water_lane[0])
-    ally.update_entity_senses(max_distance=20)
+    ally.materialize_navigation(max_distance=20)
     swim_template = Swim(source_entity_uuid=ally.uuid, template=True)
     ally.register_action(swim_template)
     available_swims = ally.get_available_actions()
@@ -1362,7 +1362,7 @@ def test_eb_15_009_shield_reaction_converts_marginal_attack_hit_to_miss() -> Non
         faction="monsters",
     )
     register_shield_reaction(shielded)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     ac_before = shielded.ac_bonus().normalized_score
 
     attack_event = run_shield_attack(attacker, shielded, 10)
@@ -1397,7 +1397,7 @@ def test_eb_15_010_shield_blocks_magic_missile_darts_against_its_target_only() -
         faction="monsters",
     )
     register_shield_reaction(shielded)
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     shielded_hp = get_hp(shielded)
     ally_hp = get_hp(ally)
 
@@ -1437,7 +1437,7 @@ def test_eb_15_020_shield_non_firing_persistence_and_turn_cleanup() -> None:
             faction="monsters",
         )
         register_shield_reaction(shielded)
-        Entity.update_all_entities_senses()
+        Entity.materialize_all_navigation()
         return shielded, attacker
 
     for d20_result, expected_outcome in (
@@ -1518,7 +1518,7 @@ def test_eb_15_022_shield_handler_toggle_gates_attack_and_missile_reactions() ->
         faction="monsters",
     )
     register_shield_reaction(shielded)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     shield_handler = shielded.get_event_handler_by_name("Shield")
     assert shield_handler is not None and shield_handler.enabled
@@ -1560,7 +1560,7 @@ def test_eb_15_022_shield_handler_toggle_gates_attack_and_missile_reactions() ->
         faction="monsters",
     )
     register_shield_reaction(shielded)
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     missile_shield_handler = shielded.get_event_handler_by_name("Shield")
     assert missile_shield_handler is not None
     assert shielded.set_handler_enabled_by_uuid(
@@ -1601,7 +1601,7 @@ def test_eb_15_036_shield_condition_log_nests_under_triggering_attack() -> None:
         faction="monsters",
     )
     register_shield_reaction(shielded)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     EventQueue.set_combat_log_callback(
         lambda event: captured_logs.append(event.combat_log) if event.combat_log else None
     )
@@ -1632,7 +1632,7 @@ def test_eb_15_005_multi_target_concentration_links_each_effect() -> None:
     caster = create_family_caster(spell_slots={1: 1})
     ally_one = create_family_target(name="Ally One", position=(2, 1), faction="heroes")
     ally_two = create_family_target(name="Ally Two", position=(3, 1), faction="heroes")
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     event = Bless(
         source_entity_uuid=caster.uuid,
@@ -1664,7 +1664,7 @@ def test_eb_15_015_bless_and_bane_rewrite_save_d20_results() -> None:
     ally = create_family_target(name="Blessed Ally", position=(2, 1), faction="heroes")
     enemy = create_family_target(name="Baned Enemy", position=(3, 1), faction="monsters")
     penalize_save(enemy, "charisma")
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     bless_event = Bless(
         source_entity_uuid=caster.uuid,
@@ -1720,7 +1720,7 @@ def test_eb_15_016_guidance_rewrites_one_skill_check_then_cleans_up() -> None:
     """EB-15-016: Guidance rewrites one check d20 and removes its condition."""
     reset_spell_family_state()
     caster = create_family_caster(spell_slots={1: 1})
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     event = Guidance(
         source_entity_uuid=caster.uuid,
@@ -1756,7 +1756,7 @@ def test_eb_15_024_d20_mutation_handlers_are_roll_type_scoped() -> None:
     caster = create_family_caster(spell_slots={1: 1})
     ally = create_family_target(name="Blessed Ally", position=(2, 1), faction="heroes")
     target = create_family_target(name="Attack Target", position=(3, 1), faction="monsters")
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     bless_event = Bless(
         source_entity_uuid=caster.uuid,
@@ -1799,7 +1799,7 @@ def test_eb_15_024_d20_mutation_handlers_are_roll_type_scoped() -> None:
     enemy = create_family_target(name="Baned Enemy", position=(2, 1), faction="monsters")
     target = create_family_target(name="Attack Target", position=(3, 1), faction="heroes")
     penalize_save(enemy, "charisma")
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     bane_event = Bane(
         source_entity_uuid=caster.uuid,
@@ -1839,7 +1839,7 @@ def test_eb_15_024_d20_mutation_handlers_are_roll_type_scoped() -> None:
 
     reset_spell_family_state()
     caster = create_family_caster(spell_slots={1: 1})
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     guidance_event = Guidance(
         source_entity_uuid=caster.uuid,
@@ -1901,7 +1901,7 @@ def test_eb_15_017_hold_person_failed_save_repeat_save_and_cleanup() -> None:
     caster = create_family_caster(spell_slots={2: 1})
     target = create_family_target(name="Held Humanoid", position=(3, 1))
     penalize_save(target, "wisdom")
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     event = HoldPerson(
         source_entity_uuid=caster.uuid,
@@ -1937,7 +1937,7 @@ def test_eb_15_017_hold_person_successful_initial_save_has_truthful_synced_log()
     caster = create_family_caster(spell_slots={2: 1})
     target = create_family_target(name="Resisting Humanoid", position=(3, 1))
     boost_save(target, "wisdom")
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     event = HoldPerson(
         source_entity_uuid=caster.uuid,
@@ -1982,7 +1982,7 @@ def test_eb_15_018_hold_monster_excludes_undead_and_repeats_cleanup() -> None:
     target = create_family_target(name="Living Monster", position=(4, 1))
     target.creature_type = CreatureType.MONSTROSITY
     penalize_save(target, "wisdom")
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     undead_event = HoldMonster(
         source_entity_uuid=caster.uuid,
@@ -2028,7 +2028,7 @@ def test_eb_15_018_hold_monster_successful_initial_save_has_synced_log() -> None
     target = create_family_target(name="Resisting Monster", position=(3, 1))
     target.creature_type = CreatureType.MONSTROSITY
     boost_save(target, "wisdom")
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     event = HoldMonster(
         source_entity_uuid=caster.uuid,
@@ -2068,7 +2068,7 @@ def test_eb_15_019_mirror_image_duplicates_absorb_missed_attacks() -> None:
     reset_spell_family_state()
     caster = create_family_caster(spell_slots={2: 2})
     attacker = create_family_target(name="Attacker", position=(2, 1), faction="monsters")
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     base_ac_bonus = caster.equipment.ac_bonus.normalized_score
 
     event = MirrorImage(
@@ -2136,7 +2136,7 @@ def test_eb_15_035_mirror_image_recast_replaces_and_duration_expires() -> None:
     reset_spell_family_state()
     caster = create_family_caster(spell_slots={2: 3})
     attacker = create_family_target(name="Mirror Attacker", position=(2, 1), faction="monsters")
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     base_ac_bonus = caster.equipment.ac_bonus.normalized_score
 
     first_event = MirrorImage(
@@ -2212,7 +2212,7 @@ def test_eb_15_006_zone_spells_create_spatial_handlers_and_cleanup_links() -> No
     """EB-15-006: zone spells create spatial handlers and concentration cleanup."""
     reset_spell_family_state()
     caster = create_family_caster(spell_slots={2: 1})
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     event = SpikeGrowth(
         source_entity_uuid=caster.uuid,
@@ -2247,7 +2247,7 @@ def test_eb_15_021_zone_spell_family_entry_turn_start_and_cleanup_edges() -> Non
     target = create_family_target(name="Grease Target", position=(8, 5))
     setup_standard_actions(target)
     penalize_save(target, "dexterity")
-    Entity.update_all_entities_senses(max_distance=30)
+    Entity.materialize_all_navigation(max_distance=30)
 
     with patch("dnd.core.dice.random.randint", side_effect=fixed_zone_randint):
         grease_event = Grease(
@@ -2286,7 +2286,7 @@ def test_eb_15_021_zone_spell_family_entry_turn_start_and_cleanup_edges() -> Non
     caster = create_family_caster(position=(1, 1), spell_slots={2: 1})
     target = create_family_target(name="Web Target", position=(8, 5))
     penalize_save(target, "dexterity")
-    Entity.update_all_entities_senses(max_distance=30)
+    Entity.materialize_all_navigation(max_distance=30)
 
     with patch("dnd.core.dice.random.randint", side_effect=fixed_zone_randint):
         web_event = Web(
@@ -2331,7 +2331,7 @@ def test_eb_15_021_zone_spell_family_entry_turn_start_and_cleanup_edges() -> Non
     caster = create_family_caster(position=(1, 1), spell_slots={5: 1})
     target = create_family_target(name="Cloudkill Target", position=(15, 10), hp_dice=10)
     penalize_save(target, "constitution")
-    Entity.update_all_entities_senses(max_distance=40)
+    Entity.materialize_all_navigation(max_distance=40)
 
     with patch("dnd.core.dice.random.randint", side_effect=fixed_zone_randint):
         cloudkill_event = Cloudkill(
@@ -2380,7 +2380,7 @@ def test_eb_15_021_zone_spell_family_entry_turn_start_and_cleanup_edges() -> Non
         hp_dice=10,
     )
     penalize_save(enemy, "wisdom")
-    Entity.update_all_entities_senses(max_distance=30)
+    Entity.materialize_all_navigation(max_distance=30)
 
     with patch("dnd.core.dice.random.randint", side_effect=fixed_zone_randint):
         spirit_event = SpiritGuardians(
@@ -2454,7 +2454,7 @@ def test_spirit_guardians_uses_one_effect_target_turn_admission_fence() -> None:
     )
     set_hp(enemy, 300)
     penalize_save(enemy, "wisdom")
-    Entity.update_all_entities_senses(max_distance=30)
+    Entity.materialize_all_navigation(max_distance=30)
 
     with patch("dnd.core.dice.random.randint", side_effect=fixed_zone_randint):
         assert_completed_spell(
@@ -2527,7 +2527,7 @@ def test_spirit_guardians_moving_aura_hits_each_target_once_per_turn() -> None:
     for enemy in (first_enemy, second_enemy):
         set_hp(enemy, 300)
         penalize_save(enemy, "wisdom")
-    Entity.update_all_entities_senses(max_distance=30)
+    Entity.materialize_all_navigation(max_distance=30)
 
     with patch("dnd.core.dice.random.randint", side_effect=fixed_zone_randint):
         assert_completed_spell(
@@ -2614,7 +2614,7 @@ def test_overlapping_spirit_guardians_keep_each_exact_slow_source() -> None:
     )
     set_hp(enemy, 500)
     penalize_save(enemy, "wisdom")
-    Entity.update_all_entities_senses(max_distance=30)
+    Entity.materialize_all_navigation(max_distance=30)
 
     with patch("dnd.core.dice.random.randint", side_effect=fixed_zone_randint):
         assert_completed_spell(
@@ -2665,7 +2665,7 @@ def test_grease_has_an_independent_lifetime_and_checks_occupants_at_turn_end() -
     )
     target = create_family_target(position=(10, 10))
     penalize_save(target, "dexterity")
-    Entity.update_all_entities_senses(max_distance=120)
+    Entity.materialize_all_navigation(max_distance=120)
 
     with patch("dnd.core.dice.random.randint", side_effect=fixed_zone_randint):
         grease_event = Grease(
@@ -2716,7 +2716,7 @@ def test_grease_has_an_independent_lifetime_and_checks_occupants_at_turn_end() -
     caster.on_turn_start(round_number=2, turn_index=0)
     fog_event = FogCloud(
         source_entity_uuid=caster.uuid,
-        end_position=(18, 18),
+        end_position=(15, 15),
         template=False,
     ).apply()
     assert_completed_spell(fog_event)
@@ -2761,7 +2761,7 @@ def test_second_overlapping_grease_replaces_exact_material_without_raw_error() -
         position=(2, 3),
         spell_slots={1: 1},
     )
-    Entity.update_all_entities_senses(max_distance=120)
+    Entity.materialize_all_navigation(max_distance=120)
 
     first_event = Grease(
         source_entity_uuid=first_caster.uuid,
@@ -2795,7 +2795,7 @@ def test_daylight_has_an_independent_lifetime_from_caster_concentration() -> Non
         position=(3, 3),
         spell_slots={2: 1, 3: 1},
     )
-    Entity.update_all_entities_senses(max_distance=200)
+    Entity.materialize_all_navigation(max_distance=200)
 
     daylight_event = Daylight(
         source_entity_uuid=caster.uuid,
@@ -2844,7 +2844,7 @@ def test_eb_15_026_light_zone_spells_apply_obscurement_and_dispel_darkness() -> 
     """EB-15-026: light-zone spells alter tiles and Daylight dispels Darkness."""
     reset_spell_family_state(width=36, height=36)
     caster = create_family_caster(position=(8, 8), spell_slots={2: 1})
-    Entity.update_all_entities_senses(max_distance=160)
+    Entity.materialize_all_navigation(max_distance=160)
 
     fog_event = FogCloud(
         source_entity_uuid=caster.uuid,
@@ -2865,9 +2865,15 @@ def test_eb_15_026_light_zone_spells_apply_obscurement_and_dispel_darkness() -> 
     assert fog_outside_tile is not None
     assert fog_zone.zone_radius_feet == 40
     assert (24, 16) in fog_zone.affected_positions
-    assert fog_center_tile.resolved_light_level == LightLevel.DARKNESS
-    assert fog_edge_tile.resolved_light_level == LightLevel.DARKNESS
+    assert fog_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
+    assert fog_edge_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
     assert fog_outside_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
+    assert get_map().get_optical_obscurements_at((16, 16)) == (
+        OpticalObscurement.HEAVY,
+    )
+    assert get_map().get_optical_obscurements_at((24, 16)) == (
+        OpticalObscurement.HEAVY,
+    )
     assert "Concentrating" in caster.active_conditions
 
     caster.remove_condition("Concentrating")
@@ -2896,7 +2902,7 @@ def test_eb_15_026_light_zone_spells_apply_obscurement_and_dispel_darkness() -> 
     darkvision_observer.senses.sense_modes = [
         SenseMode(sense_type=SensesType.DARKVISION, range_feet=60)
     ]
-    Entity.update_all_entities_senses(max_distance=120)
+    Entity.materialize_all_navigation(max_distance=120)
 
     darkness_event = Darkness(
         source_entity_uuid=dark_caster.uuid,
@@ -2912,15 +2918,12 @@ def test_eb_15_026_light_zone_spells_apply_obscurement_and_dispel_darkness() -> 
     darkness_zone = cast(AreaCondition, darkness_effect)
     center_tile = get_map().get_tile(11, 10)
     assert center_tile is not None
-    assert center_tile.resolved_light_level == LightLevel.MAGICAL_DARKNESS
-    assert center_tile.blocks_vision(light_caster.uuid)
-    assert (
-        center_tile.get_effective_light_for(
-            darkvision_observer.uuid,
-            observer_position=darkvision_observer.position,
-        )
-        == LightLevel.MAGICAL_DARKNESS
+    assert center_tile.resolved_light_level == LightLevel.DARKNESS
+    assert get_map().get_optical_obscurements_at((11, 10)) == (
+        OpticalObscurement.MAGICAL_DARKNESS,
     )
+    assert (11, 10) not in light_caster.senses.visible
+    assert (11, 10) not in darkvision_observer.senses.visible
     assert "Concentrating" in dark_caster.active_conditions
 
     daylight_event = Daylight(
@@ -2954,7 +2957,7 @@ def test_eb_15_027_damage_zones_cover_upcast_obscurement_and_movement() -> None:
     target = create_family_target(name="Insect Target", position=(10, 5), hp_dice=20)
     penalize_save(target, "constitution")
     set_hp(target, 300)
-    Entity.update_all_entities_senses(max_distance=120)
+    Entity.materialize_all_navigation(max_distance=120)
 
     target_hp_before = get_hp(target)
     with patch("dnd.core.dice.random.randint", side_effect=fixed_zone_randint):
@@ -2974,10 +2977,9 @@ def test_eb_15_027_damage_zones_cover_upcast_obscurement_and_movement() -> None:
     plague_center_tile = get_map().get_tile(10, 5)
     assert plague_center_tile is not None
     assert plague_zone.adds_difficult_terrain
-    assert plague_zone.sets_light_level == LightLevel.DIM_LIGHT
-    assert plague_zone.light_is_obscurement
+    assert plague_zone.sets_light_level is None
     assert plague_center_tile.walking_cost.normalized_score == 2
-    assert plague_center_tile.resolved_light_level == LightLevel.DIM_LIGHT
+    assert plague_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
     assert target_hp_before - get_hp(target) == 18
     assert caster.action_economy.spell_slot_7.normalized_score == 0
 
@@ -2992,7 +2994,7 @@ def test_eb_15_027_damage_zones_cover_upcast_obscurement_and_movement() -> None:
     target = create_family_target(name="Cloud Target", position=(10, 10), hp_dice=20)
     penalize_save(target, "dexterity")
     set_hp(target, 300)
-    Entity.update_all_entities_senses(max_distance=120)
+    Entity.materialize_all_navigation(max_distance=120)
 
     target_hp_before = get_hp(target)
     with patch("dnd.core.dice.random.randint", side_effect=fixed_zone_randint):
@@ -3014,9 +3016,12 @@ def test_eb_15_027_damage_zones_cover_upcast_obscurement_and_movement() -> None:
     assert old_center_tile is not None
     assert old_trailing_tile is not None
     assert not cloud_zone.adds_difficult_terrain
-    assert cloud_zone.sets_light_level == LightLevel.DARKNESS
-    assert old_center_tile.resolved_light_level == LightLevel.DARKNESS
-    assert old_trailing_tile.resolved_light_level == LightLevel.DARKNESS
+    assert cloud_zone.sets_light_level is None
+    assert get_map().get_optical_obscurements_at(old_center) == (
+        OpticalObscurement.HEAVY,
+    )
+    assert old_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
+    assert old_trailing_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
     assert target_hp_before - get_hp(target) == 30
     assert caster.action_economy.spell_slot_8.normalized_score == 0
 
@@ -3030,8 +3035,11 @@ def test_eb_15_027_damage_zones_cover_upcast_obscurement_and_movement() -> None:
     assert new_center_tile is not None
     assert new_leading_tile is not None
     assert old_trailing_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
-    assert new_center_tile.resolved_light_level == LightLevel.DARKNESS
-    assert new_leading_tile.resolved_light_level == LightLevel.DARKNESS
+    assert get_map().get_optical_obscurements_at(new_center) == (
+        OpticalObscurement.HEAVY,
+    )
+    assert new_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
+    assert new_leading_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
 
 
 def test_eb_15_028_gas_and_ice_zones_match_srd_turn_start_edges() -> None:
@@ -3051,7 +3059,7 @@ def test_eb_15_028_gas_and_ice_zones_match_srd_turn_start_edges() -> None:
             name="Book poison immunity",
         )
     )
-    Entity.update_all_entities_senses(max_distance=120)
+    Entity.materialize_all_navigation(max_distance=120)
 
     with patch("dnd.core.dice.random.randint", return_value=10):
         cloud_event = StinkingCloud(
@@ -3069,9 +3077,11 @@ def test_eb_15_028_gas_and_ice_zones_match_srd_turn_start_edges() -> None:
     cloud_center_tile = get_map().get_tile(10, 5)
     assert cloud_center_tile is not None
     assert not cloud_zone.adds_difficult_terrain
-    assert cloud_zone.sets_light_level == LightLevel.DARKNESS
-    assert cloud_zone.light_is_obscurement
-    assert cloud_center_tile.resolved_light_level == LightLevel.DARKNESS
+    assert cloud_zone.sets_light_level is None
+    assert get_map().get_optical_obscurements_at((10, 5)) == (
+        OpticalObscurement.HEAVY,
+    )
+    assert cloud_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
     assert "Nauseated" not in retching_target.active_conditions
 
     with patch("dnd.core.dice.random.randint", return_value=10):
@@ -3094,7 +3104,14 @@ def test_eb_15_028_gas_and_ice_zones_match_srd_turn_start_edges() -> None:
 
     reset_spell_family_state(width=24, height=18)
     grid = get_map()
-    grid.set_tile(11, 10, walkable=False, visible=False, name="Wall")
+    grid.set_tile(
+        11,
+        10,
+        walkable=False,
+        blocks_optics=True,
+        blocks_propagation=True,
+        name="Wall",
+    )
     caster = create_family_caster(position=(10, 5), spell_slots={3: 1})
     concentrating_target = create_family_target(
         name="Concentrating Target",
@@ -3102,7 +3119,7 @@ def test_eb_15_028_gas_and_ice_zones_match_srd_turn_start_edges() -> None:
         hp_dice=8,
     )
     penalize_save(concentrating_target, "dexterity")
-    Entity.update_all_entities_senses(max_distance=120)
+    Entity.materialize_all_navigation(max_distance=120)
 
     with patch("dnd.core.dice.random.randint", return_value=10):
         storm_event = SleetStorm(
@@ -3123,7 +3140,10 @@ def test_eb_15_028_gas_and_ice_zones_match_srd_turn_start_edges() -> None:
     assert concentrating_target.position in storm_zone.affected_positions
     assert "Prone" not in concentrating_target.active_conditions
     assert storm_center_tile.walking_cost.normalized_score == 2
-    assert storm_center_tile.resolved_light_level == LightLevel.DARKNESS
+    assert get_map().get_optical_obscurements_at((10, 10)) == (
+        OpticalObscurement.HEAVY,
+    )
+    assert storm_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
 
     concentrating_target.add_condition(
         Concentrating(
@@ -3163,7 +3183,7 @@ def test_eb_15_041_stinking_cloud_skips_breathless_creatures() -> None:
     )
     penalize_save(breathing_target, "constitution")
     penalize_save(breathless_target, "constitution")
-    Entity.update_all_entities_senses(max_distance=120)
+    Entity.materialize_all_navigation(max_distance=120)
 
     with patch("dnd.core.dice.random.randint", return_value=10):
         cloud_event = StinkingCloud(
@@ -3201,7 +3221,7 @@ def test_gust_wind_exposure_uses_the_complete_child_lifecycle() -> None:
     """Persistent wind is a typed child fact, not an effect-only shortcut."""
     reset_spell_family_state(width=24, height=18)
     caster = create_family_caster(position=(2, 2), spell_slots={2: 1})
-    Entity.update_all_entities_senses(max_distance=120)
+    Entity.materialize_all_navigation(max_distance=120)
 
     gust_event = GustOfWind(
         source_entity_uuid=caster.uuid,
@@ -3253,7 +3273,7 @@ def test_object_spell_shared_validator_rejects_out_of_reach_target() -> None:
         is_targetable=True,
     )
     focus.place_on_grid((4, 1))
-    Entity.update_all_entities_senses(max_distance=120)
+    Entity.materialize_all_navigation(max_distance=120)
 
     event = ContinualFlame(
         source_entity_uuid=caster.uuid,
@@ -3275,7 +3295,7 @@ def test_entity_spell_shared_validator_rejects_unseen_target() -> None:
         position=(2, 1),
         faction="heroes",
     )
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     caster.senses.entities.pop(target.uuid, None)
 
     event = Invisibility(
@@ -3330,7 +3350,7 @@ def test_eb_15_044_stinking_cloud_wind_dispersal_uses_srd_rounds() -> None:
     """EB-15-044: Stinking Cloud disperses after SRD wind exposure rounds."""
     reset_spell_family_state(width=24, height=18)
     caster = create_family_caster(position=(2, 2), spell_slots={3: 1})
-    Entity.update_all_entities_senses(max_distance=120)
+    Entity.materialize_all_navigation(max_distance=120)
 
     cloud_event = StinkingCloud(
         source_entity_uuid=caster.uuid,
@@ -3372,7 +3392,7 @@ def test_eb_15_044_stinking_cloud_wind_dispersal_uses_srd_rounds() -> None:
     reset_spell_family_state(width=24, height=18)
     cloud_caster = create_family_caster(name="Cloud Caster", position=(1, 1), spell_slots={3: 1})
     wind_caster = create_family_caster(name="Wind Caster", position=(2, 5), spell_slots={2: 1})
-    Entity.update_all_entities_senses(max_distance=120)
+    Entity.materialize_all_navigation(max_distance=120)
 
     cloud_event = StinkingCloud(
         source_entity_uuid=cloud_caster.uuid,
@@ -3413,8 +3433,22 @@ def test_eb_15_045_gust_terrain_removal_restores_cached_move_targets() -> None:
     reset_spell_family_state(width=25, height=21)
     grid = get_map()
     for x in range(25):
-        grid.set_tile(x, 9, walkable=False, visible=False, name="Wall")
-        grid.set_tile(x, 11, walkable=False, visible=False, name="Wall")
+        grid.set_tile(
+            x,
+            9,
+            walkable=False,
+            blocks_optics=True,
+            blocks_propagation=True,
+            name="Wall",
+        )
+        grid.set_tile(
+            x,
+            11,
+            walkable=False,
+            blocks_optics=True,
+            blocks_propagation=True,
+            name="Wall",
+        )
 
     caster = create_family_caster(
         position=(1, 10),
@@ -3426,8 +3460,8 @@ def test_eb_15_045_gust_terrain_removal_restores_cached_move_targets() -> None:
     )
     setup_standard_actions(mover)
     boost_save(mover, "strength")
-    Entity.update_all_entities_senses(max_distance=20)
-    mover.update_entity_senses(max_distance=20, path_max_distance=6)
+    Entity.materialize_all_navigation(max_distance=20)
+    mover.materialize_navigation(max_distance=20, path_max_distance=6)
 
     def move_targets() -> set[tuple[int, int]]:
         move = next(
@@ -3487,7 +3521,7 @@ def test_eb_15_043_sleet_storm_douses_exposed_flames() -> None:
     assert carried_torch.is_lit and carried_light_uuid in grid._light_sources
     assert wall_torch.is_lit and wall_light_uuid in grid._light_sources
     assert outside_torch.is_lit and outside_light_uuid in grid._light_sources
-    Entity.update_all_entities_senses(max_distance=120)
+    Entity.materialize_all_navigation(max_distance=120)
 
     with patch("dnd.core.dice.random.randint", return_value=10):
         storm_event = SleetStorm(
@@ -3554,7 +3588,7 @@ def test_eb_15_029_web_models_obscurement_grounding_and_escape_cleanup() -> None
             value=100,
         )
     )
-    Entity.update_all_entities_senses(max_distance=60)
+    Entity.materialize_all_navigation(max_distance=60)
 
     with patch("dnd.core.dice.random.randint", side_effect=fixed_zone_randint):
         web_event = Web(
@@ -3572,10 +3606,9 @@ def test_eb_15_029_web_models_obscurement_grounding_and_escape_cleanup() -> None
     assert web_center_tile is not None
     assert web_zone.zone_shape == "cube"
     assert web_zone.adds_difficult_terrain
-    assert web_zone.sets_light_level == LightLevel.DIM_LIGHT
-    assert web_zone.light_is_obscurement
+    assert web_zone.sets_light_level is None
     assert web_center_tile.walking_cost.normalized_score == 2
-    assert web_center_tile.resolved_light_level == LightLevel.DIM_LIGHT
+    assert web_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
     assert "Web Restrained" not in target.active_conditions
     assert "Restrained" not in target.active_conditions
 
@@ -3614,7 +3647,7 @@ def test_eb_15_037_web_unanchored_cast_collapses_on_caster_turn_start() -> None:
     """EB-15-037: unanchored Web ends at the caster's next turn start."""
     reset_spell_family_state(width=18, height=18)
     caster = create_family_caster(position=(1, 1), spell_slots={2: 1})
-    Entity.update_all_entities_senses(max_distance=60)
+    Entity.materialize_all_navigation(max_distance=60)
 
     with patch("dnd.core.dice.random.randint", side_effect=fixed_zone_randint):
         web_event = Web(
@@ -3636,7 +3669,7 @@ def test_eb_15_037_web_unanchored_cast_collapses_on_caster_turn_start() -> None:
     } == {"Web Turn Start Save", "Web Unanchored Collapse"}
     assert "Concentrating" in caster.active_conditions
     assert web_center_tile.walking_cost.normalized_score == 2
-    assert web_center_tile.resolved_light_level == LightLevel.DIM_LIGHT
+    assert web_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
 
     turn_start = caster.on_turn_start(round_number=2, turn_index=0)
 
@@ -3655,7 +3688,7 @@ def test_eb_15_042_web_fire_exposure_burns_one_cube_for_one_round() -> None:
     caster = create_family_caster(position=(1, 1), spell_slots={2: 1})
     target = create_family_target(name="Web Fire Target", position=(5, 5), hp_dice=8)
     penalize_save(target, "dexterity")
-    Entity.update_all_entities_senses(max_distance=60)
+    Entity.materialize_all_navigation(max_distance=60)
 
     with patch("dnd.core.dice.random.randint", side_effect=fixed_zone_randint):
         web_event = Web(
@@ -3674,7 +3707,7 @@ def test_eb_15_042_web_fire_exposure_burns_one_cube_for_one_round() -> None:
     assert (5, 5) in web_zone.affected_positions
     assert (6, 5) in web_zone.affected_positions
     assert web_center_tile.walking_cost.normalized_score == 2
-    assert web_center_tile.resolved_light_level == LightLevel.DIM_LIGHT
+    assert web_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
     assert "Web Restrained" not in target.active_conditions
     web_handlers = [
         EventQueue._event_handlers[handler_uuid]
@@ -3705,7 +3738,7 @@ def test_eb_15_042_web_fire_exposure_burns_one_cube_for_one_round() -> None:
     assert web_center_tile.walking_cost.normalized_score == 1
     assert web_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
     assert adjacent_web_tile.walking_cost.normalized_score == 2
-    assert adjacent_web_tile.resolved_light_level == LightLevel.DIM_LIGHT
+    assert adjacent_web_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
     assert "Web Restrained" not in target.active_conditions
     assert "Restrained" not in target.active_conditions
     assert all(action.name != "Escape Web" for action in target.registered_actions)
@@ -3749,7 +3782,7 @@ def test_eb_15_011_haste_modifier_bundle_and_lethargy_cleanup() -> None:
     reset_spell_family_state()
     caster = create_family_caster(spell_slots={3: 1})
     target = create_family_target(name="Hasted Ally", position=(3, 1), faction="heroes")
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     base_speed = target.action_economy.movement.normalized_score
     base_ac_bonus = target.equipment.ac_bonus.normalized_score
     base_actions = target.action_economy.actions.normalized_score
@@ -3794,7 +3827,7 @@ def test_eb_15_012_slow_multi_target_modifier_bundle_and_cleanup() -> None:
     caster = create_family_caster(spell_slots={3: 1})
     target_one = create_family_target(name="Slowed One", position=(3, 1), faction="monsters")
     target_two = create_family_target(name="Slowed Two", position=(4, 1), faction="monsters")
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     base_speed = target_one.action_economy.movement.normalized_score
     base_ac_bonus = target_one.equipment.ac_bonus.normalized_score
     base_dex_save = target_one.saving_throws.get_saving_throw("dexterity").bonus.normalized_score
@@ -3845,7 +3878,7 @@ def test_eb_15_013_sleep_hp_pool_selection_immunity_and_wake_on_damage() -> None
     set_hp(high, 20)
     set_hp(undead, 1)
     undead.creature_type = CreatureType.UNDEAD
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     selector = Sleep(
         source_entity_uuid=caster.uuid,
@@ -3909,7 +3942,7 @@ def test_eb_15_014_color_spray_hp_pool_skips_and_blinded_cleanup() -> None:
             target_entity_uuid=already_blinded.uuid,
         )
     )
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     selector = ColorSpray(
         source_entity_uuid=caster.uuid,
@@ -3973,7 +4006,7 @@ def test_eb_15_030_hp_pool_spells_cover_upcast_and_immunity_edges() -> None:
     )
     undead.creature_type = CreatureType.UNDEAD
     charmed_immune.add_condition_immunity("Charmed", immunity_name="Book charm immunity")
-    Entity.update_all_entities_senses(max_distance=80)
+    Entity.materialize_all_navigation(max_distance=80)
 
     sleep_selector = Sleep(
         source_entity_uuid=caster.uuid,
@@ -4017,7 +4050,7 @@ def test_eb_15_030_hp_pool_spells_cover_upcast_and_immunity_edges() -> None:
     )
     spray_immune.add_condition_immunity("Blinded", immunity_name="Book blind immunity")
     spray_sightless.has_ordinary_sight = False
-    Entity.update_all_entities_senses(max_distance=80)
+    Entity.materialize_all_navigation(max_distance=80)
 
     color_selector = ColorSpray(
         source_entity_uuid=caster.uuid,
@@ -4047,7 +4080,7 @@ def test_eb_15_031_eyebite_granted_action_lifecycle_and_repeat_save() -> None:
     second = create_family_target(name="Second Gaze Target", position=(5, 1))
     penalize_save(first, "wisdom")
     penalize_save(second, "wisdom")
-    Entity.update_all_entities_senses(max_distance=80)
+    Entity.materialize_all_navigation(max_distance=80)
 
     event = Eyebite(
         source_entity_uuid=caster.uuid,
@@ -4097,7 +4130,7 @@ def test_eb_15_032_eyebite_blocks_successful_retargets_and_unseen_targets() -> N
     vulnerable = create_family_target(name="Fresh Target", position=(5, 1))
     boost_save(saved, "wisdom", value=200)
     penalize_save(vulnerable, "wisdom")
-    Entity.update_all_entities_senses(max_distance=80)
+    Entity.materialize_all_navigation(max_distance=80)
 
     event = Eyebite(
         source_entity_uuid=caster.uuid,
@@ -4131,7 +4164,7 @@ def test_eb_15_032_eyebite_blocks_successful_retargets_and_unseen_targets() -> N
     unseen = create_family_target(name="Unseen Target", position=(4, 1))
     unseen.set_invisible(True)
     penalize_save(unseen, "wisdom")
-    Entity.update_all_entities_senses(max_distance=80)
+    Entity.materialize_all_navigation(max_distance=80)
     assert unseen.uuid not in caster.senses.entities
 
     channel_event = Eyebite(
@@ -4161,7 +4194,7 @@ def test_eb_15_033_shake_awake_action_ends_sleep_and_eyebite_asleep() -> None:
     sleeper = create_family_target(name="Sleep Target", position=(4, 1), hp_dice=1)
     set_hp(sleeper, 5)
     setup_standard_actions(helper)
-    Entity.update_all_entities_senses(max_distance=80)
+    Entity.materialize_all_navigation(max_distance=80)
 
     sleep = Sleep(
         source_entity_uuid=caster.uuid,
@@ -4215,7 +4248,7 @@ def test_eb_15_033_shake_awake_action_ends_sleep_and_eyebite_asleep() -> None:
     sleeper = create_family_target(name="Eyebite Sleeper", position=(4, 1), hp_dice=1)
     setup_standard_actions(helper)
     penalize_save(sleeper, "wisdom")
-    Entity.update_all_entities_senses(max_distance=80)
+    Entity.materialize_all_navigation(max_distance=80)
 
     eyebite_event = Eyebite(
         source_entity_uuid=caster.uuid,
@@ -4258,7 +4291,7 @@ def test_eb_15_034_eyebite_panicked_forces_dash_movement_and_distance_cleanup() 
     caster = create_family_caster(position=(1, 2), spell_slots={6: 1})
     target = create_family_target(name="Panicked Target", position=(4, 2), hp_dice=4)
     penalize_save(target, "wisdom")
-    Entity.update_all_entities_senses(max_distance=80)
+    Entity.materialize_all_navigation(max_distance=80)
 
     event = Eyebite(
         source_entity_uuid=caster.uuid,
@@ -4279,7 +4312,7 @@ def test_eb_15_034_eyebite_panicked_forces_dash_movement_and_distance_cleanup() 
 
     start_distance = caster.senses.get_feet_distance(target.position)
     target.on_turn_start(round_number=1, turn_index=0)
-    Entity.update_all_entities_senses(max_distance=80)
+    Entity.materialize_all_navigation(max_distance=80)
     moved_distance = caster.senses.get_feet_distance(target.position)
 
     assert moved_distance > start_distance
@@ -4291,7 +4324,7 @@ def test_eb_15_034_eyebite_panicked_forces_dash_movement_and_distance_cleanup() 
 
     caster.set_invisible(True)
     target.on_turn_start(round_number=2, turn_index=0)
-    Entity.update_all_entities_senses(max_distance=80)
+    Entity.materialize_all_navigation(max_distance=80)
 
     assert caster.uuid not in target.senses.entities
     assert caster.senses.get_feet_distance(target.position) >= 60
@@ -4303,7 +4336,7 @@ def test_eb_15_007_mobility_and_sense_utility_spells_change_state() -> None:
     """EB-15-007: utility spells modify position and sense modes."""
     reset_spell_family_state()
     caster = create_family_caster(spell_slots={2: 2})
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     see_event = SeeInvisibility(
         source_entity_uuid=caster.uuid,
@@ -4336,7 +4369,7 @@ def test_eb_15_008_illusion_and_necromancy_self_effects() -> None:
     """EB-15-008: illusion and necromancy self spells alter entity state."""
     reset_spell_family_state()
     caster = create_family_caster(spell_slots={1: 1, 2: 1})
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     false_life_event = FalseLife(
         source_entity_uuid=caster.uuid,

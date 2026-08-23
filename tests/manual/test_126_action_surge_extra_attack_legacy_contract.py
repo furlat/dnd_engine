@@ -127,7 +127,7 @@ def test_level_five_normal_attack_action_produces_two_attacks() -> None:
     _reset_state()
     fighter = _create_fighter(extra_attacks=1)
     target = _create_target()
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     force_attack_miss(fighter)
 
     _attack(fighter, target)
@@ -146,7 +146,7 @@ def test_action_surge_refreshes_extra_attack_after_first_batch_is_spent() -> Non
     _reset_state()
     fighter = _create_fighter(extra_attacks=1)
     target = _create_target()
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     force_attack_miss(fighter)
 
     _attack(fighter, target)
@@ -173,7 +173,7 @@ def test_action_surge_first_accumulates_both_pending_extra_attack_batches() -> N
     _reset_state()
     fighter = _create_fighter(extra_attacks=1)
     target = _create_target()
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     force_attack_miss(fighter)
 
     _action_surge(fighter)
@@ -197,7 +197,7 @@ def test_level_eleven_action_surge_produces_two_three_attack_batches() -> None:
     _reset_state()
     fighter = _create_fighter(extra_attacks=2)
     target = _create_target()
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     force_attack_miss(fighter)
 
     _attack(fighter, target)

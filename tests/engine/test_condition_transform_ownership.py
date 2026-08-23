@@ -198,7 +198,7 @@ def test_disengaging_owns_opportunity_attack_provocation_constraint() -> None:
     )
     mover = strong_entity("Mover", (5, 6), "heroes")
     add_opportunity_attack_handler(watcher)
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
 
     assert mover.action_economy.provokes_opportunity_attacks.normalized_score == 1
 
@@ -230,7 +230,7 @@ def test_disengaging_owns_opportunity_attack_provocation_constraint() -> None:
 
         Entity.update_entity_position(mover, (5, 6))
         mover.action_economy.reset_all_costs()
-        Entity.update_all_entities_senses(max_distance=20)
+        Entity.materialize_all_navigation(max_distance=20)
         unprotected_move = Move(
             source_entity_uuid=mover.uuid,
             end_position=(5, 10),

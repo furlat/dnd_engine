@@ -33,9 +33,10 @@ from dnd.core.gridmap import get_map
 from dnd.types.damage import DamageType
 from dnd.types.rolls import AdvantageStatus, AutoHitStatus, CriticalStatus
 from dnd.types.damage import ResistanceStatus
+from dnd.types.senses import PerceivedContact
 from dnd.core.values import BaseValue
 from dnd.entities.entity import Entity, EntityConfig
-from tests.engine.support import reset_combat_state
+from tests.engine.support import create_test_entity, reset_combat_state
 
 
 def reset_standard_condition_state() -> None:
@@ -57,8 +58,9 @@ def create_tutorial_actor(
 ) -> Entity:
     """Create an actor with stable ability, health, and movement values."""
     actor_id = uuid4()
-    return Entity.create(
-        source_entity_uuid=actor_id,
+    return create_test_entity(
+        source_id=actor_id,
+        entity_kind_id="test.condition_tutorial_actor",
         name=name,
         config=EntityConfig(
             ability_scores=AbilityScoresConfig(
@@ -153,7 +155,10 @@ def test_social_poison_and_fear_conditions_use_context_or_static_pressure() -> N
     assert target.equipment.attack_bonus.advantage == AdvantageStatus.NONE
     assert target.action_economy.movement.normalized_score == 30
 
-    target.senses.entities[charmer.uuid] = charmer.position
+    target.senses.entities[charmer.uuid] = PerceivedContact(
+        position=charmer.position,
+        visual=True,
+    )
     assert target.equipment.attack_bonus.advantage == AdvantageStatus.DISADVANTAGE
     assert target.skill_set.athletics.skill_bonus.advantage == AdvantageStatus.DISADVANTAGE
     assert target.action_economy.movement.normalized_score == 0
@@ -212,7 +217,10 @@ def test_posture_and_invisibility_use_attacker_context() -> None:
     target.equipment.ac_bonus.set_target_entity(adjacent_attacker.uuid)
     assert target.equipment.ac_bonus.outgoing_advantage == AdvantageStatus.DISADVANTAGE
 
-    adjacent_attacker.senses.entities[target.uuid] = target.position
+    adjacent_attacker.senses.entities[target.uuid] = PerceivedContact(
+        position=target.position,
+        visual=True,
+    )
     assert target.equipment.attack_bonus.advantage == AdvantageStatus.NONE
     assert target.equipment.ac_bonus.outgoing_advantage == AdvantageStatus.NONE
 

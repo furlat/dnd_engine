@@ -453,7 +453,7 @@ def _project_real_multi_reaction_movement(
             assert weapon.content_ref is not None
             weapon_ref_by_path_index[path_index] = weapon.content_ref
 
-        Entity.update_all_entities_senses(max_distance=20)
+        Entity.materialize_all_navigation(max_distance=20)
         observer_key = str(mover.uuid)
 
         def grant_all_event_participants(event: Event) -> dict[str, set[str]]:
@@ -1572,7 +1572,7 @@ def test_real_shield_handler_reaches_the_canonical_action_root() -> None:
         handler = create_shield_reaction_handler(defender.uuid)
         defender.add_event_handler(handler)
         assert handler.behavior_binding is not None
-        Entity.update_all_entities_senses(max_distance=20)
+        Entity.materialize_all_navigation(max_distance=20)
         EventQueue.set_identified_entity_observer_computer(
             lambda event: {
                 str(entity_uuid): {str(defender.uuid)}
@@ -1679,7 +1679,7 @@ def test_real_parry_handler_uses_public_reaction_identity_for_action_root() -> N
             handler.behavior_binding.provided_by_ref
             == get_content_declaration(ParryFeature).ref
         )
-        Entity.update_all_entities_senses(max_distance=20)
+        Entity.materialize_all_navigation(max_distance=20)
         EventQueue.set_identified_entity_observer_computer(
             lambda event: {
                 str(entity_uuid): {str(defender.uuid)}
@@ -1882,7 +1882,7 @@ def test_real_divine_smite_handler_reaches_the_canonical_action_root() -> None:
         handler = create_divine_smite_handler(paladin.uuid, 1)
         paladin.add_event_handler(handler)
         assert handler.behavior_binding is not None
-        Entity.update_all_entities_senses(max_distance=20)
+        Entity.materialize_all_navigation(max_distance=20)
         EventQueue.set_identified_entity_observer_computer(
             lambda event: {
                 str(entity_uuid): {str(paladin.uuid)}
@@ -2208,7 +2208,7 @@ def test_real_shove_keeps_child_before_root_forced_movement(
             faction="monsters",
         )
         target.weight = 40
-        Entity.update_all_entities_senses(max_distance=20)
+        Entity.materialize_all_navigation(max_distance=20)
         observer_key = str(shover.uuid)
         EventQueue.set_identified_entity_observer_computer(
             lambda event: {
@@ -2382,7 +2382,7 @@ def test_real_telekinesis_move_owns_visible_forced_movement() -> None:
             position=(3, 2),
             faction="monsters",
         )
-        Entity.update_all_entities_senses(max_distance=20)
+        Entity.materialize_all_navigation(max_distance=20)
         observer_key = str(caster.uuid)
         EventQueue.set_identified_entity_observer_computer(
             lambda event: {
@@ -2468,7 +2468,7 @@ def test_real_thunderwave_owns_visible_forced_movement() -> None:
             "monsters",
         )
         force_save_result(target, "constitution", succeeds=False)
-        Entity.update_all_entities_senses(max_distance=100)
+        Entity.materialize_all_navigation(max_distance=100)
         observer_key = str(caster.uuid)
         EventQueue.set_identified_entity_observer_computer(
             lambda event: {
@@ -2550,7 +2550,7 @@ def test_real_gust_of_wind_owns_visible_forced_movement() -> None:
             "monsters",
         )
         force_save_result(target, "strength", succeeds=False)
-        Entity.update_all_entities_senses(max_distance=140)
+        Entity.materialize_all_navigation(max_distance=140)
         observer_key = str(caster.uuid)
         EventQueue.set_identified_entity_observer_computer(
             lambda event: {
@@ -3338,7 +3338,7 @@ def test_real_lethal_opportunity_attack_projects_attempt_before_death() -> None:
         add_opportunity_attack_handler(watcher)
         force_attack_hit(watcher)
         force_attack_crit(watcher)
-        Entity.update_all_entities_senses(max_distance=20)
+        Entity.materialize_all_navigation(max_distance=20)
         observer_key = str(mover.uuid)
         EventQueue.set_identified_entity_observer_computer(
             lambda event: {

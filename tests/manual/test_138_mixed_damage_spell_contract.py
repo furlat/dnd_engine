@@ -53,7 +53,7 @@ def test_ice_storm_applies_bludgeoning_and_cold_as_typed_components() -> None:
         )
     )
     force_save_result(target, "dexterity", succeeds=False)
-    Entity.update_all_entities_senses(max_distance=80)
+    Entity.materialize_all_navigation(max_distance=80)
     hp_before = get_hp(target)
 
     with fixed_dice_faces(10, *([4] * 2), *([3] * 4)):
@@ -108,7 +108,7 @@ def test_ice_storm_executes_upcast_save_cylinder_and_terrain_lifecycle() -> None
     grid.set_tile(9, 4, walkable=False, visible=False, name="Wall")
     force_save_result(failed, "dexterity", succeeds=False)
     force_save_result(behind_wall, "dexterity", succeeds=True)
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
     failed_hp = get_hp(failed)
     behind_hp = get_hp(behind_wall)
 

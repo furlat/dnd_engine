@@ -45,7 +45,7 @@ def test_aoe_shapes_preserve_extent_width_entities_and_wall_occlusion() -> None:
         (10, 5),
         "monsters",
     )
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
 
     sphere = Sphere(
         source_entity_uuid=source_uuid,

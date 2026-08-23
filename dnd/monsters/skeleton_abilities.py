@@ -229,7 +229,8 @@ class MarkTargetAction(BaseAction):
                 status_message="Mark Target is unavailable until the cooldown ends"
             )
 
-        if target.uuid not in source.senses.entities:
+        contact = source.senses.entities.get(target.uuid)
+        if contact is None or not contact.visual:
             return declaration_event.cancel(status_message="Target not in line of sight")
 
         distance = source.distance_to_entity(target)

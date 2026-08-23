@@ -152,7 +152,7 @@ def test_cure_wounds_basic_heals_adjacent_ally() -> None:
     reset_spell_regression_arena(10, 7)
     caster = _healing_caster(spell_slots={1: 1}, position=(2, 3))
     ally = create_spell_regression_actor("Cure Ally", (3, 3), "heroes")
-    Entity.update_all_entities_senses(max_distance=40)
+    Entity.materialize_all_navigation(max_distance=40)
     hp_before = _wound(ally, 20, caster)
 
     with fixed_dice_faces(5):
@@ -171,7 +171,7 @@ def test_cure_wounds_upcast_self_target_and_max_hp_cap() -> None:
     """Old cases 5-7: upcast dice, self targeting, and capped healing."""
     reset_spell_regression_arena(14, 9)
     caster = _healing_caster(spell_slots={1: 1, 3: 1})
-    Entity.update_all_entities_senses(max_distance=60)
+    Entity.materialize_all_navigation(max_distance=60)
     hp_before = _wound(caster, 40, caster)
 
     with fixed_dice_faces(4, 4, 4):
@@ -201,7 +201,7 @@ def test_healing_word_range_upcast_and_bonus_action_cost() -> None:
     reset_spell_regression_arena(16, 9)
     caster = _healing_caster(spell_slots={2: 1})
     ally = create_spell_regression_actor("Distant Ally", (11, 4), "heroes")
-    Entity.update_all_entities_senses(max_distance=80)
+    Entity.materialize_all_navigation(max_distance=80)
     hp_before = _wound(ally, 30, caster)
 
     with fixed_dice_faces(2, 3):
@@ -227,7 +227,7 @@ def test_prayer_of_healing_heals_selected_allies_and_rejects_enemy() -> None:
         for index in range(2)
     ]
     enemy = create_spell_regression_actor("Prayer Enemy", (4, 4), "monsters")
-    Entity.update_all_entities_senses(max_distance=80)
+    Entity.materialize_all_navigation(max_distance=80)
     ally_before = [_wound(ally, 30, caster) for ally in allies]
     enemy_before = _wound(enemy, 30, caster)
 
@@ -261,7 +261,7 @@ def test_mass_healing_word_multi_target_upcast_and_cost() -> None:
         create_spell_regression_actor(f"Word Ally {index}", (2 + index, 4), "heroes")
         for index in range(2)
     ]
-    Entity.update_all_entities_senses(max_distance=80)
+    Entity.materialize_all_navigation(max_distance=80)
     hp_before = [_wound(ally, 30, caster) for ally in allies]
 
     with fixed_dice_faces(*([2] * 12)):
@@ -289,7 +289,7 @@ def test_mass_cure_wounds_aoe_upcast_excludes_enemy() -> None:
         create_spell_regression_actor("Mass Cure Ally 2", (6, 6), "heroes"),
     ]
     enemy = create_spell_regression_actor("Mass Cure Enemy", (7, 5), "monsters")
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
     ally_before = [_wound(ally, 50, caster) for ally in allies]
     enemy_before = _wound(enemy, 50, caster)
 
@@ -316,7 +316,7 @@ def test_heal_flat_amount_upcast_and_condition_cleanup(
     reset_spell_regression_arena(14, 9)
     caster = _healing_caster(spell_slots={cast_at_level: 1})
     ally = create_spell_regression_actor("Heal Ally", (2, 4), "heroes")
-    Entity.update_all_entities_senses(max_distance=60)
+    Entity.materialize_all_navigation(max_distance=60)
     set_hp(ally, 1)
     ally.add_condition(
         Blinded(source_entity_uuid=caster.uuid, target_entity_uuid=ally.uuid)
@@ -346,7 +346,7 @@ def test_mass_heal_distributes_pool_and_cleans_each_target() -> None:
         create_spell_regression_actor(f"Mass Heal Ally {index}", (2 + index, 4), "heroes")
         for index in range(2)
     ]
-    Entity.update_all_entities_senses(max_distance=80)
+    Entity.materialize_all_navigation(max_distance=80)
     wounds = [20, 30]
     for ally, wound in zip(allies, wounds):
         _wound(ally, wound, caster)
@@ -379,7 +379,7 @@ def test_regenerate_burst_turn_healing_expiry_and_nonconcentration() -> None:
     reset_spell_regression_arena(14, 9)
     caster = _healing_caster(spell_slots={7: 1})
     ally = create_spell_regression_actor("Regenerate Ally", (2, 4), "heroes")
-    Entity.update_all_entities_senses(max_distance=60)
+    Entity.materialize_all_navigation(max_distance=60)
     hp_before = _wound(ally, 100, caster)
 
     with fixed_dice_faces(2, 2, 2, 2):
@@ -419,7 +419,7 @@ def test_lesser_restoration_condition_matrix(
     reset_spell_regression_arena(12, 7)
     caster = _healing_caster(spell_slots={2: 1})
     ally = create_spell_regression_actor("Lesser Ally", (2, 4), "heroes")
-    Entity.update_all_entities_senses(max_distance=60)
+    Entity.materialize_all_navigation(max_distance=60)
     ally.add_condition(
         condition_type(source_entity_uuid=caster.uuid, target_entity_uuid=ally.uuid)
     )
@@ -450,7 +450,7 @@ def test_greater_restoration_condition_matrix(
     reset_spell_regression_arena(12, 7)
     caster = _healing_caster(spell_slots={5: 1})
     ally = create_spell_regression_actor("Greater Ally", (2, 4), "heroes")
-    Entity.update_all_entities_senses(max_distance=60)
+    Entity.materialize_all_navigation(max_distance=60)
     ally.add_condition(
         condition_type(source_entity_uuid=caster.uuid, target_entity_uuid=ally.uuid)
     )

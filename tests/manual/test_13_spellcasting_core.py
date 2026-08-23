@@ -150,7 +150,7 @@ def test_chill_touch_profile_and_execution_share_spell_critical_threshold() -> N
         (4, 1),
         "monsters",
     )
-    Entity.update_all_entities_senses(max_distance=40)
+    Entity.materialize_all_navigation(max_distance=40)
     spell = ChillTouch(
         source_entity_uuid=caster.uuid,
         target_entity_uuid=target.uuid,
@@ -281,7 +281,7 @@ def test_necrotic_bless_combat_log_preserves_each_target_identity() -> None:
     living_target = create_spell_actor("Living Target", (2, 1), "heroes")
     undead_ally = create_spell_actor("Undead Ally", (1, 2), "monsters")
     undead_ally.creature_type = CreatureType.UNDEAD
-    Entity.update_all_entities_senses(max_distance=30)
+    Entity.materialize_all_navigation(max_distance=30)
 
     with fixed_dice_faces(1):
         event = NecroticBless(
@@ -465,7 +465,7 @@ def test_first_spell_example_prints_visible_discovery_and_cast(capsys) -> None:
 
     register_spell(caster, FireBolt, caster_level=5)
     register_spell(caster, MagicMissile, caster_level=5)
-    Entity.update_all_entities_senses(max_distance=30)
+    Entity.materialize_all_navigation(max_distance=30)
 
     available = get_available_actions(caster)
     fire_bolt = find_action(available, "Fire Bolt")
@@ -569,7 +569,7 @@ def test_multi_target_execution_does_not_mutate_cached_discovery_target() -> Non
     first = create_spell_actor("First Target", (1, 0), "monsters")
     second = create_spell_actor("Second Target", (2, 0), "monsters")
     register_spell(caster, MagicMissile, caster_level=5)
-    Entity.update_all_entities_senses(max_distance=30)
+    Entity.materialize_all_navigation(max_distance=30)
     available = get_available_actions(caster)
     missile = find_action(available, "Magic Missile__slot_1")
     primary = next(target for target in missile.valid_targets if target.target_uuid == first.uuid)
@@ -719,7 +719,7 @@ def test_registered_spells_surface_cantrips_and_slot_variants(capsys) -> None:
     register_spell(caster, FireBolt, caster_level=5)
     register_spell(caster, MagicMissile, caster_level=5)
     register_spell(caster, Haste, caster_level=5)
-    Entity.update_all_entities_senses(max_distance=30)
+    Entity.materialize_all_navigation(max_distance=30)
 
     available = get_available_actions(caster)
     fire_bolt = find_action(available, "Fire Bolt")
@@ -812,7 +812,7 @@ def test_fire_bolt_uses_spell_attack_bonus_scaling_and_damage(capsys) -> None:
     reset_spell_tutorial_state()
     caster = create_spell_actor("Pyromancer", (0, 0), "heroes")
     enemy = create_spell_actor("Training Target", (1, 0), "monsters")
-    Entity.update_all_entities_senses(max_distance=30)
+    Entity.materialize_all_navigation(max_distance=30)
     hp_before = enemy.get_hp()
 
     with fixed_dice_faces(14, 12, 5, 6):
@@ -877,7 +877,7 @@ def test_magic_missile_auto_hits_multiple_darts_and_spends_slot(capsys) -> None:
         spell_slots={1: 1},
     )
     enemy = create_spell_actor("Training Target", (1, 0), "monsters")
-    Entity.update_all_entities_senses(max_distance=30)
+    Entity.materialize_all_navigation(max_distance=30)
     hp_before = enemy.get_hp()
 
     with fixed_dice_faces(2, 3, 4):
@@ -939,7 +939,7 @@ def test_haste_links_spell_effect_to_concentration_and_cleans_up(capsys) -> None
         spell_slots={3: 1},
     )
     ally = create_spell_actor("Haste Ally", (1, 0), "heroes")
-    Entity.update_all_entities_senses(max_distance=30)
+    Entity.materialize_all_navigation(max_distance=30)
     movement_before = ally.action_economy.movement.normalized_score
     actions_before = ally.action_economy.actions.normalized_score
     ac_before = ally.ac_bonus().normalized_score

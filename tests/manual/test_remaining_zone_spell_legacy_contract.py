@@ -153,7 +153,7 @@ def test_hazard_filters_and_factions_preserve_exact_requester_semantics() -> Non
         "neutral-placeholder",
     )
     neutral.faction = None
-    Entity.update_all_entities_senses(max_distance=40)
+    Entity.materialize_all_navigation(max_distance=40)
     assert caster.senses.safe_paths == {}
     tile = grid.get_tile(5, 2)
     assert tile is not None
@@ -242,7 +242,7 @@ def test_grease_preserves_initial_entry_turn_stand_and_cleanup_rules() -> None:
     setup_standard_actions(entrant)
     force_save_result(initial, "dexterity", succeeds=False)
     force_save_result(entrant, "dexterity", succeeds=False)
-    Entity.update_all_entities_senses(max_distance=70)
+    Entity.materialize_all_navigation(max_distance=70)
 
     with fixed_dice_faces(*([10] * 8)):
         result = Grease(
@@ -325,7 +325,7 @@ def test_cloudkill_preserves_initial_entry_turn_move_and_cleanup_rules() -> None
     )
     force_save_result(initial, "constitution", succeeds=False)
     force_save_result(entrant, "constitution", succeeds=False)
-    Entity.update_all_entities_senses(max_distance=150)
+    Entity.materialize_all_navigation(max_distance=150)
     initial_hp = get_hp(initial)
 
     with fixed_dice_faces(10, *([4] * 5)):
@@ -403,7 +403,7 @@ def test_spirit_guardians_preserves_faction_damage_slow_follow_and_cleanup() -> 
     )
     force_save_result(initial_enemy, "wisdom", succeeds=False)
     force_save_result(entrant, "wisdom", succeeds=False)
-    Entity.update_all_entities_senses(max_distance=160)
+    Entity.materialize_all_navigation(max_distance=160)
     enemy_hp = get_hp(initial_enemy)
     ally_hp = get_hp(initial_ally)
 
@@ -496,7 +496,7 @@ def test_spike_growth_preserves_hidden_hazard_damage_and_source_immunity() -> No
         "monsters",
         wisdom=8,
     )
-    Entity.update_all_entities_senses(max_distance=140)
+    Entity.materialize_all_navigation(max_distance=140)
     target_hp = get_hp(target)
 
     result = SpikeGrowth(
@@ -569,7 +569,7 @@ def test_gust_of_wind_executes_cast_entry_turn_wall_and_cleanup_edges() -> None:
         "monsters",
     )
     force_save_result(initial, "strength", succeeds=False)
-    Entity.update_all_entities_senses(max_distance=140)
+    Entity.materialize_all_navigation(max_distance=140)
 
     with fixed_dice_faces(10):
         result = GustOfWind(
@@ -677,7 +677,7 @@ def test_gust_of_wind_executes_cast_entry_turn_wall_and_cleanup_edges() -> None:
     )
     grid.set_tile(9, 5, walkable=False, visible=False, name="Wall")
     force_save_result(blocked, "strength", succeeds=False)
-    Entity.update_all_entities_senses(max_distance=90)
+    Entity.materialize_all_navigation(max_distance=90)
 
     with fixed_dice_faces(10):
         blocked_result = GustOfWind(
@@ -712,7 +712,7 @@ def test_insect_plague_executes_initial_entry_turn_reentry_and_cleanup() -> None
     )
     force_save_result(failed, "constitution", succeeds=False)
     force_save_result(passed, "constitution", succeeds=True)
-    Entity.update_all_entities_senses(max_distance=120)
+    Entity.materialize_all_navigation(max_distance=120)
     failed_hp = get_hp(failed)
     passed_hp = get_hp(passed)
 
@@ -790,7 +790,7 @@ def test_incendiary_cloud_executes_initial_entry_turn_move_and_cleanup() -> None
         "monsters",
     )
     force_save_result(initial, "dexterity", succeeds=False)
-    Entity.update_all_entities_senses(max_distance=150)
+    Entity.materialize_all_navigation(max_distance=150)
     initial_hp = get_hp(initial)
 
     with fixed_dice_faces(*([4] * 20)):

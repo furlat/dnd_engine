@@ -12,6 +12,7 @@ from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.types.life import LifeState
 from dnd.types.damage import DamageType
 from dnd.entities.entity import Entity, EntityConfig
+from dnd.entities.entity_creation import compose_entity, create_entity
 from dnd.core.gridmap import get_map
 from tests.engine.test_combat_actions import (
     reset_core_action_state,
@@ -46,7 +47,14 @@ def _raw_configured_entity(name: str, state: LifeState) -> Entity:
         faction="heroes",
         uses_death_saves=True,
     )
-    return Entity.create(source_entity_uuid=uuid4(), name=name, config=config)
+    entity = create_entity(
+        uuid4(),
+        entity_kind_id="test.life_state_entity",
+        name=name,
+        config=config,
+    )
+    compose_entity(entity)
+    return entity
 
 
 def test_raw_entity_lifecycle_never_depends_on_standard_action_setup() -> None:
@@ -102,7 +110,7 @@ def test_initial_stable_and_dead_states_are_reconciled_during_creation() -> None
     assert dead.action_economy.action_permission.normalized_score == 0
     assert dead.senses.visual_access.normalized_score == 0
     assert dead.blocks_walking() is False
-    assert dead.is_perceivable_by(stable.uuid) is False
+    assert dead.appears_in_entity_contacts() is False
 
 
 def test_dead_rejects_ordinary_healing_and_revive_restores_normal_hp_only() -> None:
@@ -190,7 +198,6 @@ def test_revival_reintroduces_entity_to_incremental_senses() -> None:
     reset_core_action_state()
     observer = strong_entity("Observer", (3, 4), "heroes", setup_actions=False)
     target = strong_entity("Observed", (4, 4), "monsters", setup_actions=False)
-    Entity.update_all_entities_senses(max_distance=20)
     assert target.uuid in observer.senses.entities
 
     target.receive_instant_death(target.uuid, source_description="test")

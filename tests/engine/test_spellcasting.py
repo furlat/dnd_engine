@@ -390,7 +390,7 @@ def test_eb_14_004_spell_actions_create_spell_events_and_slot_costs() -> None:
     reset_spell_state()
     caster = create_spellcaster(spell_slots={1: 1, 2: 1})
     target = create_spell_target()
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     cantrip = FireBolt(
         source_entity_uuid=caster.uuid,
@@ -469,7 +469,7 @@ def test_eb_14_007_registered_spells_surface_executable_slot_variants() -> None:
     reset_spell_state()
     caster = create_spellcaster(spell_slots={1: 1, 3: 1})
     target = create_spell_target(position=(1, 0))
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     register_spell(caster, MagicMissile, caster_level=5)
     register_spell(caster, FireBolt, caster_level=5)
 
@@ -525,7 +525,7 @@ def test_eb_14_019_generated_upcast_variant_executes_with_higher_slot() -> None:
     reset_spell_state()
     caster = create_spellcaster(spell_slots={1: 1, 3: 1})
     target = create_spell_target(position=(1, 0))
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     template = MagicMissile(source_entity_uuid=caster.uuid, template=True)
     variants = template.generate_variants(caster)
@@ -551,7 +551,7 @@ def test_eb_14_008_magic_missile_convolution_aggregates_child_casts() -> None:
     reset_spell_state()
     caster = create_spellcaster(spell_slots={1: 1})
     target = create_spell_target(position=(1, 0))
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     initial_hp = get_hp(target)
 
     event = MagicMissile(
@@ -679,7 +679,7 @@ def test_eb_14_012_spell_action_overrides_change_template_costs_not_slot_variant
     reset_spell_state()
     caster = create_spellcaster(spell_slots={})
     target = create_spell_target(position=(1, 0))
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     register_spell(caster, MagicMissile, caster_level=5)
 
     authored_template = caster.get_action_template("Magic Missile")
@@ -727,7 +727,7 @@ def test_eb_14_018_spell_range_overrides_affect_discovery_and_clear_cleanly() ->
     reset_spell_state(width=32, height=2)
     caster = create_spellcaster(position=(0, 0), spell_slots={})
     far_target = create_spell_target(position=(26, 0))
-    Entity.update_all_entities_senses(max_distance=32)
+    Entity.materialize_all_navigation(max_distance=32)
     register_spell(caster, FireBolt, caster_level=5)
 
     def has_fire_bolt_target() -> bool:
@@ -843,7 +843,7 @@ def test_eb_14_013_registered_cantrip_makes_entity_spellcaster() -> None:
     reset_spell_state()
     caster = create_spellcaster(spell_slots={})
     target = create_spell_target(position=(1, 0))
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     assert caster.is_spellcaster is False
 
@@ -975,7 +975,7 @@ def test_eb_14_016_multi_target_concentration_reuses_one_slot() -> None:
     caster = create_spellcaster()
     first_target = create_spell_target(name="First Target", position=(1, 0))
     second_target = create_spell_target(name="Second Target", position=(2, 0))
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     spell = BookMultiTargetConcentrationSpell(
         source_entity_uuid=caster.uuid,
@@ -1017,7 +1017,7 @@ def test_multi_target_action_restores_primary_target_after_application_error(
     caster = create_spellcaster()
     first_target = create_spell_target(name="First Target", position=(1, 0))
     second_target = create_spell_target(name="Second Target", position=(2, 0))
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     spell = BookMultiTargetConcentrationSpell(
         source_entity_uuid=caster.uuid,
         target_entity_uuid=first_target.uuid,

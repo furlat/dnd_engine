@@ -108,7 +108,7 @@ def test_directional_wall_blocks_only_declared_sides_and_stays_structural() -> N
         blocked_directions=("east",),
     )
     grid.place_object(wall.uuid, (2, 3))
-    Entity.update_all_entities_senses(max_distance=50)
+    Entity.materialize_all_navigation(max_distance=50)
 
     assert grid.is_walkable(2, 3)
     assert not wall.blocks_walking()
@@ -162,7 +162,7 @@ def test_directional_door_open_event_preserves_other_sides_and_rejects_close_occ
     )
     grid.place_object(door.uuid, (2, 3))
     door.set_directional_blocking("movement", "west", True)
-    Entity.update_all_entities_senses(max_distance=50)
+    Entity.materialize_all_navigation(max_distance=50)
 
     assert not door.is_open
     assert not grid.can_transition((2, 3), (3, 3))
@@ -174,7 +174,7 @@ def test_directional_door_open_event_preserves_other_sides_and_rejects_close_occ
     cursor = EventQueue.event_cursor()
 
     result = execute_use_action(hero, door.uuid, "Open Door")
-    Entity.update_all_entities_senses(max_distance=50)
+    Entity.materialize_all_navigation(max_distance=50)
 
     assert result is not None
     assert not result.canceled
@@ -230,7 +230,7 @@ def test_directional_propagation_wall_removes_threat_and_opportunity_attack() ->
         faction="heroes",
     )
     setup_standard_actions(mover)
-    Entity.update_all_entities_senses(max_distance=50)
+    Entity.materialize_all_navigation(max_distance=50)
     assert mover.is_threatened()
 
     screen = DirectionalWall(
@@ -239,7 +239,7 @@ def test_directional_propagation_wall_removes_threat_and_opportunity_attack() ->
         blocked_channels=("propagation",),
     )
     grid.place_object(screen.uuid, threatening_enemy.position)
-    Entity.update_all_entities_senses(max_distance=50)
+    Entity.materialize_all_navigation(max_distance=50)
 
     assert not mover.is_threatened()
     assert mover.position not in threatening_enemy.senses.get_threathened_positions()
@@ -285,7 +285,7 @@ def test_directional_propagation_wall_removes_threat_and_opportunity_attack() ->
         position=(7, 3),
         faction="monsters",
     )
-    Entity.update_all_entities_senses(max_distance=50)
+    Entity.materialize_all_navigation(max_distance=50)
     assert archer.is_threatened()
     ranged_screen = DirectionalWall(
         source_entity_uuid=uuid4(),
@@ -293,7 +293,7 @@ def test_directional_propagation_wall_removes_threat_and_opportunity_attack() ->
         blocked_channels=("propagation",),
     )
     grid.place_object(ranged_screen.uuid, adjacent_enemy.position)
-    Entity.update_all_entities_senses(max_distance=50)
+    Entity.materialize_all_navigation(max_distance=50)
     assert not archer.is_threatened()
     attack = Attack(
         source_entity_uuid=archer.uuid,

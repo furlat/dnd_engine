@@ -1684,7 +1684,7 @@ class CommandFleeEffect(CommandNextTurnEffect):
                 0,
                 (target.action_economy.movement.normalized_score + 4) // 5,
             )
-            target.update_entity_senses(
+            target.materialize_navigation(
                 max_distance=20,
                 path_max_distance=path_distance,
             )

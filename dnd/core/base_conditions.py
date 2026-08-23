@@ -44,6 +44,7 @@ from dnd.types.conditions import (
     HazardFilter,
 )
 from dnd.types.saving_throws import SavingThrowContext, SavingThrowEffectTag
+from dnd.types.senses import OpticalObscurement
 
 
 class OutcomeProtection(BaseModel):
@@ -1019,6 +1020,14 @@ class BaseCondition(BaseObject):
     def is_active_spatial_condition(self) -> bool:
         """Return whether this condition is an active independent map owner."""
         return False
+
+    def get_optical_obscurement_at(
+        self,
+        position: Tuple[int, int],
+    ) -> Optional[OpticalObscurement]:
+        """Return observer-relative optical obscurement at one position."""
+        del position
+        return None
 
     def remove_event_handlers(self) -> bool:
         """Remove owned trigger-based event handlers from the EventQueue.

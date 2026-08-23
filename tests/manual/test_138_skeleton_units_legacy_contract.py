@@ -289,7 +289,7 @@ def test_specialized_skeleton_presets_preserve_identity_and_arena_interop() -> N
         position=(3, 7),
         faction="heroes",
     )
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
 
     assert (warrior.faction, archer.faction, warlock.faction, hero.faction) == (
         "monsters",
@@ -356,7 +356,7 @@ def test_eldritch_blast_hit_miss_and_range() -> None:
         position=(10, 0),
         faction="heroes",
     )
-    Entity.update_all_entities_senses(max_distance=150)
+    Entity.materialize_all_navigation(max_distance=150)
     initial_slots = (
         warlock.action_economy.spell_slot_value(1).normalized_score
     )
@@ -402,7 +402,7 @@ def test_eldritch_blast_hit_miss_and_range() -> None:
         position=(25, 0),
         faction="heroes",
     )
-    Entity.update_all_entities_senses(max_distance=150)
+    Entity.materialize_all_navigation(max_distance=150)
     range_event = EldritchBlast(
         source_entity_uuid=warlock.uuid,
         target_entity_uuid=target.uuid,
@@ -430,7 +430,7 @@ def test_acid_flask_affects_every_creature_in_its_area() -> None:
         position=(5, 4),
         faction="heroes",
     )
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
     before = (get_hp(first), get_hp(second))
     flask = get_inventory_item(warrior, "Acid Flask")
     action = flask.get_use_actions(warrior.uuid)[0].instantiate(end_position=(5, 5))
@@ -461,7 +461,7 @@ def test_mark_target_strips_existing_hidden_and_rejects_second_use() -> None:
         position=(3, 0),
         faction="heroes",
     )
-    Entity.update_all_entities_senses(max_distance=150)
+    Entity.materialize_all_navigation(max_distance=150)
     first.add_condition(
         Hidden(
             source_entity_uuid=first.uuid,
@@ -469,7 +469,7 @@ def test_mark_target_strips_existing_hidden_and_rejects_second_use() -> None:
             stealth_result=8,
         )
     )
-    Entity.update_all_entities_senses(max_distance=150)
+    Entity.materialize_all_navigation(max_distance=150)
 
     assert "Hidden" in first.active_conditions
     assert first.stealth_dc == 8
@@ -488,7 +488,7 @@ def test_mark_target_strips_existing_hidden_and_rejects_second_use() -> None:
 
     archer.remove_condition("Concentrating")
     archer.action_economy.reset_all_costs()
-    Entity.update_all_entities_senses(max_distance=150)
+    Entity.materialize_all_navigation(max_distance=150)
     second_mark = MarkTargetAction(
         source_entity_uuid=archer.uuid,
         target_entity_uuid=second.uuid,
@@ -515,7 +515,7 @@ def test_mark_target_damage_death_and_range_boundaries() -> None:
         position=(5, 0),
         faction="heroes",
     )
-    Entity.update_all_entities_senses(max_distance=150)
+    Entity.materialize_all_navigation(max_distance=150)
     mark_event = MarkTargetAction(
         source_entity_uuid=archer.uuid,
         target_entity_uuid=target.uuid,
@@ -555,7 +555,7 @@ def test_mark_target_damage_death_and_range_boundaries() -> None:
         position=(5, 0),
         faction="heroes",
     )
-    Entity.update_all_entities_senses(max_distance=150)
+    Entity.materialize_all_navigation(max_distance=150)
     MarkTargetAction(
         source_entity_uuid=archer.uuid,
         target_entity_uuid=target.uuid,
@@ -590,7 +590,7 @@ def test_mark_target_damage_death_and_range_boundaries() -> None:
         position=(13, 0),
         faction="heroes",
     )
-    Entity.update_all_entities_senses(max_distance=150)
+    Entity.materialize_all_navigation(max_distance=150)
     range_event = MarkTargetAction(
         source_entity_uuid=archer.uuid,
         target_entity_uuid=distant.uuid,
@@ -611,7 +611,7 @@ def test_arcane_staff_modifier_and_melee_attack_lifecycle() -> None:
         position=(1, 0),
         faction="heroes",
     )
-    Entity.update_all_entities_senses(max_distance=75)
+    Entity.materialize_all_navigation(max_distance=75)
     bonus_with_staff = warlock.spellcasting.spell_attack_bonus.normalized_score
 
     staff = warlock.unequip_item(WeaponSlot.MELEE_MAIN)
@@ -650,7 +650,7 @@ def test_warlock_invisibility_scroll_applies_effect_without_spell_slots() -> Non
         position=(0, 0),
         faction="monsters",
     )
-    Entity.update_all_entities_senses(max_distance=75)
+    Entity.materialize_all_navigation(max_distance=75)
     scroll = next(
         item
         for item in warlock.inventory.items.values()
@@ -700,7 +700,7 @@ def test_warlock_burning_hands_spends_only_its_selected_slot() -> None:
         position=(6, 5),
         faction="heroes",
     )
-    Entity.update_all_entities_senses(max_distance=75)
+    Entity.materialize_all_navigation(max_distance=75)
 
     for _ in range(2):
         before = get_hp(target)

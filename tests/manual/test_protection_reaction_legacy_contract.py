@@ -62,7 +62,7 @@ def _protection_scene(*, shield: bool = True) -> ProtectionScene:
         faction="monsters",
     )
     setup_standard_actions(enemy)
-    Entity.update_all_entities_senses(max_distance=50)
+    Entity.materialize_all_navigation(max_distance=50)
     return ProtectionScene(protector=protector, ally=ally, enemy=enemy)
 
 
@@ -128,7 +128,7 @@ def test_protection_rejects_each_ineligible_reaction_gate(gate: str) -> None:
                 target_entity_uuid=scene.enemy.uuid,
             )
         )
-    Entity.update_all_entities_senses(max_distance=50)
+    Entity.materialize_all_navigation(max_distance=50)
     reactions_before = scene.protector.action_economy.reactions.normalized_score
 
     event = _attack(scene, target)

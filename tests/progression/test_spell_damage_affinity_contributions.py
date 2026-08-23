@@ -69,7 +69,7 @@ def test_matching_affinity_adds_charisma_once_per_cast_without_persisting(
         damage_type=DamageType.FIRE,
         ability_name="charisma",
     )
-    Entity.update_all_entities_senses(max_distance=30)
+    Entity.materialize_all_navigation(max_distance=30)
 
     first = _cast(
         FireBolt(source_entity_uuid=caster.uuid, template=True),
@@ -115,7 +115,7 @@ def test_affinity_does_not_apply_to_a_different_spell_damage_type(
         damage_type=DamageType.FIRE,
         ability_name="charisma",
     )
-    Entity.update_all_entities_senses(max_distance=30)
+    Entity.materialize_all_navigation(max_distance=30)
 
     result = _cast(
         RayOfFrost(source_entity_uuid=caster.uuid, template=True),

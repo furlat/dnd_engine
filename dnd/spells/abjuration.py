@@ -957,7 +957,8 @@ def counterspell_reaction_processor(
     if not entity or not isinstance(entity, Entity):
         return None
 
-    if event.source_entity_uuid not in entity.senses.entities:
+    contact = entity.senses.entities.get(event.source_entity_uuid)
+    if contact is None or not contact.visual:
         return None
 
     spell_caster = Entity.get(event.source_entity_uuid)

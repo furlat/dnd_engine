@@ -141,7 +141,7 @@ def test_equipped_weapons_create_attack_templates_for_combat() -> None:
     reset_combat_tutorial_state()
     hero = create_combatant("Manual Fighter", (1, 1), "heroes")
     enemy = create_combatant("Training Skeleton", (2, 1), "monsters")
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
 
     available = get_available_actions(hero)
     entity_actions = {action.template_name: action for action in available.entity_actions}
@@ -161,7 +161,7 @@ def test_invalid_attack_cancels_before_rolls_damage_or_costs() -> None:
     reset_combat_tutorial_state()
     hero = create_combatant("Manual Fighter", (1, 1), "heroes")
     enemy = create_combatant("Distant Skeleton", (5, 1), "monsters")
-    Entity.update_all_entities_senses(max_distance=30)
+    Entity.materialize_all_navigation(max_distance=30)
     cursor = EventQueue.event_cursor()
 
     event = Attack(
@@ -188,7 +188,7 @@ def test_successful_attack_rolls_damage_applies_hp_loss_and_spends_action() -> N
     reset_combat_tutorial_state()
     hero = create_combatant("Manual Fighter", (1, 1), "heroes")
     enemy = create_combatant("Training Skeleton", (2, 1), "monsters")
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     cursor = EventQueue.event_cursor()
     hp_before = enemy.get_hp()
 
@@ -242,7 +242,7 @@ def test_natural_twenty_critical_doubles_weapon_damage_dice() -> None:
     reset_combat_tutorial_state()
     hero = create_combatant("Manual Fighter", (1, 1), "heroes")
     enemy = create_combatant("Training Skeleton", (2, 1), "monsters")
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     hp_before = enemy.get_hp()
 
     with fixed_dice(20, 3, 4):
@@ -267,7 +267,7 @@ def test_miss_spends_the_action_without_damage_events() -> None:
     reset_combat_tutorial_state()
     hero = create_combatant("Manual Fighter", (1, 1), "heroes")
     enemy = create_combatant("Training Skeleton", (2, 1), "monsters")
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     cursor = EventQueue.event_cursor()
     hp_before = enemy.get_hp()
 

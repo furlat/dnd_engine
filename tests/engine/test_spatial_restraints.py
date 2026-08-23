@@ -155,7 +155,7 @@ def test_entangle_uses_raw_strength_escape_and_exact_effect_cleanup() -> None:
     )
     target = _actor("Target", (5, 5), "monsters")
     _penalize_save(target, "strength")
-    Entity.update_all_entities_senses(max_distance=90)
+    Entity.materialize_all_navigation(max_distance=90)
     captured_logs: list[CombatLogEntry] = []
     EventQueue.set_combat_log_callback(
         lambda event: (
@@ -248,7 +248,7 @@ def test_web_leaving_footprint_releases_only_its_exact_source() -> None:
     )
     target = _actor("Target", (2, 2), "monsters")
     _penalize_save(target, "dexterity")
-    Entity.update_all_entities_senses(max_distance=90)
+    Entity.materialize_all_navigation(max_distance=90)
 
     with fixed_dice_faces(1):
         result = Web(
@@ -345,7 +345,7 @@ def test_black_tentacles_share_one_entry_turn_fence_and_escape_source() -> None:
     )
     target = _actor("Target", (8, 8), "monsters")
     _penalize_save(target, "dexterity")
-    Entity.update_all_entities_senses(max_distance=90)
+    Entity.materialize_all_navigation(max_distance=90)
 
     result = EvardsBlackTentacles(
         source_entity_uuid=caster.uuid,

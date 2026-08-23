@@ -169,7 +169,6 @@ def test_darkvision_self_lifecycle_is_non_concentration_and_timed() -> None:
     """Darkvision is an independent eight-hour sense grant."""
     reset_spell_regression_arena(14, 7)
     caster = _caster("Darkvision Caster", (2, 3), spell_slots={2: 1})
-    Entity.update_all_entities_senses(max_distance=60)
     assert not _has_sense(caster, SensesType.DARKVISION)
 
     result = _cast_darkvision(caster, caster)
@@ -193,7 +192,6 @@ def test_darkvision_ally_touch_range_accepts_adjacent_and_rejects_far() -> None:
     caster = _caster("Touch Caster", (2, 3), spell_slots={2: 2})
     ally = _caster("Adjacent Ally", (3, 3), spell_slots={})
     far_ally = _caster("Far Ally", (5, 3), spell_slots={})
-    Entity.update_all_entities_senses(max_distance=60)
 
     adjacent = _cast_darkvision(caster, ally)
     assert not adjacent.canceled
@@ -210,7 +208,6 @@ def test_darkvision_survives_unrelated_concentration_spell() -> None:
     reset_spell_regression_arena(14, 7)
     caster = _caster("Replacing Caster", (2, 3), spell_slots={2: 2})
     ally = _caster("Darkvision Ally", (3, 3), spell_slots={})
-    Entity.update_all_entities_senses(max_distance=60)
     assert not _cast_darkvision(caster, ally).canceled
 
     caster.action_economy.reset_all_costs()
@@ -234,7 +231,6 @@ def test_see_invisibility_reveals_invisible_entity_without_concentration() -> No
     reset_spell_regression_arena(14, 7)
     caster = _caster("See Invisible Caster", (2, 3), spell_slots={2: 1})
     enemy = _enemy("Invisible Enemy", (5, 3))
-    Entity.update_all_entities_senses(max_distance=60)
     enemy.add_condition(
         Invisible(source_entity_uuid=enemy.uuid, target_entity_uuid=enemy.uuid)
     )
@@ -257,7 +253,6 @@ def test_see_invisibility_ten_round_expiry_removes_sense_and_visibility() -> Non
     reset_spell_regression_arena(14, 7)
     caster = _caster("Expiring Sight", (2, 3), spell_slots={2: 1})
     enemy = _enemy("Hidden Again", (5, 3))
-    Entity.update_all_entities_senses(max_distance=60)
     enemy.add_condition(
         Invisible(source_entity_uuid=enemy.uuid, target_entity_uuid=enemy.uuid)
     )
@@ -280,7 +275,6 @@ def test_true_seeing_ally_grants_120_foot_truesight_without_concentration() -> N
     caster = _caster("True Seeing Caster", (2, 3), spell_slots={6: 1})
     ally = _caster("True Seeing Ally", (3, 3), spell_slots={})
     enemy = _enemy("Invisible True Target", (7, 3))
-    Entity.update_all_entities_senses(max_distance=80)
     enemy.add_condition(
         Invisible(source_entity_uuid=enemy.uuid, target_entity_uuid=enemy.uuid)
     )
@@ -303,7 +297,6 @@ def test_true_seeing_ten_round_expiry_removes_truesight() -> None:
     reset_spell_regression_arena(14, 7)
     caster = _caster("True Duration Caster", (2, 3), spell_slots={6: 1})
     ally = _caster("True Duration Ally", (3, 3), spell_slots={})
-    Entity.update_all_entities_senses(max_distance=60)
     assert not _cast_true_seeing(caster, ally).canceled
 
     for _ in range(10):
@@ -318,7 +311,6 @@ def test_true_seeing_rejects_target_beyond_touch_range() -> None:
     reset_spell_regression_arena(14, 7)
     caster = _caster("True Range Caster", (2, 3), spell_slots={6: 1})
     ally = _caster("True Range Ally", (5, 3), spell_slots={})
-    Entity.update_all_entities_senses(max_distance=60)
 
     result = _cast_true_seeing(caster, ally)
 
@@ -332,7 +324,6 @@ def test_direct_darkvision_effect_removal_reverses_concentration_link() -> None:
     reset_spell_regression_arena(14, 7)
     caster = _caster("Reverse Link Caster", (2, 3), spell_slots={2: 1})
     ally = _caster("Reverse Link Ally", (3, 3), spell_slots={})
-    Entity.update_all_entities_senses(max_distance=60)
     assert not _cast_darkvision(caster, ally).canceled
 
     ally.remove_condition("Darkvision")
@@ -346,7 +337,6 @@ def test_multiple_nonconcentration_sense_buffs_clean_up_independently() -> None:
     """Old case 10: removing See Invisibility preserves True Seeing."""
     reset_spell_regression_arena(14, 7)
     caster = _caster("Multi Sense Caster", (2, 3), spell_slots={2: 1, 6: 1})
-    Entity.update_all_entities_senses(max_distance=60)
     assert not _cast_see_invisibility(caster).canceled
     caster.action_economy.reset_all_costs()
     assert not _cast_true_seeing(caster, caster).canceled
@@ -364,21 +354,14 @@ def test_darkvision_reactively_reveals_dark_target_and_explicit_cleanup_hides_it
     _reset_dark_arena()
     caster = _caster("Dark Reactive Caster", (2, 3), spell_slots={2: 1})
     enemy = _enemy("Dark Reactive Enemy", (5, 3))
-    Entity.update_all_entities_senses(max_distance=70)
     tile = get_map().get_tile(*enemy.position)
     assert tile is not None
     assert enemy.uuid not in caster.senses.entities
-    assert (
-        tile.get_effective_light_for(caster.uuid, caster.position)
-        is LightLevel.DARKNESS
-    )
+    assert tile.resolved_light_level is LightLevel.DARKNESS
 
     assert not _cast_darkvision(caster, caster).canceled
     assert enemy.uuid in caster.senses.entities
-    assert (
-        tile.get_effective_light_for(caster.uuid, caster.position)
-        is LightLevel.DIM_LIGHT
-    )
+    assert caster.senses.effective_light_levels[enemy.position] is LightLevel.DIM_LIGHT
 
     _break_concentration(caster)
     assert enemy.uuid in caster.senses.entities
@@ -392,7 +375,6 @@ def test_see_invisibility_emits_reactive_add_and_remove_deltas() -> None:
     reset_spell_regression_arena(14, 7)
     caster = _caster("See Reactive Caster", (2, 3), spell_slots={2: 1})
     enemy = _enemy("See Reactive Enemy", (5, 3))
-    Entity.update_all_entities_senses(max_distance=60)
     enemy.add_condition(
         Invisible(source_entity_uuid=enemy.uuid, target_entity_uuid=enemy.uuid)
     )
@@ -402,7 +384,7 @@ def test_see_invisibility_emits_reactive_add_and_remove_deltas() -> None:
     additions = [
         event
         for event in _completed_sensory_updates(caster.uuid)
-        if enemy.uuid in event.visible_entities_added and event.sense_modes_changed
+        if enemy.uuid in event.entity_contacts_changed and event.sense_modes_changed
     ]
     assert additions
 
@@ -411,7 +393,7 @@ def test_see_invisibility_emits_reactive_add_and_remove_deltas() -> None:
     removals = [
         event
         for event in _completed_sensory_updates(caster.uuid)
-        if enemy.uuid in event.visible_entities_removed and event.sense_modes_changed
+        if enemy.uuid in event.entity_contacts_removed and event.sense_modes_changed
     ]
     assert removals
 
@@ -422,7 +404,7 @@ def test_true_seeing_reactively_pierces_darkness_and_invisibility() -> None:
     caster = _caster("True Reactive Caster", (2, 3), spell_slots={6: 1})
     ally = _caster("True Reactive Ally", (3, 3), spell_slots={})
     enemy = _enemy("True Reactive Enemy", (6, 3))
-    Entity.update_all_entities_senses(max_distance=70)
+    get_map().add_light_source(caster.position, bright_radius_feet=5, dim_radius_feet=0)
     enemy.add_condition(
         Invisible(source_entity_uuid=enemy.uuid, target_entity_uuid=enemy.uuid)
     )
@@ -442,7 +424,7 @@ def test_darkvision_on_ally_reactively_tracks_its_independent_lifecycle() -> Non
     caster = _caster("Ally Reactive Caster", (2, 3), spell_slots={2: 1})
     ally = _caster("Ally Reactive Target", (3, 3), spell_slots={})
     enemy = _enemy("Ally Reactive Enemy", (6, 3))
-    Entity.update_all_entities_senses(max_distance=70)
+    get_map().add_light_source(caster.position, bright_radius_feet=5, dim_radius_feet=0)
     assert enemy.uuid not in ally.senses.entities
 
     assert not _cast_darkvision(caster, ally).canceled
@@ -463,7 +445,6 @@ def test_darkvision_controls_discovery_and_real_spell_execution_in_darkness() ->
     caster = _caster("Dark Attack Caster", (2, 3), spell_slots={2: 1})
     enemy = _enemy("Dark Attack Enemy", (5, 3))
     register_spell(caster, FireBolt, caster_level=5)
-    Entity.update_all_entities_senses(max_distance=70)
     assert enemy.uuid not in caster.senses.entities
     assert all(
         enemy.uuid not in {target.target_uuid for target in row.valid_targets}
@@ -508,7 +489,6 @@ def test_see_invisibility_controls_discovery_and_real_spell_execution() -> None:
     caster = _caster("See Attack Caster", (2, 3), spell_slots={2: 1})
     enemy = _enemy("See Attack Enemy", (5, 3))
     register_spell(caster, FireBolt, caster_level=5)
-    Entity.update_all_entities_senses(max_distance=60)
     enemy.add_condition(
         Invisible(source_entity_uuid=enemy.uuid, target_entity_uuid=enemy.uuid)
     )

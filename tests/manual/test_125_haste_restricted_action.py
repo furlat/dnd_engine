@@ -170,7 +170,7 @@ def _create_hasted_fighter(
         )
     )
     fighter.action_economy.resources["extra_attacks"].current = 0
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     return fighter, target
 
 

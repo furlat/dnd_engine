@@ -119,7 +119,7 @@ def test_death_ward_is_consumed_before_a_second_lethal_hit() -> None:
         spell_slots={4: 1},
     )
     target = create_spell_regression_actor("Warded Ally", (2, 2), "heroes")
-    Entity.update_all_entities_senses(max_distance=40)
+    Entity.materialize_all_navigation(max_distance=40)
 
     result = DeathWard(
         source_entity_uuid=caster.uuid,
@@ -162,7 +162,7 @@ def test_freedom_of_movement_changes_path_and_committed_step_costs() -> None:
     for x in range(3, 6):
         for y in range(7):
             _make_difficult((x, y))
-    Entity.update_all_entities_senses(max_distance=40)
+    Entity.materialize_all_navigation(max_distance=40)
 
     distances_before, _ = get_map().compute_paths(
         target.position,
@@ -189,7 +189,7 @@ def test_freedom_of_movement_changes_path_and_committed_step_costs() -> None:
     assert distances_before[(6, 3)] == 7
     assert distances_after[(6, 3)] == 4
 
-    target.update_entity_senses(max_distance=20)
+    target.materialize_navigation(max_distance=20)
     movement_before = target.action_economy.movement.normalized_score
     move = Move(
         source_entity_uuid=target.uuid,
@@ -205,7 +205,7 @@ def test_resistance_modifies_one_save_then_cleans_concentration() -> None:
     reset_spell_regression_arena(10, 6)
     caster = create_spell_regression_actor("Resistance Cleric", (1, 2), "heroes")
     target = create_spell_regression_actor("Resistance Ally", (2, 2), "heroes")
-    Entity.update_all_entities_senses(max_distance=40)
+    Entity.materialize_all_navigation(max_distance=40)
 
     result = Resistance(
         source_entity_uuid=caster.uuid,
@@ -249,7 +249,7 @@ def test_inflict_wounds_hit_and_upcast_dice(
     )
     target = create_spell_regression_actor("Wounds Target", (3, 2), "monsters")
     force_save_result(target, "wisdom", succeeds=False)
-    Entity.update_all_entities_senses(max_distance=40)
+    Entity.materialize_all_navigation(max_distance=40)
     hit_modifier = force_attack_hit(caster)
 
     try:
@@ -285,7 +285,7 @@ def test_inflict_wounds_miss_deals_no_damage() -> None:
             value=-100,
         )
     )
-    Entity.update_all_entities_senses(max_distance=40)
+    Entity.materialize_all_navigation(max_distance=40)
     hp_before = get_hp(target)
 
     with fixed_dice_faces(10):
@@ -310,7 +310,7 @@ def test_shield_of_faith_owns_bonus_action_ac_and_concentration_cleanup() -> Non
         spell_slots={1: 1},
     )
     target = create_spell_regression_actor("Faith Ally", (2, 2), "heroes")
-    Entity.update_all_entities_senses(max_distance=40)
+    Entity.materialize_all_navigation(max_distance=40)
     ac_before = target.ac_bonus().normalized_score
 
     result = ShieldOfFaith(
@@ -345,7 +345,7 @@ def test_aid_applies_multi_target_upcast_without_concentration(
         create_spell_regression_actor(f"Aid Ally {index}", (2 + index, 3), "heroes")
         for index in range(3)
     ]
-    Entity.update_all_entities_senses(max_distance=40)
+    Entity.materialize_all_navigation(max_distance=40)
     max_before = {ally.uuid: get_max_hp(ally) for ally in allies}
 
     result = Aid(
@@ -377,7 +377,7 @@ def test_sanctuary_blocks_failed_attacker_save_and_breaks_on_attack() -> None:
     _equip_dagger(ally)
     _equip_dagger(attacker)
     force_save_result(attacker, "wisdom", succeeds=False)
-    Entity.update_all_entities_senses(max_distance=40)
+    Entity.materialize_all_navigation(max_distance=40)
 
     result = Sanctuary(
         source_entity_uuid=caster.uuid,
@@ -423,7 +423,7 @@ def test_beacon_of_hope_maximizes_heal_and_cleans_up() -> None:
         spell_slots={1: 1, 3: 1},
     )
     ally = create_spell_regression_actor("Beacon Ally", (2, 3), "heroes")
-    Entity.update_all_entities_senses(max_distance=40)
+    Entity.materialize_all_navigation(max_distance=40)
 
     result = BeaconOfHope(
         source_entity_uuid=caster.uuid,
@@ -471,7 +471,7 @@ def test_harm_never_reduces_target_below_one(
     )
     target = create_spell_regression_actor("Harm Target", (3, 3), "monsters")
     force_save_result(target, "constitution", succeeds=save_succeeds)
-    Entity.update_all_entities_senses(max_distance=40)
+    Entity.materialize_all_navigation(max_distance=40)
     set_hp(target, 5)
 
     with fixed_dice_faces(10, *([6] * 14)):
@@ -511,7 +511,7 @@ def test_divine_word_hp_threshold_matrix(
         spell_slots={7: 1},
     )
     target = create_spell_regression_actor("Divine Target", (3, 3), "monsters")
-    Entity.update_all_entities_senses(max_distance=40)
+    Entity.materialize_all_navigation(max_distance=40)
     set_hp(target, hp)
 
     result = DivineWord(
@@ -539,7 +539,7 @@ def test_heroes_feast_object_and_buff_full_lifecycle() -> None:
         spell_slots={6: 1},
     )
     ally = create_spell_regression_actor("Feast Ally", (2, 3), "heroes")
-    Entity.update_all_entities_senses(max_distance=40)
+    Entity.materialize_all_navigation(max_distance=40)
 
     result = HeroesFeast(
         source_entity_uuid=caster.uuid,
@@ -699,7 +699,7 @@ def test_bestow_curse_damage_option_adds_necrotic_damage_child() -> None:
             caster_uuid=caster.uuid,
         )
     )
-    Entity.update_all_entities_senses(max_distance=40)
+    Entity.materialize_all_navigation(max_distance=40)
     hit_modifier = force_attack_hit(caster)
 
     try:
@@ -782,7 +782,7 @@ def test_bestow_curse_concentration_and_remove_curse_reverse_cleanup() -> None:
     )
     target = create_spell_regression_actor("Curse Target", (2, 3), "monsters")
     force_save_result(target, "wisdom", succeeds=False)
-    Entity.update_all_entities_senses(max_distance=40)
+    Entity.materialize_all_navigation(max_distance=40)
 
     with fixed_dice_faces(10):
         first = BestowCurse(

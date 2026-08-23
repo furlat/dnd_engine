@@ -401,7 +401,7 @@ def test_scroll_targeting_matrix_is_item_bound() -> None:
     }
     for scroll in scrolls.values():
         put_in_inventory(caster, scroll)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     expected = {
         "Fireball": TargetType.POSITION_AOE,
@@ -443,7 +443,7 @@ def test_scroll_execute_by_index_consumes_item_not_spell_slots() -> None:
         expected_type=SpellGrantingItem,
     )
     put_in_inventory(caster, scroll)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     slots_before = {
         level: caster.action_economy.spell_slot_value(level).normalized_score
         for level in range(1, 5)
@@ -486,7 +486,7 @@ def test_magic_missile_scroll_level_controls_dart_count() -> None:
             expected_type=SpellGrantingItem,
         )
         put_in_inventory(caster, scroll)
-        Entity.update_all_entities_senses()
+        Entity.materialize_all_navigation()
         info = item_action(caster, scroll.uuid, "Magic Missile")
         target_row = next(
             row for row in info.valid_targets if row.target_uuid == target.uuid
@@ -518,7 +518,7 @@ def test_permanent_weapon_coat_discovery_damage_and_cleanup() -> None:
         origin=ItemRuntimeOrigin.STARTER,
     )
     put_in_inventory(caster, coat)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     unavailable_coat_actions = [
         info
         for info in get_available_actions(caster).self_actions
@@ -616,7 +616,7 @@ def test_magic_missile_wand_depletes_without_destroying_item() -> None:
         expected_type=SpellGrantingItem,
     )
     put_in_inventory(caster, wand)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     for _ in range(3):
         info = item_action(caster, wand.uuid, "Magic Missile")
@@ -655,7 +655,7 @@ def test_wand_of_fire_enforces_per_spell_charge_costs() -> None:
         expected_type=SpellGrantingItem,
     )
     put_in_inventory(caster, wand)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     rows = [
         info
         for info in get_available_actions(caster).position_actions
@@ -732,7 +732,7 @@ def test_wand_fireballs_preserve_explicit_level_and_variant_isolation() -> None:
             expected_type=SpellGrantingItem,
         )
         put_in_inventory(caster, wand)
-        Entity.update_all_entities_senses()
+        Entity.materialize_all_navigation()
         slots_before = {
             level: caster.action_economy.spell_slot_value(
                 level
@@ -831,7 +831,7 @@ def test_arcane_machine_gun_is_repeatable_environment_spell_source() -> None:
         expected_type=SpellGrantingItem,
     )
     gun.place_on_grid((2, 5))
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     info = item_action(caster, gun.uuid, "Magic Missile")
 
     assert info.target_type is TargetType.MULTI_ENTITY
@@ -867,7 +867,7 @@ def test_fireball_cannon_depletes_and_disappears_from_discovery() -> None:
         expected_type=SpellGrantingItem,
     )
     cannon.place_on_grid((2, 5))
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     for expected_charges in (2, 1, 0):
         info = item_action(caster, cannon.uuid, "Fireball")
@@ -907,7 +907,7 @@ def test_environment_actions_require_range_and_arcana_proficiency() -> None:
         expected_type=SpellGrantingItem,
     )
     far_gun.place_on_grid((4, 5))
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     novice_sources = {
         info.source_item_uuid
         for info in get_available_actions(novice).all_actions
@@ -931,7 +931,7 @@ def test_environment_actions_require_range_and_arcana_proficiency() -> None:
     )
     device.place_on_grid((2, 5))
     set_hp(scholar, 50)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     info = item_action(scholar, device.uuid, "Activate Device")
 
     result = execute_use_action(
@@ -959,7 +959,7 @@ def test_fireball_scroll_resolves_both_save_branches_and_consumes() -> None:
         expected_type=SpellGrantingItem,
     )
     put_in_inventory(caster, scroll)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     info = item_action(caster, scroll.uuid, "Fireball")
     preview = target_hitting(
         info,
@@ -1006,7 +1006,7 @@ def test_wand_burning_hands_preserves_direction_and_damage() -> None:
         expected_type=SpellGrantingItem,
     )
     put_in_inventory(caster, wand)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     info = item_action(caster, wand.uuid, "Burning Hands")
     preview = target_hitting(info, east.uuid, excluding=west.uuid)
     east_hp = get_hp(east)
@@ -1039,7 +1039,7 @@ def test_hold_person_scroll_owns_concentration_cleanup() -> None:
         expected_type=SpellGrantingItem,
     )
     put_in_inventory(caster, scroll)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     info = item_action(caster, scroll.uuid, "Hold Person")
     target_row = next(
         row for row in info.valid_targets if row.target_uuid == target.uuid
@@ -1079,7 +1079,7 @@ def test_spike_growth_scroll_owns_entry_damage_and_terrain_cleanup() -> None:
         expected_type=SpellGrantingItem,
     )
     put_in_inventory(caster, scroll)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     info = item_action(caster, scroll.uuid, "Spike Growth")
     preview = next(
         (
@@ -1139,7 +1139,7 @@ def test_mage_armor_and_fire_bolt_scroll_effects() -> None:
         expected_type=SpellGrantingItem,
     )
     put_in_inventory(caster, mage_armor)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     armor_info = item_action(caster, mage_armor.uuid, "Mage Armor")
     self_row = next(
         row for row in armor_info.valid_targets if row.target_uuid == caster.uuid
@@ -1168,7 +1168,7 @@ def test_mage_armor_and_fire_bolt_scroll_effects() -> None:
         expected_type=SpellGrantingItem,
     )
     put_in_inventory(caster, fire_bolt)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     modifier_uuid = force_spell_attack_hit(caster)
     bolt_info = item_action(caster, fire_bolt.uuid, "Fire Bolt")
     target_row = next(
@@ -1207,7 +1207,7 @@ def test_weapon_coat_concentration_and_timed_lifetimes() -> None:
         origin=ItemRuntimeOrigin.STARTER,
     )
     put_in_inventory(caster, concentrating_coat)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     info = item_action(caster, concentrating_coat.uuid, "Coat Main Hand")
 
     result = execute_use_action(

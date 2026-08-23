@@ -346,7 +346,8 @@ def _build_door(
         content_ref=context.requested_ref,
         is_open=parameters.is_open,
         blocks_movement=not parameters.is_open,
-        blocks_vision_field=not parameters.is_open,
+        blocks_optics_field=not parameters.is_open,
+        blocks_propagation_field=not parameters.is_open,
     )
 
 
@@ -468,7 +469,8 @@ def _build_blocker(
     hit_points: int,
     map_char: str,
     blocks_movement: bool,
-    blocks_vision: bool,
+    blocks_optics: bool,
+    blocks_propagation: bool,
 ) -> BaseItem:
     context = ItemBuildContext.model_validate(raw_context)
     return BaseItem(
@@ -483,7 +485,8 @@ def _build_blocker(
         ),
         map_char=map_char,
         blocks_movement=blocks_movement,
-        blocks_vision_field=blocks_vision,
+        blocks_optics_field=blocks_optics,
+        blocks_propagation_field=blocks_propagation,
     )
 
 
@@ -569,7 +572,8 @@ def _build_crate(
         hit_points=20,
         map_char="C",
         blocks_movement=False,
-        blocks_vision=False,
+        blocks_optics=False,
+        blocks_propagation=False,
     )
 
 
@@ -601,7 +605,8 @@ def _build_boulder(
         hit_points=30,
         map_char="B",
         blocks_movement=True,
-        blocks_vision=False,
+        blocks_optics=False,
+        blocks_propagation=True,
     )
 
 
@@ -633,7 +638,8 @@ def _build_barricade(
         hit_points=20,
         map_char="X",
         blocks_movement=True,
-        blocks_vision=True,
+        blocks_optics=True,
+        blocks_propagation=True,
     )
 
 
@@ -680,7 +686,8 @@ def _build_oil_barrel(
         ),
         map_char="O",
         blocks_movement=True,
-        blocks_vision_field=False,
+        blocks_optics_field=False,
+        blocks_propagation_field=True,
     )
 
 

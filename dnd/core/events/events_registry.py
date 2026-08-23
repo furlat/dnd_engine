@@ -341,9 +341,12 @@ class Event(BaseObject):
     def completion_position_observer_evidence(
         self,
         completion_locations: Dict[str, Set[str]],
+        *,
+        completion_committed: bool,
     ) -> Dict[str, Set[str]]:
         """Return coordinate grants to freeze onto the completion version."""
         del completion_locations
+        del completion_committed
         return {
             key: set(observer_uuids)
             for key, observer_uuids in self.located_position_observer_uuids.items()
@@ -437,7 +440,12 @@ class Event(BaseObject):
             self.located_entity_observer_uuids,
         )
         completion_updates["located_position_observer_uuids"] = (
-            self.completion_position_observer_evidence(completion_locations)
+            self.completion_position_observer_evidence(
+                completion_locations,
+                completion_committed=(
+                    completion_updates.get("committed") is True
+                ),
+            )
         )
 
         all_children = list(dict.fromkeys(

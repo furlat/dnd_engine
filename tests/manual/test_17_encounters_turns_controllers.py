@@ -98,7 +98,7 @@ def create_encounter_pair() -> tuple[Entity, Entity]:
     """Create a nearby hero and monster with opposing factions."""
     hero = create_test_monster("monster.goblin", name="Manual Hero", position=(1, 1), faction="heroes")
     monster = create_test_monster("monster.skeleton", name="Manual Skeleton", position=(2, 1), faction="monsters")
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     return hero, monster
 
 

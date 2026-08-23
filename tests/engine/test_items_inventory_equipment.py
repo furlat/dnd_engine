@@ -61,9 +61,12 @@ def reset_item_state(
     BaseBlock._registry.clear()
     BaseValue._registry.clear()
     grid = get_map()
+    grid.disable_events()
     grid.create_rectangle(0, 0, width, height)
-    for tile in grid._tiles.values():
-        tile.default_light = default_light
+    if default_light is not LightLevel.BRIGHT_LIGHT:
+        for position in grid.get_all_tiles():
+            grid.set_tile_base_light(position, default_light)
+    grid.enable_events(flush_pending=False)
 
 
 def put_in_inventory(entity: Entity, item: BaseItem) -> None:
@@ -769,7 +772,7 @@ def test_eb_13_022_melee_and_ranged_slots_are_parallel_loadouts() -> None:
     assert entity.equip_item(sword.uuid, WeaponSlot.MELEE_MAIN)
     assert entity.equip_item(shield.uuid, WeaponSlot.MELEE_OFF)
     assert entity.equip_item(bow.uuid, WeaponSlot.RANGED_MAIN)
-    entity.update_entity_senses(max_distance=20)
+    entity.materialize_navigation(max_distance=20)
 
     action_names = {action.template_name for action in entity.get_available_actions().entity_actions}
 
@@ -792,7 +795,7 @@ def test_eb_13_009_environment_use_actions_are_stateful_and_spatial() -> None:
         uuid4(),
     )
     get_map().place_object(door.uuid, (1, 0))
-    entity.update_entity_senses(max_distance=5)
+    entity.materialize_navigation(max_distance=5)
 
     assert door.uuid in entity.senses.objects
     assert door.blocks_movement

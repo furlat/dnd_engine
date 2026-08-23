@@ -39,7 +39,7 @@ def _create_life_state_game() -> tuple[TestClient, str, Entity, Entity, Encounte
         faction="monsters",
         content_ref=BESTIARY_CREATURE_DECLARATIONS_BY_ID["skeleton"].ref,
     )
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
 
     encounter = Encounter(name="Lifecycle Contract", source_entity_uuid=hero.uuid)
     encounter.add_combatant(hero, HumanController(source_entity_uuid=hero.uuid))

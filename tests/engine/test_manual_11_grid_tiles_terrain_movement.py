@@ -33,7 +33,7 @@ from dnd.core.gridmap import get_map
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import BaseValue
 from dnd.entities.entity import Entity, EntityConfig
-from tests.engine.support import reset_combat_state
+from tests.engine.support import create_test_entity, reset_combat_state
 
 
 def reset_world_state(width: int = 8, height: int = 8) -> None:
@@ -54,8 +54,8 @@ def create_world_actor(
 ) -> Entity:
     """Create an actor with stable movement and Strength for world examples."""
     actor_id = uuid4()
-    return Entity.create(
-        source_entity_uuid=actor_id,
+    return create_test_entity(
+        source_id=actor_id,
         name=name,
         config=EntityConfig(
             ability_scores=AbilityScoresConfig(
@@ -71,6 +71,7 @@ def create_world_actor(
             position=position,
             faction=faction,
         ),
+        entity_kind_id="test.world_actor",
     )
 
 
@@ -162,7 +163,7 @@ def test_voluntary_move_walks_cell_by_cell_and_spends_movement() -> None:
     """The Move action emits step movement and spends movement per entered cell."""
     reset_world_state(width=5, height=1)
     hero = create_world_actor("Hero", (0, 0), "heroes")
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     cursor = EventQueue.event_cursor()
     movement_before = hero.action_economy.movement.normalized_score
 
@@ -192,7 +193,7 @@ def test_forced_movement_uses_forced_event_spatial_entries_and_no_step_events() 
     reset_world_state(width=7, height=1)
     shover = create_world_actor("Shove Tutor", (0, 0), "heroes", strength=18)
     target = create_world_actor("Practice Ally", (1, 0), "heroes", strength=10)
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     cursor = EventQueue.event_cursor()
     target_movement_before = target.action_economy.movement.normalized_score
 
@@ -255,7 +256,7 @@ def test_step_handlers_see_voluntary_movement_not_forced_movement() -> None:
             event_processor=record_step,
         )
     )
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
 
     Move(source_entity_uuid=hero.uuid, end_position=(2, 0)).apply()
 
@@ -285,7 +286,7 @@ def test_step_handlers_see_voluntary_movement_not_forced_movement() -> None:
             event_processor=record_forced_step,
         )
     )
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
 
     Shove(source_entity_uuid=shover.uuid, target_entity_uuid=target.uuid).apply()
 

@@ -263,7 +263,8 @@ def protection_processor(
     if distance > 5:
         return None
 
-    if event.source_entity_uuid not in protector.senses.entities:
+    contact = protector.senses.entities.get(event.source_entity_uuid)
+    if contact is None or not contact.visual:
         return None
 
     off_hand = protector.equipment.weapon_melee_off
@@ -853,7 +854,8 @@ class ExtraAttack(BaseAction):
         if not target:
             return declaration_event.cancel(status_message="Target not found")
 
-        if self.target_entity_uuid not in entity.senses.entities:
+        contact = entity.senses.entities.get(self.target_entity_uuid)
+        if contact is None or not contact.visual:
             return declaration_event.cancel(status_message="Target not visible")
 
         attack_event = cast(AttackEvent, declaration_event)

@@ -281,8 +281,10 @@ def danger_sense_check(
     if not entity.can_take_actions():
         return None
 
-    if target_entity_uuid and target_entity_uuid not in entity.senses.entities:
-        return None
+    if target_entity_uuid:
+        contact = entity.senses.entities.get(target_entity_uuid)
+        if contact is None or not contact.visual:
+            return None
 
     return AdvantageModifier(
         name="Danger Sense",
@@ -608,8 +610,10 @@ def intimidating_presence_end_check_processor(
     distance = creature.distance_to_entity(barbarian)
     should_end = distance > 60
 
-    if not should_end and barbarian_uuid not in creature.senses.entities:
-        should_end = True
+    if not should_end:
+        contact = creature.senses.entities.get(barbarian_uuid)
+        if contact is None or not contact.visual:
+            should_end = True
 
     if should_end:
         creature.remove_condition("Frightened", parent_event=event)
@@ -712,7 +716,8 @@ class IntimidatingPresence(BaseAction):
         if distance > 30:
             return declaration_event.cancel(status_message="Target beyond 30ft")
 
-        if self.target_entity_uuid not in entity.senses.entities:
+        contact = entity.senses.entities.get(self.target_entity_uuid)
+        if contact is None or not contact.visual:
             return declaration_event.cancel(status_message="Target not visible")
 
         if self._is_target_immune(target):
@@ -832,7 +837,8 @@ class ExtendIntimidatingPresence(BaseAction):
         if distance > 30:
             return declaration_event.cancel(status_message="Target beyond 30ft")
 
-        if self.target_entity_uuid not in entity.senses.entities:
+        contact = entity.senses.entities.get(self.target_entity_uuid)
+        if contact is None or not contact.visual:
             return declaration_event.cancel(status_message="Target not visible")
 
         if not self._is_frightened_by_me(target):

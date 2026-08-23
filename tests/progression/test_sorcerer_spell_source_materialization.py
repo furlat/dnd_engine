@@ -916,7 +916,7 @@ def test_counterspell_uses_strongest_exact_learned_source_ability() -> None:
             source_id=source_id,
             handler_uuid=handler.uuid,
         )
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     event = SpellEvent(
         name="Incoming Level Six Spell",
         event_type=EventType.CAST_SPELL,

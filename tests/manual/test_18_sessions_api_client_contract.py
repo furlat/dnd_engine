@@ -140,7 +140,7 @@ def create_api_pair() -> tuple[Entity, Entity]:
     )
     assert monster.loot_item(monster_weapon)
     assert monster.equip_item(monster_weapon.uuid, WeaponSlot.MELEE_MAIN)
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     return hero, monster
 
 

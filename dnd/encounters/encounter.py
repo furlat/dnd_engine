@@ -32,11 +32,7 @@ from dnd.core.events.encounter_events import (
     TurnEndEvent,
     DeathEvent,
 )
-from dnd.core.events.world_events import (
-    SensoryUpdateReason,
-)
-from dnd.blocks.sensory import capture_senses_snapshot, emit_sensory_update_delta
-from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
+from dnd.core.combat_log import CombatLogEntry
 from dnd.core.gridmap import get_map
 from dnd.types.life import LifeState, LifeStateChangeReason
 from dnd.entities.entity import Entity
@@ -47,79 +43,6 @@ from dnd.actions.operations import execute_by_index
 logger = logging.getLogger(__name__)
 
 
-def _scan_logs_for_reveals(logs: List[CombatLogEntry], revealed: Set[str]) -> None:
-    """Recursively scan condition-owned perceivability removals."""
-    for log in logs:
-        if log.entry_type == CombatLogEntryType.CONDITION_REMOVED:
-            if log.data.get("reveals_target") and log.target_uuid:
-                target = Entity.get(UUID(log.target_uuid))
-                if target and not target.stealth_dc and not target.is_invisible:
-                    revealed.add(log.target_uuid)
-        _scan_logs_for_reveals(log.sub_entries, revealed)
-
-
-def _compute_revealed_entities(event: Event, child_logs: List[CombatLogEntry]) -> Set[str]:
-    """Return entities revealed during an event chain.
-
-    The scan checks condition-removal combat-log entries and then verifies the
-    current entity state, so an entity is only marked revealed when it is no
-    longer hidden or invisible after the event chain resolves.
-    """
-    revealed: Set[str] = set()
-    _scan_logs_for_reveals(child_logs, revealed)
-    return revealed
-
-
-def _compute_perceivers(event: Event) -> Set[str]:
-    """Return observer UUIDs that should receive an event log."""
-    grid = get_map()
-
-    positions: Set[Tuple[int, int]] = event.get_affected_positions()
-
-    participant_uuids = event.get_participant_entity_uuids()
-    for uuid in participant_uuids:
-        if uuid:
-            pos = grid.get_entity_position(uuid)
-            if pos:
-                positions.add(pos)
-
-    perceivers: Set[str] = set()
-    for pos in positions:
-        perceivers |= {str(u) for u in grid.get_subscribers_at(pos)}
-
-    for uuid in participant_uuids:
-        if uuid:
-            perceivers.add(str(uuid))
-
-    return perceivers
-
-
-def _compute_identified_entity_observers(event: Event) -> Dict[str, Set[str]]:
-    """Capture which observers identify each entity participating in an event."""
-    grid = get_map()
-    grants: Dict[str, Set[str]] = {}
-    participant_uuids = {
-        entity_uuid
-        for entity_uuid in event.get_participant_entity_uuids()
-        if Entity.get(entity_uuid) is not None
-    }
-
-    for participant_uuid in participant_uuids:
-        observer_uuids = {participant_uuid}
-        position = grid.get_entity_position(participant_uuid)
-        if position is not None:
-            observer_uuids.update(grid.get_subscribers_at(position))
-
-        identified_by: Set[str] = set()
-        for observer_uuid in observer_uuids:
-            observer = Entity.get(observer_uuid)
-            if observer is None:
-                continue
-            if observer_uuid == participant_uuid or participant_uuid in observer.senses.entities:
-                identified_by.add(str(observer_uuid))
-        grants[str(participant_uuid)] = identified_by
-
-    return grants
 
 
 class AdvanceResult(BaseObject):
@@ -459,9 +382,6 @@ class Encounter(BaseObject):
         Encounter._active_encounter = self
 
         EventQueue.set_combat_log_callback(self._on_event_combat_log)
-        EventQueue.set_perceiver_computer(_compute_perceivers)
-        EventQueue.set_revealed_computer(_compute_revealed_entities)
-        EventQueue.set_identified_entity_observer_computer(_compute_identified_entity_observers)
 
         self._apply_surprise_reaction_lockouts()
 
@@ -502,9 +422,6 @@ class Encounter(BaseObject):
             Encounter._active_encounter = None
 
         EventQueue.set_combat_log_callback(None)
-        EventQueue.set_perceiver_computer(None)
-        EventQueue.set_revealed_computer(None)
-        EventQueue.set_identified_entity_observer_computer(None)
 
         self._notify_controllers_encounter_end()
 
@@ -592,7 +509,7 @@ class Encounter(BaseObject):
                 turn_index=self.current_turn_index,
             )
             self.current_turn_started_source_event_cursor = EventQueue.event_cursor()
-            self._refresh_turn_start_senses(entity, event)
+            self._materialize_turn_navigation(entity)
 
             if controller:
                 controller.on_turn_start(entity, self._build_turn_context(entity))
@@ -671,7 +588,7 @@ class Encounter(BaseObject):
             )
             self.current_turn_started_source_event_cursor = EventQueue.event_cursor()
 
-            self._refresh_turn_start_senses(entity, event)
+            self._materialize_turn_navigation(entity)
 
             if controller:
                 context = self._build_turn_context(entity)
@@ -683,30 +600,11 @@ class Encounter(BaseObject):
 
         return event
 
-    def _refresh_turn_start_senses(
-        self,
-        entity: Entity,
-        turn_start_event: TurnStartEvent,
-    ) -> None:
-        """Recompute one actor's senses and emit the complete subjective delta.
-
-        Args:
-            entity: Actor whose turn is starting.
-            turn_start_event: Completed turn event that caused the refresh.
-        """
-        before = capture_senses_snapshot(entity.senses)
+    def _materialize_turn_navigation(self, entity: Entity) -> None:
+        """Clear collision memory and materialize the actor's navigation cache."""
         entity.senses.collision_blocked.clear()
         entity.senses.directional_collision_blocked.clear()
-        entity.update_entity_senses(max_distance=20)
-        after = capture_senses_snapshot(entity.senses)
-        emit_sensory_update_delta(
-            entity.senses,
-            entity.uuid,
-            turn_start_event,
-            before,
-            after,
-            SensoryUpdateReason.TURN_START,
-        )
+        entity.materialize_navigation(max_distance=20)
 
     def end_turn(self) -> Optional[TurnEndEvent]:
         """

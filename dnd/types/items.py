@@ -78,7 +78,8 @@ class ItemObservationState(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     blocks_movement: bool
-    blocks_vision: bool
+    blocks_optics: bool
+    blocks_propagation: bool
     is_pickable: bool
     is_usable: bool
     stack_count: int = Field(ge=1)

@@ -1086,10 +1086,11 @@ class BaseAction(BaseObject):
                 continue
             if senses is None:
                 return "Source cannot perceive external targets"
-            if target_uuid not in senses.entities:
+            contact = senses.entities.get(target_uuid)
+            if contact is None:
                 target = BaseBlock.get(target_uuid)
                 target_name = target.name if target else str(target_uuid)
-                return f"{target_name} is not visible"
+                return f"{target_name} is not perceived"
 
         source_faction = source_block.faction
 

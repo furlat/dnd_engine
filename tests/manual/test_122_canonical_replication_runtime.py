@@ -368,7 +368,7 @@ def test_real_torch_ignite_is_one_authoritative_subjective_light_frame() -> None
         for item in observer.inventory.items.values()
         if item.stack_id == torch.stack_id
     )
-    Entity.update_all_entities_senses(max_distance=10)
+    Entity.materialize_all_navigation(max_distance=10)
 
     encounter = Encounter(name="Torch encounter", source_entity_uuid=observer.uuid)
     encounter.add_combatant(
@@ -463,7 +463,7 @@ def test_each_committed_movement_step_has_authoritative_perception_frame() -> No
     )
     assert isinstance(stored_torch, Torch)
     stored_torch.ignite(observer.uuid)
-    Entity.update_all_entities_senses(max_distance=10)
+    Entity.materialize_all_navigation(max_distance=10)
 
     encounter = Encounter(name="Moving light encounter", source_entity_uuid=observer.uuid)
     encounter.add_combatant(
@@ -554,7 +554,7 @@ def test_spike_damage_is_scheduled_after_its_destination_arrival(
     scene = runtime_scene
     starting_cursor = scene.context.journal.watermarks.observation_cursor
     materialize_spike_trap_condition({(1, 0)})
-    Entity.update_all_entities_senses(max_distance=10)
+    Entity.materialize_all_navigation(max_distance=10)
 
     with fixed_dice_faces(1, 1):
         result = Move(
@@ -701,7 +701,7 @@ def test_greater_invisibility_reveal_is_one_closed_subjective_frame() -> None:
         for item in caster.inventory.items.values()
         if item.stack_id == potion.stack_id
     )
-    Entity.update_all_entities_senses(max_distance=10)
+    Entity.materialize_all_navigation(max_distance=10)
     assert caster.uuid in observer.senses.entities
 
     encounter = Encounter(name="Reveal encounter", source_entity_uuid=observer.uuid)
@@ -1608,7 +1608,7 @@ def test_shared_root_context_copies_once_and_validates_each_step_directly(
         (3, 0): True,
     }
     observer.senses.seen = set(observer.senses.visible)
-    Entity.update_all_entities_senses(max_distance=10)
+    Entity.materialize_all_navigation(max_distance=10)
     encounter = Encounter(name="Shared contexts", source_entity_uuid=observer.uuid)
     source_stream = DndEventStream()
     runtime = CanonicalSubjectiveReplicationRuntime(

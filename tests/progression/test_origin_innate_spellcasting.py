@@ -747,7 +747,7 @@ def test_tiefling_hellish_rebuke_spends_fixed_use_and_deals_rank_two_damage(
         runtime=runtime,
     )
     receipts = install_origin_innate_spellcasting(context)
-    tiefling.update_entity_senses(max_distance=60)
+    tiefling.materialize_navigation(max_distance=60)
     resource_name = innate_spell_resource_name(preview_row)
     hp_before = attacker.get_normal_hp()
 
@@ -868,7 +868,7 @@ def test_hellish_rebuke_declaration_veto_preserves_reaction_and_resource(
             event_processor=veto_reaction_action,
         )
     )
-    tiefling.update_entity_senses(max_distance=60)
+    tiefling.materialize_navigation(max_distance=60)
     attacker_hp_before = attacker.get_normal_hp()
     reaction_before = tiefling.action_economy.reactions.normalized_score
     resource_before = tiefling.action_economy.get_resource_current(

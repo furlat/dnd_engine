@@ -3,6 +3,7 @@
 from typing import Callable, Dict, List, Optional, Set, Tuple, TypeAlias
 
 from dnd.types.world import LightLevel, MovementMode
+from dnd.types.senses import OpticalObscurement
 from uuid import UUID, uuid4
 from pydantic import Field, PrivateAttr, model_validator
 
@@ -96,6 +97,10 @@ class SpatialCondition(BaseCondition):
         SpatialEffectTriggerKind
     ] = Field(default_factory=frozenset)
     arbitration_potency: int = Field(default=0, ge=0)
+    optical_obscurement: Optional[OpticalObscurement] = Field(
+        default=None,
+        description="Observer-relative optical obstruction contributed in the footprint.",
+    )
 
     _activation_positions: Optional[Set[Tuple[int, int]]] = PrivateAttr(
         default=None,
@@ -155,6 +160,15 @@ class SpatialCondition(BaseCondition):
         """Verify this condition against the authoritative GridMap collection."""
         return get_map().get_spatial_condition(self.uuid) is self
 
+    def get_optical_obscurement_at(
+        self,
+        position: Tuple[int, int],
+    ) -> Optional[OpticalObscurement]:
+        """Return this condition's optical contribution inside its footprint."""
+        if position not in self.affected_positions:
+            return None
+        return self.optical_obscurement
+
     def blocks_walking_at(
         self,
         position: Tuple[int, int],
@@ -169,7 +183,7 @@ class SpatialCondition(BaseCondition):
             return position == self.position
         return position in self.affected_positions
 
-    def is_perceivable_by(
+    def is_hazard_perceived_by(
         self,
         requesting_entity_uuid: Optional[UUID] = None,
     ) -> bool:
@@ -186,7 +200,7 @@ class SpatialCondition(BaseCondition):
         """Resolve the inherited hazard filter for one observer."""
         if self.hazard_filter is None:
             return False
-        if not self.is_perceivable_by(entity_uuid):
+        if not self.is_hazard_perceived_by(entity_uuid):
             return False
         if self.hazard_filter is HazardFilter.ALL:
             return True
@@ -295,6 +309,13 @@ class SpatialCondition(BaseCondition):
         """Restore condition-specific mechanics on recovered positions."""
         del positions
 
+    def _publish_pending_runtime_facts(
+        self,
+        parent_event: Optional[Event],
+    ) -> None:
+        """Publish contributor facts after the complete spatial commit."""
+        del parent_event
+
     def _release_positions_for_replacement(
         self,
         positions: Set[Tuple[int, int]],
@@ -375,6 +396,7 @@ class SpatialCondition(BaseCondition):
     def _restore_displaced_footprints(self) -> None:
         """Restore incumbents after a rejected incoming application."""
         grid = get_map()
+        restored: List[SpatialCondition] = []
         for incumbent_uuid in sorted(
             self._committed_displacement_uuids,
             key=str,
@@ -391,8 +413,11 @@ class SpatialCondition(BaseCondition):
                 positions=original,
             )
             incumbent._restore_positions(original - remaining)
+            restored.append(incumbent)
         self._displaced_footprints.clear()
         self._committed_displacement_uuids.clear()
+        for incumbent in restored:
+            incumbent._publish_pending_runtime_facts(None)
 
     def _apply(
         self,
@@ -483,6 +508,7 @@ class SpatialCondition(BaseCondition):
         super().discard_uncommitted_runtime_state()
         self.affected_positions.clear()
         self._restore_displaced_footprints()
+        self._publish_pending_runtime_facts(None)
 
     def discard_from_runtime_owner(self) -> bool:
         """Discard this uncommitted independently owned condition tree."""
@@ -617,6 +643,7 @@ class SpatialCondition(BaseCondition):
                 parent_event=parent_event,
             ):
                 return False
+            self._publish_pending_runtime_facts(parent_event)
             for child_uuid in list(self.sub_conditions):
                 child = BaseCondition.get(child_uuid)
                 if isinstance(child, BaseCondition):
@@ -806,6 +833,7 @@ class SpatialCondition(BaseCondition):
             positions=self.affected_positions,
         )
         self._sync_spatial_handler_positions()
+        self._publish_pending_runtime_facts(parent_event)
         self._publish_change(
             SpatialEffectChangeOperation.TRANSFORMED,
             previous_positions=previous,
@@ -1000,14 +1028,20 @@ class AreaCondition(SpatialCondition):
     adds_difficult_terrain: bool = Field(default=False, description="If True, adds +1 to walking cost")
 
     sets_light_level: Optional[LightLevel] = Field(default=None, description="Light level to apply to zone tiles")
-    light_is_obscurement: bool = Field(default=False, description="If True, uses add_obscurement(); else add_illumination()")
+    light_is_cap: bool = Field(
+        default=False,
+        description="Whether the source caps rather than adds objective illumination.",
+    )
 
     _entry_handler_uuid: Optional[UUID] = PrivateAttr(default=None)
     _exit_handler_uuid: Optional[UUID] = PrivateAttr(default=None)
     _turn_start_handler_uuid: Optional[UUID] = PrivateAttr(default=None)
     _turn_end_handler_uuid: Optional[UUID] = PrivateAttr(default=None)
     _terrain_modifier_uuids: Dict[UUID, List[UUID]] = PrivateAttr(default_factory=dict)
-    _light_modifier_uuids: Dict[Tuple[int, int], UUID] = PrivateAttr(default_factory=dict)
+    _light_modifier_positions: Set[Tuple[int, int]] = PrivateAttr(default_factory=set)
+    _pending_light_changed_positions: Set[Tuple[int, int]] = PrivateAttr(
+        default_factory=set,
+    )
     _last_trigger_turn_by_target: Dict[UUID, UUID] = PrivateAttr(
         default_factory=dict,
     )
@@ -1308,7 +1342,11 @@ class AreaCondition(SpatialCondition):
         """Resolve the area geometry used by direct condition activation."""
         return self.resolve_area_footprint()
 
-    def rollback_failed_install(self) -> None:
+    def rollback_failed_install(
+        self,
+        *,
+        parent_event: Optional[Event] = None,
+    ) -> None:
         """Release every lease created before a failed condition commit."""
         if not self.applied:
             for handler_uuid in (
@@ -1374,7 +1412,10 @@ class AreaCondition(SpatialCondition):
             tile = grid.get_tile(*representative_pos)
             if tile:
                 event = SpatialChangeEvent.tile_changed(
-                    representative_pos, walkable=True, visible=True,
+                    representative_pos,
+                    tile.walkable,
+                    tile.blocks_optics,
+                    tile.blocks_propagation_field,
                     senses_hint=hint,
                 )
                 EventQueue.publish_lifecycle(event)
@@ -1445,8 +1486,9 @@ class AreaCondition(SpatialCondition):
             if tile is not None:
                 event = SpatialChangeEvent.tile_changed(
                     representative_position,
-                    walkable=True,
-                    visible=True,
+                    tile.walkable,
+                    tile.blocks_optics,
+                    tile.blocks_propagation_field,
                     senses_hint=hint,
                 )
                 EventQueue.publish_lifecycle(event)
@@ -1471,45 +1513,28 @@ class AreaCondition(SpatialCondition):
         self,
         positions: Optional[Set[Tuple[int, int]]] = None,
     ) -> None:
-        """Apply light level modifiers to affected tiles.
-
-        Uses fire_event=False per tile + batch event after, same pattern
-        as GridMap._apply_light_source().
-        """
+        """Apply light modifiers and retain their unpublished changed cells."""
         if self.sets_light_level is None:
             return
 
         grid = get_map()
-        changed_positions: List[Tuple[int, int]] = []
-        requires_fov = False
         target_positions = (
             positions if positions is not None else self.affected_positions
         )
-        for pos in target_positions:
-            tile = grid.get_tile(*pos)
-            if tile:
-                modifier_uuid = uuid4()
-                old_light_level = tile.resolved_light_level
-                if self.light_is_obscurement:
-                    if tile.add_obscurement(modifier_uuid, self.sets_light_level, fire_event=False):
-                        changed_positions.append(pos)
-                else:
-                    if tile.add_illumination(modifier_uuid, self.sets_light_level, fire_event=False):
-                        changed_positions.append(pos)
-                if (
-                    old_light_level == LightLevel.MAGICAL_DARKNESS
-                    or tile.resolved_light_level == LightLevel.MAGICAL_DARKNESS
-                ):
-                    requires_fov = True
-                self._light_modifier_uuids[pos] = modifier_uuid
-
-        grid._fire_light_batch_events(changed_positions, requires_fov=requires_fov)
+        applied, changed = grid.apply_tile_light_modifier(
+            self.uuid,
+            set(target_positions),
+            self.sets_light_level,
+            cap=self.light_is_cap,
+        )
+        self._light_modifier_positions.update(applied)
+        self._pending_light_changed_positions.update(changed)
 
     def _remove_light_modifiers_from_positions(
         self,
         positions: Optional[Set[Tuple[int, int]]] = None,
     ) -> bool:
-        """Remove light modifiers through one batched event path.
+        """Remove light modifiers and retain their unpublished changed cells.
 
         Args:
             positions: Position subset to remove. ``None`` removes every
@@ -1519,34 +1544,39 @@ class AreaCondition(SpatialCondition):
             True when at least one tile's resolved light state changed.
         """
         grid = get_map()
-        changed_positions: List[Tuple[int, int]] = []
-        requires_fov = False
         target_positions = (
-            set(self._light_modifier_uuids)
+            set(self._light_modifier_positions)
             if positions is None
-            else positions
+            else positions & self._light_modifier_positions
         )
-        for position in target_positions:
-            modifier_uuid = self._light_modifier_uuids.pop(position, None)
-            if modifier_uuid is None:
-                continue
-            tile = grid.get_tile(*position)
-            if tile is None:
-                continue
-            old_light_level = tile.resolved_light_level
-            if tile.remove_light_modifier(modifier_uuid, fire_event=False):
-                changed_positions.append(position)
-                if (
-                    old_light_level == LightLevel.MAGICAL_DARKNESS
-                    or tile.resolved_light_level == LightLevel.MAGICAL_DARKNESS
-                ):
-                    requires_fov = True
+        removed, changed = grid.remove_tile_light_modifier(
+            self.uuid,
+            target_positions,
+        )
+        self._light_modifier_positions.difference_update(removed)
+        self._pending_light_changed_positions.update(changed)
+        return bool(removed)
 
-        grid._fire_light_batch_events(
-            changed_positions,
-            requires_fov=requires_fov,
+    def _publish_pending_light_changes(
+        self,
+        parent_event: Optional[Event],
+    ) -> None:
+        """Publish the exact light delta after optical and light state agree."""
+        if not self._pending_light_changed_positions:
+            return
+        changed = set(self._pending_light_changed_positions)
+        get_map().publish_light_changes(
+            changed,
+            parent_event=parent_event.uuid if parent_event is not None else None,
         )
-        return bool(changed_positions)
+        self._pending_light_changed_positions.difference_update(changed)
+
+    def _publish_pending_runtime_facts(
+        self,
+        parent_event: Optional[Event],
+    ) -> None:
+        """Publish deferred objective light state after the spatial commit."""
+        self._publish_pending_light_changes(parent_event)
 
     def _remove_light_modifiers(self) -> None:
         """Remove every light modifier through the batched primitive."""
@@ -1672,10 +1702,13 @@ class AreaCondition(SpatialCondition):
             handler_uuids.append(handler.uuid)
 
         terrain_modifiers = self._apply_terrain_modifiers()
-
-        self._apply_light_modifiers()
-
         self._commit_activation_footprint(parent_event=declaration_event)
+        self._apply_light_modifiers()
+        for incumbent_uuid in sorted(self._displaced_footprints, key=str):
+            incumbent = BaseCondition.get(incumbent_uuid)
+            if isinstance(incumbent, AreaCondition):
+                incumbent._publish_pending_light_changes(declaration_event)
+        self._publish_pending_light_changes(declaration_event)
 
         if declaration_event is not None:
             effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition": self})
@@ -1685,8 +1718,11 @@ class AreaCondition(SpatialCondition):
         return terrain_modifiers, handler_uuids, [], spatial_handler_uuids, effect_event
 
     def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
-        """Advance removal; owned state is released by the shared hook."""
-        return super()._remove(event)
+        """Remove the optical index before publishing owned light removal."""
+        removed_event = super()._remove(event)
+        if removed_event is not None and not removed_event.canceled:
+            get_map().remove_spatial_condition(self.uuid)
+        return removed_event
 
     def _release_owned_runtime_state(
         self,
@@ -1694,8 +1730,7 @@ class AreaCondition(SpatialCondition):
         parent_event: Optional[Event] = None,
     ) -> None:
         """Release partial area mechanics during rejected application."""
-        del parent_event
-        self.rollback_failed_install()
+        self.rollback_failed_install(parent_event=parent_event)
 
     def move_zone(
         self,
@@ -1758,7 +1793,10 @@ class AreaCondition(SpatialCondition):
                 positions=old_positions,
             )
             self._restore_positions(removed_positions)
+            self._pending_light_changed_positions.clear()
             raise
+
+        self._publish_pending_light_changes(parent_event)
 
         self.apply_effect_exit_trigger(
             removed_positions,

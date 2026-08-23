@@ -183,7 +183,7 @@ def test_first_action_example_prints_visible_turn_menu(capsys) -> None:
     reset_action_state()
     hero = create_test_monster("monster.goblin", name="Scout", position=(5, 5), faction="heroes")
     create_test_monster("monster.skeleton", name="Skeleton", position=(6, 5), faction="monsters")
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     available = get_available_actions(hero)
     entity_names = {
@@ -325,7 +325,7 @@ def test_standard_action_discovery_groups_choices_for_clients(capsys) -> None:
     reset_action_state()
     hero = create_test_monster("monster.goblin", name="Scout", position=(5, 5), faction="heroes")
     skeleton = create_test_monster("monster.skeleton", name="Skeleton", position=(6, 5), faction="monsters")
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     available = get_available_actions(hero)
     self_names = {info.template_name for info in available.self_actions}
@@ -419,7 +419,7 @@ def test_authored_entity_action_remains_without_targets_when_cost_is_exhausted()
         position=(6, 5),
         faction="monsters",
     )
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     hero.action_economy.consume("actions", 1)
 
     attack = find_attack_action(get_available_actions(hero))
@@ -433,7 +433,7 @@ def test_affordable_authored_entity_action_remains_with_no_valid_targets() -> No
     """An authored targeted action remains discoverable before a target exists."""
     reset_action_state()
     hero = create_test_monster("monster.goblin", name="Lonely Hero", position=(5, 5), faction="heroes")
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     attack = find_attack_action(get_available_actions(hero))
 
@@ -445,7 +445,7 @@ def test_affordable_self_action_remains_when_its_rule_prerequisite_fails() -> No
     """Self-action identity remains visible while its prerequisite disables it."""
     reset_action_state()
     hero = create_test_monster("monster.goblin", name="Unfocused Hero", position=(5, 5), faction="heroes")
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     drop_concentration = find_action(
         get_available_actions(hero),
@@ -465,7 +465,7 @@ def test_legal_only_action_discovery_omits_cost_and_requirement_blockers() -> No
         position=(6, 5),
         faction="monsters",
     )
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     hero.action_economy.consume("actions", 1)
 
     authored = get_available_actions(hero)
@@ -493,7 +493,7 @@ def test_contextual_object_and_environment_discovery_remains_sparse() -> None:
         origin=ItemRuntimeOrigin.LOOT,
     )
     distant_potion.place_on_grid((5, 3))
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     available = get_available_actions(hero)
 
@@ -519,7 +519,7 @@ def test_unaffordable_authored_position_and_object_paths_do_no_target_work(
         origin=ItemRuntimeOrigin.LOOT,
     )
     club.place_on_grid((4, 3))
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     jump = hero.get_action_template("Jump")
     assert isinstance(jump, Jump)
     monkeypatch.setattr(jump, "position_discovery", None)
@@ -558,7 +558,7 @@ def test_position_action_rows_report_no_rules_valid_targets(
     actor = create_tutorial_actor(position=(2, 2))
     if template_name == "Prepare Intercept":
         register_prepare_intercept(actor)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     authored = get_available_actions(actor)
     legal = get_available_actions(actor, legal_only=True)
@@ -582,7 +582,7 @@ def test_position_action_rows_report_target_cost_unaffordable(
     actor = create_tutorial_actor(position=(2, 2))
     if template_name == "Prepare Intercept":
         register_prepare_intercept(actor)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     template = actor.get_action_template(template_name)
     assert template is not None
     template.set_target_position((3, 2))
@@ -618,7 +618,7 @@ def test_entity_action_discovery_does_not_retain_candidate_targets() -> None:
     actor = create_tutorial_actor(position=(2, 2))
     create_test_monster("monster.skeleton", name="First Target", position=(3, 2), faction="monsters")
     create_test_monster("monster.skeleton", name="Second Target", position=(2, 3), faction="monsters")
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     shake_awake = actor.get_action_template("Shake Awake")
     shove = actor.get_action_template("Shove")
     assert shake_awake is not None
@@ -638,7 +638,7 @@ def test_move_row_reports_no_rules_valid_routes() -> None:
     GridMap.reset()
     get_map().create_rectangle(2, 2, 1, 1)
     actor = create_tutorial_actor(position=(2, 2))
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     authored = get_available_actions(actor)
     legal = get_available_actions(actor, legal_only=True)
@@ -657,7 +657,7 @@ def test_move_row_reports_movement_budget_exhaustion() -> None:
     """Rules-valid routes blocked only by movement retain a typed authored row."""
     reset_action_state()
     actor = create_tutorial_actor(position=(2, 2))
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     actor.action_economy.consume(
         "movement",
         actor.action_economy.movement.normalized_score,
@@ -697,7 +697,7 @@ def test_generic_position_row_reports_requirements_not_target_cost(
             template=True,
         )
     )
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     monkeypatch.setattr(
         MistyStep,
         "validate_requirements_for_discovery",
@@ -732,7 +732,7 @@ def test_entity_row_reports_target_cost_unaffordable(
         faction="heroes",
     )
     create_test_monster("monster.skeleton", name="Adjacent Enemy", position=(3, 2), faction="monsters")
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     def impossible_target_cost(self: Attack) -> list[Cost]:
         return [
@@ -773,7 +773,7 @@ def test_unaffordable_contextual_self_item_stays_stable_without_validation(
         origin=ItemRuntimeOrigin.STARTER,
     )
     assert hero.loot_item(potion)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     monkeypatch.setattr(BaseAction, "pre_validate", unexpected_discovery_work)
     deny_nonreaction_actions(hero)
 
@@ -808,7 +808,7 @@ def test_unaffordable_contextual_entity_item_stays_stable_without_target_work(
     )
     assert hero.loot_item(scroll)
     create_test_monster("monster.skeleton", name="Scroll Target", position=(4, 3), faction="monsters")
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     monkeypatch.setattr(Entity, "_compute_target_pool", unexpected_discovery_work)
     deny_nonreaction_actions(hero)
 
@@ -843,7 +843,7 @@ def test_unaffordable_contextual_aoe_item_stays_stable_without_preview_work(
     )
     assert hero.loot_item(scroll)
     create_test_monster("monster.skeleton", name="Blast Target", position=(5, 3), faction="monsters")
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     monkeypatch.setattr(Fireball, "get_valid_positions", unexpected_discovery_work)
     monkeypatch.setattr(
         Entity,
@@ -956,7 +956,7 @@ def test_floor_and_inventory_item_actions_are_discovered_and_routed(capsys) -> N
         origin=ItemRuntimeOrigin.LOOT,
     )
     potion.place_on_grid((4, 3))
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     available = get_available_actions(actor)
     pickup_info = find_action(available, "Pick Up")
@@ -1059,7 +1059,7 @@ def test_item_bound_spell_consumes_its_charge_before_action_completion() -> None
         origin=ItemRuntimeOrigin.STARTER,
     )
     assert actor.loot_item(scroll)
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     available = get_available_actions(actor)
     row = next(
         info
@@ -1153,7 +1153,7 @@ def test_target_filters_shape_entity_target_pools(capsys) -> None:
     enemy = create_test_monster("monster.skeleton", name="Enemy", position=(6, 5), faction="monsters")
     dead_enemy = create_test_monster("monster.skeleton", name="Dead Enemy", position=(6, 6), faction="monsters")
     dead_enemy.receive_damage(999, DamageType.BLUDGEONING, hero.uuid)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     default_attack = find_attack_action(hero.get_available_actions())
     assert [target.target_uuid for target in default_attack.valid_targets] == [enemy.uuid]
@@ -1213,7 +1213,7 @@ def test_safe_movement_metadata_shapes_path_choice(capsys) -> None:
     hazard_tile.add_condition(hazard)
 
     scout = create_test_monster("monster.skeleton", name="Scout", position=(5, 3), faction="heroes")
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     available = get_available_actions(scout)
     move_info = find_action(available, "Move")
@@ -1283,7 +1283,7 @@ def test_move_executes_affordable_disclosed_path_when_safe_alternative_is_too_co
     """Execution must not replace a legal epoch path with an unaffordable route."""
     reset_action_state()
     scout = create_test_monster("monster.skeleton", name="Scout", position=(5, 3), faction="heroes")
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     available = get_available_actions(scout)
     move_info = find_action(available, "Move")
@@ -1330,7 +1330,7 @@ def test_partial_move_completion_reports_only_traversed_path_and_cost() -> None:
     """A newly discovered collision cannot survive as an untraversed log tail."""
     reset_action_state()
     scout = create_tutorial_actor(name="Scout", position=(0, 5))
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     available = get_available_actions(scout)
     move_info = find_action(available, "Move")

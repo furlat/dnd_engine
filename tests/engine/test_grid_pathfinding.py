@@ -141,7 +141,13 @@ def test_eb_11_001_tiles_are_grid_stored_blocks_with_uuid_lookup() -> None:
     reset_grid_state(width=1, height=1)
     grid = get_map()
 
-    tile = grid.set_tile(3, 4, walkable=True, visible=True, name="Marble Floor")
+    tile = grid.set_tile(
+        3,
+        4,
+        walkable=True,
+        blocks_optics=False,
+        name="Marble Floor",
+    )
 
     assert tile.position == (3, 4)
     assert grid.get_tile(3, 4) is tile
@@ -346,7 +352,7 @@ def test_eb_11_004_move_action_converts_tile_cost_units_to_feet() -> None:
         )
     )
     entity = create_test_monster("monster.skeleton", name="Mover", position=(0, 0), faction="heroes")
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
 
     move = Move(source_entity_uuid=entity.uuid, end_position=(4, 0))
     event = move.apply()
@@ -365,7 +371,7 @@ def test_eb_11_005_occupants_and_objects_block_walkable_tiles_polymorphically() 
     grid = get_map()
     mover = create_test_monster("monster.skeleton", name="Mover", position=(0, 0), faction="heroes")
     blocker = create_test_monster("monster.skeleton", name="Blocker", position=(1, 0), faction="monsters")
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
 
     assert grid.is_walkable(1, 0)
     assert not grid.is_walkable_for(1, 0, mover.uuid)
@@ -394,7 +400,7 @@ def test_eb_11_015_dead_entities_become_non_blocking_for_paths() -> None:
     grid = get_map()
     mover = create_test_monster("monster.skeleton", name="Mover", position=(0, 0), faction="heroes")
     blocker = create_test_monster("monster.skeleton", name="Blocker", position=(2, 0), faction="monsters")
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
 
     assert blocker.blocks_walking(requesting_entity_uuid=mover.uuid) is True
     assert not grid.is_walkable_for(2, 0, mover.uuid)
@@ -448,46 +454,44 @@ def test_eb_11_006_directional_borders_block_transitions_and_emit_metadata() -> 
 
 
 def test_eb_11_007_directional_channels_are_independent() -> None:
-    """EB-11-007: movement, vision, light, and propagation are separate channels."""
+    """EB-11-007: movement, optics, and propagation are separate channels."""
     reset_grid_state(width=4, height=3)
     grid = get_map()
     screen = BaseItem(
         source_entity_uuid=uuid4(),
         name="Screen",
         is_pickable=False,
-        blocks_vision_east=True,
-        blocks_light_east=True,
+        blocks_optics_east=True,
         blocks_propagation_east=True,
     )
     grid.place_object(screen.uuid, (1, 1))
 
     assert grid.can_transition((1, 1), (2, 1))
     assert (2, 1) not in set(grid.compute_fov((1, 1), max_distance=3))
-    assert (2, 1) not in set(grid.compute_light_fov((1, 1), max_distance=3))
     assert (2, 1) not in set(grid.compute_propagation_fov((1, 1), max_distance=3))
     assert (0, 1) in set(grid.compute_fov((1, 1), max_distance=3))
 
 
-def test_eb_11_022_fov_cache_invalidates_when_vision_blockers_change() -> None:
-    """EB-11-022: cached FOV cannot survive changed vision topology."""
+def test_eb_11_022_fov_cache_invalidates_when_optical_blockers_change() -> None:
+    """EB-11-022: cached FOV cannot survive changed optical topology."""
     reset_grid_state(width=6, height=3)
     grid = get_map()
 
     first_fov = set(grid.compute_fov((0, 1), max_distance=6))
-    first_revision = grid.vision_revision
+    first_revision = grid.optical_revision
     assert (5, 1) in first_fov
 
     wall = BaseItem(
         source_entity_uuid=uuid4(),
         name="Vision Cache Wall",
         is_pickable=False,
-        blocks_vision_field=True,
+        blocks_optics_field=True,
     )
     grid.place_object(wall.uuid, (2, 1))
 
     second_fov = set(grid.compute_fov((0, 1), max_distance=6))
 
-    assert grid.vision_revision > first_revision
+    assert grid.optical_revision > first_revision
     assert (5, 1) not in second_fov
     assert (1, 1) in second_fov
 
@@ -520,7 +524,7 @@ def test_eb_11_023_propagation_cache_reuses_results_and_invalidates_on_blockers(
         source_entity_uuid=uuid4(),
         name="Propagation Cache Wall",
         is_pickable=False,
-        blocks_vision_field=True,
+        blocks_propagation_field=True,
     )
     grid.place_object(wall.uuid, (2, 1))
     third_fov = grid.compute_propagation_fov((0, 1), max_distance=6)
@@ -543,7 +547,7 @@ def test_eb_11_017_forced_movement_and_jump_respect_directional_blockers() -> No
         blocks_propagation_east=True,
     )
     grid.place_object(wall.uuid, (1, 1))
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
 
     final_pos, distance, blocked, blocker_name = Shove.calculate_final_position(
         start=(1, 1),
@@ -560,7 +564,12 @@ def test_eb_11_017_forced_movement_and_jump_respect_directional_blockers() -> No
 
     jump = Jump(source_entity_uuid=actor.uuid, template=True)
     assert (3, 1) in actor.senses.visible
-    assert not grid.raycast_clear((1, 1), (3, 1), channel="propagation", observer_uuid=actor.uuid)
+    assert not grid.raycast_clear(
+        (1, 1),
+        (3, 1),
+        channel="propagation",
+        requester_uuid=actor.uuid,
+    )
     assert (3, 1) not in jump.get_valid_positions()
 
     jump_attempt = Jump(source_entity_uuid=actor.uuid, end_position=(3, 1))
@@ -626,7 +635,7 @@ def test_eb_11_014_hidden_hazard_perception_change_recomputes_safe_paths() -> No
         condition_stealth_dc=base_perception + 5,
     )
     trap_tile.add_condition(hidden_trap)
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
 
     destination = (4, 1)
     initial_path = observer.senses.paths[destination]
@@ -662,7 +671,14 @@ def test_eb_11_009_geometry_and_aoe_are_grid_aware_where_needed() -> None:
     """EB-11-009: pure geometry feeds AoE shapes, which then consult the grid."""
     reset_grid_state(width=5, height=3)
     grid = get_map()
-    grid.set_tile(2, 1, walkable=False, visible=False, name="Wall")
+    grid.set_tile(
+        2,
+        1,
+        walkable=False,
+        blocks_optics=True,
+        blocks_propagation=True,
+        name="Wall",
+    )
     caster = create_test_monster("monster.skeleton", name="Caster", position=(0, 1), faction="heroes")
     target = create_test_monster("monster.skeleton", name="Behind Wall", position=(3, 1), faction="monsters")
 
@@ -737,10 +753,17 @@ def test_eb_11_019_cylinder_subjective_preview_matches_targeting_footprint() -> 
     """EB-11-019: cylinder subjective previews use the same full footprint as targeting."""
     reset_grid_state(width=5, height=3)
     grid = get_map()
-    grid.set_tile(2, 1, walkable=False, visible=False, name="Wall")
+    grid.set_tile(
+        2,
+        1,
+        walkable=False,
+        blocks_optics=True,
+        blocks_propagation=True,
+        name="Wall",
+    )
     caster = create_test_monster("monster.skeleton", name="Caster", position=(0, 1), faction="heroes")
     target = create_test_monster("monster.skeleton", name="Behind Wall", position=(3, 1), faction="monsters")
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
 
     subjective = Cylinder(source_entity_uuid=caster.uuid, target=(1, 1), radius_feet=15)
     subjective.compute_subjective(
@@ -896,7 +919,7 @@ def test_eb_11_016_raw_object_removal_clears_item_floor_location_state() -> None
     observer = create_test_monster("monster.skeleton", name="Observer", position=(0, 0), faction="heroes")
     raw_item = BaseItem(source_entity_uuid=uuid4(), name="Raw Floor Item")
     raw_item.place_on_grid((1, 0))
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
 
     raw_tile_uuid = raw_item.tile_uuid
     assert raw_tile_uuid is not None

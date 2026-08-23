@@ -51,7 +51,7 @@ def test_battlefield_composition_work_tracks_authored_elevation_cells(
     elevated_elapsed = perf_counter() - elevated_started
 
     assert elevation_calls == [
-        cell.position for cell in elevated.preview.elevation_cells
+        cell.position for cell in elevated.layout.elevation
     ]
     assert flat_elapsed >= 0
     assert elevated_elapsed >= 0
@@ -63,7 +63,7 @@ def test_cold_and_warm_action_discovery_have_bounded_pathfinder_calls(
     """A warm query never adds a map- or target-proportional path rebuild."""
     reset_core_action_state()
     actor = strong_entity("Discovery", (0, 0), "heroes")
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     grid = get_map()
     original = grid.compute_paths
     calls: list[MovementMode] = []

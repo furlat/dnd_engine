@@ -332,7 +332,7 @@ def _runtime_encounter(
     )
     for entity in entities:
         add_opportunity_attack_handler(entity)
-    Entity.update_all_entities_senses(max_distance=80)
+    Entity.materialize_all_navigation(max_distance=80)
     encounter = Encounter(name=definition.title, source_entity_uuid=uuid4())
     controllers: dict[UUID, Controller] = {}
     for entity in entities:

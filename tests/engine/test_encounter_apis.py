@@ -154,7 +154,7 @@ def create_book_pair() -> tuple[Entity, Entity]:
         faction="monsters",
         content_ref=BESTIARY_CREATURE_DECLARATIONS_BY_ID["skeleton"].ref,
     )
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     return hero, monster
 
 
@@ -460,7 +460,7 @@ def test_eb_18_034_available_move_paths_preserve_directional_blockers() -> None:
     )
 
     changed = grid.set_tile_directional_border((1, 1), "movement", "east", False)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     assert changed
     assert not grid.can_transition((1, 1), (2, 1))
@@ -903,7 +903,7 @@ def test_eb_18_027_available_actions_serializes_spell_slot_variant_metadata() ->
         faction="monsters",
         content_ref=BESTIARY_CREATURE_DECLARATIONS_BY_ID["skeleton"].ref,
     )
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     encounter = start_ordered_encounter(
         caster,
         target,
@@ -2230,7 +2230,7 @@ def test_downed_external_combatant_does_not_hold_the_turn() -> None:
     downed.uses_death_saves = True
     standing = create_test_monster("monster.goblin", name="Standing", position=(2, 2), faction="heroes")
     monster = create_test_monster("monster.skeleton", name="Monster", position=(9, 6), faction="monsters")
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     encounter = Encounter(name="Downed Turn", source_entity_uuid=uuid4())
     encounter.add_combatant(downed, HumanController(source_entity_uuid=downed.uuid))

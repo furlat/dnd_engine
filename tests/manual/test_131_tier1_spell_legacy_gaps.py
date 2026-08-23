@@ -86,7 +86,7 @@ def test_hold_person_rejects_non_humanoid() -> None:
         "monsters",
         creature_type=CreatureType.UNDEAD,
     )
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
 
     result = HoldPerson(
         source_entity_uuid=caster.uuid,
@@ -135,7 +135,7 @@ def test_hold_monster_concentration_cleanup() -> None:
         creature_type=CreatureType.MONSTROSITY,
     )
     force_save_result(target, "wisdom", succeeds=False)
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
 
     with fixed_dice_faces(10):
         result = HoldMonster(
@@ -179,7 +179,7 @@ def _sunburst_cast(
         creature_type=creature_type,
     )
     force_save_result(target, "constitution", succeeds=save_succeeds)
-    Entity.update_all_entities_senses(max_distance=200)
+    Entity.materialize_all_navigation(max_distance=200)
     hp_before = target.get_hp()
     save_faces = (18, 3) if creature_type is CreatureType.UNDEAD else (10,)
 
@@ -264,7 +264,7 @@ def _poison_spray_scene(
         (2 + distance_tiles, 3),
         "monsters",
     )
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
     return caster, target, PoisonSpray(
         source_entity_uuid=caster.uuid,
         target_entity_uuid=target.uuid,
