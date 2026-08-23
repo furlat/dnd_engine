@@ -40,7 +40,7 @@ def _cast_shatter(
         "monsters",
     )
     force_save_result(target, "constitution", succeeds=save_succeeds)
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
 
     hp_before = target.get_hp()
     with fixed_dice_faces(10, damage_face, damage_face, damage_face):
@@ -99,7 +99,7 @@ def test_shatter_smaller_radius() -> None:
     far = create_spell_regression_actor("Far", (10, 4), "monsters")
     force_save_result(center, "constitution", succeeds=False)
     force_save_result(near, "constitution", succeeds=False)
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
     hp_before = {actor.uuid: actor.get_hp() for actor in (center, near, far)}
 
     with fixed_dice_faces(*([10, 4, 4, 4] * 2)):
@@ -125,7 +125,7 @@ def test_shatter_range_validation() -> None:
         spell_slots={2: 1},
     )
     in_range = create_spell_regression_actor("At 60 feet", (14, 4), "monsters")
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
 
     out_of_range = Shatter(
         source_entity_uuid=caster.uuid,
@@ -162,7 +162,7 @@ def test_shatter_wall_blocks() -> None:
     blocked = create_spell_regression_actor("Blocked", (9, 4), "monsters")
     force_save_result(visible, "constitution", succeeds=False)
     force_save_result(blocked, "constitution", succeeds=False)
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
     visible_hp = visible.get_hp()
     blocked_hp = blocked.get_hp()
 
@@ -189,7 +189,7 @@ def test_shatter_los_to_center() -> None:
         spell_slots={2: 1},
     )
     create_spell_regression_actor("Hidden Target", (7, 4), "monsters")
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
 
     result = Shatter(
         source_entity_uuid=caster.uuid,
@@ -215,7 +215,7 @@ def test_shatter_both_save_outcomes_are_reported() -> None:
     passing = create_spell_regression_actor("Passing", (8, 4), "monsters")
     force_save_result(failing, "constitution", succeeds=False)
     force_save_result(passing, "constitution", succeeds=True)
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
 
     with fixed_dice_faces(*([10, 4, 4, 4] * 2)):
         result = Shatter(

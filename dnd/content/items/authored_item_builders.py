@@ -96,7 +96,8 @@ def _unseen_strike_processor(
         if event.target_entity_uuid is not None
         else None
     )
-    if target is None or source_entity_uuid in target.senses.entities:
+    contact = target.senses.entities.get(source_entity_uuid) if target is not None else None
+    if target is None or (contact is not None and contact.visual):
         return None
     damage = Damage(
         name="Unseen Strike",
@@ -577,7 +578,8 @@ def build_authored_item(
             ),
             map_char=blocker.map_character,
             blocks_movement=blocker.blocks_movement,
-            blocks_vision_field=blocker.blocks_vision,
+            blocks_optics_field=blocker.blocks_optics,
+            blocks_propagation_field=blocker.blocks_propagation,
         )
     if item_id == "consumable.healing_potion":
         return build_healing_potion(

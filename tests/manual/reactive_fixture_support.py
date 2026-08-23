@@ -114,7 +114,7 @@ def create_intercept_processor(charge_destination: Tuple[int, int]):
             Entity.update_entity_position(interceptor, next_pos, parent_event=event.uuid)
             current_pos = next_pos
 
-        interceptor.update_entity_senses()
+        interceptor.materialize_navigation()
 
         dist_after = interceptor.senses.get_feet_distance(event.from_position)
         if dist_after <= 5:

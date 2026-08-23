@@ -95,7 +95,7 @@ def test_counterspell_spends_both_casters_resources_and_records_one_cancel() -> 
     caster = create_counterspell_caster("Caster", (2, 2), "heroes", {1: 1})
     counterspeller = create_counterspell_caster("Abjurer", (6, 2), "monsters", {3: 1})
     register_counterspell_reaction(counterspeller)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     combat_logs: list[CombatLogEntry] = []
 
     def capture_combat_log(log_event: Event) -> None:
@@ -155,7 +155,7 @@ def test_counterspell_declaration_veto_preserves_reaction_and_slot() -> None:
         {3: 1},
     )
     register_counterspell_reaction(counterspeller)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     def veto_counterspell(
         event: Event,
@@ -278,7 +278,7 @@ def test_counterspell_evidence_mutation_fails_closed_before_resource_commit(
         {3: 1},
     )
     register_counterspell_reaction(counterspeller)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     combat_logs: list[CombatLogEntry] = []
     observed_reactions: list[
         tuple[
@@ -475,7 +475,7 @@ def test_registered_counterspell_freezes_both_reaction_and_spell_bindings() -> N
     )
     register_spell(caster, MagicMissile, caster_level=3)
     register_counterspell_reaction(counterspeller)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     template = caster.get_action_template("Magic Missile")
     assert isinstance(template, SpellAction)
@@ -539,7 +539,7 @@ def test_counterspell_does_not_interrupt_an_allied_spell() -> None:
     counterspeller = create_counterspell_caster("Allied Abjurer", (6, 2), "heroes", {3: 1})
     target = create_counterspell_caster("Target", (8, 2), "monsters", {})
     register_counterspell_reaction(counterspeller)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     event = MagicMissile(
         source_entity_uuid=caster.uuid,
@@ -577,7 +577,7 @@ def test_counterspell_consumes_quickened_override_after_committed_cast() -> None
         recharge_type=RechargeType.LONG_REST,
     )
     register_counterspell_reaction(counterspeller)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     fireball_template = caster.get_action_template("Fireball")
     assert isinstance(fireball_template, SpellAction)
@@ -630,7 +630,7 @@ def test_counterspell_never_spends_a_slot_below_third_level() -> None:
         {1: 1, 2: 1, 3: 1},
     )
     register_counterspell_reaction(counterspeller)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     event = MagicMissile(
         source_entity_uuid=caster.uuid,
@@ -651,7 +651,7 @@ def test_counterspell_can_interrupt_a_cantrip_with_a_third_level_slot() -> None:
     caster = create_counterspell_caster("Caster", (2, 2), "heroes", {})
     counterspeller = create_counterspell_caster("Abjurer", (6, 2), "monsters", {3: 1})
     register_counterspell_reaction(counterspeller)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     event = FireBolt(
         source_entity_uuid=caster.uuid,
@@ -673,7 +673,7 @@ def test_declaration_validation_cancel_spends_no_resources() -> None:
     caster = create_counterspell_caster("Caster", (1, 1), "heroes", {1: 1})
     counterspeller = create_counterspell_caster("Distant Abjurer", (30, 1), "monsters", {3: 1})
     register_counterspell_reaction(counterspeller)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     event = MagicMissile(
         source_entity_uuid=caster.uuid,
@@ -696,7 +696,7 @@ def test_failed_counterspell_check_spends_reaction_and_original_cast_completes()
     caster = create_counterspell_caster("Caster", (2, 2), "heroes", {5: 1})
     counterspeller = create_counterspell_caster("Abjurer", (6, 2), "monsters", {3: 1})
     register_counterspell_reaction(counterspeller)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     with patch("dnd.spells.abjuration.random.randint", return_value=1):
         event = MagicMissile(
@@ -721,7 +721,7 @@ def test_successful_counterspell_check_spends_the_selected_upcast_slot() -> None
     caster = create_counterspell_caster("Caster", (2, 2), "heroes", {1: 1, 5: 1})
     counterspeller = create_counterspell_caster("Abjurer", (6, 2), "monsters", {3: 1})
     register_counterspell_reaction(counterspeller)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     with patch("dnd.spells.abjuration.random.randint", return_value=20):
         event = MagicMissile(

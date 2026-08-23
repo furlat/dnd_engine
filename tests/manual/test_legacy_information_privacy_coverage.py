@@ -128,7 +128,7 @@ def test_position_aoe_can_resolve_with_zero_affected_entities() -> None:
         position=(14, 14),
         faction="monsters",
     )
-    Entity.update_all_entities_senses(max_distance=15)
+    Entity.materialize_all_navigation(max_distance=15)
     hp_before = get_hp(distant_target)
     action_before = caster.action_economy.actions.normalized_score
     slots_before = caster.action_economy.spell_slot_3.normalized_score

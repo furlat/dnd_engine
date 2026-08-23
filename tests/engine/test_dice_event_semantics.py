@@ -1288,7 +1288,7 @@ def test_eb_03_014_real_attack_pipeline_applies_modified_damage_rolls() -> None:
         WeaponSlot.MELEE_MAIN,
     )
     _install_great_weapon_fighting_fixture(attacker)
-    Entity.update_all_entities_senses(max_distance=10)
+    Entity.materialize_all_navigation(max_distance=10)
     initial_hp = target.get_hp()
 
     with fixed_randint(15, 1, 2, 5, 1):
@@ -1514,7 +1514,7 @@ def test_eb_03_016_attack_d20_slot_and_gwf_extra_packet_boundaries() -> None:
     )
     attacker.equipment.extra_attack_damage_type.append(DamageType.RADIANT)
     _install_great_weapon_fighting_fixture(attacker)
-    Entity.update_all_entities_senses(max_distance=10)
+    Entity.materialize_all_navigation(max_distance=10)
 
     with fixed_randint(15, 1, 2, 1, 6, 5):
         attack_event = Attack(

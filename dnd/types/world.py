@@ -13,13 +13,12 @@ class MovementMode(str, Enum):
 
 
 class LightLevel(int, Enum):
-    """Tile light levels ordered from most obscuring to brightest."""
+    """Objective illumination levels ordered from darkest to brightest."""
 
-    MAGICAL_DARKNESS = 0
-    DARKNESS = 1
-    DIM_LIGHT = 2
-    BRIGHT_LIGHT = 3
-    VERY_BRIGHT = 4
+    DARKNESS = 0
+    DIM_LIGHT = 1
+    BRIGHT_LIGHT = 2
+    VERY_BRIGHT = 3
 
 
 class CardinalDirection(StrEnum):
@@ -35,8 +34,7 @@ class WorldEdgeChannel(str, Enum):
     """Objective structural channel blocked by one contribution."""
 
     MOVEMENT = "movement"
-    VISION = "vision"
-    LIGHT = "light"
+    OPTICAL = "optical"
     PROPAGATION = "propagation"
 
 

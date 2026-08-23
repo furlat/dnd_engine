@@ -166,9 +166,9 @@ class BaseBlock(BaseModel):
         """Whether this block should appear in entity senses.objects."""
         return True
 
-    def should_include_in_adjacent_senses_objects(self) -> bool:
-        """Whether this block can be sensed from an adjacent tile even if its cell is not visible."""
-        return False
+    def appears_in_entity_contacts(self) -> bool:
+        """Whether a GridMap entity occupant belongs in perceived contacts."""
+        return True
 
     def should_include_in_available_object_actions(self) -> bool:
         """Whether this block should be considered by object/action discovery."""
@@ -347,9 +347,13 @@ class BaseBlock(BaseModel):
         del position
         return self.blocks_walking(requesting_entity_uuid, mode)
 
-    def blocks_vision(self, requesting_entity_uuid: Optional[UUID] = None) -> bool:
-        """Whether this block prevents vision through its position.
+    def blocks_optics_at_center(self) -> bool:
+        """Whether this block prevents ordinary optics through its cell center.
         Non-spatial blocks inherit this default."""
+        return False
+
+    def blocks_propagation(self) -> bool:
+        """Whether this block prevents physical propagation through its position."""
         return False
 
     def blocks_directional_movement(self, direction: str,
@@ -359,16 +363,8 @@ class BaseBlock(BaseModel):
         """Whether this block prevents movement out of its tile in a direction."""
         return False
 
-    def blocks_directional_vision(self, direction: str,
-                                  observer_uuid: Optional[UUID] = None,
-                                  subjective: bool = False) -> bool:
-        """Whether this block prevents vision crossing out of its tile in a direction."""
-        return False
-
-    def blocks_directional_light(self, direction: str,
-                                 observer_uuid: Optional[UUID] = None,
-                                 subjective: bool = False) -> bool:
-        """Whether this block prevents light crossing out of its tile in a direction."""
+    def blocks_directional_optics(self, direction: str) -> bool:
+        """Whether this block prevents ordinary optics crossing one boundary."""
         return False
 
     def blocks_directional_propagation(self, direction: str,
@@ -390,22 +386,24 @@ class BaseBlock(BaseModel):
     def _notify_perceivability_changed(self, parent_event: Optional[UUID] = None) -> None:
         """Fire a SPATIAL_PERCEIVABILITY_CHANGED event at this block's position.
 
-        Entities subscribed to this cell via SpatialSensesCallback will
-        re-evaluate their senses. Does not trigger SpatialHandlers (zone effects).
+        The observer authority re-evaluates subscribed observers. This fact
+        does not dispatch position-indexed zone handlers.
         """
-        event = SpatialChangeEvent.perceivability_changed(self.position, self.uuid, parent_event=parent_event)
+        event = SpatialChangeEvent.perceivability_changed(
+            self.position,
+            self.uuid,
+            is_invisible=self.is_invisible,
+            stealth_dc=self.stealth_dc,
+            parent_event=parent_event,
+        )
         EventQueue.publish_lifecycle(event)
 
     def get_passive_perception(self) -> int:
         """Return passive perception for this block as an observer."""
         return 0
 
-    def can_bypass_invisibility(self) -> bool:
-        """Return whether this block can perceive invisible things."""
-        return False
-
-    def can_pierce_magical_darkness(self) -> bool:
-        """Return whether this block can see through magical darkness."""
+    def has_ordinary_visual_sight(self) -> bool:
+        """Return whether this block has ordinary visual sight."""
         return False
 
     def get_sense_modes(self) -> List[sense_types.SenseMode]:
@@ -472,25 +470,6 @@ class BaseBlock(BaseModel):
     def get_attached_light_sources(self) -> Set[UUID]:
         """Get all light sources attached to this block."""
         return self._attached_light_sources.copy()
-
-    def is_perceivable_by(self, requesting_entity_uuid: Optional[UUID] = None) -> bool:
-        """Return whether this block is perceivable by an optional observer."""
-        if requesting_entity_uuid is None:
-            return True
-
-        observer = BaseBlock.get(requesting_entity_uuid)
-        if observer is None:
-            return True
-
-        if self.is_invisible:
-            if not observer.can_bypass_invisibility():
-                return False
-
-        if self.stealth_dc is not None:
-            if self.stealth_dc >= observer.get_passive_perception():
-                return False
-
-        return True
 
     def is_enemy_of(self, other_uuid: UUID) -> bool:
         """Whether this block considers other_uuid an enemy.

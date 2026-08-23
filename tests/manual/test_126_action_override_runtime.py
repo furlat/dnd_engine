@@ -245,7 +245,7 @@ def test_range_override_controls_discovery_execution_scaling_and_clear() -> None
     caster = create_caster()
     far_target = create_target("Far Target", (26, 0))
     register_spell(caster, FireBolt, caster_level=11)
-    Entity.update_all_entities_senses(max_distance=30)
+    Entity.materialize_all_navigation(max_distance=30)
 
     template = find_spell_template(caster, "Fire Bolt")
 
@@ -318,7 +318,7 @@ def test_cost_override_executes_then_clears_within_the_same_turn() -> None:
     second_target = create_target("Second Target", (0, 1))
     register_spell(caster, FireBolt, caster_level=5)
     register_spell(caster, HoldPerson, caster_level=5)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     fire_bolt = find_spell_template(caster, "Fire Bolt")
     hold_person = find_spell_template(caster, "Hold Person")
@@ -470,7 +470,7 @@ def test_target_count_routing_and_cleanup_follow_effective_target_type() -> None
     create_target("First Target", (2, 0))
     create_target("Second Target", (2, 1))
     register_spell(caster, FireBolt, caster_level=5)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     template = find_spell_template(caster, "Fire Bolt")
     assert template.get_multi_target_count() is None
@@ -536,7 +536,7 @@ def test_extra_resource_cost_gates_discovery_execution_and_is_consumed() -> None
     caster = create_caster()
     target = create_target("Resource Target", (1, 0))
     register_spell(caster, FireBolt, caster_level=5)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     template = find_spell_template(caster, "Fire Bolt")
     extra_cost = sorcery_point_cost()
@@ -601,7 +601,7 @@ def test_generated_upcast_variant_checks_and_consumes_extra_resource_once() -> N
     caster = create_caster(spell_slots={1: 1})
     target = create_target("Missile Resource Target", (2, 0))
     register_spell(caster, MagicMissile, caster_level=5)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     template = find_spell_template(caster, "Magic Missile")
     modified = apply_action_overrides(
@@ -726,7 +726,7 @@ def test_skip_slot_execution_applies_upcast_effect_without_consuming_slot(
     reset_override_state()
     caster = create_caster(spell_slots={2: 2, 3: 2})
     target = create_target("Held Target", (1, 0))
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     force_save_result(target, "wisdom", succeeds=False)
 
     slot = (
@@ -760,7 +760,7 @@ def test_entity_to_multi_entity_convolves_and_registers_child_applications() -> 
         create_target("Target Two", (0, 1)),
         create_target("Target Three", (1, 1)),
     ]
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     hp_before = {target.uuid: target.get_hp() for target in targets}
 
     hit_modifier = force_spell_attack_hit(caster)
@@ -813,7 +813,7 @@ def test_position_aoe_to_entity_affects_only_the_explicit_target() -> None:
     caster = create_caster()
     target = create_target("Explicit Target", (4, 0))
     bystander = create_target("Bystander", (4, 1))
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     force_save_result(target, "dexterity", succeeds=False)
     hp_target = target.get_hp()
     hp_bystander = bystander.get_hp()
@@ -842,7 +842,7 @@ def test_position_aoe_to_multi_entity_affects_only_selected_targets() -> None:
         create_target("Selected Two", (4, 1)),
     ]
     unselected = create_target("Unselected", (5, 0))
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     for target in selected:
         force_save_result(target, "dexterity", succeeds=False)
     hp_before = {
@@ -881,7 +881,7 @@ def test_entity_to_position_aoe_uses_shape_for_convolution(
         create_target("Area One", (3, 0)),
         create_target("Area Two", (3, 1)),
     ]
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     hp_before = {target.uuid: target.get_hp() for target in targets}
 
     spell = FireBolt(
@@ -928,7 +928,7 @@ def test_position_zone_spell_still_requires_position_when_retargeted() -> None:
     reset_override_state()
     caster = create_caster()
     target = create_target("Web Target", (2, 0))
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     actions_before = caster.action_economy.actions.normalized_score
     slots_before = caster.action_economy.spell_slot_2.normalized_score
 
@@ -956,7 +956,7 @@ def test_multitarget_concentration_has_one_owner_and_manual_break_cleans_all() -
         create_target("Held Two", (0, 1)),
         create_target("Held Three", (1, 1)),
     ]
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     for target in targets:
         force_save_result(target, "wisdom", succeeds=False)
 
@@ -991,7 +991,7 @@ def test_multitarget_concentration_survives_until_its_last_child_is_removed() ->
     caster = create_caster()
     first = create_target("Held One", (1, 0))
     second = create_target("Held Two", (0, 1))
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     force_save_result(first, "wisdom", succeeds=False)
     force_save_result(second, "wisdom", succeeds=False)
 
@@ -1027,7 +1027,7 @@ def test_damage_breaks_multitarget_concentration_and_all_linked_effects() -> Non
         create_target("Held One", (1, 0)),
         create_target("Held Two", (0, 1)),
     ]
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     for target in targets:
         force_save_result(target, "wisdom", succeeds=False)
 
@@ -1062,7 +1062,7 @@ def test_partial_save_then_damage_break_cleans_only_applied_children() -> None:
         create_target("Failed Two", (0, 1)),
     ]
     successful_target = create_target("Successful Save", (1, 1))
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     for target in failed_targets:
         force_save_result(target, "wisdom", succeeds=False)
     force_save_result(successful_target, "wisdom", succeeds=True)
@@ -1106,7 +1106,7 @@ def test_partial_manual_cleanup_then_damage_break_removes_remaining_child() -> N
     caster = create_caster()
     first = create_target("Held One", (1, 0))
     second = create_target("Held Two", (0, 1))
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     force_save_result(first, "wisdom", succeeds=False)
     force_save_result(second, "wisdom", succeeds=False)
 
@@ -1142,7 +1142,7 @@ def test_ice_storm_finalization_follows_effective_target_type(
     reset_override_state()
     caster = create_caster()
     target = create_target("Ice Target", (5, 0))
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     force_save_result(target, "dexterity", succeeds=False)
     hp_before = target.get_hp()
 
@@ -1173,7 +1173,7 @@ def test_gust_of_wind_entity_override_skips_zone_and_concentration() -> None:
     reset_override_state(width=10, height=4)
     caster = create_caster()
     target = create_target("Wind Target", (2, 0))
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     force_save_result(target, "strength", succeeds=False)
 
     with fixed_dice_faces(2):
@@ -1197,7 +1197,7 @@ def test_eldritch_blast_target_count_only_convolves_when_multi_entity() -> None:
     caster = create_caster()
     first = create_target("Blast One", (1, 0))
     second = create_target("Blast Two", (0, 1))
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     hp_first = first.get_hp()
     hp_second = second.get_hp()
 
@@ -1223,7 +1223,7 @@ def test_eldritch_blast_target_count_only_convolves_when_multi_entity() -> None:
         create_target("Blast Two", (0, 1)),
         create_target("Blast Three", (1, 1)),
     ]
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     hp_before = {target.uuid: target.get_hp() for target in targets}
 
     hit_modifier = force_spell_attack_hit(caster)
@@ -1253,7 +1253,7 @@ def test_magic_missile_owns_projectile_count_and_target_resolution() -> None:
     caster = create_caster()
     primary = create_target("Missile Target", (3, 0))
     bystander = create_target("Missile Bystander", (3, 1))
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     count_probe = MagicMissile(
         source_entity_uuid=caster.uuid,
@@ -1293,7 +1293,7 @@ def test_fireball_position_aoe_event_reports_target_count_and_position() -> None
     reset_override_state(width=12, height=4)
     caster = create_caster()
     target = create_target("Area Target", (6, 0))
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     force_save_result(target, "dexterity", succeeds=False)
 
     with fixed_dice_faces(*([2] * 9)):

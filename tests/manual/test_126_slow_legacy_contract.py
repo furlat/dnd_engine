@@ -199,7 +199,7 @@ def _cast_slow(
     caster: Entity,
     center: tuple[int, int],
 ) -> None:
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     event = Slow(
         source_entity_uuid=caster.uuid,
         end_position=center,
@@ -225,7 +225,7 @@ def test_slow_applies_complete_static_debuff_bundle() -> None:
     _reset_state()
     caster = _create_caster()
     target = _create_target("Slowed Target", (3, 1))
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     base_speed = target.action_economy.movement.normalized_score
     base_ac = target.equipment.ac_bonus.normalized_score
     base_dex_save = target.saving_throws.get_saving_throw(

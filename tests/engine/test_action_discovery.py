@@ -150,7 +150,7 @@ def test_eb_09_002_standard_actions_discover_self_position_and_entity_groups() -
     reset_action_state()
     goblin = create_test_monster("monster.goblin", name="Goblin", position=(5, 5), faction="heroes")
     skeleton = create_test_monster("monster.skeleton", name="Skeleton", position=(6, 5), faction="monsters")
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     available = get_available_actions(goblin)
     self_names = {info.template_name for info in available.self_actions}
@@ -233,7 +233,7 @@ def test_eb_09_004_floor_objects_create_object_actions_and_can_be_picked_up() ->
         uuid4(),
     )
     potion.place_on_grid((4, 3))
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     available = get_available_actions(entity)
     pickup_info = find_action(available, "Pick Up")
@@ -296,7 +296,7 @@ def test_eb_09_006_nearby_environment_use_actions_are_distance_gated() -> None:
     )
     nearby.place_on_grid((4, 3))
     far.place_on_grid((8, 8))
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     available = get_available_actions(entity)
     source_item_uuids = {
@@ -346,7 +346,7 @@ def test_eb_09_008_target_filters_and_dead_targets_shape_entity_actions() -> Non
     enemy = create_test_monster("monster.skeleton", name="Enemy", position=(6, 5), faction="monsters")
     dead_enemy = create_test_monster("monster.skeleton", name="Dead Enemy", position=(6, 6), faction="monsters")
     dead_enemy.receive_damage(999, DamageType.BLUDGEONING, hero.uuid)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     default_attack = find_attack_action(hero.get_available_actions())
     assert [target.target_uuid for target in default_attack.valid_targets] == [enemy.uuid]
@@ -396,7 +396,7 @@ def test_eb_09_009_registered_multi_entity_spell_discovers_and_executes() -> Non
         create_test_monster("monster.skeleton", name="Target 2", position=(3, 2), faction="monsters"),
         create_test_monster("monster.skeleton", name="Target 3", position=(3, 3), faction="monsters"),
     ]
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     register_spell(caster, MagicMissile, caster_level=5)
 
     available = get_available_actions(caster)
@@ -497,7 +497,7 @@ def test_eb_09_010_registered_position_aoe_spell_previews_and_executes() -> None
         name="Outsider",
         config=creature_config.model_copy(update={"position": (12, 12), "faction": "monsters"}),
     )
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     register_spell(caster, Fireball, caster_level=5)
 
     available = get_available_actions(caster)
@@ -573,7 +573,7 @@ def test_eb_09_011_move_discovery_marks_hazardous_and_safe_paths() -> None:
     hazard_tile.add_condition(hazard)
 
     scout = create_test_monster("monster.skeleton", name="Scout", position=(5, 3), faction="heroes")
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     available = get_available_actions(scout)
     move_info = find_action(available, "Move")
@@ -630,7 +630,7 @@ def test_eb_09_012_attack_object_discovers_and_destroys_breakables() -> None:
         weight=50,
     )
     crate.place_on_grid((4, 3))
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     available = get_available_actions(entity)
     attack_info = find_action(available, "Attack Object")
@@ -660,7 +660,7 @@ def test_eb_09_012_attack_object_discovers_and_destroys_breakables() -> None:
     assert BaseBlock.get(crate.uuid) is None
     assert get_map().get_object_position(crate.uuid) is None
 
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     assert crate.uuid not in entity.senses.objects
     assert entity.action_economy.actions.normalized_score == 0
 

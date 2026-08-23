@@ -233,7 +233,7 @@ def test_proving_battlefield_traverses_every_connector_kind_through_one_action()
     for authored in definition.layout.connectors:
         Entity.update_entity_position(actor, authored.endpoint_positions[0])
         actor.action_economy.reset_all_costs()
-        Entity.update_all_entities_senses(max_distance=30)
+        Entity.materialize_all_navigation(max_distance=30)
         row = next(
             row
             for row in actor.get_available_actions(legal_only=True).self_actions
@@ -291,7 +291,7 @@ def test_product_proving_encounter_plays_every_vertical_surface_and_terminates()
     def stage_actor(position: tuple[int, int]) -> None:
         Entity.update_entity_position(hero, position)
         hero.action_economy.reset_all_costs()
-        Entity.update_all_entities_senses(max_distance=30)
+        Entity.materialize_all_navigation(max_distance=30)
 
     def complete_move(path: tuple[tuple[int, int], ...]) -> MovementEvent:
         result = Move(
@@ -318,7 +318,7 @@ def test_product_proving_encounter_plays_every_vertical_surface_and_terminates()
     ).apply()
     assert opened is not None and opened.phase is EventPhase.COMPLETION
     assert door.is_open is True
-    Entity.update_all_entities_senses(max_distance=30)
+    Entity.materialize_all_navigation(max_distance=30)
     complete_move(((3, 7), (4, 7)))
 
     stage_actor((5, 4))

@@ -42,7 +42,7 @@ def _cast_lightning_bolt(
         "monsters",
     )
     force_save_result(target, "dexterity", succeeds=save_succeeds)
-    Entity.update_all_entities_senses(max_distance=150)
+    Entity.materialize_all_navigation(max_distance=150)
     hp_before = target.get_hp()
 
     with fixed_dice_faces(10, *([damage_face] * 8)):
@@ -111,7 +111,7 @@ def test_lightning_bolt_hits_line_targets() -> None:
     ]
     for target in targets:
         force_save_result(target, "dexterity", succeeds=False)
-    Entity.update_all_entities_senses(max_distance=150)
+    Entity.materialize_all_navigation(max_distance=150)
     hp_before = {target.uuid: target.get_hp() for target in targets}
 
     with fixed_dice_faces(*([10, *([4] * 8)] * len(targets))):
@@ -141,7 +141,7 @@ def test_lightning_bolt_misses_off_line() -> None:
     on_line = create_spell_regression_actor("On line", (8, 4), "monsters")
     off_line = create_spell_regression_actor("Off line", (8, 6), "monsters")
     force_save_result(on_line, "dexterity", succeeds=False)
-    Entity.update_all_entities_senses(max_distance=150)
+    Entity.materialize_all_navigation(max_distance=150)
     on_line_hp = on_line.get_hp()
     off_line_hp = off_line.get_hp()
 
@@ -171,7 +171,7 @@ def test_lightning_bolt_wall_stops_line() -> None:
     after = create_spell_regression_actor("After wall", (12, 4), "monsters")
     force_save_result(before, "dexterity", succeeds=False)
     force_save_result(after, "dexterity", succeeds=False)
-    Entity.update_all_entities_senses(max_distance=150)
+    Entity.materialize_all_navigation(max_distance=150)
     before_hp = before.get_hp()
     after_hp = after.get_hp()
 
@@ -198,7 +198,7 @@ def test_lightning_bolt_caster_excluded() -> None:
     )
     target = create_spell_regression_actor("Line target", (8, 4), "monsters")
     force_save_result(target, "dexterity", succeeds=False)
-    Entity.update_all_entities_senses(max_distance=150)
+    Entity.materialize_all_navigation(max_distance=150)
     caster_hp = caster.get_hp()
 
     with fixed_dice_faces(10, *([4] * 8)):
@@ -223,7 +223,7 @@ def test_lightning_bolt_long_range() -> None:
     )
     target = create_spell_regression_actor("At 95 feet", (21, 4), "monsters")
     force_save_result(target, "dexterity", succeeds=False)
-    Entity.update_all_entities_senses(max_distance=150)
+    Entity.materialize_all_navigation(max_distance=150)
     hp_before = target.get_hp()
 
     with fixed_dice_faces(10, *([4] * 8)):
@@ -249,7 +249,7 @@ def test_lightning_bolt_diagonal_direction() -> None:
     diagonal = create_spell_regression_actor("Diagonal", (8, 8), "monsters")
     off_diagonal = create_spell_regression_actor("Off diagonal", (8, 2), "monsters")
     force_save_result(diagonal, "dexterity", succeeds=False)
-    Entity.update_all_entities_senses(max_distance=150)
+    Entity.materialize_all_navigation(max_distance=150)
     diagonal_hp = diagonal.get_hp()
     off_diagonal_hp = off_diagonal.get_hp()
 
@@ -278,7 +278,7 @@ def test_lightning_bolt_both_save_outcomes_are_reported() -> None:
     passing = create_spell_regression_actor("Passing", (9, 4), "monsters")
     force_save_result(failing, "dexterity", succeeds=False)
     force_save_result(passing, "dexterity", succeeds=True)
-    Entity.update_all_entities_senses(max_distance=150)
+    Entity.materialize_all_navigation(max_distance=150)
 
     with fixed_dice_faces(*([10, *([4] * 8)] * 2)):
         result = LightningBolt(

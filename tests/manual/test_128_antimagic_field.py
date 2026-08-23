@@ -82,7 +82,7 @@ def test_zone_creation() -> None:
     """Archived group 1: the ten-foot zone is centered on its caster."""
     reset_spell_regression_arena(16, 9)
     caster = _amf_caster()
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
 
     _cast_antimagic_field(caster)
 
@@ -107,7 +107,7 @@ def test_spell_blocked_targeting_inside_zone() -> None:
         "monsters",
     )
     target = create_spell_regression_actor("Inside Target", (6, 4), "heroes")
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
     _cast_antimagic_field(amf_caster)
 
     result = FireBolt(
@@ -131,7 +131,7 @@ def test_spell_blocked_from_inside_zone() -> None:
         "monsters",
     )
     target = create_spell_regression_actor("Outside Target", (11, 4), "heroes")
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
     _cast_antimagic_field(amf_caster)
 
     result = FireBolt(
@@ -150,7 +150,7 @@ def test_suppress_existing_conditions_on_cast() -> None:
     reset_spell_regression_arena(16, 9)
     caster = _amf_caster()
     target = create_spell_regression_actor("Inside Target", (6, 4), "monsters")
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
     _add_magical_blinded(caster, target)
 
     _cast_antimagic_field(caster)
@@ -164,7 +164,7 @@ def test_restore_conditions_on_amf_end() -> None:
     reset_spell_regression_arena(16, 9)
     caster = _amf_caster()
     target = create_spell_regression_actor("Inside Target", (6, 4), "monsters")
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
     _add_magical_blinded(caster, target)
     _cast_antimagic_field(caster)
     assert not has_condition(target, "Blinded")
@@ -184,7 +184,7 @@ def test_suppress_on_entry_restore_on_exit() -> None:
     reset_spell_regression_arena(16, 9)
     caster = _amf_caster()
     target = create_spell_regression_actor("Mobile Target", (11, 4), "monsters")
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
     _add_magical_blinded(caster, target)
     _cast_antimagic_field(caster)
     assert has_condition(target, "Blinded")
@@ -201,7 +201,7 @@ def test_caster_magical_conditions_suppressed() -> None:
     reset_spell_regression_arena(16, 9)
     caster = _amf_caster()
     ally = create_spell_regression_actor("Blessing Ally", (11, 4), "heroes")
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
     caster.add_condition(
         BlessEffect(
             source_entity_uuid=ally.uuid,
@@ -222,7 +222,7 @@ def test_zone_follows_caster() -> None:
     reset_spell_regression_arena(16, 9)
     caster = _amf_caster()
     target = create_spell_regression_actor("Old-zone Target", (6, 4), "monsters")
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
     _add_magical_blinded(caster, target)
     _cast_antimagic_field(caster)
     assert not has_condition(target, "Blinded")
@@ -248,7 +248,7 @@ def test_concentration_spell_suppressed_and_restored() -> None:
         spell_slots={3: 1},
     )
     target = create_spell_regression_actor("Haste Target", (6, 4), "heroes")
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
     haste_result = Haste(
         source_entity_uuid=haste_caster.uuid,
         target_entity_uuid=target.uuid,
@@ -283,7 +283,7 @@ def test_haste_no_lethargy_on_suppression() -> None:
         spell_slots={3: 1},
     )
     target = create_spell_regression_actor("Haste Target", (6, 4), "heroes")
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
     haste_result = Haste(
         source_entity_uuid=haste_caster.uuid,
         target_entity_uuid=target.uuid,
@@ -304,7 +304,7 @@ def test_nonmagical_conditions_untouched() -> None:
     reset_spell_regression_arena(16, 9)
     caster = _amf_caster()
     target = create_spell_regression_actor("Inside Target", (6, 4), "monsters")
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
     target.add_condition(
         Poisoned(
             source_entity_uuid=caster.uuid,
@@ -330,7 +330,7 @@ def test_concentrating_not_suppressed() -> None:
         spell_slots={3: 1},
     )
     target = create_spell_regression_actor("Haste Target", (10, 4), "heroes")
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
     haste_result = Haste(
         source_entity_uuid=haste_caster.uuid,
         target_entity_uuid=target.uuid,
@@ -353,7 +353,7 @@ def test_multiple_conditions_suppressed() -> None:
     reset_spell_regression_arena(16, 9)
     caster = _amf_caster()
     target = create_spell_regression_actor("Inside Target", (6, 4), "monsters")
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
     target.add_condition(
         Blinded(
             source_entity_uuid=caster.uuid,
@@ -385,7 +385,7 @@ def test_zone_movement_suppress_new_entity() -> None:
     reset_spell_regression_arena(16, 9)
     caster = _amf_caster(position=(3, 4))
     target = create_spell_regression_actor("New-zone Target", (12, 4), "monsters")
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
     _add_magical_blinded(caster, target)
     _cast_antimagic_field(caster)
     assert has_condition(target, "Blinded")

@@ -36,6 +36,7 @@ from dnd.types.life import LifeState
 from dnd.types.damage import DamageType
 from dnd.types.rolls import AdvantageStatus, AutoHitStatus, CriticalStatus
 from dnd.types.damage import ResistanceStatus
+from dnd.types.senses import PerceivedContact
 from dnd.core.values import BaseValue
 from dnd.entities.entity import Entity, EntityConfig
 from dnd.conditions import (
@@ -58,7 +59,7 @@ from dnd.conditions import (
     Stunned,
     Unconscious,
 )
-from tests.engine.support import get_max_hp, reset_combat_state
+from tests.engine.support import create_test_entity, get_max_hp, reset_combat_state
 
 
 @contextmanager
@@ -118,7 +119,12 @@ def configured_entity(
         position=position,
         faction=faction,
     )
-    return Entity.create(source_entity_uuid=source_uuid, name=name, config=config)
+    return create_test_entity(
+        source_id=source_uuid,
+        name=name,
+        config=config,
+        entity_kind_id="test.standard_condition_entity",
+    )
 
 
 def apply_to_target(condition_type, source: Entity, target: Entity):
@@ -349,7 +355,10 @@ def test_eb_08_003_poisoned_and_frightened_penalize_attacks_and_checks() -> None
 
     target.senses.entities.clear()
     assert target.equipment.attack_bonus.advantage == AdvantageStatus.NONE
-    target.senses.entities[source.uuid] = source.position
+    target.senses.entities[source.uuid] = PerceivedContact(
+        position=source.position,
+        visual=True,
+    )
     assert target.equipment.attack_bonus.advantage == AdvantageStatus.DISADVANTAGE
     assert target.skill_set.athletics.skill_bonus.advantage == AdvantageStatus.DISADVANTAGE
     assert target.action_economy.movement.normalized_score == 0
@@ -535,7 +544,10 @@ def test_eb_08_007_invisible_sets_perceivability_and_unseen_combat_modifiers() -
     target.equipment.ac_bonus.set_target_entity(attacker.uuid)
     assert target.equipment.ac_bonus.outgoing_advantage == AdvantageStatus.DISADVANTAGE
 
-    attacker.senses.entities[target.uuid] = target.position
+    attacker.senses.entities[target.uuid] = PerceivedContact(
+        position=target.position,
+        visual=True,
+    )
     assert target.equipment.attack_bonus.advantage == AdvantageStatus.NONE
     assert target.equipment.ac_bonus.outgoing_advantage == AdvantageStatus.NONE
 
@@ -691,7 +703,10 @@ def test_eb_08_012_standard_condition_removal_cleans_owned_state() -> None:
         target = configured_entity("Target", (2, 1), "monsters")
         adjacent_attacker = configured_entity("Adjacent", (2, 2), "heroes")
 
-        target.senses.entities[source.uuid] = source.position
+        target.senses.entities[source.uuid] = PerceivedContact(
+            position=source.position,
+            visual=True,
+        )
         condition = apply_to_target(condition_type, source, target)
         if condition_type in severe_conditions:
             assert condition.sub_conditions == []

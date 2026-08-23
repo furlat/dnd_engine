@@ -28,19 +28,6 @@ from dnd.items.environment import DirectionalDoor, DirectionalWall
 from dnd.entities.entity import Entity
 from tests.engine.support import reset_combat_state
 from tests.engine.test_combat_actions import reset_core_action_state, strong_entity
-from server.api_models import (
-    MapEditorGridBounds,
-    MapEditorMapSnapshot,
-    MapEditorSavedMapDocument,
-    MapEditorSavedMapMetadata,
-    MapEditorTilePatch,
-)
-from server.mapeditor_support import (
-    _preflight_saved_editor_map,
-    apply_tile_patches,
-)
-from server.world_contracts import APITile
-from server.world_projection import project_grid
 
 
 def reset_grid() -> None:
@@ -682,7 +669,7 @@ def test_elevation_child_emission_preserves_noop_parent_lifecycle() -> None:
 def test_elevation_mutation_and_replacement_dirty_materialized_actor_paths() -> None:
     reset_core_action_state()
     actor = strong_entity("Path Owner", (0, 0), "heroes")
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     assert actor.senses._paths_dirty is False
 
     grid = get_map()
@@ -694,7 +681,7 @@ def test_elevation_mutation_and_replacement_dirty_materialized_actor_paths() -> 
     )
     assert actor.senses._paths_dirty is True
 
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     assert actor.senses._paths_dirty is False
     replacement = Tile.create(
         (1, 0),
@@ -723,7 +710,7 @@ def test_elevation_mutation_and_replacement_dirty_materialized_actor_paths() -> 
 def test_removing_ordinary_support_dirties_paths_and_recomputes_fov() -> None:
     reset_core_action_state()
     actor = strong_entity("Removal Observer", (0, 0), "heroes")
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     assert actor.senses._paths_dirty is False
     assert (1, 0) in actor.senses.visible
     assert (1, 0) in actor.senses.paths
@@ -799,8 +786,6 @@ def test_invalid_elevated_replacement_preserves_old_tile_and_uuid_index() -> Non
         len(BaseBlock._registry),
         len(BaseValue._registry),
     ) == registry_counts
-
-
 def test_mutated_prebuilt_tile_cannot_install_a_malformed_elevation_tuple() -> None:
     reset_grid()
     grid = get_map()
@@ -827,183 +812,3 @@ def test_mutated_prebuilt_tile_cannot_install_a_malformed_elevation_tuple() -> N
         len(BaseBlock._registry),
         len(BaseValue._registry),
     ) == registry_counts
-
-
-def test_projection_and_editor_patch_carry_one_exact_elevation_tuple() -> None:
-    reset_grid()
-    snapshot = apply_tile_patches(
-        [
-            MapEditorTilePatch(
-                x=1,
-                y=0,
-                elevation_steps=-2,
-                elevation_surface_kind=ElevationSurfaceKind.RAMP,
-                slope_axis=SlopeAxis.EAST_WEST,
-            )
-        ]
-    )
-    tile = next(row for row in snapshot.tiles if (row.x, row.y) == (1, 0))
-    assert tile.elevation_steps == -2
-    assert tile.elevation_steps * 5 == -10
-    assert "elevation_feet" not in tile.model_dump()
-    assert tile.elevation_surface_kind is ElevationSurfaceKind.RAMP
-    assert tile.slope_axis is SlopeAxis.EAST_WEST
-
-    round_trip = APITile.model_validate_json(tile.model_dump_json())
-    assert round_trip == tile
-    objective = next(
-        row for row in project_grid(get_map()).tiles if (row.x, row.y) == (1, 0)
-    )
-    assert objective == tile
-
-    with pytest.raises(ValidationError):
-        MapEditorTilePatch(x=0, y=0, elevation_steps=True)
-
-    payload = tile.model_dump()
-    payload.update(elevation_steps=True)
-    with pytest.raises(ValidationError):
-        APITile.model_validate(payload)
-    payload.update(elevation_steps="1")
-    with pytest.raises(ValidationError):
-        APITile.model_validate(payload)
-    payload = tile.model_dump()
-    payload["elevation_feet"] = 999
-    with pytest.raises(ValidationError):
-        APITile.model_validate(payload)
-
-    with pytest.raises(ValidationError):
-        MapEditorTilePatch.model_validate({
-            "x": 0,
-            "y": 0,
-            "elevation_feet": 999,
-        })
-
-
-def test_invalid_mixed_editor_elevation_patch_mutates_nothing() -> None:
-    reset_grid()
-    grid = get_map()
-    tile = grid.get_tile(0, 0)
-    assert tile is not None
-    before_uuid = tile.uuid
-    before_light = tile.default_light
-    before_border = tile.border_east
-
-    with pytest.raises(ValueError, match="require a slope axis"):
-        apply_tile_patches([
-            MapEditorTilePatch(
-                x=0,
-                y=0,
-                type="wall",
-                light_level=0,
-                directional_channel="movement",
-                direction="east",
-                passable=False,
-                elevation_surface_kind=ElevationSurfaceKind.RAMP,
-            )
-        ])
-
-    after = grid.get_tile(0, 0)
-    assert after is not None
-    assert after is tile
-    assert after.uuid == before_uuid
-    assert after.name == "Floor"
-    assert after.default_light is before_light
-    assert after.border_east is before_border
-    assert after.height == 0
-    assert after.elevation_surface_kind is ElevationSurfaceKind.ORDINARY
-
-
-def test_elevation_veto_aborts_mixed_editor_patch_before_other_mutation() -> None:
-    reset_grid()
-    grid = get_map()
-    original = grid.get_tile(0, 0)
-    assert original is not None
-    before = (
-        original.uuid,
-        original.name,
-        original.default_light,
-        original.border_east,
-        original.height,
-        original.elevation_surface_kind,
-        original.slope_axis,
-    )
-    handler = EventHandler(
-        name="Veto editor elevation",
-        source_entity_uuid=uuid4(),
-        trigger_conditions=[Trigger(
-            name="Veto editor elevation declaration",
-            event_type=EventType.SPATIAL_TILE_CHANGED,
-            event_phase=EventPhase.DECLARATION,
-        )],
-        event_processor=lambda event, _source: event.cancel("Anchored tile"),
-    )
-    EventQueue.add_event_handler(handler)
-    try:
-        with pytest.raises(ValueError, match="elevation change was rejected"):
-            apply_tile_patches([
-                MapEditorTilePatch(
-                    x=0,
-                    y=0,
-                    type="wall",
-                    light_level=0,
-                    directional_channel="movement",
-                    direction="east",
-                    passable=False,
-                    elevation_steps=1,
-                    elevation_surface_kind=ElevationSurfaceKind.RAMP,
-                    slope_axis=SlopeAxis.EAST_WEST,
-                )
-            ])
-    finally:
-        EventQueue.remove_event_handler(handler)
-
-    after = grid.get_tile(0, 0)
-    assert after is original
-    assert after is not None
-    assert (
-        after.uuid,
-        after.name,
-        after.default_light,
-        after.border_east,
-        after.height,
-        after.elevation_surface_kind,
-        after.slope_axis,
-    ) == before
-
-
-def test_saved_map_preflight_rejects_contradictory_progressive_edge() -> None:
-    reset_grid()
-    projected = project_grid(get_map())
-    first = next(tile for tile in projected.tiles if (tile.x, tile.y) == (0, 0))
-    second = next(tile for tile in projected.tiles if (tile.x, tile.y) == (1, 0))
-    bad_snapshot = MapEditorMapSnapshot(
-        grid_bounds=MapEditorGridBounds(min_x=0, min_y=0, max_x=1, max_y=0),
-        tiles=[
-            first.model_copy(update={
-                "elevation_steps": 0,
-                "elevation_surface_kind": ElevationSurfaceKind.RAMP,
-                "slope_axis": SlopeAxis.EAST_WEST,
-            }),
-            second.model_copy(update={
-                "elevation_steps": 2,
-                "elevation_surface_kind": ElevationSurfaceKind.RAMP,
-                "slope_axis": SlopeAxis.EAST_WEST,
-            }),
-        ],
-    )
-    document = MapEditorSavedMapDocument(
-        content_set_digest="0" * 64,
-        metadata=MapEditorSavedMapMetadata(
-            id="bad-progressive-run",
-            name="Bad Progressive Run",
-            created_at="2026-08-08T00:00:00Z",
-            updated_at="2026-08-08T00:00:00Z",
-            grid_bounds=bad_snapshot.grid_bounds,
-            tile_count=2,
-            floor_object_count=0,
-        ),
-        snapshot=bad_snapshot,
-    )
-
-    with pytest.raises(ValueError, match="contradictory progressive elevation"):
-        _preflight_saved_editor_map(document, validate_runtime_state=False)

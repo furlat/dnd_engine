@@ -1753,7 +1753,8 @@ class TelekinesisGrab(BaseAction):
         if distance > 60:
             return declaration_event.cancel(status_message=f"Target out of range ({distance}ft > 60ft)")
 
-        if target.uuid not in source.senses.entities:
+        contact = source.senses.entities.get(target.uuid)
+        if contact is None or not contact.visual:
             return declaration_event.cancel(status_message="Target not in line of sight")
 
         return declaration_event.phase_to(

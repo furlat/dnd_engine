@@ -832,7 +832,7 @@ def test_usable_items_and_environment_objects_expose_item_bound_actions(capsys) 
         expected_type=TutorialDoor,
     )
     door.place_on_grid((1, 0))
-    patient.update_entity_senses(max_distance=5)
+    patient.materialize_navigation(max_distance=5)
 
     assert door.uuid in patient.senses.objects
     assert door.blocks_movement_east

@@ -227,7 +227,7 @@ def test_duplicate_spell_targets_receive_stable_ordered_application_ids() -> Non
         spell_slots={1: 1},
     )
     target = _create_actor("Training Target", (2, 1), "monsters")
-    Entity.update_all_entities_senses(max_distance=30)
+    Entity.materialize_all_navigation(max_distance=30)
     spell = MagicMissile(
         source_entity_uuid=caster.uuid,
         target_entity_uuid=target.uuid,

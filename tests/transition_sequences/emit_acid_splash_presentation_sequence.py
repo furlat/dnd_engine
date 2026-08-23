@@ -117,7 +117,7 @@ def _build_production_models() -> tuple[object, object, object, object]:
         faction="monsters",
         deployment_role_id="tests.transition_sequences.acid_splash_target",
     )
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     _require(
         target.uuid in caster.senses.entities,
         "Acid Splash target is not lawfully visible to its caster",

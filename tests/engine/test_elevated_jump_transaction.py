@@ -67,7 +67,7 @@ def test_elevated_jump_commits_one_direct_arc_with_exact_support_cost() -> None:
     reset_core_action_state()
     jumper = strong_entity("Elevated Jumper", (1, 1), "heroes", strength=18)
     _set_height((4, 1), 2)
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
 
     result = Jump(
         source_entity_uuid=jumper.uuid,
@@ -94,7 +94,7 @@ def test_step_handler_cannot_rewrite_jump_root_to_underpay_landing() -> None:
     """Jump debit and landing retain the accepted root EFFECT snapshot."""
     reset_core_action_state()
     jumper = strong_entity("Root Guarded Jumper", (1, 1), "heroes", strength=18)
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
 
     def rewrite_parent_jump(event: Event, _source_uuid: UUID) -> Event:
         if event.parent_event is not None:
@@ -176,7 +176,7 @@ def test_jump_arc_does_not_recruit_intermediate_only_reactor() -> None:
         faction="monsters",
     )
     add_opportunity_attack_handler(intermediate_reactor)
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     hit_modifier = force_attack_hit(intermediate_reactor)
     hp_before = jumper.get_hp()
 
@@ -215,7 +215,7 @@ def test_lethal_takeoff_reaction_keeps_fixed_cost_but_not_movement_cost() -> Non
         faction="monsters",
     )
     add_opportunity_attack_handler(watcher)
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     movement_handles_before = set(
         jumper.action_economy.movement.self_static.value_modifiers
     )
@@ -256,7 +256,7 @@ def test_lethal_takeoff_reaction_keeps_fixed_cost_but_not_movement_cost() -> Non
 def test_jump_root_effect_veto_spends_nothing_and_publishes_no_step() -> None:
     reset_core_action_state()
     jumper = strong_entity("Vetoed Jumper", (1, 1), "heroes", strength=18)
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     handler = EventHandler(
         name="Veto Jump Effect",
         source_entity_uuid=uuid4(),
@@ -299,7 +299,7 @@ def test_jump_root_effect_veto_spends_nothing_and_publishes_no_step() -> None:
 def test_direct_arc_effect_forgery_stops_without_observable_forged_geometry() -> None:
     reset_core_action_state()
     jumper = strong_entity("Guarded Jumper", (1, 1), "heroes", strength=18)
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
 
     def forge_arc(event: Event, _source: UUID) -> Event:
         if type(event) is not StepMovementEvent:
@@ -353,7 +353,7 @@ def test_jump_position_staging_failure_undoes_only_movement_debit(
 ) -> None:
     reset_core_action_state()
     jumper = strong_entity("Staging Jumper", (1, 1), "heroes", strength=18)
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     grid = get_map()
     original = grid.recompute_tile_directional_blocking
     movement_handles_before = set(
@@ -388,7 +388,7 @@ def test_jump_position_staging_failure_undoes_only_movement_debit(
 def test_jump_spatial_publication_failure_preserves_committed_position_and_cost() -> None:
     reset_core_action_state()
     jumper = strong_entity("Publishing Jumper", (1, 1), "heroes", strength=18)
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     handler = EventHandler(
         name="Fail Jump Spatial Publication",
         source_entity_uuid=uuid4(),
@@ -413,7 +413,7 @@ def test_jump_spatial_publication_failure_preserves_committed_position_and_cost(
         EventQueue.remove_event_handler(handler)
 
     assert jumper.position == (4, 1)
-    assert jumper.senses.position == (4, 1)
+    assert jumper.senses.position == (1, 1)
     assert get_map().get_entity_position(jumper.uuid) == (4, 1)
     assert jumper.action_economy.bonus_actions.normalized_score == 0
     assert jumper.action_economy.movement.normalized_score == 15
@@ -428,7 +428,7 @@ def test_jump_arrival_handler_cannot_mutate_stored_step_or_root_effect() -> None
     reset_core_action_state()
     jumper = strong_entity("Arrival Guarded Jumper", (1, 1), "heroes", strength=18)
     _set_height((4, 1), 2)
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
 
     def mutate_stored_effects(event: Event, _source: UUID) -> Event:
         if event.parent_event is None:
@@ -497,7 +497,7 @@ def test_jump_arrival_mutation_is_restored_before_publication_error_escapes() ->
     reset_core_action_state()
     jumper = strong_entity("Failing Arrival Jumper", (1, 1), "heroes", strength=18)
     _set_height((4, 1), 2)
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
 
     def mutate_effects_then_raise(event: Event, _source_uuid: UUID) -> Event:
         if event.parent_event is None:
@@ -570,7 +570,7 @@ def test_jump_restores_parent_between_step_handlers_and_when_later_handler_raise
     reset_core_action_state()
     jumper = strong_entity("Step Guarded Jumper", (1, 1), "heroes", strength=18)
     _set_height((4, 1), 2)
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     seen_distances: list[int] = []
 
     def forge_parent(event: Event, _source_uuid: UUID) -> Event:

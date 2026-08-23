@@ -390,7 +390,7 @@ def test_stacked_scroll_has_one_discovered_row_and_consumes_one_copy() -> None:
         ))
     stacked = next(iter(caster.inventory.items.values()))
     assert isinstance(stacked, UsableItem)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     available = get_available_actions(caster)
     rows = [
@@ -515,7 +515,7 @@ def test_override_and_default_door_actions_toggle_spatial_state() -> None:
     )
     override_door.place_on_grid((4, 3))
     default_door.place_on_grid((3, 4))
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     override_rows = item_rows(actor, override_door.uuid)
     default_rows = item_rows(actor, default_door.uuid)
@@ -573,7 +573,7 @@ def test_lever_depletion_removes_only_its_linked_trap() -> None:
         ),
     )
     lever.place_on_grid((5, 6))
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     rows = item_rows(actor, lever.uuid)
     assert len(rows) == 1
@@ -615,7 +615,7 @@ def test_chest_discovery_loot_and_empty_state_are_one_contract() -> None:
     assert chest.chest_inventory.add_item(sword)
     assert chest.chest_inventory.add_item(potion)
     chest.place_on_grid((6, 5))
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     rows = item_rows(actor, chest.uuid)
     assert len(rows) == 1
@@ -649,7 +649,7 @@ def test_multi_action_environment_item_executes_and_depletes() -> None:
     campfire.charges = 2
     campfire.max_charges = 2
     campfire.place_on_grid((5, 6))
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     rows = item_rows(actor, campfire.uuid)
     assert {
@@ -688,7 +688,7 @@ def test_nonusable_and_out_of_range_objects_do_not_surface_use_rows() -> None:
     )
     rock.place_on_grid((2, 1))
     far_door.place_on_grid((8, 8))
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     all_rows = get_available_actions(actor).all_actions
 

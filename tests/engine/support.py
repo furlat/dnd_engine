@@ -76,7 +76,7 @@ def setup_combat_arena(
     """
     Set up a combat encounter between two entities.
 
-    Clears any existing state, updates senses, creates encounter with initiative.
+    Materializes navigation caches, creates encounter with initiative.
 
     Args:
         entity_a: First combatant
@@ -88,7 +88,7 @@ def setup_combat_arena(
     """
     _ = grid_size
 
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     encounter = Encounter(name="Test Combat", source_entity_uuid=uuid4())
     ctrl_a = HumanController(source_entity_uuid=entity_a.uuid)
@@ -326,7 +326,7 @@ def set_hp(entity: Entity, hp: int):
 
 def get_position(entity: Entity) -> Tuple[int, int]:
     """Get the current position of an entity."""
-    return entity.senses.position
+    return entity.position
 
 
 def move_entity(entity: Entity, new_position: Tuple[int, int]):
@@ -337,17 +337,8 @@ def move_entity(entity: Entity, new_position: Tuple[int, int]):
         entity: Entity to move
         new_position: Target (x, y) position
     """
-    old_pos = entity.senses.position
-    entity.position = new_position
-    entity.senses.position = new_position
-
-    if entity.uuid in Entity._entity_by_position.get(old_pos, []):
-        Entity._entity_by_position[old_pos].remove(entity)
-    if new_position not in Entity._entity_by_position:
-        Entity._entity_by_position[new_position] = []
-    Entity._entity_by_position[new_position].append(entity)
-
-    Entity.update_all_entities_senses()
+    Entity.update_entity_position(entity, new_position)
+    Entity.materialize_all_navigation()
 
 
 def has_condition(entity: Entity, condition_name: str) -> bool:

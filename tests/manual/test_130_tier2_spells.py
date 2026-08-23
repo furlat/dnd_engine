@@ -67,7 +67,7 @@ def test_cone_of_cold_damage_and_save() -> None:
     passing = create_spell_regression_actor("Passing", (8, 7), "monsters")
     force_save_result(failing, "constitution", succeeds=False)
     force_save_result(passing, "constitution", succeeds=True)
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
     failing_hp = failing.get_hp()
     passing_hp = passing.get_hp()
 
@@ -112,7 +112,7 @@ def test_circle_of_death_range() -> None:
     )
     target = create_spell_regression_actor("At 150 feet", (31, 1), "monsters")
     force_save_result(target, "constitution", succeeds=False)
-    Entity.update_all_entities_senses(max_distance=200)
+    Entity.materialize_all_navigation(max_distance=200)
 
     too_far = CircleOfDeath(
         source_entity_uuid=caster.uuid,
@@ -183,7 +183,7 @@ def test_blight_rejects_undead() -> None:
         "monsters",
         creature_type=CreatureType.UNDEAD,
     )
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
 
     result = Blight(
         source_entity_uuid=caster.uuid,
@@ -212,7 +212,7 @@ def test_blight_rejects_construct() -> None:
         "monsters",
         creature_type=CreatureType.CONSTRUCT,
     )
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
 
     result = Blight(
         source_entity_uuid=caster.uuid,
@@ -241,7 +241,7 @@ def test_blight_plant_max_damage() -> None:
         "monsters",
         creature_type=CreatureType.PLANT,
     )
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
     hp_before = plant.get_hp()
 
     with fixed_dice_faces(10, 11):
@@ -267,7 +267,7 @@ def test_blight_normal_target() -> None:
     )
     target = create_spell_regression_actor("Humanoid", (4, 3), "monsters")
     force_save_result(target, "constitution", succeeds=True)
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
     hp_before = target.get_hp()
 
     with fixed_dice_faces(10, *([4] * 8)):
@@ -294,7 +294,7 @@ def _power_word_kill_target(hp: int) -> tuple[SpellEvent, Entity]:
     )
     target = create_spell_regression_actor("Word Target", (4, 3), "monsters")
     set_hp(target, hp)
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
 
     result = PowerWordKill(
         source_entity_uuid=caster.uuid,
@@ -359,7 +359,7 @@ def _cast_protection(
         if self_target
         else create_spell_regression_actor("Protected Target", (3, 3), "heroes")
     )
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
     result = ProtectionFromEnergy(
         source_entity_uuid=caster.uuid,
         target_entity_uuid=target.uuid,
@@ -427,7 +427,7 @@ def _cast_stoneskin() -> tuple[Entity, Entity, SpellEvent]:
         spell_slots={4: 1},
     )
     target = create_spell_regression_actor("Stoneskin Target", (3, 3), "heroes")
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
     result = Stoneskin(
         source_entity_uuid=caster.uuid,
         target_entity_uuid=target.uuid,

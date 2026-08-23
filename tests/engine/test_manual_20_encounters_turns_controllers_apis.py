@@ -130,7 +130,7 @@ def create_runtime_pair() -> tuple[Entity, Entity]:
         faction="monsters",
         content_ref=BESTIARY_CREATURE_DECLARATIONS_BY_ID["skeleton"].ref,
     )
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     return hero, monster
 
 
@@ -501,7 +501,7 @@ def test_lethal_multi_entity_command_reports_causal_death_and_primary_hp() -> No
         faction="monsters",
         content_ref=BESTIARY_CREATURE_DECLARATIONS_BY_ID["skeleton"].ref,
     )
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     encounter = start_ordered_encounter(
         caster,
         monster,

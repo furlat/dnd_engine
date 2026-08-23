@@ -260,13 +260,13 @@ def test_vision_blocker_hides_then_destroy_reveals_floor_item_and_entity() -> No
     hidden_item = create_floor_item((5, 5), name="Hidden Gem")
     hidden_actor = create_actor((5, 5), name="Hidden Enemy", faction="monsters")
 
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     assert hidden_item.uuid not in observer.senses.objects
     assert hidden_actor.uuid not in observer.senses.entities
 
     blocker.receive_damage(100, DamageType.BLUDGEONING, observer.uuid)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     assert BaseBlock.get(blocker.uuid) is None
     assert hidden_item.uuid in observer.senses.objects
@@ -287,18 +287,18 @@ def test_portable_vision_blocker_drop_and_pickup_update_los() -> None:
         is_pickable=True,
     )
     assert dropper.inventory.add_item(blocker)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     assert hidden_item.uuid in watcher.senses.objects
 
     dropped = execute_drop(dropper, blocker.uuid)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     assert dropped is not None and not dropped.canceled
     assert hidden_item.uuid not in watcher.senses.objects
 
     picker = create_actor((3, 4), name="Picker", faction="helpers")
     assert picker.loot_item(blocker)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     assert hidden_item.uuid in watcher.senses.objects
 
@@ -312,11 +312,11 @@ def test_movement_blocker_destroy_reopens_cached_paths() -> None:
         blocks_movement=True,
     )
     mover = create_actor((2, 5), name="Mover")
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     assert (3, 5) not in mover.senses.paths
 
     blocker.receive_damage(100, DamageType.BLUDGEONING, mover.uuid)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     assert BaseBlock.get(blocker.uuid) is None
     assert (3, 5) in mover.senses.paths
@@ -336,11 +336,11 @@ def test_inventory_removes_floor_item_from_grid_senses_and_object_targets() -> N
         health=BaseItem.create_item_health(source_uuid, 16),
     )
     crate.place_on_grid((4, 3))
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     assert crate.uuid in actor.senses.objects
 
     assert actor.loot_item(crate)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     assert grid.get_object_position(crate.uuid) is None
     assert crate.uuid not in grid.get_objects_at((4, 3))
@@ -383,12 +383,12 @@ def test_dropped_and_colocated_items_preserve_grid_and_visibility() -> None:
     second = create_floor_item(name="Gem Two")
     assert dropper.inventory.add_item(first)
     assert dropper.inventory.add_item(second)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     assert first.uuid not in watcher_a.senses.objects
 
     execute_drop(dropper, first.uuid)
     execute_drop(dropper, second.uuid)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     assert {first.uuid, second.uuid} <= set(grid.get_objects_at((5, 5)))
     assert {first.uuid, second.uuid} <= set(watcher_a.senses.objects)
@@ -407,11 +407,11 @@ def test_pickup_removes_floor_visibility_for_other_observers() -> None:
     item = create_floor_item((5, 5), name="Shared Gem")
     picker = create_actor((5, 4), name="Picker")
     watcher = create_actor((5, 6), name="Watcher", faction="others")
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     assert item.uuid in watcher.senses.objects
 
     assert picker.loot_item(item)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     assert item.uuid not in watcher.senses.objects
 
@@ -432,7 +432,7 @@ def test_nonbreakable_or_unseen_items_are_not_object_targets() -> None:
     for y in range(10):
         grid.set_tile(3, y, walkable=False, visible=False, name="Wall")
     hidden = create_floor_item((5, 5), name="Hidden Gem")
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     assert hidden.uuid not in actor.senses.objects
     assert pillar.uuid not in object_target_uuids(actor, "Attack Object")
@@ -445,14 +445,14 @@ def test_pickup_targets_respect_capacity_and_five_foot_range() -> None:
     actor = create_actor((3, 3))
     adjacent = create_floor_item((4, 4), name="Close Gem")
     distant = create_floor_item((5, 3), name="Far Gem")
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     targets = object_target_uuids(actor, "Pick Up")
     assert adjacent.uuid in targets
     assert distant.uuid not in targets
 
     actor.inventory.max_slots = actor.inventory.item_count
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     assert adjacent.uuid not in object_target_uuids(actor, "Pick Up")
 
@@ -533,7 +533,7 @@ def test_multiple_loot_drop_and_colocation_round_trips() -> None:
         create_floor_item((4, 3), name=f"Gem {index}")
         for index in range(5)
     ]
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     for item in items:
         assert actor.loot_item(item)

@@ -84,7 +84,7 @@ def test_quickened_cast_spends_its_source_resource_and_cleans_override() -> None
         name="Target",
         config=EntityConfig(position=(2, 1), faction="enemies"),
     )
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     authored_magic_missile = _spell(sorcerer, "Magic Missile")
 
     activated = _action(sorcerer, "Quickened Spell").instantiate().apply()

@@ -51,7 +51,6 @@ from dnd.core.events.world_events import (
     StepMovementEvent,
     ForcedMovementEvent,
     SpatialChangeEvent,
-    SensoryUpdateReason,
     MovementTrajectory,
 )
 from dnd.core.events.check_events import (
@@ -128,7 +127,7 @@ from dnd.core.combat_log import (
     CombatLogEntry, CombatLogEntryType, ModifierBreakdown, DiceRollDisplay,
     DamageRollDisplay, AttackLogData, MovementLogData, SpellSaveLogData,
     format_attack_compact, format_attack_verbose, format_attack_detailed,
-    md_color, position_evidence_key
+    md_color,
 )
 from pydantic import BaseModel, Field, StrictBool, StrictInt, TypeAdapter, model_validator
 from typing import Any, Callable, ClassVar, Dict, Iterable, Mapping, Optional, List, Set, TypeVar, Tuple, Self, cast
@@ -142,7 +141,7 @@ from dnd.blocks.action_economy import (
 from dnd.blocks.base_item import (
     BaseItem,
 )
-from dnd.blocks.sensory import capture_senses_snapshot, emit_sensory_update_delta
+from dnd.blocks.sensory import spatial_senses_system
 from dnd.conditions import Dashing, Dodging, Disengaging, Prone, Hidden, Concentrating
 
 
@@ -165,18 +164,13 @@ class IntrinsicAttackSource:
 
 
 def _step_intent_position_evidence(
-    grid: GridMap,
     from_position: tuple[int, int],
     to_position: tuple[int, int],
 ) -> dict[str, set[str]]:
     """Freeze which observers perceived both endpoints when a step began."""
-    return {
-        position_evidence_key(position): {
-            str(observer_uuid)
-            for observer_uuid in grid.get_subscribers_at(position)
-        }
-        for position in (from_position, to_position)
-    }
+    return spatial_senses_system.position_observer_evidence(
+        {from_position, to_position},
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -330,7 +324,8 @@ def validate_line_of_sight(declaration_event: PolymorphicActionEvent, source_ent
     if not isinstance(target_entity, Entity):
         return declaration_event.cancel(status_message=f"Target entity not found for {declaration_event.name}")
 
-    if target_entity.uuid not in source_entity.senses.entities.keys():
+    contact = source_entity.senses.entities.get(target_entity.uuid)
+    if contact is None or not contact.visual:
         return declaration_event.cancel(status_message=f"Target entity not in line of sight for {declaration_event.name}")
     return declaration_event.with_updates(
         status_message=f"Validated line of sight for {declaration_event.name}"
@@ -354,17 +349,10 @@ def _normalize_move_path(path: object) -> MovePath:
 
 
 def _path_intent_position_evidence(
-    grid: GridMap,
     path: Iterable[tuple[int, int]],
 ) -> dict[str, set[str]]:
     """Freeze per-cell observers for disclosed nonoccupancy geometry."""
-    return {
-        position_evidence_key(position): {
-            str(observer_uuid)
-            for observer_uuid in grid.get_subscribers_at(position)
-        }
-        for position in path
-    }
+    return spatial_senses_system.position_observer_evidence(set(path))
 
 
 def _unsettled_move_cancel_updates(
@@ -1395,7 +1383,6 @@ class Move(BaseAction):
             )
 
         voluntary_observer_evidence = _step_intent_position_evidence(
-            grid,
             from_position,
             to_position,
         )
@@ -1531,7 +1518,6 @@ class Move(BaseAction):
             status_message=f"Applying movement for {execution_event.name}",
         )
 
-        source.senses.clear_visibility_cache()
         try:
             objective_failure = self._objective_move_failure(
                 source,
@@ -1667,7 +1653,6 @@ class Move(BaseAction):
                     committed=False,
                     located_position_observer_uuids=(
                         _step_intent_position_evidence(
-                            grid,
                             from_position,
                             to_position,
                         )
@@ -1769,24 +1754,13 @@ class Move(BaseAction):
                 continuation_reason,
             )
         finally:
-            senses_before_refresh = capture_senses_snapshot(source.senses)
             remaining_path_distance = max(
                 0,
                 (source.action_economy.movement.normalized_score + 4) // 5,
             )
-            source.update_entity_senses(
+            source.materialize_navigation(
                 max_distance=20,
-                reuse_visibility_cache=True,
                 path_max_distance=remaining_path_distance,
-            )
-            senses_after_refresh = capture_senses_snapshot(source.senses)
-            emit_sensory_update_delta(
-                source.senses,
-                source.uuid,
-                effect_event,
-                senses_before_refresh,
-                senses_after_refresh,
-                SensoryUpdateReason.SELF_MOVEMENT,
             )
 
     def _apply_costs(
@@ -3000,7 +2974,8 @@ class Hide(BaseAction):
             sub = Entity.get(sub_uuid)
             if sub and isinstance(sub, Entity) and entity.is_enemy(sub):
                 if (
-                    entity.uuid in sub.senses.entities
+                    (contact := sub.senses.entities.get(entity.uuid)) is not None
+                    and contact.visual
                     and not entity.is_obscured_by_larger_creature_from(sub)
                 ):
                     return declaration_event.cancel(
@@ -3516,7 +3491,7 @@ class TraverseConnector(BaseAction):
             ),
             committed=False,
             located_position_observer_uuids=_step_intent_position_evidence(
-                grid, effect.start_position, destination
+                effect.start_position, destination
             ),
             parent_event=effect.uuid,
             phase=EventPhase.DECLARATION,
@@ -3750,7 +3725,12 @@ class Jump(BaseAction):
             if not grid.is_walkable_for(pos[0], pos[1], entity.uuid):
                 continue
 
-            if not grid.raycast_clear(entity.position, pos, channel="propagation", observer_uuid=entity.uuid):
+            if not grid.raycast_clear(
+                entity.position,
+                pos,
+                channel="propagation",
+                requester_uuid=entity.uuid,
+            ):
                 continue
 
             valid.append(pos)
@@ -3890,7 +3870,12 @@ class Jump(BaseAction):
         if not grid.is_walkable_for(end_pos[0], end_pos[1], source_entity.uuid):
             return declaration_event.cancel(status_message=f"Position {end_pos} not walkable or occupied")
 
-        if not grid.raycast_clear(source_entity.position, end_pos, channel="propagation", observer_uuid=source_entity.uuid):
+        if not grid.raycast_clear(
+            source_entity.position,
+            end_pos,
+            channel="propagation",
+            requester_uuid=source_entity.uuid,
+        ):
             return declaration_event.cancel(status_message=f"Path to {end_pos} is blocked")
 
         return declaration_event.phase_to(
@@ -4047,7 +4032,7 @@ class Jump(BaseAction):
                 event.start_position,
                 landing,
                 channel="propagation",
-                observer_uuid=source.uuid,
+                requester_uuid=source.uuid,
             )
         )
 
@@ -4057,7 +4042,6 @@ class Jump(BaseAction):
         if not source_entity:
             return execution_event.cancel(status_message="Entity not found")
 
-        source_entity.senses.clear_visibility_cache()
         grid = get_map()
         try:
             effect_event = execution_event.phase_to(
@@ -4150,7 +4134,7 @@ class Jump(BaseAction):
                 provocation_policy=MovementProvocationPolicy.ORDINARY_EXIT,
                 committed=False,
                 located_position_observer_uuids=(
-                    _path_intent_position_evidence(grid, disclosed_path)
+                    _path_intent_position_evidence(disclosed_path)
                 ),
                 phase=EventPhase.DECLARATION,
                 parent_event=effect_event.uuid,
@@ -4311,7 +4295,7 @@ class Jump(BaseAction):
                 status_message=f"Jumped to {landing}",
             ))
         finally:
-            source_entity.update_entity_senses(max_distance=20, reuse_visibility_cache=True)
+            source_entity.materialize_navigation(max_distance=20)
 
     def _apply_costs(self, completion_event: JumpEvent) -> JumpEvent:
         """Return the transaction-settled Jump without paying it twice."""
@@ -4538,7 +4522,8 @@ class Shove(BaseAction):
                 status_message=f"Target too heavy ({target.weight}lbs > {declaration_event.max_shove_weight}lbs)"
             )
 
-        if target.uuid not in source.senses.entities:
+        contact = source.senses.entities.get(target.uuid)
+        if contact is None or not contact.visual:
             return declaration_event.cancel(status_message="Target not visible")
 
         return declaration_event.phase_to(
@@ -5324,7 +5309,10 @@ class SpellAction(BaseAction):
                 )
             if (
                 target_uuid != source_entity.uuid
-                and target_uuid not in source_entity.senses.entities
+                and (
+                    (contact := source_entity.senses.entities.get(target_uuid)) is None
+                    or not contact.visual
+                )
             ):
                 return declaration_event.cancel(
                     status_message=(

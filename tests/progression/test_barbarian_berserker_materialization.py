@@ -434,7 +434,7 @@ def test_level_twenty_berserker_materializes_and_reverses_exactly() -> None:
             faction="monsters",
         ),
     )
-    Entity.update_all_entities_senses(max_distance=30)
+    Entity.materialize_all_navigation(max_distance=30)
     target.equipment.ac_bonus.self_static.add_value_modifier(
         NumericalModifier.create(
             source_entity_uuid=target.uuid,

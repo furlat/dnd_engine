@@ -76,7 +76,7 @@ def test_encounter_round_boundary_advances_tile_durations() -> None:
         position=(1, 0),
         faction="second",
     )
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     encounter = setup_combat_arena(first, second)
     tile = grid.get_tile(5, 5)
     assert tile is not None

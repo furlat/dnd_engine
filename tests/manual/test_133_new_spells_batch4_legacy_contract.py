@@ -94,7 +94,7 @@ def _true_strike_scene(caster_level: int) -> tuple[Entity, Entity]:
     )
     setup_standard_actions(caster)
     register_true_strike(caster, caster_level=caster_level)
-    Entity.update_all_entities_senses(max_distance=60)
+    Entity.materialize_all_navigation(max_distance=60)
     return caster, target
 
 
@@ -264,7 +264,7 @@ def test_finger_of_death_full_and_half_damage() -> None:
             "monsters",
         )
         force_save_result(target, "constitution", succeeds=succeeds)
-        Entity.update_all_entities_senses(max_distance=100)
+        Entity.materialize_all_navigation(max_distance=100)
         hp_before = get_hp(target)
 
         with fixed_dice_faces(10, *([4] * 7)):
@@ -294,7 +294,7 @@ def _telekinesis_scene() -> tuple[Entity, Entity]:
         "monsters",
     )
     force_save_result(target, "strength", succeeds=False)
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
     return caster, target
 
 
@@ -422,7 +422,7 @@ def _globe_scene() -> tuple[Entity, Entity, Entity]:
         "monsters",
         spell_slots={2: 1, 3: 2, 6: 1, 7: 1},
     )
-    Entity.update_all_entities_senses(max_distance=120)
+    Entity.materialize_all_navigation(max_distance=120)
     result = GlobeOfInvulnerability(
         source_entity_uuid=globe_caster.uuid,
         cast_at_level=6,
@@ -480,7 +480,7 @@ def test_globe_direction_level_and_concentration_contract() -> None:
         (4, 7),
         "monsters",
     )
-    Entity.update_all_entities_senses(max_distance=120)
+    Entity.materialize_all_navigation(max_distance=120)
     inside_modifier = _force_attack_outcome(inside_caster, AutoHitStatus.AUTOHIT)
     outside_hp = get_hp(outside_target)
     with fixed_dice_faces(10, 4):
@@ -522,7 +522,7 @@ def test_globe_partially_filters_aoe_and_uses_base_spell_level() -> None:
     )
     force_save_result(inside, "dexterity", succeeds=False)
     force_save_result(outside_target, "dexterity", succeeds=False)
-    Entity.update_all_entities_senses(max_distance=120)
+    Entity.materialize_all_navigation(max_distance=120)
     inside_hp = get_hp(inside)
     outside_hp = get_hp(outside_target)
 
@@ -600,7 +600,7 @@ def _banishment_scene(*, save_succeeds: bool) -> tuple[Entity, Entity, Entity]:
         "neutral",
     )
     force_save_result(target, "charisma", succeeds=save_succeeds)
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
     return caster, target, observer
 
 

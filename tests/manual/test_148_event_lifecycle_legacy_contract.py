@@ -248,7 +248,7 @@ def test_fireball_emits_one_parent_log_with_isolated_target_children() -> None:
     ]
     for target in targets:
         penalize_save(target, "dexterity")
-    Entity.update_all_entities_senses(max_distance=80)
+    Entity.materialize_all_navigation(max_distance=80)
     captured: list[Event] = []
     EventQueue.set_combat_log_callback(captured.append)
     try:

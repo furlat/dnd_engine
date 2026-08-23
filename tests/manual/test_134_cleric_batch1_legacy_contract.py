@@ -125,7 +125,7 @@ def test_flame_strike_aoe_save_and_damage_types() -> None:
     )
     force_save_result(failed, "dexterity", succeeds=False)
     force_save_result(passed, "dexterity", succeeds=True)
-    Entity.update_all_entities_senses(max_distance=120)
+    Entity.materialize_all_navigation(max_distance=120)
     hp_before = {
         failed.uuid: get_hp(failed),
         passed.uuid: get_hp(passed),
@@ -191,7 +191,7 @@ def test_flame_strike_applies_fire_and_radiant_as_typed_components() -> None:
         )
     )
     force_save_result(target, "dexterity", succeeds=False)
-    Entity.update_all_entities_senses(max_distance=80)
+    Entity.materialize_all_navigation(max_distance=80)
     hp_before = get_hp(target)
 
     with fixed_dice_faces(10, *([2] * 4), *([3] * 4)):
@@ -227,7 +227,7 @@ def test_guidance_concentration_break_removes_unused_effect() -> None:
     """Old case 6; old cases 4-5 are covered by EB-15-016."""
     reset_spell_regression_arena(8, 5)
     caster = create_spell_regression_actor("Guidance Cleric", (2, 2), "heroes")
-    Entity.update_all_entities_senses(max_distance=40)
+    Entity.materialize_all_navigation(max_distance=40)
 
     result = Guidance(
         source_entity_uuid=caster.uuid,
@@ -245,7 +245,7 @@ def test_light_geometry_follows_movement_and_cleans_up() -> None:
     """Old cases 7-9: anchored light has exact bright/dim bounds and cleanup."""
     _dark_arena()
     caster = create_spell_regression_actor("Light Cleric", (5, 7), "heroes")
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
 
     result = Light(
         source_entity_uuid=caster.uuid,
@@ -263,7 +263,7 @@ def test_light_geometry_follows_movement_and_cleans_up() -> None:
     assert _tile((11, 7)).resolved_light_level is LightLevel.DIM_LIGHT
     assert _tile((15, 7)).resolved_light_level is LightLevel.DARKNESS
 
-    caster.update_entity_senses(max_distance=100)
+    caster.materialize_navigation(max_distance=100)
     moved = Move(
         source_entity_uuid=caster.uuid,
         end_position=(8, 7),
@@ -284,7 +284,7 @@ def test_light_reactively_reveals_a_low_stealth_target() -> None:
     _dark_arena()
     caster = create_spell_regression_actor("Light Observer", (5, 7), "heroes")
     target = create_spell_regression_actor("Hidden Target", (8, 7), "monsters")
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
     target.add_condition(
         Hidden(
             source_entity_uuid=target.uuid,
@@ -309,7 +309,7 @@ def test_light_on_ally_moves_with_the_ally() -> None:
     _dark_arena()
     caster = create_spell_regression_actor("Light Cleric", (4, 7), "heroes")
     ally = create_spell_regression_actor("Light Ally", (5, 7), "heroes")
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
 
     result = Light(
         source_entity_uuid=caster.uuid,
@@ -319,7 +319,7 @@ def test_light_on_ally_moves_with_the_ally() -> None:
     assert isinstance(result, SpellEvent)
     assert has_condition(ally, "Light")
     assert not has_condition(caster, "Concentrating")
-    ally.update_entity_senses(max_distance=100)
+    ally.materialize_navigation(max_distance=100)
     moved = Move(
         source_entity_uuid=ally.uuid,
         end_position=(8, 7),
@@ -339,7 +339,7 @@ def test_continual_flame_effect_owns_light_lifecycle() -> None:
         "heroes",
         spell_slots={2: 1},
     )
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
     focus = BaseItem(
         source_entity_uuid=caster.uuid,
         semantic_key="test.continual_flame_focus",
@@ -347,7 +347,7 @@ def test_continual_flame_effect_owns_light_lifecycle() -> None:
         is_pickable=False,
     )
     focus.place_on_grid((3, 7))
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
 
     result = ContinualFlame(
         source_entity_uuid=caster.uuid,
@@ -454,7 +454,7 @@ def test_command_branches_spend_exactly_the_targets_next_turn(
     target = create_spell_regression_actor("Command Target", (5, 3), "monsters")
     setup_standard_actions(target)
     force_save_result(target, "wisdom", succeeds=False)
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
     original_position = target.position
 
     _cast_failed_command(caster, target, command_word)
@@ -538,13 +538,13 @@ def test_command_flee_uses_voluntary_movement_and_provokes_reactions() -> None:
     )
     add_opportunity_attack_handler(watcher)
     force_save_result(target, "wisdom", succeeds=False)
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
     target.action_economy.consume(
         "movement",
         25,
         cost_name="Prior turn movement",
     )
-    target.update_entity_senses(max_distance=20, path_max_distance=1)
+    target.materialize_navigation(max_distance=20, path_max_distance=1)
     assert max(len(path) for path in target.senses.paths.values()) <= 2
     reaction_before = watcher.action_economy.reactions.normalized_score
     hit_modifier = force_attack_hit(watcher)
@@ -606,7 +606,7 @@ def test_command_halt_closes_haste_and_zero_cost_paths_but_not_reactions() -> No
         )
     )
     force_save_result(target, "wisdom", succeeds=False)
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
 
     before = get_available_actions(target)
     haste_rows_before = [
@@ -659,7 +659,7 @@ def test_command_successful_save_and_undead_immunity() -> None:
         creature_type=CreatureType.UNDEAD,
     )
     force_save_result(wise, "wisdom", succeeds=True)
-    Entity.update_all_entities_senses(max_distance=100)
+    Entity.materialize_all_navigation(max_distance=100)
 
     with fixed_dice_faces(10):
         resisted = Command(
@@ -707,7 +707,7 @@ def test_silence_zone_deafens_blocks_verbal_and_cleans_up() -> None:
         (10, 7),
         "monsters",
     )
-    Entity.update_all_entities_senses(max_distance=120)
+    Entity.materialize_all_navigation(max_distance=120)
 
     silence = Silence(
         source_entity_uuid=caster.uuid,
@@ -753,7 +753,7 @@ def test_guardian_placement_ward_and_damage_budget() -> None:
         "heroes",
         spell_slots={4: 1},
     )
-    Entity.update_all_entities_senses(max_distance=120)
+    Entity.materialize_all_navigation(max_distance=120)
     grid = get_map()
 
     result = GuardianOfFaith(

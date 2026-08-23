@@ -882,7 +882,8 @@ def _unseen_strike_processor(
     if not target or not isinstance(target, Entity):
         return None
 
-    if source_entity_uuid in target.senses.entities:
+    contact = target.senses.entities.get(source_entity_uuid)
+    if contact is not None and contact.visual:
         return None
 
     damage_bonus = ModifiableValue.create(

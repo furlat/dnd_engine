@@ -192,7 +192,7 @@ def test_off_hand_damage_omits_ability_modifier_without_style() -> None:
     attacker = create_test_monster("monster.goblin", name="Damage Tester", position=(0, 0))
     target = create_test_monster("monster.goblin", name="Damage Target", position=(1, 0))
     _equip_off_hand_dagger(attacker)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     main_bonus = _damage_bonus(attacker, target, WeaponSlot.MELEE_MAIN)
     off_bonus = _damage_bonus(attacker, target, WeaponSlot.MELEE_OFF)
@@ -207,7 +207,7 @@ def test_two_weapon_round_spends_one_action_and_one_bonus_action() -> None:
     attacker = create_test_monster("monster.goblin", name="Dual Wielder", position=(0, 0))
     target = create_test_monster("monster.goblin", name="Durable Target", position=(1, 0))
     _equip_off_hand_dagger(attacker)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     set_hp(target, 100)
     force_attack_miss(attacker)
 
@@ -238,7 +238,7 @@ def test_two_weapon_style_adds_off_hand_ability_modifier() -> None:
     attacker = create_test_monster("monster.goblin", name="Style Tester", position=(0, 0))
     target = create_test_monster("monster.goblin", name="Style Target", position=(1, 0))
     _equip_off_hand_dagger(attacker)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     before = _damage_bonus(attacker, target, WeaponSlot.MELEE_OFF)
 
     _apply_two_weapon_style(attacker)
@@ -268,7 +268,7 @@ def test_two_weapon_style_finesse_uses_higher_ability(
     )
     target = create_test_monster("monster.goblin", name="Finesse Target", position=(1, 0))
     _equip_off_hand_dagger(attacker)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     _apply_two_weapon_style(attacker)
 
     off_bonus = _damage_bonus(attacker, target, WeaponSlot.MELEE_OFF)
@@ -285,7 +285,7 @@ def test_two_weapon_style_does_not_change_main_hand_damage() -> None:
     attacker = create_test_monster("monster.goblin", name="Main-Hand Tester", position=(0, 0))
     target = create_test_monster("monster.goblin", name="Main-Hand Target", position=(1, 0))
     _equip_off_hand_dagger(attacker)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     before = _damage_bonus(attacker, target, WeaponSlot.MELEE_MAIN)
 
     _apply_two_weapon_style(attacker)
@@ -300,7 +300,7 @@ def test_removing_two_weapon_style_restores_off_hand_damage() -> None:
     attacker = create_test_monster("monster.goblin", name="Style Cleanup Tester", position=(0, 0))
     target = create_test_monster("monster.goblin", name="Style Cleanup Target", position=(1, 0))
     _equip_off_hand_dagger(attacker)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     before = _damage_bonus(attacker, target, WeaponSlot.MELEE_OFF)
     handles = _apply_two_weapon_style(attacker)
     during = _damage_bonus(attacker, target, WeaponSlot.MELEE_OFF)

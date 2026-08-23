@@ -6,23 +6,10 @@ from pydantic import Field, PrivateAttr, StrictInt, model_validator
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition
 from dnd.types.world import MovementMode, LightLevel
-from dnd.types.senses import SensesType
 from dnd.types.spatial_effects import SpatialEffectLayer
 from dnd.core.values import ModifiableValue
 from dnd.core.modifiers import NumericalModifier
-from dnd.core.events.world_events import (
-    SpatialChangeEvent,
-)
-from dnd.core.events.events_registry import (
-    EventQueue,
-)
-from dnd.core.geometry import grid_distance_feet
 from dnd.core.world_edges import ElevationSurfaceKind, SlopeAxis
-
-_DARKVISION_SHIFT: Dict[LightLevel, LightLevel] = {
-    LightLevel.DARKNESS: LightLevel.DIM_LIGHT,
-    LightLevel.DIM_LIGHT: LightLevel.BRIGHT_LIGHT,
-}
 
 
 def validate_elevation_surface_tuple(
@@ -54,7 +41,14 @@ class Tile(BaseBlock):
 
     name: str = Field(default="Floor", description="The name of the tile")
     walkable: bool = Field(default=True, description="Whether the tile can be walked on (legacy, use walking_cost)")
-    visible: bool = Field(default=True, description="Whether the tile can be seen through")
+    blocks_optics: bool = Field(
+        default=False,
+        description="Whether the Tile intrinsically blocks ordinary XY optics.",
+    )
+    blocks_propagation_field: bool = Field(
+        default=False,
+        description="Whether the Tile intrinsically blocks physical propagation.",
+    )
     sprite_name: Optional[str] = Field(default=None, description="The name of the sprite to use for the tile")
     allow_events_conditions: bool = Field(default=True, description="Tiles can have conditions")
 
@@ -95,14 +89,10 @@ class Tile(BaseBlock):
     border_south: bool = Field(default=True, description="Can enter from south (y-1)")
     border_east: bool = Field(default=True, description="Can enter from east (x+1)")
     border_west: bool = Field(default=True, description="Can enter from west (x-1)")
-    vision_border_north: bool = Field(default=True, description="Vision can cross north")
-    vision_border_south: bool = Field(default=True, description="Vision can cross south")
-    vision_border_east: bool = Field(default=True, description="Vision can cross east")
-    vision_border_west: bool = Field(default=True, description="Vision can cross west")
-    light_border_north: bool = Field(default=True, description="Light can cross north")
-    light_border_south: bool = Field(default=True, description="Light can cross south")
-    light_border_east: bool = Field(default=True, description="Light can cross east")
-    light_border_west: bool = Field(default=True, description="Light can cross west")
+    optical_border_north: bool = Field(default=True, description="Ordinary optics can cross north")
+    optical_border_south: bool = Field(default=True, description="Ordinary optics can cross south")
+    optical_border_east: bool = Field(default=True, description="Ordinary optics can cross east")
+    optical_border_west: bool = Field(default=True, description="Ordinary optics can cross west")
     propagation_border_north: bool = Field(default=True, description="Physical propagation can cross north")
     propagation_border_south: bool = Field(default=True, description="Physical propagation can cross south")
     propagation_border_east: bool = Field(default=True, description="Physical propagation can cross east")
@@ -111,14 +101,10 @@ class Tile(BaseBlock):
     object_movement_border_south: bool = Field(default=True, description="Object-derived movement contribution south")
     object_movement_border_east: bool = Field(default=True, description="Object-derived movement contribution east")
     object_movement_border_west: bool = Field(default=True, description="Object-derived movement contribution west")
-    object_vision_border_north: bool = Field(default=True, description="Object-derived vision contribution north")
-    object_vision_border_south: bool = Field(default=True, description="Object-derived vision contribution south")
-    object_vision_border_east: bool = Field(default=True, description="Object-derived vision contribution east")
-    object_vision_border_west: bool = Field(default=True, description="Object-derived vision contribution west")
-    object_light_border_north: bool = Field(default=True, description="Object-derived light contribution north")
-    object_light_border_south: bool = Field(default=True, description="Object-derived light contribution south")
-    object_light_border_east: bool = Field(default=True, description="Object-derived light contribution east")
-    object_light_border_west: bool = Field(default=True, description="Object-derived light contribution west")
+    object_optical_border_north: bool = Field(default=True, description="Object-derived optical contribution north")
+    object_optical_border_south: bool = Field(default=True, description="Object-derived optical contribution south")
+    object_optical_border_east: bool = Field(default=True, description="Object-derived optical contribution east")
+    object_optical_border_west: bool = Field(default=True, description="Object-derived optical contribution west")
     object_propagation_border_north: bool = Field(default=True, description="Object-derived propagation contribution north")
     object_propagation_border_south: bool = Field(default=True, description="Object-derived propagation contribution south")
     object_propagation_border_east: bool = Field(default=True, description="Object-derived propagation contribution east")
@@ -138,7 +124,7 @@ class Tile(BaseBlock):
         description="Base objective light level before illumination or obscurement modifiers.",
     )
     _illuminations: Dict[UUID, LightLevel] = PrivateAttr(default_factory=dict)
-    _obscurements: Dict[UUID, LightLevel] = PrivateAttr(default_factory=dict)
+    _illumination_caps: Dict[UUID, LightLevel] = PrivateAttr(default_factory=dict)
     _spatial_condition_uuids: Dict[
         SpatialEffectLayer,
         set[UUID],
@@ -223,47 +209,28 @@ class Tile(BaseBlock):
         """A tile blocks walking if its movement cost for the given mode is 0 or less."""
         return self.get_movement_cost(mode) <= 0
 
-    def blocks_vision(self, requesting_entity_uuid: Optional['UUID'] = None) -> bool:
-        """Return whether this tile blocks vision for an optional observer."""
-        if not self.visible:
-            return True
-        if self.resolved_light_level == LightLevel.MAGICAL_DARKNESS:
-            if requesting_entity_uuid is None:
-                return True
-            observer = BaseBlock.get(requesting_entity_uuid)
-            return observer is None or not observer.can_pierce_magical_darkness()
-        return False
+    def blocks_propagation(self) -> bool:
+        """Return the Tile's intrinsic physical-propagation policy."""
+        return self.blocks_propagation_field
 
-    def add_illumination(self, source_uuid: UUID, level: LightLevel,
-                         fire_event: bool = True) -> bool:
-        """Add illumination and optionally notify when resolved light changes."""
+    def _add_illumination(self, source_uuid: UUID, level: LightLevel) -> bool:
+        """Install one GridMap-owned objective illumination contribution."""
         old = self.resolved_light_level
         self._illuminations[source_uuid] = level
-        changed = self.resolved_light_level != old
-        if changed and fire_event:
-            self._notify_light_changed()
-        return changed
+        return self.resolved_light_level != old
 
-    def add_obscurement(self, source_uuid: UUID, level: LightLevel,
-                        fire_event: bool = True) -> bool:
-        """Add obscurement and optionally notify when resolved light changes."""
+    def _add_illumination_cap(self, source_uuid: UUID, level: LightLevel) -> bool:
+        """Install one GridMap-owned source cap on objective illumination."""
         old = self.resolved_light_level
-        self._obscurements[source_uuid] = level
-        changed = self.resolved_light_level != old
-        if changed and fire_event:
-            self._notify_light_changed()
-        return changed
+        self._illumination_caps[source_uuid] = level
+        return self.resolved_light_level != old
 
-    def remove_light_modifier(self, source_uuid: UUID,
-                              fire_event: bool = True) -> bool:
-        """Remove any light modifier by UUID from illumination or obscurement."""
+    def _remove_light_modifier(self, source_uuid: UUID) -> bool:
+        """Remove one GridMap-owned illumination contribution or cap."""
         old = self.resolved_light_level
         self._illuminations.pop(source_uuid, None)
-        self._obscurements.pop(source_uuid, None)
-        changed = self.resolved_light_level != old
-        if changed and fire_event:
-            self._notify_light_changed()
-        return changed
+        self._illumination_caps.pop(source_uuid, None)
+        return self.resolved_light_level != old
 
     @property
     def resolved_light_level(self) -> LightLevel:
@@ -272,74 +239,10 @@ class Tile(BaseBlock):
         for level in self._illuminations.values():
             if level.value > brightest.value:
                 brightest = level
-        if not self._obscurements:
+        if not self._illumination_caps:
             return brightest
-        darkest = min(self._obscurements.values(), key=lambda x: x.value)
+        darkest = min(self._illumination_caps.values(), key=lambda x: x.value)
         return LightLevel(min(brightest.value, darkest.value))
-
-    def get_effective_light_for(
-        self,
-        observer_uuid: Optional[UUID] = None,
-        observer_position: Optional[Tuple[int, int]] = None,
-    ) -> LightLevel:
-        """Resolve subjective light for an observer's sense modes."""
-        base = self.resolved_light_level
-        if observer_uuid is None:
-            return base
-
-        observer = BaseBlock.get(observer_uuid)
-        if observer is None:
-            return base
-
-        sense_modes: list = observer.get_sense_modes()
-        if not sense_modes:
-            return self._apply_adjacent_rule(base, observer_position)
-
-        for sm in sense_modes:
-            if sm.sense_type in (SensesType.TRUESIGHT, SensesType.BLINDSIGHT):
-                in_range = (sm.range_feet == 0)
-                if not in_range and observer_position is not None and self.position is not None:
-                    in_range = grid_distance_feet(self.position, observer_position) <= sm.range_feet
-                if in_range:
-                    return max(base, LightLevel.BRIGHT_LIGHT)
-
-        if base in (LightLevel.MAGICAL_DARKNESS, LightLevel.DARKNESS):
-            for sm in sense_modes:
-                if sm.sense_type == SensesType.DEVILS_SIGHT:
-                    in_range = (sm.range_feet == 0)
-                    if not in_range and observer_position is not None and self.position is not None:
-                        in_range = grid_distance_feet(self.position, observer_position) <= sm.range_feet
-                    if in_range:
-                        base = LightLevel.BRIGHT_LIGHT
-                    break
-
-        if base in _DARKVISION_SHIFT:
-            for sm in sense_modes:
-                if sm.sense_type == SensesType.DARKVISION:
-                    in_range = (sm.range_feet == 0)
-                    if not in_range and observer_position is not None and self.position is not None:
-                        in_range = grid_distance_feet(self.position, observer_position) <= sm.range_feet
-                    if in_range:
-                        base = _DARKVISION_SHIFT[base]
-                    break
-
-        return self._apply_adjacent_rule(base, observer_position)
-
-    def _apply_adjacent_rule(self, level: LightLevel,
-                             observer_position: Optional[Tuple[int, int]]) -> LightLevel:
-        """Apply the adjacent-cell minimum DIM_LIGHT rule for natural darkness."""
-        if observer_position is not None and self.position is not None:
-            dx = abs(self.position[0] - observer_position[0])
-            dy = abs(self.position[1] - observer_position[1])
-            if max(dx, dy) <= 1 and level == LightLevel.DARKNESS:
-                return LightLevel.DIM_LIGHT
-        return level
-
-    def _notify_light_changed(self, parent_event: Optional[UUID] = None) -> None:
-        """Fire a full SPATIAL_LIGHT_CHANGED lifecycle at this tile."""
-        event = SpatialChangeEvent.light_changed(self.position, self.uuid, parent_event=parent_event,
-                                                       new_light_level=self.resolved_light_level.value)
-        EventQueue.publish_lifecycle(event)
 
     def directions_toward(self, other_position: Tuple[int, int]) -> Tuple[str, ...]:
         """Return tile-relative cardinal directions touched by a transition."""
@@ -369,24 +272,15 @@ class Tile(BaseBlock):
                 return self.border_east
             if direction == "west":
                 return self.border_west
-        elif channel == "vision":
+        elif channel == "optical":
             if direction == "north":
-                return self.vision_border_north
+                return self.optical_border_north
             if direction == "south":
-                return self.vision_border_south
+                return self.optical_border_south
             if direction == "east":
-                return self.vision_border_east
+                return self.optical_border_east
             if direction == "west":
-                return self.vision_border_west
-        elif channel == "light":
-            if direction == "north":
-                return self.light_border_north
-            if direction == "south":
-                return self.light_border_south
-            if direction == "east":
-                return self.light_border_east
-            if direction == "west":
-                return self.light_border_west
+                return self.optical_border_west
         elif channel == "propagation":
             if direction == "north":
                 return self.propagation_border_north
@@ -408,24 +302,15 @@ class Tile(BaseBlock):
                 return self.object_movement_border_east
             if direction == "west":
                 return self.object_movement_border_west
-        elif channel == "vision":
+        elif channel == "optical":
             if direction == "north":
-                return self.object_vision_border_north
+                return self.object_optical_border_north
             if direction == "south":
-                return self.object_vision_border_south
+                return self.object_optical_border_south
             if direction == "east":
-                return self.object_vision_border_east
+                return self.object_optical_border_east
             if direction == "west":
-                return self.object_vision_border_west
-        elif channel == "light":
-            if direction == "north":
-                return self.object_light_border_north
-            if direction == "south":
-                return self.object_light_border_south
-            if direction == "east":
-                return self.object_light_border_east
-            if direction == "west":
-                return self.object_light_border_west
+                return self.object_optical_border_west
         elif channel == "propagation":
             if direction == "north":
                 return self.object_propagation_border_north
@@ -453,26 +338,15 @@ class Tile(BaseBlock):
                 self.border_west = passable
             else:
                 return False
-        elif channel == "vision":
+        elif channel == "optical":
             if direction == "north":
-                self.vision_border_north = passable
+                self.optical_border_north = passable
             elif direction == "south":
-                self.vision_border_south = passable
+                self.optical_border_south = passable
             elif direction == "east":
-                self.vision_border_east = passable
+                self.optical_border_east = passable
             elif direction == "west":
-                self.vision_border_west = passable
-            else:
-                return False
-        elif channel == "light":
-            if direction == "north":
-                self.light_border_north = passable
-            elif direction == "south":
-                self.light_border_south = passable
-            elif direction == "east":
-                self.light_border_east = passable
-            elif direction == "west":
-                self.light_border_west = passable
+                self.optical_border_west = passable
             else:
                 return False
         elif channel == "propagation":
@@ -506,26 +380,15 @@ class Tile(BaseBlock):
                 self.object_movement_border_west = passable
             else:
                 return False
-        elif channel == "vision":
+        elif channel == "optical":
             if direction == "north":
-                self.object_vision_border_north = passable
+                self.object_optical_border_north = passable
             elif direction == "south":
-                self.object_vision_border_south = passable
+                self.object_optical_border_south = passable
             elif direction == "east":
-                self.object_vision_border_east = passable
+                self.object_optical_border_east = passable
             elif direction == "west":
-                self.object_vision_border_west = passable
-            else:
-                return False
-        elif channel == "light":
-            if direction == "north":
-                self.object_light_border_north = passable
-            elif direction == "south":
-                self.object_light_border_south = passable
-            elif direction == "east":
-                self.object_light_border_east = passable
-            elif direction == "west":
-                self.object_light_border_west = passable
+                self.object_optical_border_west = passable
             else:
                 return False
         elif channel == "propagation":
@@ -564,7 +427,8 @@ class Tile(BaseBlock):
     @classmethod
     def create(cls, position: Tuple[int, int],
                walkable: bool = True,
-               visible: bool = True,
+               blocks_optics: bool = False,
+               blocks_propagation: bool = False,
                name: str = "Floor",
                sprite_name: Optional[str] = None,
                height: int = 0,
@@ -625,7 +489,8 @@ class Tile(BaseBlock):
             source_entity_uuid=tile_uuid,
             position=position,
             walkable=walkable,
-            visible=visible,
+            blocks_optics=blocks_optics,
+            blocks_propagation_field=blocks_propagation,
             name=name,
             sprite_name=sprite_name,
             walking_cost=walking_cost,
@@ -641,18 +506,25 @@ class Tile(BaseBlock):
 
 def floor_factory(position: Tuple[int, int]) -> Tile:
     """Create a floor tile (bright light, outdoor default)."""
-    return Tile.create(position, walkable=True, visible=True, name="Floor", sprite_name="floor.png")
+    return Tile.create(position, walkable=True, name="Floor", sprite_name="floor.png")
 
 
 def dark_floor_factory(position: Tuple[int, int]) -> Tile:
     """Create a dark floor tile (darkness, dungeon default)."""
-    return Tile.create(position, walkable=True, visible=True, name="Floor", sprite_name="floor.png",
+    return Tile.create(position, walkable=True, name="Floor", sprite_name="floor.png",
                        default_light=LightLevel.DARKNESS)
 
 
 def wall_factory(position: Tuple[int, int]) -> Tile:
     """Create a wall tile."""
-    tile = Tile.create(position, walkable=False, visible=False, name="Wall", sprite_name="wall.png")
+    tile = Tile.create(
+        position,
+        walkable=False,
+        blocks_optics=True,
+        blocks_propagation=True,
+        name="Wall",
+        sprite_name="wall.png",
+    )
     tile.flying_cost.self_static.add_max_constraint(
         NumericalModifier.create(
             source_entity_uuid=tile.uuid,
@@ -665,7 +537,7 @@ def wall_factory(position: Tuple[int, int]) -> Tile:
 
 def water_factory(position: Tuple[int, int]) -> Tile:
     """Create a water tile (can't walk, can see through, can swim)."""
-    tile = Tile.create(position, walkable=False, visible=True, name="Water", sprite_name="water.png")
+    tile = Tile.create(position, walkable=False, name="Water", sprite_name="water.png")
 
     for mod_uuid in list(tile.swimming_cost.self_static.max_constraints.keys()):
         tile.swimming_cost.self_static.remove_max_constraint(mod_uuid)
@@ -690,7 +562,6 @@ def difficult_terrain_factory(
     tile = Tile.create(
         position,
         walkable=True,
-        visible=True,
         name="Difficult Terrain",
         sprite_name="rough.png",
         height=height,

@@ -19,7 +19,7 @@ def test_shake_awake_uses_typed_removal_capability_for_every_supported_effect() 
     helper = strong_entity("Helper", (2, 2), "heroes")
     target = strong_entity("Target", (2, 1), "monsters")
     setup_standard_actions(helper)
-    Entity.update_all_entities_senses(max_distance=80)
+    Entity.materialize_all_navigation(max_distance=80)
 
     supported_effects = (
         SleepEffect,

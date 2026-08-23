@@ -40,6 +40,7 @@ from dnd.core.world_edges import (
     transition_axis,
 )
 from dnd.types.world import WorldEdgeChannel
+from dnd.types.senses import OpticalObscurement
 from dnd.core.positioning import PositionCommitError, PositionPublicationError
 from dnd.core.traversal_connectors import (
     TraversalConnector,
@@ -49,7 +50,7 @@ from dnd.core.traversal_connectors import (
 )
 
 DIRECTIONS: Tuple[str, ...] = ("north", "south", "east", "west")
-DIRECTIONAL_CHANNELS: Tuple[str, ...] = ("movement", "vision", "light", "propagation")
+DIRECTIONAL_CHANNELS: Tuple[str, ...] = ("movement", "optical", "propagation")
 
 _OBJECT_BORDER_FIELDS: Tuple[str, ...] = tuple(
     f"object_{channel}_border_{direction}"
@@ -134,17 +135,15 @@ class GridMap:
         self._pending_events: List['SpatialChangeEvent'] = []
         self._pending_committed_events: List['SpatialChangeEvent'] = []
 
-        self._light_callback_registered: bool = False
         self._blocking_callback_registered: bool = False
         self._spatial_revision: int = 0
-        self._vision_revision: int = 0
+        self._optical_revision: int = 0
         self._movement_revision: int = 0
         self._occupancy_revision: int = 0
         self._light_revision: int = 0
-        self._light_geometry_revision: int = 0
         self._propagation_revision: int = 0
         self._fov_cache: Dict[
-            Tuple[Tuple[int, int], Optional[float], bool, int],
+            Tuple[Tuple[int, int], Optional[float], int],
             List[Tuple[int, int]],
         ] = {}
         self._propagation_fov_cache: Dict[
@@ -152,17 +151,12 @@ class GridMap:
             Tuple[Tuple[int, int], ...],
         ] = {}
         self._barrier_positions_cache: Optional[frozenset[Tuple[int, int]]] = None
-        self._directional_blockers_cache: Dict[str, bool] = {}
-        self._directional_channel_equivalence_cache: Dict[
-            Tuple[str, str],
-            bool,
-        ] = {}
         self._directional_transition_cache: Dict[
-            Tuple[str, int, bool],
+            Tuple[str, int],
             Dict[Tuple[Tuple[int, int], Tuple[int, int]], bool],
         ] = {}
         self._directional_blocking_cache: Dict[
-            Tuple[str, int, bool],
+            Tuple[str, int],
             Dict[Tuple[int, int], bool],
         ] = {}
         self._propagation_transition_cache: Dict[
@@ -285,9 +279,9 @@ class GridMap:
         return self._entity_subscriptions.get(entity_uuid, set()).copy()
 
     @property
-    def vision_revision(self) -> int:
-        """Return the current vision-topology revision."""
-        return self._vision_revision
+    def optical_revision(self) -> int:
+        """Return the current physical-optical topology revision."""
+        return self._optical_revision
 
     @property
     def movement_revision(self) -> int:
@@ -308,7 +302,7 @@ class GridMap:
         """Invalidate spatial query caches after authoritative topology changes.
 
         Args:
-            channels: Changed spatial channels: movement, vision, light, or
+            channels: Changed spatial channels: movement, optical, illumination, or
                 propagation.
         """
         self._bump_spatial_revisions(channels)
@@ -338,16 +332,14 @@ class GridMap:
         if not channels:
             return
         self._spatial_revision += 1
-        if "vision" in channels:
-            self._vision_revision += 1
+        if "optical" in channels:
+            self._optical_revision += 1
             self._fov_cache.clear()
         if "movement" in channels:
             self._movement_revision += 1
             self._path_cache.clear()
-        if "light" in channels or "illumination" in channels:
+        if "illumination" in channels:
             self._light_revision += 1
-        if "light" in channels:
-            self._light_geometry_revision += 1
         if "propagation" in channels:
             self._propagation_revision += 1
             self._propagation_fov_cache.clear()
@@ -355,24 +347,13 @@ class GridMap:
             self._barrier_positions_cache = None
             self._propagation_transition_cache.clear()
             self._propagation_blocking_cache.clear()
-        if channels & set(DIRECTIONAL_CHANNELS):
-            self._directional_channel_equivalence_cache.clear()
-        if "vision" in channels or "light" in channels:
+        if "optical" in channels:
             self._directional_transition_cache.clear()
             self._directional_blocking_cache.clear()
-        for channel in channels & set(DIRECTIONAL_CHANNELS):
-            self._directional_blockers_cache.pop(channel, None)
 
     def _bump_all_spatial_revisions(self) -> None:
         """Advance every spatial channel revision and clear query caches."""
-        self._bump_spatial_revisions({"movement", "vision", "light", "propagation"})
-
-    def _observer_can_pierce_magical_darkness(self, observer_uuid: Optional[UUID]) -> bool:
-        """Return the observer capability that affects magical-darkness FOV."""
-        if observer_uuid is None:
-            return False
-        observer = BaseBlock.get(observer_uuid)
-        return observer is not None and observer.can_pierce_magical_darkness()
+        self._bump_spatial_revisions({"movement", "optical", "propagation"})
 
     def _path_requester_perception_signature(
         self,
@@ -383,21 +364,22 @@ class GridMap:
         if requester_uuid is None or not subjective:
             return ()
         requester = BaseBlock.get(requester_uuid)
-        if requester is None:
+        if requester is None or requester.get_senses() is None:
             return ()
+        senses = requester.get_senses()
+        assert senses is not None
         return (
-            requester.get_passive_perception(),
-            requester.can_bypass_invisibility(),
-            requester.can_pierce_magical_darkness(),
-            tuple(
-                sorted(
-                    (mode.sense_type.value, mode.range_feet)
-                    for mode in requester.get_sense_modes()
-                )
-            ),
+            tuple(sorted(senses.entities, key=str)),
+            tuple(sorted(senses.objects, key=str)),
         )
 
-    def set_tile(self, x: int, y: int, walkable: bool = True, visible: bool = True,
+    def set_tile(
+        self,
+        x: int,
+        y: int,
+        walkable: bool = True,
+        blocks_optics: bool = False,
+        blocks_propagation: bool = False,
                  name: str = "Floor", sprite_name: Optional[str] = None,
                  fire_event: bool = True, tile: Optional[Tile] = None,
                  height: int = 0,
@@ -461,7 +443,8 @@ class GridMap:
             tile = Tile.create(
                 position=position,
                 walkable=walkable,
-                visible=visible,
+                blocks_optics=blocks_optics,
+                blocks_propagation=blocks_propagation,
                 name=name,
                 sprite_name=sprite_name,
                 height=height,
@@ -478,7 +461,7 @@ class GridMap:
         directional_metadata = self._directional_metadata_from_delta(position, old_directional, new_directional)
         revision_channels: Set[str] = set()
         if old_tile is None:
-            revision_channels.update({"movement", "vision", "light", "propagation"})
+            revision_channels.update({"movement", "optical", "propagation"})
         else:
             if old_tile.walkable != tile.walkable:
                 revision_channels.add("movement")
@@ -492,21 +475,34 @@ class GridMap:
                 tile.slope_axis,
             ):
                 revision_channels.add("movement")
-            if old_tile.visible != tile.visible:
-                revision_channels.update({"vision", "propagation"})
-            old_magical = old_tile.resolved_light_level == LightLevel.MAGICAL_DARKNESS
-            new_magical = tile.resolved_light_level == LightLevel.MAGICAL_DARKNESS
-            if old_magical != new_magical:
-                revision_channels.update({"vision", "light"})
+            if old_tile.blocks_optics != tile.blocks_optics:
+                revision_channels.add("optical")
+            if (
+                old_tile.blocks_propagation_field
+                != tile.blocks_propagation_field
+            ):
+                revision_channels.add("propagation")
+            if old_tile.resolved_light_level != tile.resolved_light_level:
+                revision_channels.add("illumination")
         self._bump_spatial_revisions(revision_channels)
 
         if fire_event and self._events_enabled:
             old_walkable = old_tile.walkable if old_tile else None
-            old_visible = old_tile.visible if old_tile else None
+            old_blocks_optics = old_tile.blocks_optics if old_tile else None
+            old_blocks_propagation = (
+                old_tile.blocks_propagation_field if old_tile else None
+            )
             tile_walkable = tile.walkable
-            tile_visible = tile.visible
+            tile_blocks_optics = tile.blocks_optics
+            tile_blocks_propagation = tile.blocks_propagation_field
             scalar_walk_changed = old_tile is None or old_walkable != tile_walkable
-            scalar_visible_changed = old_tile is None or old_visible != tile_visible
+            scalar_optics_changed = (
+                old_tile is None or old_blocks_optics != tile_blocks_optics
+            )
+            scalar_propagation_changed = (
+                old_tile is None
+                or old_blocks_propagation != tile_blocks_propagation
+            )
             scalar_elevation_changed = old_elevation_tuple != (
                 tile.height,
                 tile.elevation_surface_kind,
@@ -515,12 +511,16 @@ class GridMap:
             directional_channels = set(directional_metadata.get("directional_channels") or [])
             if (
                 scalar_walk_changed
-                or scalar_visible_changed
+                or scalar_optics_changed
+                or scalar_propagation_changed
                 or scalar_elevation_changed
                 or directional_channels
             ):
                 hint = SensesUpdateHint(
-                    requires_fov=scalar_visible_changed or "vision" in directional_channels,
+                    requires_fov=(
+                        scalar_optics_changed
+                        or "optical" in directional_channels
+                    ),
                     requires_paths=(
                         scalar_walk_changed
                         or scalar_elevation_changed
@@ -533,11 +533,20 @@ class GridMap:
                         for neighbor in self._neighbor_for_direction(position, direction)
                     } or None,
                     directional_channels_changed=directional_channels or None,
-                    requires_light_recompute="light" in directional_channels,
-                    requires_propagation_recompute="propagation" in directional_channels,
+                    requires_light_recompute=(
+                        scalar_optics_changed
+                        or "optical" in directional_channels
+                    ),
+                    requires_propagation_recompute=(
+                        scalar_propagation_changed
+                        or "propagation" in directional_channels
+                    ),
                 )
                 event = SpatialChangeEvent.tile_changed(
-                    position, tile_walkable, tile_visible,
+                    position,
+                    tile_walkable,
+                    tile_blocks_optics,
+                    tile_blocks_propagation,
                     senses_hint=hint,
                     **directional_metadata,
                 )
@@ -707,7 +716,7 @@ class GridMap:
         """Set an intrinsic tile-owned directional border and emit tile change metadata.
 
         Args:
-            channel: movement, vision, light, or propagation.
+            channel: movement, optical, or propagation.
             direction: north, south, east, or west relative to this tile.
             passable: True allows crossing; False blocks crossing.
 
@@ -731,23 +740,25 @@ class GridMap:
             "directional_directions": [direction],
             "directional_channels": [channel],
             "directional_blocks_movement": state["movement"],
-            "directional_blocks_vision": state["vision"],
-            "directional_blocks_light": state["light"],
+            "directional_blocks_optics": state["optical"],
             "directional_blocks_propagation": state["propagation"],
         }
 
         if fire_event and self._events_enabled:
             hint = SensesUpdateHint(
-                requires_fov=channel == "vision",
+                requires_fov=channel == "optical",
                 requires_paths=channel == "movement",
                 directional_positions={position},
                 directional_neighbors={neighbor for neighbor in self._neighbor_for_direction(position, direction)},
                 directional_channels_changed={channel},
-                requires_light_recompute=channel == "light",
+                requires_light_recompute=channel == "optical",
                 requires_propagation_recompute=channel == "propagation",
             )
             event = SpatialChangeEvent.tile_changed(
-                position, tile.walkable, tile.visible,
+                position,
+                tile.walkable,
+                tile.blocks_optics,
+                tile.blocks_propagation_field,
                 senses_hint=hint,
                 parent_event=parent_event,
                 **metadata,
@@ -1333,6 +1344,19 @@ class GridMap:
             for condition_uuid in sorted(self._spatial_conditions, key=str)
         ]
 
+    def get_optical_obscurements_at(
+        self,
+        position: Tuple[int, int],
+    ) -> Tuple[OpticalObscurement, ...]:
+        """Return active optical contributions affecting one Tile."""
+        return tuple(
+            obscurement
+            for condition in self.get_spatial_conditions_at(position)
+            if (
+                obscurement := condition.get_optical_obscurement_at(position)
+            ) is not None
+        )
+
     def is_walkable_for(self, x: int, y: int, requesting_entity_uuid: Optional[UUID] = None,
                         mode: MovementMode = MovementMode.WALKING,
                         walk_in_danger: bool = True,
@@ -1354,15 +1378,21 @@ class GridMap:
         for entity_uuid in self._entities_by_position.get((x, y), set()):
             block = BaseBlock.get(entity_uuid)
             if block is not None and block.blocks_walking(requesting_entity_uuid, mode):
-                if subjective and not block.is_perceivable_by(requesting_entity_uuid):
-                    continue
+                if subjective and requesting_entity_uuid is not None:
+                    requester = BaseBlock.get(requesting_entity_uuid)
+                    senses = requester.get_senses() if requester is not None else None
+                    if senses is not None and entity_uuid not in senses.entities:
+                        continue
                 return False
 
         for obj_uuid in self._objects_by_position.get((x, y), set()):
             block = BaseBlock.get(obj_uuid)
             if block is not None and block.blocks_walking(requesting_entity_uuid, mode):
-                if subjective and not block.is_perceivable_by(requesting_entity_uuid):
-                    continue
+                if subjective and requesting_entity_uuid is not None:
+                    requester = BaseBlock.get(requesting_entity_uuid)
+                    senses = requester.get_senses() if requester is not None else None
+                    if senses is not None and obj_uuid not in senses.objects:
+                        continue
                 return False
 
         for condition in self.get_spatial_conditions_at((x, y)):
@@ -1373,7 +1403,7 @@ class GridMap:
             ):
                 if (
                     subjective
-                    and not condition.is_perceivable_by(requesting_entity_uuid)
+                    and not condition.is_hazard_perceived_by(requesting_entity_uuid)
                 ):
                     continue
                 return False
@@ -1387,19 +1417,19 @@ class GridMap:
 
         return True
 
-    def is_visible(self, x: int, y: int) -> bool:
-        """Check if position allows vision (has tile and tile allows vision)."""
+    def allows_optics(self, x: int, y: int) -> bool:
+        """Return whether an existing Tile intrinsically transmits optics."""
         tile = self._tiles.get((x, y))
-        return tile is not None and not tile.blocks_vision()
+        return tile is not None and not tile.blocks_optics
 
-    def is_blocking(self, x: int, y: int, requesting_entity_uuid: Optional[UUID] = None) -> bool:
-        """Return whether a tile or placed object blocks line of sight."""
+    def is_blocking_optics(self, x: int, y: int) -> bool:
+        """Return whether a Tile or center object blocks ordinary optics."""
         tile = self._tiles.get((x, y))
-        if tile is None or tile.blocks_vision(requesting_entity_uuid):
+        if tile is None or tile.blocks_optics:
             return True
         for obj_uuid in self._objects_by_position.get((x, y), set()):
             block = BaseBlock.get(obj_uuid)
-            if block is not None and block.blocks_vision(requesting_entity_uuid):
+            if block is not None and block.blocks_optics_at_center():
                 return True
         return False
 
@@ -1409,10 +1439,8 @@ class GridMap:
                                 subjective: bool = False) -> bool:
         if channel == "movement":
             return block.blocks_directional_movement(direction, requester_uuid, movement_mode, subjective)
-        if channel == "vision":
-            return block.blocks_directional_vision(direction, requester_uuid, subjective)
-        if channel == "light":
-            return block.blocks_directional_light(direction, requester_uuid, subjective)
+        if channel == "optical":
+            return block.blocks_directional_optics(direction)
         if channel == "propagation":
             return block.blocks_directional_propagation(direction, requester_uuid, subjective)
         return False
@@ -1442,8 +1470,10 @@ class GridMap:
         must instead rebuild the derived contribution from blocks the requesting
         observer can actually perceive, or hidden directional blockers leak.
         """
-        if BaseBlock.get(requesting_entity_uuid) is None:
+        requester = BaseBlock.get(requesting_entity_uuid)
+        if requester is None:
             raise ValueError("subjective directional projection requires a known observer")
+        senses = requester.get_senses()
         tile = self._tiles.get(position)
         result: Dict[str, Dict[str, bool]] = {
             channel: {direction: False for direction in DIRECTIONS}
@@ -1464,7 +1494,12 @@ class GridMap:
         block_uuids.update(self._entities_by_position.get(position, set()))
         for block_uuid in block_uuids:
             block = BaseBlock.get(block_uuid)
-            if block is None or not block.is_perceivable_by(requesting_entity_uuid):
+            if block is None:
+                continue
+            if senses is not None and (
+                block_uuid not in senses.entities
+                and block_uuid not in senses.objects
+            ):
                 continue
             for channel in DIRECTIONAL_CHANNELS:
                 for direction in DIRECTIONS:
@@ -1487,8 +1522,7 @@ class GridMap:
             "directional_directions": None,
             "directional_channels": None,
             "directional_blocks_movement": None,
-            "directional_blocks_vision": None,
-            "directional_blocks_light": None,
+            "directional_blocks_optics": None,
             "directional_blocks_propagation": None,
         }
         changed_channels = [
@@ -1506,8 +1540,7 @@ class GridMap:
             "directional_directions": changed_directions,
             "directional_channels": changed_channels,
             "directional_blocks_movement": new["movement"],
-            "directional_blocks_vision": new["vision"],
-            "directional_blocks_light": new["light"],
+            "directional_blocks_optics": new["optical"],
             "directional_blocks_propagation": new["propagation"],
         }
 
@@ -1522,8 +1555,7 @@ class GridMap:
             "directional_directions": None,
             "directional_channels": None,
             "directional_blocks_movement": None,
-            "directional_blocks_vision": None,
-            "directional_blocks_light": None,
+            "directional_blocks_optics": None,
             "directional_blocks_propagation": None,
         }
         tile = self._tiles.get(position)
@@ -1573,11 +1605,16 @@ class GridMap:
                            for direction in directions}
         block_uuids = set(self._objects_by_position.get(tile_pos, set()))
         block_uuids.update(self._entities_by_position.get(tile_pos, set()))
+        requester = BaseBlock.get(requester_uuid) if requester_uuid is not None else None
+        senses = requester.get_senses() if requester is not None else None
         for block_uuid in block_uuids:
             block = BaseBlock.get(block_uuid)
             if block is None:
                 continue
-            if not block.is_perceivable_by(requester_uuid):
+            if senses is not None and (
+                block_uuid not in senses.entities
+                and block_uuid not in senses.objects
+            ):
                 continue
             for direction in directions:
                 if self._block_blocks_direction(block, channel, direction, requester_uuid,
@@ -1652,7 +1689,7 @@ class GridMap:
             return result
         if channel == "propagation":
             return not self.is_blocking_propagation(position[0], position[1])
-        return not self.is_blocking(position[0], position[1], requester_uuid)
+        return not self.is_blocking_optics(position[0], position[1])
 
     def _cardinal_transition_sides_allow(self, from_pos: Tuple[int, int], to_pos: Tuple[int, int],
                                          channel: str,
@@ -1856,24 +1893,21 @@ class GridMap:
             movement_mode,
         )
 
-    def can_see_transition(self, from_pos: Tuple[int, int], to_pos: Tuple[int, int],
-                           observer_uuid: Optional[UUID] = None,
-                           subjective: bool = False) -> bool:
+    def can_optical_transition(
+        self,
+        from_pos: Tuple[int, int],
+        to_pos: Tuple[int, int],
+    ) -> bool:
+        """Return whether ordinary optics can cross one adjacent transition."""
         if abs(to_pos[0] - from_pos[0]) == 1 and abs(to_pos[1] - from_pos[1]) == 1:
-            return self._diagonal_transition_allows(from_pos, to_pos, "vision", observer_uuid, subjective=subjective)
+            return self._diagonal_transition_allows(
+                from_pos,
+                to_pos,
+                "optical",
+            )
         return (
-            self._tile_allows_transition_side(from_pos, to_pos, "vision", observer_uuid, subjective=subjective)
-            and self._tile_allows_transition_side(to_pos, from_pos, "vision", observer_uuid, subjective=subjective)
-        )
-
-    def can_light_transition(self, from_pos: Tuple[int, int], to_pos: Tuple[int, int],
-                             observer_uuid: Optional[UUID] = None,
-                             subjective: bool = False) -> bool:
-        if abs(to_pos[0] - from_pos[0]) == 1 and abs(to_pos[1] - from_pos[1]) == 1:
-            return self._diagonal_transition_allows(from_pos, to_pos, "light", observer_uuid, subjective=subjective)
-        return (
-            self._tile_allows_transition_side(from_pos, to_pos, "light", observer_uuid, subjective=subjective)
-            and self._tile_allows_transition_side(to_pos, from_pos, "light", observer_uuid, subjective=subjective)
+            self._tile_allows_transition_side(from_pos, to_pos, "optical")
+            and self._tile_allows_transition_side(to_pos, from_pos, "optical")
         )
 
     def can_propagate_transition(self, from_pos: Tuple[int, int], to_pos: Tuple[int, int],
@@ -1963,9 +1997,18 @@ class GridMap:
         """Grid size as (width, height)."""
         return (self.width, self.height)
 
-    def create_rectangle(self, x: int, y: int, width: int, height: int,
-                         walkable: bool = True, visible: bool = True,
-                         name: str = "Floor", sprite_name: Optional[str] = None) -> None:
+    def create_rectangle(
+        self,
+        x: int,
+        y: int,
+        width: int,
+        height: int,
+        walkable: bool = True,
+        blocks_optics: bool = False,
+        blocks_propagation: bool = False,
+        name: str = "Floor",
+        sprite_name: Optional[str] = None,
+    ) -> None:
         """Create a rectangular area of tiles (batch operation, no events during)."""
         positions = {
             (tx, ty)
@@ -1992,7 +2035,8 @@ class GridMap:
                     tile = Tile.create(
                         position=(tx, ty),
                         walkable=walkable,
-                        visible=visible,
+                        blocks_optics=blocks_optics,
+                        blocks_propagation=blocks_propagation,
                         name=name,
                         sprite_name=sprite_name
                     )
@@ -2179,11 +2223,14 @@ class GridMap:
         self._objects_by_position[position].add(object_uuid)
         directional_metadata = self.recompute_tile_directional_blocking(position)
         obj = BaseBlock.get(object_uuid)
-        blocks_vision = obj.blocks_vision() if obj else False
+        blocks_optics = obj.blocks_optics_at_center() if obj else False
+        blocks_propagation = obj.blocks_propagation() if obj else False
         blocks_walking = obj.blocks_walking() if obj else False
         revision_channels: Set[str] = set()
-        if blocks_vision:
-            revision_channels.update({"vision", "propagation"})
+        if blocks_optics:
+            revision_channels.add("optical")
+        if blocks_propagation:
+            revision_channels.add("propagation")
         if blocks_walking:
             revision_channels.add("movement")
         self._bump_spatial_revisions(revision_channels)
@@ -2193,7 +2240,8 @@ class GridMap:
             self._fire_spatial_event(SpatialChangeEvent.object_placed(
                 position, object_uuid,
                 parent_event=parent_event,
-                blocks_vision=blocks_vision,
+                blocks_optics=blocks_optics,
+                blocks_propagation=blocks_propagation,
                 blocks_walking=blocks_walking,
                 object_name=obj_name,
                 object_map_char=obj_map_char,
@@ -2205,7 +2253,8 @@ class GridMap:
                        clear_object_location: bool = True) -> None:
         """Remove an object from the grid."""
         obj = BaseBlock.get(object_uuid)
-        blocks_vision = obj.blocks_vision() if obj else False
+        blocks_optics = obj.blocks_optics_at_center() if obj else False
+        blocks_propagation = obj.blocks_propagation() if obj else False
         blocks_walking = obj.blocks_walking() if obj else False
         position = self._object_positions.pop(object_uuid, None)
         if position is not None:
@@ -2214,8 +2263,10 @@ class GridMap:
                 obj.on_grid_object_removed(position, clear_location=clear_object_location)
             directional_metadata = self.recompute_tile_directional_blocking(position)
             revision_channels: Set[str] = set()
-            if blocks_vision:
-                revision_channels.update({"vision", "propagation"})
+            if blocks_optics:
+                revision_channels.add("optical")
+            if blocks_propagation:
+                revision_channels.add("propagation")
             if blocks_walking:
                 revision_channels.add("movement")
             self._bump_spatial_revisions(revision_channels)
@@ -2223,7 +2274,8 @@ class GridMap:
                 self._fire_spatial_event(SpatialChangeEvent.object_removed(
                     position, object_uuid,
                     parent_event=parent_event,
-                    blocks_vision=blocks_vision,
+                    blocks_optics=blocks_optics,
+                    blocks_propagation=blocks_propagation,
                     blocks_walking=blocks_walking,
                     **directional_metadata,
                 ))
@@ -2248,67 +2300,48 @@ class GridMap:
                 result.append(block)
         return result
 
-    def _has_directional_blockers(self, channel: str) -> bool:
-        cached = self._directional_blockers_cache.get(channel)
-        if cached is not None:
-            return cached
-        for tile in self._tiles.values():
+    def _has_directional_blockers(
+        self,
+        channel: str,
+        origin: Tuple[int, int],
+        max_distance: Optional[float],
+    ) -> bool:
+        """Return whether the queried region contains a directional blocker."""
+        if max_distance is None:
+            positions = self._tiles
+        else:
+            radius = math.ceil(max_distance)
+            positions = (
+                (x, y)
+                for x in range(origin[0] - radius, origin[0] + radius + 1)
+                for y in range(origin[1] - radius, origin[1] + radius + 1)
+                if (x - origin[0]) ** 2 + (y - origin[1]) ** 2
+                <= max_distance * max_distance
+            )
+        for position in positions:
+            tile = self._tiles.get(position)
+            if tile is None:
+                continue
             for direction in DIRECTIONS:
                 if not tile.allows_direction(direction, channel):
-                    self._directional_blockers_cache[channel] = True
                     return True
-        self._directional_blockers_cache[channel] = False
         return False
-
-    def _directional_channels_equivalent(
-        self,
-        first_channel: str,
-        second_channel: str,
-    ) -> bool:
-        """Return whether two directional channels have identical topology.
-
-        Args:
-            first_channel: First directional propagation channel.
-            second_channel: Second directional propagation channel.
-
-        Returns:
-            Whether every tile exposes the same directional borders for both.
-        """
-        key = (
-            min(first_channel, second_channel),
-            max(first_channel, second_channel),
-        )
-        cached = self._directional_channel_equivalence_cache.get(key)
-        if cached is not None:
-            return cached
-        equivalent = all(
-            tile.allows_direction(direction, first_channel)
-            == tile.allows_direction(direction, second_channel)
-            for tile in self._tiles.values()
-            for direction in DIRECTIONS
-        )
-        self._directional_channel_equivalence_cache[key] = equivalent
-        return equivalent
 
     def _transition_clear(self, start: Tuple[int, int], end: Tuple[int, int],
                           channel: str,
-                          observer_uuid: Optional[UUID] = None) -> bool:
+                          requester_uuid: Optional[UUID] = None) -> bool:
         path = supercover_line(start, end)
         if not path:
             return False
         for index in range(1, len(path)):
             prev = path[index - 1]
             current = path[index]
-            if channel == "vision":
-                if not self.can_see_transition(prev, current, observer_uuid):
+            if channel == "optical":
+                if not self.can_optical_transition(prev, current):
                     return False
-                blocks_cell = self.is_blocking(current[0], current[1], observer_uuid)
-            elif channel == "light":
-                if not self.can_light_transition(prev, current, observer_uuid):
-                    return False
-                blocks_cell = self.is_blocking(current[0], current[1], observer_uuid)
+                blocks_cell = self.is_blocking_optics(current[0], current[1])
             else:
-                if not self.can_propagate_transition(prev, current, observer_uuid):
+                if not self.can_propagate_transition(prev, current, requester_uuid):
                     return False
                 blocks_cell = self.is_blocking_propagation(current[0], current[1])
 
@@ -2317,14 +2350,27 @@ class GridMap:
         return True
 
     def raycast_clear(self, start: Tuple[int, int], end: Tuple[int, int],
-                      channel: str = "vision",
-                      observer_uuid: Optional[UUID] = None) -> bool:
-        """Public transition-aware line check for vision/light/propagation."""
-        return self._transition_clear(start, end, channel, observer_uuid)
+                      channel: str = "optical",
+                      requester_uuid: Optional[UUID] = None) -> bool:
+        """Public transition-aware line check for optics or propagation."""
+        if channel not in {"optical", "propagation"}:
+            raise ValueError(f"Unsupported raycast channel: {channel}")
+        return self._transition_clear(start, end, channel, requester_uuid)
+
+    def get_optical_obscurements_on_route(
+        self,
+        start: Tuple[int, int],
+        end: Tuple[int, int],
+    ) -> Set[OpticalObscurement]:
+        """Return conditional optical obscurements intersecting one clear ray."""
+        obscurements: Set[OpticalObscurement] = set()
+        for position in supercover_line(start, end):
+            obscurements.update(self.get_optical_obscurements_at(position))
+        return obscurements
 
     def _compute_directional_fov(self, origin: Tuple[int, int], max_distance: Optional[float],
                                  channel: str,
-                                 observer_uuid: Optional[UUID] = None) -> List[Tuple[int, int]]:
+                                 requester_uuid: Optional[UUID] = None) -> List[Tuple[int, int]]:
         if origin not in self._tiles:
             return []
         if self._bounds_dirty:
@@ -2342,17 +2388,8 @@ class GridMap:
         if channel == "propagation":
             transition_cache = self._propagation_transition_cache
             blocking_cache = self._propagation_blocking_cache
-        elif channel in {"vision", "light"}:
-            revision = (
-                self._vision_revision
-                if channel == "vision"
-                else self._light_geometry_revision
-            )
-            cache_key = (
-                channel,
-                revision,
-                self._observer_can_pierce_magical_darkness(observer_uuid),
-            )
+        elif channel == "optical":
+            cache_key = (channel, self._optical_revision)
             transition_cache = self._directional_transition_cache.setdefault(
                 cache_key,
                 {},
@@ -2378,12 +2415,10 @@ class GridMap:
             cached = transition_cache.get(key)
             if cached is not None:
                 return cached
-            if channel == "vision":
-                allowed = self.can_see_transition(prev, current, observer_uuid)
-            elif channel == "light":
-                allowed = self.can_light_transition(prev, current, observer_uuid)
+            if channel == "optical":
+                allowed = self.can_optical_transition(prev, current)
             else:
-                allowed = self.can_propagate_transition(prev, current, observer_uuid)
+                allowed = self.can_propagate_transition(prev, current, requester_uuid)
             transition_cache[key] = allowed
             return allowed
 
@@ -2391,8 +2426,8 @@ class GridMap:
             cached = blocking_cache.get(position)
             if cached is not None:
                 return cached
-            if channel in {"vision", "light"}:
-                blocked = self.is_blocking(position[0], position[1], observer_uuid)
+            if channel == "optical":
+                blocked = self.is_blocking_optics(position[0], position[1])
             else:
                 blocked = self.is_blocking_propagation(position[0], position[1])
             blocking_cache[position] = blocked
@@ -2428,23 +2463,23 @@ class GridMap:
                     visible_positions.append(pos)
         return visible_positions
 
-    def compute_fov(self, origin: Tuple[int, int], max_distance: Optional[float] = None,
-                    observer_uuid: Optional[UUID] = None) -> List[Tuple[int, int]]:
+    def compute_fov(
+        self,
+        origin: Tuple[int, int],
+        max_distance: Optional[float] = None,
+    ) -> List[Tuple[int, int]]:
         """
         Compute field of view from a position using shadowcasting.
 
         Args:
             origin: Position to compute FOV from
             max_distance: Maximum view distance
-            observer_uuid: If provided, magical darkness is checked per-observer
-
         Returns list of visible positions.
         """
         cache_key = (
             origin,
             max_distance,
-            self._observer_can_pierce_magical_darkness(observer_uuid),
-            self._vision_revision,
+            self._optical_revision,
         )
         cached = self._fov_cache.get(cache_key)
         if cached is not None:
@@ -2455,12 +2490,10 @@ class GridMap:
                 for (
                     cached_origin,
                     cached_distance,
-                    cached_pierces_darkness,
                     cached_revision,
                 ), positions in tuple(self._fov_cache.items())
                 if cached_origin == origin
-                and cached_pierces_darkness == cache_key[2]
-                and cached_revision == self._vision_revision
+                and cached_revision == self._optical_revision
                 and (cached_distance is None or cached_distance >= max_distance)
             ]
             if supersets:
@@ -2491,35 +2524,22 @@ class GridMap:
             cached = blocking_cache.get(position)
             if cached is not None:
                 return cached
-            blocked = self.is_blocking(x, y, requesting_entity_uuid=observer_uuid)
+            blocked = self.is_blocking_optics(x, y)
             blocking_cache[position] = blocked
             return blocked
 
-        if self._has_directional_blockers("vision"):
-            visible_positions = self._compute_directional_fov(origin, max_distance, "vision", observer_uuid)
+        if self._has_directional_blockers("optical", origin, max_distance):
+            visible_positions = self._compute_directional_fov(
+                origin,
+                max_distance,
+                "optical",
+            )
             self._fov_cache[cache_key] = list(visible_positions)
             return list(visible_positions)
 
         compute_fov(origin, is_blocking_for, mark_visible, max_distance)
         self._fov_cache[cache_key] = list(visible_positions)
         return list(visible_positions)
-
-    def compute_light_fov(self, origin: Tuple[int, int], max_distance: Optional[float] = None) -> List[Tuple[int, int]]:
-        """Compute light reach using light directional borders and current cell blockers."""
-        if self._has_directional_blockers("light"):
-            if self._directional_channels_equivalent("vision", "light"):
-                return self.compute_fov(origin, max_distance)
-            return self._compute_directional_fov(origin, max_distance, "light")
-        visible_positions: List[Tuple[int, int]] = []
-
-        def mark_visible(x: int, y: int) -> None:
-            visible_positions.append((x, y))
-
-        def is_blocking_for(x: int, y: int) -> bool:
-            return self.is_blocking(x, y)
-
-        compute_fov(origin, is_blocking_for, mark_visible, max_distance)
-        return visible_positions
 
     def compute_paths(self, start: Tuple[int, int], max_distance: Optional[int] = None,
                       requesting_entity_uuid: Optional[UUID] = None,
@@ -2733,6 +2753,78 @@ class GridMap:
         distances, _ = self.compute_paths(start, requesting_entity_uuid=requesting_entity_uuid)
         return distances.get(end)
 
+    def set_tile_base_light(
+        self,
+        position: Tuple[int, int],
+        level: LightLevel,
+        *,
+        parent_event: Optional[UUID] = None,
+    ) -> bool:
+        """Set one Tile's objective base illumination through GridMap authority."""
+        tile = self._tiles.get(position)
+        if tile is None:
+            raise ValueError(f"cannot set light on missing tile {position}")
+        old_level = tile.resolved_light_level
+        tile.default_light = level
+        if tile.resolved_light_level == old_level:
+            return False
+        self._fire_light_batch_events([position], parent_event=parent_event)
+        return True
+
+    def apply_tile_light_modifier(
+        self,
+        source_uuid: UUID,
+        positions: Set[Tuple[int, int]],
+        level: LightLevel,
+        *,
+        cap: bool,
+    ) -> Tuple[Set[Tuple[int, int]], Set[Tuple[int, int]]]:
+        """Install one source-owned contribution without publishing its fact."""
+        changed_positions: Set[Tuple[int, int]] = set()
+        applied_positions: Set[Tuple[int, int]] = set()
+        for position in positions:
+            tile = self._tiles.get(position)
+            if tile is None:
+                continue
+            applied_positions.add(position)
+            changed = (
+                tile._add_illumination_cap(source_uuid, level)
+                if cap
+                else tile._add_illumination(source_uuid, level)
+            )
+            if changed:
+                changed_positions.add(position)
+        return applied_positions, changed_positions
+
+    def remove_tile_light_modifier(
+        self,
+        source_uuid: UUID,
+        positions: Set[Tuple[int, int]],
+    ) -> Tuple[Set[Tuple[int, int]], Set[Tuple[int, int]]]:
+        """Remove one source-owned contribution without publishing its fact."""
+        changed_positions: Set[Tuple[int, int]] = set()
+        removed_positions: Set[Tuple[int, int]] = set()
+        for position in positions:
+            tile = self._tiles.get(position)
+            if tile is None:
+                continue
+            removed_positions.add(position)
+            if tile._remove_light_modifier(source_uuid):
+                changed_positions.add(position)
+        return removed_positions, changed_positions
+
+    def publish_light_changes(
+        self,
+        changed_positions: Set[Tuple[int, int]],
+        *,
+        parent_event: Optional[UUID] = None,
+    ) -> None:
+        """Publish one objective light fact after its complete domain commit."""
+        self._fire_light_batch_events(
+            sorted(changed_positions),
+            parent_event=parent_event,
+        )
+
     def add_light_source(self, position: Tuple[int, int], bright_radius_feet: int,
                          dim_radius_feet: int, anchor_uuid: Optional[UUID] = None,
                          very_bright_radius_feet: int = 0,
@@ -2769,7 +2861,8 @@ class GridMap:
         if self._is_light_effectively_active(source):
             self._apply_light_source(source, parent_event=parent_event)
 
-        self._ensure_light_callback()
+        self._ensure_light_pre_completion_callback()
+        self._ensure_blocking_callback()
 
         return source.uuid
 
@@ -2876,10 +2969,10 @@ class GridMap:
                 continue
 
             if old_level is not None and new_level is None:
-                if tile.remove_light_modifier(source.uuid, fire_event=False):
+                if tile._remove_light_modifier(source.uuid):
                     changed_positions.append(pos)
             elif new_level is not None:
-                if tile.add_illumination(source.uuid, new_level, fire_event=False):
+                if tile._add_illumination(source.uuid, new_level):
                     changed_positions.append(pos)
 
         source.position = new_position
@@ -2919,7 +3012,7 @@ class GridMap:
         bright_radius_tiles = max(source.bright_radius_feet // 5, 1)
         very_bright_radius_tiles = source.very_bright_radius_feet / 5 if source.very_bright_radius_feet > 0 else 0
 
-        visible_positions = self.compute_light_fov(pos, total_radius_tiles)
+        visible_positions = self.compute_fov(pos, total_radius_tiles)
         result: Dict[Tuple[int, int], LightLevel] = {}
         for tile_pos in visible_positions:
             if tile_pos not in self._tiles:
@@ -2946,7 +3039,7 @@ class GridMap:
         for pos, level in source.affected_tiles.items():
             tile = self._tiles.get(pos)
             if tile is not None:
-                if tile.add_illumination(source.uuid, level, fire_event=False):
+                if tile._add_illumination(source.uuid, level):
                     changed_positions.append(pos)
         self._fire_light_batch_events(changed_positions, parent_event=parent_event)
 
@@ -2958,7 +3051,7 @@ class GridMap:
         for pos in source.affected_tiles:
             tile = self._tiles.get(pos)
             if tile:
-                if tile.remove_light_modifier(source.uuid, fire_event=False):
+                if tile._remove_light_modifier(source.uuid):
                     changed_positions.append(pos)
         source.affected_tiles.clear()
         self._fire_light_batch_events(changed_positions, parent_event=parent_event)
@@ -2972,8 +3065,7 @@ class GridMap:
         """Publish one complete event for an atomic light-field delta.
 
         The event carries every changed position so rule handlers and observer
-        senses consume the same authoritative batch exactly once. Magical
-        darkness changes request a full field-of-view refresh.
+        senses consume the same authoritative batch exactly once.
 
         Args:
             changed_positions: Tiles whose resolved light level changed.
@@ -2984,18 +3076,11 @@ class GridMap:
             return
         channels = {"illumination"}
         if requires_fov:
-            channels.update({"vision", "light"})
+            channels.add("optical")
         self._bump_spatial_revisions(channels)
 
-        has_magical_darkness = requires_fov
-        for pos in changed_positions:
-            tile = self._tiles.get(pos)
-            if tile and tile.resolved_light_level == LightLevel.MAGICAL_DARKNESS:
-                has_magical_darkness = True
-                break
-
         batch_hint = SensesUpdateHint(
-            requires_fov=has_magical_darkness,
+            requires_fov=requires_fov,
             light_changed_positions=set(changed_positions),
         )
         representative_position = min(changed_positions)
@@ -3017,34 +3102,29 @@ class GridMap:
         )
         self._fire_spatial_event(event)
 
-    def _ensure_light_callback(self) -> None:
-        """Register the movement callback for light source tracking (once)."""
-        if self._light_callback_registered:
-            return
-        self._light_callback_registered = True
-        EventQueue.add_on_event_callback(
-            self._on_light_movement_event,
-            event_types={EventType.SPATIAL_ENTITY_ENTERED},
-            phases={EventPhase.COMPLETION},
+    def _ensure_light_pre_completion_callback(self) -> None:
+        """Install carried-light settlement before indexed sensory reduction."""
+        EventQueue.add_pre_completion_callback(
+            self._move_attached_lights_before_entry_completion,
         )
-        self._ensure_blocking_callback()
 
-    def _on_light_movement_event(self, event: Event) -> None:
-        """Move light sources when their anchor entity moves."""
-        if event.event_type != EventType.SPATIAL_ENTITY_ENTERED:
+    def _move_attached_lights_before_entry_completion(self, event: Event) -> None:
+        """Commit attached illumination while the entry effect is current."""
+        if (
+            event.event_type is not EventType.SPATIAL_ENTITY_ENTERED
+            or not isinstance(event, SpatialChangeEvent)
+            or event.entity_uuid is None
+        ):
             return
-        if event.phase != EventPhase.COMPLETION:
-            return
-        if not isinstance(event, SpatialChangeEvent) or event.entity_uuid is None:
-            return
-        entity_uuid = event.entity_uuid
-        new_pos = event.position
-        anchor = BaseBlock.get(entity_uuid)
+        anchor = BaseBlock.get(event.entity_uuid)
         if anchor is None:
             return
         for light_uuid in anchor.get_attached_light_sources():
-            if light_uuid in self._light_sources:
-                self.move_light_source(light_uuid, new_pos, parent_event=event.parent_event)
+            self.move_light_source(
+                light_uuid,
+                event.position,
+                parent_event=event.uuid,
+            )
 
     def _ensure_blocking_callback(self) -> None:
         """Register vision-blocking callback for light recomputation (once)."""
@@ -3123,10 +3203,10 @@ class GridMap:
                     continue
 
                 if old_level is not None and new_level is None:
-                    if tile.remove_light_modifier(source.uuid, fire_event=False):
+                    if tile._remove_light_modifier(source.uuid):
                         changed_positions.append(pos)
                 elif new_level is not None:
-                    if tile.add_illumination(source.uuid, new_level, fire_event=False):
+                    if tile._add_illumination(source.uuid, new_level):
                         changed_positions.append(pos)
 
             source.affected_tiles = new_affected
@@ -3146,16 +3226,13 @@ class GridMap:
         return candidates
 
     def is_blocking_propagation(self, x: int, y: int) -> bool:
-        """Check if position blocks AoE propagation (physical barriers only).
-
-        Unlike is_blocking(), this ignores magical darkness — AoE spreads
-        through darkness but not through walls/closed doors."""
+        """Return whether a Tile or center object blocks physical propagation."""
         tile = self._tiles.get((x, y))
-        if tile is None or not tile.visible:
+        if tile is None or tile.blocks_propagation():
             return True
         for obj_uuid in self._objects_by_position.get((x, y), set()):
             block = BaseBlock.get(obj_uuid)
-            if block is not None and block.blocks_vision():
+            if block is not None and block.blocks_propagation():
                 return True
         return False
 
@@ -3163,8 +3240,7 @@ class GridMap:
                                 max_distance: Optional[float] = None) -> List[Tuple[int, int]]:
         """Compute FOV for AoE propagation (physical barriers only).
 
-        Unlike compute_fov(), ignores magical darkness — AoE spreads through
-        darkness but not through walls/closed doors."""
+        This is independent of optical opacity and objective illumination."""
         cache_key = (origin, max_distance)
         cached = self._propagation_fov_cache.get(cache_key)
         if cached is not None:
@@ -3177,7 +3253,7 @@ class GridMap:
         def is_blocking_for(x: int, y: int) -> bool:
             return self.is_blocking_propagation(x, y)
 
-        if self._has_directional_blockers("propagation"):
+        if self._has_directional_blockers("propagation", origin, max_distance):
             visible_positions = self._compute_directional_fov(origin, max_distance, "propagation")
         else:
             compute_fov(origin, is_blocking_for, mark_visible, max_distance)
@@ -3288,14 +3364,14 @@ class GridMap:
             return set(self._barrier_positions_cache)
         barriers: Set[Tuple[int, int]] = set()
         for pos, tile in self._tiles.items():
-            if not tile.visible:
+            if tile.blocks_propagation():
                 barriers.add(pos)
             elif any(not tile.allows_direction(direction, "propagation") for direction in DIRECTIONS):
                 barriers.add(pos)
         for pos, obj_uuids in self._objects_by_position.items():
             for obj_uuid in obj_uuids:
                 block = BaseBlock.get(obj_uuid)
-                if block is not None and block.blocks_vision():
+                if block is not None and block.blocks_propagation():
                     barriers.add(pos)
         self._barrier_positions_cache = frozenset(barriers)
         return set(barriers)
@@ -3332,17 +3408,14 @@ class GridMap:
         self._pending_committed_events.clear()
         self._bounds_dirty = True
         self._spatial_revision = 0
-        self._vision_revision = 0
+        self._optical_revision = 0
         self._movement_revision = 0
         self._light_revision = 0
-        self._light_geometry_revision = 0
         self._propagation_revision = 0
         self._fov_cache.clear()
         self._propagation_fov_cache.clear()
         self._propagation_filter_cache.clear()
         self._barrier_positions_cache = None
-        self._directional_blockers_cache.clear()
-        self._directional_channel_equivalence_cache.clear()
         self._directional_transition_cache.clear()
         self._directional_blocking_cache.clear()
         self._propagation_transition_cache.clear()

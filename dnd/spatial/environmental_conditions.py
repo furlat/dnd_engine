@@ -7,6 +7,7 @@ from uuid import UUID
 
 from pydantic import Field
 
+from dnd.types.senses import OpticalObscurement
 from dnd.types.world import LightLevel
 from dnd.types.abilities import AbilityName
 from dnd.core.base_conditions import Duration
@@ -382,8 +383,7 @@ class SteamCloud(WetAreaCondition):
             duration_type=DurationType.ROUNDS,
         ),
     )
-    sets_light_level: Optional[LightLevel] = LightLevel.DIM_LIGHT
-    light_is_obscurement: bool = True
+    optical_obscurement: Optional[OpticalObscurement] = OpticalObscurement.HEAVY
 
 
 class OilSurface(FixedFootprintCondition):

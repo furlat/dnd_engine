@@ -28,8 +28,7 @@ from dnd.types.items import ItemDirectionalStructureState
 DIRECTIONS: Tuple[CardinalDirection, ...] = tuple(CardinalDirection)
 DIRECTIONAL_CHANNELS: Tuple[WorldEdgeChannel, ...] = (
     WorldEdgeChannel.MOVEMENT,
-    WorldEdgeChannel.VISION,
-    WorldEdgeChannel.LIGHT,
+    WorldEdgeChannel.OPTICAL,
     WorldEdgeChannel.PROPAGATION,
 )
 
@@ -71,7 +70,7 @@ class DirectionalWall(BaseItem):
         is_usable: Whether the wall exposes use actions.
         is_targetable: Whether the wall can be directly targeted.
         blocks_movement: Global movement blocker flag.
-        blocks_vision_field: Global vision blocker flag.
+        blocks_optics_field: Global optical blocker flag.
         map_char: Map-editor glyph.
         include_in_senses_objects: Whether senses expose the wall as an object.
         include_in_available_object_actions: Whether object action discovery
@@ -85,7 +84,7 @@ class DirectionalWall(BaseItem):
     is_usable: bool = Field(default=False, description="Whether the wall exposes use actions.")
     is_targetable: bool = Field(default=False, description="Whether the wall can be directly targeted.")
     blocks_movement: bool = Field(default=False, description="Global movement blocker flag for the wall.")
-    blocks_vision_field: bool = Field(default=False, description="Global vision blocker flag for the wall.")
+    blocks_optics_field: bool = Field(default=False, description="Global optical blocker flag for the wall.")
     map_char: str = Field(default="W", description="Map-editor glyph for the wall.")
     include_in_senses_objects: bool = Field(
         default=False,
@@ -242,11 +241,9 @@ class DirectionalDoor(UsableItem):
         is_pickable: Whether the door can be looted into inventory.
         is_targetable: Whether the door can be directly targeted.
         blocks_movement: Global movement blocker flag.
-        blocks_vision_field: Global vision blocker flag.
+        blocks_optics_field: Global optical blocker flag.
         map_char: Map-editor glyph.
         include_in_senses_objects: Whether senses expose the door as an object.
-        include_in_adjacent_senses_objects: Whether adjacent senses expose the
-            door as an object.
         include_in_available_object_actions: Whether object action discovery
             includes the door.
         is_open: Current door state.
@@ -258,15 +255,11 @@ class DirectionalDoor(UsableItem):
     is_pickable: bool = Field(default=False, description="Whether the door can be looted into inventory.")
     is_targetable: bool = Field(default=False, description="Whether the door can be directly targeted.")
     blocks_movement: bool = Field(default=False, description="Global movement blocker flag for the door.")
-    blocks_vision_field: bool = Field(default=False, description="Global vision blocker flag for the door.")
+    blocks_optics_field: bool = Field(default=False, description="Global optical blocker flag for the door.")
     map_char: str = Field(default="D", description="Map-editor glyph for the door.")
     include_in_senses_objects: bool = Field(
         default=True,
         description="Whether senses expose the door as a visible object.",
-    )
-    include_in_adjacent_senses_objects: bool = Field(
-        default=True,
-        description="Whether adjacent senses expose the door as a visible object.",
     )
     include_in_available_object_actions: bool = Field(
         default=True,

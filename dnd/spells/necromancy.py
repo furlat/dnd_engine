@@ -1168,13 +1168,14 @@ class EyebitePanickedEffect(BaseCondition):
 
     def _should_end(self, target: Entity, caster: Entity) -> bool:
         """Return whether Panicked ends by distance and loss of sight."""
-        target.update_entity_senses(max_distance=80)
+        target.materialize_navigation(max_distance=80)
         distance = self._distance_feet(target.position, caster.position)
-        return distance >= 60 and caster.uuid not in target.senses.entities
+        contact = target.senses.entities.get(caster.uuid)
+        return distance >= 60 and (contact is None or not contact.visual)
 
     def _choose_flee_path(self, target: Entity, caster: Entity, movement_budget: int) -> List[Tuple[int, int]]:
         """Choose the safest farthest path away from the caster within budget."""
-        target.update_entity_senses(max_distance=80)
+        target.materialize_navigation(max_distance=80)
         start_distance = self._distance_feet(target.position, caster.position)
         best_path: List[Tuple[int, int]] = []
         best_score: Optional[Tuple[int, int, int]] = None
@@ -1424,7 +1425,8 @@ class EyebiteStrike(BaseAction):
         if distance > 60:
             return declaration_event.cancel(status_message=f"Target out of range ({distance}ft)")
 
-        if target.uuid not in caster.senses.entities:
+        contact = caster.senses.entities.get(target.uuid)
+        if contact is None or not contact.visual:
             return declaration_event.cancel(status_message="Target not visible")
 
         casting_state = self._get_casting_state(caster)

@@ -52,7 +52,8 @@ class ItemState(BaseModel):
     light_source: Optional[ItemLightSourceState] = None
     is_open: Optional[bool] = None
     blocks_movement: bool = False
-    blocks_vision: bool = False
+    blocks_optics: bool = False
+    blocks_propagation: bool = False
     damage_die: Optional[DieSize] = None
     damage_dice_count: Optional[int] = Field(default=None, ge=1)
     damage_bonus: Optional[int] = None

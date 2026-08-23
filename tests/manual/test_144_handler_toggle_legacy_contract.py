@@ -143,7 +143,7 @@ def test_opportunity_attack_toggle_preserves_registration_and_invisibility() -> 
         target_entity_uuid=attacker.uuid,
     )
     attacker.add_condition(invisible)
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
 
     handler = attacker.get_event_handler_by_name("Opportunity Attack Handler")
     assert handler is not None
@@ -201,7 +201,7 @@ def test_protection_reaction_respects_disable_and_reenable() -> None:
         faction="monsters",
     )
     setup_standard_actions(enemy)
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
 
     handler = protector.get_event_handler_by_name("Protection")
     assert handler is not None

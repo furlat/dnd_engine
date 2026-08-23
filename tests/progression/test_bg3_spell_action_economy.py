@@ -114,7 +114,7 @@ def test_hasted_spellblade_casts_with_action_haste_surge_and_bonus_action(
         ),
     )
     spellblade.on_turn_start()
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     assert spellblade.action_economy.spell_slot_1.normalized_score == 4
     assert spellblade.action_economy.actions.normalized_score == 1

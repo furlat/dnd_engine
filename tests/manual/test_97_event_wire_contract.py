@@ -117,7 +117,7 @@ def test_executed_event_lineages_round_trip_typed_values_through_json() -> None:
         position=(6, 5),
         faction="monsters",
     )
-    Entity.update_all_entities_senses(max_distance=30)
+    Entity.materialize_all_navigation(max_distance=30)
 
     movement = Move(
         source_entity_uuid=mover.uuid,

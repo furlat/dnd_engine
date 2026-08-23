@@ -161,7 +161,7 @@ def test_ranged_spell_attacks_are_disadvantaged_while_threatened() -> None:
     reset_spell_family_state()
     caster = create_spell_family_actor("Threatened Mage", (2, 2), "heroes")
     target = create_spell_family_actor("Adjacent Warrior", (2, 3), "monsters")
-    Entity.update_all_entities_senses(max_distance=30)
+    Entity.materialize_all_navigation(max_distance=30)
 
     spell = FireBolt(
         source_entity_uuid=caster.uuid,
@@ -198,7 +198,7 @@ def test_first_spell_family_example_prints_catalog_and_outcomes(capsys) -> None:
         spell_slots={1: 1},
     )
     target = create_spell_family_actor("Target", (3, 1), "monsters")
-    Entity.update_all_entities_senses(max_distance=30)
+    Entity.materialize_all_navigation(max_distance=30)
 
     families = [
         ("attack", ALL_SPELLS["Fire Bolt"]),
@@ -338,7 +338,7 @@ def test_offensive_spell_families_cover_attack_save_and_auto_hit_damage(capsys) 
         spell_slots={1: 1},
     )
     target = create_spell_family_actor("Target", (3, 1), "monsters")
-    Entity.update_all_entities_senses(max_distance=30)
+    Entity.materialize_all_navigation(max_distance=30)
 
     hp_before = target.get_hp()
     with fixed_dice_faces(12, 5, 6):
@@ -438,7 +438,7 @@ def test_recovery_protection_and_restoration_families_change_owned_state(capsys)
         spell_slots={1: 3, 2: 1},
     )
     ally = create_spell_family_actor("Ally", (2, 1), "heroes")
-    Entity.update_all_entities_senses(max_distance=30)
+    Entity.materialize_all_navigation(max_distance=30)
 
     set_current_normal_hp(ally, 5, caster)
     hp_before = ally.get_normal_hp()
@@ -546,7 +546,7 @@ def test_mobility_and_temporary_hit_point_families_update_position_and_hp_pool(
         "heroes",
         spell_slots={1: 1, 2: 1},
     )
-    Entity.update_all_entities_senses(max_distance=30)
+    Entity.materialize_all_navigation(max_distance=30)
 
     position_before = caster.position
     bonus_before = caster.action_economy.bonus_actions.normalized_score
@@ -612,7 +612,7 @@ def test_zone_spell_family_owns_spatial_handlers_and_concentration_cleanup(
         spell_slots={2: 1},
     )
     target = create_spell_family_actor("Raider", (10, 1), "monsters")
-    Entity.update_all_entities_senses(max_distance=30)
+    Entity.materialize_all_navigation(max_distance=30)
 
     event = SpikeGrowth(
         source_entity_uuid=caster.uuid,
@@ -700,7 +700,7 @@ def test_illusion_and_enchantment_families_create_conditions(capsys) -> None:
     set_current_normal_hp(high, 20, caster)
     set_current_normal_hp(undead, 1, caster)
     undead.creature_type = CreatureType.UNDEAD
-    Entity.update_all_entities_senses(max_distance=30)
+    Entity.materialize_all_navigation(max_distance=30)
 
     base_ac = caster.ac_bonus().normalized_score
     mirror_event = MirrorImage(source_entity_uuid=caster.uuid).apply()

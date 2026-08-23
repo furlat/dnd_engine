@@ -47,6 +47,7 @@ from dnd.core.gridmap import get_map
 from dnd.types.life import LifeState
 from dnd.types.creatures import CreatureType, Size
 from dnd.types.damage import DamageType
+from dnd.types.senses import PerceivedContact
 from dnd.core.modifiers import NumericalModifier
 from dnd.types.rolls import AdvantageStatus
 from dnd.core.values import BaseValue, ModifiableValue
@@ -472,13 +473,13 @@ def test_eb_06_011_visible_entities_filter_into_allies_and_enemies() -> None:
     enemy = configured_entity("Enemy", (3, 2), "monsters")
     neutral = configured_entity("Neutral", (3, 3), None)
 
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     setup_standard_actions(hero)
 
     assert hero.senses.entities == {
-        enemy.uuid: (3, 2),
-        neutral.uuid: (3, 3),
-        ally.uuid: (2, 3),
+        enemy.uuid: PerceivedContact(position=(3, 2), visual=True),
+        neutral.uuid: PerceivedContact(position=(3, 3), visual=True),
+        ally.uuid: PerceivedContact(position=(2, 3), visual=True),
     }
     assert hero.get_visible_allies() == {ally.uuid: (2, 3)}
     assert hero.get_visible_enemies() == {

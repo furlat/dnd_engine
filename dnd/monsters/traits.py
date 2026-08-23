@@ -544,7 +544,8 @@ class AggressiveMoveAction(Move):
             return MovementTerminationReason.INVALID_PATH
         enemies = [
             entity
-            for entity_uuid in source.senses.entities
+            for entity_uuid, contact in source.senses.entities.items()
+            if contact.visual
             if (entity := Entity.get(entity_uuid)) is not None
             and source.is_enemy(entity)
         ]
@@ -1176,7 +1177,8 @@ class ParryFeature(BaseCondition):
         defender = Entity.get(source_entity_uuid)
         if not defender or not isinstance(event, AttackEvent) or event.range is None or event.range.type != RangeType.REACH:
             return event
-        if event.source_entity_uuid not in defender.senses.entities:
+        contact = defender.senses.entities.get(event.source_entity_uuid)
+        if contact is None or not contact.visual:
             return event
         if not defender.action_economy.can_afford("reactions", 1):
             return event
@@ -1797,7 +1799,8 @@ def _has_sneak_attack_condition(source: Entity, target: Entity, event: DamageRol
 
 def _is_unseen_attacker(source: Entity, target: Entity) -> bool:
     """Return whether target currently lacks sight of the source."""
-    return source.uuid not in target.senses.entities
+    contact = target.senses.entities.get(source.uuid)
+    return contact is None or not contact.visual
 
 
 def _attack_weapon_name(actor: Entity, action: Attack) -> Optional[str]:

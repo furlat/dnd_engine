@@ -108,6 +108,7 @@ from dnd.core.modifiers import NumericalModifier, AdvantageModifier
 from dnd.types.rolls import AdvantageStatus
 from dnd.types.damage import ResistanceStatus
 from dnd.types.saving_throws import SavingThrowEffectTag
+from dnd.types.senses import OpticalObscurement
 from dnd.core.base_block import BaseBlock
 from dnd.types.world import LightLevel
 from dnd.core.gridmap import get_map
@@ -190,7 +191,8 @@ class CallLightningStrike(BaseAction):
         if not isinstance(conc, Concentrating) or conc.get_slot_by_spell_name("Call Lightning") is None:
             return declaration_event.cancel(status_message="Not concentrating on Call Lightning")
 
-        if target.uuid not in caster.senses.entities.keys():
+        contact = caster.senses.entities.get(target.uuid)
+        if contact is None or not contact.visual:
             return declaration_event.cancel(status_message="Target not in line of sight")
 
         distance = caster.distance_to_entity(target)
@@ -507,7 +509,8 @@ class AcidSplash(SpellAction):
             if not target:
                 return declaration_event.cancel(status_message="Target not found")
 
-            if target_uuid not in source.senses.entities.keys():
+            contact = source.senses.entities.get(target_uuid)
+            if contact is None or not contact.visual:
                 return declaration_event.cancel(status_message=f"{target.name} not in line of sight")
 
             distance = source.distance_to_entity(target)
@@ -938,8 +941,6 @@ class WebZone(RestrainingAreaCondition):
     zone_shape: str = Field(default="cube", description="Area shape used by web zone to compute affected grid positions.")
     zone_radius_feet: int = Field(default=20, description="Zone radius in feet used by web zone.")
     adds_difficult_terrain: bool = Field(default=True, description="Whether web zone makes affected tiles difficult terrain.")
-    sets_light_level: Optional[LightLevel] = Field(default=LightLevel.DIM_LIGHT, description="Light level applied to affected tiles by web zone.")
-    light_is_obscurement: bool = Field(default=True, description="Whether web zone lightly obscures affected tiles.")
 
     hazard_filter: Optional[HazardFilter] = Field(default=HazardFilter.ALL, description="Creature relationship filter used for web zone hazard markers.")
 
@@ -2341,8 +2342,10 @@ class FogCloudZone(AreaCondition):
     zone_shape: str = Field(default="sphere", description="Area shape used by fog cloud zone to compute affected grid positions.")
     zone_radius_feet: int = Field(default=20, description="Zone radius in feet used by fog cloud zone.")
 
-    sets_light_level: Optional[LightLevel] = Field(default=LightLevel.DARKNESS, description="Light level applied to affected tiles by fog cloud zone.")
-    light_is_obscurement: bool = Field(default=True, description="Whether fog cloud zone blocks sight through its light level.")
+    optical_obscurement: Optional[OpticalObscurement] = Field(
+        default=OpticalObscurement.HEAVY,
+        description="Fog blocks visual routes without changing objective illumination.",
+    )
 
 
 class FogCloud(SpellAction):
@@ -2469,8 +2472,15 @@ class DarknessZone(AreaCondition):
     zone_shape: str = Field(default="sphere", description="Area shape used by darkness zone to compute affected grid positions.")
     zone_radius_feet: int = Field(default=15, description="Zone radius in feet used by darkness zone.")
 
-    sets_light_level: Optional[LightLevel] = Field(default=LightLevel.MAGICAL_DARKNESS, description="Light level applied to affected tiles by darkness zone.")
-    light_is_obscurement: bool = Field(default=True, description="Whether darkness zone blocks sight through its light level.")
+    sets_light_level: Optional[LightLevel] = Field(
+        default=LightLevel.DARKNESS,
+        description="Darkness caps objective illumination in affected cells.",
+    )
+    light_is_cap: bool = Field(default=True, description="Darkness caps rather than adds illumination.")
+    optical_obscurement: Optional[OpticalObscurement] = Field(
+        default=OpticalObscurement.MAGICAL_DARKNESS,
+        description="Conditional optical obscurement bypassed only by exact senses.",
+    )
 
 
 class Darkness(SpellAction):
@@ -2595,7 +2605,6 @@ class DaylightZone(AreaCondition):
     zone_radius_feet: int = Field(default=60, description="Zone radius in feet used by daylight zone.")
 
     sets_light_level: Optional[LightLevel] = Field(default=LightLevel.VERY_BRIGHT, description="Light level applied to affected tiles by daylight zone.")
-    light_is_obscurement: bool = Field(default=False, description="Whether daylight zone blocks sight through its light level.")
     duration: Duration = Field(
         default_factory=lambda: Duration(
             duration=600,
@@ -2607,8 +2616,7 @@ class DaylightZone(AreaCondition):
 
 def _is_daylight_targetable_darkness(position: Tuple[int, int]) -> bool:
     """Return whether Daylight may target a magical-darkness position."""
-    tile = get_map().get_tile(*position)
-    return tile is not None and tile.resolved_light_level == LightLevel.MAGICAL_DARKNESS
+    return OpticalObscurement.MAGICAL_DARKNESS in get_map().get_optical_obscurements_at(position)
 
 
 def _remove_overlapping_darkness_zones(
@@ -2778,8 +2786,6 @@ class InsectPlagueZone(AreaCondition):
     zone_shape: str = Field(default="sphere", description="Area shape used by insect plague zone to compute affected grid positions.")
     zone_radius_feet: int = Field(default=20, description="Zone radius in feet used by insect plague zone.")
     adds_difficult_terrain: bool = Field(default=True, description="Whether insect plague zone makes affected tiles difficult terrain.")
-    sets_light_level: Optional[LightLevel] = Field(default=LightLevel.DIM_LIGHT, description="Light level applied to affected tiles by insect plague zone.")
-    light_is_obscurement: bool = Field(default=True, description="Whether insect plague zone lightly obscures affected tiles.")
 
     hazard_filter: Optional[HazardFilter] = Field(default=HazardFilter.ALL, description="Creature relationship filter used for insect plague zone hazard markers.")
 
@@ -2969,8 +2975,10 @@ class IncendiaryCloudZone(AreaCondition):
     zone_shape: str = Field(default="sphere", description="Area shape used by incendiary cloud zone to compute affected grid positions.")
     zone_radius_feet: int = Field(default=20, description="Zone radius in feet used by incendiary cloud zone.")
     adds_difficult_terrain: bool = Field(default=False, description="Whether incendiary cloud zone makes affected tiles difficult terrain.")
-    sets_light_level: Optional[LightLevel] = Field(default=LightLevel.DARKNESS, description="Light level applied to affected tiles by incendiary cloud zone.")
-    light_is_obscurement: bool = Field(default=True, description="Whether incendiary cloud zone blocks sight through its light level.")
+    optical_obscurement: Optional[OpticalObscurement] = Field(
+        default=OpticalObscurement.HEAVY,
+        description="The cloud blocks visual routes without changing illumination.",
+    )
 
     hazard_filter: Optional[HazardFilter] = Field(default=HazardFilter.ALL, description="Creature relationship filter used for incendiary cloud zone hazard markers.")
 
@@ -3246,8 +3254,10 @@ class StinkingCloudZone(AreaCondition):
     zone_radius_feet: int = Field(default=20, description="Zone radius in feet used by stinking cloud zone.")
     adds_difficult_terrain: bool = Field(default=False, description="Whether stinking cloud zone makes affected tiles difficult terrain.")
 
-    sets_light_level: Optional[LightLevel] = Field(default=LightLevel.DARKNESS, description="Light level applied to affected tiles by stinking cloud zone.")
-    light_is_obscurement: bool = Field(default=True, description="Whether stinking cloud zone blocks sight through its light level.")
+    optical_obscurement: Optional[OpticalObscurement] = Field(
+        default=OpticalObscurement.HEAVY,
+        description="The cloud blocks visual routes without changing illumination.",
+    )
 
     hazard_filter: Optional[HazardFilter] = Field(default=HazardFilter.ENEMIES, description="Creature relationship filter used for stinking cloud zone hazard markers.")
 
@@ -3399,8 +3409,10 @@ class SleetStormZone(AreaCondition):
     zone_radius_feet: int = Field(default=40, description="Zone radius in feet used by sleet storm zone.")
     adds_difficult_terrain: bool = Field(default=True, description="Whether sleet storm zone makes affected tiles difficult terrain.")
 
-    sets_light_level: Optional[LightLevel] = Field(default=LightLevel.DARKNESS, description="Light level applied to affected tiles by sleet storm zone.")
-    light_is_obscurement: bool = Field(default=True, description="Whether sleet storm zone blocks sight through its light level.")
+    optical_obscurement: Optional[OpticalObscurement] = Field(
+        default=OpticalObscurement.HEAVY,
+        description="The storm blocks visual routes without changing illumination.",
+    )
 
     hazard_filter: Optional[HazardFilter] = Field(default=HazardFilter.ENEMIES, description="Creature relationship filter used for sleet storm zone hazard markers.")
 
@@ -3773,7 +3785,7 @@ class DimensionDoor(SpellAction):
         )
 
         Entity.update_entity_position(caster, target_pos)
-        caster.update_entity_senses()
+        caster.materialize_navigation()
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,

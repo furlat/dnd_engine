@@ -75,7 +75,8 @@ def build_door(
         semantic_key="environment.door",
         is_open=is_open,
         blocks_movement=not is_open,
-        blocks_vision_field=not is_open,
+        blocks_optics_field=not is_open,
+        blocks_propagation_field=not is_open,
     )
 
 

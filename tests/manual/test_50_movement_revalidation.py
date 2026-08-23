@@ -43,7 +43,7 @@ def test_voluntary_move_interrupts_only_after_one_committed_paid_step() -> None:
     """An interruption preserves the exact paid and traversed movement."""
     reset_action_state()
     actor = create_tutorial_actor(name="Scout", position=(0, 5))
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     available = get_available_actions(actor)
     move = next(
         action
@@ -98,7 +98,7 @@ def test_voluntary_move_reaches_destination_before_continuation_check() -> None:
     """A final-step interruption cannot undo already completed movement."""
     reset_action_state()
     actor = create_tutorial_actor(name="Scout", position=(0, 5))
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     available = get_available_actions(actor)
     move = next(
         action

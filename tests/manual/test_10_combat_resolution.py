@@ -126,7 +126,7 @@ def test_first_combat_example_prints_visible_hit_damage_and_heal(capsys) -> None
     reset_combat_tutorial_state()
     attacker = create_test_monster("monster.goblin", name="Blade", position=(5, 5), faction="heroes")
     target = create_test_monster("monster.skeleton", name="Bone Guard", position=(6, 5), faction="monsters")
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
 
     target_hp_before = target.get_hp()
     actions_before = attacker.action_economy.actions.normalized_score
@@ -212,7 +212,7 @@ def test_invalid_melee_attack_cancels_before_costs(capsys) -> None:
     reset_combat_tutorial_state()
     attacker = create_test_monster("monster.goblin", name="Attacker", position=(2, 2), faction="heroes")
     target = create_test_monster("monster.skeleton", name="Too Far", position=(12, 2), faction="monsters")
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
 
     actions_before = attacker.action_economy.actions.normalized_score
     event = Attack(
@@ -253,7 +253,7 @@ def test_successful_attack_rolls_damage_spends_action_and_can_be_healed(capsys) 
     reset_combat_tutorial_state()
     attacker = create_test_monster("monster.goblin", name="Attacker", position=(5, 5), faction="heroes")
     target = create_test_monster("monster.skeleton", name="Target", position=(6, 5), faction="monsters")
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
 
     target_hp_before = target.get_hp()
     hit_modifier = make_melee_attack_auto_hit(attacker)
@@ -331,7 +331,7 @@ def test_critical_hit_doubles_weapon_damage_dice(capsys) -> None:
     reset_combat_tutorial_state()
     attacker = create_test_monster("monster.goblin", name="Attacker", position=(5, 5), faction="heroes")
     target = create_test_monster("monster.skeleton", name="Target", position=(6, 5), faction="monsters")
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
 
     hit_modifier = make_melee_attack_auto_hit(attacker)
     crit_modifier = make_melee_attack_auto_crit(attacker)
@@ -380,7 +380,7 @@ def test_step_movement_can_trigger_opportunity_attack(capsys) -> None:
     watcher = create_test_monster("monster.skeleton", name="Watcher", position=(5, 5), faction="monsters")
     mover = create_test_monster("monster.goblin", name="Mover", position=(5, 6), faction="heroes")
     add_opportunity_attack_handler(watcher)
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     setup_standard_actions(mover)
     available = mover.get_available_actions()
     move = next(
@@ -449,7 +449,7 @@ def test_diagonal_threat_exit_preview_matches_runtime_opportunity_attack() -> No
     watcher = create_test_monster("monster.skeleton", name="Watcher", position=(5, 5), faction="monsters")
     mover = create_test_monster("monster.goblin", name="Mover", position=(6, 6), faction="heroes")
     add_opportunity_attack_handler(watcher)
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     setup_standard_actions(mover)
 
     move = next(
@@ -495,7 +495,7 @@ def test_extended_reach_exit_preview_matches_runtime_opportunity_attack(
 
     monkeypatch.setattr(Entity, "get_weapon_range", get_weapon_range)
     add_opportunity_attack_handler(watcher)
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     setup_standard_actions(mover)
 
     move = next(
@@ -535,7 +535,7 @@ def test_bg3_shove_uses_bonus_action_and_forced_movement_not_opportunity_attack(
     )
     watcher = create_test_monster("monster.skeleton", name="Watcher", position=(6, 6), faction="monsters")
     add_opportunity_attack_handler(watcher)
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
 
     with fixed_dice_faces(20):
         shove_event = Shove(

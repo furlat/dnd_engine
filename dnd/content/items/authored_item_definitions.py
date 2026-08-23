@@ -70,7 +70,8 @@ class StaticBlockerDefinition(AuthoredItemDefinition):
     hit_points: int = 1
     map_character: str = "?"
     blocks_movement: bool = False
-    blocks_vision: bool = False
+    blocks_optics: bool = False
+    blocks_propagation: bool = False
 
     def __post_init__(self) -> None:
         AuthoredItemDefinition.__post_init__(self)
@@ -138,6 +139,7 @@ _STATIC_BLOCKERS = (
         hit_points=30,
         map_character="B",
         blocks_movement=True,
+        blocks_propagation=True,
     ),
     StaticBlockerDefinition(
         "environment.blocker.barricade",
@@ -147,7 +149,8 @@ _STATIC_BLOCKERS = (
         hit_points=20,
         map_character="X",
         blocks_movement=True,
-        blocks_vision=True,
+        blocks_optics=True,
+        blocks_propagation=True,
     ),
 )
 

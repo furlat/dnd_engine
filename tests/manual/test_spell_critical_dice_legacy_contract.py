@@ -100,7 +100,7 @@ def test_spell_attack_critical_rolls_double_once(
         "monsters",
         hit_die_count=100,
     )
-    Entity.update_all_entities_senses(max_distance=120)
+    Entity.materialize_all_navigation(max_distance=120)
     hit_modifier = force_spell_attack_hit(caster)
     crit_modifier = force_spell_attack_crit(caster)
     DiceRoll._registry.clear()

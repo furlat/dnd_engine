@@ -85,7 +85,7 @@ def test_spike_zone_applies_damage_for_each_committed_step() -> None:
         name="Spike Step Walker",
         position=(0, 4),
     )
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     hp_before = get_hp(walker)
 
     with fixed_dice_faces(2, 2, 2, 2, 2, 2):
@@ -123,7 +123,7 @@ def test_lethal_spike_step_stops_remaining_movement_with_life_state() -> None:
         position=(0, 4),
     )
     set_hp(walker, 2)
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
 
     with fixed_dice_faces(4, 4):
         result = execute_action(
@@ -148,7 +148,7 @@ def test_hidden_spike_trap_reveals_its_exact_effect_once_when_triggered() -> Non
     grid.create_rectangle(0, 0, 6, 3)
     effect = materialize_spike_trap_condition({(2, 1), (3, 1)}, stealth_dc=30)
     walker = create_test_monster("monster.skeleton", name="Trap Trigger", position=(1, 1))
-    Entity.update_all_entities_senses()
+    Entity.materialize_all_navigation()
     cursor = EventQueue.event_cursor()
 
     assert not grid.is_position_hazardous_for(2, 1, walker.uuid)

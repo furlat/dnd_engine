@@ -42,6 +42,7 @@ from dnd.actions.operations import execute_available_action
 from tests.engine.support import create_test_monster
 from dnd.entities.entity import Entity
 from dnd.actions.reactions import add_opportunity_attack_handler
+from dnd.types.world import LightLevel
 from tests.engine.support import (
     force_attack_hit,
     remove_attack_modifier,
@@ -569,7 +570,7 @@ def test_connector_discovery_and_atomic_execution_share_one_typed_variant() -> N
         position=(0, 0),
         faction="heroes",
     )
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
 
     available = actor.get_available_actions(legal_only=True)
     rows = [
@@ -626,7 +627,7 @@ def test_one_way_reverse_and_disabled_connector_have_no_discovery_variant() -> N
         position=(1, 0),
         faction="heroes",
     )
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     assert not any(
         row.connector_traversal is not None
         for row in actor.get_available_actions().self_actions
@@ -678,7 +679,7 @@ def test_connector_provocation_is_authored_not_inferred_from_kind(
     actor = create_test_monster("monster.skeleton", name="Connector Mover", position=(0, 0), faction="heroes")
     reactor = create_test_monster("monster.skeleton", name="Connector Watcher", position=(-1, 0), faction="monsters")
     add_opportunity_attack_handler(reactor)
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     hp_before = actor.get_hp()
     hit = force_attack_hit(reactor)
     try:
@@ -709,7 +710,7 @@ def test_lethal_connector_reaction_stops_before_cost_or_arrival() -> None:
     assert connector is not None
     actor = create_test_monster("monster.skeleton", name="Fragile Connector User", position=(0, 0), faction="heroes")
     set_hp(actor, 1)
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
 
     def lethal_step_reaction(event: Event, _source_uuid: UUID) -> Event:
         set_hp(actor, 0)
@@ -764,7 +765,7 @@ def test_stale_or_unaffordable_connector_variant_mutates_nothing() -> None:
     connector = grid.register_connector(connector_definition())
     assert connector is not None
     actor = create_test_monster("monster.skeleton", name="Stale Connector User", position=(0, 0), faction="heroes")
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     stale_row = _connector_row(actor)
     replacement = grid.replace_connector(
         connector.uuid,
@@ -801,16 +802,29 @@ def test_stale_or_unaffordable_connector_variant_mutates_nothing() -> None:
 
 def test_hidden_destination_occupancy_does_not_change_unknown_discovery() -> None:
     _connector_grid()
-    connector = get_map().register_connector(connector_definition())
+    grid = get_map()
+    grid.set_tile_base_light((1, 0), LightLevel.DARKNESS)
+    connector = grid.register_connector(connector_definition())
     assert connector is not None
-    actor = create_test_monster("monster.skeleton", name="Uninformed Connector User", position=(0, 0), faction="heroes")
+    actor = create_test_monster(
+        "monster.skeleton",
+        name="Uninformed Connector User",
+        position=(0, 0),
+        faction="heroes",
+        darkvision=False,
+    )
     empty_row = _connector_row(actor)
     empty_discovery = empty_row.connector_traversal
     assert empty_discovery is not None
     assert empty_discovery.destination_status.value == "unknown"
 
-    create_test_monster("monster.skeleton", name="Secret Occupant", position=(1, 0), faction="monsters")
-    actor.senses.visible[(1, 0)] = False
+    secret = create_test_monster(
+        "monster.skeleton",
+        name="Secret Occupant",
+        position=(1, 0),
+        faction="monsters",
+    )
+    secret.set_invisible(True)
     occupied_row = _connector_row(actor)
     occupied_discovery = occupied_row.connector_traversal
     assert occupied_discovery is not None
@@ -850,7 +864,7 @@ def test_occupied_connector_destination_stops_before_step_or_oa() -> None:
         faction="monsters",
     )
     add_opportunity_attack_handler(reactor)
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     hp_before = actor.get_hp()
     hit = force_attack_hit(reactor)
     row = _connector_row(actor)
@@ -881,7 +895,7 @@ def test_connector_arrival_fires_once_and_preserves_objective_displacement() -> 
     connector = get_map().register_connector(connector_definition())
     assert connector is not None
     actor = create_test_monster("monster.skeleton", name="Displaced Connector User", position=(0, 0), faction="heroes")
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     arrivals: list[tuple[int, int]] = []
 
     def displace_after_connector_arrival(event: Event, _source: UUID) -> Event:
@@ -920,7 +934,7 @@ def test_connector_arrival_handler_cannot_mutate_stored_step_or_root() -> None:
     connector = get_map().register_connector(connector_definition())
     assert connector is not None
     actor = create_test_monster("monster.skeleton", name="Arrival Guarded Connector", position=(0, 0), faction="heroes")
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
 
     def mutate_stored_effects(event: Event, _source_uuid: UUID) -> Event:
         if event.parent_event is None:
@@ -985,7 +999,7 @@ def test_connector_arrival_mutation_is_restored_before_publication_error_escapes
         position=(0, 0),
         faction="heroes",
     )
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
 
     def mutate_effects_then_raise(event: Event, _source_uuid: UUID) -> Event:
         if event.parent_event is None:
@@ -1071,7 +1085,7 @@ def test_connector_restores_parent_between_step_handlers_and_on_later_failure() 
         position=(0, 0),
         faction="heroes",
     )
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     seen_costs: list[int] = []
 
     def forge_parent(event: Event, _source_uuid: UUID) -> Event:
@@ -1143,7 +1157,7 @@ def test_connector_and_step_noop_effect_handlers_publish_one_version_per_phase()
         position=(0, 0),
         faction="heroes",
     )
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     immediate = []
     sequences = []
     batches = []
@@ -1237,7 +1251,7 @@ def test_connector_and_step_child_emission_preserve_noop_parent_lifecycles() -> 
         position=(0, 0),
         faction="heroes",
     )
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     emitted_by_parent: dict[UUID, UUID] = {}
 
     def emit_child(event: Event, _source_uuid: UUID) -> Event:
@@ -1344,7 +1358,7 @@ def test_connector_step_forged_child_evidence_stops_before_commit() -> None:
         position=(0, 0),
         faction="heroes",
     )
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     forged_child = uuid4()
     actor.add_event_handler(EventHandler(
         name="Forge connector Step child evidence",
@@ -1394,7 +1408,7 @@ def test_connector_root_forged_child_evidence_cancels_before_step() -> None:
         position=(0, 0),
         faction="heroes",
     )
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     forged_child = uuid4()
     actor.add_event_handler(EventHandler(
         name="Forge connector root child evidence",
@@ -1447,7 +1461,7 @@ def test_connector_execution_rejects_replaced_global_support_owner() -> None:
         position=(0, 0),
         faction="heroes",
     )
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     row = _connector_row(actor)
     support = grid.get_tile(1, 0)
     assert support is not None
@@ -1482,7 +1496,7 @@ def test_connector_step_handler_cannot_mutate_parent_root_before_stop() -> None:
         position=(0, 0),
         faction="heroes",
     )
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
 
     def mutate_parent_and_kill(event: Event, _source_uuid: UUID) -> Event:
         if type(event) is not StepMovementEvent or event.parent_event is None:
@@ -1548,7 +1562,7 @@ def test_connector_position_staging_failure_undoes_exact_debit(
     connector = grid.register_connector(connector_definition())
     assert connector is not None
     actor = create_test_monster("monster.skeleton", name="Staging Connector User", position=(0, 0), faction="heroes")
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     row = _connector_row(actor)
     original = grid.recompute_tile_directional_blocking
 
@@ -1578,7 +1592,7 @@ def test_connector_spatial_publication_failure_keeps_position_and_cost() -> None
     connector = get_map().register_connector(connector_definition())
     assert connector is not None
     actor = create_test_monster("monster.skeleton", name="Publishing Connector User", position=(0, 0), faction="heroes")
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     handler = EventHandler(
         name="Fail connector spatial publication",
         source_entity_uuid=uuid4(),
@@ -1600,7 +1614,7 @@ def test_connector_spatial_publication_failure_keeps_position_and_cost() -> None
         EventQueue.remove_event_handler(handler)
 
     assert actor.position == (1, 0)
-    assert actor.senses.position == (1, 0)
+    assert actor.senses.position == (0, 0)
     assert get_map().get_entity_position(actor.uuid) == (1, 0)
     assert actor.action_economy.actions.normalized_score == 0
     assert actor.action_economy.movement.normalized_score == 20
@@ -1616,7 +1630,7 @@ def test_connector_root_and_step_forgery_store_no_forged_geometry() -> None:
     connector = get_map().register_connector(connector_definition())
     assert connector is not None
     actor = create_test_monster("monster.skeleton", name="Guarded Connector User", position=(0, 0), faction="heroes")
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
 
     def forge_step(event: Event, _source: UUID) -> Event:
         if type(event) is StepMovementEvent:
@@ -1657,7 +1671,7 @@ def test_connector_root_effect_forgery_cancels_before_step_or_cost() -> None:
     connector = get_map().register_connector(connector_definition())
     assert connector is not None
     actor = create_test_monster("monster.skeleton", name="Guarded Connector Root", position=(0, 0), faction="heroes")
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
 
     def forge_root(event: Event, _source: UUID) -> Event:
         if type(event) is TraverseConnectorEvent:

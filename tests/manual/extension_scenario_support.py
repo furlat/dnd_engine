@@ -72,7 +72,7 @@ def create_aegis_scene() -> tuple[Entity, Entity, Entity]:
             template=True,
         ),
     )
-    Entity.update_all_entities_senses(max_distance=30)
+    Entity.materialize_all_navigation(max_distance=30)
     return caster, ally, enemy
 
 
@@ -106,7 +106,7 @@ def create_field_training_scene() -> tuple[Entity, Entity, UsableItem]:
         expected_type=UsableItem,
     )
     floor_kit.place_on_grid((1, 2))
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     return medic, ally, floor_kit
 
 

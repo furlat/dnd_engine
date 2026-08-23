@@ -89,7 +89,7 @@ from dnd.blocks.creature_proficiencies import (
 )
 from dnd.blocks.action_economy import ActionEconomyConfig, ActionEconomy
 from dnd.blocks.skills import SkillSetConfig, SkillSet
-from dnd.blocks.sensory import Senses, VisibilityComputationCache, spatial_senses_system
+from dnd.blocks.sensory import Senses, spatial_senses_system
 from dnd.types.senses import SensesType, SenseMode
 from dnd.types.world import LightLevel
 from dnd.blocks.inventory import Inventory, InventoryAddResult
@@ -619,7 +619,6 @@ class Entity(BaseBlock):
         super().model_post_init(__context)
         self.__class__._entity_registry[self.uuid] = self
         self._reconcile_initial_life_state()
-        self.senses.snapshot_perception(self.get_passive_perception())
 
     def _attach_to_world(self, position: Tuple[int, int]) -> None:
         """Install committed entity occupancy for the owning Game."""
@@ -632,14 +631,7 @@ class Entity(BaseBlock):
         self.__class__._entity_by_position[position].append(self)
         self.is_deployed = True
         try:
-            update_senses_func = lambda: self.update_entity_senses(max_distance=20)
-            update_visibility_func = lambda: self.update_entity_visibility(max_distance=20)
-            spatial_callback = self.senses.create_spatial_callback(
-                self.uuid,
-                update_senses_func=update_senses_func,
-                update_visibility_func=update_visibility_func,
-            )
-            spatial_senses_system.register_observer(spatial_callback)
+            spatial_senses_system.register_observer(self.uuid, self.senses)
             spatial_senses_system.attach()
             get_map().register_entity(self.uuid, position)
         except Exception:
@@ -929,8 +921,10 @@ class Entity(BaseBlock):
                 MovementMode.WALKING,
             ):
                 continue
-            if subjective and not occupant.is_perceivable_by(self.uuid):
-                continue
+            if subjective:
+                contact = self.senses.entities.get(occupant.uuid)
+                if contact is None:
+                    continue
             return False
         return True
 
@@ -965,24 +959,12 @@ class Entity(BaseBlock):
         return False
 
     def _set_position(self, new_position: Tuple[int, int]) -> None:
-        """Set entity and senses position without updating registry indexes.
-
-        Args:
-            new_position: Position to store on the entity and senses block.
-        """
+        """Set objective entity position without mutating subjective projection."""
         self.position = new_position
-        self.senses.position = new_position
 
-    def move(self, new_position: Tuple[int, int], update_senses: bool = True) -> None:
-        """Move the entity through the registry-aware position path.
-
-        Args:
-            new_position: Destination grid position.
-            update_senses: Whether to refresh all entity senses after moving.
-        """
+    def move(self, new_position: Tuple[int, int]) -> None:
+        """Move through the objective spatial-event path."""
         Entity.update_entity_position(self, new_position)
-        if update_senses:
-            Entity.update_all_entities_senses()
 
     def get_target_entity(self, copy: bool = False) -> Optional['Entity']:
         """Return the currently targeted entity.
@@ -2060,18 +2042,6 @@ class Entity(BaseBlock):
         """Entity's passive perception from skill system."""
         return self.passive_skill(SkillName.PERCEPTION)
 
-    def can_bypass_invisibility(self) -> bool:
-        """Entity can bypass invisibility with special senses."""
-        return (self.senses.has_sense(SensesType.TRUESIGHT) or
-                self.senses.has_sense(SensesType.BLINDSIGHT) or
-                self.senses.has_sense(SensesType.TREMORSENSE) or
-                self.senses.has_sense(SensesType.SEE_INVISIBLE))
-
-    def can_pierce_magical_darkness(self) -> bool:
-        """Entity can see through magical darkness with TRUESIGHT or DEVILS_SIGHT."""
-        return (self.senses.has_sense(SensesType.TRUESIGHT) or
-                self.senses.has_sense(SensesType.DEVILS_SIGHT))
-
     def can_see_visual_effects(self) -> bool:
         """Whether this entity can currently see visual effects at all."""
         if self.senses.visual_access.normalized_score <= 0:
@@ -2983,6 +2953,14 @@ class Entity(BaseBlock):
         """Override BaseBlock virtual — returns Senses block for subjective perception."""
         return self.senses
 
+    def has_ordinary_visual_sight(self) -> bool:
+        """Return the Entity's authored ordinary-sight capability."""
+        return self.has_ordinary_sight
+
+    def appears_in_entity_contacts(self) -> bool:
+        """Dead entities do not remain creature perception contacts."""
+        return self.health.life_state is not LifeState.DEAD
+
     @property
     def has_hp(self) -> bool:
         """Whether this entity has positive normal HP."""
@@ -2992,12 +2970,6 @@ class Entity(BaseBlock):
     def is_active(self) -> bool:
         """Whether rules may still treat this entity as a living participant."""
         return self.health.life_state is not LifeState.DEAD
-
-    def is_perceivable_by(self, requesting_entity_uuid: Optional[UUID] = None) -> bool:
-        """Dead entities leave creature-senses facts until revived."""
-        if self.health.life_state is LifeState.DEAD:
-            return False
-        return super().is_perceivable_by(requesting_entity_uuid)
 
     def can_take_actions(self) -> bool:
         """Return whether neutral condition transforms permit ordinary actions."""
@@ -3108,7 +3080,7 @@ class Entity(BaseBlock):
                 self.position,
                 candidate_position,
                 channel="propagation",
-                observer_uuid=self.uuid,
+                requester_uuid=self.uuid,
             )
         ):
             return False
@@ -3500,12 +3472,12 @@ class Entity(BaseBlock):
             Enemy positions keyed by UUID.
         """
         enemies: Dict[UUID, Tuple[int, int]] = {}
-        for entity_uuid, pos in self.senses.entities.items():
+        for entity_uuid, contact in self.senses.entities.items():
             other = Entity.get(entity_uuid)
             if other and self.is_enemy(other):
                 if not include_dead and not self._has_positive_normal_hp_for_discovery(other):
                     continue
-                enemies[entity_uuid] = pos
+                enemies[entity_uuid] = contact.position
         return enemies
 
     def get_visible_allies(self, include_dead: bool = False) -> Dict[UUID, Tuple[int, int]]:
@@ -3518,12 +3490,12 @@ class Entity(BaseBlock):
             Ally positions keyed by UUID.
         """
         allies: Dict[UUID, Tuple[int, int]] = {}
-        for entity_uuid, pos in self.senses.entities.items():
+        for entity_uuid, contact in self.senses.entities.items():
             other = Entity.get(entity_uuid)
             if other and self.is_ally(other):
                 if not include_dead and not self._has_positive_normal_hp_for_discovery(other):
                     continue
-                allies[entity_uuid] = pos
+                allies[entity_uuid] = contact.position
         return allies
 
     @classmethod
@@ -4324,411 +4296,90 @@ class Entity(BaseBlock):
         self._store_or_drop_equipment_item(item)
         return item
 
-    @staticmethod
-    def _add_adjacent_senses_objects(
-        visible_objects: Dict[UUID, Tuple[int, int]],
-        observer_position: Tuple[int, int],
-        observer_uuid: Optional[UUID],
-    ) -> None:
-        """Add adjacent interactable structural objects that block visibility into their own cell."""
-        grid = get_map()
-        for dx in (-1, 0, 1):
-            for dy in (-1, 0, 1):
-                if dx == 0 and dy == 0:
-                    continue
-                position = (observer_position[0] + dx, observer_position[1] + dy)
-                for obj_uuid in grid.get_objects_at(position):
-                    if obj_uuid in visible_objects:
-                        continue
-                    obj = BaseBlock.get(obj_uuid)
-                    if obj is None:
-                        continue
-                    if not obj.should_include_in_senses_objects():
-                        continue
-                    if not obj.should_include_in_adjacent_senses_objects():
-                        continue
-                    if not obj.is_perceivable_by(observer_uuid):
-                        continue
-                    visible_objects[obj_uuid] = position
-
-    @staticmethod
-    def _is_senses_visible_entity(
-        candidate: "Entity",
-        observer_uuid: Optional[UUID],
-    ) -> bool:
-        """Return whether a live entity belongs in an observer's entity facts."""
-        return (
-            candidate.health.life_state is not LifeState.DEAD
-            and candidate.is_perceivable_by(observer_uuid)
-        )
-
-    @staticmethod
-    def compute_senses_from_position(
-        position: Tuple[int, int],
-        seen: Set[Tuple[int, int]],
-        max_distance: int = 10,
-        entity_uuid: Optional[UUID] = None,
-        visibility_cache: Optional[VisibilityComputationCache] = None,
-        path_max_distance: Optional[int] = None,
-    ) -> Tuple[Dict[Tuple[int, int], bool], DefaultDict[Tuple[int, int], List[Tuple[int, int]]], Dict[Tuple[int, int], int], Dict[Tuple[int, int], bool], Dict[UUID, Tuple[int, int]], Dict[UUID, Tuple[int, int]], List[Tuple[int, int]], Dict[Tuple[int, int], List[Tuple[int, int]]], Dict[Tuple[int, int], int]]:
-        """Compute observer-local senses data from a position.
-
-        Args:
-            position: Position to compute from.
-            seen: Previously seen positions.
-            max_distance: Maximum view and movement distance.
-            entity_uuid: Optional observer UUID for subjective filtering.
-            visibility_cache: Optional visibility-only computation result to
-                reuse for an immediate full refresh at the same origin.
-            path_max_distance: Optional movement-cost radius for pathfinding.
-                When omitted, pathfinding uses `max_distance`.
-
-        Returns:
-            Visible cells, filtered paths and costs, walkability, visible
-            entities, visible objects, full geometric FOV positions, safe
-            paths, and safe path costs.
-        """
-        grid = get_map()
-        if visibility_cache is not None:
-            fov_positions = list(visibility_cache.fov_positions)
-            visible_dict = dict(visibility_cache.visible)
-        else:
-            fov_positions = grid.compute_fov(position, max_distance, observer_uuid=entity_uuid)
-
-            visible_dict = Entity._filter_visible_positions_by_light(
-                fov_positions,
-                position,
-                entity_uuid,
-            )
-
-        collision: Set[Tuple[int, int]] = set()
-        directional_collision: Set[Tuple[Tuple[int, int], str]] = set()
-        ign_terrain = False
-        requesting_entity: Optional[Entity] = None
-        if entity_uuid:
-            requesting_entity = Entity._entity_registry.get(entity_uuid)
-            if requesting_entity is not None:
-                collision = requesting_entity.senses.collision_blocked
-                directional_collision = (
-                    requesting_entity.senses.directional_collision_blocked
-                )
-                ign_terrain = requesting_entity.ignore_difficult_terrain
-        effective_path_max_distance = path_max_distance if path_max_distance is not None else max_distance
-        distances, paths = grid.compute_paths(position, effective_path_max_distance, requesting_entity_uuid=entity_uuid,
-                                              subjective=True, collision_blocked=collision,
-                                              directional_collision_blocked=directional_collision,
-                                              ignore_difficult_terrain=ign_terrain)
-
-        filtered_paths: DefaultDict[Tuple[int, int], List[Tuple[int, int]]] = defaultdict(list)
-        path_costs: Dict[Tuple[int, int], int] = {}
-        for pos, path in paths.items():
-            if (
-                pos in visible_dict
-                and all(
-                    step in seen or step in visible_dict
-                    for step in path
-                )
-                and (
-                    requesting_entity is None
-                    or requesting_entity.can_end_movement_at(
-                        pos,
-                        subjective=True,
-                    )
-                )
-            ):
-                filtered_paths[pos] = path
-                path_costs[pos] = int(distances[pos] * 5)
-
-        safe_paths: Dict[Tuple[int, int], List[Tuple[int, int]]] = {}
-        safe_path_costs: Dict[Tuple[int, int], int] = {}
-        has_any_hazardous = False
-        if grid.has_any_hazards():
-            for pos, path in filtered_paths.items():
-                for step in path[1:]:
-                    if grid.is_position_hazardous_for(step[0], step[1], entity_uuid):
-                        has_any_hazardous = True
-                        break
-                if has_any_hazardous:
-                    break
-
-        if has_any_hazardous:
-            safe_distances, safe_raw = grid.compute_paths(
-                position, effective_path_max_distance, requesting_entity_uuid=entity_uuid,
-                walk_in_danger=False, subjective=True, collision_blocked=collision,
-                directional_collision_blocked=directional_collision,
-                ignore_difficult_terrain=ign_terrain
-            )
-            for pos, path in safe_raw.items():
-                if (
-                    pos in visible_dict
-                    and all(
-                        step in seen or step in visible_dict
-                        for step in path
-                    )
-                    and (
-                        requesting_entity is None
-                        or requesting_entity.can_end_movement_at(
-                            pos,
-                            subjective=True,
-                        )
-                    )
-                ):
-                    safe_paths[pos] = path
-                    safe_path_costs[pos] = int(safe_distances[pos] * 5)
-
-        if visibility_cache is not None:
-            visible_entities: Dict[UUID, Tuple[int, int]] = {}
-            for visible_uuid, visible_position in visibility_cache.entities.items():
-                candidate = Entity._entity_registry.get(visible_uuid)
-                if candidate is not None and Entity._is_senses_visible_entity(
-                    candidate,
-                    entity_uuid,
-                ):
-                    visible_entities[visible_uuid] = visible_position
-            visible_objects = dict(visibility_cache.objects)
-        else:
-            visible_entities: Dict[UUID, Tuple[int, int]] = {}
-            for pos in visible_dict:
-                entities = Entity.get_all_entities_at_position(pos)
-                for entity in entities:
-                    if entity_uuid and entity.uuid == entity_uuid:
-                        continue
-                    if Entity._is_senses_visible_entity(entity, entity_uuid):
-                        visible_entities[entity.uuid] = pos
-
-            visible_objects: Dict[UUID, Tuple[int, int]] = {}
-            for pos in visible_dict:
-                for obj_uuid in grid.get_objects_at(pos):
-                    obj = BaseBlock.get(obj_uuid)
-                    if obj is None:
-                        continue
-                    if not obj.should_include_in_senses_objects():
-                        continue
-                    if not obj.is_perceivable_by(entity_uuid):
-                        continue
-                    visible_objects[obj_uuid] = pos
-            Entity._add_adjacent_senses_objects(visible_objects, position, entity_uuid)
-
-        walkable = {pos: grid.is_walkable(pos[0], pos[1]) for pos in fov_positions}
-
-        return (
-            visible_dict,
-            filtered_paths,
-            path_costs,
-            walkable,
-            visible_entities,
-            visible_objects,
-            fov_positions,
-            safe_paths,
-            safe_path_costs,
-        )
-
-    @staticmethod
-    def _filter_visible_positions_by_light(
-        fov_positions: List[Tuple[int, int]],
-        observer_position: Tuple[int, int],
-        observer_uuid: Optional[UUID],
-    ) -> Dict[Tuple[int, int], bool]:
-        """Filter geometric FOV cells through the subjective light model.
-
-        Bright-or-brighter cells are visible to every observer, so a fully
-        bright FOV can skip per-cell sense-mode resolution. Darkness, dim
-        light, and magical darkness still use `Tile.get_effective_light_for()`
-        so darkvision and similar senses keep their normal behavior.
-        """
-        grid = get_map()
-        fov_tiles = [
-            (pos, tile)
-            for pos in fov_positions
-            if (tile := grid.get_tile(pos[0], pos[1])) is not None
-        ]
-        if observer_uuid is None:
-            return {pos: True for pos, _ in fov_tiles}
-        if all(
-            tile.resolved_light_level.value >= LightLevel.BRIGHT_LIGHT.value
-            for _, tile in fov_tiles
-        ):
-            return {pos: True for pos, _ in fov_tiles}
-
-        visible_dict: Dict[Tuple[int, int], bool] = {}
-        for pos, tile in fov_tiles:
-            eff = tile.get_effective_light_for(
-                observer_uuid,
-                observer_position=observer_position,
-            )
-            if eff.value <= LightLevel.DARKNESS.value:
-                continue
-            visible_dict[pos] = True
-        return visible_dict
-
-    def update_entity_senses(
+    def materialize_navigation(
         self,
         max_distance: int = 10,
-        reuse_visibility_cache: bool = False,
         path_max_distance: Optional[int] = None,
     ) -> None:
-        """Fully recompute the entity's senses and FOV subscriptions.
-
-        This computes:
-        - Visible cells within max_distance using shadowcast
-        - Paths to reachable cells using dijkstra (excludes cells occupied by other entities)
-        - Entities present in visible cells
-
-        After updating, subscribes to visible cells so this entity
-        receives SpatialChangeEvents when something changes in its FOV.
-
-        Args:
-            max_distance: Maximum view/movement distance (default 10)
-            reuse_visibility_cache: Whether to reuse a matching one-shot
-                visibility result from an immediately preceding movement step.
-            path_max_distance: Optional movement-cost radius for paths. When
-                omitted, pathfinding uses `max_distance`.
-        """
-        visibility_cache = None
-        if reuse_visibility_cache:
-            candidate = self.senses._visibility_cache
-            if (
-                candidate is not None
-                and candidate.position == self.position
-                and candidate.max_distance == max_distance
-            ):
-                visibility_cache = candidate
-
-        (
-            visible_dict,
-            filtered_paths,
-            path_costs,
-            walkable,
-            visible_entities,
-            visible_objects,
-            fov_positions,
-            safe_paths,
-            safe_path_costs,
-        ) = Entity.compute_senses_from_position(
+        """Materialize derived navigation without changing perception projection."""
+        grid = get_map()
+        effective_path_distance = path_max_distance or max_distance
+        distances, paths = grid.compute_paths(
             self.position,
-            self.senses.seen,
-            max_distance,
-            entity_uuid=self.uuid,
-            visibility_cache=visibility_cache,
-            path_max_distance=path_max_distance,
+            effective_path_distance,
+            requesting_entity_uuid=self.uuid,
+            subjective=True,
+            collision_blocked=self.senses.collision_blocked,
+            directional_collision_blocked=self.senses.directional_collision_blocked,
+            ignore_difficult_terrain=self.ignore_difficult_terrain,
         )
-        self.senses.update_senses(
-            entities=visible_entities,
-            visible=visible_dict,
+        filtered_paths: DefaultDict[Tuple[int, int], List[Tuple[int, int]]] = defaultdict(list)
+        path_costs: Dict[Tuple[int, int], int] = {}
+        for position, path in paths.items():
+            if (
+                position in self.senses.visible
+                and all(step in self.senses.seen or step in self.senses.visible for step in path)
+                and self.can_end_movement_at(position, subjective=True)
+            ):
+                filtered_paths[position] = path
+                path_costs[position] = int(distances[position] * 5)
+        safe_paths: Dict[Tuple[int, int], List[Tuple[int, int]]] = {}
+        safe_path_costs: Dict[Tuple[int, int], int] = {}
+        has_reachable_hazard = any(
+            grid.is_position_hazardous_for(
+                step[0],
+                step[1],
+                self.uuid,
+            )
+            for path in filtered_paths.values()
+            for step in path[1:]
+        )
+        if has_reachable_hazard:
+            safe_distances, safe_raw_paths = grid.compute_paths(
+                self.position,
+                effective_path_distance,
+                requesting_entity_uuid=self.uuid,
+                walk_in_danger=False,
+                subjective=True,
+                collision_blocked=self.senses.collision_blocked,
+                directional_collision_blocked=(
+                    self.senses.directional_collision_blocked
+                ),
+                ignore_difficult_terrain=self.ignore_difficult_terrain,
+            )
+            for position, path in safe_raw_paths.items():
+                if (
+                    position in self.senses.visible
+                    and all(
+                        step in self.senses.seen or step in self.senses.visible
+                        for step in path
+                    )
+                    and self.can_end_movement_at(position, subjective=True)
+                ):
+                    safe_paths[position] = path
+                    safe_path_costs[position] = int(
+                        safe_distances[position] * 5,
+                    )
+        walkable = {
+            position: grid.is_walkable(position[0], position[1])
+            for position in self.senses.visible
+        }
+        self.senses.replace_navigation(
             walkable=walkable,
             paths=filtered_paths,
             path_costs=path_costs,
-            objects=visible_objects,
             safe_paths=safe_paths,
             safe_path_costs=safe_path_costs,
-            path_max_distance=path_max_distance if path_max_distance is not None else max_distance,
+            path_max_distance=effective_path_distance,
         )
-        self.senses.snapshot_perception(self.get_passive_perception())
-        get_map().subscribe_to_cells(self.uuid, set(fov_positions))
         spatial_senses_system.refresh_observer(self.uuid)
 
     @classmethod
-    def update_all_entities_senses(cls, max_distance: int = 10) -> None:
-        """Update the senses for all entities."""
+    def materialize_all_navigation(cls, max_distance: int = 10) -> None:
+        """Materialize derived navigation for every deployed entity."""
         for entity in cls.get_all_entities():
-            entity.update_entity_senses(max_distance)
-
-    def update_entity_visibility(self, max_distance: int = 10) -> None:
-        """Recompute visible cells, entities, and objects without paths.
-
-        Used during movement to update what entity can see at each step
-        without the cost of recomputing all paths (which is done once at end).
-
-        This recomputes:
-        - Visible cells from current position
-        - Entities in visible cells
-
-        Does NOT recompute paths (expensive, done once at movement end).
-
-        Args:
-            max_distance: Maximum view distance (default 10)
-        """
-        grid = get_map()
-        fov_positions = grid.compute_fov(self.position, max_distance, observer_uuid=self.uuid)
-
-        visible_dict = Entity._filter_visible_positions_by_light(
-            fov_positions,
-            self.position,
-            self.uuid,
-        )
-
-        visible_entities: Dict[UUID, Tuple[int, int]] = {}
-        for pos in visible_dict:
-            for ent_uuid in grid.get_entities_at(pos):
-                if ent_uuid != self.uuid:
-                    candidate = Entity._entity_registry.get(ent_uuid)
-                    if candidate is not None and Entity._is_senses_visible_entity(
-                        candidate,
-                        self.uuid,
-                    ):
-                        visible_entities[ent_uuid] = pos
-
-        visible_objects: Dict[UUID, Tuple[int, int]] = {}
-        for pos in visible_dict:
-            for obj_uuid in grid.get_objects_at(pos):
-                obj = BaseBlock.get(obj_uuid)
-                if obj is None:
-                    continue
-                if not obj.should_include_in_senses_objects():
-                    continue
-                if not obj.is_perceivable_by(self.uuid):
-                    continue
-                visible_objects[obj_uuid] = pos
-        Entity._add_adjacent_senses_objects(visible_objects, self.position, self.uuid)
-
-        old_entities = set(self.senses.entities.keys())
-        newly_spotted = set(visible_entities.keys()) - old_entities
-        for spotted_uuid in newly_spotted:
-            spotted = Entity.get(spotted_uuid)
-            if (spotted and isinstance(spotted, Entity)
-                    and spotted.stealth_dc is not None
-                    and self.is_enemy(spotted)):
-                pp = self.get_passive_perception()
-                log_entry = CombatLogEntry(
-                    entry_type=CombatLogEntryType.ENTITY_SPOTTED,
-                    source_name=self.name,
-                    source_uuid=str(self.uuid),
-                    target_name=spotted.name,
-                    target_uuid=str(spotted.uuid),
-                    compact=f"{{cyan:{self.name}}} spots {{yellow:{spotted.name}}} (Perception {pp} vs Stealth DC {spotted.stealth_dc})",
-                    verbose=f"{{cyan:{self.name}}} sees through {{yellow:{spotted.name}}}'s hiding (Passive Perception {pp} vs Stealth DC {spotted.stealth_dc})",
-                    detailed=f"{{cyan:{self.name}}} sees through {{yellow:{spotted.name}}}'s hiding (Passive Perception {pp} vs Stealth DC {spotted.stealth_dc})",
-                    perceiver_uuids={str(self.uuid)},
-                    identified_entity_observer_uuids={
-                        str(spotted.uuid): {str(self.uuid)},
-                    },
-                    data=EntitySpottedLogData(
-                        observer_name=self.name,
-                        observer_uuid=str(self.uuid),
-                        target_name=spotted.name,
-                        target_uuid=str(spotted.uuid),
-                        target_position=spotted.position,
-                        passive_perception=pp,
-                        stealth_dc=spotted.stealth_dc
-                    ).model_dump()
-                )
-                EventQueue.push_combat_log(log_entry, self.uuid)
-
-        self.senses.visible = visible_dict
-        self.senses.update_seen(visible_dict)
-        self.senses.entities = visible_entities
-        self.senses.objects = visible_objects
-        self.senses._visibility_cache = VisibilityComputationCache(
-            position=self.position,
-            max_distance=max_distance,
-            visible=dict(visible_dict),
-            fov_positions=list(fov_positions),
-            entities=dict(visible_entities),
-            objects=dict(visible_objects),
-        )
-
-        grid.subscribe_to_cells(self.uuid, set(fov_positions))
-        spatial_senses_system.refresh_observer(self.uuid)
+            if entity.is_deployed:
+                entity.materialize_navigation(max_distance)
 
     def register_action(self, action: BaseAction) -> None:
         """Register an action template.
@@ -5140,14 +4791,14 @@ class Entity(BaseBlock):
 
         if action_filter == "all":
             pool: Dict[UUID, Tuple[int, int]] = {}
-            for k, v in self.senses.entities.items():
+            for k, contact in self.senses.entities.items():
                 if k == self.uuid:
                     continue
                 if not include_dead:
                     other = Entity.get(k)
                     if other and not self._has_positive_normal_hp_for_discovery(other):
                         continue
-                pool[k] = v
+                pool[k] = contact.position
         elif action_filter in ("allies", "self_or_allies"):
             pool = dict(self.get_visible_allies(include_dead=include_dead))
         else:
@@ -5432,11 +5083,11 @@ class Entity(BaseBlock):
         contact_alive: Dict[UUID, bool] = {
             self.uuid: self._has_positive_normal_hp_for_discovery(self)
         }
-        for entity_uuid, perceived_position in self.senses.entities.items():
+        for entity_uuid, contact in self.senses.entities.items():
             entity = Entity.get(entity_uuid)
             if entity is None:
                 contact_facts.append(
-                    (str(entity_uuid), perceived_position, None, None, None)
+                    (str(entity_uuid), contact.position, None, None, None)
                 )
                 continue
             alive = self._has_positive_normal_hp_for_discovery(entity)
@@ -5444,7 +5095,7 @@ class Entity(BaseBlock):
             contact_facts.append(
                 (
                     str(entity_uuid),
-                    perceived_position,
+                    contact.position,
                     entity.name,
                     entity.faction,
                     alive,
@@ -5486,11 +5137,11 @@ class Entity(BaseBlock):
         target_filter = template.valid_target_filter
         allow_dead = include_dead or template.include_dead
 
-        for entity_uuid, perceived_position in self.senses.entities.items():
+        for entity_uuid, contact in self.senses.entities.items():
             entity = Entity.get(entity_uuid)
             if entity is None:
                 if target_filter == "all":
-                    positions.add(perceived_position)
+                    positions.add(contact.position)
                 continue
             if not allow_dead and not self._has_positive_normal_hp_for_discovery(entity):
                 continue
@@ -5507,7 +5158,7 @@ class Entity(BaseBlock):
                 matches = True
 
             if matches:
-                positions.add(perceived_position)
+                positions.add(contact.position)
 
         if template.include_self and (allow_dead or self._has_positive_normal_hp_for_discovery(self)):
             if target_filter in {"all", "allies", "self_or_allies"} or target_filter not in {
@@ -5734,7 +5385,9 @@ class Entity(BaseBlock):
                 caster_visible_positions,
             )
 
-        perceived_occupancy = set(self.senses.entities.values())
+        perceived_occupancy = {
+            contact.position for contact in self.senses.entities.values()
+        }
         perceived_occupancy.add(self.position)
         targets: List[AvailableTarget] = []
         for position in sorted(candidate_positions):
@@ -5860,17 +5513,17 @@ class Entity(BaseBlock):
         walkable_facts = tuple(sorted(self.senses.walkable.items()))
         entity_facts = tuple(
             sorted(
-                (str(entity_uuid), position)
-                for entity_uuid, position in self.senses.entities.items()
+                (str(entity_uuid), contact.position)
+                for entity_uuid, contact in self.senses.entities.items()
             )
         )
         object_facts: List[Tuple[Any, ...]] = []
-        for object_uuid, position in self.senses.objects.items():
+        for object_uuid, contact in self.senses.objects.items():
             block = BaseBlock.get(object_uuid)
             object_facts.append(
                 (
                     str(object_uuid),
-                    position,
+                    contact.position,
                     block.blocks_walking(self.uuid, MovementMode.WALKING)
                     if block is not None
                     else None,
@@ -5932,8 +5585,8 @@ class Entity(BaseBlock):
             return False
         if position in self.senses.collision_blocked:
             return False
-        for object_uuid, object_position in self.senses.objects.items():
-            if object_position != position:
+        for object_uuid, contact in self.senses.objects.items():
+            if contact.position != position:
                 continue
             block = BaseBlock.get(object_uuid)
             if block is not None and block.blocks_walking(
@@ -6649,7 +6302,7 @@ class Entity(BaseBlock):
             if not can_afford:
                 continue
 
-            for obj_uuid, obj_pos in self.senses.objects.items():
+            for obj_uuid, contact in self.senses.objects.items():
                 obj_block = BaseBlock.get(obj_uuid)
                 if obj_block is not None and not obj_block.should_include_in_available_object_actions():
                     continue
@@ -6665,12 +6318,12 @@ class Entity(BaseBlock):
                     distance = (
                         self.distance_to_object(obj_block)
                         if obj_block is not None
-                        else self.distance_to_position(obj_pos)
+                        else self.distance_to_position(contact.position)
                     )
                     valid_targets.append(AvailableTarget(
                         index=idx,
                         target_uuid=obj_uuid,
-                        position=obj_pos,
+                        position=contact.position,
                         target_name=obj_name,
                         distance=distance
                     ))
@@ -6771,7 +6424,7 @@ class Entity(BaseBlock):
                 (use_template, item_uuid, item_name, item_stack, True),
             )
 
-        for obj_uuid, _obj_pos in self.senses.objects.items():
+        for obj_uuid in self.senses.objects:
             obj = BaseBlock.get(obj_uuid)
             if not isinstance(obj, UsableItem):
                 continue
@@ -7173,14 +6826,14 @@ class Entity(BaseBlock):
             potential_targets = self.get_visible_allies(include_dead=include_dead)
         else:
             potential_targets: Dict[UUID, Tuple[int, int]] = {}
-            for k, v in self.senses.entities.items():
+            for k, contact in self.senses.entities.items():
                 if k == self.uuid:
                     continue
                 if not include_dead:
                     other = Entity.get(k)
                     if other and not other.has_hp:
                         continue
-                potential_targets[k] = v
+                potential_targets[k] = contact.position
 
         result.self_actions = self._collect_self_actions(discovery_variants, legal_only)
 
@@ -7197,7 +6850,7 @@ class Entity(BaseBlock):
             and not self.senses.has_clean_paths_for_distance(required_path_distance)
         )
         if paths_need_refresh:
-            self.update_entity_senses(max_distance=20, path_max_distance=required_path_distance)
+            self.materialize_navigation(max_distance=20, path_max_distance=required_path_distance)
 
         grid = get_map()
         if self._aoe_origin_fov_cache_revision != grid.propagation_revision:

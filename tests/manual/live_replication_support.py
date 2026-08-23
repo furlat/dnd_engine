@@ -61,7 +61,7 @@ def create_stream_pair() -> tuple[Entity, Entity]:
         faction="monsters",
         content_ref=BESTIARY_CREATURE_DECLARATIONS_BY_ID["skeleton"].ref,
     )
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     return hero, monster
 
 

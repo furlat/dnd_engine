@@ -39,7 +39,7 @@ def create_controller_pair(
         position=monster_position,
         faction="monsters",
     )
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
     return hero, monster
 
 

@@ -1,204 +1,91 @@
-"""Focused contract for reusable objective runtime-state serialization."""
+"""Objective illumination and replayed subjective-perception contracts."""
 
-from collections.abc import Iterator
-from uuid import uuid4
+from uuid import UUID
 
-import pytest
-
-from dnd.blocks.equipment import (
-    Weapon,
-)
-from dnd.content_system.item_bindings import ItemRuntimeOrigin
-from dnd.content_system.item_materialization import materialize_item
-from dnd.types.senses import SenseMode, SensesType
-from dnd.core.gridmap import GridMap
-from dnd.entities.entity import Entity, EntityConfig
-from dnd.items.torches import TORCH_RECIPE, Torch
-from dnd.items.weapons import DAGGER_RECIPE
-from dnd.monsters.bestiary_content import (
-    BESTIARY_CREATURE_DECLARATIONS_BY_ID,
-)
-from dnd.runtime_reset import reset_engine_runtime
-from server.objective_state import (
-    build_current_objective_game_state,
-    build_current_objective_world,
-    build_current_objective_visibility,
-    build_objective_equipment,
-    build_objective_game_state,
-    build_objective_world,
-    build_objective_visibility,
-    get_floor_object_state,
-)
+from dnd.blocks.sensory import Senses, capture_senses_snapshot
+from dnd.core.events.events_registry import EventPhase, EventQueue, EventType
+from dnd.core.events.world_events import SensoryUpdateEvent
+from dnd.core.gridmap import get_map
+from dnd.types.senses import PerceivedContact, SensesType
+from dnd.types.world import LightLevel
+from tests.engine.support import create_test_monster, reset_combat_state
 
 
-@pytest.fixture
-def objective_scene() -> Iterator[tuple[GridMap, Entity, Entity, Torch]]:
-    """Create a small deterministic runtime with actors and one floor item."""
-    grid = reset_engine_runtime(grid_size=(3, 2))
-    observer = Entity.create(
-        source_entity_uuid=uuid4(),
-        name="Observer",
-        config=EntityConfig(position=(0, 0), faction="heroes"),
-        content_ref=BESTIARY_CREATURE_DECLARATIONS_BY_ID["goblin"].ref,
-    )
-    target = Entity.create(
-        source_entity_uuid=uuid4(),
-        name="Target",
-        config=EntityConfig(position=(1, 0), faction="monsters"),
-        content_ref=BESTIARY_CREATURE_DECLARATIONS_BY_ID["skeleton"].ref,
-    )
-    torch = materialize_item(
-        TORCH_RECIPE,
-        observer.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Torch,
-    )
-    torch.name = "Debug Torch"
-    torch.is_lit = True
-    grid.place_object(torch.uuid, (1, 1))
+def reset_objective_scene(*, default_light: LightLevel) -> None:
+    """Build one event-silent line before deploying observers."""
+    reset_combat_state()
+    grid = get_map()
+    grid.disable_events()
+    grid.create_rectangle(0, 0, 6, 1)
+    for position in grid.get_all_tiles():
+        grid.set_tile_base_light(position, default_light)
+    grid.enable_events(flush_pending=False)
 
-    observer.senses.visible = {
-        (0, 0): True,
-        (1, 0): True,
-        (2, 0): False,
-    }
-    observer.senses.entities = {target.uuid: target.position}
-    observer.senses.objects = {torch.uuid: (1, 1)}
-    observer.senses.seen = {(0, 0), (1, 0), (2, 0)}
-    observer.senses.sense_modes = [
-        SenseMode(sense_type=SensesType.DARKVISION, range_feet=60),
+
+def observer_updates(observer_uuid: UUID) -> list[SensoryUpdateEvent]:
+    """Return the recorded subjective projection for one observer."""
+    return [
+        event
+        for event in EventQueue.get_events_by_type(EventType.SENSORY_UPDATE)
+        if isinstance(event, SensoryUpdateEvent)
+        and event.phase is EventPhase.COMPLETION
+        and event.observer_uuid == observer_uuid
     ]
 
-    try:
-        yield grid, observer, target, torch
-    finally:
-        reset_engine_runtime()
 
-
-def test_objective_game_state_preserves_entities_tiles_and_floor_object_state(
-    objective_scene: tuple[GridMap, Entity, Entity, Torch],
-) -> None:
-    """The explicit builder reproduces the legacy objective state shape."""
-    grid, observer, target, torch = objective_scene
-
-    state = build_objective_game_state(
-        grid=grid,
-        entities=[observer, target],
-        encounter=None,
+def perception_projection(senses: Senses) -> tuple[object, ...]:
+    """Return the accepted replay projection without navigation caches."""
+    snapshot = capture_senses_snapshot(senses)
+    return (
+        snapshot.position,
+        snapshot.visible,
+        snapshot.seen,
+        snapshot.entities,
+        snapshot.objects,
+        snapshot.effective_light_levels,
+        tuple(senses.get_sense_modes()),
+        snapshot.passive_perception,
+        snapshot.visual_access,
     )
 
-    assert state.grid.model_dump(exclude={"tiles"}) == {
-        "min_x": 0,
-        "min_y": 0,
-        "max_x": 2,
-        "max_y": 1,
-        "connectors": [],
-    }
-    assert {(tile.x, tile.y) for tile in state.grid.tiles} == {
-        (0, 0),
-        (1, 0),
-        (2, 0),
-        (0, 1),
-        (1, 1),
-        (2, 1),
-    }
-    assert [(entity.uuid, entity.name, entity.position) for entity in state.entities] == [
-        (str(observer.uuid), "Observer", (0, 0)),
-        (str(target.uuid), "Target", (1, 0)),
-    ]
-    assert state.encounter is None
-    assert len(state.floor_objects) == 1
-    floor_object = state.floor_objects[0]
-    assert floor_object.uuid == str(torch.uuid)
-    assert floor_object.name == "Debug Torch"
-    assert floor_object.position == (1, 1)
-    assert floor_object.map_char == "\u2666"
-    assert floor_object.state["is_lit"] is True
-    assert floor_object.state["bright_radius_feet"] == 20
-    assert "uuid" not in floor_object.state
-    assert "name" not in floor_object.state
-    assert "map_char" not in floor_object.state
-    assert "blocks" not in floor_object.state
 
-    assert get_floor_object_state(torch) == floor_object.state
-    assert build_current_objective_game_state(encounter=None) == state
-
-
-def test_objective_visibility_preserves_every_observer_cache_field(
-    objective_scene: tuple[GridMap, Entity, Entity, Torch],
-) -> None:
-    """Visibility retains current, remembered, entity, object, and light facts."""
-    _, observer, target, torch = objective_scene
-
-    visibility = build_objective_visibility(entities=[observer, target])
-
-    assert set(visibility.root) == {str(observer.uuid), str(target.uuid)}
-    observer_row = visibility.root[str(observer.uuid)]
-    assert observer_row.name == "Observer"
-    assert observer_row.position == (0, 0)
-    assert observer_row.visible_cells == [(0, 0), (1, 0)]
-    assert observer_row.visible_entities == [str(target.uuid)]
-    assert observer_row.visible_objects == [str(torch.uuid)]
-    assert set(observer_row.seen_cells) == {(0, 0), (1, 0), (2, 0)}
-    assert observer_row.sense_modes == [
-        SenseMode(sense_type=SensesType.DARKVISION, range_feet=60),
-    ]
-    assert observer_row.effective_light_levels == {"0,0": 3, "1,0": 3}
-
-    target_row = visibility.root[str(target.uuid)]
-    assert target_row.name == "Target"
-    assert target_row.visible_cells == []
-    assert target_row.visible_entities == []
-    assert target_row.visible_objects == []
-    assert build_current_objective_visibility() == visibility
-
-
-def test_objective_game_state_ignores_unresolved_floor_registry_entries(
-    objective_scene: tuple[GridMap, Entity, Entity, Torch],
-) -> None:
-    """A stale grid index cannot manufacture a misleading object DTO."""
-    grid, observer, target, _ = objective_scene
-    grid._object_positions[uuid4()] = (2, 1)
-
-    state = build_objective_game_state(
-        grid=grid,
-        entities=[observer, target],
-        encounter=None,
+def test_objective_darkness_and_subjective_darkvision_remain_distinct() -> None:
+    """Darkvision changes observer projection without rewriting objective light."""
+    reset_objective_scene(default_light=LightLevel.DARKNESS)
+    observer = create_test_monster(
+        "monster.skeleton", name="Observer", position=(0, 0), darkvision=True,
+    )
+    target = create_test_monster(
+        "monster.skeleton", name="Target", position=(3, 0), darkvision=False,
     )
 
-    assert len(state.floor_objects) == 1
-    assert state.floor_objects[0].name == "Debug Torch"
-
-
-def test_objective_world_includes_one_equipment_reducer_seed_per_entity(
-    objective_scene: tuple[GridMap, Entity, Entity, Torch],
-) -> None:
-    """World capture keeps equipment in the same live/replay reducer seed."""
-    grid, observer, target, _ = objective_scene
-    dagger = materialize_item(
-        DAGGER_RECIPE,
-        observer.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
-    )
-    assert observer.loot_item(dagger)
-
-    equipment = build_objective_equipment(entities=[observer, target])
-    world = build_objective_world(
-        grid=grid,
-        entities=[observer, target],
-        encounter=None,
+    tile = get_map().get_tile(3, 0)
+    assert tile is not None
+    assert tile.resolved_light_level is LightLevel.DARKNESS
+    assert observer.senses.effective_light_levels[(3, 0)] is LightLevel.DIM_LIGHT
+    assert observer.senses.entities[target.uuid] == PerceivedContact(
+        position=(3, 0),
+        visual=True,
+        special_senses=(SensesType.DARKVISION,),
     )
 
-    assert world.equipment_by_entity == equipment
-    assert set(world.equipment_by_entity) == {str(observer.uuid), str(target.uuid)}
-    assert [item.uuid for item in world.equipment_by_entity[str(observer.uuid)].inventory] == [
-        str(dagger.uuid)
-    ]
-    assert world.state == build_objective_game_state(
-        grid=grid,
-        entities=[observer, target],
-        encounter=None,
+
+def test_typed_sensory_events_replay_the_complete_subjective_projection() -> None:
+    """Cold deltas rebuild Senses without querying live GridMap state."""
+    reset_objective_scene(default_light=LightLevel.DARKNESS)
+    observer = create_test_monster(
+        "monster.skeleton", name="Observer", position=(0, 0), darkvision=True,
     )
-    assert world.visibility == build_objective_visibility(entities=[observer, target])
-    assert build_current_objective_world(encounter=None) == world
+    create_test_monster(
+        "monster.skeleton", name="Target", position=(3, 0), darkvision=False,
+    )
+
+    replay = Senses.create(source_entity_uuid=observer.uuid)
+    for event in observer_updates(observer.uuid):
+        replay.apply_sensory_update(event)
+
+    assert perception_projection(replay) == perception_projection(observer.senses)
+    assert all(
+        isinstance(contact, PerceivedContact)
+        for contact in replay.entities.values()
+    )

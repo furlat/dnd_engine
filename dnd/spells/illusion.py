@@ -256,7 +256,8 @@ class FearEffect(BaseCondition):
                 target.remove_condition("Fear", parent_event=event)
                 return None
 
-            if caster_uuid in target.senses.entities:
+            contact = target.senses.entities.get(caster_uuid)
+            if contact is not None and contact.visual:
                 return None
 
             save_request = caster.create_saving_throw_request(

@@ -1126,7 +1126,7 @@ def test_subjective_connector_projection_requires_both_endpoint_grants() -> None
         position=(0, 0),
         faction="heroes",
     )
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
 
     visible_projection = project_grid(
         grid,

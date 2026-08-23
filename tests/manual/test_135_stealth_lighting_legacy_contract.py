@@ -582,7 +582,7 @@ def test_perceivability_boundaries_special_senses_and_objects() -> None:
     ]
     item = BaseItem(source_entity_uuid=uuid4(), name="Hidden Cache")
     item.place_on_grid((2, 1))
-    Entity.update_all_entities_senses(max_distance=8)
+    Entity.materialize_all_navigation(max_distance=8)
 
     assert target.stealth_dc is None
     assert target.is_invisible is False
@@ -608,10 +608,10 @@ def test_perceivability_boundaries_special_senses_and_objects() -> None:
     assert target.uuid in observer.senses.entities
 
     item.set_stealth_dc(passive)
-    observer.update_entity_senses(max_distance=8)
+    observer.materialize_navigation(max_distance=8)
     assert item.uuid not in observer.senses.objects
     item.set_stealth_dc(None)
-    observer.update_entity_senses(max_distance=8)
+    observer.materialize_navigation(max_distance=8)
     assert item.uuid in observer.senses.objects
 
 
@@ -668,7 +668,7 @@ def test_real_attack_reveals_hidden_and_spell_invisibility() -> None:
         faction="monsters",
         darkvision=False,
     )
-    Entity.update_all_entities_senses(max_distance=10)
+    Entity.materialize_all_navigation(max_distance=10)
     add_hidden(attacker)
     invisibility = InvisibilityEffect(
         source_entity_uuid=attacker.uuid,
@@ -755,7 +755,7 @@ def test_damage_incapacity_and_spell_events_reveal_hidden_state() -> None:
         faction="monsters",
         darkvision=False,
     )
-    Entity.update_all_entities_senses(max_distance=10)
+    Entity.materialize_all_navigation(max_distance=10)
     add_hidden(caster)
     caster.add_condition(
         InvisibilityEffect(
@@ -794,7 +794,7 @@ def test_hide_uses_subjective_enemy_visibility_and_emits_stealth_check() -> None
         faction="monsters",
         darkvision=False,
     )
-    Entity.update_all_entities_senses(max_distance=8)
+    Entity.materialize_all_navigation(max_distance=8)
     assert hider.uuid in enemy.senses.entities
     skill_checks_before = len(EventQueue.get_events_by_type(EventType.SKILL_CHECK))
 
@@ -844,7 +844,7 @@ def test_hide_succeeds_in_darkness_or_without_enemy_observers() -> None:
         faction="monsters",
         darkvision=False,
     )
-    Entity.update_all_entities_senses(max_distance=10)
+    Entity.materialize_all_navigation(max_distance=10)
     assert dark_hider.uuid not in dark_enemy.senses.entities
 
     with fixed_dice_faces(11):
@@ -861,7 +861,7 @@ def test_hide_succeeds_in_darkness_or_without_enemy_observers() -> None:
         faction="heroes",
         darkvision=False,
     )
-    Entity.update_all_entities_senses(max_distance=10)
+    Entity.materialize_all_navigation(max_distance=10)
 
     with fixed_dice_faces(11):
         bright_result = Hide(source_entity_uuid=lone_hider.uuid).apply()
@@ -881,7 +881,7 @@ def test_non_revealing_actions_and_movement_preserve_hidden() -> None:
         faction="heroes",
         darkvision=False,
     )
-    actor.update_entity_senses(max_distance=10)
+    actor.materialize_navigation(max_distance=10)
     add_hidden(actor)
 
     dodge = Dodge(source_entity_uuid=actor.uuid).apply()
@@ -928,7 +928,7 @@ def test_greater_invisibility_self_cast_owns_lineage_and_concentration() -> None
         faction="monsters",
         darkvision=False,
     )
-    Entity.update_all_entities_senses(max_distance=10)
+    Entity.materialize_all_navigation(max_distance=10)
     assert caster.action_economy.spell_slot_4.normalized_score == 1
 
     result = GreaterInvisibility(
@@ -1049,7 +1049,7 @@ def test_assassin_dagger_mutates_only_unseen_damage_and_cleans_handler() -> None
     assert handler_uuid is not None
     assert attacker.get_event_handler_by_name("Unseen Strike") is not None
     assert EventHandler.get(handler_uuid) is not None
-    Entity.update_all_entities_senses(max_distance=10)
+    Entity.materialize_all_navigation(max_distance=10)
     assert attacker.uuid in target.senses.entities
 
     target_hp = get_max_hp(target)
@@ -1117,7 +1117,7 @@ def test_magical_darkness_controls_attack_discovery_by_sense_mode() -> None:
         faction="monsters",
         darkvision=False,
     )
-    Entity.update_all_entities_senses(max_distance=8)
+    Entity.materialize_all_navigation(max_distance=8)
     assert target.uuid in attacker.senses.entities
     assert target_is_discoverable(attacker, target.uuid)
 
@@ -1130,7 +1130,7 @@ def test_magical_darkness_controls_attack_discovery_by_sense_mode() -> None:
     attacker.senses.sense_modes.append(
         SenseMode(sense_type=SensesType.DEVILS_SIGHT, range_feet=120)
     )
-    attacker.update_entity_senses(max_distance=8)
+    attacker.materialize_navigation(max_distance=8)
 
     assert target.uuid in attacker.senses.entities
     assert target_is_discoverable(attacker, target.uuid)
@@ -1212,7 +1212,7 @@ def test_light_add_spots_only_the_hidden_enemy() -> None:
         faction="monsters",
         darkvision=False,
     )
-    Entity.update_all_entities_senses(max_distance=8)
+    Entity.materialize_all_navigation(max_distance=8)
     add_hidden(hidden_enemy, observer.get_passive_perception() - 1)
     assert hidden_enemy.uuid not in observer.senses.entities
     assert plain_enemy.uuid not in observer.senses.entities
@@ -1244,7 +1244,7 @@ def test_torch_light_change_refreshes_move_targets() -> None:
         faction="heroes",
         darkvision=False,
     )
-    Entity.update_all_entities_senses(max_distance=16)
+    Entity.materialize_all_navigation(max_distance=16)
 
     before = carrier.get_available_actions()
     before_move = next(
@@ -1300,7 +1300,7 @@ def test_anchored_torch_movement_spots_hidden_enemy_reactively() -> None:
         faction="monsters",
         darkvision=False,
     )
-    Entity.update_all_entities_senses(max_distance=16)
+    Entity.materialize_all_navigation(max_distance=16)
     add_hidden(hidden_enemy, carrier.get_passive_perception() - 1)
     torch = materialize_item(
         TORCH_RECIPE,
@@ -1348,7 +1348,7 @@ def test_light_toggle_spots_hidden_enemy_reactively() -> None:
         faction="monsters",
         darkvision=False,
     )
-    Entity.update_all_entities_senses(max_distance=8)
+    Entity.materialize_all_navigation(max_distance=8)
     add_hidden(hidden_enemy, observer.get_passive_perception() - 1)
     light_uuid = get_map().add_light_source(
         (1, 1),

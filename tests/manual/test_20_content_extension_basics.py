@@ -316,7 +316,7 @@ def test_floor_object_use_action_comes_from_nearby_sensed_item(capsys) -> None:
     hero = create_test_monster("monster.goblin", name="Floor Kit User", position=(1, 1), faction="heroes")
     kit = _materialize_field_kit(hero.uuid)
     kit.place_on_grid((1, 2))
-    Entity.update_all_entities_senses(max_distance=20)
+    Entity.materialize_all_navigation(max_distance=20)
 
     actions = get_available_actions(hero)
     item_action = find_item_action(actions, "Deploy Field Focus", kit.uuid)
