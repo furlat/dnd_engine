@@ -54,6 +54,7 @@ from dnd.core.world_edges import (
     ElevationSurfaceKind,
     contradictory_progressive_elevation_edge,
 )
+from dnd.types.materials import Material, TileSurface
 from dnd.environmental_effect_runtime import (
     extend_spike_trap_effect,
     materialize_spike_trap_effect,
@@ -147,8 +148,26 @@ def build_scratch_map(request: MapEditorCreateMapRequest) -> None:
     """Build a simple rectangular editor map."""
     grid = get_map()
     x0, y0 = request.origin
-    walkable, visible, name = _tile_properties(request.default_tile)
-    grid.create_rectangle(x0, y0, request.width, request.height, walkable=walkable, visible=visible, name=name)
+    walkable, _legacy_visible, name = _tile_properties(request.default_tile)
+    tile_type = _normalize_id(request.default_tile)
+    surface = TileSurface(
+        base_material=Material.WATER
+        if tile_type == "water"
+        else Material.STONE,
+    )
+    blocks_optics = tile_type == "wall"
+    blocks_propagation = tile_type == "wall"
+    grid.create_rectangle(
+        x0,
+        y0,
+        request.width,
+        request.height,
+        surface=surface,
+        walkable=walkable,
+        blocks_optics=blocks_optics,
+        blocks_propagation=blocks_propagation,
+        name=name,
+    )
     for x in range(x0, x0 + request.width):
         for y in range(y0, y0 + request.height):
             tile = grid.get_tile(x, y)
@@ -626,8 +645,10 @@ def apply_tile_patches(patches: Iterable[MapEditorTilePatch]) -> MapEditorMapSna
                 grid.set_tile(
                     patch.x,
                     patch.y,
+                    surface=TileSurface(base_material=Material.STONE),
                     walkable=True,
-                    visible=True,
+                    blocks_optics=False,
+                    blocks_propagation=False,
                     name="Floor",
                     height=requested_elevation,
                     elevation_surface_kind=requested_kind,
@@ -648,8 +669,10 @@ def apply_tile_patches(patches: Iterable[MapEditorTilePatch]) -> MapEditorMapSna
             tile = grid.set_tile(
                 patch.x,
                 patch.y,
+                surface=TileSurface(base_material=Material.STONE),
                 walkable=True,
-                visible=True,
+                blocks_optics=False,
+                blocks_propagation=False,
                 name="Floor",
                 height=requested_elevation,
                 elevation_surface_kind=requested_kind,
@@ -676,12 +699,20 @@ def apply_tile_patches(patches: Iterable[MapEditorTilePatch]) -> MapEditorMapSna
             grid.set_tile(patch.x, patch.y, tile=tile)
             _apply_directional_tile_patch(grid, patch)
             continue
-        walkable, visible, name = _tile_properties(tile_type)
+        walkable, _legacy_visible, name = _tile_properties(tile_type)
         tile = grid.set_tile(
             patch.x,
             patch.y,
+            surface=TileSurface(
+                base_material=(
+                    Material.WATER
+                    if tile_type == "water"
+                    else Material.STONE
+                ),
+            ),
             walkable=walkable,
-            visible=visible,
+            blocks_optics=tile_type == "wall",
+            blocks_propagation=tile_type == "wall",
             name=name,
             height=requested_elevation,
             elevation_surface_kind=requested_kind,
@@ -709,7 +740,15 @@ def _apply_directional_tile_patch(grid: Any, patch: MapEditorTilePatch) -> None:
     if patch.directional_channel is None or patch.direction is None or patch.passable is None:
         raise ValueError("directional_channel, direction, and passable are required together")
     if grid.get_tile(patch.x, patch.y) is None:
-        grid.set_tile(patch.x, patch.y, walkable=True, visible=True, name="Floor")
+        grid.set_tile(
+            patch.x,
+            patch.y,
+            surface=TileSurface(base_material=Material.STONE),
+            walkable=True,
+            blocks_optics=False,
+            blocks_propagation=False,
+            name="Floor",
+        )
     grid.set_tile_directional_border(
         (patch.x, patch.y),
         patch.directional_channel,
@@ -803,7 +842,10 @@ def _capture_editor_materialization_state(
         frozenset(BaseObject._registry),
         frozenset(BaseValue._registry),
         frozenset(ITEM_RUNTIME_BINDINGS.bindings),
-        frozenset(get_map().get_all_object_positions()),
+        frozenset(
+            placement.object_uuid
+            for placement in get_map().get_all_object_placements()
+        ),
     )
 
 
@@ -825,9 +867,10 @@ def _rollback_editor_materialization(
         objects_before,
     ) = snapshot
     grid = get_map()
-    for object_uuid in set(grid.get_all_object_positions()) - set(
-        objects_before
-    ):
+    for object_uuid in {
+        placement.object_uuid
+        for placement in grid.get_all_object_placements()
+    } - set(objects_before):
         grid.remove_object(object_uuid)
     for block_uuid in set(BaseBlock._registry) - set(blocks_before):
         grid.cleanup_block_light_sources(block_uuid)
@@ -938,7 +981,8 @@ def _active_spike_trap_effects() -> list[SpikeTrapGroundEffect]:
 def _bind_unlinked_trap_levers(trap_effect_uuid: UUID) -> None:
     """Bind existing editor levers after their sole trap network is authored."""
     grid = get_map()
-    for object_uuid in sorted(grid.get_all_object_positions(), key=str):
+    for placement in grid.get_all_object_placements():
+        object_uuid = placement.object_uuid
         item = BaseBlock.get(object_uuid)
         if not isinstance(item, TrapLever):
             continue
@@ -1016,12 +1060,12 @@ def get_visibility_blockers() -> MapEditorVisibilityResponse:
     cells = []
     for x, y, tile in _iter_tiles():
         blocker: Optional[str] = None
-        if not tile.visible:
+        if tile.blocks_optics:
             blocker = tile.name
         else:
             for obj_uuid in get_map().get_objects_at((x, y)):
                 block = BaseBlock.get(obj_uuid)
-                if block is not None and block.blocks_vision(None):
+                if block is not None and block.blocks_optics_at_center():
                     blocker = block.name
                     break
         cells.append(MapEditorVisibilityCell(x=x, y=y, blocks_visibility=blocker is not None, blocker=blocker))
@@ -1184,8 +1228,10 @@ def _load_editor_snapshot(
         tile = grid.set_tile(
             tile_data.x,
             tile_data.y,
+            surface=TileSurface(base_material=Material.STONE),
             walkable=tile_data.walkable,
-            visible=tile_data.visible,
+            blocks_optics=not tile_data.visible,
+            blocks_propagation=not tile_data.visible,
             name=tile_data.name,
             sprite_name=tile_data.visual_key,
             fire_event=False,
@@ -1264,8 +1310,8 @@ def _iter_tiles() -> Iterable[Tuple[int, int, Tile]]:
 
 def _floor_objects(grid: Any) -> List[APIFloorObject]:
     result = []
-    for obj_uuid, obj_pos in grid.get_all_object_positions().items():
-        result.append(_floor_object(obj_uuid, obj_pos))
+    for placement in grid.get_all_object_placements():
+        result.append(_floor_object(placement.object_uuid, placement.position))
     return result
 
 

@@ -1,16 +1,20 @@
 """Engine semantic tests for grid, tiles, terrain, and pathfinding."""
+from dnd.types.materials import Material, TileSurface
 
 from uuid import UUID, uuid4
 
 import pytest
 
-import dnd.core.gridmap as gridmap_module
 from dnd.blocks.base_item import (
     BaseItem,
 )
+from dnd.content.items.environment_item_builders import (
+    build_directional_door,
+    build_directional_wall,
+)
 from dnd.core.aoe import Cone, Cylinder, Line, Sphere
 from dnd.core.base_block import BaseBlock
-from dnd.types.world import MovementMode
+from dnd.types.world import CardinalDirection, MovementMode, WorldEdgeChannel
 from dnd.core.base_conditions import BaseCondition
 from dnd.types.conditions import ConditionCategory, HazardFilter
 from dnd.core.base_object import BaseObject
@@ -28,6 +32,7 @@ from dnd.core.events.events_registry import (
     EventType,
 )
 from dnd.core.events.world_events import (
+    ForcedMovementEvent,
     SpatialChangeEvent,
 )
 from dnd.core.geometry import circle_positions, supercover_line
@@ -42,6 +47,7 @@ from dnd.actions.standard import (
     Move,
     Shove,
 )
+from dnd.spells.evocation import Thunderwave
 from dnd.entities.entity import Entity
 from tests.engine.support import create_test_monster
 from dnd.content.spatial_effect_materialization import (
@@ -133,7 +139,7 @@ def reset_grid_state(width: int = 8, height: int = 8, x: int = 0, y: int = 0) ->
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
     BaseValue._registry.clear()
-    get_map().create_rectangle(x, y, width, height)
+    get_map().create_rectangle(x, y, width, height, surface=TileSurface(base_material=Material.STONE))
 
 
 def test_eb_11_001_tiles_are_grid_stored_blocks_with_uuid_lookup() -> None:
@@ -144,6 +150,7 @@ def test_eb_11_001_tiles_are_grid_stored_blocks_with_uuid_lookup() -> None:
     tile = grid.set_tile(
         3,
         4,
+        surface=TileSurface(base_material=Material.STONE),
         walkable=True,
         blocks_optics=False,
         name="Marble Floor",
@@ -291,7 +298,14 @@ def test_eb_11_021_diagonal_transitions_need_one_cardinal_bridge_route() -> None
 
     assert grid.can_transition((0, 0), (1, 1))
 
-    grid.set_tile_directional_border((0, 0), "movement", "east", False)
+    east_wall = build_directional_wall(
+        blocked_channels=(WorldEdgeChannel.MOVEMENT,),
+    )
+    grid.place_object(
+        east_wall.uuid,
+        (0, 0),
+        boundary_direction=CardinalDirection.EAST,
+    )
     one_bridge_distances, one_bridge_paths = grid.compute_paths(
         (0, 0),
         movement_mode=MovementMode.WALKING,
@@ -303,7 +317,14 @@ def test_eb_11_021_diagonal_transitions_need_one_cardinal_bridge_route() -> None
     assert one_bridge_distances[(1, 1)] == 1
     assert one_bridge_paths[(1, 1)] == [(0, 0), (1, 1)]
 
-    grid.set_tile_directional_border((0, 0), "movement", "north", False)
+    north_wall = build_directional_wall(
+        blocked_channels=(WorldEdgeChannel.MOVEMENT,),
+    )
+    grid.place_object(
+        north_wall.uuid,
+        (0, 0),
+        boundary_direction=CardinalDirection.NORTH,
+    )
     no_bridge_distances, no_bridge_paths = grid.compute_paths(
         (0, 0),
         movement_mode=MovementMode.WALKING,
@@ -424,47 +445,65 @@ def test_eb_11_015_dead_entities_become_non_blocking_for_paths() -> None:
     assert mover.senses.paths[(4, 0)] == [(0, 0), (1, 0), (2, 0), (3, 0), (4, 0)]
 
 
-def test_eb_11_006_directional_borders_block_transitions_and_emit_metadata() -> None:
-    """EB-11-006: directional border changes affect crossing, not whole tiles."""
+def test_eb_11_006_boundary_providers_block_transitions_and_emit_metadata() -> None:
+    """EB-11-006: one boundary provider blocks crossing, not whole tiles."""
     reset_grid_state(width=4, height=1)
     grid = get_map()
     cursor = EventQueue.event_cursor()
 
-    changed = grid.set_tile_directional_border((1, 0), "movement", "east", False)
+    wall = build_directional_wall(
+        blocked_channels=(WorldEdgeChannel.MOVEMENT,),
+    )
+    placement = grid.place_object(
+        wall.uuid,
+        (1, 0),
+        boundary_direction=CardinalDirection.EAST,
+    )
 
     events = [
         event
         for _, event in EventQueue.iter_events_since(cursor)
         if isinstance(event, SpatialChangeEvent)
-        and event.event_type == EventType.SPATIAL_TILE_CHANGED
-        and event.phase == EventPhase.DECLARATION
+        and event.event_type == EventType.SPATIAL_OBJECT_PLACED
+        and event.phase == EventPhase.COMPLETION
+        and event.object_uuid == wall.uuid
     ]
     event = events[-1] if events else None
 
-    assert changed is True
+    assert placement.boundary_direction is CardinalDirection.EAST
     assert grid.is_walkable(1, 0)
     assert not grid.can_transition((1, 0), (2, 0))
     assert not grid.can_transition((2, 0), (1, 0))
     assert grid.can_transition((1, 0), (0, 0))
     assert event is not None
-    assert event.directional_position == (1, 0)
-    assert event.directional_directions == ["east"]
-    assert event.directional_channels == ["movement"]
-    assert {(1, 0), (2, 0)} <= event.get_affected_positions()
+    assert event.placement == placement
+    assert event.object_boundary_structure is not None
+    assert event.object_boundary_structure.blocked_channels == (
+        WorldEdgeChannel.MOVEMENT,
+    )
+    assert event.get_affected_positions() == {(1, 0), (2, 0)}
+    assert event.senses_hint is not None
+    assert event.senses_hint.directional_positions == {(1, 0)}
+    assert event.senses_hint.directional_neighbors == {(2, 0)}
+    assert event.senses_hint.directional_channels_changed == {"movement"}
 
 
 def test_eb_11_007_directional_channels_are_independent() -> None:
     """EB-11-007: movement, optics, and propagation are separate channels."""
     reset_grid_state(width=4, height=3)
     grid = get_map()
-    screen = BaseItem(
-        source_entity_uuid=uuid4(),
-        name="Screen",
-        is_pickable=False,
-        blocks_optics_east=True,
-        blocks_propagation_east=True,
+    screen = build_directional_wall(
+        display_name="Screen",
+        blocked_channels=(
+            WorldEdgeChannel.OPTICAL,
+            WorldEdgeChannel.PROPAGATION,
+        ),
     )
-    grid.place_object(screen.uuid, (1, 1))
+    grid.place_object(
+        screen.uuid,
+        (1, 1),
+        boundary_direction=CardinalDirection.EAST,
+    )
 
     assert grid.can_transition((1, 1), (2, 1))
     assert (2, 1) not in set(grid.compute_fov((1, 1), max_distance=3))
@@ -496,42 +535,107 @@ def test_eb_11_022_fov_cache_invalidates_when_optical_blockers_change() -> None:
     assert (1, 1) in second_fov
 
 
-def test_eb_11_023_propagation_cache_reuses_results_and_invalidates_on_blockers(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """EB-11-023: AoE propagation caches follow physical blocker revisions."""
+def test_eb_11_023_propagation_cache_reuses_results_and_invalidates_on_blockers() -> None:
+    """EB-11-023: public propagation results follow physical blocker revisions."""
     reset_grid_state(width=6, height=3)
     grid = get_map()
-    original_compute_fov = gridmap_module.compute_fov
-    compute_calls = 0
-
-    def track_compute_fov(*args, **kwargs):
-        nonlocal compute_calls
-        compute_calls += 1
-        return original_compute_fov(*args, **kwargs)
-
-    monkeypatch.setattr(gridmap_module, "compute_fov", track_compute_fov)
     first_fov = grid.compute_propagation_fov((0, 1), max_distance=6)
     first_revision = grid.propagation_revision
+    first_result = tuple(first_fov)
     first_fov.append((99, 99))
     second_fov = grid.compute_propagation_fov((0, 1), max_distance=6)
 
-    assert compute_calls == 1
+    assert grid.propagation_revision == first_revision
     assert (99, 99) not in second_fov
     assert (5, 1) in second_fov
+    assert tuple(second_fov) == first_result
 
-    wall = BaseItem(
-        source_entity_uuid=uuid4(),
-        name="Propagation Cache Wall",
-        is_pickable=False,
-        blocks_propagation_field=True,
+    grid.get_world_edge((2, 1), (3, 1))
+    first_diagnostics = grid.last_operation_diagnostics
+    assert (
+        first_diagnostics.operation,
+        first_diagnostics.tiles_inspected,
+        first_diagnostics.bands_inspected,
+    ) == ("get_world_edge", 2, 0)
+
+    wall = build_directional_wall(
+        display_name="Propagation Cache Wall",
+        blocked_channels=(WorldEdgeChannel.PROPAGATION,),
     )
-    grid.place_object(wall.uuid, (2, 1))
+    grid.place_object(
+        wall.uuid,
+        (2, 1),
+        boundary_direction=CardinalDirection.EAST,
+    )
     third_fov = grid.compute_propagation_fov((0, 1), max_distance=6)
 
     assert grid.propagation_revision > first_revision
-    assert compute_calls == 2
     assert (5, 1) not in third_fov
+    assert (2, 1) in grid.get_barrier_positions({(2, 1), (3, 1)})
+    grid.get_world_edge((2, 1), (3, 1))
+    assert grid.last_operation_diagnostics.tiles_inspected == 2
+    assert grid.last_operation_diagnostics.bands_inspected == 2
+
+
+def test_propagation_only_boundary_removes_threat_and_opportunity_attack() -> None:
+    """A propagation-only edge removes threat while movement and optics pass."""
+    reset_grid_state(width=5, height=3)
+    grid = get_map()
+    watcher = create_test_monster(
+        "monster.skeleton",
+        name="Watcher",
+        position=(1, 1),
+        faction="monsters",
+    )
+    mover = create_test_monster(
+        "monster.goblin",
+        name="Mover",
+        position=(2, 1),
+        faction="heroes",
+    )
+    Entity.materialize_all_navigation(max_distance=20)
+
+    assert watcher.uuid in mover.senses.entities
+    assert watcher.threatens_entity_at(mover)
+    assert grid.can_transition((1, 1), (2, 1), mover.uuid)
+    assert grid.can_optical_transition((1, 1), (2, 1))
+    before_move = next(
+        action
+        for action in mover.get_available_actions().position_actions
+        if action.template_name == "Move"
+    )
+    before_target = next(
+        target for target in before_move.valid_targets
+        if target.position == (3, 1)
+    )
+    assert [
+        exposure.reactor_uuid
+        for exposure in before_target.opportunity_attack_exposures
+    ] == [watcher.uuid]
+
+    boundary = build_directional_wall(
+        display_name="Propagation Screen",
+        blocked_channels=(WorldEdgeChannel.PROPAGATION,),
+    )
+    grid.place_object(
+        boundary.uuid,
+        (1, 1),
+        boundary_direction=CardinalDirection.EAST,
+    )
+
+    assert not watcher.threatens_entity_at(mover)
+    assert grid.can_transition((1, 1), (2, 1), mover.uuid)
+    assert grid.can_optical_transition((1, 1), (2, 1))
+    after_move = next(
+        action
+        for action in mover.get_available_actions().position_actions
+        if action.template_name == "Move"
+    )
+    after_target = next(
+        target for target in after_move.valid_targets
+        if target.position == (3, 1)
+    )
+    assert after_target.opportunity_attack_exposures == []
 
 
 def test_eb_11_017_forced_movement_and_jump_respect_directional_blockers() -> None:
@@ -539,14 +643,27 @@ def test_eb_11_017_forced_movement_and_jump_respect_directional_blockers() -> No
     reset_grid_state(width=4, height=3)
     grid = get_map()
     actor = create_test_monster("monster.skeleton", name="Actor", position=(1, 1), faction="heroes")
-    wall = BaseItem(
-        source_entity_uuid=uuid4(),
-        name="Directional Force Wall",
-        is_pickable=False,
-        blocks_movement_east=True,
-        blocks_propagation_east=True,
+    wall = build_directional_wall(
+        display_name="Directional Force Wall",
+        blocked_channels=(
+            WorldEdgeChannel.MOVEMENT,
+            WorldEdgeChannel.PROPAGATION,
+        ),
     )
-    grid.place_object(wall.uuid, (1, 1))
+    grid.place_object(
+        wall.uuid,
+        (1, 1),
+        boundary_direction=CardinalDirection.EAST,
+    )
+    entry_wall = build_directional_wall(
+        display_name="Directional Entry Wall",
+        blocked_channels=(WorldEdgeChannel.MOVEMENT, WorldEdgeChannel.PROPAGATION),
+    )
+    grid.place_object(
+        entry_wall.uuid,
+        (2, 1),
+        boundary_direction=CardinalDirection.WEST,
+    )
     Entity.materialize_all_navigation(max_distance=20)
 
     final_pos, distance, blocked, blocker_name = Shove.calculate_final_position(
@@ -559,8 +676,127 @@ def test_eb_11_017_forced_movement_and_jump_respect_directional_blockers() -> No
     assert final_pos == (1, 1)
     assert distance == 0
     assert blocked is True
-    assert blocker_name == "obstacle"
+    assert blocker_name == wall.name
     assert not grid.can_transition((1, 1), (2, 1), actor.uuid)
+
+    grid.remove_object(wall.uuid)
+    final_pos, distance, blocked, blocker_name = Shove.calculate_final_position(
+        start=(1, 1),
+        direction=(1, 0),
+        distance_feet=5,
+        target_uuid=actor.uuid,
+    )
+    assert final_pos == (1, 1)
+    assert distance == 0
+    assert blocked is True
+    assert blocker_name == entry_wall.name
+
+    clear_diagonal = (0, 2)
+    assert grid.can_transition((1, 1), clear_diagonal, actor.uuid)
+    assert grid.identify_blocker_at(
+        clear_diagonal,
+        actor.uuid,
+        source_position=(1, 1),
+    ) is None
+
+    bridge_wall = build_directional_wall(
+        display_name="Diagonal Bridge Wall",
+        blocked_channels=(WorldEdgeChannel.MOVEMENT,),
+    )
+    grid.place_object(
+        bridge_wall.uuid,
+        (1, 1),
+        boundary_direction=CardinalDirection.WEST,
+    )
+    bridge_wall_other_leg = build_directional_wall(
+        display_name="Diagonal Bridge Wall Other Leg",
+        blocked_channels=(WorldEdgeChannel.MOVEMENT,),
+    )
+    grid.place_object(
+        bridge_wall_other_leg.uuid,
+        (1, 1),
+        boundary_direction=CardinalDirection.NORTH,
+    )
+    assert not grid.can_transition((1, 1), clear_diagonal, actor.uuid)
+    assert grid.identify_blocker_at(
+        clear_diagonal,
+        actor.uuid,
+        source_position=(1, 1),
+    ) == "obstacle"
+
+    closed_door = build_directional_door(
+        display_name="Closed Identity Door",
+        blocked_channels=(WorldEdgeChannel.MOVEMENT,),
+    )
+    grid.place_object(
+        closed_door.uuid,
+        (1, 2),
+        boundary_direction=CardinalDirection.EAST,
+    )
+    assert not grid.can_transition((1, 2), (2, 2), actor.uuid)
+    assert grid.identify_blocker_at(
+        (2, 2),
+        actor.uuid,
+        source_position=(1, 2),
+    ) == closed_door.name
+
+    thunderwave_caster = create_test_monster(
+        "monster.generic_caster",
+        name="Thunderwave caster",
+        position=(0, 0),
+        faction="heroes",
+    )
+    push_target = create_test_monster(
+        "monster.skeleton",
+        name="Thunderwave target",
+        position=(1, 0),
+        faction="monsters",
+    )
+    dead_non_blocker = create_test_monster(
+        "monster.skeleton",
+        name="Dead non-blocker",
+        position=(2, 0),
+        faction="monsters",
+    )
+    dead_non_blocker.receive_damage(
+        dead_non_blocker.get_hp() + 5,
+        DamageType.BLUDGEONING,
+        actor.uuid,
+    )
+    assert dead_non_blocker.health.life_state is LifeState.DEAD
+    assert dead_non_blocker.blocks_walking(
+        requesting_entity_uuid=push_target.uuid,
+    ) is False
+    push_target.saving_throws.get_saving_throw(
+        "constitution",
+    ).bonus.self_static.add_value_modifier(
+        NumericalModifier.create(
+            source_entity_uuid=thunderwave_caster.uuid,
+            target_entity_uuid=push_target.uuid,
+            name="Forced Thunderwave failed save",
+            value=-100,
+        )
+    )
+    thunderwave = Thunderwave(
+        source_entity_uuid=thunderwave_caster.uuid,
+        target_entity_uuid=push_target.uuid,
+        end_position=push_target.position,
+    )
+    cursor = EventQueue.event_cursor()
+    thunderwave_result = thunderwave.apply()
+    assert thunderwave_result is not None
+    assert not thunderwave_result.canceled
+    assert push_target.position == (3, 0)
+    forced_events = [
+        event
+        for _index, event in EventQueue.iter_events_since(cursor)
+        if isinstance(event, ForcedMovementEvent)
+        and event.phase is EventPhase.COMPLETION
+        and event.target_entity_uuid == push_target.uuid
+    ]
+    assert len(forced_events) == 1
+    assert forced_events[0].blocked_by_obstacle is False
+    assert forced_events[0].blocked_by is None
 
     jump = Jump(source_entity_uuid=actor.uuid, template=True)
     assert (3, 1) in actor.senses.visible
@@ -580,6 +816,76 @@ def test_eb_11_017_forced_movement_and_jump_respect_directional_blockers() -> No
     assert validated.canceled is True
     assert validated.status_message is not None
     assert "blocked" in validated.status_message.lower()
+
+
+def test_unknown_boundary_collision_records_directed_memory_before_reroute() -> None:
+    """An unknown objective boundary first collides, then blocks remembered subjective routing."""
+    reset_grid_state(width=3, height=1)
+    grid = get_map()
+    wall = build_directional_wall(
+        display_name="Hidden remembered wall",
+        blocked_channels=(WorldEdgeChannel.MOVEMENT,),
+    )
+    grid.place_object(
+        wall.uuid,
+        (1, 0),
+        boundary_direction=CardinalDirection.WEST,
+    )
+    wall.set_invisible(True)
+    actor = create_test_monster(
+        "monster.skeleton",
+        name="Unknown-collision actor",
+        position=(0, 0),
+        darkvision=False,
+    )
+    Entity.materialize_all_navigation(max_distance=10)
+
+    assert wall.uuid not in actor.senses.objects
+    assert grid.can_transition(
+        (0, 0),
+        (1, 0),
+        actor.uuid,
+        subjective=True,
+        directional_collision_blocked=actor.senses.directional_collision_blocked,
+    )
+    assert not grid.can_transition((0, 0), (1, 0), actor.uuid)
+
+    cursor = EventQueue.event_cursor()
+    result = Move(
+        source_entity_uuid=actor.uuid,
+        end_position=(1, 0),
+        use_movement_cost=False,
+    ).apply()
+
+    assert result is not None
+    assert result.termination_reason.value == "collision"
+    assert actor.position == (0, 0)
+    assert wall.uuid not in actor.senses.objects
+    assert grid.can_transition(
+        (0, 0),
+        (1, 0),
+        actor.uuid,
+        subjective=True,
+        directional_collision_blocked=set(),
+    )
+    assert ( (0, 0), "east") in actor.senses.directional_collision_blocked
+    collision_facts = [
+        event
+        for _index, event in EventQueue.iter_events_since(cursor)
+        if isinstance(event, SpatialChangeEvent)
+        and event.event_type is EventType.MOVEMENT_COLLISION
+        and event.phase is EventPhase.COMPLETION
+    ]
+    assert len(collision_facts) == 1
+    assert collision_facts[0].transition_from == (0, 0)
+    assert collision_facts[0].transition_to == (1, 0)
+    assert not grid.can_transition(
+        (0, 0),
+        (1, 0),
+        actor.uuid,
+        subjective=True,
+        directional_collision_blocked=actor.senses.directional_collision_blocked,
+    )
 
 
 def test_eb_11_008_hazards_can_be_excluded_from_safe_paths() -> None:
@@ -674,6 +980,7 @@ def test_eb_11_009_geometry_and_aoe_are_grid_aware_where_needed() -> None:
     grid.set_tile(
         2,
         1,
+        surface=TileSurface(base_material=Material.STONE),
         walkable=False,
         blocks_optics=True,
         blocks_propagation=True,
@@ -756,6 +1063,7 @@ def test_eb_11_019_cylinder_subjective_preview_matches_targeting_footprint() -> 
     grid.set_tile(
         2,
         1,
+        surface=TileSurface(base_material=Material.STONE),
         walkable=False,
         blocks_optics=True,
         blocks_propagation=True,
@@ -769,7 +1077,6 @@ def test_eb_11_019_cylinder_subjective_preview_matches_targeting_footprint() -> 
     subjective.compute_subjective(
         caster.position,
         caster.senses,
-        barrier_positions=grid.get_barrier_positions(),
         caster_uuid=caster.uuid,
     )
 
@@ -777,7 +1084,6 @@ def test_eb_11_019_cylinder_subjective_preview_matches_targeting_footprint() -> 
     targeting.compute_for_targeting(
         caster.position,
         caster.senses,
-        barrier_positions=grid.get_barrier_positions(),
         caster_uuid=caster.uuid,
     )
 
@@ -894,8 +1200,8 @@ def test_eb_11_010_walkability_is_cost_driven_not_the_legacy_flag() -> None:
     assert not grid.is_walkable(1, 0)
 
 
-def test_eb_11_011_replacing_object_position_removes_old_grid_membership() -> None:
-    """EB-11-011: placing the same object twice keeps one authoritative position."""
+def test_eb_11_011_moving_object_replaces_old_grid_membership() -> None:
+    """EB-11-011: explicit movement keeps one authoritative placement."""
     reset_grid_state(width=4, height=1)
     grid = get_map()
     crate = BaseItem(
@@ -905,7 +1211,7 @@ def test_eb_11_011_replacing_object_position_removes_old_grid_membership() -> No
     )
 
     grid.place_object(crate.uuid, (1, 0))
-    grid.place_object(crate.uuid, (2, 0))
+    grid.move_object(crate.uuid, (2, 0))
 
     assert grid.get_object_position(crate.uuid) == (2, 0)
     assert crate.uuid not in grid.get_objects_at((1, 0))
@@ -921,8 +1227,8 @@ def test_eb_11_016_raw_object_removal_clears_item_floor_location_state() -> None
     raw_item.place_on_grid((1, 0))
     Entity.materialize_all_navigation(max_distance=20)
 
-    raw_tile_uuid = raw_item.tile_uuid
-    assert raw_tile_uuid is not None
+    raw_placement = grid.get_object_placement(raw_item.uuid)
+    assert raw_placement is not None
     assert grid.get_object_position(raw_item.uuid) == (1, 0)
     assert raw_item.uuid in observer.senses.objects
 
@@ -931,18 +1237,18 @@ def test_eb_11_016_raw_object_removal_clears_item_floor_location_state() -> None
     assert grid.get_object_position(raw_item.uuid) is None
     assert raw_item.uuid not in grid.get_objects_at((1, 0))
     assert raw_item.uuid not in observer.senses.objects
-    assert raw_item.tile_uuid is None
+    assert grid.get_object_placement(raw_item.uuid) is None
     assert raw_item.get_position() is None
     assert BaseBlock.get(raw_item.uuid) is raw_item
 
     lifecycle_item = BaseItem(source_entity_uuid=uuid4(), name="Lifecycle Floor Item")
     lifecycle_item.place_on_grid((2, 0))
-    assert lifecycle_item.tile_uuid is not None
+    assert grid.get_object_placement(lifecycle_item.uuid) is not None
 
     lifecycle_item.destroy()
 
     assert grid.get_object_position(lifecycle_item.uuid) is None
-    assert lifecycle_item.tile_uuid is None
+    assert grid.get_object_placement(lifecycle_item.uuid) is None
     assert lifecycle_item.owner_uuid is None
     assert lifecycle_item.stored_in_uuid is None
     assert BaseBlock.get(lifecycle_item.uuid) is None

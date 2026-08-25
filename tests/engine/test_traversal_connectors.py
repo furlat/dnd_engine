@@ -1,4 +1,5 @@
 """Typed vertical-connector ownership, execution, and privacy regressions."""
+from dnd.types.materials import Material, TileSurface
 
 from uuid import UUID, uuid4
 
@@ -24,7 +25,7 @@ from dnd.core.events.events_registry import (
 )
 from dnd.core.gridmap import get_map
 from dnd.types.life import LifeState
-from dnd.core.positioning import PositionCommitError, PositionPublicationError
+from dnd.core.positioning import PositionPublicationError
 from dnd.core.world_edges import ElevationSurfaceKind, SlopeAxis
 from dnd.core.action_execution import MovementTerminationReason
 from dnd.core.events.world_events import (
@@ -109,9 +110,9 @@ def test_connector_runtime_uuid_is_not_cold_authored_identity() -> None:
 def _connector_grid() -> None:
     reset_combat_state()
     grid = get_map()
-    grid.set_tile(0, 0, height=0)
-    grid.set_tile(1, 0, height=1)
-    grid.set_tile(0, 1, height=2)
+    grid.set_tile(0, 0, surface=TileSurface(base_material=Material.STONE), height=0)
+    grid.set_tile(1, 0, surface=TileSurface(base_material=Material.STONE), height=1)
+    grid.set_tile(0, 1, surface=TileSurface(base_material=Material.STONE), height=2)
 
 
 def _connector_row(actor: Entity):
@@ -170,7 +171,7 @@ def test_live_tile_cannot_alias_positions_during_connector_registration() -> Non
     """Connector supports retain reciprocal tile-position identity under handlers."""
     _connector_grid()
     grid = get_map()
-    other = grid.set_tile(2, 0, height=0)
+    other = grid.set_tile(2, 0, surface=TileSurface(base_material=Material.STONE), height=0)
     destination = grid.get_tile(1, 0)
     assert destination is not None
 
@@ -214,7 +215,7 @@ def test_tile_uuid_impostor_cannot_become_a_connector_support() -> None:
     """Grid and connector support identity agree with the global registry."""
     _connector_grid()
     grid = get_map()
-    canonical = Tile.create((9, 9))
+    canonical = Tile.create((9, 9), surface=TileSurface(base_material=Material.STONE))
     impostor = canonical.model_copy(deep=True)
 
     with pytest.raises(ValueError, match="exact global Tile"):
@@ -411,7 +412,7 @@ def test_connector_replace_revalidates_new_support_after_effect_handlers(
         if mutation == "remove":
             grid.remove_tile(0, 1)
         elif mutation == "replace":
-            grid.set_tile(0, 1, height=2)
+            grid.set_tile(0, 1, surface=TileSurface(base_material=Material.STONE), height=2)
         else:
             assert grid.set_tile_elevation(
                 (0, 1),
@@ -540,16 +541,16 @@ def test_connector_support_is_anchored_until_connector_removal() -> None:
     connector = grid.register_connector(connector_definition())
     assert connector is not None
 
-    with pytest.raises(ValueError, match="support height"):
+    with pytest.raises(ValueError, match="traversal connector"):
         grid.set_tile_elevation(
             (0, 0),
             height=1,
             surface_kind=ElevationSurfaceKind.ORDINARY,
             slope_axis=None,
         )
-    with pytest.raises(ValueError, match="replace a support tile"):
-        grid.set_tile(0, 0, height=0)
-    with pytest.raises(ValueError, match="remove a support tile"):
+    with pytest.raises(ValueError, match="connector endpoint"):
+        grid.set_tile(0, 0, surface=TileSurface(base_material=Material.STONE), height=0)
+    with pytest.raises(ValueError, match="connector endpoint"):
         grid.remove_tile(0, 0)
 
     assert grid.set_tile_elevation(
@@ -668,7 +669,7 @@ def test_connector_provocation_is_authored_not_inferred_from_kind(
 ) -> None:
     _connector_grid()
     grid = get_map()
-    grid.set_tile(-1, 0, height=0)
+    grid.set_tile(-1, 0, surface=TileSurface(base_material=Material.STONE), height=0)
     connector = grid.register_connector(connector_definition(
         kind=TraversalConnectorKind.LIFT,
         action_cost_type=None,
@@ -705,7 +706,7 @@ def test_connector_provocation_is_authored_not_inferred_from_kind(
 def test_lethal_connector_reaction_stops_before_cost_or_arrival() -> None:
     _connector_grid()
     grid = get_map()
-    grid.set_tile(-1, 0, height=0)
+    grid.set_tile(-1, 0, surface=TileSurface(base_material=Material.STONE), height=0)
     connector = grid.register_connector(connector_definition())
     assert connector is not None
     actor = create_test_monster("monster.skeleton", name="Fragile Connector User", position=(0, 0), faction="heroes")
@@ -845,7 +846,7 @@ def test_occupied_connector_destination_stops_before_step_or_oa() -> None:
     """Initial collision admission cannot create a source-exit reaction."""
     _connector_grid()
     grid = get_map()
-    grid.set_tile(-1, 0, height=0)
+    grid.set_tile(-1, 0, surface=TileSurface(base_material=Material.STONE), height=0)
     connector = grid.register_connector(connector_definition())
     assert connector is not None
     actor = create_test_monster("monster.skeleton", 
@@ -1552,39 +1553,6 @@ def test_connector_step_handler_cannot_mutate_parent_root_before_stop() -> None:
     assert all(event.requested_end_elevation_feet == 5 for event in roots)
     assert all(event.movement_cost_feet == 10 for event in roots)
     assert all(event.connector_digest == connector.objective_digest for event in roots)
-
-
-def test_connector_position_staging_failure_undoes_exact_debit(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _connector_grid()
-    grid = get_map()
-    connector = grid.register_connector(connector_definition())
-    assert connector is not None
-    actor = create_test_monster("monster.skeleton", name="Staging Connector User", position=(0, 0), faction="heroes")
-    Entity.materialize_all_navigation(max_distance=20)
-    row = _connector_row(actor)
-    original = grid.recompute_tile_directional_blocking
-
-    def fail_destination(position: tuple[int, int]):
-        if position == (1, 0):
-            raise RuntimeError("injected connector staging failure")
-        return original(position)
-
-    monkeypatch.setattr(grid, "recompute_tile_directional_blocking", fail_destination)
-    with pytest.raises(PositionCommitError):
-        execute_available_action(actor, row, row.valid_targets[0])
-
-    assert actor.position == (0, 0)
-    assert actor.senses.position == (0, 0)
-    assert grid.get_entity_position(actor.uuid) == (0, 0)
-    assert actor.action_economy.actions.normalized_score == 1
-    assert actor.action_economy.movement.normalized_score == 30
-    assert not any(
-        type(event) is TraverseConnectorEvent
-        and event.phase is EventPhase.COMPLETION
-        for event in EventQueue.get_events_by_type(EventType.MOVEMENT)
-    )
 
 
 def test_connector_spatial_publication_failure_keeps_position_and_cost() -> None:

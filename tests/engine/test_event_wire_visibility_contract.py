@@ -1,4 +1,5 @@
 """Dnd-only wire contracts for movement evidence and perception facts."""
+from dnd.types.materials import Material, TileSurface
 
 from uuid import UUID, uuid4
 
@@ -14,8 +15,9 @@ from dnd.core.events.world_events import (
 )
 from dnd.core.gridmap import get_map
 from dnd.core.world_edges import ElevationSurfaceKind
-from dnd.types.world import CardinalDirection, LightLevel
+from dnd.types.world import LightLevel
 from dnd.types.senses import SenseMode, SensesType
+from dnd.types.world_placement import WorldObjectPlacement, WorldPlacementKind
 from tests.engine.support import create_test_monster, reset_combat_state
 
 
@@ -24,7 +26,7 @@ def reset_wire_scene() -> None:
     reset_combat_state()
     grid = get_map()
     grid.disable_events()
-    grid.create_rectangle(0, 0, 5, 1)
+    grid.create_rectangle(0, 0, 5, 1, surface=TileSurface(base_material=Material.STONE))
     grid.enable_events(flush_pending=False)
 
 
@@ -106,10 +108,10 @@ def test_sensory_update_round_trips_without_generic_observer_grants() -> None:
 
 def test_bootstrap_tile_and_object_carry_final_optical_channels() -> None:
     """Cold world rows preserve separate optical and propagation policies."""
-    directions = tuple(CardinalDirection)
     tile = WorldTileState(
         tile_uuid=uuid4(),
         position=(1, 0),
+        surface=TileSurface(base_material=Material.STONE),
         name="Opaque grate",
         walkable=True,
         blocks_optics=True,
@@ -122,9 +124,6 @@ def test_bootstrap_tile_and_object_carry_final_optical_channels() -> None:
         surface_kind=ElevationSurfaceKind.ORDINARY,
         default_light=LightLevel.DIM_LIGHT,
         resolved_light=LightLevel.DIM_LIGHT,
-        movement_open=directions,
-        optical_open=(),
-        propagation_open=directions,
     )
     assert WorldTileState.model_validate_json(tile.model_dump_json()) == tile
     assert tile.blocks_optics is True
@@ -137,7 +136,18 @@ def test_bootstrap_tile_and_object_carry_final_optical_channels() -> None:
         blocks_optics_field=True,
         blocks_propagation_field=False,
     )
-    world_object = WorldObjectState(position=(1, 0), item=item.to_item_state())
+    world_object = WorldObjectState(
+        placement=WorldObjectPlacement(
+            object_uuid=item.uuid,
+            tile_uuid=tile.tile_uuid,
+            position=(1, 0),
+            kind=WorldPlacementKind.CENTER,
+            occupies_bands=False,
+            base_height_steps=0,
+            top_height_steps=1,
+        ),
+        item=item.to_item_state(),
+    )
     assert WorldObjectState.model_validate_json(world_object.model_dump_json()) == world_object
     assert world_object.item.blocks_optics is True
     assert world_object.item.blocks_propagation is False

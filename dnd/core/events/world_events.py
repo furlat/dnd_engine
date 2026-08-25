@@ -48,7 +48,9 @@ from dnd.types.spatial_effects import (
     SpatialEffectInteractionOperation,
     SpatialEffectLayer,
 )
-from dnd.types.world import CardinalDirection, LightLevel
+from dnd.types.world import LightLevel
+from dnd.types.materials import TileSurface
+from dnd.types.world_placement import BoundaryStructure, WorldObjectPlacement
 
 
 class WorldTileState(BaseModel):
@@ -58,6 +60,7 @@ class WorldTileState(BaseModel):
 
     tile_uuid: UUID
     position: Tuple[int, int]
+    surface: TileSurface
     name: str
     walkable: bool
     blocks_optics: bool
@@ -71,9 +74,6 @@ class WorldTileState(BaseModel):
     slope_axis: Optional[SlopeAxis] = None
     default_light: LightLevel
     resolved_light: LightLevel
-    movement_open: Tuple[CardinalDirection, ...]
-    optical_open: Tuple[CardinalDirection, ...]
-    propagation_open: Tuple[CardinalDirection, ...]
 
 
 class WorldObjectState(BaseModel):
@@ -81,9 +81,16 @@ class WorldObjectState(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    position: Tuple[int, int]
+    placement: WorldObjectPlacement
     item: ItemState
     contained_items: Tuple[ItemState, ...] = ()
+
+    @model_validator(mode="after")
+    def validate_placement_identity(self) -> Self:
+        """Keep the object snapshot and its placement on the same identity."""
+        if self.placement.object_uuid != self.item.item_uuid:
+            raise ValueError("placement.object_uuid must match item.item_uuid")
+        return self
 
 
 class WorldConnectorState(BaseModel):
@@ -355,32 +362,6 @@ class SensoryUpdateEvent(Event):
         """Emit removed contact identities in canonical wire order."""
         return [str(contact_uuid) for contact_uuid in sorted(value, key=str)]
 
-_DIRECTION_DELTAS: Dict[str, Tuple[int, int]] = {
-    "north": (0, 1),
-    "south": (0, -1),
-    "east": (1, 0),
-    "west": (-1, 0),
-}
-
-def _directional_neighbors(position: Tuple[int, int], directions: Optional[List[str]]) -> Set[Tuple[int, int]]:
-    """Return neighboring cells touched by directional tile metadata.
-
-    Args:
-        position: Origin tile for the directional metadata.
-        directions: Direction labels such as north, south, east, and west.
-
-    Returns:
-        Neighboring grid positions for recognized direction labels.
-    """
-    neighbors: Set[Tuple[int, int]] = set()
-    if not directions:
-        return neighbors
-    for direction in directions:
-        delta = _DIRECTION_DELTAS.get(direction)
-        if delta is not None:
-            neighbors.add((position[0] + delta[0], position[1] + delta[1]))
-    return neighbors
-
 class SpatialEffectChangeEvent(SpatiallyIndexedEvent):
     """Observable lifecycle fact for one independent spatial phenomenon."""
 
@@ -563,16 +544,27 @@ class SpatialChangeEvent(SpatiallyIndexedEvent):
         default=None,
         description="Secondary movement position: previous position on enter events, destination on leave events.",
     )
+    placement: Optional[WorldObjectPlacement] = Field(
+        default=None,
+        description="Exact committed placement after an object mutation.",
+    )
+    previous_placement: Optional[WorldObjectPlacement] = Field(
+        default=None,
+        description="Exact committed placement before an object mutation.",
+    )
     tile_walkable: Optional[bool] = Field(default=None, description="New walkable state (for tile changes)")
     tile_blocks_optics: Optional[bool] = Field(default=None, description="Final intrinsic Tile optical policy")
     tile_blocks_propagation: Optional[bool] = Field(default=None, description="Final intrinsic Tile propagation policy")
+    tile_surface: Optional[TileSurface] = Field(
+        default=None,
+        description="Complete TileSurface after-value for a surface change.",
+    )
     senses_hint: Optional[SensesUpdateHint] = Field(default=None, description="Hint for incremental senses updates")
 
     new_light_level: Optional[int] = Field(default=None, description="Resolved light level at position after change")
     light_level_map: Optional[Dict[str, int]] = Field(default=None, description="Map of 'x,y' -> resolved light_level for all changed positions in batch")
 
     object_name: Optional[str] = Field(default=None, description="Object name (e.g. 'Door', 'Torch')")
-    object_map_char: Optional[str] = Field(default=None, description="Object map character (e.g. 'D', 'φ')")
     object_blocks_movement: Optional[bool] = Field(default=None, description="Object blocks_movement after change")
     object_blocks_optics: Optional[bool] = Field(default=None, description="Final object optical policy")
     object_blocks_propagation: Optional[bool] = Field(default=None, description="Final object propagation policy")
@@ -580,26 +572,30 @@ class SpatialChangeEvent(SpatiallyIndexedEvent):
     changed_block_stealth_dc: Optional[int] = Field(default=None, description="Final source-derived stealth DC of a perceivability subject")
     object_is_open: Optional[bool] = Field(default=None, description="Object is_open state (doors)")
 
-    directional_position: Optional[Tuple[int, int]] = Field(default=None, description="Tile whose directional state changed")
-    directional_directions: Optional[List[str]] = Field(default=None, description="Tile-relative directions changed")
-    directional_channels: Optional[List[str]] = Field(default=None, description="Directional channels changed")
-    directional_blocks_movement: Optional[Dict[str, bool]] = Field(default=None, description="Direction -> movement blocked")
-    directional_blocks_optics: Optional[Dict[str, bool]] = Field(default=None, description="Direction -> ordinary optics blocked")
-    directional_blocks_propagation: Optional[Dict[str, bool]] = Field(default=None, description="Direction -> propagation blocked")
+    object_boundary_structure: Optional[BoundaryStructure] = Field(
+        default=None,
+        description="Current exact boundary structure after an object mutation.",
+    )
     transition_from: Optional[Tuple[int, int]] = Field(default=None, description="Transition source for directional movement/collision")
     transition_to: Optional[Tuple[int, int]] = Field(default=None, description="Transition destination for directional movement/collision")
+
+    @model_validator(mode="after")
+    def validate_placement_identity(self) -> Self:
+        """Reject spatial facts whose nested placement names another object."""
+        if self.placement is not None and self.placement.object_uuid != self.object_uuid:
+            raise ValueError("placement.object_uuid must match object_uuid")
+        if (
+            self.previous_placement is not None
+            and self.previous_placement.object_uuid != self.object_uuid
+        ):
+            raise ValueError("previous_placement.object_uuid must match object_uuid")
+        return self
 
     @classmethod
     def entity_entered(cls, position: Tuple[int, int], entity_uuid: UUID,
                        old_position: Optional[Tuple[int, int]] = None,
                        source_entity_uuid: Optional[UUID] = None,
-                       parent_event: Optional[UUID] = None,
-                       directional_position: Optional[Tuple[int, int]] = None,
-                       directional_directions: Optional[List[str]] = None,
-                       directional_channels: Optional[List[str]] = None,
-                       directional_blocks_movement: Optional[Dict[str, bool]] = None,
-                       directional_blocks_optics: Optional[Dict[str, bool]] = None,
-                       directional_blocks_propagation: Optional[Dict[str, bool]] = None) -> 'SpatialChangeEvent':
+                       parent_event: Optional[UUID] = None) -> 'SpatialChangeEvent':
         """Create an event for an entity entering a cell.
 
         Event starts at DECLARATION phase to allow full lifecycle:
@@ -615,19 +611,10 @@ class SpatialChangeEvent(SpatiallyIndexedEvent):
             source_entity_uuid: Source entity for event (defaults to entity_uuid)
             parent_event: Optional parent event UUID for lineage (e.g., StepMovementEvent)
         """
-        directional_channels_set = set(directional_channels or [])
-        directional_pos = directional_position or position
-        directional_neighbors = _directional_neighbors(directional_pos, directional_directions)
         hint = SensesUpdateHint(
-            requires_fov="optical" in directional_channels_set,
             requires_paths=True,
             entity_entered=(entity_uuid, position),
             entity_left=(entity_uuid, old_position) if old_position is not None else None,
-            directional_positions={directional_pos} if directional_channels_set else None,
-            directional_neighbors=directional_neighbors or None,
-            directional_channels_changed=directional_channels_set or None,
-            requires_light_recompute="optical" in directional_channels_set,
-            requires_propagation_recompute="propagation" in directional_channels_set,
         )
         return cls(
             source_entity_uuid=source_entity_uuid or entity_uuid,
@@ -640,25 +627,13 @@ class SpatialChangeEvent(SpatiallyIndexedEvent):
             use_register=False,
             parent_event=parent_event,
             senses_hint=hint,
-            directional_position=directional_position,
-            directional_directions=directional_directions,
-            directional_channels=directional_channels,
-            directional_blocks_movement=directional_blocks_movement,
-            directional_blocks_optics=directional_blocks_optics,
-            directional_blocks_propagation=directional_blocks_propagation,
         )
 
     @classmethod
     def entity_left(cls, position: Tuple[int, int], entity_uuid: UUID,
                     new_position: Optional[Tuple[int, int]] = None,
                     source_entity_uuid: Optional[UUID] = None,
-                    parent_event: Optional[UUID] = None,
-                    directional_position: Optional[Tuple[int, int]] = None,
-                    directional_directions: Optional[List[str]] = None,
-                    directional_channels: Optional[List[str]] = None,
-                    directional_blocks_movement: Optional[Dict[str, bool]] = None,
-                    directional_blocks_optics: Optional[Dict[str, bool]] = None,
-                    directional_blocks_propagation: Optional[Dict[str, bool]] = None) -> 'SpatialChangeEvent':
+                    parent_event: Optional[UUID] = None) -> 'SpatialChangeEvent':
         """Create an event for an entity leaving a cell.
 
         Event starts at DECLARATION phase to allow full lifecycle:
@@ -673,18 +648,9 @@ class SpatialChangeEvent(SpatiallyIndexedEvent):
             source_entity_uuid: Source entity for event (defaults to entity_uuid)
             parent_event: Optional parent event UUID for lineage (e.g., StepMovementEvent)
         """
-        directional_channels_set = set(directional_channels or [])
-        directional_pos = directional_position or position
-        directional_neighbors = _directional_neighbors(directional_pos, directional_directions)
         hint = SensesUpdateHint(
-            requires_fov="optical" in directional_channels_set,
             requires_paths=True,
             entity_left=(entity_uuid, position),
-            directional_positions={directional_pos} if directional_channels_set else None,
-            directional_neighbors=directional_neighbors or None,
-            directional_channels_changed=directional_channels_set or None,
-            requires_light_recompute="optical" in directional_channels_set,
-            requires_propagation_recompute="propagation" in directional_channels_set,
         )
         return cls(
             source_entity_uuid=source_entity_uuid or entity_uuid,
@@ -697,12 +663,6 @@ class SpatialChangeEvent(SpatiallyIndexedEvent):
             use_register=False,
             parent_event=parent_event,
             senses_hint=hint,
-            directional_position=directional_position,
-            directional_directions=directional_directions,
-            directional_channels=directional_channels,
-            directional_blocks_movement=directional_blocks_movement,
-            directional_blocks_optics=directional_blocks_optics,
-            directional_blocks_propagation=directional_blocks_propagation,
         )
 
     @classmethod
@@ -712,31 +672,20 @@ class SpatialChangeEvent(SpatiallyIndexedEvent):
         walkable: bool,
         blocks_optics: bool,
         blocks_propagation: bool,
+        tile_surface: Optional[TileSurface] = None,
                      source_entity_uuid: Optional[UUID] = None,
                      senses_hint: Optional['SensesUpdateHint'] = None,
-                     parent_event: Optional[UUID] = None,
-                     directional_position: Optional[Tuple[int, int]] = None,
-                     directional_directions: Optional[List[str]] = None,
-                     directional_channels: Optional[List[str]] = None,
-                     directional_blocks_movement: Optional[Dict[str, bool]] = None,
-                     directional_blocks_optics: Optional[Dict[str, bool]] = None,
-                     directional_blocks_propagation: Optional[Dict[str, bool]] = None) -> 'SpatialChangeEvent':
+                     parent_event: Optional[UUID] = None) -> 'SpatialChangeEvent':
         """Create an event for a tile property change.
 
         Event starts at DECLARATION phase to allow full lifecycle.
         If no senses_hint is provided, conservative optical/path recomputation
         is requested from the complete final Tile fact.
         """
-        directional_channels_set = set(directional_channels or [])
-        directional_pos = directional_position or position
-        directional_neighbors = _directional_neighbors(directional_pos, directional_directions)
         if senses_hint is None:
             senses_hint = SensesUpdateHint(
                 requires_fov=True,
                 requires_paths=True,
-                directional_positions={directional_pos} if directional_channels_set else None,
-                directional_neighbors=directional_neighbors or None,
-                directional_channels_changed=directional_channels_set or None,
                 requires_light_recompute=True,
                 requires_propagation_recompute=True,
             )
@@ -748,16 +697,11 @@ class SpatialChangeEvent(SpatiallyIndexedEvent):
             tile_walkable=walkable,
             tile_blocks_optics=blocks_optics,
             tile_blocks_propagation=blocks_propagation,
+            tile_surface=tile_surface,
             phase=EventPhase.DECLARATION,
             use_register=False,
             parent_event=parent_event,
             senses_hint=senses_hint,
-            directional_position=directional_position,
-            directional_directions=directional_directions,
-            directional_channels=directional_channels,
-            directional_blocks_movement=directional_blocks_movement,
-            directional_blocks_optics=directional_blocks_optics,
-            directional_blocks_propagation=directional_blocks_propagation,
         )
 
     @classmethod
@@ -768,30 +712,21 @@ class SpatialChangeEvent(SpatiallyIndexedEvent):
                       blocks_propagation: bool = False,
                       blocks_walking: bool = False,
                       object_name: Optional[str] = None,
-                      object_map_char: Optional[str] = None,
-                      directional_position: Optional[Tuple[int, int]] = None,
-                      directional_directions: Optional[List[str]] = None,
-                      directional_channels: Optional[List[str]] = None,
-                      directional_blocks_movement: Optional[Dict[str, bool]] = None,
-                      directional_blocks_optics: Optional[Dict[str, bool]] = None,
-                      directional_blocks_propagation: Optional[Dict[str, bool]] = None) -> 'SpatialChangeEvent':
+                      placement: Optional[WorldObjectPlacement] = None,
+                      previous_placement: Optional[WorldObjectPlacement] = None,
+                      object_boundary_structure: Optional[BoundaryStructure] = None,
+                      senses_hint: Optional[SensesUpdateHint] = None) -> 'SpatialChangeEvent':
         """Create an event for an object being placed on the grid."""
-        directional_channels_set = set(directional_channels or [])
-        directional_pos = directional_position or position
-        directional_neighbors = _directional_neighbors(directional_pos, directional_directions)
-        hint = SensesUpdateHint(
-            requires_fov=blocks_optics or "optical" in directional_channels_set,
-            requires_paths=blocks_walking or "movement" in directional_channels_set,
+        structure_channels = (
+            {channel.value for channel in object_boundary_structure.blocked_channels}
+            if object_boundary_structure is not None else set()
+        )
+        hint = senses_hint or SensesUpdateHint(
+            requires_fov=blocks_optics or "optical" in structure_channels,
+            requires_paths=blocks_walking or "movement" in structure_channels,
             object_placed=(object_uuid, position),
-            directional_positions={directional_pos} if directional_channels_set else None,
-            directional_neighbors=directional_neighbors or None,
-            directional_channels_changed=directional_channels_set or None,
-            requires_light_recompute=(
-                blocks_optics or "optical" in directional_channels_set
-            ),
-            requires_propagation_recompute=(
-                blocks_propagation or "propagation" in directional_channels_set
-            ),
+            requires_light_recompute=blocks_optics or "optical" in structure_channels,
+            requires_propagation_recompute=blocks_propagation or "propagation" in structure_channels,
         )
         return cls(
             source_entity_uuid=source_entity_uuid or uuid4(),
@@ -799,21 +734,22 @@ class SpatialChangeEvent(SpatiallyIndexedEvent):
             change_type=SpatialChangeType.OBJECT_PLACED,
             position=position,
             object_uuid=object_uuid,
+            old_position=(
+                previous_placement.position
+                if previous_placement is not None
+                else None
+            ),
             phase=EventPhase.DECLARATION,
             use_register=False,
             parent_event=parent_event,
             senses_hint=hint,
             object_name=object_name,
-            object_map_char=object_map_char,
+            placement=placement,
+            previous_placement=previous_placement,
             object_blocks_movement=blocks_walking,
             object_blocks_optics=blocks_optics,
             object_blocks_propagation=blocks_propagation,
-            directional_position=directional_position,
-            directional_directions=directional_directions,
-            directional_channels=directional_channels,
-            directional_blocks_movement=directional_blocks_movement,
-            directional_blocks_optics=directional_blocks_optics,
-            directional_blocks_propagation=directional_blocks_propagation,
+            object_boundary_structure=object_boundary_structure,
         )
 
     @classmethod
@@ -823,29 +759,21 @@ class SpatialChangeEvent(SpatiallyIndexedEvent):
                        blocks_optics: bool = False,
                        blocks_propagation: bool = False,
                        blocks_walking: bool = False,
-                       directional_position: Optional[Tuple[int, int]] = None,
-                       directional_directions: Optional[List[str]] = None,
-                       directional_channels: Optional[List[str]] = None,
-                       directional_blocks_movement: Optional[Dict[str, bool]] = None,
-                       directional_blocks_optics: Optional[Dict[str, bool]] = None,
-                       directional_blocks_propagation: Optional[Dict[str, bool]] = None) -> 'SpatialChangeEvent':
+                       previous_placement: Optional[WorldObjectPlacement] = None,
+                       new_position: Optional[Tuple[int, int]] = None,
+                       object_boundary_structure: Optional[BoundaryStructure] = None,
+                       senses_hint: Optional[SensesUpdateHint] = None) -> 'SpatialChangeEvent':
         """Create an event for an object being removed from the grid."""
-        directional_channels_set = set(directional_channels or [])
-        directional_pos = directional_position or position
-        directional_neighbors = _directional_neighbors(directional_pos, directional_directions)
-        hint = SensesUpdateHint(
-            requires_fov=blocks_optics or "optical" in directional_channels_set,
-            requires_paths=blocks_walking or "movement" in directional_channels_set,
+        structure_channels = (
+            {channel.value for channel in object_boundary_structure.blocked_channels}
+            if object_boundary_structure is not None else set()
+        )
+        hint = senses_hint or SensesUpdateHint(
+            requires_fov=blocks_optics or "optical" in structure_channels,
+            requires_paths=blocks_walking or "movement" in structure_channels,
             object_removed=(object_uuid, position),
-            directional_positions={directional_pos} if directional_channels_set else None,
-            directional_neighbors=directional_neighbors or None,
-            directional_channels_changed=directional_channels_set or None,
-            requires_light_recompute=(
-                blocks_optics or "optical" in directional_channels_set
-            ),
-            requires_propagation_recompute=(
-                blocks_propagation or "propagation" in directional_channels_set
-            ),
+            requires_light_recompute=blocks_optics or "optical" in structure_channels,
+            requires_propagation_recompute=blocks_propagation or "propagation" in structure_channels,
         )
         return cls(
             source_entity_uuid=source_entity_uuid or uuid4(),
@@ -853,6 +781,8 @@ class SpatialChangeEvent(SpatiallyIndexedEvent):
             change_type=SpatialChangeType.OBJECT_REMOVED,
             position=position,
             object_uuid=object_uuid,
+            old_position=new_position,
+            previous_placement=previous_placement,
             phase=EventPhase.DECLARATION,
             use_register=False,
             parent_event=parent_event,
@@ -860,12 +790,7 @@ class SpatialChangeEvent(SpatiallyIndexedEvent):
             object_blocks_movement=blocks_walking,
             object_blocks_optics=blocks_optics,
             object_blocks_propagation=blocks_propagation,
-            directional_position=directional_position,
-            directional_directions=directional_directions,
-            directional_channels=directional_channels,
-            directional_blocks_movement=directional_blocks_movement,
-            directional_blocks_optics=directional_blocks_optics,
-            directional_blocks_propagation=directional_blocks_propagation,
+            object_boundary_structure=object_boundary_structure,
         )
 
     @classmethod
@@ -939,40 +864,24 @@ class SpatialChangeEvent(SpatiallyIndexedEvent):
                        source_entity_uuid: Optional[UUID] = None,
                        parent_event: Optional[UUID] = None,
                        object_name: Optional[str] = None,
-                       object_map_char: Optional[str] = None,
+                       placement: Optional[WorldObjectPlacement] = None,
+                       previous_placement: Optional[WorldObjectPlacement] = None,
                        object_blocks_movement: Optional[bool] = None,
                        object_blocks_optics: Optional[bool] = None,
                        object_blocks_propagation: Optional[bool] = None,
                        object_is_open: Optional[bool] = None,
-                       directional_position: Optional[Tuple[int, int]] = None,
-                       directional_directions: Optional[List[str]] = None,
-                       directional_channels: Optional[List[str]] = None,
-                       directional_blocks_movement: Optional[Dict[str, bool]] = None,
-                       directional_blocks_optics: Optional[Dict[str, bool]] = None,
-                       directional_blocks_propagation: Optional[Dict[str, bool]] = None) -> 'SpatialChangeEvent':
+                       object_boundary_structure: Optional[BoundaryStructure] = None,
+                       senses_hint: Optional[SensesUpdateHint] = None) -> 'SpatialChangeEvent':
         """Create an event for an object's blocking state changing (door open/close).
 
         Fires when an object's movement, optical, or propagation policy changes
         while on the grid. Carries hint indicating which senses layers are affected.
         """
-        directional_channels_set = set(directional_channels or [])
-        directional_pos = directional_position or position
-        directional_neighbors = _directional_neighbors(directional_pos, directional_directions)
-        hint = SensesUpdateHint(
-            requires_fov=(
-                blocks_optics_changed or "optical" in directional_channels_set
-            ),
-            requires_paths=blocks_walking_changed or "movement" in directional_channels_set,
-            directional_positions={directional_pos} if directional_channels_set else None,
-            directional_neighbors=directional_neighbors or None,
-            directional_channels_changed=directional_channels_set or None,
-            requires_light_recompute=(
-                blocks_optics_changed or "optical" in directional_channels_set
-            ),
-            requires_propagation_recompute=(
-                blocks_propagation_changed
-                or "propagation" in directional_channels_set
-            ),
+        hint = senses_hint or SensesUpdateHint(
+            requires_fov=blocks_optics_changed,
+            requires_paths=blocks_walking_changed,
+            requires_light_recompute=blocks_optics_changed,
+            requires_propagation_recompute=blocks_propagation_changed,
         )
         return cls(
             source_entity_uuid=source_entity_uuid or object_uuid,
@@ -980,22 +889,19 @@ class SpatialChangeEvent(SpatiallyIndexedEvent):
             change_type=SpatialChangeType.OBJECT_CHANGED,
             position=position,
             object_uuid=object_uuid,
+            old_position=position,
+            placement=placement,
+            previous_placement=previous_placement,
             phase=EventPhase.DECLARATION,
             use_register=False,
             parent_event=parent_event,
             senses_hint=hint,
             object_name=object_name,
-            object_map_char=object_map_char,
             object_blocks_movement=object_blocks_movement,
             object_blocks_optics=object_blocks_optics,
             object_blocks_propagation=object_blocks_propagation,
             object_is_open=object_is_open,
-            directional_position=directional_position,
-            directional_directions=directional_directions,
-            directional_channels=directional_channels,
-            directional_blocks_movement=directional_blocks_movement,
-            directional_blocks_optics=directional_blocks_optics,
-            directional_blocks_propagation=directional_blocks_propagation,
+            object_boundary_structure=object_boundary_structure,
         )
 
     @classmethod
@@ -1003,23 +909,14 @@ class SpatialChangeEvent(SpatiallyIndexedEvent):
                            source_entity_uuid: Optional[UUID] = None,
                            parent_event: Optional[UUID] = None,
                            transition_from: Optional[Tuple[int, int]] = None,
-                           transition_to: Optional[Tuple[int, int]] = None,
-                           directional_position: Optional[Tuple[int, int]] = None,
-                           directional_directions: Optional[List[str]] = None,
-                           directional_channels: Optional[List[str]] = None) -> 'SpatialChangeEvent':
+                           transition_to: Optional[Tuple[int, int]] = None) -> 'SpatialChangeEvent':
         """Create an event for an entity bumping into an imperceivable blocker.
 
         Fired when objective walkability blocks but subjective would allow.
         Hidden entities at this position will be de-stealthed by their reveal handler.
         """
-        directional_channels_set = set(directional_channels or [])
-        directional_pos = directional_position or position
-        directional_neighbors = _directional_neighbors(directional_pos, directional_directions)
         hint = SensesUpdateHint(
             requires_paths=True,
-            directional_positions={directional_pos} if directional_channels_set else None,
-            directional_neighbors=directional_neighbors or None,
-            directional_channels_changed=directional_channels_set or None,
         )
         return cls(
             source_entity_uuid=source_entity_uuid or mover_uuid,
@@ -1033,18 +930,16 @@ class SpatialChangeEvent(SpatiallyIndexedEvent):
             senses_hint=hint,
             transition_from=transition_from,
             transition_to=transition_to,
-            directional_position=directional_position,
-            directional_directions=directional_directions,
-            directional_channels=directional_channels,
         )
 
     def get_affected_positions(self) -> Set[Tuple[int, int]]:
         positions = {self.position}
         if self.old_position:
             positions.add(self.old_position)
-        if self.directional_position:
-            positions.add(self.directional_position)
-            positions.update(_directional_neighbors(self.directional_position, self.directional_directions))
+        if self.placement is not None:
+            positions.add(self.placement.position)
+        if self.previous_placement is not None:
+            positions.add(self.previous_placement.position)
         if self.transition_from:
             positions.add(self.transition_from)
         if self.transition_to:

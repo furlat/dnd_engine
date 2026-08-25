@@ -63,27 +63,34 @@ class AdjacentEdgeKey:
 
 @dataclass(frozen=True, slots=True)
 class WorldEdgeStructuralContribution:
-    """One stable provider's objective blocked channels at an edge."""
+    """One stable provider's exact vertical interval and blocked channels."""
 
     provider_uuid: UUID
+    base_height_steps: int
+    top_height_steps: int
     blocked_channels: tuple[world_types.WorldEdgeChannel, ...]
 
 
 @dataclass(frozen=True, slots=True)
 class WorldEdgeView:
-    """Immutable objective structural and elevation facts for one edge."""
+    """Immutable ordered objective facts for one directed edge query."""
 
     key: AdjacentEdgeKey
-    first_tile_uuid: UUID
-    second_tile_uuid: UUID
-    first_height_steps: int
-    second_height_steps: int
+    source_position: tuple[int, int]
+    destination_position: tuple[int, int]
+    source_tile_uuid: UUID
+    destination_tile_uuid: UUID
+    source_height_steps: int
+    destination_height_steps: int
     elevation_delta_steps: int
-    first_surface_kind: ElevationSurfaceKind
-    second_surface_kind: ElevationSurfaceKind
-    first_slope_axis: SlopeAxis | None
-    second_slope_axis: SlopeAxis | None
-    structural_contributions: tuple[WorldEdgeStructuralContribution, ...]
+    source_surface_kind: ElevationSurfaceKind
+    destination_surface_kind: ElevationSurfaceKind
+    source_slope_axis: SlopeAxis | None
+    destination_slope_axis: SlopeAxis | None
+    exit_direction: world_types.CardinalDirection
+    entry_direction: world_types.CardinalDirection
+    exit_contributions: tuple[WorldEdgeStructuralContribution, ...]
+    entry_contributions: tuple[WorldEdgeStructuralContribution, ...]
 
 
 def transition_axis(

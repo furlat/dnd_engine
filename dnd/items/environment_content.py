@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from dnd.blocks.base_item import (
     BaseItem,
     UsableItem,
+    WorldItem,
 )
 from dnd.content_system.action_definitions import (
     ACTION_BEHAVIOR_DECLARATIONS_BY_CLASS,
@@ -69,6 +70,7 @@ from dnd.core.events.resolution_events import (
     TakeDamageEvent,
 )
 from dnd.types.world import WorldEdgeChannel, CardinalDirection
+from dnd.types.world_placement import WorldPlacementKind, WorldPlacementSpec
 from dnd.types.spatial_effects import (
     SpatialEffectInteractionIntensity,
     SpatialEffectInteractionOperation,
@@ -471,9 +473,10 @@ def _build_blocker(
     blocks_movement: bool,
     blocks_optics: bool,
     blocks_propagation: bool,
-) -> BaseItem:
+    placement_spec: WorldPlacementSpec,
+) -> WorldItem:
     context = ItemBuildContext.model_validate(raw_context)
-    return BaseItem(
+    return WorldItem(
         source_entity_uuid=context.source_entity_uuid,
         content_ref=context.requested_ref,
         name=name,
@@ -487,10 +490,11 @@ def _build_blocker(
         blocks_movement=blocks_movement,
         blocks_optics_field=blocks_optics,
         blocks_propagation_field=blocks_propagation,
+        world_placement_spec=placement_spec,
     )
 
 
-class OilBarrel(BaseItem):
+class OilBarrel(WorldItem):
     """Destructible authored container that spills exact oil material."""
 
     def _on_destroy(self, parent_event: Event | None) -> None:
@@ -564,7 +568,7 @@ class OilBarrel(BaseItem):
 def _build_crate(
     raw_context: object,
     parameters: EmptyEnvironmentParameters,
-) -> BaseItem:
+) -> WorldItem:
     _ = parameters
     return _build_blocker(
         raw_context,
@@ -574,6 +578,11 @@ def _build_crate(
         blocks_movement=False,
         blocks_optics=False,
         blocks_propagation=False,
+        placement_spec=WorldPlacementSpec(
+            kind=WorldPlacementKind.CENTER,
+            occupies_bands=False,
+            vertical_extent_steps=1,
+        ),
     )
 
 
@@ -597,7 +606,7 @@ def _build_crate(
 def _build_boulder(
     raw_context: object,
     parameters: EmptyEnvironmentParameters,
-) -> BaseItem:
+) -> WorldItem:
     _ = parameters
     return _build_blocker(
         raw_context,
@@ -607,6 +616,11 @@ def _build_boulder(
         blocks_movement=True,
         blocks_optics=False,
         blocks_propagation=True,
+        placement_spec=WorldPlacementSpec(
+            kind=WorldPlacementKind.CENTER,
+            occupies_bands=True,
+            vertical_extent_steps=1,
+        ),
     )
 
 
@@ -630,7 +644,7 @@ def _build_boulder(
 def _build_barricade(
     raw_context: object,
     parameters: EmptyEnvironmentParameters,
-) -> BaseItem:
+) -> WorldItem:
     _ = parameters
     return _build_blocker(
         raw_context,
@@ -640,6 +654,11 @@ def _build_barricade(
         blocks_movement=True,
         blocks_optics=True,
         blocks_propagation=True,
+        placement_spec=WorldPlacementSpec(
+            kind=WorldPlacementKind.CENTER,
+            occupies_bands=True,
+            vertical_extent_steps=1,
+        ),
     )
 
 
@@ -688,6 +707,11 @@ def _build_oil_barrel(
         blocks_movement=True,
         blocks_optics_field=False,
         blocks_propagation_field=True,
+        world_placement_spec=WorldPlacementSpec(
+            kind=WorldPlacementKind.CENTER,
+            occupies_bands=True,
+            vertical_extent_steps=1,
+        ),
     )
 
 

@@ -11,9 +11,11 @@ from dnd.blocks.equipment import (
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.types.life import LifeState
 from dnd.types.damage import DamageType
+from dnd.types.world import LightLevel
 from dnd.entities.entity import Entity, EntityConfig
 from dnd.entities.entity_creation import compose_entity, create_entity
 from dnd.core.gridmap import get_map
+from dnd.game import Game
 from tests.engine.test_combat_actions import (
     reset_core_action_state,
     strong_entity,
@@ -191,6 +193,61 @@ def test_light_desired_state_and_nonblocking_survive_death_and_revival() -> None
     assert grid._light_sources[inactive_uuid].is_active is False
     assert grid._light_sources[inactive_uuid].affected_tiles == {}
     assert grid._light_sources[added_while_dead].affected_tiles
+
+
+def test_world_presence_and_death_light_suppressions_compose_through_restore() -> None:
+    """World absence and death each own a light token through relocation."""
+    reset_core_action_state()
+    target = strong_entity("World-presence light bearer", (4, 4), "heroes", setup_actions=False)
+    grid = get_map()
+    old_position = target.position
+    new_position = (12, 12)
+    grid.set_tile_base_light(old_position, LightLevel.DARKNESS)
+    grid.set_tile_base_light(new_position, LightLevel.DARKNESS)
+    light_uuid = grid.add_light_source(
+        old_position,
+        bright_radius_feet=5,
+        dim_radius_feet=0,
+        anchor_uuid=target.uuid,
+    )
+    assert light_uuid in target.get_attached_light_sources()
+    assert grid.get_tile(*old_position).resolved_light_level is LightLevel.BRIGHT_LIGHT
+
+    target.suspend_spatial_presence()
+    assert grid.get_tile(*old_position).resolved_light_level is LightLevel.DARKNESS
+
+    target.receive_instant_death(target.uuid, source_description="test")
+    target.restore_spatial_presence(new_position)
+    assert grid.get_tile(*old_position).resolved_light_level is LightLevel.DARKNESS
+    assert grid.get_tile(*new_position).resolved_light_level is LightLevel.DARKNESS
+
+    assert target.revive()
+    assert grid.get_tile(*old_position).resolved_light_level is LightLevel.DARKNESS
+    assert grid.get_tile(*new_position).resolved_light_level is LightLevel.BRIGHT_LIGHT
+
+
+def test_undeployed_attached_light_stays_absent_until_public_deploy() -> None:
+    """An attached source created before deployment honors world absence."""
+    reset_core_action_state()
+    entity = _raw_configured_entity("Undeployed light bearer", LifeState.ALIVE)
+    grid = get_map()
+    position = entity.position
+    grid.set_tile_base_light(position, LightLevel.DARKNESS)
+    light_uuid = grid.add_light_source(
+        position,
+        bright_radius_feet=5,
+        dim_radius_feet=0,
+        anchor_uuid=entity.uuid,
+    )
+    assert light_uuid in entity.get_attached_light_sources()
+    assert grid.get_tile(*position).resolved_light_level is LightLevel.DARKNESS
+
+    game = Game()
+    game.deploy_entity(entity, position)
+    assert grid.get_tile(*position).resolved_light_level is LightLevel.BRIGHT_LIGHT
+
+    game.remove_entity(entity.uuid)
+    assert grid.get_tile(*position).resolved_light_level is LightLevel.DARKNESS
 
 
 def test_revival_reintroduces_entity_to_incremental_senses() -> None:

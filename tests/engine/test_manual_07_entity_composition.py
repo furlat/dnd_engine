@@ -14,6 +14,7 @@ from dnd.core.gridmap import get_map
 from dnd.types.creatures import CreatureType, Size
 from dnd.core.values import BaseValue
 from dnd.entities.entity import Entity, EntityConfig
+from dnd.types.materials import Material, TileSurface
 from tests.engine.support import create_test_entity, reset_combat_state
 
 
@@ -24,7 +25,13 @@ def reset_entity_state() -> None:
     BaseValue._registry.clear()
     BaseBlock._registry.clear()
     Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
+    get_map().create_rectangle(
+        0,
+        0,
+        8,
+        8,
+        surface=TileSurface(base_material=Material.STONE),
+    )
 
 
 def create_tutorial_hero() -> Entity:
@@ -91,7 +98,7 @@ def test_configured_entity_registers_identity_position_and_blocks() -> None:
     assert hero.name == "Tutorial Hero"
     assert Entity.get(hero.uuid) is hero
     assert BaseBlock.get(hero.uuid) is hero
-    assert hero in Entity.get_all_entities_at_position((2, 3))
+    assert hero.uuid in get_map().get_entities_at((2, 3))
     assert get_map().get_entity_position(hero.uuid) == (2, 3)
 
     owned_blocks = [
@@ -168,6 +175,6 @@ def test_entity_position_updates_stay_in_sync() -> None:
 
     assert hero.position == (4, 5)
     assert hero.senses.position == (4, 5)
-    assert hero not in Entity.get_all_entities_at_position((2, 3))
-    assert hero in Entity.get_all_entities_at_position((4, 5))
+    assert hero.uuid not in get_map().get_entities_at((2, 3))
+    assert hero.uuid in get_map().get_entities_at((4, 5))
     assert get_map().get_entity_position(hero.uuid) == (4, 5)

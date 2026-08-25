@@ -1,4 +1,5 @@
 """Executable contract for the engine-wide runtime reset boundary."""
+from dnd.types.materials import Material, TileSurface
 
 from typing import Any, cast
 from uuid import uuid4
@@ -10,7 +11,7 @@ from dnd.core.base_object import BaseObject
 from dnd.core.events.events_registry import (
     EventQueue,
 )
-from dnd.core.gridmap import get_map
+from dnd.core.gridmap import GridMap, get_map
 from dnd.core.values import BaseValue
 from dnd.encounters.encounter import Encounter
 from dnd.entities.entity import Entity
@@ -25,7 +26,6 @@ def test_reset_engine_runtime_clears_every_engine_registry_and_rebuilds_grid() -
     BaseBlock._registry[marker_uuid] = marker
     BaseValue._registry[marker_uuid] = marker
     Entity._entity_registry[marker_uuid] = marker
-    Entity._entity_by_position[(7, 7)].append(marker)
     Controller._controller_registry[marker_uuid] = marker
     Encounter._encounter_registry[marker_uuid] = marker
     Encounter._active_encounter = marker
@@ -34,8 +34,9 @@ def test_reset_engine_runtime_clears_every_engine_registry_and_rebuilds_grid() -
     EventQueue._combat_log_callback = marker
     EventQueue._all_events.append(marker)
 
+    GridMap.reset()
     old_grid = get_map()
-    old_grid.create_rectangle(0, 0, 2, 2)
+    old_grid.create_rectangle(0, 0, 2, 2, surface=TileSurface(base_material=Material.STONE))
 
     new_grid = reset_engine_runtime(grid_size=(4, 3))
 
@@ -48,7 +49,6 @@ def test_reset_engine_runtime_clears_every_engine_registry_and_rebuilds_grid() -
     assert marker_uuid not in BaseBlock._registry
     assert marker_uuid not in BaseValue._registry
     assert Entity._entity_registry == {}
-    assert dict(Entity._entity_by_position) == {}
     assert Controller._controller_registry == {}
     assert Encounter._encounter_registry == {}
     assert Encounter._active_encounter is None

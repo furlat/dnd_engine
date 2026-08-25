@@ -6,6 +6,7 @@ index zero instead of the intended UUID.  This module records every old case's
 disposition and restores item-specific behavior against current discovered
 action identities.
 """
+from dnd.types.materials import Material, TileSurface
 
 from dataclasses import dataclass
 from enum import StrEnum
@@ -201,7 +202,7 @@ USABLE_CASES: dict[str, CoverageRecord] = {
 def reset_item_world(width: int = 20, height: int = 20) -> None:
     """Reset global engine state and create one bright floor."""
     reset_combat_state()
-    get_map().create_rectangle(0, 0, width, height)
+    get_map().create_rectangle(0, 0, width, height, surface=TileSurface(base_material=Material.STONE))
 
 
 def create_actor(
@@ -630,7 +631,7 @@ def test_chest_discovery_loot_and_empty_state_are_one_contract() -> None:
     for item in (sword, potion):
         assert item.owner_uuid == actor.uuid
         assert item.stored_in_uuid == actor.inventory.uuid
-        assert item.tile_uuid is None
+        assert get_map().get_object_placement(item.uuid) is None
     assert item_rows(actor, chest.uuid) == []
 
 

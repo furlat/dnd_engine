@@ -4,6 +4,7 @@ The historical scripts mixed print-only checks, stochastic assertions, and
 superseded callback internals.  This file maps every named case to a maintained
 selector and restores the missing behavior through current event phases.
 """
+from dnd.types.materials import Material, TileSurface
 
 from dataclasses import dataclass
 from typing import Literal
@@ -321,7 +322,7 @@ INTERCEPT_DODGE_LEDGER: dict[str, LegacyCoverage] = {
 def reset_arena(width: int = 15, height: int = 5) -> None:
     """Reset engine-global state and create one open arena."""
     reset_combat_state()
-    get_map().create_rectangle(0, 0, width, height)
+    get_map().create_rectangle(0, 0, width, height, surface=TileSurface(base_material=Material.STONE))
 
 
 def create_melee_fighter(
@@ -1007,7 +1008,7 @@ def test_dodge_roll_handles_fully_blocked_and_partial_retreats() -> None:
     reset_arena(width=10, height=5)
     attacker = create_melee_fighter("Attacker", (3, 2), "monsters")
     defender = create_melee_fighter("Defender", (4, 2), "heroes")
-    get_map().set_tile(6, 2, walkable=False, visible=False, name="Wall")
+    get_map().set_tile(6, 2, surface=TileSurface(base_material=Material.STONE), walkable=False, blocks_optics=True, blocks_propagation=True, name="Wall")
     defender.add_condition(
         DodgeRollFeature(
             source_entity_uuid=defender.uuid,

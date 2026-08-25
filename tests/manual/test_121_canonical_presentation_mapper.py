@@ -1,4 +1,5 @@
 """Focused contracts for canonical event-to-player presentation projection."""
+from dnd.types.materials import Material, TileSurface
 
 from dataclasses import dataclass, replace
 from typing import TypeVar
@@ -410,7 +411,7 @@ def _project_real_multi_reaction_movement(
 ) -> _ReactiveMovementProjection:
     """Execute one real Move or Jump with two visible, deterministic misses."""
     reset_combat_state()
-    get_map().create_rectangle(0, 0, 12, 6)
+    get_map().create_rectangle(0, 0, 12, 6, surface=TileSurface(base_material=Material.STONE))
     try:
         mover = create_test_monster("monster.goblin", 
             name=f"{movement_kind.value.title()} Mover",
@@ -1552,7 +1553,7 @@ def test_real_shield_handler_reaches_the_canonical_action_root() -> None:
     """The production handler bridge preserves Shield without synthetic events."""
 
     reset_combat_state()
-    get_map().create_rectangle(0, 0, 6, 6)
+    get_map().create_rectangle(0, 0, 6, 6, surface=TileSurface(base_material=Material.STONE))
     try:
         SERVER_CONTENT_SYSTEM_RUNTIME.install(bootstrap_content_system())
         defender = Entity.create(
@@ -1642,7 +1643,7 @@ def test_real_parry_handler_uses_public_reaction_identity_for_action_root() -> N
     """Parry activation must not expose its persistent trait as an action root."""
 
     reset_combat_state()
-    get_map().create_rectangle(0, 0, 6, 6)
+    get_map().create_rectangle(0, 0, 6, 6, surface=TileSurface(base_material=Material.STONE))
     try:
         SERVER_CONTENT_SYSTEM_RUNTIME.install(bootstrap_content_system())
         defender = create_test_monster("monster.goblin", 
@@ -1854,7 +1855,7 @@ def test_real_divine_smite_handler_reaches_the_canonical_action_root() -> None:
     """The production smite handler exposes activation before the attack impact."""
 
     reset_combat_state()
-    get_map().create_rectangle(0, 0, 6, 6)
+    get_map().create_rectangle(0, 0, 6, 6, surface=TileSurface(base_material=Material.STONE))
     try:
         SERVER_CONTENT_SYSTEM_RUNTIME.install(bootstrap_content_system())
         paladin = create_test_monster("monster.goblin", 
@@ -2195,7 +2196,7 @@ def test_real_shove_keeps_child_before_root_forced_movement(
     """The real engine path preserves spectated and controlled shoves."""
 
     reset_combat_state()
-    get_map().create_rectangle(0, 0, 8, 8)
+    get_map().create_rectangle(0, 0, 8, 8, surface=TileSurface(base_material=Material.STONE))
     try:
         shover = create_test_monster("monster.goblin", 
             name="Spectated Shove Hero",
@@ -2369,7 +2370,7 @@ def test_real_telekinesis_move_owns_visible_forced_movement() -> None:
     """Telekinesis follow-up completes displacement before its action root."""
 
     reset_combat_state()
-    get_map().create_rectangle(0, 0, 10, 10)
+    get_map().create_rectangle(0, 0, 10, 10, surface=TileSurface(base_material=Material.STONE))
     try:
         SERVER_CONTENT_SYSTEM_RUNTIME.install(bootstrap_content_system())
         caster = create_test_monster("monster.goblin", 
@@ -3323,7 +3324,7 @@ def test_lethal_opportunity_attack_keeps_exact_uncommitted_provoking_edge() -> N
 def test_real_lethal_opportunity_attack_projects_attempt_before_death() -> None:
     """The real interrupted Step owns OA, damage, and death without teleporting."""
     reset_combat_state()
-    get_map().create_rectangle(0, 0, 12, 12)
+    get_map().create_rectangle(0, 0, 12, 12, surface=TileSurface(base_material=Material.STONE))
     try:
         watcher = create_test_monster("monster.skeleton", 
             name="Lethal Reaction Watcher",

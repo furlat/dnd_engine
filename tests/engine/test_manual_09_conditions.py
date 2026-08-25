@@ -30,7 +30,6 @@ def reset_condition_state() -> None:
     BaseValue._registry.clear()
     BaseBlock._registry.clear()
     Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
 
 
 def create_tutorial_entity(

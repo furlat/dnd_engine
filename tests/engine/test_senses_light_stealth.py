@@ -1,4 +1,5 @@
 """Executable contract for unified optics, illumination, and perception."""
+from dnd.types.materials import Material, TileSurface
 
 from time import perf_counter
 from uuid import UUID, uuid4
@@ -6,6 +7,7 @@ from uuid import UUID, uuid4
 import pytest
 
 from dnd.actions.standard import Move
+from dnd.actions.operations import execute_use_action
 from dnd.blocks.base_item import BaseItem
 from dnd.blocks.sensory import (
     Senses,
@@ -20,20 +22,22 @@ from dnd.content.spatial_effect_recipes import (
 )
 from dnd.core.base_actions import BaseAction, TargetType
 from dnd.core.base_block import BaseBlock
-from dnd.core.base_tiles import Tile
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
 from dnd.core.events.events_registry import Event, EventPhase, EventQueue, EventType
 from dnd.core.events.world_events import (
     SensoryUpdateEvent,
     SensoryUpdateReason,
     SpatialChangeEvent,
+    SpatialChangeType,
 )
 from dnd.core.gridmap import get_map
-from dnd.items.environment import DirectionalDoor
-from dnd.items.environment_interactables import CloseDoorAction, DoorObject, OpenDoorAction
+from dnd.content.items.environment_item_builders import (
+    build_directional_door,
+    build_directional_wall,
+)
 from dnd.spells.conjuration import DarknessZone, FogCloudZone
-from dnd.types.senses import OpticalObscurement, SenseMode, SensesType
-from dnd.types.world import LightLevel
+from dnd.types.senses import PerceivedContact, OpticalObscurement, SenseMode, SensesType
+from dnd.types.world import CardinalDirection, LightLevel, WorldEdgeChannel
 from tests.engine.support import create_test_monster, reset_combat_state
 
 
@@ -67,7 +71,7 @@ def reset_senses_state(
     reset_combat_state()
     grid = get_map()
     grid.disable_events()
-    grid.create_rectangle(0, 0, width, height)
+    grid.create_rectangle(0, 0, width, height, surface=TileSurface(base_material=Material.STONE))
     if default_light is not LightLevel.BRIGHT_LIGHT:
         for position in grid.get_all_tiles():
             grid.set_tile_base_light(position, default_light)
@@ -78,7 +82,7 @@ def completed_sensory_updates(observer_uuid: UUID) -> list[SensoryUpdateEvent]:
     """Return recorded completion deltas for one observer."""
     return [
         event
-        for event in EventQueue._all_events
+        for _, event in EventQueue.iter_events_since(0)
         if isinstance(event, SensoryUpdateEvent)
         and event.phase is EventPhase.COMPLETION
         and event.observer_uuid == observer_uuid
@@ -172,10 +176,238 @@ def test_adjacent_directional_door_does_not_fabricate_visual_contact() -> None:
     observer = create_test_monster(
         "monster.skeleton", name="Observer", position=(0, 0), darkvision=False,
     )
-    door = DirectionalDoor(source_entity_uuid=uuid4())
-    get_map().place_object(door.uuid, (1, 0))
+    door = build_directional_door(
+        blocked_channels=tuple(WorldEdgeChannel),
+    )
+    get_map().place_object(
+        door.uuid,
+        (1, 0),
+        boundary_direction=CardinalDirection.WEST,
+    )
 
     assert door.uuid not in observer.senses.objects
+
+
+def test_near_lit_tile_contacts_entry_boundary_without_far_tile_content() -> None:
+    """A lit near Tile reveals an opaque entry boundary but not its far contents."""
+    reset_senses_state(width=4, height=1, default_light=LightLevel.DARKNESS)
+    grid = get_map()
+    entry_wall = build_directional_wall(
+        blocked_channels=tuple(WorldEdgeChannel),
+    )
+    grid.place_object(entry_wall.uuid, (1, 0), boundary_direction=CardinalDirection.WEST)
+    grid.add_light_source((0, 0), bright_radius_feet=5, dim_radius_feet=0)
+    assert grid.get_tile(0, 0).resolved_light_level is LightLevel.BRIGHT_LIGHT
+    assert grid.get_tile(1, 0).resolved_light_level is LightLevel.DARKNESS
+    far_entity = create_test_monster(
+        "monster.skeleton", name="Hidden far entity", position=(1, 0), darkvision=False,
+    )
+    observer = create_test_monster(
+        "monster.skeleton", name="Near observer", position=(0, 0), darkvision=False,
+    )
+
+    assert entry_wall.uuid in observer.senses.objects
+    assert observer.senses.objects[entry_wall.uuid] == PerceivedContact(
+        position=(1, 0), visual=True, special_senses=(),
+    )
+    assert (1, 0) not in observer.senses.visible
+    assert far_entity.uuid not in observer.senses.entities
+
+    assert not grid.can_transition((0, 0), (1, 0))
+    entry_wall.set_invisible(True)
+    assert not grid.can_transition((0, 0), (1, 0))
+    assert entry_wall.uuid not in observer.senses.objects
+    entry_wall.set_invisible(False)
+    assert not grid.can_transition((0, 0), (1, 0))
+    assert observer.senses.objects[entry_wall.uuid] == PerceivedContact(
+        position=(1, 0), visual=True, special_senses=(),
+    )
+
+
+def test_opaque_exit_hides_entry_boundary_and_far_contents() -> None:
+    """An opaque exit layer stops ordered visual boundary exposure."""
+    reset_senses_state(width=5, height=1)
+    grid = get_map()
+    exit_wall = build_directional_wall(
+        blocked_channels=tuple(WorldEdgeChannel),
+    )
+    entry_wall = build_directional_wall(
+        blocked_channels=tuple(WorldEdgeChannel),
+    )
+    grid.place_object(exit_wall.uuid, (1, 0), boundary_direction=CardinalDirection.EAST)
+    grid.place_object(entry_wall.uuid, (2, 0), boundary_direction=CardinalDirection.WEST)
+    far_entity = create_test_monster(
+        "monster.skeleton", name="Hidden beyond exit", position=(2, 0), darkvision=False,
+    )
+    observer = create_test_monster(
+        "monster.skeleton", name="Exit observer", position=(0, 0), darkvision=False,
+    )
+
+    assert exit_wall.uuid in observer.senses.objects
+    assert entry_wall.uuid not in observer.senses.objects
+    assert far_entity.uuid not in observer.senses.entities
+
+
+def test_open_exit_reaches_entry_boundary_but_not_blocked_far_center() -> None:
+    """An open exit layer exposes the terminal entry boundary only."""
+    reset_senses_state(width=5, height=1)
+    grid = get_map()
+    open_exit = build_directional_door(
+        blocked_channels=tuple(WorldEdgeChannel),
+        is_open=True,
+    )
+    entry_wall = build_directional_wall(
+        blocked_channels=tuple(WorldEdgeChannel),
+    )
+    grid.place_object(open_exit.uuid, (1, 0), boundary_direction=CardinalDirection.EAST)
+    grid.place_object(entry_wall.uuid, (2, 0), boundary_direction=CardinalDirection.WEST)
+    far_entity = create_test_monster(
+        "monster.skeleton", name="Hidden behind entry", position=(2, 0), darkvision=False,
+    )
+    observer = create_test_monster(
+        "monster.skeleton", name="Open exit observer", position=(0, 0), darkvision=False,
+    )
+
+    assert open_exit.uuid in observer.senses.objects
+    assert entry_wall.uuid in observer.senses.objects
+    assert observer.senses.objects[entry_wall.uuid].visual is True
+    assert (2, 0) not in observer.senses.visible
+    assert far_entity.uuid not in observer.senses.entities
+
+
+def test_reverse_observers_contact_their_near_terminal_boundary_only() -> None:
+    """Opposite observers resolve reverse ordered terminal layers independently."""
+    reset_senses_state(width=4, height=1)
+    grid = get_map()
+    left_boundary = build_directional_wall(
+        blocked_channels=tuple(WorldEdgeChannel),
+    )
+    right_boundary = build_directional_wall(
+        blocked_channels=tuple(WorldEdgeChannel),
+    )
+    grid.place_object(left_boundary.uuid, (1, 0), boundary_direction=CardinalDirection.EAST)
+    grid.place_object(right_boundary.uuid, (2, 0), boundary_direction=CardinalDirection.WEST)
+    far_for_left = create_test_monster(
+        "monster.skeleton", name="Far for left", position=(2, 0), darkvision=False,
+    )
+    far_for_right = create_test_monster(
+        "monster.skeleton", name="Far for right", position=(1, 0), darkvision=False,
+    )
+    left_observer = create_test_monster(
+        "monster.skeleton", name="Left observer", position=(0, 0), darkvision=False,
+    )
+    right_observer = create_test_monster(
+        "monster.skeleton", name="Right observer", position=(3, 0), darkvision=False,
+    )
+
+    assert left_boundary.uuid in left_observer.senses.objects
+    assert right_boundary.uuid not in left_observer.senses.objects
+    assert far_for_left.uuid not in left_observer.senses.entities
+    assert right_boundary.uuid in right_observer.senses.objects
+    assert left_boundary.uuid not in right_observer.senses.objects
+    assert far_for_right.uuid not in right_observer.senses.entities
+
+
+def test_visible_incident_cells_contact_transparent_boundary_from_either_side() -> None:
+    """A transparent boundary between visible cells is reached from both sides."""
+    reset_senses_state(width=4, height=1)
+    grid = get_map()
+    boundary = build_directional_wall(
+        blocked_channels=(WorldEdgeChannel.MOVEMENT,),
+    )
+    grid.place_object(
+        boundary.uuid,
+        (1, 0),
+        boundary_direction=CardinalDirection.EAST,
+    )
+    left_observer = create_test_monster(
+        "monster.skeleton", name="Left route observer", position=(0, 0), darkvision=False,
+    )
+    right_observer = create_test_monster(
+        "monster.skeleton", name="Right route observer", position=(3, 0), darkvision=False,
+    )
+
+    assert (1, 0) in left_observer.senses.visible
+    assert (2, 0) in left_observer.senses.visible
+    assert (1, 0) in right_observer.senses.visible
+    assert (2, 0) in right_observer.senses.visible
+    assert left_observer.senses.objects[boundary.uuid] == PerceivedContact(
+        position=(1, 0), visual=True, special_senses=(),
+    )
+    assert right_observer.senses.objects[boundary.uuid] == PerceivedContact(
+        position=(1, 0), visual=True, special_senses=(),
+    )
+
+
+def test_visual_and_nonvisual_boundary_routes_merge_one_contact_deterministically() -> None:
+    """One provider reached by visual and blindsight routes yields one merged contact."""
+    reset_senses_state(width=4, height=1)
+    grid = get_map()
+    wall = build_directional_wall(
+        blocked_channels=tuple(WorldEdgeChannel),
+    )
+    grid.place_object(wall.uuid, (1, 0), boundary_direction=CardinalDirection.EAST)
+    observer = create_test_monster(
+        "monster.skeleton", name="Dual-route observer", position=(0, 0), darkvision=False,
+    )
+    set_modes(observer.uuid, [SenseMode(sense_type=SensesType.BLINDSIGHT, range_feet=20)])
+
+    contact = observer.senses.objects[wall.uuid]
+    assert contact.position == (1, 0)
+    assert contact.visual is True
+    assert contact.special_senses == (SensesType.BLINDSIGHT,)
+    assert list(observer.senses.objects).count(wall.uuid) == 1
+
+
+@pytest.mark.parametrize("sense_type", [SensesType.BLINDSIGHT, SensesType.TREMORSENSE])
+def test_nonvisual_boundary_route_contacts_without_visual_evidence(
+    sense_type: SensesType,
+) -> None:
+    """Propagation-only route evidence establishes boundary contact by special sense."""
+    reset_senses_state(width=4, height=1, default_light=LightLevel.DARKNESS)
+    grid = get_map()
+    wall = build_directional_wall(
+        blocked_channels=tuple(WorldEdgeChannel),
+    )
+    grid.place_object(wall.uuid, (1, 0), boundary_direction=CardinalDirection.EAST)
+    observer = create_test_monster(
+        "monster.skeleton", name="Nonvisual observer", position=(0, 0), darkvision=False,
+    )
+    set_modes(observer.uuid, [SenseMode(sense_type=sense_type, range_feet=20)])
+
+    contact = observer.senses.objects[wall.uuid]
+    assert contact.position == (1, 0)
+    assert contact.visual is False
+    assert contact.special_senses == (sense_type,)
+    assert (1, 0) not in observer.senses.visible
+
+
+def test_boundary_invisibility_and_stealth_change_contact_not_objective_transition() -> None:
+    """Subjective boundary visibility never changes the objective edge answer."""
+    reset_senses_state(width=4, height=1)
+    grid = get_map()
+    wall = build_directional_wall(
+        blocked_channels=tuple(WorldEdgeChannel),
+    )
+    grid.place_object(wall.uuid, (1, 0), boundary_direction=CardinalDirection.EAST)
+    observer = create_test_monster(
+        "monster.skeleton", name="Boundary observer", position=(0, 0), darkvision=False,
+    )
+    assert not grid.can_transition((1, 0), (2, 0))
+    assert wall.uuid in observer.senses.objects
+
+    wall.set_invisible(True)
+    assert not grid.can_transition((1, 0), (2, 0))
+    assert wall.uuid not in observer.senses.objects
+
+    wall.set_invisible(False)
+    wall.set_stealth_dc(observer.get_passive_perception() + 1)
+    assert not grid.can_transition((1, 0), (2, 0))
+    assert wall.uuid not in observer.senses.objects
+
+    wall.set_stealth_dc(None)
+    assert not grid.can_transition((1, 0), (2, 0))
+    assert wall.uuid in observer.senses.objects
 
 
 def test_light_change_reveals_subscribed_dark_cell_reactively() -> None:
@@ -213,7 +445,14 @@ def test_one_optical_boundary_blocks_sight_and_light_but_not_propagation() -> No
     """Vision and light share optics while physical propagation remains distinct."""
     reset_senses_state(width=6, height=1, default_light=LightLevel.DARKNESS)
     grid = get_map()
-    grid.set_tile_directional_border((1, 0), "optical", "east", False)
+    wall = build_directional_wall(
+        blocked_channels=(WorldEdgeChannel.OPTICAL,),
+    )
+    grid.place_object(
+        wall.uuid,
+        (1, 0),
+        boundary_direction=CardinalDirection.EAST,
+    )
 
     assert (2, 0) not in grid.compute_fov((0, 0), max_distance=5)
     assert (2, 0) in grid.compute_propagation_fov((0, 0), max_distance=5)
@@ -697,37 +936,183 @@ def test_center_door_changes_movement_optics_and_propagation_together() -> None:
     actor = create_test_monster(
         "monster.skeleton", name="Actor", position=(0, 0), darkvision=False,
     )
-    door = DoorObject(source_entity_uuid=actor.uuid)
-    grid.place_object(door.uuid, (2, 0))
+    door = build_directional_door(
+        blocked_channels=tuple(WorldEdgeChannel),
+    )
+    grid.place_object(
+        door.uuid,
+        (2, 0),
+        boundary_direction=CardinalDirection.WEST,
+    )
     assert not grid.can_transition((1, 0), (2, 0), actor.uuid)
     assert (3, 0) not in grid.compute_fov((0, 0), 4)
     assert (3, 0) not in grid.compute_propagation_fov((0, 0), 4)
 
-    opened = OpenDoorAction(
-        source_entity_uuid=actor.uuid,
-        source_item_uuid=door.uuid,
-    ).apply()
+    revisions_before_open = (
+        grid.movement_revision,
+        grid.optical_revision,
+        grid.propagation_revision,
+    )
+    cursor = EventQueue.event_cursor()
+    opened = execute_use_action(actor, door.uuid, "Open Door")
     assert opened is not None and not opened.canceled
+    assert (
+        grid.movement_revision,
+        grid.optical_revision,
+        grid.propagation_revision,
+    ) == tuple(revision + 1 for revision in revisions_before_open)
     assert grid.can_transition((1, 0), (2, 0), actor.uuid)
     assert (3, 0) in grid.compute_fov((0, 0), 4)
     assert (3, 0) in grid.compute_propagation_fov((0, 0), 4)
 
-    closed = CloseDoorAction(
-        source_entity_uuid=actor.uuid,
-        source_item_uuid=door.uuid,
-    ).apply()
+    revisions_before_close = (
+        grid.movement_revision,
+        grid.optical_revision,
+        grid.propagation_revision,
+    )
+    closed = execute_use_action(actor, door.uuid, "Close Door")
     assert closed is not None and not closed.canceled
+    assert (
+        grid.movement_revision,
+        grid.optical_revision,
+        grid.propagation_revision,
+    ) == tuple(revision + 1 for revision in revisions_before_close)
     assert not grid.can_transition((1, 0), (2, 0), actor.uuid)
     changed = [
-        event for event in EventQueue._all_events
+        event for _, event in EventQueue.iter_events_since(cursor)
         if isinstance(event, SpatialChangeEvent)
         and event.event_type is EventType.SPATIAL_OBJECT_CHANGED
         and event.phase is EventPhase.COMPLETION
         and event.object_uuid == door.uuid
     ]
     assert len(changed) == 2
-    assert changed[-1].object_blocks_optics is True
-    assert changed[-1].object_blocks_propagation is True
+    assert [event.object_is_open for event in changed] == [True, False]
+    assert [
+        event.object_boundary_structure.blocked_channels
+        for event in changed
+    ] == [(), tuple(WorldEdgeChannel)]
+    assert changed[0].placement == changed[1].placement
+
+
+def test_redundant_opposing_boundaries_preserve_answers_revisions_and_light() -> None:
+    """Removing one of two opposing blockers retains aggregate topology."""
+    reset_senses_state(width=4, height=1, default_light=LightLevel.DARKNESS)
+    grid = get_map()
+    first = build_directional_wall(
+        blocked_channels=tuple(WorldEdgeChannel),
+    )
+    second = build_directional_wall(
+        blocked_channels=tuple(WorldEdgeChannel),
+    )
+    grid.place_object(first.uuid, (0, 0), boundary_direction=CardinalDirection.EAST)
+    grid.place_object(second.uuid, (1, 0), boundary_direction=CardinalDirection.WEST)
+    light_uuid = grid.add_light_source((0, 0), bright_radius_feet=15, dim_radius_feet=0)
+    answers_before = (
+        grid.can_transition((0, 0), (1, 0)),
+        grid.can_optical_transition((0, 0), (1, 0)),
+        grid.can_propagate_transition((0, 0), (1, 0)),
+    )
+    revisions_before = (
+        grid.movement_revision,
+        grid.optical_revision,
+        grid.propagation_revision,
+    )
+    light_before = tuple(
+        grid.get_tile(*position).resolved_light_level
+        for position in ((0, 0), (1, 0), (2, 0), (3, 0))
+    )
+    cursor = EventQueue.event_cursor()
+
+    try:
+        grid.remove_object(first.uuid)
+        assert answers_before == (False, False, False)
+        assert (
+            grid.can_transition((0, 0), (1, 0)),
+            grid.can_optical_transition((0, 0), (1, 0)),
+            grid.can_propagate_transition((0, 0), (1, 0)),
+        ) == answers_before
+        assert (
+            grid.movement_revision,
+            grid.optical_revision,
+            grid.propagation_revision,
+        ) == revisions_before
+        assert tuple(
+            grid.get_tile(*position).resolved_light_level
+            for position in ((0, 0), (1, 0), (2, 0), (3, 0))
+        ) == light_before
+
+        removals = [
+            (index, event)
+            for index, event in EventQueue.iter_events_since(cursor)
+            if isinstance(event, SpatialChangeEvent)
+            and event.phase is EventPhase.COMPLETION
+            and event.object_uuid == first.uuid
+        ]
+        assert len(removals) == 1
+        assert not any(
+            isinstance(event, SpatialChangeEvent)
+            and event.event_type is EventType.SPATIAL_LIGHT_CHANGED
+            for _index, event in EventQueue.iter_events_since(cursor)
+        )
+        _index, removal = removals[0]
+        assert removal.change_type is SpatialChangeType.OBJECT_REMOVED
+        assert removal.placement is None
+        assert removal.object_boundary_structure is None
+        assert removal.previous_placement is not None
+        assert removal.senses_hint is not None
+        assert removal.senses_hint.directional_positions == {(0, 0)}
+        assert removal.senses_hint.directional_neighbors == {(1, 0)}
+        assert removal.senses_hint.directional_channels_changed is None
+        assert not removal.senses_hint.requires_fov
+        assert not removal.senses_hint.requires_paths
+        assert not removal.senses_hint.requires_light_recompute
+        assert not removal.senses_hint.requires_propagation_recompute
+    finally:
+        grid.remove_object(second.uuid)
+        grid.remove_light_source(light_uuid)
+
+
+def test_boundary_optical_light_settlement_is_a_child_before_object_completion() -> None:
+    """An optical boundary publishes causal light facts before its completion."""
+    reset_senses_state(width=5, height=1, default_light=LightLevel.DARKNESS)
+    grid = get_map()
+    grid.add_light_source((0, 0), bright_radius_feet=15, dim_radius_feet=0)
+    wall = build_directional_wall(
+        blocked_channels=(WorldEdgeChannel.OPTICAL,),
+    )
+    cursor = EventQueue.event_cursor()
+
+    grid.place_object(
+        wall.uuid,
+        (1, 0),
+        boundary_direction=CardinalDirection.EAST,
+    )
+
+    recorded = list(EventQueue.iter_events_since(cursor))
+    object_completions = [
+        (index, event)
+        for index, event in recorded
+        if isinstance(event, SpatialChangeEvent)
+        and event.event_type is EventType.SPATIAL_OBJECT_PLACED
+        and event.phase is EventPhase.COMPLETION
+        and event.object_uuid == wall.uuid
+    ]
+    assert len(object_completions) == 1
+    completion_index, completion = object_completions[0]
+    light_children = [
+        (index, event)
+        for index, event in recorded
+        if isinstance(event, SpatialChangeEvent)
+        and event.event_type is EventType.SPATIAL_LIGHT_CHANGED
+        and event.phase is EventPhase.COMPLETION
+    ]
+    child_uuids = set(completion.lineage_children_events)
+    assert light_children
+    assert any(
+        event.uuid in child_uuids and index < completion_index
+        for index, event in light_children
+    )
+    assert grid.get_tile(2, 0).resolved_light_level is LightLevel.DARKNESS
 
 
 def test_local_spatial_change_selects_only_subscribed_observers(
@@ -785,59 +1170,83 @@ def test_fixed_radius_optical_query_cost_is_independent_of_total_map_size() -> N
 def test_cold_directional_preflight_is_bounded_to_the_query_region(
     size: int,
     distant_blockers: int,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Distant directional structure cannot add work to fixed-radius sight."""
+    """Distant boundary providers cannot change fixed-radius sight."""
     reset_senses_state(width=size, height=size)
     grid = get_map()
     origin = (size // 2, size // 2)
+    baseline = set(grid.compute_fov(origin, max_distance=10))
     for offset in range(distant_blockers):
         position = (offset % size, 0)
-        grid.set_tile_directional_border(position, "optical", "east", False)
-
-    calls = 0
-    original = Tile.allows_direction
-
-    def count_calls(self: Tile, direction: str, channel: str = "movement", *, include_derived: bool = True) -> bool:
-        nonlocal calls
-        calls += 1
-        return original(
-            self,
-            direction,
-            channel,
-            include_derived=include_derived,
+        wall = build_directional_wall(
+            blocked_channels=(WorldEdgeChannel.OPTICAL,),
+        )
+        grid.place_object(
+            wall.uuid,
+            position,
+            boundary_direction=CardinalDirection.EAST,
         )
 
-    monkeypatch.setattr(Tile, "allows_direction", count_calls)
-    grid._fov_cache.clear()
-    grid.compute_fov(origin, max_distance=10)
-
-    assert calls <= 4 * 441
+    assert set(grid.compute_fov(origin, max_distance=10)) == baseline
 
 
 def test_optical_change_recomputes_only_light_sources_within_radius(
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The active-source scan does expensive FOV work only for local lights."""
+    """A local optical boundary changes nearby light, not a distant source."""
     reset_senses_state(width=80, height=1, default_light=LightLevel.DARKNESS)
     grid = get_map()
-    near_uuid = grid.add_light_source(
+    grid.add_light_source(
         (10, 0), bright_radius_feet=10, dim_radius_feet=0,
     )
     grid.add_light_source(
         (70, 0), bright_radius_feet=10, dim_radius_feet=0,
     )
-    recomputed: list[UUID] = []
-    original = grid._compute_light_tiles
+    near_tile = grid.get_tile(12, 0)
+    far_tile = grid.get_tile(72, 0)
+    assert near_tile is not None and far_tile is not None
+    near_before = near_tile.resolved_light_level
+    far_before = far_tile.resolved_light_level
+    optical_revision = grid.optical_revision
 
-    def track(source, position=None):
-        recomputed.append(source.uuid)
-        return original(source, position)
+    wall = build_directional_wall(
+        blocked_channels=(WorldEdgeChannel.OPTICAL,),
+    )
+    grid.place_object(
+        wall.uuid,
+        (11, 0),
+        boundary_direction=CardinalDirection.EAST,
+    )
 
-    monkeypatch.setattr(grid, "_compute_light_tiles", track)
-    grid.set_tile_directional_border((11, 0), "optical", "east", False)
+    assert grid.optical_revision > optical_revision
+    assert near_tile.resolved_light_level is not near_before
+    assert far_tile.resolved_light_level is far_before
 
-    assert recomputed == [near_uuid]
+
+def test_single_boundary_removal_bumps_only_its_authored_channel_once() -> None:
+    """Removing one optical boundary changes only the aggregate optical revision."""
+    reset_senses_state(width=4, height=1)
+    grid = get_map()
+    wall = build_directional_wall(
+        blocked_channels=(WorldEdgeChannel.OPTICAL,),
+    )
+    grid.place_object(wall.uuid, (1, 0), boundary_direction=CardinalDirection.EAST)
+    revisions_before_remove = (
+        grid.movement_revision,
+        grid.optical_revision,
+        grid.propagation_revision,
+    )
+
+    grid.remove_object(wall.uuid)
+
+    assert (
+        grid.movement_revision,
+        grid.optical_revision,
+        grid.propagation_revision,
+    ) == (
+        revisions_before_remove[0],
+        revisions_before_remove[1] + 1,
+        revisions_before_remove[2],
+    )
 
 
 def test_optical_and_propagation_caches_invalidate_only_their_channels() -> None:
@@ -849,14 +1258,28 @@ def test_optical_and_propagation_caches_invalidate_only_their_channels() -> None
     optical_revision = grid.optical_revision
     propagation_revision = grid.propagation_revision
 
-    grid.set_tile_directional_border((3, 0), "optical", "east", False)
-    assert grid.optical_revision > optical_revision
+    optical_wall = build_directional_wall(
+        blocked_channels=(WorldEdgeChannel.OPTICAL,),
+    )
+    grid.place_object(
+        optical_wall.uuid,
+        (3, 0),
+        boundary_direction=CardinalDirection.EAST,
+    )
+    assert grid.optical_revision == optical_revision + 1
     assert grid.propagation_revision == propagation_revision
     assert grid.compute_fov((0, 0), 7) != first_optical
     assert grid.compute_propagation_fov((0, 0), 7) == first_propagation
 
     optical_revision = grid.optical_revision
-    grid.set_tile_directional_border((3, 0), "propagation", "east", False)
+    propagation_wall = build_directional_wall(
+        blocked_channels=(WorldEdgeChannel.PROPAGATION,),
+    )
+    grid.place_object(
+        propagation_wall.uuid,
+        (3, 0),
+        boundary_direction=CardinalDirection.NORTH,
+    )
     assert grid.optical_revision == optical_revision
-    assert grid.propagation_revision > propagation_revision
-    assert grid.compute_propagation_fov((0, 0), 7) != first_propagation
+    assert grid.propagation_revision == propagation_revision + 1
+    assert not grid.can_propagate_transition((3, 0), (3, 1))

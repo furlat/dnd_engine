@@ -35,6 +35,7 @@ def test_spike_trap_recipe_materializes_without_a_global_content_runtime() -> No
     assert condition.condition_stealth_dc == 12
     assert condition.content_ref == recipe.ref
     assert condition.trigger_kinds == frozenset({SpatialEffectTriggerKind.ENTER})
+    assert not condition.blocks_physical_optics_at((2, 3))
 
 
 def test_spatial_recipe_parameters_are_rejected_at_the_direct_boundary() -> None:

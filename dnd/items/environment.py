@@ -1,6 +1,6 @@
 """Tile-owned directional environment items."""
 
-from typing import List, Optional, Tuple
+from typing import List, Optional
 from uuid import UUID
 
 from pydantic import Field
@@ -22,32 +22,23 @@ from dnd.core.events.events_registry import (
     EventPhase,
 )
 from dnd.core.gridmap import get_map
-from dnd.types.world import WorldEdgeChannel, CardinalDirection
-from dnd.types.items import ItemDirectionalStructureState
+from dnd.types.world import WorldEdgeChannel
+from dnd.types.materials import Material
+from dnd.types.world_placement import (
+    BoundaryStructure,
+    BoundaryStructureKind,
+    WorldPlacementKind,
+    WorldPlacementSpec,
+)
 
-DIRECTIONS: Tuple[CardinalDirection, ...] = tuple(CardinalDirection)
-DIRECTIONAL_CHANNELS: Tuple[WorldEdgeChannel, ...] = (
+DIRECTIONAL_CHANNELS: tuple[WorldEdgeChannel, ...] = (
     WorldEdgeChannel.MOVEMENT,
     WorldEdgeChannel.OPTICAL,
     WorldEdgeChannel.PROPAGATION,
 )
 
 
-def _validate_directions(directions: Tuple[CardinalDirection, ...]) -> None:
-    """Validate directional blocker names.
-
-    Args:
-        directions: Direction names to validate.
-
-    Raises:
-        ValueError: If any direction is outside the supported cardinal set.
-    """
-    for direction in directions:
-        if direction not in DIRECTIONS:
-            raise ValueError(f"Unsupported direction: {direction}")
-
-
-def _validate_channels(channels: Tuple[WorldEdgeChannel, ...]) -> None:
+def _validate_channels(channels: tuple[WorldEdgeChannel, ...]) -> None:
     """Validate directional blocking channel names.
 
     Args:
@@ -75,7 +66,6 @@ class DirectionalWall(BaseItem):
         include_in_senses_objects: Whether senses expose the wall as an object.
         include_in_available_object_actions: Whether object action discovery
             includes the wall.
-        blocked_directions: Cardinal directions blocked from the wall tile.
         blocked_channels: Spatial channels blocked in those directions.
     """
 
@@ -87,7 +77,7 @@ class DirectionalWall(BaseItem):
     blocks_optics_field: bool = Field(default=False, description="Global optical blocker flag for the wall.")
     map_char: str = Field(default="W", description="Map-editor glyph for the wall.")
     include_in_senses_objects: bool = Field(
-        default=False,
+        default=True,
         description="Whether senses expose the wall as a visible object.",
     )
     include_in_available_object_actions: bool = Field(
@@ -95,35 +85,63 @@ class DirectionalWall(BaseItem):
         description="Whether object action discovery includes the wall.",
     )
 
-    blocked_directions: Tuple[CardinalDirection, ...] = Field(
-        default_factory=lambda: DIRECTIONS,
-        description="Cardinal directions blocked from the wall tile.",
-    )
-    blocked_channels: Tuple[WorldEdgeChannel, ...] = Field(
+    blocked_channels: tuple[WorldEdgeChannel, ...] = Field(
         default_factory=lambda: DIRECTIONAL_CHANNELS,
         description="Spatial channels blocked in each configured direction.",
     )
 
     def model_post_init(self, __context) -> None:
-        """Validate and project directional blockers after model initialization.
-
-        Args:
-            __context: Pydantic post-init context.
-        """
+        """Validate the one-side wall contract."""
         super().model_post_init(__context)
-        _validate_directions(self.blocked_directions)
         _validate_channels(self.blocked_channels)
-        for channel in self.blocked_channels:
-            for direction in self.blocked_directions:
-                self._set_directional_blocking_field(channel, direction, True)
 
-    def get_directional_structure_state(
-        self,
-    ) -> ItemDirectionalStructureState:
-        """Return the wall's exact authored directional topology."""
-        return ItemDirectionalStructureState(
-            blocked_directions=self.blocked_directions,
+    def get_world_placement_spec(self) -> WorldPlacementSpec:
+        """Return the fixed support-relative two-band capability."""
+        return WorldPlacementSpec(
+            kind=WorldPlacementKind.BOUNDARY,
+            occupies_bands=True,
+            vertical_extent_steps=2,
+        )
+
+    def get_boundary_structure(self) -> BoundaryStructure:
+        """Return the current wall structure."""
+        return BoundaryStructure(
+            structure=BoundaryStructureKind.WALL,
+            material=Material.STONE,
             blocked_channels=self.blocked_channels,
+        )
+
+
+class CliffFace(BaseItem):
+    """A fixed, movement-only cliff boundary."""
+
+    name: str = Field(default="Cliff Face", description="Display name for the cliff object.")
+    is_pickable: bool = Field(default=False, description="Cliffs are fixed environment objects.")
+    is_usable: bool = Field(default=False, description="Cliffs do not expose use actions.")
+    is_targetable: bool = Field(default=False, description="Cliffs are not direct targets.")
+    include_in_senses_objects: bool = Field(
+        default=True,
+        description="Whether senses expose the cliff as a visible object.",
+    )
+    include_in_available_object_actions: bool = Field(
+        default=False,
+        description="Whether object action discovery includes the cliff.",
+    )
+
+    def get_world_placement_spec(self) -> WorldPlacementSpec:
+        """Return the fixed two-band boundary capability."""
+        return WorldPlacementSpec(
+            kind=WorldPlacementKind.BOUNDARY,
+            occupies_bands=True,
+            vertical_extent_steps=2,
+        )
+
+    def get_boundary_structure(self) -> BoundaryStructure:
+        """Return the movement-only cliff structure."""
+        return BoundaryStructure(
+            structure=BoundaryStructureKind.CLIFF,
+            material=Material.STONE,
+            blocked_channels=(WorldEdgeChannel.MOVEMENT,),
         )
 
 
@@ -247,7 +265,6 @@ class DirectionalDoor(UsableItem):
         include_in_available_object_actions: Whether object action discovery
             includes the door.
         is_open: Current door state.
-        blocked_directions: Cardinal directions blocked while closed.
         blocked_channels: Spatial channels blocked in those directions.
     """
 
@@ -267,26 +284,15 @@ class DirectionalDoor(UsableItem):
     )
 
     is_open: bool = Field(default=False, description="Current open or closed state of the door.")
-    blocked_directions: Tuple[CardinalDirection, ...] = Field(
-        default_factory=lambda: DIRECTIONS,
-        description="Cardinal directions blocked while the door is closed.",
-    )
-    blocked_channels: Tuple[WorldEdgeChannel, ...] = Field(
+    blocked_channels: tuple[WorldEdgeChannel, ...] = Field(
         default_factory=lambda: DIRECTIONAL_CHANNELS,
         description="Spatial channels blocked in each configured direction.",
     )
 
     def model_post_init(self, __context) -> None:
-        """Validate and project the initial directional door state.
-
-        Args:
-            __context: Pydantic post-init context.
-        """
+        """Validate the one-side door contract."""
         super().model_post_init(__context)
-        _validate_directions(self.blocked_directions)
         _validate_channels(self.blocked_channels)
-        for channel, direction, blocked in self._directional_updates(closed=not self.is_open):
-            self._set_directional_blocking_field(channel, direction, blocked)
 
     def get_spatial_open_state(self) -> Optional[bool]:
         """Return the door state used by spatial serialization.
@@ -296,25 +302,24 @@ class DirectionalDoor(UsableItem):
         """
         return self.is_open
 
-    def get_directional_structure_state(
-        self,
-    ) -> ItemDirectionalStructureState:
-        """Return the door's exact authored directional topology."""
-        return ItemDirectionalStructureState(
-            blocked_directions=self.blocked_directions,
-            blocked_channels=self.blocked_channels,
+    def get_world_placement_spec(self) -> WorldPlacementSpec:
+        """Return the fixed support-relative two-band capability."""
+        return WorldPlacementSpec(
+            kind=WorldPlacementKind.BOUNDARY,
+            occupies_bands=True,
+            vertical_extent_steps=2,
+        )
+
+    def get_boundary_structure(self) -> BoundaryStructure:
+        """Return the closed channels or empty open-door structure."""
+        return BoundaryStructure(
+            structure=BoundaryStructureKind.DOOR,
+            material=Material.WOOD,
+            blocked_channels=() if self.is_open else self.blocked_channels,
         )
 
     def get_use_actions(self, user_entity_uuid: UUID) -> List[BaseAction]:
-        """Build use-action templates available from the door's current state.
-
-        Args:
-            user_entity_uuid: Entity UUID that would execute the action.
-
-        Returns:
-            Open or close action templates, or an empty list when an open door is
-            occupied and cannot be closed.
-        """
+        """Build use-action templates available from the door's current state."""
         if self.is_open:
             door_pos = get_map().get_object_position(self.uuid)
             if door_pos and get_map().get_entities_at(door_pos):
@@ -339,38 +344,38 @@ class DirectionalDoor(UsableItem):
         ]
 
     def open(self, parent_event: Optional[UUID] = None) -> None:
-        """Open the door and remove configured directional blockers.
-
-        Args:
-            parent_event: Optional parent event UUID for spatial updates.
-        """
+        """Open the door without changing its exact placement."""
         if self.is_open:
             return
+        previous_structure = self.get_boundary_structure()
         self.is_open = True
-        self.set_directional_blocking_bulk(self._directional_updates(closed=False), parent_event=parent_event)
+        try:
+            get_map().update_object_boundary_structure(
+                self.uuid,
+                self.get_boundary_structure(),
+                previous_structure=previous_structure,
+                parent_event=parent_event,
+            )
+        except Exception:
+            self.is_open = False
+            raise
 
     def close(self, parent_event: Optional[UUID] = None) -> None:
-        """Close the door and restore configured directional blockers.
-
-        Args:
-            parent_event: Optional parent event UUID for spatial updates.
-        """
+        """Close the door without re-admitting or rewriting its bands."""
         if not self.is_open:
             return
+        previous_structure = self.get_boundary_structure()
         self.is_open = False
-        self.set_directional_blocking_bulk(self._directional_updates(closed=True), parent_event=parent_event)
+        try:
+            get_map().update_object_boundary_structure(
+                self.uuid,
+                self.get_boundary_structure(),
+                previous_structure=previous_structure,
+                parent_event=parent_event,
+            )
+        except Exception:
+            self.is_open = True
+            raise
 
-    def _directional_updates(self, closed: bool) -> List[Tuple[str, str, bool]]:
-        """Build bulk directional blocking updates for the requested state.
-
-        Args:
-            closed: Whether the door should block its configured directions.
-
-        Returns:
-            Tuples of channel, direction, and blocked state.
-        """
-        return [
-            (channel, direction, closed)
-            for channel in self.blocked_channels
-            for direction in self.blocked_directions
-        ]
+    # The action surface above is intentionally the sole lifecycle owner.
+    # No directional boolean projection or side-expansion helper remains.

@@ -6,6 +6,7 @@ construct darkvision-capable skeletons and then assert no-darkvision behavior.
 This module maps all 58 logical cases to current selectors and restores the
 remaining behavior with deterministic state and event-lifecycle assertions.
 """
+from dnd.types.materials import Material, TileSurface
 
 from collections import Counter
 from dataclasses import dataclass
@@ -455,7 +456,7 @@ def reset_stealth_world(
     BaseValue._registry.clear()
     Encounter.clear_registry()
     grid = get_map()
-    grid.create_rectangle(0, 0, width, height)
+    grid.create_rectangle(0, 0, width, height, surface=TileSurface(base_material=Material.STONE))
     for tile in grid._tiles.values():
         tile.default_light = default_light
 

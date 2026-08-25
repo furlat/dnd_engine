@@ -1,4 +1,5 @@
 """Tutorial tests for attack resolution, damage, healing, reactions, and shove."""
+from dnd.types.materials import Material, TileSurface
 
 from uuid import UUID, uuid4
 
@@ -53,9 +54,8 @@ def reset_combat_tutorial_state() -> None:
     BaseCondition._registry.clear()
     BaseValue._registry.clear()
     Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
     GridMap.reset()
-    get_map().create_rectangle(0, 0, 20, 20)
+    get_map().create_rectangle(0, 0, 20, 20, surface=TileSurface(base_material=Material.STONE))
 
 
 def make_melee_attack_auto_hit(entity: Entity) -> UUID:

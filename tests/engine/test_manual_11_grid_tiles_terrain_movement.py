@@ -1,4 +1,5 @@
 """Focused checks for grid, tiles, terrain, and movement."""
+from dnd.types.materials import Material, TileSurface
 
 from typing import Optional
 from uuid import uuid4
@@ -7,13 +8,14 @@ from dnd.actions.standard import (
     Move,
     Shove,
 )
+from dnd.content.items.environment_item_builders import build_directional_wall
 from dnd.core.events.action_events import (
     ShoveEvent,
 )
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.core.base_block import BaseBlock
-from dnd.types.world import MovementMode
+from dnd.types.world import CardinalDirection, MovementMode, WorldEdgeChannel
 from dnd.core.base_object import BaseObject
 from dnd.core.base_tiles import difficult_terrain_factory, floor_factory, water_factory
 from dnd.core.events.events_registry import (
@@ -43,7 +45,7 @@ def reset_world_state(width: int = 8, height: int = 8) -> None:
     BaseObject._registry.clear()
     BaseValue._registry.clear()
     BaseBlock._registry.clear()
-    get_map().create_rectangle(0, 0, width, height)
+    get_map().create_rectangle(0, 0, width, height, surface=TileSurface(base_material=Material.STONE))
 
 
 def create_world_actor(
@@ -120,7 +122,14 @@ def test_paths_price_destination_tiles_and_directional_borders() -> None:
     assert distances[(4, 0)] == 5
     assert paths[(4, 0)] == [(0, 0), (1, 0), (2, 0), (3, 0), (4, 0)]
 
-    grid.set_tile_directional_border((1, 0), "movement", "east", False)
+    wall = build_directional_wall(
+        blocked_channels=(WorldEdgeChannel.MOVEMENT,),
+    )
+    grid.place_object(
+        wall.uuid,
+        (1, 0),
+        boundary_direction=CardinalDirection.EAST,
+    )
     blocked_distances, blocked_paths = grid.compute_paths(
         (0, 0),
         movement_mode=MovementMode.WALKING,
@@ -152,8 +161,8 @@ def test_entity_position_updates_class_registry_grid_registry_and_spatial_events
 
     assert hero.position == (2, 2)
     assert hero.senses.position == (2, 2)
-    assert hero not in Entity.get_all_entities_at_position((1, 1))
-    assert hero in Entity.get_all_entities_at_position((2, 2))
+    assert hero.uuid not in get_map().get_entities_at((1, 1))
+    assert hero.uuid in get_map().get_entities_at((2, 2))
     assert hero.uuid not in grid.get_entities_at((1, 1))
     assert hero.uuid in grid.get_entities_at((2, 2))
     assert entered_positions == [(2, 2)]

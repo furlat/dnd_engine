@@ -1,4 +1,5 @@
 """Focused server contracts for authoritative creature lifecycle projection."""
+from dnd.types.materials import Material, TileSurface
 
 from fastapi.testclient import TestClient
 
@@ -24,7 +25,7 @@ from server.session import PlayerType
 def _create_life_state_game() -> tuple[TestClient, str, Entity, Entity, Encounter]:
     """Create one visible controlled actor and an opposing observer target."""
     reset_server_test_runtime()
-    get_map().create_rectangle(0, 0, 6, 4)
+    get_map().create_rectangle(0, 0, 6, 4, surface=TileSurface(base_material=Material.STONE))
 
     hero = create_test_monster("monster.goblin", 
         name="Lifecycle Hero",

@@ -1,10 +1,11 @@
 """Tutorial tests for the grid, tiles, movement costs, and spatial events."""
+from dnd.types.materials import Material, TileSurface
 
 from uuid import uuid4
 
-from dnd.core.base_block import BaseBlock
+from dnd.content.items.environment_item_builders import build_directional_wall
 from dnd.types.world import MovementMode
-from dnd.core.base_object import BaseObject
+from dnd.types.world import CardinalDirection, WorldEdgeChannel
 from dnd.core.base_tiles import Tile, difficult_terrain_factory
 from dnd.core.events.events_registry import (
     EventPhase,
@@ -16,18 +17,15 @@ from dnd.core.events.world_events import (
     SpatialChangeEvent,
     StepMovementEvent,
 )
-from dnd.core.gridmap import GridMap, get_map
-from dnd.core.values import BaseValue
+from dnd.core.gridmap import get_map
+from dnd.entities.entity import Entity, EntityConfig
+from dnd.runtime_reset import reset_engine_runtime
+from tests.engine.support import create_test_entity
 
 
 def reset_world_state() -> None:
     """Clear global state touched by these world-model examples."""
-    EventQueue.reset()
-    BaseObject._registry.clear()
-    BaseBlock._registry.clear()
-    BaseValue._registry.clear()
-    GridMap.reset()
-    EventQueue.set_combat_log_callback(None)
+    reset_engine_runtime()
 
 
 def test_first_world_example_prints_visible_corridor_costs(capsys) -> None:
@@ -35,7 +33,7 @@ def test_first_world_example_prints_visible_corridor_costs(capsys) -> None:
     reset_world_state()
 
     grid = get_map()
-    grid.create_rectangle(0, 0, 5, 1, name="Stone Floor")
+    grid.create_rectangle(0, 0, 5, 1, name="Stone Floor", surface=TileSurface(base_material=Material.STONE))
     difficult_tile = difficult_terrain_factory((2, 0))
     grid.set_tile(2, 0, tile=difficult_tile, fire_event=False)
 
@@ -82,7 +80,7 @@ def test_grid_tiles_have_bounds_lookup_and_movement_costs(capsys) -> None:
     reset_world_state()
     grid = get_map()
 
-    grid.create_rectangle(0, 0, 5, 1, name="Stone Floor")
+    grid.create_rectangle(0, 0, 5, 1, name="Stone Floor", surface=TileSurface(base_material=Material.STONE))
     difficult_tile = difficult_terrain_factory((2, 0))
     grid.set_tile(2, 0, tile=difficult_tile, fire_event=False)
 
@@ -140,7 +138,7 @@ def test_directional_border_blocks_transition_and_emits_tile_change(capsys) -> N
     """Directional tile borders can block movement between adjacent cells."""
     reset_world_state()
     grid = get_map()
-    grid.create_rectangle(0, 0, 2, 1)
+    grid.create_rectangle(0, 0, 2, 1, surface=TileSurface(base_material=Material.STONE))
 
     before_passable = grid.can_transition(
         (0, 0),
@@ -149,11 +147,15 @@ def test_directional_border_blocks_transition_and_emits_tile_change(capsys) -> N
     )
     assert before_passable
 
-    changed = grid.set_tile_directional_border(
-        position=(0, 0),
-        channel="movement",
-        direction="east",
-        passable=False,
+    wall = build_directional_wall(
+        display_name="Tutorial East Wall",
+        blocked_channels=(WorldEdgeChannel.MOVEMENT,),
+    )
+    event_cursor = EventQueue.event_cursor()
+    placement = grid.place_object(
+        wall.uuid,
+        (0, 0),
+        boundary_direction=CardinalDirection.EAST,
     )
     after_passable = grid.can_transition(
         (0, 0),
@@ -161,39 +163,43 @@ def test_directional_border_blocks_transition_and_emits_tile_change(capsys) -> N
         movement_mode=MovementMode.WALKING,
     )
 
-    assert changed is True
     assert not after_passable
 
     tile_change_completions = [
         event
-        for event in EventQueue.get_events_by_type(EventType.SPATIAL_TILE_CHANGED)
+        for _, event in EventQueue.iter_events_since(event_cursor)
+        if event.event_type is EventType.SPATIAL_OBJECT_PLACED
         if event.phase == EventPhase.COMPLETION
     ]
     assert len(tile_change_completions) == 1
-    assert tile_change_completions[0].position == (0, 0)
-    assert tile_change_completions[0].directional_directions == ["east"]
-    assert tile_change_completions[0].directional_channels == ["movement"]
-    border_event = tile_change_completions[0]
+    placement_event = tile_change_completions[0]
+    assert placement_event.object_uuid == wall.uuid
+    assert placement_event.placement == placement
+    assert placement_event.placement.boundary_direction is CardinalDirection.EAST
+    assert placement_event.object_boundary_structure is not None
+    assert placement_event.object_boundary_structure.blocked_channels == (
+        WorldEdgeChannel.MOVEMENT,
+    )
 
     border_lines = [
         f"transition before border: {before_passable}",
-        f"border changed: {changed}",
+        "object placed: True",
         f"transition after border: {after_passable}",
-        f"tile-change completions: {len(tile_change_completions)}",
-        f"changed position: {border_event.position}",
-        f"directions: {border_event.directional_directions}",
-        f"channels: {border_event.directional_channels}",
+        f"object-placement completions: {len(tile_change_completions)}",
+        f"placed position: {placement_event.position}",
+        f"boundary direction: {placement_event.placement.boundary_direction.value}",
+        f"channels: {[channel.value for channel in placement_event.object_boundary_structure.blocked_channels]}",
     ]
 
     print("\n".join(border_lines))
 
     expected_border_lines = [
         "transition before border: True",
-        "border changed: True",
+        "object placed: True",
         "transition after border: False",
-        "tile-change completions: 1",
-        "changed position: (0, 0)",
-        "directions: ['east']",
+        "object-placement completions: 1",
+        "placed position: (0, 0)",
+        "boundary direction: east",
         "channels: ['movement']",
     ]
     assert border_lines == expected_border_lines
@@ -204,10 +210,12 @@ def test_entity_position_index_and_spatial_events_follow_grid_moves(capsys) -> N
     """GridMap tracks entity positions and emits enter/leave spatial events."""
     reset_world_state()
     grid = get_map()
-    grid.create_rectangle(0, 0, 3, 1)
-    actor_id = uuid4()
-
-    grid.register_entity(actor_id, (0, 0))
+    grid.create_rectangle(0, 0, 3, 1, surface=TileSurface(base_material=Material.STONE))
+    actor = create_test_entity(
+        name="World model actor",
+        config=EntityConfig(position=(0, 0), faction="heroes"),
+    )
+    actor_id = actor.uuid
 
     assert grid.get_entity_position(actor_id) == (0, 0)
     assert grid.get_entities_at((0, 0)) == {actor_id}
@@ -222,7 +230,7 @@ def test_entity_position_index_and_spatial_events_follow_grid_moves(capsys) -> N
         total_path_length=2,
         phase=EventPhase.EFFECT,
     )
-    grid.move_entity(actor_id, (1, 0), parent_event=step_event.uuid)
+    Entity.update_entity_position(actor, (1, 0), parent_event=step_event.uuid)
 
     assert grid.get_entity_position(actor_id) == (1, 0)
     assert grid.get_entities_at((0, 0)) == set()
@@ -287,11 +295,13 @@ def test_forced_movement_is_a_distinct_event_that_can_parent_spatial_updates(cap
     """Forced displacement is distinct from voluntary step movement."""
     reset_world_state()
     grid = get_map()
-    grid.create_rectangle(0, 0, 5, 1)
+    grid.create_rectangle(0, 0, 5, 1, surface=TileSurface(base_material=Material.STONE))
     shover_id = uuid4()
-    target_id = uuid4()
-
-    grid.register_entity(target_id, (1, 0))
+    target = create_test_entity(
+        name="Forced movement target",
+        config=EntityConfig(position=(1, 0), faction="neutral"),
+    )
+    target_id = target.uuid
 
     forced_event = ForcedMovementEvent(
         source_entity_uuid=shover_id,
@@ -304,7 +314,7 @@ def test_forced_movement_is_a_distinct_event_that_can_parent_spatial_updates(cap
         cause="tutorial shove",
         phase=EventPhase.EFFECT,
     )
-    grid.move_entity(target_id, (3, 0), parent_event=forced_event.uuid)
+    Entity.update_entity_position(target, (3, 0), parent_event=forced_event.uuid)
 
     assert forced_event.event_type == EventType.FORCED_MOVEMENT
     assert grid.get_entity_position(target_id) == (3, 0)
@@ -351,7 +361,7 @@ def test_batch_tile_creation_does_not_emit_tile_change_events(capsys) -> None:
     reset_world_state()
     grid = get_map()
 
-    grid.create_rectangle(0, 0, 3, 2)
+    grid.create_rectangle(0, 0, 3, 2, surface=TileSurface(base_material=Material.STONE))
 
     assert grid.tile_count() == 6
     assert EventQueue.get_events_by_type(EventType.SPATIAL_TILE_CHANGED) == []
@@ -360,6 +370,7 @@ def test_batch_tile_creation_does_not_emit_tile_change_events(capsys) -> None:
     grid.set_tile(
         1,
         1,
+        surface=TileSurface(base_material=Material.STONE),
         walkable=False,
         blocks_optics=True,
         blocks_propagation=True,

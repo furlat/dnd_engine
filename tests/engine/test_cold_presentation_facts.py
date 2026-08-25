@@ -1,4 +1,5 @@
 """Focused contracts for cold engine presentation facts."""
+from dnd.types.materials import Material, TileSurface
 
 from uuid import uuid4, uuid5
 
@@ -93,7 +94,7 @@ def _create_actor(
 def _reset_grid() -> None:
     """Reset engine registries and create a small deterministic arena."""
     reset_engine_runtime()
-    get_map().create_rectangle(0, 0, 10, 6)
+    get_map().create_rectangle(0, 0, 10, 6, surface=TileSurface(base_material=Material.STONE))
 
 
 def test_shape_snapshots_preserve_every_runtime_geometry_parameter() -> None:

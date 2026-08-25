@@ -4,6 +4,7 @@ The legacy file was removed from active collection during the July test
 reorganization.  These tests retain every distinct rule assertion while using
 normal pytest assertions and top-level imports.
 """
+from dnd.types.materials import Material, TileSurface
 
 from uuid import uuid4
 
@@ -43,7 +44,7 @@ def _reset_state(
 ) -> None:
     reset_combat_state()
     if create_rectangle:
-        get_map().create_rectangle(0, 0, width, height)
+        get_map().create_rectangle(0, 0, width, height, surface=TileSurface(base_material=Material.STONE))
 
 
 def _create_jumper(
@@ -114,6 +115,7 @@ def test_jump_reaches_visible_island_that_move_cannot_path_to() -> None:
             grid.set_tile(
                 x,
                 y,
+                surface=TileSurface(base_material=Material.STONE),
                 walkable=True,
                 blocks_optics=False,
                 blocks_propagation=False,
@@ -124,6 +126,7 @@ def test_jump_reaches_visible_island_that_move_cannot_path_to() -> None:
             grid.set_tile(
                 x,
                 y,
+                surface=TileSurface(base_material=Material.WATER),
                 walkable=False,
                 blocks_optics=False,
                 blocks_propagation=False,
@@ -138,6 +141,7 @@ def test_jump_reaches_visible_island_that_move_cannot_path_to() -> None:
         grid.set_tile(
             x,
             y,
+            surface=TileSurface(base_material=Material.STONE),
             walkable=True,
             blocks_optics=False,
             blocks_propagation=False,

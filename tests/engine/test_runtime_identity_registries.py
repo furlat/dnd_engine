@@ -1,9 +1,16 @@
 """Engine semantic tests for object identity and registries."""
 
+import pytest
 from uuid import uuid4
 
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_object import BaseObject
+from dnd.core.events.events_registry import EventQueue, EventType
+from dnd.core.gridmap import get_map
+from dnd.core.positioning import PositionCommitError
+from dnd.blocks.sensory import capture_senses_snapshot
+from dnd.content.monsters.monster_builders import create_monster
+from dnd.game import Game
 from dnd.core.values import (
     BaseValue,
     ContextualValue,
@@ -11,6 +18,8 @@ from dnd.core.values import (
     StaticValue,
 )
 from dnd.entities.entity import Entity, EntityConfig
+from dnd.types.materials import Material, TileSurface
+from dnd.types.world import LightLevel
 from tests.engine.support import create_test_entity, reset_combat_state
 
 
@@ -29,7 +38,6 @@ def reset_identity_state() -> None:
     BaseValue._registry.clear()
     BaseBlock._registry.clear()
     Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
 
 
 def test_eb_01_001_base_object_registration_lifecycle() -> None:
@@ -87,6 +95,13 @@ def test_eb_01_003_value_and_block_registries_are_separate() -> None:
 def test_eb_01_004_entity_registers_as_block_and_entity() -> None:
     """EB-01-004: Entity creation populates block and entity registries."""
     reset_identity_state()
+    get_map().create_rectangle(
+        0,
+        0,
+        6,
+        6,
+        surface=TileSurface(base_material=Material.STONE),
+    )
     entity_uuid = uuid4()
     config = EntityConfig(position=(2, 3))
 
@@ -99,14 +114,262 @@ def test_eb_01_004_entity_registers_as_block_and_entity() -> None:
 
     assert Entity.get(entity_uuid) is entity
     assert BaseBlock.get(entity_uuid) is entity
-    assert entity in Entity.get_all_entities_at_position((2, 3))
+    assert entity.uuid in get_map().get_entities_at((2, 3))
 
     Entity.update_entity_position(entity, (4, 5))
 
     assert entity.position == (4, 5)
     assert entity.senses.position == (4, 5)
-    assert entity not in Entity.get_all_entities_at_position((2, 3))
-    assert entity in Entity.get_all_entities_at_position((4, 5))
+    assert entity.uuid not in get_map().get_entities_at((2, 3))
+    assert entity.uuid in get_map().get_entities_at((4, 5))
+
+
+def test_entity_tile_membership_is_defensive_and_co_located_noop_is_quiet() -> None:
+    """Tile membership admits co-location and exposes only defensive reads."""
+    reset_identity_state()
+    get_map().create_rectangle(
+        0,
+        0,
+        6,
+        6,
+        surface=TileSurface(base_material=Material.STONE),
+    )
+    first = create_test_entity(
+        name="First co-located",
+        config=EntityConfig(position=(2, 3)),
+        entity_kind_id="test.first_co_located",
+    )
+    second = create_test_entity(
+        name="Second co-located",
+        config=EntityConfig(position=(2, 3)),
+        entity_kind_id="test.second_co_located",
+    )
+    grid = get_map()
+
+    expected = {first.uuid, second.uuid}
+    assert grid.get_entities_at((2, 3)) == expected
+    assert grid.get_entity_position(first.uuid) == (2, 3)
+    snapshot = grid.get_tile(2, 3).get_entity_uuids()
+    snapshot.clear()
+    assert grid.get_entities_at((2, 3)) == expected
+
+    revision = grid.occupancy_revision
+    cursor = EventQueue.event_cursor()
+    Entity.update_entity_position(first, first.position)
+    assert grid.occupancy_revision == revision
+    assert EventQueue.event_cursor() == cursor
+    assert grid.get_entities_at((2, 3)) == expected
+
+
+def test_public_entity_lifecycle_revision_deltas_are_exact() -> None:
+    """Real occupancy transitions bump once; no-op and rejected transitions do not."""
+    reset_identity_state()
+    grid = get_map()
+    grid.create_rectangle(
+        0,
+        0,
+        8,
+        8,
+        surface=TileSurface(base_material=Material.STONE),
+    )
+    game = Game()
+    entity = create_monster("creature.commoner", uuid4(), faction="heroes")
+
+    before_deploy = grid.occupancy_revision
+    game.deploy_entity(entity, (1, 1))
+    assert grid.occupancy_revision == before_deploy + 1
+
+    before_noop = grid.occupancy_revision
+    Entity.update_entity_position(entity, entity.position)
+    assert grid.occupancy_revision == before_noop
+
+    before_move = grid.occupancy_revision
+    Entity.update_entity_position(entity, (2, 1))
+    assert grid.occupancy_revision == before_move + 1
+
+    grid.remove_tile(3, 1)
+    before_rejected = grid.occupancy_revision
+    with pytest.raises(PositionCommitError):
+        Entity.update_entity_position(entity, (3, 1))
+    assert grid.occupancy_revision == before_rejected
+    assert entity.position == (2, 1)
+
+    grid.set_tile(
+        3,
+        1,
+        surface=TileSurface(base_material=Material.STONE),
+    )
+    before_suspend = grid.occupancy_revision
+    entity.suspend_spatial_presence()
+    assert grid.occupancy_revision == before_suspend + 1
+
+    before_restore = grid.occupancy_revision
+    entity.restore_spatial_presence((3, 1))
+    assert grid.occupancy_revision == before_restore + 1
+
+    before_detach = grid.occupancy_revision
+    assert game.remove_entity(entity.uuid) is entity
+    assert grid.occupancy_revision == before_detach + 1
+
+
+def test_entity_membership_has_no_block_route_and_rejects_live_tile_mutations() -> None:
+    """Only Entity commands can create membership, and live support is protected."""
+    reset_identity_state()
+    grid = get_map()
+    grid.create_rectangle(
+        0,
+        0,
+        5,
+        5,
+        surface=TileSurface(base_material=Material.STONE),
+    )
+    entity = create_test_entity(
+        name="Protected occupancy",
+        config=EntityConfig(position=(2, 2)),
+        entity_kind_id="test.protected_occupancy",
+    )
+    arbitrary_block = BaseBlock(source_entity_uuid=uuid4())
+
+    assert arbitrary_block.uuid not in grid.get_entities_at((2, 2))
+    assert not hasattr(grid, "register_entity")
+    assert not hasattr(grid.get_tile(2, 2), "add_entity")
+
+    replacement = TileSurface(base_material=Material.WATER)
+    with pytest.raises(ValueError, match="entity occupancy"):
+        grid.set_tile(2, 2, surface=replacement)
+    with pytest.raises(ValueError, match="entities are deployed"):
+        grid.clear()
+
+    assert grid.get_entity_position(entity.uuid) == (2, 2)
+    assert grid.get_entities_at((2, 2)) == {entity.uuid}
+
+
+def test_missing_tile_move_is_publicly_atomic_for_occupancy_events_light_and_senses() -> None:
+    """A rejected destination changes no objective, sensory, or light fact."""
+    reset_identity_state()
+    grid = get_map()
+    grid.create_rectangle(
+        0,
+        0,
+        5,
+        5,
+        surface=TileSurface(base_material=Material.STONE),
+    )
+    entity = create_test_entity(
+        name="Missing destination",
+        config=EntityConfig(position=(2, 2)),
+        entity_kind_id="test.missing_destination",
+    )
+    grid.set_tile_base_light((2, 2), LightLevel.DARKNESS)
+    before_senses = capture_senses_snapshot(entity.senses)
+    before_position = entity.position
+    before_membership = grid.get_entities_at(before_position)
+    before_revision = grid.occupancy_revision
+    before_cursor = EventQueue.event_cursor()
+    before_light = grid.get_tile(*before_position).resolved_light_level
+    grid.remove_tile(3, 2)
+    before_senses = capture_senses_snapshot(entity.senses)
+    before_cursor = EventQueue.event_cursor()
+
+    with pytest.raises(PositionCommitError):
+        Entity.update_entity_position(entity, (3, 2))
+
+    assert entity.position == before_position
+    assert grid.get_entity_position(entity.uuid) == before_position
+    assert grid.get_entities_at(before_position) == before_membership
+    assert grid.occupancy_revision == before_revision
+    assert EventQueue.event_cursor() == before_cursor
+    assert grid.get_tile(*before_position).resolved_light_level is before_light
+    assert capture_senses_snapshot(entity.senses) == before_senses
+
+
+def test_suspended_entity_keeps_game_identity_without_observer_or_second_left() -> None:
+    """Suspension is world absence; suspended detach is a quiet ownership removal."""
+    reset_identity_state()
+    grid = get_map()
+    grid.create_rectangle(
+        0,
+        0,
+        12,
+        12,
+        surface=TileSurface(base_material=Material.STONE),
+    )
+    game = Game()
+    observer = create_monster("creature.commoner", uuid4(), faction="heroes")
+    target = create_monster("creature.commoner", uuid4(), faction="monsters")
+    game.deploy_entity(observer, (4, 4))
+    game.deploy_entity(target, (5, 4))
+    light_uuid = grid.add_light_source(
+        target.position,
+        bright_radius_feet=5,
+        dim_radius_feet=0,
+        anchor_uuid=target.uuid,
+    )
+    retained_position = target.position
+    revision_before = grid.occupancy_revision
+    cursor_before = EventQueue.event_cursor()
+
+    assert target.uuid in observer.senses.entities
+    assert grid.get_entity_subscriptions(target.uuid)
+    target.suspend_spatial_presence()
+
+    left_events = [
+        event
+        for _, event in EventQueue.iter_events_since(cursor_before)
+        if (
+            event.event_type == EventType.SPATIAL_ENTITY_LEFT
+            and event.phase.value == "completion"
+        )
+    ]
+    assert len(left_events) == 1
+    assert target.position == retained_position
+    assert target.uuid not in grid.get_entities_at(retained_position)
+    assert grid.get_entity_position(target.uuid) is None
+    assert game.get_entity(target.uuid) is target
+    assert target.uuid not in observer.senses.entities
+    assert grid.get_entity_subscriptions(target.uuid) == set()
+    assert target.get_attached_light_sources() == {light_uuid}
+    assert grid.occupancy_revision == revision_before + 1
+
+    cursor_after_suspend = EventQueue.event_cursor()
+    assert game.remove_entity(target.uuid) is target
+    assert game.get_entity(target.uuid) is None
+    assert grid.get_entity_position(target.uuid) is None
+    assert EventQueue.event_cursor() == cursor_after_suspend
+    assert grid.occupancy_revision == revision_before + 1
+
+
+def test_entity_membership_queries_are_map_size_invariant_at_public_boundary() -> None:
+    """Small and large maps expose the same bounded occupancy result and delta."""
+    observations = []
+    for size in (8, 40):
+        reset_identity_state()
+        grid = get_map()
+        grid.create_rectangle(
+            0,
+            0,
+            size,
+            size,
+            surface=TileSurface(base_material=Material.STONE),
+        )
+        entity = create_test_entity(
+            name=f"Locality entity {size}",
+            config=EntityConfig(position=(2, 2)),
+            entity_kind_id=f"test.locality_{size}",
+        )
+        before_revision = grid.occupancy_revision
+        observations.append(
+            (
+                grid.get_entities_at((2, 2)),
+                grid.get_entities_at((size - 1, size - 1)),
+                grid.get_entity_position(entity.uuid),
+                grid.occupancy_revision - before_revision,
+            )
+        )
+
+    assert len(observations[0][0]) == len(observations[1][0]) == 1
+    assert observations[0][1] == observations[1][1] == set()
+    assert observations[0][2:] == observations[1][2:] == ((2, 2), 0)
 
 
 def test_eb_01_005_value_subclass_lookup_contracts() -> None:

@@ -1,4 +1,5 @@
 """Focused engine contracts for Counterspell and committed spell costs."""
+from dnd.types.materials import Material, TileSurface
 
 from unittest.mock import patch
 from uuid import uuid4
@@ -56,7 +57,7 @@ def reset_counterspell_state(*, width: int = 40, height: int = 8) -> None:
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
     BaseValue._registry.clear()
-    get_map().create_rectangle(0, 0, width, height)
+    get_map().create_rectangle(0, 0, width, height, surface=TileSurface(base_material=Material.STONE))
 
 
 def create_counterspell_caster(

@@ -1,11 +1,11 @@
 """Dependency-neutral item observation and location contracts."""
 
 from enum import Enum
-from typing import Optional, Tuple
+from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from dnd.types.world import CardinalDirection, WorldEdgeChannel
+from dnd.types.world_placement import BoundaryStructure
 
 
 class ItemRarity(str, Enum):
@@ -36,15 +36,6 @@ class ItemLocation(str, Enum):
     EQUIPMENT = "equipment"
     MERGED = "merged"
     DESTROYED = "destroyed"
-
-
-class ItemDirectionalStructureState(BaseModel):
-    """Cold directional topology contributed by one spatial item."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    blocked_directions: Tuple[CardinalDirection, ...]
-    blocked_channels: Tuple[WorldEdgeChannel, ...]
 
 
 class ItemLightSourceState(BaseModel):
@@ -85,14 +76,13 @@ class ItemObservationState(BaseModel):
     stack_count: int = Field(ge=1)
     is_hazardous: bool
     is_open: Optional[bool] = None
-    directional_structure: Optional[ItemDirectionalStructureState] = None
+    boundary_structure: Optional[BoundaryStructure] = None
     light_source: Optional[ItemLightSourceState] = None
     charge_state: Optional[ItemChargeState] = None
 
 
 __all__ = [
     "ItemChargeState",
-    "ItemDirectionalStructureState",
     "ItemKind",
     "ItemLightSourceState",
     "ItemLocation",

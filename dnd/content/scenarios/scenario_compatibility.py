@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections import deque
 from collections.abc import Mapping
 
-from dnd.core.base_block import BaseBlock
 from dnd.content.scenarios.battlefield_definitions import BattlefieldDefinition
 from dnd.content.scenarios.scenario_definitions import (
     EncounterCompatibilityCode,
@@ -287,14 +286,8 @@ def _has_interactable_topology_path(
     start: tuple[int, int],
     end: tuple[int, int],
 ) -> bool:
-    """Return connectivity after treating closed open-state objects as usable.
-
-    A closed door is not a permanently disconnected battlefield: combatants
-    can reach and open it. This pure topology walk ignores only blockers that
-    explicitly expose a closed spatial-open state, while retaining terrain,
-    walls, and all other cell/directional blockers.
-    """
-    if not _topology_cell_walkable(grid, start):
+    """Return connectivity through the public movement transition query."""
+    if not grid.is_walkable(*start):
         return False
     pending = deque((start,))
     visited = {start}
@@ -315,112 +308,15 @@ def _has_interactable_topology_path(
             candidate = (current[0] + dx, current[1] + dy)
             if candidate in visited:
                 continue
-            if not _topology_transition_allows(grid, current, candidate):
+            if not grid.can_transition(
+                current,
+                candidate,
+                treat_closed_doors_as_interactable=True,
+            ):
                 continue
             visited.add(candidate)
             pending.append(candidate)
     return False
-
-
-def _topology_transition_allows(
-    grid: GridMap,
-    from_position: tuple[int, int],
-    to_position: tuple[int, int],
-) -> bool:
-    if not _topology_cell_walkable(grid, to_position):
-        return False
-    dx = to_position[0] - from_position[0]
-    dy = to_position[1] - from_position[1]
-    if max(abs(dx), abs(dy)) != 1:
-        return False
-    if dx == 0 or dy == 0:
-        return _topology_cardinal_transition_allows(
-            grid,
-            from_position,
-            to_position,
-        )
-    bridges = (
-        (from_position[0] + dx, from_position[1]),
-        (from_position[0], from_position[1] + dy),
-    )
-    return any(
-        _topology_cell_walkable(grid, bridge)
-        and _topology_cardinal_transition_allows(
-            grid,
-            from_position,
-            bridge,
-        )
-        and _topology_cardinal_transition_allows(
-            grid,
-            bridge,
-            to_position,
-        )
-        for bridge in bridges
-    )
-
-
-def _topology_cell_walkable(
-    grid: GridMap,
-    position: tuple[int, int],
-) -> bool:
-    tile = grid.get_tile(*position)
-    if tile is None or tile.blocks_walking():
-        return False
-    for object_uuid in grid.get_objects_at(position):
-        block = BaseBlock.get(object_uuid)
-        if block is None or not block.blocks_walking():
-            continue
-        if block.get_spatial_open_state() is False:
-            continue
-        return False
-    return True
-
-
-def _topology_cardinal_transition_allows(
-    grid: GridMap,
-    from_position: tuple[int, int],
-    to_position: tuple[int, int],
-) -> bool:
-    if (
-        abs(to_position[0] - from_position[0])
-        + abs(to_position[1] - from_position[1])
-        != 1
-    ):
-        return False
-    return (
-        _topology_side_allows(grid, from_position, to_position)
-        and _topology_side_allows(grid, to_position, from_position)
-    )
-
-
-def _topology_side_allows(
-    grid: GridMap,
-    position: tuple[int, int],
-    other_position: tuple[int, int],
-) -> bool:
-    tile = grid.get_tile(*position)
-    if tile is None:
-        return False
-    directions = tile.directions_toward(other_position)
-    if not all(
-        tile.allows_direction(
-            direction,
-            "movement",
-            include_derived=False,
-        )
-        for direction in directions
-    ):
-        return False
-    for object_uuid in grid.get_objects_at(position):
-        block = BaseBlock.get(object_uuid)
-        if block is None or block.get_spatial_open_state() is False:
-            continue
-        if any(
-            block.blocks_directional_movement(direction)
-            for direction in directions
-        ):
-            return False
-    return True
 
 
 __all__ = [

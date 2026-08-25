@@ -1,4 +1,5 @@
 """Focused checks for standard condition families."""
+from dnd.types.materials import Material, TileSurface
 
 from uuid import uuid4
 
@@ -47,8 +48,7 @@ def reset_standard_condition_state() -> None:
     BaseValue._registry.clear()
     BaseBlock._registry.clear()
     Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
-    get_map().create_rectangle(0, 0, 20, 20)
+    get_map().create_rectangle(0, 0, 20, 20, surface=TileSurface(base_material=Material.STONE))
 
 
 def create_tutorial_actor(

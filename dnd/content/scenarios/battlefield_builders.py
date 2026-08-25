@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, cast
+from typing import Callable
 from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 from dnd.blocks.base_item import BaseItem
@@ -12,6 +12,7 @@ from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.content.items.environment_item_builders import (
     build_directional_door,
     build_directional_wall,
+    build_cliff_face,
     build_fireball_cannon,
     build_storage_chest,
     build_wall_torch,
@@ -27,6 +28,7 @@ from dnd.content.scenarios.battlefield_definitions import (
     LightLevelName,
 )
 from dnd.types.world import CardinalDirection, MovementMode
+from dnd.types.materials import Material, TileSurface
 from dnd.core.world_edges import ElevationSurfaceKind, SlopeAxis
 from dnd.core.traversal_connectors import (
     ConnectorActionCostType,
@@ -49,15 +51,13 @@ from dnd.items.environment import DirectionalDoor, DirectionalWall
 from dnd.items.environment_interactables import StorageChest
 from dnd.maps.arena_layout import (
     DIFFICULT_TERRAIN_POSITIONS,
-    DOOR_DIRECTIONS,
     DOOR_POSITION,
     HEALING_POTION_POSITIONS,
     SPIKE_ZONE_POSITIONS,
     STANDARD_BLOCKING_CHANNELS,
     TRAP_LEVER_POSITION,
-    WALL_DIRECTIONS,
     WALL_POSITIONS,
-    WALL_TORCH_POSITIONS,
+    WALL_TORCH_MOUNTS,
     WATER_POSITIONS,
     StandardArenaObjects,
     StandardBarrierObjects,
@@ -116,7 +116,9 @@ def _object_definition(
     kind: BattlefieldObjectKind,
     label: str,
     *,
-    blocked_directions: tuple[CardinalDirection, ...] = (),
+    boundary_direction: CardinalDirection | None = None,
+    base_height_steps: int | None = None,
+    orientation: CardinalDirection | None = None,
     is_open: bool | None = None,
 ) -> BattlefieldObjectDefinition:
     """Create one static authored object placement."""
@@ -124,7 +126,9 @@ def _object_definition(
         position=position,
         kind=kind,
         label=label,
-        blocked_directions=blocked_directions,
+        boundary_direction=boundary_direction,
+        base_height_steps=base_height_steps,
+        orientation=orientation,
         is_open=is_open,
     )
 
@@ -148,7 +152,7 @@ def _standard_hazards_layout(*, open_door: bool) -> BattlefieldLayoutDefinition:
                 position,
                 "wall",
                 "Wall",
-                blocked_directions=cast(tuple[CardinalDirection, ...], WALL_DIRECTIONS),
+                boundary_direction=CardinalDirection.WEST,
             )
             for position in WALL_POSITIONS
         ),
@@ -156,16 +160,20 @@ def _standard_hazards_layout(*, open_door: bool) -> BattlefieldLayoutDefinition:
             DOOR_POSITION,
             "door",
             "Door",
-            blocked_directions=(
-                ()
-                if open_door
-                else cast(tuple[CardinalDirection, ...], DOOR_DIRECTIONS)
-            ),
+            boundary_direction=CardinalDirection.WEST,
             is_open=open_door,
         ),
         *(
-            _object_definition(position, "wall_torch", "Wall Torch")
-            for position in WALL_TORCH_POSITIONS
+            _object_definition(
+                position,
+                "wall_torch",
+                "Wall Torch",
+                boundary_direction=boundary_direction,
+                base_height_steps=base_height_steps,
+                orientation=orientation,
+            )
+            for position, boundary_direction, base_height_steps, orientation
+            in WALL_TORCH_MOUNTS
         ),
         *(
             _object_definition(position, "healing_potion", "Healing Potion")
@@ -186,7 +194,7 @@ def _two_barrier_layout(*, first_door_y: int, second_door_y: int) -> Battlefield
                     (column, y),
                     "door",
                     f"{label} Door",
-                    blocked_directions=(CardinalDirection.WEST,),
+                    boundary_direction=CardinalDirection.WEST,
                     is_open=False,
                 ))
             else:
@@ -194,7 +202,7 @@ def _two_barrier_layout(*, first_door_y: int, second_door_y: int) -> Battlefield
                     (column, y),
                     "wall",
                     f"{label} Wall",
-                    blocked_directions=(CardinalDirection.WEST,),
+                    boundary_direction=CardinalDirection.WEST,
                 ))
     return BattlefieldLayoutDefinition(objects=tuple(objects))
 
@@ -211,10 +219,18 @@ def _elevation_proving_layout() -> BattlefieldLayoutDefinition:
                 (4, y),
                 "door" if y == 7 else "wall",
                 "Proving Door" if y == 7 else "Proving Wall",
-                blocked_directions=(CardinalDirection.WEST,),
+                boundary_direction=CardinalDirection.WEST,
                 is_open=False if y == 7 else None,
             )
             for y in range(3, 12)
+        ) + (
+            _object_definition(
+                (11, 5),
+                "cliff",
+                "Cliff Face",
+                boundary_direction=CardinalDirection.WEST,
+                base_height_steps=0,
+            ),
         ),
         elevation=(
             BattlefieldElevationDefinition(
@@ -355,7 +371,14 @@ def _layout_for_battlefield(battlefield_id: str) -> BattlefieldLayoutDefinition:
         return standard.model_copy(update={
             "objects": (
                 *standard.objects,
-                _object_definition((4, 10), "wall_torch", "Control-Room Torch"),
+                _object_definition(
+                    (4, 10),
+                    "wall_torch",
+                    "Control-Room Torch",
+                    boundary_direction=CardinalDirection.WEST,
+                    base_height_steps=1,
+                    orientation=CardinalDirection.EAST,
+                ),
                 _object_definition((6, 11), "fireball_cannon", "Fireball Cannon"),
                 _object_definition((5, 10), "loot_chest", "Control Cache"),
             ),
@@ -518,22 +541,34 @@ def _place_directional_barrier(
     door: DirectionalDoor | None = None
     for y in range(3, 12):
         position = (column, y)
-        grid.set_tile(column, y, walkable=True, name="Floor")
+        grid.set_tile(
+            column,
+            y,
+            surface=TileSurface(base_material=Material.STONE),
+            walkable=True,
+            name="Floor",
+        )
         if y == door_y:
             door = build_directional_door(
                 display_name=f"{label} Door",
-                blocked_directions=(CardinalDirection.WEST,),
                 blocked_channels=STANDARD_BLOCKING_CHANNELS,
                 is_open=False,
             )
-            door.place_on_grid(position)
+            grid.place_object(
+                door.uuid,
+                position,
+                boundary_direction=CardinalDirection.WEST,
+            )
         else:
             wall = build_directional_wall(
                 display_name=f"{label} Wall",
-                blocked_directions=(CardinalDirection.WEST,),
                 blocked_channels=STANDARD_BLOCKING_CHANNELS,
             )
-            wall.place_on_grid(position)
+            grid.place_object(
+                wall.uuid,
+                position,
+                boundary_direction=CardinalDirection.WEST,
+            )
             walls.append(wall)
     if door is None:
         raise ValueError("Directional barrier requires a door within rows 3 through 11.")
@@ -665,8 +700,19 @@ def _build_multi_object_dark(
     """Build the standard floor plus the control-room object package."""
     environment = build_standard_arena_environment(grid)
     environment.barrier.door.open()
+    torch_definition = next(
+        row
+        for row in definition.layout.objects
+        if row.kind == "wall_torch" and row.position == (4, 10)
+    )
     wall_torch = build_wall_torch()
-    wall_torch.mount((4, 10), lit=True)
+    wall_torch.mount(
+        torch_definition.position,
+        boundary_direction=torch_definition.boundary_direction,
+        base_height_steps=torch_definition.base_height_steps,
+        orientation=torch_definition.orientation,
+        lit=True,
+    )
     cannon = build_fireball_cannon(charges=2)
     cannon.place_on_grid((6, 11))
     chest = _create_cache("Validation Control Cache", heal_amount=12, include_full_loadout=False)
@@ -701,6 +747,7 @@ def _build_elevation_proving_ground(
             grid.set_tile(
                 cell.position[0],
                 cell.position[1],
+                surface=TileSurface(base_material=Material.STONE),
                 walkable=False,
                 name="Gap",
             )
@@ -724,6 +771,17 @@ def _build_elevation_proving_ground(
         column=4,
         door_y=7,
         label="Proving",
+    )
+    cliff_definition = next(
+        row for row in layout.objects if row.kind == "cliff"
+    )
+    cliff = build_cliff_face(display_name=cliff_definition.label)
+    grid.place_object(
+        cliff.uuid,
+        cliff_definition.position,
+        boundary_direction=cliff_definition.boundary_direction,
+        base_height_steps=cliff_definition.base_height_steps,
+        orientation=cliff_definition.orientation,
     )
     landing_hazard = materialize_spike_trap_condition({(11, 9)})
     return BuiltBattlefield(
@@ -750,6 +808,7 @@ def _build_elevation_proving_ground(
         },
         object_uuids={
             "door": barrier.door.uuid,
+            "cliff": cliff.uuid,
             "landing_hazard": landing_hazard.uuid,
             **{
                 authored_id: connector_uuid
@@ -802,24 +861,6 @@ def build_battlefield(battlefield_id: str) -> BuiltBattlefield:
     return built
 
 
-def _open_directions(
-    north: bool,
-    south: bool,
-    east: bool,
-    west: bool,
-) -> tuple[CardinalDirection, ...]:
-    return tuple(
-        direction
-        for direction, is_open in (
-            (CardinalDirection.NORTH, north),
-            (CardinalDirection.SOUTH, south),
-            (CardinalDirection.EAST, east),
-            (CardinalDirection.WEST, west),
-        )
-        if is_open
-    )
-
-
 def _world_initialized_event(
     built: BuiltBattlefield,
     grid: GridMap,
@@ -828,6 +869,7 @@ def _world_initialized_event(
         WorldTileState(
             tile_uuid=tile.uuid,
             position=position,
+            surface=tile.surface,
             name=tile.name,
             walkable=tile.walkable,
             blocks_optics=tile.blocks_optics,
@@ -841,35 +883,19 @@ def _world_initialized_event(
             slope_axis=tile.slope_axis,
             default_light=tile.default_light,
             resolved_light=tile.resolved_light_level,
-            movement_open=_open_directions(
-                tile.border_north,
-                tile.border_south,
-                tile.border_east,
-                tile.border_west,
-            ),
-            optical_open=_open_directions(
-                tile.optical_border_north,
-                tile.optical_border_south,
-                tile.optical_border_east,
-                tile.optical_border_west,
-            ),
-            propagation_open=_open_directions(
-                tile.propagation_border_north,
-                tile.propagation_border_south,
-                tile.propagation_border_east,
-                tile.propagation_border_west,
-            ),
         )
         for position, tile in sorted(grid.get_all_tiles().items())
     )
     objects: list[WorldObjectState] = []
-    for object_uuid, position in sorted(
-        grid.get_all_object_positions().items(),
-        key=lambda row: (row[1], str(row[0])),
+    for placement in sorted(
+        grid.get_all_object_placements(),
+        key=lambda row: (row.position, str(row.object_uuid)),
     ):
-        item = BaseItem.get(object_uuid)
+        item = BaseItem.get(placement.object_uuid)
         if item is None:
-            raise RuntimeError(f"world object {object_uuid} is not a BaseItem")
+            raise RuntimeError(
+                f"world object {placement.object_uuid} is not a BaseItem",
+            )
         storage = item.get_storage_block()
         contained_items = (
             tuple(
@@ -883,7 +909,7 @@ def _world_initialized_event(
             else ()
         )
         objects.append(WorldObjectState(
-            position=position,
+            placement=placement,
             item=item.to_item_state(),
             contained_items=contained_items,
         ))

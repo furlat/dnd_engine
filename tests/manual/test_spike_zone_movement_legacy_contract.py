@@ -1,4 +1,5 @@
 """Deterministic spatial-effect spike-trap movement regressions."""
+from dnd.types.materials import Material, TileSurface
 
 from dnd.actions.operations import execute_action, get_available_actions
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
@@ -43,7 +44,7 @@ def test_spike_zone_activation_uses_one_independent_spatial_effect() -> None:
     """One exact effect owns the complete hazard without tile marker identity."""
     reset_combat_state()
     grid = get_map()
-    grid.create_rectangle(0, 0, 10, 8)
+    grid.create_rectangle(0, 0, 10, 8, surface=TileSurface(base_material=Material.STONE))
     positions = {(2, 4), (3, 4), (4, 4)}
     effect = materialize_spike_trap_condition(positions)
     observer = create_test_monster("monster.skeleton",
@@ -79,7 +80,7 @@ def test_spike_zone_applies_damage_for_each_committed_step() -> None:
     """A multi-cell traversal resolves the shared spatial handler per entry."""
     reset_combat_state()
     grid = get_map()
-    grid.create_rectangle(0, 0, 10, 8)
+    grid.create_rectangle(0, 0, 10, 8, surface=TileSurface(base_material=Material.STONE))
     materialize_spike_trap_condition({(2, 4), (3, 4), (4, 4)})
     walker = create_test_monster("monster.skeleton",
         name="Spike Step Walker",
@@ -116,7 +117,7 @@ def test_lethal_spike_step_stops_remaining_movement_with_life_state() -> None:
     """Lethal entry stops the path and commits canonical death, not a Dead condition."""
     reset_combat_state()
     grid = get_map()
-    grid.create_rectangle(0, 0, 10, 8)
+    grid.create_rectangle(0, 0, 10, 8, surface=TileSurface(base_material=Material.STONE))
     materialize_spike_trap_condition({(2, 4), (3, 4), (4, 4)})
     walker = create_test_monster("monster.skeleton",
         name="Lethal Spike Walker",
@@ -145,7 +146,7 @@ def test_hidden_spike_trap_reveals_its_exact_effect_once_when_triggered() -> Non
     """Triggering a hidden network publishes one typed reveal and updates hazard knowledge."""
     reset_combat_state()
     grid = get_map()
-    grid.create_rectangle(0, 0, 6, 3)
+    grid.create_rectangle(0, 0, 6, 3, surface=TileSurface(base_material=Material.STONE))
     effect = materialize_spike_trap_condition({(2, 1), (3, 1)}, stealth_dc=30)
     walker = create_test_monster("monster.skeleton", name="Trap Trigger", position=(1, 1))
     Entity.materialize_all_navigation()

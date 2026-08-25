@@ -5,9 +5,11 @@ normal pytest suites: their isolation lived in a custom ``__main__`` runner.
 This module maps every old logical case to a maintained selector and restores
 the current public contracts that had no active equivalent.
 """
+from dnd.types.materials import Material, TileSurface
 
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import Optional
 from uuid import UUID, uuid4
 
 from pydantic import Field
@@ -30,6 +32,7 @@ from dnd.core.events.events_registry import (
 )
 from dnd.core.gridmap import get_map
 from dnd.types.items import ItemRarity
+from dnd.types.world_placement import WorldObjectPlacement
 from dnd.types.damage import DamageType
 from dnd.core.modifiers import NumericalModifier
 from dnd.entities.entity import Entity, EntityConfig
@@ -211,15 +214,15 @@ LIFECYCLE_CASES: dict[str, CoverageRecord] = {
 class GridRemovalProbeItem(BaseItem):
     """Floor item that records authoritative grid-removal callbacks."""
 
-    removal_calls: list[tuple[tuple[int, int], bool]] = Field(default_factory=list)
+    removal_calls: list[tuple[int, int]] = Field(default_factory=list)
 
     def on_grid_object_removed(
         self,
         position: tuple[int, int],
-        clear_location: bool = True,
+        parent_event: Optional[UUID] = None,
     ) -> None:
-        self.removal_calls.append((position, clear_location))
-        super().on_grid_object_removed(position, clear_location=clear_location)
+        self.removal_calls.append(position)
+        super().on_grid_object_removed(position, parent_event=parent_event)
 
 
 class LifecycleProbeItem(BaseItem):
@@ -230,25 +233,25 @@ class LifecycleProbeItem(BaseItem):
             str,
             UUID | None,
             UUID | None,
-            UUID | None,
+            WorldObjectPlacement | None,
             tuple[int, int] | None,
         ]
     ] = Field(default_factory=list)
 
     def _on_loot(self, entity_uuid: UUID, inventory_uuid: UUID) -> None:
         self.hook_calls.append(
-            ("loot", entity_uuid, inventory_uuid, self.tile_uuid, self.get_position())
+            ("loot", entity_uuid, inventory_uuid, get_map().get_object_placement(self.uuid), self.get_position())
         )
 
     def _on_drop(self, entity_uuid: UUID, position: tuple[int, int]) -> None:
         self.hook_calls.append(
-            ("drop", entity_uuid, self.stored_in_uuid, self.tile_uuid, self.get_position())
+            ("drop", entity_uuid, self.stored_in_uuid, get_map().get_object_placement(self.uuid), self.get_position())
         )
 
     def _on_destroy(self, parent_event: Event | None) -> None:
         del parent_event
         self.hook_calls.append(
-            ("destroy", self.owner_uuid, self.stored_in_uuid, self.tile_uuid, self.get_position())
+            ("destroy", self.owner_uuid, self.stored_in_uuid, get_map().get_object_placement(self.uuid), self.get_position())
         )
 
 
@@ -308,7 +311,7 @@ class AuraProbeItem(BaseItem):
 def reset_item_world(width: int = 12, height: int = 12) -> None:
     """Reset global engine state and create one bright floor."""
     reset_combat_state()
-    get_map().create_rectangle(0, 0, width, height)
+    get_map().create_rectangle(0, 0, width, height, surface=TileSurface(base_material=Material.STONE))
 
 
 def create_actor(
@@ -442,7 +445,7 @@ def test_base_item_value_damage_affinity_and_destroy_contract() -> None:
     assert get_map().get_object_position(breakable.uuid) is None
     assert breakable.owner_uuid is None
     assert breakable.stored_in_uuid is None
-    assert breakable.tile_uuid is None
+    assert get_map().get_object_placement(breakable.uuid) is None
     assert breakable.get_position() is None
 
 
@@ -457,11 +460,11 @@ def test_grid_clear_synchronizes_each_floor_item_exactly_once() -> None:
 
     grid.clear()
 
-    assert first.removal_calls == [((2, 2), True)]
-    assert second.removal_calls == [((3, 2), True)]
+    assert first.removal_calls == [(2, 2)]
+    assert second.removal_calls == [(3, 2)]
     for item in (first, second):
         assert grid.get_object_position(item.uuid) is None
-        assert item.tile_uuid is None
+        assert grid.get_object_placement(item.uuid) is None
         assert item.get_position() is None
 
 
@@ -471,11 +474,11 @@ def test_lifecycle_hooks_receive_authoritative_context_in_order() -> None:
     actor = create_actor((4, 4))
     item = LifecycleProbeItem(source_entity_uuid=uuid4(), name="Tracked")
     item.place_on_grid((5, 4))
-    original_tile_uuid = item.tile_uuid
+    original_placement = get_map().get_object_placement(item.uuid)
 
     assert actor.loot_item(item)
     assert actor.drop_item(item.uuid, position=(4, 5)) is item
-    dropped_tile_uuid = item.tile_uuid
+    dropped_placement = get_map().get_object_placement(item.uuid)
     item.destroy()
 
     assert item.hook_calls == [
@@ -490,20 +493,20 @@ def test_lifecycle_hooks_receive_authoritative_context_in_order() -> None:
             "drop",
             actor.uuid,
             None,
-            dropped_tile_uuid,
+            dropped_placement,
             (4, 5),
         ),
         (
             "destroy",
             None,
             None,
-            dropped_tile_uuid,
+            dropped_placement,
             (4, 5),
         ),
     ]
-    assert original_tile_uuid is not None
-    assert dropped_tile_uuid is not None
-    assert item.tile_uuid is None
+    assert original_placement is not None
+    assert dropped_placement is not None
+    assert get_map().get_object_placement(item.uuid) is None
     assert item.get_position() is None
 
 

@@ -1,4 +1,5 @@
 """Observable contracts for independently owned spatial conditions."""
+from dnd.types.materials import Material, TileSurface
 
 from typing import NoReturn
 from uuid import UUID, uuid4
@@ -15,6 +16,7 @@ from dnd.content.spatial_effect_recipes import (
     CLOUDKILL_CLOUD_RECIPE,
     CONTINUAL_FLAME_FIELD_RECIPE,
     DAYLIGHT_FIELD_RECIPE,
+    DARKNESS_FIELD_RECIPE,
     ELECTRIFIED_WATER_RECIPE,
     FIRE_SURFACE_RECIPE,
     FOG_CLOUD_RECIPE,
@@ -23,6 +25,7 @@ from dnd.content.spatial_effect_recipes import (
     OIL_SURFACE_RECIPE,
     SILENCE_FIELD_RECIPE,
     SLEET_STORM_FIELD_RECIPE,
+    SPIKE_TRAP_EFFECT_RECIPE,
     SPIRIT_GUARDIANS_FIELD_RECIPE,
     STEAM_CLOUD_RECIPE,
     WATER_SURFACE_DECLARATION,
@@ -43,12 +46,13 @@ from dnd.core.events.events_registry import (
     Trigger,
 )
 from dnd.core.events.world_events import (
+    SpatialChangeEvent,
     SpatialEffectChangeEvent,
     SpatialEffectInteractionEvent,
 )
 from dnd.core.gridmap import get_map
 from dnd.core.base_tiles import dark_floor_factory, water_factory
-from dnd.entities.entity import EntityConfig
+from dnd.entities.entity import Entity, EntityConfig
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.blocks.action_economy import RechargeType
 from dnd.classes.sorcerer import DraconicPresence, DraconicPresenceAura
@@ -58,10 +62,16 @@ from dnd.spatial.environmental_conditions import (
     FireSurface,
     IceSurface,
     OilSurface,
+    SpikeTrap,
     SteamCloud,
     WaterSurface,
 )
-from dnd.spells.conjuration import GreaseZone, SleetStormZone
+from dnd.spells.conjuration import (
+    DarknessZone,
+    FogCloudZone,
+    GreaseZone,
+    SleetStormZone,
+)
 from dnd.spells.abjuration import FreedomOfMovementEffect
 from dnd.conditions import Concentrating
 from dnd.types.conditions import DurationType
@@ -123,6 +133,40 @@ def _materialize_test_condition(
         condition_type=selected_type,
         condition_fields=fields,
     )
+
+
+def _materialize_physical_condition(
+    source_uuid: UUID,
+    positions: set[tuple[int, int]],
+    *,
+    recipe: ContentRecipe = DAYLIGHT_FIELD_RECIPE,
+    condition_type: type[SpatialCondition] = SpatialCondition,
+) -> SpatialCondition:
+    """Materialize one explicit condition-owned physical optics blocker."""
+    return _materialize_test_condition(
+        recipe,
+        source_uuid,
+        positions,
+        condition_type=condition_type,
+        extra_fields={"blocks_physical_optics": True},
+    )
+
+
+def _set_all_tile_light(grid, level: LightLevel) -> None:
+    """Set the public base illumination used by one bounded optics test."""
+    for position in grid.get_all_tiles():
+        grid.set_tile_base_light(position, level)
+
+
+def _light_completions_since(cursor: int) -> list[tuple[int, SpatialChangeEvent]]:
+    """Return public completed light facts in event order."""
+    return [
+        (index, event)
+        for index, event in EventQueue.iter_events_since(cursor)
+        if isinstance(event, SpatialChangeEvent)
+        and event.event_type is EventType.SPATIAL_LIGHT_CHANGED
+        and event.phase is EventPhase.COMPLETION
+    ]
 
 
 def _publish_interaction(
@@ -279,6 +323,279 @@ def test_partial_wet_footprint_release_removes_departed_membership() -> None:
 
     assert "Wet" not in entity.active_conditions
     assert water.affected_positions == {(1, 2)}
+
+
+def test_physical_condition_activation_and_deactivation_settle_objective_optics() -> None:
+    """A physical condition shadows light and FOV, then restores both once."""
+    reset_engine_runtime(grid_size=(5, 1))
+    grid = get_map()
+    _set_all_tile_light(grid, LightLevel.DARKNESS)
+    grid.add_light_source((0, 0), bright_radius_feet=20, dim_radius_feet=0)
+    assert grid.get_tile(2, 0).resolved_light_level is LightLevel.BRIGHT_LIGHT
+
+    source_uuid = uuid4()
+    parent = _root_action(source_uuid)
+    condition = _materialize_physical_condition(source_uuid, {(1, 0)})
+    optical_revision = grid.optical_revision
+    cursor = EventQueue.event_cursor()
+
+    condition.activate(parent_event=parent)
+
+    assert grid.optical_revision == optical_revision + 1
+    assert grid.is_blocking_optics(1, 0)
+    assert (2, 0) not in grid.compute_fov((0, 0), 4)
+    assert grid.get_tile(2, 0).resolved_light_level is LightLevel.DARKNESS
+    recorded = list(EventQueue.iter_events_since(cursor))
+    created = [
+        (index, event)
+        for index, event in recorded
+        if isinstance(event, SpatialEffectChangeEvent)
+        and event.phase is EventPhase.COMPLETION
+        and event.operation is SpatialEffectChangeOperation.CREATED
+        and event.spatial_effect_uuid == condition.uuid
+    ]
+    lights = _light_completions_since(cursor)
+    assert len(created) == 1
+    assert len(lights) == 1
+    assert lights[0][0] < created[0][0]
+
+    optical_revision = grid.optical_revision
+    cursor = EventQueue.event_cursor()
+    condition.deactivate(parent_event=parent)
+
+    assert grid.optical_revision == optical_revision + 1
+    assert not grid.is_blocking_optics(1, 0)
+    assert (2, 0) in grid.compute_fov((0, 0), 4)
+    assert grid.get_tile(2, 0).resolved_light_level is LightLevel.BRIGHT_LIGHT
+    recorded = list(EventQueue.iter_events_since(cursor))
+    removed = [
+        (index, event)
+        for index, event in recorded
+        if isinstance(event, SpatialEffectChangeEvent)
+        and event.phase is EventPhase.COMPLETION
+        and event.operation is SpatialEffectChangeOperation.REMOVED
+        and event.spatial_effect_uuid == condition.uuid
+    ]
+    lights = _light_completions_since(cursor)
+    assert len(removed) == 1
+    assert len(lights) == 1
+    assert lights[0][0] < removed[0][0]
+
+
+def test_physical_condition_move_settles_old_and_new_footprints_once() -> None:
+    """A physical zone move changes both local answers in one settlement."""
+    reset_engine_runtime(grid_size=(5, 1))
+    grid = get_map()
+    _set_all_tile_light(grid, LightLevel.DARKNESS)
+    grid.add_light_source((0, 0), bright_radius_feet=20, dim_radius_feet=0)
+    source_uuid = uuid4()
+    parent = _root_action(source_uuid)
+    moving = _materialize_physical_condition(
+        source_uuid,
+        {(2, 0)},
+        recipe=GREASE_SURFACE_RECIPE,
+        condition_type=MovingGreaseZone,
+    )
+    moving.activate(parent_event=parent)
+    before_fov = set(grid.compute_fov((0, 0), 4))
+    optical_revision = grid.optical_revision
+    cursor = EventQueue.event_cursor()
+
+    assert moving.move_zone((1, 0), parent_event=parent)
+
+    assert moving.affected_positions == {(1, 0)}
+    assert grid.optical_revision == optical_revision + 1
+    assert grid.is_blocking_optics(1, 0)
+    assert not grid.is_blocking_optics(2, 0)
+    assert set(grid.compute_fov((0, 0), 4)) != before_fov
+    assert grid.get_tile(2, 0).resolved_light_level is LightLevel.DARKNESS
+    changed = [
+        event
+        for _, event in EventQueue.iter_events_since(cursor)
+        if isinstance(event, SpatialEffectChangeEvent)
+        and event.phase is EventPhase.COMPLETION
+        and event.operation is SpatialEffectChangeOperation.FOOTPRINT_CHANGED
+        and event.spatial_effect_uuid == moving.uuid
+    ]
+    assert len(changed) == 1
+    assert len(_light_completions_since(cursor)) == 1
+
+
+def test_physical_condition_overlap_with_existing_center_blocker_has_no_delta() -> None:
+    """An already-blocked center leaves aggregate optics unchanged."""
+    reset_engine_runtime(grid_size=(4, 1))
+    grid = get_map()
+    _set_all_tile_light(grid, LightLevel.DARKNESS)
+    grid.add_light_source((0, 0), bright_radius_feet=20, dim_radius_feet=0)
+    source_uuid = uuid4()
+    blocker = BaseItem(
+        source_entity_uuid=source_uuid,
+        name="Existing center optical blocker",
+        blocks_optics_field=True,
+    )
+    blocker.place_on_grid((1, 0))
+    assert grid.is_blocking_optics(1, 0)
+    condition = _materialize_physical_condition(source_uuid, {(1, 0)})
+    optical_revision = grid.optical_revision
+    light_before = grid.get_tile(2, 0).resolved_light_level
+    cursor = EventQueue.event_cursor()
+
+    condition.activate(parent_event=_root_action(source_uuid))
+
+    assert grid.optical_revision == optical_revision
+    assert grid.get_tile(2, 0).resolved_light_level is light_before
+    assert not _light_completions_since(cursor)
+    assert grid.is_blocking_optics(1, 0)
+
+
+def test_overlapping_physical_conditions_without_aggregate_change_have_no_delta() -> None:
+    """A second physical owner does not bump aggregate optics redundantly."""
+    reset_engine_runtime(grid_size=(4, 1))
+    grid = get_map()
+    _set_all_tile_light(grid, LightLevel.DARKNESS)
+    grid.add_light_source((0, 0), bright_radius_feet=20, dim_radius_feet=0)
+    source_uuid = uuid4()
+    first = _materialize_physical_condition(source_uuid, {(1, 0)})
+    second = _materialize_physical_condition(source_uuid, {(1, 0)})
+    parent = _root_action(source_uuid)
+    first.activate(parent_event=parent)
+    optical_revision = grid.optical_revision
+    light_before = grid.get_tile(2, 0).resolved_light_level
+    cursor = EventQueue.event_cursor()
+
+    second.activate(parent_event=parent)
+
+    assert grid.optical_revision == optical_revision
+    assert grid.get_tile(2, 0).resolved_light_level is light_before
+    assert not _light_completions_since(cursor)
+    assert {
+        condition.uuid
+        for condition in grid.get_spatial_conditions_at((1, 0))
+    } == {first.uuid, second.uuid}
+
+
+def test_spike_trap_extension_remains_nonphysical() -> None:
+    """SpikeTrap membership never changes physical optics or its light shadow."""
+    reset_engine_runtime(grid_size=(4, 1))
+    grid = get_map()
+    _set_all_tile_light(grid, LightLevel.DARKNESS)
+    grid.add_light_source((0, 0), bright_radius_feet=20, dim_radius_feet=0)
+    source_uuid = uuid4()
+    parent = _root_action(source_uuid)
+    trap = materialize_spatial_condition(
+        SPIKE_TRAP_EFFECT_RECIPE,
+        source_uuid,
+        position=(1, 0),
+        faction=None,
+        condition_type=SpikeTrap,
+        condition_fields={"affected_positions": {(1, 0)}},
+    )
+    trap.activate(parent_event=parent)
+    optical_revision = grid.optical_revision
+    fov_before = set(grid.compute_fov((0, 0), 3))
+    light_before = grid.get_tile(3, 0).resolved_light_level
+    cursor = EventQueue.event_cursor()
+
+    trap.extend_footprint({(2, 0)}, parent_event=parent)
+
+    assert not trap.blocks_physical_optics_at((1, 0))
+    assert not trap.blocks_physical_optics_at((2, 0))
+    assert grid.optical_revision == optical_revision
+    assert set(grid.compute_fov((0, 0), 3)) == fov_before
+    assert grid.get_tile(3, 0).resolved_light_level is light_before
+    assert not _light_completions_since(cursor)
+
+
+def test_observer_relative_fog_and_darkness_do_not_change_physical_optics() -> None:
+    """Subjective fog/darkness preserves objective optics and illumination."""
+    reset_engine_runtime(grid_size=(5, 1))
+    grid = get_map()
+    _set_all_tile_light(grid, LightLevel.DARKNESS)
+    grid.add_light_source((0, 0), bright_radius_feet=20, dim_radius_feet=0)
+    fov_before = set(grid.compute_fov((0, 0), 4))
+    optical_revision = grid.optical_revision
+    source_uuid = uuid4()
+    parent = _root_action(source_uuid)
+
+    fog = materialize_spatial_condition(
+        FOG_CLOUD_RECIPE,
+        source_uuid,
+        position=(1, 0),
+        faction="tests",
+        condition_type=FogCloudZone,
+        condition_fields={
+            "affected_positions": {(1, 0)},
+            "zone_radius_feet": 0,
+        },
+    )
+    fog.activate(parent_event=parent)
+    darkness = materialize_spatial_condition(
+        DARKNESS_FIELD_RECIPE,
+        source_uuid,
+        position=(2, 0),
+        faction="tests",
+        condition_type=DarknessZone,
+        condition_fields={
+            "affected_positions": {(2, 0)},
+            "zone_radius_feet": 0,
+        },
+    )
+    darkness.activate(parent_event=parent)
+
+    assert grid.optical_revision == optical_revision
+    assert set(grid.compute_fov((0, 0), 4)) == fov_before
+    assert not grid.is_blocking_optics(1, 0)
+    assert not grid.is_blocking_optics(2, 0)
+
+
+def test_rejected_physical_zone_move_preserves_optics_and_events() -> None:
+    """A rejected physical move leaves objective state and facts unchanged."""
+    reset_engine_runtime(grid_size=(4, 1))
+    grid = get_map()
+    source_uuid = uuid4()
+    parent = _root_action(source_uuid)
+    moving = _materialize_physical_condition(
+        source_uuid,
+        {(1, 0)},
+        recipe=GREASE_SURFACE_RECIPE,
+        condition_type=MovingGreaseZone,
+    )
+    incumbent = _materialize_physical_condition(
+        source_uuid,
+        {(2, 0)},
+        recipe=GREASE_SURFACE_RECIPE,
+    )
+    moving.activate(parent_event=parent)
+    incumbent.activate(parent_event=parent)
+    optical_revision = grid.optical_revision
+    before_positions = (
+        set(moving.affected_positions),
+        set(incumbent.affected_positions),
+    )
+    before_answers = (
+        grid.is_blocking_optics(1, 0),
+        grid.is_blocking_optics(2, 0),
+    )
+    cursor = EventQueue.event_cursor()
+
+    with pytest.raises(ValueError, match="already has a condition"):
+        moving.move_zone((2, 0), parent_event=parent)
+
+    assert grid.optical_revision == optical_revision
+    assert (
+        set(moving.affected_positions),
+        set(incumbent.affected_positions),
+    ) == before_positions
+    assert (
+        grid.is_blocking_optics(1, 0),
+        grid.is_blocking_optics(2, 0),
+    ) == before_answers
+    assert not _light_completions_since(cursor)
+    assert not any(
+        isinstance(event, SpatialEffectChangeEvent)
+        and event.phase is EventPhase.COMPLETION
+        for _, event in EventQueue.iter_events_since(cursor)
+    )
 
 
 def test_water_transformations_do_not_replace_structural_water_tile() -> None:
@@ -779,6 +1096,53 @@ def test_failed_same_material_activation_restores_the_incumbent() -> None:
     assert tile.walking_cost.normalized_score == 2
 
 
+def test_failed_physical_activation_restores_optics_without_false_facts() -> None:
+    """A failed physical install restores the exact optical state and events."""
+    reset_engine_runtime(grid_size=(5, 1))
+    grid = get_map()
+    _set_all_tile_light(grid, LightLevel.DARKNESS)
+    grid.add_light_source((0, 0), bright_radius_feet=20, dim_radius_feet=0)
+    source_uuid = uuid4()
+    parent = _root_action(source_uuid)
+    incumbent = _materialize_test_condition(
+        GREASE_SURFACE_RECIPE,
+        source_uuid,
+        {(1, 0)},
+        condition_type=FixedGreaseZone,
+        extra_fields={"arbitration_potency": 10},
+    )
+    incumbent.activate(parent_event=parent)
+    failed = _materialize_test_condition(
+        GREASE_SURFACE_RECIPE,
+        source_uuid,
+        {(1, 0)},
+        condition_type=FailingGreaseZone,
+        extra_fields={
+            "arbitration_potency": 20,
+            "blocks_physical_optics": True,
+        },
+    )
+    optical_revision = grid.optical_revision
+    light_before = grid.get_tile(2, 0).resolved_light_level
+    cursor = EventQueue.event_cursor()
+
+    with pytest.raises(RuntimeError, match="intentional condition failure"):
+        failed.activate(parent_event=parent)
+
+    assert grid.optical_revision == optical_revision
+    assert grid.get_tile(2, 0).resolved_light_level is light_before
+    assert grid.get_spatial_condition_uuids_at((1, 0)) == {incumbent.uuid}
+    assert incumbent.affected_positions == {(1, 0)}
+    assert BaseCondition.get(failed.uuid) is None
+    assert not _light_completions_since(cursor)
+    assert not any(
+        isinstance(event, SpatialEffectChangeEvent)
+        and event.spatial_effect_uuid == failed.uuid
+        and event.phase is EventPhase.COMPLETION
+        for _, event in EventQueue.iter_events_since(cursor)
+    )
+
+
 def test_failed_water_replacement_preserves_incumbent_membership() -> None:
     """Provisional displacement cannot retire occupant-facing Wet state."""
     reset_engine_runtime(grid_size=(5, 5))
@@ -926,11 +1290,16 @@ def test_tile_replacement_and_removal_reject_live_condition_references() -> None
     grid = get_map()
 
     with pytest.raises(ValueError, match="spatial conditions cover"):
-        grid.set_tile(1, 1, fire_event=False)
+        grid.set_tile(
+            1,
+            1,
+            surface=TileSurface(base_material=Material.STONE),
+            fire_event=False,
+        )
     with pytest.raises(ValueError, match="spatial conditions cover"):
         grid.remove_tile(1, 1, fire_event=False)
     with pytest.raises(ValueError, match="spatial conditions cover"):
-        grid.create_rectangle(0, 0, 4, 4)
+        grid.create_rectangle(0, 0, 4, 4, surface=TileSurface(base_material=Material.STONE))
 
     assert grid.get_spatial_condition_positions(condition.uuid) == {(1, 1)}
     assert grid.get_spatial_condition_uuids_at((1, 1)) == {condition.uuid}
@@ -1127,7 +1496,7 @@ def test_world_object_anchor_moves_then_retires_with_its_object() -> None:
     )
     flame.activate(parent_event=_root_action(source_uuid))
 
-    focus.place_on_grid((12, 2))
+    grid.move_object(focus.uuid, (12, 2))
 
     assert flame.applied
     assert flame.affected_positions == {(12, 2)}
@@ -1182,6 +1551,177 @@ def test_draconic_presence_direct_action_owns_aura_and_cleanup() -> None:
 
     assert BaseCondition.get(aura.uuid) is None
     assert "Charmed" not in target.active_conditions
+
+
+def test_entity_anchor_presence_leave_and_restore_reconciles_footprint() -> None:
+    """A live entity anchor can be absent without retiring its aura."""
+    reset_engine_runtime(grid_size=(30, 30))
+    grid = get_map()
+    caster = create_test_entity(
+        name="Present anchor",
+        config=EntityConfig(position=(10, 10), faction="heroes"),
+    )
+    observer = create_test_entity(
+        name="Anchor witness",
+        config=EntityConfig(position=(8, 10), faction="heroes"),
+    )
+    for position in ((10, 10), (12, 10), (13, 10)):
+        grid.set_tile_base_light(position, LightLevel.DARKNESS)
+    light_uuid = grid.add_light_source(
+        (10, 10),
+        bright_radius_feet=5,
+        dim_radius_feet=0,
+        anchor_uuid=caster.uuid,
+    )
+    assert caster.uuid in observer.senses.entities
+    assert light_uuid in caster.get_attached_light_sources()
+    assert grid.get_tile(10, 10).resolved_light_level is LightLevel.BRIGHT_LIGHT
+    caster.action_economy.add_resource_contribution(
+        "sorcery_points",
+        "test.entity_anchor_presence",
+        maximum=18,
+        recharge_type=RechargeType.LONG_REST,
+    )
+
+    result = DraconicPresence(
+        source_entity_uuid=caster.uuid,
+        mode="awe",
+    ).apply()
+    assert result is not None and not result.canceled
+    aura = next(
+        condition
+        for condition in get_map().get_spatial_conditions()
+        if isinstance(condition, DraconicPresenceAura)
+    )
+    original_footprint = set(aura.affected_positions)
+    assert original_footprint
+
+    caster.suspend_spatial_presence()
+
+    assert caster.is_spatially_suspended
+    assert not caster.is_deployed
+    assert caster.uuid not in get_map().get_entities_at(caster.position)
+    assert get_map().get_entity_subscriptions(caster.uuid) == set()
+    assert BaseCondition.get(aura.uuid) is aura
+    assert aura.applied
+    assert aura.affected_positions == set()
+
+    caster.restore_spatial_presence((12, 10))
+
+    assert caster.is_deployed
+    assert not caster.is_spatially_suspended
+    assert caster.uuid in get_map().get_entities_at((12, 10))
+    assert get_map().get_entity_subscriptions(caster.uuid)
+    assert aura.affected_positions
+    assert aura.affected_positions != original_footprint
+
+    boundary_observations = []
+
+    def observe_left_boundary(event: Event) -> None:
+        if not isinstance(event, SpatialChangeEvent):
+            return
+        if (
+            event.entity_uuid != caster.uuid
+            or event.event_type is not EventType.SPATIAL_ENTITY_LEFT
+            or event.phase is not EventPhase.EFFECT
+        ):
+            return
+        boundary_observations.append(
+            (
+                bool(aura.affected_positions),
+                grid.get_tile(*event.position).resolved_light_level
+                is LightLevel.BRIGHT_LIGHT,
+                caster.uuid in observer.senses.entities,
+            )
+        )
+
+    EventQueue.add_on_event_callback(
+        observe_left_boundary,
+        event_types={EventType.SPATIAL_ENTITY_LEFT},
+        phases={EventPhase.EFFECT},
+    )
+    Entity.update_entity_position(caster, (13, 10))
+    EventQueue.remove_on_event_callback(observe_left_boundary)
+    assert caster.uuid in get_map().get_entities_at((13, 10))
+    assert get_map().get_entity_subscriptions(caster.uuid)
+    assert aura.affected_positions
+    assert boundary_observations
+    assert all(
+        footprint_present and light_present and contact_present
+        for footprint_present, light_present, contact_present
+        in boundary_observations
+    )
+    assert grid.get_tile(13, 10).resolved_light_level is LightLevel.BRIGHT_LIGHT
+
+    caster.remove_condition("Concentrating")
+    assert BaseCondition.get(aura.uuid) is None
+
+
+def test_entity_anchor_condition_destruction_while_suspended_does_not_resurrect() -> None:
+    """Suspension empties a live aura; terminal condition cleanup stays terminal."""
+    reset_engine_runtime(grid_size=(20, 20))
+    caster = create_test_entity(
+        name="Destroyed suspended anchor",
+        config=EntityConfig(position=(8, 8), faction="heroes"),
+    )
+    caster.action_economy.add_resource_contribution(
+        "sorcery_points",
+        "test.entity_anchor_destroyed_suspended",
+        maximum=18,
+        recharge_type=RechargeType.LONG_REST,
+    )
+    result = DraconicPresence(
+        source_entity_uuid=caster.uuid,
+        mode="awe",
+    ).apply()
+    assert result is not None and not result.canceled
+    aura = next(
+        condition
+        for condition in get_map().get_spatial_conditions()
+        if isinstance(condition, DraconicPresenceAura)
+    )
+
+    caster.suspend_spatial_presence()
+    assert aura.affected_positions == set()
+    caster.remove_condition("Concentrating")
+    assert BaseCondition.get(aura.uuid) is None
+
+    caster.restore_spatial_presence((10, 8))
+    assert aura.affected_positions == set()
+
+
+def test_nonconcentration_entity_anchor_survives_empty_suspended_footprint() -> None:
+    """A directly-owned Entity aura remains active while its footprint is empty."""
+    reset_engine_runtime(grid_size=(20, 20))
+    caster = create_test_entity(
+        name="Nonconcentration anchor",
+        config=EntityConfig(position=(8, 8), faction="heroes"),
+    )
+    condition = _materialize_test_condition(
+        SPIRIT_GUARDIANS_FIELD_RECIPE,
+        caster.uuid,
+        {(8, 8)},
+    )
+    result = condition.activate(parent_event=_root_action(caster.uuid))
+    assert result is not None and not result.canceled
+    original_footprint = set(condition.affected_positions)
+    assert condition.anchor_uuid == caster.uuid
+
+    caster.suspend_spatial_presence()
+    assert condition.applied
+    assert condition.affected_positions == set()
+
+    caster.restore_spatial_presence((10, 8))
+    assert condition.applied
+    assert condition.affected_positions
+    assert condition.affected_positions != original_footprint
+    condition.transition_footprint(
+        set(),
+        parent_event=_root_action(caster.uuid),
+    )
+    assert condition.applied
+    assert condition.affected_positions == set()
+    condition.deactivate()
 
 
 def test_draconic_presence_expires_with_concentration_after_ten_rounds() -> None:

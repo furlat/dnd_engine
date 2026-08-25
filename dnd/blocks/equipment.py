@@ -1442,6 +1442,22 @@ class Equipment(BaseBlock):
                 seen_item_uuids.add(current_item.uuid)
         return conflicts
 
+    def get_equipment_displacement(
+        self,
+        item: EquippableItem,
+        slot: Optional[EquipmentSlot] = None,
+    ) -> Tuple[EquipmentSlot, Tuple[EquippableItem, ...]]:
+        """Return the selected slot and current pure displacement result."""
+        selected_slot = self.resolve_equipment_slot(item, slot)
+        displaced_items = tuple(
+            conflicting_item
+            for _conflicting_slot, conflicting_item in self._get_conflicts(
+                item,
+                selected_slot,
+            )
+        )
+        return selected_slot, displaced_items
+
     def _reparent_equippable_item(self, item: EquippableItem) -> None:
         """Update item-owned values and channels to this equipment owner."""
         item.source_entity_uuid = self.source_entity_uuid

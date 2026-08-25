@@ -1,4 +1,5 @@
 """Engine semantic tests for implemented standard D&D conditions."""
+from dnd.types.materials import Material, TileSurface
 
 from contextlib import contextmanager
 from uuid import UUID, uuid4
@@ -90,7 +91,7 @@ def reset_condition_state() -> None:
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
     BaseValue._registry.clear()
-    get_map().create_rectangle(0, 0, 20, 20)
+    get_map().create_rectangle(0, 0, 20, 20, surface=TileSurface(base_material=Material.STONE))
 
 
 def configured_entity(

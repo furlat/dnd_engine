@@ -34,6 +34,7 @@ from dnd.spells.conjuration import (
 )
 from dnd.spells.evocation import GustOfWind, GustOfWindZone
 from dnd.spells.transmutation import SpikeGrowth, SpikeGrowthZone
+from dnd.types.materials import Material, TileSurface
 from dnd.spatial.area_conditions import SpatialCondition
 from tests.engine.support import get_hp, has_condition
 from tests.manual.spell_regression_support import (
@@ -679,6 +680,7 @@ def test_gust_of_wind_executes_cast_entry_turn_wall_and_cleanup_edges() -> None:
     grid.set_tile(
         9,
         5,
+        surface=TileSurface(base_material=Material.STONE),
         walkable=False,
         blocks_optics=True,
         blocks_propagation=True,

@@ -12,6 +12,7 @@ from dnd.core.values import (
     StaticValue,
 )
 from dnd.entities.entity import Entity, EntityConfig
+from dnd.types.materials import Material, TileSurface
 from tests.engine.support import create_test_entity
 
 
@@ -30,7 +31,6 @@ def reset_identity_state() -> None:
     BaseValue._registry.clear()
     BaseBlock._registry.clear()
     Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
 
 
 def test_first_runtime_object_prints_inspection_output(capsys) -> None:
@@ -200,6 +200,13 @@ def test_registry_families_print_separate_lookup_surfaces(capsys) -> None:
 def test_entity_creation_prints_actor_position_and_map_lookup(capsys) -> None:
     """Entity creation prints actor, block, position, and map lookup surfaces."""
     reset_identity_state()
+    get_map().create_rectangle(
+        0,
+        0,
+        8,
+        8,
+        surface=TileSurface(base_material=Material.STONE),
+    )
     hero_id = uuid4()
 
     hero = create_test_entity(
@@ -213,7 +220,7 @@ def test_entity_creation_prints_actor_position_and_map_lookup(capsys) -> None:
         f"created actor: {hero.name} at {hero.position}",
         f"entity lookup: {Entity.get(hero_id) is hero}",
         f"block lookup: {BaseBlock.get(hero_id) is hero}",
-        f"position index count: {len(Entity.get_all_entities_at_position((2, 3)))}",
+        f"position index count: {len(get_map().get_entities_at((2, 3)))}",
         f"map position: {get_map().get_entity_position(hero_id)}",
     ]
 
@@ -229,7 +236,7 @@ def test_entity_creation_prints_actor_position_and_map_lookup(capsys) -> None:
     assert hero.uuid == hero_id
     assert Entity.get(hero_id) is hero
     assert BaseBlock.get(hero_id) is hero
-    assert hero in Entity.get_all_entities_at_position((2, 3))
+    assert hero.uuid in get_map().get_entities_at((2, 3))
     assert get_map().get_entity_position(hero_id) == (2, 3)
     assert creation_lines == expected_creation_lines
 
@@ -238,8 +245,8 @@ def test_entity_creation_prints_actor_position_and_map_lookup(capsys) -> None:
     movement_lines = [
         f"moved actor: {hero.name} to {hero.position}",
         f"senses position: {hero.senses.position}",
-        f"old cell contains hero: {hero in Entity.get_all_entities_at_position((2, 3))}",
-        f"new cell contains hero: {hero in Entity.get_all_entities_at_position((4, 5))}",
+        f"old cell contains hero: {hero.uuid in get_map().get_entities_at((2, 3))}",
+        f"new cell contains hero: {hero.uuid in get_map().get_entities_at((4, 5))}",
         f"map position: {get_map().get_entity_position(hero_id)}",
     ]
 
@@ -254,8 +261,8 @@ def test_entity_creation_prints_actor_position_and_map_lookup(capsys) -> None:
     ]
     assert hero.position == (4, 5)
     assert hero.senses.position == (4, 5)
-    assert hero not in Entity.get_all_entities_at_position((2, 3))
-    assert hero in Entity.get_all_entities_at_position((4, 5))
+    assert hero.uuid not in get_map().get_entities_at((2, 3))
+    assert hero.uuid in get_map().get_entities_at((4, 5))
     assert get_map().get_entity_position(hero_id) == (4, 5)
     assert movement_lines == expected_movement_lines
     assert capsys.readouterr().out.splitlines() == (

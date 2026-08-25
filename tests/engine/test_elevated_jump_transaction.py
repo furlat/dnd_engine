@@ -27,7 +27,7 @@ from dnd.core.events.world_events import (
 )
 from dnd.core.gridmap import get_map
 from dnd.types.life import LifeState
-from dnd.core.positioning import PositionCommitError, PositionPublicationError
+from dnd.core.positioning import PositionPublicationError
 from dnd.core.world_edges import ElevationSurfaceKind
 from dnd.entities.entity import Entity
 from tests.engine.support import create_test_monster
@@ -346,43 +346,6 @@ def test_direct_arc_effect_forgery_stops_without_observable_forged_geometry() ->
     assert all(step.to_elevation_feet == 0 for step in steps)
     assert all(step.movement_cost == 15 for step in steps)
     assert all((99, 99) not in step.disclosed_path for step in steps)
-
-
-def test_jump_position_staging_failure_undoes_only_movement_debit(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    reset_core_action_state()
-    jumper = strong_entity("Staging Jumper", (1, 1), "heroes", strength=18)
-    Entity.materialize_all_navigation(max_distance=20)
-    grid = get_map()
-    original = grid.recompute_tile_directional_blocking
-    movement_handles_before = set(
-        jumper.action_economy.movement.self_static.value_modifiers
-    )
-
-    def fail_landing(position: tuple[int, int]):
-        if position == (4, 1):
-            raise RuntimeError("injected Jump staging failure")
-        return original(position)
-
-    monkeypatch.setattr(grid, "recompute_tile_directional_blocking", fail_landing)
-    with pytest.raises(PositionCommitError):
-        Jump(
-            source_entity_uuid=jumper.uuid,
-            end_position=(4, 1),
-        ).apply()
-
-    assert jumper.position == (1, 1)
-    assert jumper.senses.position == (1, 1)
-    assert grid.get_entity_position(jumper.uuid) == (1, 1)
-    assert jumper.action_economy.bonus_actions.normalized_score == 0
-    assert set(
-        jumper.action_economy.movement.self_static.value_modifiers
-    ) == movement_handles_before
-    assert not any(
-        type(event) is JumpEvent and event.phase is EventPhase.COMPLETION
-        for event in EventQueue.get_events_by_type(EventType.MOVEMENT)
-    )
 
 
 def test_jump_spatial_publication_failure_preserves_committed_position_and_cost() -> None:

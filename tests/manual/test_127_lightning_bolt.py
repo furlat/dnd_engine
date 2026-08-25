@@ -16,6 +16,7 @@ from dnd.core.dice import fixed_dice_faces
 from dnd.core.gridmap import get_map
 from dnd.entities.entity import Entity
 from dnd.spells.evocation import LightningBolt
+from dnd.types.materials import Material, TileSurface
 from tests.manual.spell_regression_support import (
     create_spell_regression_actor,
     force_save_result,
@@ -163,6 +164,7 @@ def test_lightning_bolt_wall_stops_line() -> None:
     get_map().set_tile(
         10,
         4,
+        surface=TileSurface(base_material=Material.STONE),
         walkable=False,
         blocks_optics=True,
         blocks_propagation=True,

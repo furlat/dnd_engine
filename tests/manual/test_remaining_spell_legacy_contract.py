@@ -44,6 +44,7 @@ from dnd.spells.conjuration import (
     CallLightning,
     CallLightningStrike,
 )
+from dnd.types.materials import Material, TileSurface
 from dnd.spells.enchantment import PowerWordStun, TestBless as AllyFilterSpell
 from dnd.spells.evocation import (
     BurningHands,
@@ -1474,7 +1475,7 @@ def test_close_area_spells_execute_save_geometry_damage_and_push_rules() -> None
 
     reset_spell_regression_arena(16, 10)
     grid = get_map()
-    grid.set_tile(6, 5, walkable=False, visible=False, name="Cone Wall")
+    grid.set_tile(6, 5, surface=TileSurface(base_material=Material.STONE), walkable=False, blocks_optics=True, blocks_propagation=True, name="Cone Wall")
     caster = create_spell_regression_actor(
         "Blocked Cone Caster",
         (5, 5),
@@ -1660,7 +1661,7 @@ def test_fireball_enforces_cast_los_range_and_explosion_occlusion() -> None:
         "monsters",
     )
     for y in range(12):
-        grid.set_tile(5, y, walkable=False, visible=False, name="Wall")
+        grid.set_tile(5, y, surface=TileSurface(base_material=Material.STONE), walkable=False, blocks_optics=True, blocks_propagation=True, name="Wall")
     Entity.materialize_all_navigation(max_distance=250)
 
     blocked = Fireball(
@@ -1715,7 +1716,7 @@ def test_fireball_enforces_cast_los_range_and_explosion_occlusion() -> None:
         (8, 5),
         "monsters",
     )
-    grid.set_tile(7, 5, walkable=False, visible=False, name="Explosion Wall")
+    grid.set_tile(7, 5, surface=TileSurface(base_material=Material.STONE), walkable=False, blocks_optics=True, blocks_propagation=True, name="Explosion Wall")
     force_save_result(visible, "dexterity", succeeds=False)
     force_save_result(behind_wall, "dexterity", succeeds=False)
     Entity.materialize_all_navigation(max_distance=100)
@@ -1751,7 +1752,7 @@ def test_thunderwave_push_stops_before_walls_and_occupied_cells() -> None:
         (7, 4),
         "monsters",
     )
-    grid.set_tile(8, 4, walkable=False, visible=True, name="Push Wall")
+    grid.set_tile(8, 4, surface=TileSurface(base_material=Material.STONE), walkable=False, blocks_optics=False, blocks_propagation=False, name="Push Wall")
     force_save_result(target, "constitution", succeeds=False)
     Entity.materialize_all_navigation(max_distance=80)
     caster_hp = get_hp(caster)

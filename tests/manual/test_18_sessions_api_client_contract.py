@@ -1,4 +1,5 @@
 """Manual Chapter 18 checks for sessions, API payloads, and client cursors."""
+from dnd.types.materials import Material, TileSurface
 
 import asyncio
 from unittest.mock import patch
@@ -91,7 +92,7 @@ def reset_client_api_state(width: int = 16, height: int = 10) -> None:
     Encounter.clear_registry()
     Encounter._combat_log_listeners.clear()
     GridMap.reset()
-    get_map().create_rectangle(0, 0, width, height)
+    get_map().create_rectangle(0, 0, width, height, surface=TileSurface(base_material=Material.STONE))
 
     sim.reset()
 

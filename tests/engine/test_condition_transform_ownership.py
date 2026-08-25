@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from uuid import uuid4
 
 from dnd.actions.standard import (
     Disengage,
@@ -14,11 +15,20 @@ from dnd.core.base_actions import (
     Cost,
 )
 from dnd.core.events.events_registry import (
+    EventHandler,
+    EventPhase,
     EventQueue,
     EventType,
+    Trigger,
 )
+from dnd.core.gridmap import get_map
+from dnd.core.positioning import PositionCommitError, PositionPublicationError
+from dnd.types.materials import Material, TileSurface
 from dnd.types.damage import DamageType
+from dnd.types.world import LightLevel
 from dnd.entities.entity import Entity
+from dnd.content.monsters.monster_builders import create_monster
+from dnd.game import Game
 from dnd.conditions import Blinded, Incapacitated, Paralyzed, Stunned, Unconscious
 from tests.engine.support import create_test_monster
 from dnd.actions.reactions import add_opportunity_attack_handler
@@ -362,15 +372,335 @@ def test_banishment_owns_denial_and_restores_spatial_registration() -> None:
     source = strong_entity("Source", (1, 1), "heroes")
     target = strong_entity("Target", (2, 1), "monsters")
     original_position = target.position
+    get_map().set_tile_base_light(original_position, LightLevel.DARKNESS)
+    attached_light_uuid = get_map().add_light_source(
+        original_position,
+        bright_radius_feet=5,
+        dim_radius_feet=0,
+        anchor_uuid=target.uuid,
+    )
+    assert get_map().get_tile(*original_position).resolved_light_level is LightLevel.BRIGHT_LIGHT
 
+    application_cursor = EventQueue.event_cursor()
     effect = _apply_condition(BanishedCondition, source, target)
 
     assert effect.sub_conditions == []
     assert "Incapacitated" not in target.active_conditions
     assert target.action_economy.action_permission.normalized_score == 0
-    assert target not in Entity._entity_by_position[original_position]
+    assert target.uuid not in get_map().get_entities_at(original_position)
+    assert target.get_attached_light_sources() == {attached_light_uuid}
+    assert get_map().get_tile(*original_position).resolved_light_level is LightLevel.DARKNESS
 
+    application_events = [
+        event
+        for _, event in EventQueue.iter_events_since(application_cursor)
+        if event.event_type in {
+            EventType.CONDITION_APPLICATION,
+            EventType.SPATIAL_ENTITY_LEFT,
+        }
+    ]
+    application_execution = next(
+        event
+        for event in application_events
+        if event.phase is EventPhase.EXECUTION
+    )
+    left_completion = next(
+        event
+        for event in application_events
+        if event.event_type == EventType.SPATIAL_ENTITY_LEFT
+        and event.phase is EventPhase.COMPLETION
+    )
+    assert left_completion.parent_event == application_execution.uuid
+
+    removal_cursor = EventQueue.event_cursor()
     target.remove_condition_by_uuid(effect.uuid)
 
     assert target.action_economy.action_permission.normalized_score == 1
-    assert target in Entity._entity_by_position[original_position]
+    assert target.uuid in get_map().get_entities_at(original_position)
+    assert get_map().get_tile(*original_position).resolved_light_level is LightLevel.BRIGHT_LIGHT
+    removal_events = [
+        event
+        for _, event in EventQueue.iter_events_since(removal_cursor)
+        if event.event_type == EventType.CONDITION_REMOVAL
+        or event.event_type == EventType.SPATIAL_ENTITY_ENTERED
+    ]
+    removal_execution = next(
+        event
+        for event in removal_events
+        if event.event_type == EventType.CONDITION_REMOVAL
+        and event.phase is EventPhase.EXECUTION
+    )
+    entered_completion = next(
+        event
+        for event in removal_events
+        if event.event_type == EventType.SPATIAL_ENTITY_ENTERED
+        and event.phase is EventPhase.COMPLETION
+    )
+    assert entered_completion.parent_event == removal_execution.uuid
+
+
+def test_banishment_suspend_publication_failure_compensates_without_condition_or_denial() -> None:
+    """A failed terminal LEFT is compensated through one ordinary restore."""
+    reset_core_action_state()
+    source = strong_entity("Source", (1, 1), "heroes")
+    target = strong_entity("Target", (2, 1), "monsters")
+    condition = BanishedCondition(
+        source_entity_uuid=source.uuid,
+        target_entity_uuid=target.uuid,
+    )
+
+    def fail_left(event, _source_uuid):
+        raise RuntimeError("injected banishment LEFT publication failure")
+
+    handler = EventHandler(
+        name="Fail banishment LEFT publication",
+        source_entity_uuid=uuid4(),
+        trigger_conditions=[
+            Trigger(
+                event_type=EventType.SPATIAL_ENTITY_LEFT,
+                event_phase=EventPhase.EFFECT,
+                event_source_entity_uuid=target.uuid,
+            ),
+        ],
+        event_processor=fail_left,
+    )
+    EventQueue.add_event_handler(handler)
+    try:
+        with pytest.raises(PositionPublicationError):
+            target.add_condition(condition)
+    finally:
+        EventQueue.remove_event_handler(handler)
+
+    assert target.is_deployed
+    assert not target.is_spatially_suspended
+    assert target.uuid in get_map().get_entities_at(target.position)
+    assert target.active_conditions_by_uuid.get(condition.uuid) is None
+    assert condition.applied is False
+    assert target.action_economy.action_permission.normalized_score == 1
+    assert target.action_economy.actions.normalized_score == 1
+    assert target.action_economy.bonus_actions.normalized_score == 1
+    assert target.action_economy.reactions.normalized_score == 1
+    assert target.action_economy.movement.normalized_score == 30
+
+
+def test_banishment_compensation_failure_preserves_publication_chain_without_presence() -> None:
+    """A removed destination cannot make failed Banishment appear present."""
+    reset_core_action_state()
+    source = strong_entity("Source", (1, 1), "heroes")
+    target = strong_entity("Target", (2, 1), "monsters")
+    condition = BanishedCondition(
+        source_entity_uuid=source.uuid,
+        target_entity_uuid=target.uuid,
+    )
+
+    def remove_empty_target_tile_and_fail(event, _source_uuid):
+        del event
+        get_map().remove_tile(*target.position)
+        raise RuntimeError("injected banishment LEFT publication failure")
+
+    handler = EventHandler(
+        name="Remove target tile during banishment LEFT",
+        source_entity_uuid=uuid4(),
+        trigger_conditions=[
+            Trigger(
+                event_type=EventType.SPATIAL_ENTITY_LEFT,
+                event_phase=EventPhase.EFFECT,
+                event_source_entity_uuid=target.uuid,
+            ),
+        ],
+        event_processor=remove_empty_target_tile_and_fail,
+    )
+    EventQueue.add_event_handler(handler)
+    try:
+        with pytest.raises(
+            RuntimeError,
+            match="Banishment suspension compensation invariant failed",
+        ) as error:
+            target.add_condition(condition)
+    finally:
+        EventQueue.remove_event_handler(handler)
+
+    exception_chain = []
+    current_error = error.value
+    seen_error_ids = set()
+    while current_error is not None and id(current_error) not in seen_error_ids:
+        seen_error_ids.add(id(current_error))
+        exception_chain.append(current_error)
+        current_error = current_error.__cause__ or current_error.__context__
+    original_publication_error = next(
+        item for item in exception_chain
+        if isinstance(item, PositionPublicationError)
+    )
+    assert any(
+        isinstance(item, PositionCommitError)
+        for item in exception_chain
+    )
+    assert isinstance(original_publication_error.cause, RuntimeError)
+    assert "injected banishment LEFT publication failure" in str(
+        original_publication_error.cause,
+    )
+    assert condition.applied is False
+    assert target.active_conditions_by_uuid.get(condition.uuid) is None
+    assert not target.is_deployed
+    assert target.is_spatially_suspended
+    assert target.position == (2, 1)
+    assert get_map().get_entity_position(target.uuid) is None
+    assert get_map().get_tile(*target.position) is None
+    assert target.action_economy.action_permission.normalized_score == 1
+    assert target.action_economy.actions.normalized_score == 1
+    assert target.action_economy.bonus_actions.normalized_score == 1
+    assert target.action_economy.reactions.normalized_score == 1
+    assert target.action_economy.movement.normalized_score == 30
+
+
+def test_banishment_suspend_precommit_failure_is_publicly_atomic() -> None:
+    """A detached target cannot enter Banishment or leak its denial transform."""
+    reset_core_action_state()
+    source = strong_entity("Source", (1, 1), "heroes")
+    target = create_monster("creature.commoner", uuid4(), faction="monsters")
+    game = Game()
+    game.deploy_entity(target, (2, 1))
+    assert game.remove_entity(target.uuid) is target
+    retained_position = target.position
+    grid = get_map()
+    before_tile = grid.get_entities_at(retained_position)
+    before_cursor = EventQueue.event_cursor()
+    condition = BanishedCondition(
+        source_entity_uuid=source.uuid,
+        target_entity_uuid=target.uuid,
+    )
+
+    with pytest.raises(RuntimeError, match="only a present Entity can be suspended"):
+        target.add_condition(condition)
+
+    assert condition.applied is False
+    assert target.active_conditions_by_uuid.get(condition.uuid) is None
+    assert not target.is_deployed
+    assert not target.is_spatially_suspended
+    assert target.position == retained_position
+    assert grid.get_entity_position(target.uuid) is None
+    assert grid.get_entities_at(retained_position) == before_tile
+    assert target.action_economy.action_permission.normalized_score == 1
+    assert target.action_economy.actions.normalized_score == 1
+    assert target.action_economy.bonus_actions.normalized_score == 1
+    assert target.action_economy.reactions.normalized_score == 1
+    assert target.action_economy.movement.normalized_score == 30
+    assert EventQueue.event_cursor() >= before_cursor
+
+
+def test_banishment_provisional_failure_releases_all_denial_ownership() -> None:
+    """Failure after transform installation leaves no provisional denial rows."""
+    reset_core_action_state()
+    source = strong_entity("Source", (1, 1), "heroes")
+    target = strong_entity("Target", (2, 1), "monsters")
+    condition = BanishedCondition(
+        source_entity_uuid=source.uuid,
+        target_entity_uuid=target.uuid,
+    )
+
+    def fail_effect(event, _source_uuid):
+        raise RuntimeError("injected banishment EFFECT failure")
+
+    handler = EventHandler(
+        name="Fail banishment condition effect",
+        source_entity_uuid=uuid4(),
+        trigger_conditions=[
+            Trigger(
+                event_type=EventType.CONDITION_APPLICATION,
+                event_phase=EventPhase.EFFECT,
+                event_target_entity_uuid=target.uuid,
+            ),
+        ],
+        event_processor=fail_effect,
+    )
+    EventQueue.add_event_handler(handler)
+    try:
+        with pytest.raises(RuntimeError, match="injected banishment EFFECT"):
+            target.add_condition(condition)
+    finally:
+        EventQueue.remove_event_handler(handler)
+
+    assert target.is_deployed
+    assert not target.is_spatially_suspended
+    assert target.uuid in get_map().get_entities_at(target.position)
+    assert target.active_conditions_by_uuid.get(condition.uuid) is None
+    assert target.action_economy.action_permission.normalized_score == 1
+    assert target.action_economy.actions.normalized_score == 1
+    assert target.action_economy.bonus_actions.normalized_score == 1
+    assert target.action_economy.reactions.normalized_score == 1
+    assert target.action_economy.movement.normalized_score == 30
+
+
+def test_banishment_restore_failure_keeps_condition_retryable_and_then_cleans_up() -> None:
+    """Restore precommit failure retains Banished; a later retry is ordinary."""
+    reset_core_action_state()
+    source = strong_entity("Source", (1, 1), "heroes")
+    target = strong_entity("Target", (2, 1), "monsters")
+    condition = _apply_condition(BanishedCondition, source, target)
+    retained_position = target.position
+    get_map().remove_tile(*retained_position)
+
+    with pytest.raises(PositionCommitError):
+        target.remove_condition_by_uuid(condition.uuid)
+
+    assert condition.applied
+    assert target.is_spatially_suspended
+    assert target.active_conditions_by_uuid[condition.uuid] is condition
+    assert target.action_economy.action_permission.normalized_score == 0
+    assert target.action_economy.actions.normalized_score == 0
+    assert target.action_economy.bonus_actions.normalized_score == 0
+    assert target.action_economy.reactions.normalized_score == 0
+    assert target.action_economy.movement.normalized_score == 0
+
+    get_map().set_tile(
+        *retained_position,
+        surface=TileSurface(base_material=Material.STONE),
+    )
+    assert target.remove_condition_by_uuid(condition.uuid)
+    assert target.is_deployed
+    assert not target.is_spatially_suspended
+    assert target.uuid in get_map().get_entities_at(retained_position)
+    assert target.action_economy.action_permission.normalized_score == 1
+    assert target.action_economy.actions.normalized_score == 1
+    assert target.action_economy.bonus_actions.normalized_score == 1
+    assert target.action_economy.reactions.normalized_score == 1
+    assert target.action_economy.movement.normalized_score == 30
+
+
+def test_banishment_restore_publication_failure_keeps_presence_and_finishes_cleanup() -> None:
+    """Committed restore publication failure does not trigger a second restore."""
+    reset_core_action_state()
+    source = strong_entity("Source", (1, 1), "heroes")
+    target = strong_entity("Target", (2, 1), "monsters")
+    condition = _apply_condition(BanishedCondition, source, target)
+
+    def fail_entered(event, _source_uuid):
+        raise RuntimeError("injected banishment ENTERED publication failure")
+
+    handler = EventHandler(
+        name="Fail banishment ENTERED publication",
+        source_entity_uuid=uuid4(),
+        trigger_conditions=[
+            Trigger(
+                event_type=EventType.SPATIAL_ENTITY_ENTERED,
+                event_phase=EventPhase.EFFECT,
+                event_source_entity_uuid=target.uuid,
+            ),
+        ],
+        event_processor=fail_entered,
+    )
+    EventQueue.add_event_handler(handler)
+    try:
+        assert target.remove_condition_by_uuid(condition.uuid)
+    finally:
+        EventQueue.remove_event_handler(handler)
+
+    assert target.is_deployed
+    assert not target.is_spatially_suspended
+    assert target.uuid in get_map().get_entities_at(target.position)
+    assert target.active_conditions_by_uuid.get(condition.uuid) is None
+    assert target.action_economy.action_permission.normalized_score == 1
+    assert target.action_economy.actions.normalized_score == 1
+    assert target.action_economy.bonus_actions.normalized_score == 1
+    assert target.action_economy.reactions.normalized_score == 1
+    assert target.action_economy.movement.normalized_score == 30

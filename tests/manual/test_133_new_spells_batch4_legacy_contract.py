@@ -20,6 +20,7 @@ from dnd.actions.operations import (
 )
 from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.core.dice import fixed_dice_faces
+from dnd.core.aoe import Sphere
 from dnd.types.equipment import WeaponSlot
 from dnd.core.events.events_registry import (
     Event,
@@ -30,6 +31,7 @@ from dnd.core.events.events_registry import (
     Trigger,
 )
 from dnd.types.damage import DamageType
+from dnd.types.world import LightLevel
 from dnd.core.modifiers import AutoHitModifier
 from dnd.types.rolls import AutoHitStatus
 from dnd.entities.entity import Entity
@@ -43,6 +45,8 @@ from dnd.spells.evocation import Fireball, FireBolt, register_true_strike
 from dnd.spells.necromancy import FingerOfDeath
 from dnd.spells.transmutation import Telekinesis
 from dnd.core.gridmap import get_map
+from dnd.blocks.action_economy import RechargeType
+from dnd.classes.sorcerer import DraconicPresence, DraconicPresenceAura
 from tests.engine.support import get_hp, has_condition
 from tests.manual.spell_regression_support import (
     create_spell_regression_actor,
@@ -366,8 +370,8 @@ def test_telekinesis_move_updates_spatial_indexes_and_cleans_followups() -> None
     assert result is not None
     assert not result.canceled
     assert target.position == (7, 5)
-    assert target in Entity._entity_by_position[(7, 5)]
-    assert target not in Entity._entity_by_position[original_position]
+    assert target.uuid in get_map().get_entities_at((7, 5))
+    assert target.uuid not in get_map().get_entities_at(original_position)
     assert {"Telekinesis: Restrain", "Telekinesis: Move"}.isdisjoint(
         {action.name for action in caster.registered_actions}
     )
@@ -609,6 +613,34 @@ def test_banishment_removes_and_restores_spatial_perception() -> None:
     caster, target, observer = _banishment_scene(save_succeeds=False)
     original_position = target.position
     assert target.uuid in observer.senses.entities
+    grid = get_map()
+    grid.set_tile_base_light(original_position, LightLevel.DARKNESS)
+    light_uuid = grid.add_light_source(
+        original_position,
+        bright_radius_feet=5,
+        dim_radius_feet=0,
+        anchor_uuid=target.uuid,
+    )
+    target.action_economy.add_resource_contribution(
+        "sorcery_points",
+        "test.banishment_anchor",
+        maximum=18,
+        recharge_type=RechargeType.LONG_REST,
+    )
+    target.action_economy.reset_all_costs()
+    anchor_result = DraconicPresence(
+        source_entity_uuid=target.uuid,
+        mode="awe",
+    ).apply()
+    assert anchor_result is not None and not anchor_result.canceled
+    aura = next(
+        condition
+        for condition in grid.get_spatial_conditions()
+        if isinstance(condition, DraconicPresenceAura)
+        and condition.anchor_uuid == target.uuid
+    )
+    assert aura.affected_positions
+    assert grid.get_tile(*original_position).resolved_light_level is LightLevel.BRIGHT_LIGHT
 
     with fixed_dice_faces(10):
         result = Banishment(
@@ -621,16 +653,75 @@ def test_banishment_removes_and_restores_spatial_perception() -> None:
     assert not result.canceled
     assert has_condition(target, "Banished")
     assert target.action_economy.action_permission.normalized_score == 0
-    assert target not in Entity._entity_by_position[original_position]
+    assert target.uuid not in grid.get_entities_at(original_position)
     assert target.uuid not in observer.senses.entities
+    assert grid.is_walkable_for(*original_position, requesting_entity_uuid=caster.uuid)
+    objective_aoe = Sphere(
+        source_entity_uuid=caster.uuid,
+        target=original_position,
+        radius_feet=5,
+    )
+    objective_aoe.compute_objective(caster.position)
+    assert target.uuid not in objective_aoe.affected_entity_uuids
+    assert light_uuid in target.get_attached_light_sources()
+    assert grid.get_tile(*original_position).resolved_light_level is LightLevel.DARKNESS
+    assert aura.applied
+    assert aura.affected_positions == set()
     assert has_condition(caster, "Concentrating")
 
     caster.remove_condition("Concentrating")
 
     assert not has_condition(target, "Banished")
     assert target.action_economy.action_permission.normalized_score == 1
-    assert target in Entity._entity_by_position[original_position]
+    assert target.uuid in grid.get_entities_at(original_position)
     assert target.uuid in observer.senses.entities
+    assert grid.get_tile(*original_position).resolved_light_level is LightLevel.BRIGHT_LIGHT
+    assert aura.affected_positions
+    target.remove_condition("Concentrating")
+    assert not aura.applied
+
+
+def test_banishment_return_selects_one_stable_origin_occupant() -> None:
+    """Return moves the stable first occupant once and keeps the other co-located."""
+    caster, target, _observer = _banishment_scene(save_succeeds=False)
+    original_position = target.position
+
+    with fixed_dice_faces(10):
+        Banishment(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid,
+            cast_at_level=4,
+        ).apply()
+
+    first = create_spell_regression_actor(
+        "First origin occupant",
+        original_position,
+        "neutral",
+    )
+    second = create_spell_regression_actor(
+        "Second origin occupant",
+        original_position,
+        "neutral",
+    )
+    origin_occupants = (first, second)
+    expected_first = min(origin_occupants, key=lambda entity: str(entity.uuid))
+    expected_second = max(origin_occupants, key=lambda entity: str(entity.uuid))
+
+    caster.remove_condition("Concentrating")
+
+    moved = [
+        entity
+        for entity in origin_occupants
+        if entity.position != original_position
+    ]
+    assert len(moved) == 1
+    assert moved[0].uuid == expected_first.uuid
+    assert expected_second.position == original_position
+    assert target.position == original_position
+    assert get_map().get_entities_at(original_position) >= {
+        target.uuid,
+        expected_second.uuid,
+    }
 
 
 def test_banishment_return_displaces_an_occupant() -> None:
@@ -660,6 +751,42 @@ def test_banishment_return_displaces_an_occupant() -> None:
     ) == 1
 
 
+def test_banishment_return_co_locates_when_every_displacement_offset_is_blocked() -> None:
+    """The characterized fallback retains both occupants when no offset admits."""
+    caster, target, _observer = _banishment_scene(save_succeeds=False)
+    original_position = target.position
+
+    with fixed_dice_faces(10):
+        Banishment(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid,
+            cast_at_level=4,
+        ).apply()
+
+    occupant = create_spell_regression_actor(
+        "Stable first occupant",
+        original_position,
+        "neutral",
+    )
+    for index, (dx, dy) in enumerate(
+        ((0, 1), (1, 0), (0, -1), (-1, 0), (1, 1), (-1, 1), (1, -1), (-1, -1)),
+    ):
+        create_spell_regression_actor(
+            f"Offset blocker {index}",
+            (original_position[0] + dx, original_position[1] + dy),
+            "neutral",
+        )
+
+    caster.remove_condition("Concentrating")
+
+    assert target.position == original_position
+    assert occupant.position == original_position
+    assert get_map().get_entities_at(original_position) >= {
+        target.uuid,
+        occupant.uuid,
+    }
+
+
 def test_banishment_successful_save_preserves_spatial_state() -> None:
     """Old case 22: a successful Charisma save applies no removal."""
     caster, target, observer = _banishment_scene(save_succeeds=True)
@@ -676,5 +803,5 @@ def test_banishment_successful_save_preserves_spatial_state() -> None:
     assert not result.canceled
     assert not has_condition(target, "Banished")
     assert not has_condition(caster, "Concentrating")
-    assert target in Entity._entity_by_position[original_position]
+    assert target.uuid in get_map().get_entities_at(original_position)
     assert target.uuid in observer.senses.entities

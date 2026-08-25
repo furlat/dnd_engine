@@ -1,4 +1,5 @@
 """Small, legal fixtures for the spell suites displaced by the d80 test rework."""
+from dnd.types.materials import Material, TileSurface
 
 from uuid import uuid4
 
@@ -17,7 +18,7 @@ from tests.engine.support import create_test_entity, reset_combat_state
 def reset_spell_regression_arena(width: int, height: int) -> None:
     """Reset every runtime registry and create one rectangular floor map."""
     reset_combat_state()
-    get_map().create_rectangle(0, 0, width, height)
+    get_map().create_rectangle(0, 0, width, height, surface=TileSurface(base_material=Material.STONE))
 
 
 def create_spell_regression_actor(

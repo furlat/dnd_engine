@@ -101,6 +101,10 @@ class SpatialCondition(BaseCondition):
         default=None,
         description="Observer-relative optical obstruction contributed in the footprint.",
     )
+    blocks_physical_optics: bool = Field(
+        default=False,
+        description="Whether this condition is an objective physical optical blocker.",
+    )
 
     _activation_positions: Optional[Set[Tuple[int, int]]] = PrivateAttr(
         default=None,
@@ -116,6 +120,9 @@ class SpatialCondition(BaseCondition):
     _reveal_in_progress: bool = PrivateAttr(default=False)
     _anchor_handler_uuid: Optional[UUID] = PrivateAttr(default=None)
     _interaction_handler_uuid: Optional[UUID] = PrivateAttr(default=None)
+    _pending_physical_optics: Optional[
+        Tuple[Dict[Tuple[int, int], bool], Set[Tuple[int, int]]]
+    ] = PrivateAttr(default=None)
     _interaction_transitions: Tuple[
         SpatialEffectTransitionDefinition,
         ...,
@@ -168,6 +175,61 @@ class SpatialCondition(BaseCondition):
         if position not in self.affected_positions:
             return None
         return self.optical_obscurement
+
+    def blocks_physical_optics_at(
+        self,
+        position: Tuple[int, int],
+    ) -> bool:
+        """Return the objective physical optical answer for one covered Tile."""
+        return self.blocks_physical_optics and position in self.affected_positions
+
+    @staticmethod
+    def _physical_optics_snapshot(
+        grid,
+        positions: Set[Tuple[int, int]],
+    ) -> Dict[Tuple[int, int], bool]:
+        """Capture each complete objective center-optics answer locally."""
+        return {
+            position: grid.is_blocking_optics(*position)
+            for position in positions
+        }
+
+    @staticmethod
+    def _settle_physical_optics(
+        grid,
+        before: Dict[Tuple[int, int], bool],
+        positions: Set[Tuple[int, int]],
+        *,
+        parent_event: Optional[Event],
+    ) -> None:
+        """Settle one aggregate optical change after footprint indexes commit."""
+        after = SpatialCondition._physical_optics_snapshot(grid, positions)
+        changed = {
+            position
+            for position in positions
+            if before.get(position, False) != after.get(position, False)
+        }
+        if not changed:
+            return
+        grid.invalidate_spatial_caches({"optical"})
+        grid.recompute_lights_at_positions(
+            changed,
+            parent_event=parent_event.uuid if parent_event is not None else None,
+        )
+
+    def _settle_pending_physical_optics(self, parent_event: Event) -> None:
+        """Settle a committed activation only after application succeeds."""
+        pending = self._pending_physical_optics
+        self._pending_physical_optics = None
+        if pending is None:
+            return
+        before, positions = pending
+        self._settle_physical_optics(
+            get_map(),
+            before,
+            positions,
+            parent_event=parent_event,
+        )
 
     def blocks_walking_at(
         self,
@@ -337,6 +399,10 @@ class SpatialCondition(BaseCondition):
         if self._activation_positions is None:
             raise RuntimeError("Spatial condition has no prepared footprint")
         grid = get_map()
+        physical_positions = set(self._activation_positions) | set(self.affected_positions)
+        for original, _remaining in self._displaced_footprints.values():
+            physical_positions.update(original)
+        physical_before = self._physical_optics_snapshot(grid, physical_positions)
         self._committed_displacement_uuids.clear()
         for incumbent_uuid in sorted(self._displaced_footprints, key=str):
             incumbent = BaseCondition.get(incumbent_uuid)
@@ -366,6 +432,10 @@ class SpatialCondition(BaseCondition):
         self.affected_positions = set(self._activation_positions)
         self._install_interaction_handler()
         self._install_anchor_handler()
+        self._pending_physical_optics = (
+            physical_before,
+            physical_positions,
+        )
 
         del parent_event
 
@@ -392,6 +462,7 @@ class SpatialCondition(BaseCondition):
                     "Displaced spatial condition rejected retirement",
                 )
             self._committed_displacement_uuids.discard(incumbent_uuid)
+        self._settle_pending_physical_optics(effect_event)
 
     def _restore_displaced_footprints(self) -> None:
         """Restore incumbents after a rejected incoming application."""
@@ -504,6 +575,7 @@ class SpatialCondition(BaseCondition):
         if self._uncommitted_state_discarded:
             return
         self._uncommitted_state_discarded = True
+        self._pending_physical_optics = None
         get_map().remove_spatial_condition(self.uuid)
         super().discard_uncommitted_runtime_state()
         self.affected_positions.clear()
@@ -637,6 +709,7 @@ class SpatialCondition(BaseCondition):
             if previous_positions is None
             else set(previous_positions)
         )
+        physical_before = self._physical_optics_snapshot(get_map(), previous)
         try:
             if self.applied and not self.cleanup_own_state(
                 expire=expire,
@@ -667,6 +740,12 @@ class SpatialCondition(BaseCondition):
             self._release_condition_owned_actions(self)
             get_map().remove_spatial_condition(self.uuid)
             self.affected_positions.clear()
+            self._settle_physical_optics(
+                get_map(),
+                physical_before,
+                previous,
+                parent_event=parent_event,
+            )
             if self._created_event_published:
                 self._publish_change(
                     operation,
@@ -815,15 +894,14 @@ class SpatialCondition(BaseCondition):
     ) -> None:
         """Shrink this condition and publish the existing transformed fact."""
         if not remaining_positions:
-            self.deactivate(
-                parent_event=parent_event,
-                operation=SpatialEffectChangeOperation.TRANSFORMED,
-            )
+            self.transition_anchor_to_absence(parent_event=parent_event)
             return
         if not remaining_positions.issubset(self.affected_positions):
             raise ValueError("A footprint transition cannot add positions")
         previous = set(self.affected_positions)
         removed = previous - remaining_positions
+        physical_positions = previous | set(remaining_positions)
+        physical_before = self._physical_optics_snapshot(get_map(), physical_positions)
         self._release_positions(removed)
         self.affected_positions = set(remaining_positions)
         get_map().set_spatial_condition_positions(
@@ -833,6 +911,12 @@ class SpatialCondition(BaseCondition):
             positions=self.affected_positions,
         )
         self._sync_spatial_handler_positions()
+        self._settle_physical_optics(
+            get_map(),
+            physical_before,
+            physical_positions,
+            parent_event=parent_event,
+        )
         self._publish_pending_runtime_facts(parent_event)
         self._publish_change(
             SpatialEffectChangeOperation.TRANSFORMED,
@@ -943,7 +1027,10 @@ class SpatialCondition(BaseCondition):
         anchor_uuid = self.anchor_uuid
         anchor_kind = self.anchor_kind
         event_types = (
-            (EventType.SPATIAL_ENTITY_ENTERED,)
+            (
+                EventType.SPATIAL_ENTITY_ENTERED,
+                EventType.SPATIAL_ENTITY_LEFT,
+            )
             if anchor_kind is SpatialEffectAnchorKind.ENTITY
             else (
                 EventType.SPATIAL_OBJECT_PLACED,
@@ -965,13 +1052,31 @@ class SpatialCondition(BaseCondition):
             )
             if not matched:
                 return None
+            if anchor_kind is SpatialEffectAnchorKind.ENTITY:
+                if event.event_type is EventType.SPATIAL_ENTITY_ENTERED:
+                    condition.relocate_anchor(event.position, parent_event=event)
+                elif event.old_position is None:
+                    condition.transition_anchor_to_absence(parent_event=event)
+                return None
             if event.event_type is EventType.SPATIAL_OBJECT_REMOVED:
-                anchor = BaseBlock.get(anchor_uuid)
-                if anchor is not None and anchor.position != event.position:
+                previous = event.previous_placement
+                is_relocation_departure = (
+                    previous is not None
+                    and event.placement is None
+                    and event.old_position is not None
+                    and event.old_position != previous.position
+                )
+                if is_relocation_departure:
                     return None
                 condition.deactivate(parent_event=event)
             else:
-                condition.relocate_anchor(event.position, parent_event=event)
+                placement = event.placement
+                previous = event.previous_placement
+                if placement is None:
+                    return None
+                if previous is not None and previous.position == placement.position:
+                    return None
+                condition.relocate_anchor(placement.position, parent_event=event)
             return None
 
         handler = EventHandler(
@@ -993,10 +1098,80 @@ class SpatialCondition(BaseCondition):
         *,
         parent_event: Event,
     ) -> None:
-        """Relocate an attached condition; area subclasses implement this."""
-        del position, parent_event
-        raise NotImplementedError(
-            f"{type(self).__name__} does not implement attached relocation",
+        """Relocate a generic attached footprint through public state."""
+        grid = get_map()
+        previous = set(self.affected_positions)
+        old_position = self.position
+        if previous:
+            delta = (position[0] - old_position[0], position[1] - old_position[1])
+            admitted = {
+                (x + delta[0], y + delta[1])
+                for x, y in previous
+            }
+        else:
+            admitted = {position}
+        grid.validate_spatial_condition_positions(
+            condition=self,
+            layer=self.layer,
+            occupancy_policy=self.occupancy_policy,
+            positions=admitted,
+        )
+        physical_positions = previous | admitted
+        physical_before = self._physical_optics_snapshot(
+            grid,
+            physical_positions,
+        )
+        self._release_positions(previous - admitted)
+        grid.set_spatial_condition_positions(
+            condition=self,
+            layer=self.layer,
+            occupancy_policy=self.occupancy_policy,
+            positions=admitted,
+        )
+        self.position = position
+        self.affected_positions = set(admitted)
+        self._sync_spatial_handler_positions()
+        self._settle_physical_optics(
+            grid,
+            physical_before,
+            physical_positions,
+            parent_event=parent_event,
+        )
+        self._publish_pending_runtime_facts(parent_event)
+        self._publish_change(
+            SpatialEffectChangeOperation.FOOTPRINT_CHANGED,
+            previous_positions=previous,
+            parent_event=parent_event,
+        )
+
+    def transition_anchor_to_absence(self, *, parent_event: Event) -> None:
+        """Transition an attached condition to empty without deactivation."""
+        previous = set(self.affected_positions)
+        if not previous:
+            return
+        grid = get_map()
+        physical_before = self._physical_optics_snapshot(grid, previous)
+        self._release_positions(previous)
+        self.affected_positions = set()
+        grid.set_spatial_condition_positions(
+            condition=self,
+            layer=self.layer,
+            occupancy_policy=self.occupancy_policy,
+            positions=set(),
+        )
+        self._sync_spatial_handler_positions()
+        self._settle_physical_optics(
+            grid,
+            physical_before,
+            previous,
+            parent_event=parent_event,
+        )
+        self._publish_pending_runtime_facts(parent_event)
+        self.apply_effect_exit_trigger(previous, parent_event=parent_event)
+        self._publish_change(
+            SpatialEffectChangeOperation.FOOTPRINT_CHANGED,
+            previous_positions=previous,
+            parent_event=parent_event,
         )
 
 
@@ -1763,6 +1938,8 @@ class AreaCondition(SpatialCondition):
         }
         removed_positions = old_positions - new_positions
         added_positions = new_positions - old_positions
+        physical_positions = old_positions | new_positions
+        physical_before = self._physical_optics_snapshot(grid, physical_positions)
 
         grid.validate_spatial_condition_positions(
             condition=self,
@@ -1794,8 +1971,20 @@ class AreaCondition(SpatialCondition):
             )
             self._restore_positions(removed_positions)
             self._pending_light_changed_positions.clear()
+            self._settle_physical_optics(
+                grid,
+                physical_before,
+                physical_positions,
+                parent_event=parent_event,
+            )
             raise
 
+        self._settle_physical_optics(
+            grid,
+            physical_before,
+            physical_positions,
+            parent_event=parent_event,
+        )
         self._publish_pending_light_changes(parent_event)
 
         self.apply_effect_exit_trigger(

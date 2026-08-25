@@ -1,4 +1,5 @@
 """Completion facts required to replay inventory and equipment state."""
+from dnd.types.materials import Material, TileSurface
 
 from uuid import uuid4
 
@@ -48,7 +49,7 @@ from tests.engine.support import reset_combat_state, set_hp
 def _fresh_entity(name: str = "Fact Keeper") -> Entity:
     """Create one minimal entity on a fresh engine runtime."""
     reset_combat_state()
-    get_map().create_rectangle(0, 0, 4, 3)
+    get_map().create_rectangle(0, 0, 4, 3, surface=TileSurface(base_material=Material.STONE))
     return Entity.create(source_entity_uuid=uuid4(), name=name)
 
 
@@ -144,8 +145,9 @@ def test_pickup_drop_and_stack_merge_publish_exact_inventory_state() -> None:
     assert len(drop_facts) == 1
     assert drop_facts[0].item_state.item_uuid == item.uuid
     assert drop_facts[0].location is ItemLocation.FLOOR
-    assert drop_facts[0].position == (0, 1)
-    assert drop_facts[0].tile_uuid == item.tile_uuid
+    assert drop_facts[0].world_placement is not None
+    assert drop_facts[0].world_placement.position == (0, 1)
+    assert drop_facts[0].world_placement == get_map().get_object_placement(item.uuid)
 
     existing = materialize_item(
         HEALING_POTION_RECIPE,

@@ -1160,13 +1160,6 @@ class Move(BaseAction):
             parent_event=root_event.uuid,
             transition_from=from_position,
             transition_to=to_position,
-            directional_position=from_position if directions else None,
-            directional_directions=directions or None,
-            directional_channels=(
-                ["movement"]
-                if directions and not cell_blocked
-                else None
-            ),
         )
         grid._fire_spatial_event(collision_event)
 
@@ -4447,9 +4440,13 @@ class Shove(BaseAction):
         for _ in range(cells_to_move):
             next_pos = (current[0] + direction[0], current[1] + direction[1])
 
-            if not grid.can_transition(current, next_pos, target_uuid):
+            blocked_by = grid.identify_blocker_at(
+                next_pos,
+                target_uuid,
+                source_position=current,
+            )
+            if blocked_by is not None:
                 blocked = True
-                blocked_by = grid.identify_blocker_at(next_pos, target_uuid)
                 break
 
             current = next_pos
@@ -4636,16 +4633,13 @@ class Shove(BaseAction):
                 forced_event = forced_event.phase_to(EventPhase.EFFECT)
             if not forced_event.canceled:
                 for next_pos in movement_path:
-                    if not get_map().can_transition(
-                        target.position,
+                    blocked_by = get_map().identify_blocker_at(
                         next_pos,
                         target.uuid,
-                    ):
+                        source_position=target.position,
+                    )
+                    if blocked_by is not None:
                         blocked = True
-                        blocked_by = get_map().identify_blocker_at(
-                            next_pos,
-                            target.uuid,
-                        ) or "blocked path"
                         break
                     Entity.update_entity_position(
                         target,

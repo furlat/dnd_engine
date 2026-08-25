@@ -20,6 +20,7 @@ from dnd.core.events.events_registry import (
     EventPhase,
 )
 from dnd.types.abilities import SkillName
+from dnd.types.items import ItemLocation
 from dnd.core.gridmap import get_map
 from dnd.blocks.base_item import (
     UsableItem,
@@ -29,154 +30,6 @@ from dnd.spatial.environmental_conditions import SpikeTrap
 from dnd.entities.entity import Entity
 
 
-class OpenDoorAction(BaseAction):
-    """Opens a closed door."""
-
-    name: str = Field(default="Open Door", description="Action name for opening a door.")
-    target_type: TargetType = Field(
-        default=TargetType.SELF,
-        description="Door actions target the source user and resolve through source_item_uuid.",
-    )
-    costs: List[Cost] = Field(
-        default_factory=list,
-        description="No-cost action-economy payload for opening a door.",
-    )
-    source_item_uuid: Optional[UUID] = Field(
-        default=None,
-        description="UUID of the door item this action opens.",
-    )
-
-    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
-        if self.source_item_uuid is None:
-            return declaration_event.cancel(status_message="No door linked")
-        door = BaseBlock.get(self.source_item_uuid)
-        if not door or not isinstance(door, DoorObject):
-            return declaration_event.cancel(status_message="Door not found")
-        if door.is_open:
-            return declaration_event.cancel(status_message="Door already open")
-        return declaration_event.phase_to(EventPhase.EXECUTION, status_message="Validated")
-
-    def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
-        if self.source_item_uuid is None:
-            return execution_event.cancel(status_message="No door linked")
-        door = BaseBlock.get(self.source_item_uuid)
-        if not isinstance(door, DoorObject):
-            return execution_event.cancel(status_message="Door not found")
-        old_blocks_movement = door.blocks_movement
-        old_blocks_optics = door.blocks_optics_field
-        old_blocks_propagation = door.blocks_propagation_field
-        door.is_open = True
-        door.blocks_movement = False
-        door.blocks_optics_field = False
-        door.blocks_propagation_field = False
-        door._notify_blocking_changed(
-            old_blocks_movement,
-            old_blocks_optics,
-            old_blocks_propagation,
-            parent_event=execution_event.uuid,
-        )
-        effect = execution_event.phase_to(EventPhase.EFFECT, status_message="Door opened")
-        return effect.phase_to(EventPhase.COMPLETION, status_message="Door opened")
-
-
-class CloseDoorAction(BaseAction):
-    """Closes an open door."""
-
-    name: str = Field(default="Close Door", description="Action name for closing a door.")
-    target_type: TargetType = Field(
-        default=TargetType.SELF,
-        description="Door actions target the source user and resolve through source_item_uuid.",
-    )
-    costs: List[Cost] = Field(
-        default_factory=list,
-        description="No-cost action-economy payload for closing a door.",
-    )
-    source_item_uuid: Optional[UUID] = Field(
-        default=None,
-        description="UUID of the door item this action closes.",
-    )
-
-    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
-        if self.source_item_uuid is None:
-            return declaration_event.cancel(status_message="No door linked")
-        door = BaseBlock.get(self.source_item_uuid)
-        if not door or not isinstance(door, DoorObject):
-            return declaration_event.cancel(status_message="Door not found")
-        if not door.is_open:
-            return declaration_event.cancel(status_message="Door already closed")
-        grid = get_map()
-        door_pos = grid.get_object_position(door.uuid)
-        if door_pos and grid.get_entities_at(door_pos):
-            return declaration_event.cancel(status_message="Can't close door — someone is standing in the doorway")
-        return declaration_event.phase_to(EventPhase.EXECUTION, status_message="Validated")
-
-    def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
-        if self.source_item_uuid is None:
-            return execution_event.cancel(status_message="No door linked")
-        door = BaseBlock.get(self.source_item_uuid)
-        if not isinstance(door, DoorObject):
-            return execution_event.cancel(status_message="Door not found")
-        old_blocks_movement = door.blocks_movement
-        old_blocks_optics = door.blocks_optics_field
-        old_blocks_propagation = door.blocks_propagation_field
-        door.is_open = False
-        door.blocks_movement = True
-        door.blocks_optics_field = True
-        door.blocks_propagation_field = True
-        door._notify_blocking_changed(
-            old_blocks_movement,
-            old_blocks_optics,
-            old_blocks_propagation,
-            parent_event=execution_event.uuid,
-        )
-        effect = execution_event.phase_to(EventPhase.EFFECT, status_message="Door closed")
-        return effect.phase_to(EventPhase.COMPLETION, status_message="Door closed")
-
-
-class DoorObject(UsableItem):
-    """Door that surfaces exactly the action valid for its current state."""
-
-    name: str = Field(default="Door", description="Display name for the test door.")
-    is_pickable: bool = Field(default=False, description="Doors are fixed environment objects.")
-    map_char: str = Field(default="\u03c0", description="Map glyph for the test door.")
-    blocks_movement: bool = Field(default=True, description="Closed doors block movement.")
-    blocks_optics_field: bool = Field(default=True, description="Closed doors block ordinary optics.")
-    blocks_propagation_field: bool = Field(default=True, description="Closed doors block physical propagation.")
-    is_open: bool = Field(default=False, description="Whether the door is currently open.")
-
-    def get_spatial_open_state(self) -> Optional[bool]:
-        """Return the door-open state used by spatial event metadata."""
-        return self.is_open
-
-    def get_use_actions(self, user_entity_uuid: UUID) -> List[BaseAction]:
-        """Return open or close actions according to the door state."""
-        if self.is_open:
-            grid = get_map()
-            door_pos = grid.get_object_position(self.uuid)
-            if door_pos and grid.get_entities_at(door_pos):
-                return []
-            return [
-                self.bind_dynamic_use_action(
-                    CloseDoorAction(
-                        source_entity_uuid=user_entity_uuid,
-                        source_item_uuid=self.uuid,
-                        template=True,
-                        semantic_key="action.environment.door.close",
-                        behavior_id="action.environment.door.close",
-                    ),
-                )
-            ]
-        return [
-            self.bind_dynamic_use_action(
-                OpenDoorAction(
-                    source_entity_uuid=user_entity_uuid,
-                    source_item_uuid=self.uuid,
-                    template=True,
-                    semantic_key="action.environment.door.open",
-                    behavior_id="action.environment.door.open",
-                ),
-            )
-        ]
 class PullLeverAction(BaseAction):
     """Deactivate one linked, independently owned spike condition."""
 
@@ -292,7 +145,7 @@ class StorageChest(UsableItem):
     def _on_destroy(self, parent_event: Optional[Event]) -> None:
         """Spill all contents onto the ground at chest's position."""
         _ = parent_event
-        pos = self.position
+        pos = get_map().get_object_position(self.uuid)
         if pos is None:
             return
         for item_uuid in list(self.chest_inventory.items.keys()):
@@ -301,6 +154,11 @@ class StorageChest(UsableItem):
                 item.owner_uuid = None
                 item.stored_in_uuid = None
                 item.place_on_grid(pos)
+                item.publish_location_state(
+                    ItemLocation.FLOOR,
+                    world_placement=get_map().get_object_placement(item.uuid),
+                    parent_event=parent_event,
+                )
 
 
 class RestAction(BaseAction):

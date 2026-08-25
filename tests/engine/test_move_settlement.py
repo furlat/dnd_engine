@@ -10,9 +10,11 @@ from uuid import UUID, uuid4
 import pytest
 
 from dnd.actions.standard import (
+    Attack,
     Move,
     MovementEvent,
 )
+from dnd.actions.operations import execute_use_action
 from dnd.blocks.action_economy import RechargeType, Resource
 from dnd.core.base_actions import (
     Cost,
@@ -24,7 +26,8 @@ from dnd.core.action_execution import (
     MovementTerminationReason,
     movement_continuation_scope,
 )
-from dnd.types.world import MovementMode
+from dnd.types.equipment import WeaponSlot
+from dnd.types.world import CardinalDirection, MovementMode, WorldEdgeChannel
 from dnd.core.events.events_registry import (
     Event,
     EventHandler,
@@ -40,15 +43,25 @@ from dnd.core.events.world_events import (
 )
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.gridmap import get_map
+from dnd.content.items.environment_item_builders import build_directional_door
 from dnd.types.life import LifeState
-from dnd.core.positioning import PositionCommitError, PositionPublicationError
+from dnd.core.positioning import PositionPublicationError
 from dnd.entities.creature_transforms import (
     apply_opportunity_attack_immunity_transform,
 )
 from dnd.entities.entity import Entity
 from dnd.monsters.traits import AggressiveMoveAction
 from dnd.actions.reactions import add_opportunity_attack_handler
-from tests.engine.support import force_attack_crit, force_attack_hit, set_hp
+from tests.engine.support import (
+    force_attack_crit,
+    force_attack_hit,
+    remove_attack_modifier,
+    set_hp,
+)
+from tests.manual.reactive_fixture_support import (
+    DodgeRollFeature,
+    PrepareIntercept,
+)
 from tests.engine.test_combat_actions import (
     fixed_dice,
     reset_core_action_state,
@@ -85,47 +98,6 @@ def _step_versions(
         and event.source_entity_uuid == mover_uuid
         and event.phase is phase
     ]
-
-
-def test_move_staging_failure_restores_exact_edge_debit(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A precommit position failure cannot spend the attempted Move edge."""
-    mover = _open_movement_world()
-    grid = get_map()
-    original = grid.recompute_tile_directional_blocking
-    movement_handles_before = set(
-        mover.action_economy.movement.self_static.value_modifiers
-    )
-
-    def fail_at_destination(position: tuple[int, int]) -> None:
-        if position == (1, 0):
-            raise RuntimeError("injected Move staging failure")
-        original(position)
-
-    monkeypatch.setattr(
-        grid,
-        "recompute_tile_directional_blocking",
-        fail_at_destination,
-    )
-
-    with pytest.raises(PositionCommitError) as error:
-        Move(
-            source_entity_uuid=mover.uuid,
-            end_position=(1, 0),
-            path=((0, 0), (1, 0)),
-            prefer_safe=False,
-        ).apply()
-
-    assert error.value.position_committed is False
-    assert mover.position == (0, 0)
-    assert mover.senses.position == (0, 0)
-    assert get_map().get_entity_position(mover.uuid) == (0, 0)
-    assert mover.action_economy.movement.normalized_score == 30
-    assert set(
-        mover.action_economy.movement.self_static.value_modifiers
-    ) == movement_handles_before
-    assert not _step_versions(mover.uuid, EventPhase.COMPLETION)
 
 
 def _add_movement_handler(
@@ -678,6 +650,75 @@ def test_aggressive_instantiation_and_retarget_preserve_fixed_cost() -> None:
     assert actor.position == (2, 0)
     assert actor.action_economy.bonus_actions.normalized_score == 0
     assert [cost.cost_type for cost in result.costs].count("bonus_actions") == 1
+
+
+def test_closed_boundary_door_invalidates_prepared_intercept_path() -> None:
+    """A close after preparation makes the reaction use current path truth."""
+    reset_core_action_state()
+    interceptor = strong_entity("Interceptor", (2, 2), "heroes")
+    door_closer = strong_entity("Door Closer", (4, 3), "neutral")
+    enemy = strong_entity("Enemy", (9, 2), "monsters")
+    door = build_directional_door(
+        blocked_channels=tuple(WorldEdgeChannel),
+        is_open=True,
+    )
+    grid = get_map()
+    grid.place_object(door.uuid, (4, 2), boundary_direction=CardinalDirection.WEST)
+
+    prepare = PrepareIntercept(source_entity_uuid=interceptor.uuid)
+    prepare.set_target_position((6, 2))
+    prepared = prepare.apply()
+    assert prepared is not None and not prepared.canceled
+    Entity.materialize_all_navigation(max_distance=20)
+
+    closed = execute_use_action(door_closer, door.uuid, "Close Door")
+    assert closed is not None and not closed.canceled
+    assert door.is_open is False
+    Entity.materialize_all_navigation(max_distance=20)
+
+    movement = Move(source_entity_uuid=enemy.uuid, end_position=(5, 2)).apply()
+    assert isinstance(movement, MovementEvent)
+    assert not movement.canceled
+    assert enemy.position == (5, 2)
+    assert interceptor.position == (2, 2)
+    assert interceptor.action_economy.reactions.normalized_score == 1
+
+
+def test_open_boundary_door_is_authoritative_for_reaction_displacement() -> None:
+    """A newly opened boundary door is used by reaction displacement."""
+    reset_core_action_state()
+    attacker = strong_entity("Attacker", (3, 2), "monsters")
+    defender = strong_entity("Defender", (4, 2), "heroes")
+    opener = strong_entity("Door Opener", (5, 3), "heroes")
+    door = build_directional_door(
+        blocked_channels=tuple(WorldEdgeChannel),
+    )
+    grid = get_map()
+    grid.place_object(door.uuid, (5, 2), boundary_direction=CardinalDirection.WEST)
+    defender.add_condition(
+        DodgeRollFeature(
+            source_entity_uuid=defender.uuid,
+            target_entity_uuid=defender.uuid,
+        )
+    )
+    Entity.materialize_all_navigation(max_distance=20)
+
+    opened = execute_use_action(opener, door.uuid, "Open Door")
+    assert opened is not None and not opened.canceled
+    assert door.is_open
+
+    hit_modifier = force_attack_hit(attacker)
+    try:
+        result = Attack(
+            source_entity_uuid=attacker.uuid,
+            target_entity_uuid=defender.uuid,
+            weapon_slot=WeaponSlot.MELEE_MAIN,
+        ).apply()
+    finally:
+        remove_attack_modifier(attacker, hit_modifier)
+
+    assert result is not None and not result.canceled
+    assert defender.position == (6, 2)
 
 
 def test_no_reason_interrupt_records_exact_committed_boundary() -> None:

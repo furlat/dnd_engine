@@ -1,11 +1,12 @@
 """Cold renderer-independent definitions for directly authored items."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Mapping, Optional
 
 from dnd.types.damage import DamageType
 from dnd.types.equipment import ArmorType, BodyPart, WeaponProperty
+from dnd.types.world_placement import WorldPlacementKind, WorldPlacementSpec
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,6 +73,7 @@ class StaticBlockerDefinition(AuthoredItemDefinition):
     blocks_movement: bool = False
     blocks_optics: bool = False
     blocks_propagation: bool = False
+    placement_spec: WorldPlacementSpec = field(kw_only=True)
 
     def __post_init__(self) -> None:
         AuthoredItemDefinition.__post_init__(self)
@@ -79,6 +81,12 @@ class StaticBlockerDefinition(AuthoredItemDefinition):
             raise ValueError("static blocker hit_points must be positive")
         if len(self.map_character) != 1:
             raise ValueError("static blocker map_character must be one character")
+        if not isinstance(self.placement_spec, WorldPlacementSpec):
+            raise ValueError(
+                "static blocker placement must be a WorldPlacementSpec",
+            )
+        if self.placement_spec.kind is not WorldPlacementKind.CENTER:
+            raise ValueError("static blocker placement must be CENTER")
 
 
 _ACOLYTE_GEAR = (
@@ -130,6 +138,11 @@ _STATIC_BLOCKERS = (
         ("breakable", "crate", "environment"),
         hit_points=20,
         map_character="C",
+        placement_spec=WorldPlacementSpec(
+            kind=WorldPlacementKind.CENTER,
+            occupies_bands=False,
+            vertical_extent_steps=1,
+        ),
     ),
     StaticBlockerDefinition(
         "environment.blocker.boulder",
@@ -140,6 +153,11 @@ _STATIC_BLOCKERS = (
         map_character="B",
         blocks_movement=True,
         blocks_propagation=True,
+        placement_spec=WorldPlacementSpec(
+            kind=WorldPlacementKind.CENTER,
+            occupies_bands=True,
+            vertical_extent_steps=1,
+        ),
     ),
     StaticBlockerDefinition(
         "environment.blocker.barricade",
@@ -151,6 +169,11 @@ _STATIC_BLOCKERS = (
         blocks_movement=True,
         blocks_optics=True,
         blocks_propagation=True,
+        placement_spec=WorldPlacementSpec(
+            kind=WorldPlacementKind.CENTER,
+            occupies_bands=True,
+            vertical_extent_steps=1,
+        ),
     ),
 )
 

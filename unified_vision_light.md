@@ -958,12 +958,12 @@ the current `BaseItem`/Tile/GridMap placement interfaces. They do not create a
 temporary WorldItem facade or adapter.
 
 Phase 6 has one explicit external prerequisite:
-`DND_TILE_WORLD_ITEM_PLACEMENT_CLEAN_PLAN_2026-08-17.md` must land first. That
-plan owns the exact placement types, Tile dictionaries, reverse indexes,
-placement mutation order, Item location facts, wall/door/torch behavior, and
-Entity/GridMap position synchronization. This document owns only the optical,
-illumination, observer, and event-evidence behavior which that placement cut
-must preserve.
+`DND_TILE_WORLD_ITEM_VERTICAL_BOUNDARY_MIGRATION_PLAN_2026-08-17.md` must land
+first. That master plan supersedes the earlier placement notes and owns the
+exact placement types, Tile dictionaries, reverse indexes, placement mutation
+order, Item location facts, wall/door/torch behavior, and Entity/Tile objective
+position synchronization. This document owns only the optical, illumination,
+observer, and event-evidence behavior which that placement cut must preserve.
 
 After that prerequisite, these target boundaries apply:
 

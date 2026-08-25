@@ -6,7 +6,7 @@ from uuid import UUID
 
 from pydantic import PrivateAttr
 
-from dnd.blocks.base_item import BaseItem
+from dnd.blocks.base_item import BaseItem, WorldItem
 from dnd.blocks.equipment import (
     BodyArmor,
     Boots,
@@ -47,7 +47,6 @@ from dnd.content.items.environment_item_builders import (
     build_arcane_device,
     build_arcane_machine_gun,
     build_campfire,
-    build_door,
 )
 from dnd.extensions.field_focus import build_field_kit
 from dnd.items.consumables import (
@@ -526,7 +525,6 @@ def build_authored_item(
         "spell_item.scroll_invisibility": {"cast_level": int},
         "spell_item.wand_fire": {"charges": int},
         "spell_item.wand_magic_missiles": {"charges": int},
-        "environment.door": {"is_open": bool},
         "consumable.weapon_coat.timed_fire": {"rounds": int},
         "environment.arcane_device": {"heal_amount": int},
         "gear.field_kit": {"charges": int},
@@ -564,7 +562,7 @@ def build_authored_item(
         return _build_wearable(wearable, source_entity_uuid)
     blocker = STATIC_BLOCKER_DEFINITIONS.get(item_id)
     if blocker is not None:
-        return BaseItem(
+        return WorldItem(
             source_entity_uuid=source_entity_uuid,
             semantic_key=blocker.item_id,
             name=blocker.name,
@@ -580,6 +578,7 @@ def build_authored_item(
             blocks_movement=blocker.blocks_movement,
             blocks_optics_field=blocker.blocks_optics,
             blocks_propagation_field=blocker.blocks_propagation,
+            world_placement_spec=blocker.placement_spec,
         )
     if item_id == "consumable.healing_potion":
         return build_healing_potion(
@@ -651,11 +650,6 @@ def build_authored_item(
         )
     if item_id == "equipment.portable_torch":
         return build_torch(source_entity_uuid)
-    if item_id == "environment.door":
-        return build_door(
-            source_entity_uuid,
-            is_open=bool(parameter_values.get("is_open", False)),
-        )
     if item_id == "environment.campfire":
         return build_campfire(source_entity_uuid)
     if item_id == "environment.arcane_device":

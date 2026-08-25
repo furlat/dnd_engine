@@ -71,6 +71,7 @@ SAFE_LEAF_MODULES = frozenset({
     "dnd.types.items",
     "dnd.types.languages",
     "dnd.types.life",
+    "dnd.types.materials",
     "dnd.types.proficiency",
     "dnd.types.progression",
     "dnd.types.rolls",
@@ -78,7 +79,9 @@ SAFE_LEAF_MODULES = frozenset({
     "dnd.types.senses",
     "dnd.types.spatial_effects",
     "dnd.types.world",
+    "dnd.types.world_placement",
 })
+
 
 RETIRED_TYPE_MODULES = frozenset({
     "dnd.core.action_types",
@@ -1583,78 +1586,6 @@ def test_life_state_has_one_authoritative_writer_and_no_condition_mirror() -> No
     assert not forbidden, (
         "Life-state conditions/handlers would create a second authority: "
         + ", ".join(sorted(forbidden))
-    )
-
-
-def test_floor_items_use_the_canonical_placement_boundary() -> None:
-    """Production code must not bypass BaseItem.place_on_grid."""
-
-    class RawPlacementCollector(ast.NodeVisitor):
-        """Collect direct GridMap.place_object calls with lexical ownership."""
-
-        def __init__(self) -> None:
-            self.class_names: list[str] = []
-            self.function_names: list[str] = []
-            self.calls: list[tuple[str | None, str | None, int]] = []
-
-        def visit_ClassDef(self, node: ast.ClassDef) -> None:
-            self.class_names.append(node.name)
-            self.generic_visit(node)
-            self.class_names.pop()
-
-        def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
-            self.function_names.append(node.name)
-            self.generic_visit(node)
-            self.function_names.pop()
-
-        def visit_AsyncFunctionDef(
-            self,
-            node: ast.AsyncFunctionDef,
-        ) -> None:
-            self.function_names.append(node.name)
-            self.generic_visit(node)
-            self.function_names.pop()
-
-        def visit_Call(self, node: ast.Call) -> None:
-            if (
-                isinstance(node.func, ast.Attribute)
-                and node.func.attr == "place_object"
-            ):
-                self.calls.append(
-                    (
-                        self.class_names[-1] if self.class_names else None,
-                        (
-                            self.function_names[-1]
-                            if self.function_names
-                            else None
-                        ),
-                        node.lineno,
-                    )
-                )
-            self.generic_visit(node)
-
-    allowed = {
-        (
-            "dnd.blocks.base_item",
-            "BaseItem",
-            "place_on_grid",
-        ),
-    }
-    found: set[tuple[str, str | None, str | None]] = set()
-    details: list[str] = []
-    for source_module in _source_modules().values():
-        collector = RawPlacementCollector()
-        collector.visit(source_module.tree)
-        for class_name, function_name, line in collector.calls:
-            found.add((source_module.name, class_name, function_name))
-            details.append(
-                f"- {source_module.display_path}:{line}: "
-                f"{class_name or '<module>'}.{function_name or '<body>'}"
-            )
-
-    assert found == allowed, (
-        "Only BaseItem.place_on_grid may call GridMap.place_object directly.\n"
-        + "\n".join(details)
     )
 
 

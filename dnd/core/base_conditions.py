@@ -1029,6 +1029,14 @@ class BaseCondition(BaseObject):
         del position
         return None
 
+    def blocks_physical_optics_at(
+        self,
+        position: Tuple[int, int],
+    ) -> bool:
+        """Return whether this condition is a physical optical blocker."""
+        del position
+        return False
+
     def remove_event_handlers(self) -> bool:
         """Remove owned trigger-based event handlers from the EventQueue.
 

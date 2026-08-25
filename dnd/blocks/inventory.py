@@ -81,7 +81,6 @@ class Inventory(BaseBlock):
         """
         item.owner_uuid = None
         item.stored_in_uuid = None
-        item.tile_uuid = None
         item.is_equipped = False
         item.equipped_slot = None
 
@@ -98,7 +97,6 @@ class Inventory(BaseBlock):
         gridmap = get_map()
         if gridmap.get_object_position(item.uuid) is not None:
             gridmap.remove_object(item.uuid)
-        item.tile_uuid = None
 
     def _stamp_item_location(self, item: BaseItem) -> None:
         """Stamp an item stack as stored in this inventory.
@@ -173,7 +171,6 @@ class Inventory(BaseBlock):
         if (
             item.owner_uuid is not None
             or item.stored_in_uuid is not None
-            or item.tile_uuid is not None
             or item.is_equipped
         ):
             raise ValueError("starting item must not already have a location")
@@ -189,11 +186,9 @@ class Inventory(BaseBlock):
         previous_source = item.source_entity_uuid
         previous_owner = item.owner_uuid
         previous_storage = item.stored_in_uuid
-        previous_tile = item.tile_uuid
         item.source_entity_uuid = self.source_entity_uuid
         self.items[item.uuid] = item
         self._stamp_item_location(item)
-        item.tile_uuid = None
 
         def undo() -> None:
             if self.items.get(item.uuid) is not item:
@@ -204,7 +199,6 @@ class Inventory(BaseBlock):
             item.source_entity_uuid = previous_source
             item.owner_uuid = previous_owner
             item.stored_in_uuid = previous_storage
-            item.tile_uuid = previous_tile
 
         return undo
 
