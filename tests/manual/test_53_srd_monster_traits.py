@@ -323,6 +323,26 @@ def test_pack_tactics_sunlight_and_keen_senses_use_contextual_values() -> None:
     perception.set_context({"sense": "hearing"})
     assert perception.advantage == AdvantageStatus.ADVANTAGE
 
+    pack_target = _materialize_srd_fixture(
+        "commoner",
+        position=(3, 3),
+        faction="heroes",
+    )
+    co_located_ally = _materialize_srd_fixture(
+        "commoner",
+        position=pack_target.position,
+        faction="monsters",
+    )
+    assert (
+        wolf.attack_bonus(WeaponSlot.MELEE_MAIN, pack_target.uuid).advantage
+        is AdvantageStatus.ADVANTAGE
+    )
+    co_located_ally.suspend_spatial_presence()
+    assert (
+        wolf.attack_bonus(WeaponSlot.MELEE_MAIN, pack_target.uuid).advantage
+        is AdvantageStatus.NONE
+    )
+
 
 def test_uniform_multiattack_discloses_repeated_attack_profile() -> None:
     """Uniform Multiattack rows should advertise their repeated applications."""

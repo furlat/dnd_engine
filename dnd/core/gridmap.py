@@ -2,7 +2,7 @@
 
 import math
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple, Set, DefaultDict
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple, Set, DefaultDict
 from uuid import UUID, uuid4
 from collections import OrderedDict, defaultdict
 
@@ -10,12 +10,16 @@ from pydantic import BaseModel, Field
 
 from dnd.core.elevation import support_distance_feet
 from dnd.core.geometry import circle_positions, supercover_line, supercover_line_offsets
-from dnd.core.shadowcast import compute_fov
 from dnd.core.dijkstra import breadth_first_paths, dijkstra
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition
-from dnd.types.world import MovementMode, LightLevel
-from dnd.core.base_tiles import Tile, validate_elevation_surface_tuple
+from dnd.types.world import CardinalDirection, MovementMode, LightLevel
+from dnd.types.materials import TileSurface
+from dnd.core.base_tiles import (
+    Tile,
+    TileObjectBand,
+    validate_elevation_surface_tuple,
+)
 from dnd.core.events.events_registry import (
     Event,
     EventPhase,
@@ -40,6 +44,12 @@ from dnd.core.world_edges import (
     transition_axis,
 )
 from dnd.types.world import WorldEdgeChannel
+from dnd.types.world_placement import (
+    BoundaryStructure,
+    BoundaryStructureKind,
+    WorldObjectPlacement,
+    WorldPlacementKind,
+)
 from dnd.types.senses import OpticalObscurement
 from dnd.core.positioning import PositionCommitError, PositionPublicationError
 from dnd.core.traversal_connectors import (
@@ -49,25 +59,28 @@ from dnd.core.traversal_connectors import (
     TraversalConnectorEndpoint,
 )
 
-DIRECTIONS: Tuple[str, ...] = ("north", "south", "east", "west")
-DIRECTIONAL_CHANNELS: Tuple[str, ...] = ("movement", "optical", "propagation")
-
-_OBJECT_BORDER_FIELDS: Tuple[str, ...] = tuple(
-    f"object_{channel}_border_{direction}"
-    for channel in DIRECTIONAL_CHANNELS
-    for direction in DIRECTIONS
-)
+DIRECTIONS: Tuple[CardinalDirection, ...] = tuple(CardinalDirection)
+ENTITY_WORLD_PRESENCE_LIGHT_SUPPRESSION_TOKEN = "entity.world_presence.absent"
 
 
 @dataclass(frozen=True, slots=True)
-class GridEntityPositionReceipt:
-    """Exact staged GridMap index transition awaiting spatial publication."""
+class GridEntityMembershipReceipt:
+    """Exact committed Tile-membership transition awaiting publication."""
 
     entity_uuid: UUID
     old_position: Optional[Tuple[int, int]]
-    new_position: Tuple[int, int]
-    old_directional_metadata: Dict[str, Any]
-    new_directional_metadata: Dict[str, Any]
+    new_position: Optional[Tuple[int, int]]
+
+
+@dataclass(frozen=True, slots=True)
+class GridMapOperationDiagnostics:
+    """Read-only counters for one measured GridMap placement query."""
+
+    operation: str
+    tiles_inspected: int = 0
+    bands_inspected: int = 0
+    bands_replaced: int = 0
+    placement_iterator_rows_visited: int = 0
 
 
 class LightSourceData(BaseModel):
@@ -102,11 +115,8 @@ class GridMap:
         self._max_y: int = 0
         self._bounds_dirty: bool = True
 
-        self._entities_by_position: DefaultDict[Tuple[int, int], Set[UUID]] = defaultdict(set)
-        self._entity_positions: Dict[UUID, Tuple[int, int]] = {}
-
-        self._object_positions: Dict[UUID, Tuple[int, int]] = {}
-        self._objects_by_position: DefaultDict[Tuple[int, int], Set[UUID]] = defaultdict(set)
+        self._object_placements: Dict[UUID, WorldObjectPlacement] = {}
+        self._last_operation_diagnostics = GridMapOperationDiagnostics("none")
 
         self._spatial_conditions: Dict[UUID, BaseCondition] = {}
         self._spatial_condition_positions: Dict[
@@ -149,15 +159,6 @@ class GridMap:
         self._propagation_fov_cache: Dict[
             Tuple[Tuple[int, int], Optional[float]],
             Tuple[Tuple[int, int], ...],
-        ] = {}
-        self._barrier_positions_cache: Optional[frozenset[Tuple[int, int]]] = None
-        self._directional_transition_cache: Dict[
-            Tuple[str, int],
-            Dict[Tuple[Tuple[int, int], Tuple[int, int]], bool],
-        ] = {}
-        self._directional_blocking_cache: Dict[
-            Tuple[str, int],
-            Dict[Tuple[int, int], bool],
         ] = {}
         self._propagation_transition_cache: Dict[
             Tuple[Tuple[int, int], Tuple[int, int]],
@@ -219,7 +220,8 @@ class GridMap:
         if not self._events_enabled:
             self._pending_committed_events.append(event)
             return None
-        execution = event.phase_to(EventPhase.EXECUTION)
+        current = EventQueue.publish_preflighted(event)
+        execution = current.phase_to(EventPhase.EXECUTION)
         effect = execution.phase_to(EventPhase.EFFECT)
         return effect.phase_to(EventPhase.COMPLETION, use_register=True)
 
@@ -289,6 +291,11 @@ class GridMap:
         return self._movement_revision
 
     @property
+    def occupancy_revision(self) -> int:
+        """Return the authoritative Entity-membership revision."""
+        return self._occupancy_revision
+
+    @property
     def propagation_revision(self) -> int:
         """Return the current physical-propagation topology revision."""
         return self._propagation_revision
@@ -344,16 +351,32 @@ class GridMap:
             self._propagation_revision += 1
             self._propagation_fov_cache.clear()
             self._propagation_filter_cache.clear()
-            self._barrier_positions_cache = None
             self._propagation_transition_cache.clear()
             self._propagation_blocking_cache.clear()
-        if "optical" in channels:
-            self._directional_transition_cache.clear()
-            self._directional_blocking_cache.clear()
-
     def _bump_all_spatial_revisions(self) -> None:
         """Advance every spatial channel revision and clear query caches."""
         self._bump_spatial_revisions({"movement", "optical", "propagation"})
+
+    def _assert_tile_replacement_allowed(
+        self,
+        position: Tuple[int, int],
+        tile: Optional[Tile],
+    ) -> None:
+        """Reject replacement while any Phase-2-owned support is live."""
+        if tile is None:
+            return
+        if self.get_entities_at(position):
+            raise ValueError("cannot replace a Tile with entity occupancy")
+        if self.get_objects_at(position):
+            raise ValueError("cannot replace a Tile with object bands")
+        if tile.active_conditions:
+            raise ValueError("cannot replace a Tile with direct conditions")
+        if tile.get_spatial_condition_uuids():
+            raise ValueError("cannot replace a Tile while spatial conditions cover it")
+        if self._connector_uuids_by_endpoint.get(position):
+            raise ValueError("cannot replace a support Tile with a connector endpoint")
+        if tile._illuminations or tile._illumination_caps:
+            raise ValueError("cannot replace a Tile with live illumination contributions")
 
     def _path_requester_perception_signature(
         self,
@@ -377,6 +400,7 @@ class GridMap:
         self,
         x: int,
         y: int,
+        surface: Optional[TileSurface] = None,
         walkable: bool = True,
         blocks_optics: bool = False,
         blocks_propagation: bool = False,
@@ -405,16 +429,8 @@ class GridMap:
         if (
             old_tile is not None
             and tile is not old_tile
-            and old_tile.get_spatial_condition_uuids()
         ):
-            raise ValueError(
-                "cannot replace a tile while spatial conditions cover it",
-            )
-        if old_tile is not None and self._connector_uuids_by_endpoint.get(position):
-            raise ValueError(
-                "cannot replace a support tile while a traversal connector is anchored"
-            )
-        old_directional = self._directional_block_map(position)
+            self._assert_tile_replacement_allowed(position, old_tile)
         old_elevation_tuple = (
             (
                 old_tile.height,
@@ -440,8 +456,11 @@ class GridMap:
                 )
             tile.position = position
         else:
+            if surface is None:
+                raise ValueError("new Tiles require an explicit semantic surface")
             tile = Tile.create(
                 position=position,
+                surface=surface,
                 walkable=walkable,
                 blocks_optics=blocks_optics,
                 blocks_propagation=blocks_propagation,
@@ -456,9 +475,6 @@ class GridMap:
         self._tiles[position] = tile
         self._tiles_by_uuid[tile.uuid] = position
         self._bounds_dirty = True
-        self.recompute_tile_directional_blocking(position)
-        new_directional = self._directional_block_map(position)
-        directional_metadata = self._directional_metadata_from_delta(position, old_directional, new_directional)
         revision_channels: Set[str] = set()
         if old_tile is None:
             revision_channels.update({"movement", "optical", "propagation"})
@@ -508,47 +524,28 @@ class GridMap:
                 tile.elevation_surface_kind,
                 tile.slope_axis,
             )
-            directional_channels = set(directional_metadata.get("directional_channels") or [])
             if (
                 scalar_walk_changed
                 or scalar_optics_changed
                 or scalar_propagation_changed
                 or scalar_elevation_changed
-                or directional_channels
             ):
                 hint = SensesUpdateHint(
-                    requires_fov=(
-                        scalar_optics_changed
-                        or "optical" in directional_channels
-                    ),
+                    requires_fov=scalar_optics_changed,
                     requires_paths=(
                         scalar_walk_changed
                         or scalar_elevation_changed
-                        or "movement" in directional_channels
                     ),
-                    directional_positions={position} if directional_channels else None,
-                    directional_neighbors={
-                        neighbor
-                        for direction in (directional_metadata.get("directional_directions") or [])
-                        for neighbor in self._neighbor_for_direction(position, direction)
-                    } or None,
-                    directional_channels_changed=directional_channels or None,
-                    requires_light_recompute=(
-                        scalar_optics_changed
-                        or "optical" in directional_channels
-                    ),
-                    requires_propagation_recompute=(
-                        scalar_propagation_changed
-                        or "propagation" in directional_channels
-                    ),
+                    requires_light_recompute=scalar_optics_changed,
+                    requires_propagation_recompute=scalar_propagation_changed,
                 )
                 event = SpatialChangeEvent.tile_changed(
                     position,
                     tile_walkable,
                     tile_blocks_optics,
                     tile_blocks_propagation,
+                    tile_surface=tile.surface,
                     senses_hint=hint,
-                    **directional_metadata,
                 )
                 if scalar_elevation_changed:
                     self._fire_committed_spatial_event(event)
@@ -556,6 +553,36 @@ class GridMap:
                     self._fire_spatial_event(event)
 
         return tile
+
+    def replace_tile_surface(
+        self,
+        position: Tuple[int, int],
+        surface: TileSurface,
+        *,
+        parent_event: Optional[UUID] = None,
+    ) -> bool:
+        """Replace one Tile's semantic surface in place and publish its fact."""
+        if not isinstance(surface, TileSurface):
+            raise TypeError("surface must be a TileSurface")
+        tile = self._tiles.get(position)
+        if tile is None:
+            raise ValueError(f"cannot replace surface on missing tile {position}")
+        if tile.surface == surface:
+            return False
+
+        tile.surface = surface
+        if self._events_enabled:
+            event = SpatialChangeEvent.tile_changed(
+                position,
+                tile.walkable,
+                tile.blocks_optics,
+                tile.blocks_propagation_field,
+                tile_surface=surface,
+                senses_hint=SensesUpdateHint(),
+                parent_event=parent_event,
+            )
+            self._fire_committed_spatial_event(event)
+        return True
 
     def set_tile_elevation(
         self,
@@ -581,6 +608,19 @@ class GridMap:
             raise ValueError(
                 "cannot change support height while a traversal connector is anchored"
             )
+        if height != tile.height:
+            support_dependent_placements = tuple(
+                placement
+                for placement in self._object_placements.values()
+                if (
+                    placement.position == position
+                    and placement.kind is WorldPlacementKind.CENTER
+                )
+            )
+            if support_dependent_placements:
+                raise ValueError(
+                    "cannot change support height while center object placements are anchored",
+                )
         original_tile_tuple = (
             tile.height,
             tile.elevation_surface_kind,
@@ -644,152 +684,175 @@ class GridMap:
 
     def get_world_edge(
         self,
-        first: Tuple[int, int],
-        second: Tuple[int, int],
+        source: Tuple[int, int],
+        destination: Tuple[int, int],
     ) -> WorldEdgeView:
-        """Derive one reciprocal objective boundary view from live owners."""
-        key = AdjacentEdgeKey.between(first, second)
-        first_tile = self._tiles.get(key.first)
-        second_tile = self._tiles.get(key.second)
-        if first_tile is None or second_tile is None:
+        """Derive one ordered edge view from exact endpoint-owned layers."""
+        view, _ = self._derive_world_edge(source, destination)
+        return view
+
+    def get_boundary_route_layers(
+        self,
+        source: Tuple[int, int],
+        direction: CardinalDirection,
+        channel: WorldEdgeChannel,
+    ) -> Tuple[Tuple[UUID, ...], Tuple[UUID, ...]]:
+        """Return the deterministic reached boundary layers for one route step."""
+        if source not in self._tiles:
+            raise ValueError("boundary route source must have a supporting Tile")
+        if type(direction) is not CardinalDirection:
+            raise TypeError("boundary route direction must be a CardinalDirection")
+        if channel not in {
+            WorldEdgeChannel.OPTICAL,
+            WorldEdgeChannel.PROPAGATION,
+        }:
+            raise ValueError("boundary route channel must be OPTICAL or PROPAGATION")
+
+        exit_layer = tuple(sorted(
+            self.get_boundary_objects_at(source, direction),
+            key=str,
+        ))
+        destination = self._directional_neighbor(source, direction)
+        if destination not in self._tiles:
+            return exit_layer, ()
+
+        view, _closed_door_provider_uuids = self._derive_world_edge(
+            source,
+            destination,
+        )
+        if not self._edge_layer_allows(
+            view.exit_contributions,
+            channel,
+            source_height=view.source_height_steps,
+            destination_height=view.destination_height_steps,
+            movement_mode=MovementMode.WALKING,
+            treat_closed_doors_as_interactable=False,
+            ignorable_provider_uuids=frozenset(),
+        ):
+            return exit_layer, ()
+        entry_layer = tuple(sorted(
+            self.get_boundary_objects_at(
+                destination,
+                self._opposite_direction(direction),
+            ),
+            key=str,
+        ))
+        return exit_layer, entry_layer
+
+    def _derive_world_edge(
+        self,
+        source: Tuple[int, int],
+        destination: Tuple[int, int],
+        *,
+        structure_overrides: Optional[Dict[UUID, Optional[BoundaryStructure]]] = None,
+    ) -> tuple[WorldEdgeView, frozenset[UUID]]:
+        """Derive an edge and transient closed-door facts for one evaluation."""
+        self._begin_operation_diagnostics("get_world_edge")
+        key = AdjacentEdgeKey.between(source, destination)
+        source_tile = self._tiles.get(source)
+        destination_tile = self._tiles.get(destination)
+        if source_tile is None or destination_tile is None:
             raise ValueError("world-edge endpoints must both have supporting tiles")
 
-        contributions: Dict[UUID, Set[WorldEdgeChannel]] = defaultdict(set)
-        endpoints = ((key.first, first_tile), (key.second, second_tile))
-        for position, tile in endpoints:
-            direction = tile.directions_toward(
-                key.second if position == key.first else key.first
-            )[0]
-            for channel in WorldEdgeChannel:
-                if not tile.allows_direction(
-                    direction,
-                    channel.value,
-                    include_derived=False,
-                ):
-                    contributions[tile.uuid].add(channel)
-            for provider_uuid in self._objects_by_position.get(position, set()):
-                provider = BaseBlock.get(provider_uuid)
-                if provider is None:
-                    continue
-                structural_channels = (
-                    provider.get_objective_directional_structural_channels(
-                        direction
-                    )
-                )
-                if structural_channels is None:
-                    continue
-                contributions.setdefault(provider_uuid, set()).update(
-                    WorldEdgeChannel(channel)
-                    for channel in structural_channels
-                )
+        dx = destination[0] - source[0]
+        dy = destination[1] - source[1]
+        if (dx, dy) == (1, 0):
+            exit_direction = CardinalDirection.EAST
+        elif (dx, dy) == (-1, 0):
+            exit_direction = CardinalDirection.WEST
+        elif (dx, dy) == (0, 1):
+            exit_direction = CardinalDirection.NORTH
+        elif (dx, dy) == (0, -1):
+            exit_direction = CardinalDirection.SOUTH
+        else:
+            raise ValueError("world-edge endpoints must be cardinally adjacent")
+        entry_direction = self._opposite_direction(exit_direction)
+        bands_inspected = 0
+        provider_rows_visited = 0
+        closed_door_provider_uuids: set[UUID] = set()
 
-        ordered_channels = tuple(WorldEdgeChannel)
-        structural_contributions = tuple(
-            WorldEdgeStructuralContribution(
-                provider_uuid=provider_uuid,
-                blocked_channels=tuple(
-                    channel
-                    for channel in ordered_channels
-                    if channel in contributions[provider_uuid]
-                ),
+        def layer_contributions(
+            tile: Tile,
+            direction: CardinalDirection,
+        ) -> tuple[WorldEdgeStructuralContribution, ...]:
+            nonlocal bands_inspected, provider_rows_visited
+            contributions: Dict[UUID, WorldEdgeStructuralContribution] = {}
+            provider_uuids: Set[UUID] = set()
+            boundary_bands = tuple(
+                tile._boundary_object_bands.get(direction, {}).values()
             )
-            for provider_uuid in sorted(contributions, key=str)
+            bands_inspected += len(boundary_bands)
+            for band in boundary_bands:
+                provider_uuids.update(band.object_uuids)
+
+            for provider_uuid in sorted(provider_uuids, key=str):
+                provider_rows_visited += 1
+                provider = BaseBlock.get(provider_uuid)
+                placement = self.get_object_placement(provider_uuid)
+                if provider is None or placement is None:
+                    continue
+                if (
+                    placement.kind is not WorldPlacementKind.BOUNDARY
+                    or placement.boundary_direction is not direction
+                ):
+                    continue
+                if (
+                    structure_overrides is not None
+                    and provider_uuid in structure_overrides
+                ):
+                    structure = structure_overrides[provider_uuid]
+                else:
+                    structure = provider.get_boundary_structure()
+                    if structure_overrides is not None:
+                        structure_overrides[provider_uuid] = structure
+                if structure is None:
+                    continue
+                if (
+                    structure.structure is BoundaryStructureKind.DOOR
+                    and provider.get_spatial_open_state() is False
+                ):
+                    closed_door_provider_uuids.add(provider_uuid)
+                contributions[provider_uuid] = WorldEdgeStructuralContribution(
+                    provider_uuid=provider_uuid,
+                    base_height_steps=placement.base_height_steps,
+                    top_height_steps=placement.top_height_steps,
+                    blocked_channels=structure.blocked_channels,
+                )
+            return tuple(contributions[uuid] for uuid in sorted(contributions, key=str))
+
+        exit_contributions = layer_contributions(source_tile, exit_direction)
+        entry_contributions = layer_contributions(destination_tile, entry_direction)
+        self._finish_operation_diagnostics(
+            "get_world_edge",
+            tiles_inspected=2,
+            bands_inspected=bands_inspected,
+            placement_iterator_rows_visited=provider_rows_visited,
         )
         return WorldEdgeView(
             key=key,
-            first_tile_uuid=first_tile.uuid,
-            second_tile_uuid=second_tile.uuid,
-            first_height_steps=first_tile.height,
-            second_height_steps=second_tile.height,
-            elevation_delta_steps=second_tile.height - first_tile.height,
-            first_surface_kind=first_tile.elevation_surface_kind,
-            second_surface_kind=second_tile.elevation_surface_kind,
-            first_slope_axis=first_tile.slope_axis,
-            second_slope_axis=second_tile.slope_axis,
-            structural_contributions=structural_contributions,
-        )
-
-    def set_tile_directional_border(self, position: Tuple[int, int], channel: str,
-                                    direction: str, passable: bool,
-                                    parent_event: Optional[UUID] = None,
-                                    fire_event: bool = True) -> bool:
-        """Set an intrinsic tile-owned directional border and emit tile change metadata.
-
-        Args:
-            channel: movement, optical, or propagation.
-            direction: north, south, east, or west relative to this tile.
-            passable: True allows crossing; False blocks crossing.
-
-        Returns True when the stored value changed.
-        """
-        if channel not in DIRECTIONAL_CHANNELS:
-            raise ValueError(f"Unsupported directional channel: {channel}")
-        if direction not in DIRECTIONS:
-            raise ValueError(f"Unsupported direction: {direction}")
-
-        tile = self._tiles.get(position)
-        if tile is None:
-            return False
-
-        if not tile.set_intrinsic_border(channel, direction, passable):
-            return False
-        self._bump_spatial_revisions({channel})
-        state = self._directional_block_map(position)
-        metadata = {
-            "directional_position": position,
-            "directional_directions": [direction],
-            "directional_channels": [channel],
-            "directional_blocks_movement": state["movement"],
-            "directional_blocks_optics": state["optical"],
-            "directional_blocks_propagation": state["propagation"],
-        }
-
-        if fire_event and self._events_enabled:
-            hint = SensesUpdateHint(
-                requires_fov=channel == "optical",
-                requires_paths=channel == "movement",
-                directional_positions={position},
-                directional_neighbors={neighbor for neighbor in self._neighbor_for_direction(position, direction)},
-                directional_channels_changed={channel},
-                requires_light_recompute=channel == "optical",
-                requires_propagation_recompute=channel == "propagation",
-            )
-            event = SpatialChangeEvent.tile_changed(
-                position,
-                tile.walkable,
-                tile.blocks_optics,
-                tile.blocks_propagation_field,
-                senses_hint=hint,
-                parent_event=parent_event,
-                **metadata,
-            )
-            self._fire_spatial_event(event)
-        return True
-
-    def _neighbor_for_direction(self, position: Tuple[int, int], direction: str) -> List[Tuple[int, int]]:
-        delta = {
-            "north": (0, 1),
-            "south": (0, -1),
-            "east": (1, 0),
-            "west": (-1, 0),
-        }.get(direction)
-        if delta is None:
-            return []
-        return [(position[0] + delta[0], position[1] + delta[1])]
+            source_position=source,
+            destination_position=destination,
+            source_tile_uuid=source_tile.uuid,
+            destination_tile_uuid=destination_tile.uuid,
+            source_height_steps=source_tile.height,
+            destination_height_steps=destination_tile.height,
+            elevation_delta_steps=destination_tile.height - source_tile.height,
+            source_surface_kind=source_tile.elevation_surface_kind,
+            destination_surface_kind=destination_tile.elevation_surface_kind,
+            source_slope_axis=source_tile.slope_axis,
+            destination_slope_axis=destination_tile.slope_axis,
+            exit_direction=exit_direction,
+            entry_direction=entry_direction,
+            exit_contributions=exit_contributions,
+            entry_contributions=entry_contributions,
+        ), frozenset(closed_door_provider_uuids)
 
     def remove_tile(self, x: int, y: int, fire_event: bool = True) -> None:
         """Remove a tile at the given position."""
         position = (x, y)
         if position in self._tiles:
-            if self._connector_uuids_by_endpoint.get(position):
-                raise ValueError(
-                    "cannot remove a support tile while a traversal connector is anchored"
-                )
             tile = self._tiles[position]
-            if tile.get_spatial_condition_uuids():
-                raise ValueError(
-                    "cannot remove a tile while spatial conditions cover it",
-                )
+            self._assert_tile_replacement_allowed(position, tile)
             self._tiles_by_uuid.pop(tile.uuid, None)
             del self._tiles[position]
             self._bounds_dirty = True
@@ -1164,7 +1227,7 @@ class GridMap:
         if tile is not None and tile.is_hazardous_for(entity_uuid):
             return True
 
-        for obj_uuid in self._objects_by_position.get((x, y), set()):
+        for obj_uuid in self.get_center_objects_at((x, y)):
             obj = BaseBlock.get(obj_uuid)
             if obj is not None and obj.is_hazardous_for(entity_uuid):
                 return True
@@ -1375,7 +1438,7 @@ class GridMap:
         if not self.is_walkable(x, y, mode):
             return False
 
-        for entity_uuid in self._entities_by_position.get((x, y), set()):
+        for entity_uuid in self.get_entities_at((x, y)):
             block = BaseBlock.get(entity_uuid)
             if block is not None and block.blocks_walking(requesting_entity_uuid, mode):
                 if subjective and requesting_entity_uuid is not None:
@@ -1385,7 +1448,7 @@ class GridMap:
                         continue
                 return False
 
-        for obj_uuid in self._objects_by_position.get((x, y), set()):
+        for obj_uuid in self.get_center_objects_at((x, y)):
             block = BaseBlock.get(obj_uuid)
             if block is not None and block.blocks_walking(requesting_entity_uuid, mode):
                 if subjective and requesting_entity_uuid is not None:
@@ -1420,238 +1483,133 @@ class GridMap:
     def allows_optics(self, x: int, y: int) -> bool:
         """Return whether an existing Tile intrinsically transmits optics."""
         tile = self._tiles.get((x, y))
-        return tile is not None and not tile.blocks_optics
+        return (
+            tile is not None
+            and not tile.blocks_optics
+            and not any(
+                condition.blocks_physical_optics_at((x, y))
+                for condition in self.get_spatial_conditions_at((x, y))
+            )
+        )
 
     def is_blocking_optics(self, x: int, y: int) -> bool:
         """Return whether a Tile or center object blocks ordinary optics."""
         tile = self._tiles.get((x, y))
         if tile is None or tile.blocks_optics:
             return True
-        for obj_uuid in self._objects_by_position.get((x, y), set()):
+        for obj_uuid in self.get_center_objects_at((x, y)):
             block = BaseBlock.get(obj_uuid)
             if block is not None and block.blocks_optics_at_center():
                 return True
-        return False
-
-    def _block_blocks_direction(self, block: BaseBlock, channel: str, direction: str,
-                                requester_uuid: Optional[UUID] = None,
-                                movement_mode: MovementMode = MovementMode.WALKING,
-                                subjective: bool = False) -> bool:
-        if channel == "movement":
-            return block.blocks_directional_movement(direction, requester_uuid, movement_mode, subjective)
-        if channel == "optical":
-            return block.blocks_directional_optics(direction)
-        if channel == "propagation":
-            return block.blocks_directional_propagation(direction, requester_uuid, subjective)
-        return False
-
-    def _directional_block_map(self, position: Tuple[int, int]) -> Dict[str, Dict[str, bool]]:
-        tile = self._tiles.get(position)
-        result: Dict[str, Dict[str, bool]] = {
-            channel: {direction: False for direction in DIRECTIONS}
-            for channel in DIRECTIONAL_CHANNELS
-        }
-        if tile is None:
-            return result
-        for channel in DIRECTIONAL_CHANNELS:
-            for direction in DIRECTIONS:
-                result[channel][direction] = not tile.allows_direction(direction, channel)
-        return result
-
-    def get_subjective_directional_block_map(
-        self,
-        position: Tuple[int, int],
-        requesting_entity_uuid: UUID,
-        movement_mode: MovementMode = MovementMode.WALKING,
-    ) -> Dict[str, Dict[str, bool]]:
-        """Return intrinsic plus perceivable directional blockers for one observer.
-
-        The tile's cached derived borders are objective.  Subjective transports
-        must instead rebuild the derived contribution from blocks the requesting
-        observer can actually perceive, or hidden directional blockers leak.
-        """
-        requester = BaseBlock.get(requesting_entity_uuid)
-        if requester is None:
-            raise ValueError("subjective directional projection requires a known observer")
-        senses = requester.get_senses()
-        tile = self._tiles.get(position)
-        result: Dict[str, Dict[str, bool]] = {
-            channel: {direction: False for direction in DIRECTIONS}
-            for channel in DIRECTIONAL_CHANNELS
-        }
-        if tile is None:
-            return result
-
-        for channel in DIRECTIONAL_CHANNELS:
-            for direction in DIRECTIONS:
-                result[channel][direction] = not tile.allows_direction(
-                    direction,
-                    channel,
-                    include_derived=False,
-                )
-
-        block_uuids = set(self._objects_by_position.get(position, set()))
-        block_uuids.update(self._entities_by_position.get(position, set()))
-        for block_uuid in block_uuids:
-            block = BaseBlock.get(block_uuid)
-            if block is None:
-                continue
-            if senses is not None and (
-                block_uuid not in senses.entities
-                and block_uuid not in senses.objects
-            ):
-                continue
-            for channel in DIRECTIONAL_CHANNELS:
-                for direction in DIRECTIONS:
-                    if self._block_blocks_direction(
-                        block,
-                        channel,
-                        direction,
-                        requesting_entity_uuid,
-                        movement_mode,
-                        subjective=True,
-                    ):
-                        result[channel][direction] = True
-        return result
-
-    def _directional_metadata_from_delta(self, position: Tuple[int, int],
-                                         old: Dict[str, Dict[str, bool]],
-                                         new: Dict[str, Dict[str, bool]]) -> Dict[str, Any]:
-        empty: Dict[str, Any] = {
-            "directional_position": None,
-            "directional_directions": None,
-            "directional_channels": None,
-            "directional_blocks_movement": None,
-            "directional_blocks_optics": None,
-            "directional_blocks_propagation": None,
-        }
-        changed_channels = [
-            channel for channel in DIRECTIONAL_CHANNELS
-            if any(old[channel][direction] != new[channel][direction] for direction in DIRECTIONS)
-        ]
-        changed_directions = [
-            direction for direction in DIRECTIONS
-            if any(old[channel][direction] != new[channel][direction] for channel in DIRECTIONAL_CHANNELS)
-        ]
-        if not changed_channels:
-            return empty
-        return {
-            "directional_position": position,
-            "directional_directions": changed_directions,
-            "directional_channels": changed_channels,
-            "directional_blocks_movement": new["movement"],
-            "directional_blocks_optics": new["optical"],
-            "directional_blocks_propagation": new["propagation"],
-        }
-
-    def recompute_tile_directional_blocking(self, position: Tuple[int, int]) -> Dict[str, Any]:
-        """Refresh object/entity-derived tile directional state for one tile.
-
-        The stored state is objective/default. Subjective pathing still re-derives
-        from the live blocks so imperceivable directional blockers do not leak.
-        """
-        empty: Dict[str, Any] = {
-            "directional_position": None,
-            "directional_directions": None,
-            "directional_channels": None,
-            "directional_blocks_movement": None,
-            "directional_blocks_optics": None,
-            "directional_blocks_propagation": None,
-        }
-        tile = self._tiles.get(position)
-        if tile is None:
-            return empty
-
-        old = self._directional_block_map(position)
-
-        for channel in DIRECTIONAL_CHANNELS:
-            for direction in DIRECTIONS:
-                tile.set_object_border(channel, direction, True)
-
-        block_uuids = set(self._objects_by_position.get(position, set()))
-        block_uuids.update(self._entities_by_position.get(position, set()))
-        for block_uuid in block_uuids:
-            block = BaseBlock.get(block_uuid)
-            if block is None:
-                continue
-            for channel in DIRECTIONAL_CHANNELS:
-                for direction in DIRECTIONS:
-                    if self._block_blocks_direction(block, channel, direction):
-                        tile.set_object_border(channel, direction, False)
-
-        new = self._directional_block_map(position)
-        metadata = self._directional_metadata_from_delta(position, old, new)
-        changed_channels = set(metadata.get("directional_channels") or [])
-        self._bump_spatial_revisions(changed_channels)
-        return metadata
-
-    def _tile_allows_transition_side(self, tile_pos: Tuple[int, int], other_pos: Tuple[int, int],
-                                     channel: str,
-                                     requester_uuid: Optional[UUID] = None,
-                                     movement_mode: MovementMode = MovementMode.WALKING,
-                                     subjective: bool = False) -> bool:
-        tile = self._tiles.get(tile_pos)
-        if tile is None:
-            return False
-
-        directions = tile.directions_toward(other_pos)
-        if not directions:
+        if any(
+            condition.blocks_physical_optics_at((x, y))
+            for condition in self.get_spatial_conditions_at((x, y))
+        ):
             return True
+        return False
 
-        if not subjective:
-            return tile.allows_directions(directions, channel)
-
-        open_directions = {direction: tile.allows_direction(direction, channel, include_derived=False)
-                           for direction in directions}
-        block_uuids = set(self._objects_by_position.get(tile_pos, set()))
-        block_uuids.update(self._entities_by_position.get(tile_pos, set()))
-        requester = BaseBlock.get(requester_uuid) if requester_uuid is not None else None
-        senses = requester.get_senses() if requester is not None else None
-        for block_uuid in block_uuids:
-            block = BaseBlock.get(block_uuid)
-            if block is None:
-                continue
-            if senses is not None and (
-                block_uuid not in senses.entities
-                and block_uuid not in senses.objects
-            ):
-                continue
-            for direction in directions:
-                if self._block_blocks_direction(block, channel, direction, requester_uuid,
-                                                movement_mode, subjective=True):
-                    open_directions[direction] = False
-
-        return all(open_directions.values())
-
-    def _cached_tile_allows_transition_side(
+    def _edge_contribution_allows(
         self,
-        tile_pos: Tuple[int, int],
-        other_pos: Tuple[int, int],
-        channel: str,
-        requester_uuid: Optional[UUID],
+        contribution: WorldEdgeStructuralContribution,
+        channel: WorldEdgeChannel,
+        *,
+        source_height: int,
+        destination_height: int,
         movement_mode: MovementMode,
-        subjective: bool,
-        side_cache: Optional[
-            Dict[Tuple[Tuple[int, int], Tuple[int, int]], bool]
-        ],
+        treat_closed_doors_as_interactable: bool,
+        ignorable_provider_uuids: frozenset[UUID],
+        visible_provider_uuids: Optional[frozenset[UUID]] = None,
     ) -> bool:
-        """Return one directional-side result through an optional query cache."""
-        key = (tile_pos, other_pos)
-        if side_cache is not None:
-            cached = side_cache.get(key)
-            if cached is not None:
-                return cached
-        result = self._tile_allows_transition_side(
-            tile_pos,
-            other_pos,
-            channel,
-            requester_uuid,
-            movement_mode,
-            subjective,
+        """Evaluate one contribution under the canonical channel policy."""
+        if (
+            channel is WorldEdgeChannel.MOVEMENT
+            and visible_provider_uuids is not None
+            and contribution.provider_uuid not in visible_provider_uuids
+        ):
+            return True
+        if (
+            treat_closed_doors_as_interactable
+            and contribution.provider_uuid in ignorable_provider_uuids
+        ):
+            return True
+        if channel not in contribution.blocked_channels:
+            return True
+        if channel is not WorldEdgeChannel.MOVEMENT:
+            return False
+        if movement_mode is not MovementMode.WALKING:
+            return False
+        lower = min(source_height, destination_height)
+        upper = max(source_height, destination_height) + 1
+        return not (
+            contribution.base_height_steps < upper
+            and contribution.top_height_steps > lower
         )
-        if side_cache is not None:
-            side_cache[key] = result
-        return result
+
+    def _edge_layer_allows(
+        self,
+        contributions: Tuple[WorldEdgeStructuralContribution, ...],
+        channel: WorldEdgeChannel,
+        *,
+        source_height: int,
+        destination_height: int,
+        movement_mode: MovementMode,
+        treat_closed_doors_as_interactable: bool,
+        ignorable_provider_uuids: frozenset[UUID],
+        visible_provider_uuids: Optional[frozenset[UUID]] = None,
+    ) -> bool:
+        """Evaluate one ordered layer with the canonical contribution policy."""
+        return all(
+            self._edge_contribution_allows(
+                contribution,
+                channel,
+                source_height=source_height,
+                destination_height=destination_height,
+                movement_mode=movement_mode,
+                treat_closed_doors_as_interactable=treat_closed_doors_as_interactable,
+                ignorable_provider_uuids=ignorable_provider_uuids,
+                visible_provider_uuids=visible_provider_uuids,
+            )
+            for contribution in contributions
+        )
+
+    def _edge_channel_allows(
+        self,
+        view: WorldEdgeView,
+        channel: WorldEdgeChannel,
+        *,
+        source_height: Optional[int] = None,
+        destination_height: Optional[int] = None,
+        movement_mode: MovementMode = MovementMode.WALKING,
+        treat_closed_doors_as_interactable: bool = False,
+        ignorable_provider_uuids: frozenset[UUID] = frozenset(),
+        visible_provider_uuids: Optional[frozenset[UUID]] = None,
+    ) -> bool:
+        """Evaluate both ordered endpoint layers for one channel."""
+        source_height = view.source_height_steps if source_height is None else source_height
+        destination_height = view.destination_height_steps if destination_height is None else destination_height
+
+        return (
+            self._edge_layer_allows(
+                view.exit_contributions,
+                channel,
+                source_height=source_height,
+                destination_height=destination_height,
+                movement_mode=movement_mode,
+                treat_closed_doors_as_interactable=treat_closed_doors_as_interactable,
+                ignorable_provider_uuids=ignorable_provider_uuids,
+                visible_provider_uuids=visible_provider_uuids,
+            )
+            and self._edge_layer_allows(
+                view.entry_contributions,
+                channel,
+                source_height=source_height,
+                destination_height=destination_height,
+                movement_mode=movement_mode,
+                treat_closed_doors_as_interactable=treat_closed_doors_as_interactable,
+                ignorable_provider_uuids=ignorable_provider_uuids,
+                visible_provider_uuids=visible_provider_uuids,
+            )
+        )
 
     def _remembered_transition_allows(self, from_pos: Tuple[int, int], to_pos: Tuple[int, int],
                                       blocked: Optional[Set[Tuple[Tuple[int, int], str]]]) -> bool:
@@ -1697,7 +1655,8 @@ class GridMap:
                                          movement_mode: MovementMode = MovementMode.WALKING,
                                          subjective: bool = False,
                                          directional_collision_blocked: Optional[Set[Tuple[Tuple[int, int], str]]] = None,
-                                         side_cache: Optional[Dict[Tuple[Tuple[int, int], Tuple[int, int]], bool]] = None) -> bool:
+                                         side_cache: Optional[Dict[Tuple[Tuple[int, int], Tuple[int, int]], bool]] = None,
+                                         treat_closed_doors_as_interactable: bool = False) -> bool:
         dx = abs(to_pos[0] - from_pos[0])
         dy = abs(to_pos[1] - from_pos[1])
         if dx + dy != 1:
@@ -1706,16 +1665,31 @@ class GridMap:
             return False
         if channel == "movement" and not self._remembered_transition_allows(from_pos, to_pos, directional_collision_blocked):
             return False
-        return (
-            self._cached_tile_allows_transition_side(
-                from_pos, to_pos, channel,
-                requester_uuid, movement_mode, subjective, side_cache,
-            )
-            and self._cached_tile_allows_transition_side(
-                to_pos, from_pos, channel,
-                requester_uuid, movement_mode, subjective, side_cache,
-            )
+        key = (from_pos, to_pos)
+        if side_cache is not None:
+            cached = side_cache.get(key)
+            if cached is not None:
+                return cached
+        view, ignorable_provider_uuids = self._derive_world_edge(from_pos, to_pos)
+        visible_provider_uuids: Optional[frozenset[UUID]] = None
+        if subjective and channel == WorldEdgeChannel.MOVEMENT.value and requester_uuid is not None:
+            requester = BaseBlock.get(requester_uuid)
+            senses = requester.get_senses() if requester is not None else None
+            if senses is not None:
+                visible_provider_uuids = frozenset(senses.objects)
+        result = self._edge_channel_allows(
+            view,
+            WorldEdgeChannel(channel),
+            source_height=self._tiles[from_pos].height,
+            destination_height=self._tiles[to_pos].height,
+            movement_mode=movement_mode,
+            treat_closed_doors_as_interactable=treat_closed_doors_as_interactable,
+            ignorable_provider_uuids=ignorable_provider_uuids,
+            visible_provider_uuids=visible_provider_uuids,
         )
+        if side_cache is not None:
+            side_cache[key] = result
+        return result
 
     def _elevation_transition_allows(
         self,
@@ -1779,7 +1753,8 @@ class GridMap:
                                     collision_blocked: Optional[Set[Tuple[int, int]]] = None,
                                     directional_collision_blocked: Optional[Set[Tuple[Tuple[int, int], str]]] = None,
                                     side_cache: Optional[Dict[Tuple[Tuple[int, int], Tuple[int, int]], bool]] = None,
-                                    movement_cell_cache: Optional[Dict[Tuple[int, int], bool]] = None) -> bool:
+                                    movement_cell_cache: Optional[Dict[Tuple[int, int], bool]] = None,
+                                    treat_closed_doors_as_interactable: bool = False) -> bool:
         dx = to_pos[0] - from_pos[0]
         dy = to_pos[1] - from_pos[1]
         if abs(dx) != 1 or abs(dy) != 1:
@@ -1823,10 +1798,12 @@ class GridMap:
                 and self._cardinal_transition_sides_allow(
                     from_pos, bridge, channel, requester_uuid, movement_mode,
                     subjective, directional_collision_blocked, side_cache,
+                    treat_closed_doors_as_interactable,
                 )
                 and self._cardinal_transition_sides_allow(
                     bridge, to_pos, channel, requester_uuid, movement_mode,
                     subjective, directional_collision_blocked, side_cache,
+                    treat_closed_doors_as_interactable,
                 )
             ):
                 return True
@@ -1840,7 +1817,8 @@ class GridMap:
                        collision_blocked: Optional[Set[Tuple[int, int]]] = None,
                        directional_collision_blocked: Optional[Set[Tuple[Tuple[int, int], str]]] = None,
                        side_cache: Optional[Dict[Tuple[Tuple[int, int], Tuple[int, int]], bool]] = None,
-                       movement_cell_cache: Optional[Dict[Tuple[int, int], bool]] = None) -> bool:
+                       movement_cell_cache: Optional[Dict[Tuple[int, int], bool]] = None,
+                       treat_closed_doors_as_interactable: bool = False) -> bool:
         """Return whether movement can cross from one adjacent tile to another."""
         if from_pos == to_pos:
             return True
@@ -1854,6 +1832,7 @@ class GridMap:
                 walk_in_danger, subjective, collision_blocked,
                 directional_collision_blocked, side_cache,
                 movement_cell_cache,
+                treat_closed_doors_as_interactable,
             ):
                 return False
             return self._transition_cell_allows(
@@ -1868,14 +1847,16 @@ class GridMap:
             )
         if not self._remembered_transition_allows(from_pos, to_pos, directional_collision_blocked):
             return False
-        if not self._cached_tile_allows_transition_side(
-            from_pos, to_pos, "movement",
-            requesting_entity_uuid, movement_mode, subjective, side_cache,
-        ):
-            return False
-        if not self._cached_tile_allows_transition_side(
-            to_pos, from_pos, "movement",
-            requesting_entity_uuid, movement_mode, subjective, side_cache,
+        if not self._cardinal_transition_sides_allow(
+            from_pos,
+            to_pos,
+            "movement",
+            requesting_entity_uuid,
+            movement_mode,
+            subjective,
+            directional_collision_blocked,
+            side_cache,
+            treat_closed_doors_as_interactable,
         ):
             return False
         return self._transition_cell_allows(
@@ -1905,45 +1886,105 @@ class GridMap:
                 to_pos,
                 "optical",
             )
-        return (
-            self._tile_allows_transition_side(from_pos, to_pos, "optical")
-            and self._tile_allows_transition_side(to_pos, from_pos, "optical")
-        )
+        return self._cardinal_transition_sides_allow(from_pos, to_pos, "optical")
 
     def can_propagate_transition(self, from_pos: Tuple[int, int], to_pos: Tuple[int, int],
                                  requester_uuid: Optional[UUID] = None,
                                  subjective: bool = False) -> bool:
         if abs(to_pos[0] - from_pos[0]) == 1 and abs(to_pos[1] - from_pos[1]) == 1:
             return self._diagonal_transition_allows(from_pos, to_pos, "propagation", requester_uuid, subjective=subjective)
-        return (
-            self._tile_allows_transition_side(from_pos, to_pos, "propagation", requester_uuid, subjective=subjective)
-            and self._tile_allows_transition_side(to_pos, from_pos, "propagation", requester_uuid, subjective=subjective)
+        return self._cardinal_transition_sides_allow(
+            from_pos,
+            to_pos,
+            "propagation",
+            requester_uuid=requester_uuid,
+            subjective=subjective,
         )
 
-    def identify_blocker_at(self, position: Tuple[int, int],
-                            requesting_entity_uuid: Optional[UUID] = None,
-                            mode: MovementMode = MovementMode.WALKING) -> str:
-        """Identify what's blocking movement at a position.
+    def identify_blocker_at(
+        self,
+        position: Tuple[int, int],
+        requesting_entity_uuid: Optional[UUID] = None,
+        mode: MovementMode = MovementMode.WALKING,
+        *,
+        source_position: Optional[Tuple[int, int]] = None,
+    ) -> Optional[str]:
+        """Return one public blocker identity, or ``None`` when admissible.
 
-        Call this after is_walkable_for() returned False to get a descriptive
-        name for the blocker. Checks in the same order as is_walkable_for():
-        1. Tile itself (missing = "edge of map", blocks_walking = tile.name)
-        2. Entity at position
-        3. Object at position
-        4. Fallback: "obstacle"
+        With ``source_position`` this performs the complete adjacent transition
+        decision once, including ordered boundary identity. Without it, the
+        query retains its existing destination-cell blocker contract.
         """
+        if source_position is not None:
+            delta_x = position[0] - source_position[0]
+            delta_y = position[1] - source_position[1]
+            if abs(delta_x) <= 1 and abs(delta_y) <= 1 and (delta_x or delta_y):
+                if (
+                    source_position not in self._tiles
+                    or position not in self._tiles
+                ):
+                    return "edge of map"
+                if abs(delta_x) == 1 and abs(delta_y) == 1:
+                    if self._diagonal_transition_allows(
+                        source_position,
+                        position,
+                        WorldEdgeChannel.MOVEMENT.value,
+                        requesting_entity_uuid,
+                        mode,
+                    ) and self._transition_cell_allows(
+                        position,
+                        WorldEdgeChannel.MOVEMENT.value,
+                        requesting_entity_uuid,
+                        mode,
+                    ):
+                        return None
+                else:
+                    view, ignorable_provider_uuids = self._derive_world_edge(
+                        source_position,
+                        position,
+                    )
+                    source_tile = self._tiles[source_position]
+                    destination_tile = self._tiles[position]
+                    for contribution in (
+                        *view.exit_contributions,
+                        *view.entry_contributions,
+                    ):
+                        if self._edge_contribution_allows(
+                            contribution,
+                            WorldEdgeChannel.MOVEMENT,
+                            source_height=source_tile.height,
+                            destination_height=destination_tile.height,
+                            movement_mode=mode,
+                            treat_closed_doors_as_interactable=False,
+                            ignorable_provider_uuids=ignorable_provider_uuids,
+                        ):
+                            continue
+                        provider = BaseBlock.get(contribution.provider_uuid)
+                        return provider.name if provider is not None else "obstacle"
+                    if self._transition_cell_allows(
+                        position,
+                        WorldEdgeChannel.MOVEMENT.value,
+                        requesting_entity_uuid,
+                        mode,
+                    ) and self._elevation_transition_allows(
+                        source_position,
+                        position,
+                        mode,
+                    ):
+                        return None
+
         tile = self._tiles.get(position)
         if tile is None:
             return "edge of map"
         if tile.blocks_walking(mode=mode):
             return tile.name
 
-        for entity_uuid in self._entities_by_position.get(position, set()):
+        for entity_uuid in self.get_entities_at(position):
             block = BaseBlock.get(entity_uuid)
             if block is not None and block.blocks_walking(requesting_entity_uuid, mode):
                 return block.name
 
-        for obj_uuid in self._objects_by_position.get(position, set()):
+        for obj_uuid in self.get_center_objects_at(position):
             block = BaseBlock.get(obj_uuid)
             if block is not None and block.blocks_walking(requesting_entity_uuid, mode):
                 return block.name
@@ -2003,6 +2044,7 @@ class GridMap:
         y: int,
         width: int,
         height: int,
+        surface: TileSurface,
         walkable: bool = True,
         blocks_optics: bool = False,
         blocks_propagation: bool = False,
@@ -2015,13 +2057,10 @@ class GridMap:
             for tx in range(x, x + width)
             for ty in range(y, y + height)
         }
-        if any(
-            (tile := self._tiles.get(position)) is not None
-            and tile.get_spatial_condition_uuids()
-            for position in positions
-        ):
-            raise ValueError(
-                "cannot replace tiles while spatial conditions cover them",
+        for position in positions:
+            self._assert_tile_replacement_allowed(
+                position,
+                self._tiles.get(position),
             )
         events_were_enabled = self._events_enabled
         self.disable_events()
@@ -2034,6 +2073,7 @@ class GridMap:
 
                     tile = Tile.create(
                         position=(tx, ty),
+                        surface=surface,
                         walkable=walkable,
                         blocks_optics=blocks_optics,
                         blocks_propagation=blocks_propagation,
@@ -2048,284 +2088,1654 @@ class GridMap:
             if events_were_enabled:
                 self.enable_events()
 
-    def register_entity(self, entity_uuid: UUID, position: Tuple[int, int],
-                         parent_event: Optional[UUID] = None) -> None:
-        """Register an entity at a position."""
-        old_pos = self._entity_positions.get(entity_uuid)
-        if old_pos is not None:
-            self._entities_by_position[old_pos].discard(entity_uuid)
-            self.invalidate_occupancy_paths()
-            old_directional_metadata = self.recompute_tile_directional_blocking(old_pos)
-            if self._events_enabled:
-                event = SpatialChangeEvent.entity_left(
-                    old_pos, entity_uuid, position, parent_event=parent_event,
-                    **old_directional_metadata,
-                )
-                self._fire_spatial_event(event)
-
-        self._entity_positions[entity_uuid] = position
-        self._entities_by_position[position].add(entity_uuid)
-        self.invalidate_occupancy_paths()
-        new_directional_metadata = self.recompute_tile_directional_blocking(position)
-
-        if self._events_enabled:
-            event = SpatialChangeEvent.entity_entered(
-                position, entity_uuid, old_pos, parent_event=parent_event,
-                **new_directional_metadata,
-            )
-            self._fire_spatial_event(event)
-
-    def unregister_entity(self, entity_uuid: UUID) -> None:
-        """Silently discard one unpublished entity from spatial ownership."""
-        position = self._entity_positions.pop(entity_uuid, None)
-        if position is not None:
-            occupants = self._entities_by_position.get(position)
-            if occupants is not None:
-                occupants.discard(entity_uuid)
-                if not occupants:
-                    self._entities_by_position.pop(position, None)
-            self.recompute_tile_directional_blocking(position)
-        self.unsubscribe_entity(entity_uuid)
-        self._block_light_suppressions.pop(entity_uuid, None)
-        self.invalidate_occupancy_paths()
-
-    def move_entity(
-        self,
-        entity_uuid: UUID,
-        new_position: Tuple[int, int],
-        parent_event: Optional[UUID] = None
+    @staticmethod
+    def _validate_entity_position(
+        position: Optional[Tuple[int, int]],
+        *,
+        allow_none: bool = True,
     ) -> None:
-        """Move an entity to a new position and fire spatial events.
+        """Require one exact objective coordinate at the Tile boundary."""
+        if position is None:
+            if allow_none:
+                return
+            raise ValueError("entity position cannot be None")
+        if (
+            type(position) is not tuple
+            or len(position) != 2
+            or any(type(component) is not int for component in position)
+        ):
+            raise ValueError("entity position must be an exact tuple[int, int]")
 
-        Args:
-            entity_uuid: UUID of the entity to move
-            new_position: New grid position
-            parent_event: Optional parent event UUID for lineage (e.g., StepMovementEvent)
-        """
-        receipt = self.stage_entity_position(entity_uuid, new_position)
-        try:
-            self.publish_staged_entity_position(
-                receipt,
-                parent_event=parent_event,
-            )
-        except Exception as exc:
-            raise PositionPublicationError(exc) from exc
-
-    def stage_entity_position(
+    def _commit_entity_membership(
         self,
         entity_uuid: UUID,
-        new_position: Tuple[int, int],
-    ) -> GridEntityPositionReceipt:
-        """Stage the GridMap indexes without publishing spatial events."""
-        old_position = self._entity_positions.get(entity_uuid)
-        affected_positions = {
-            position
-            for position in (old_position, new_position)
-            if position is not None
-        }
-        directional_snapshots = {
-            position: {
-                field_name: getattr(tile, field_name)
-                for field_name in _OBJECT_BORDER_FIELDS
-            }
-            for position in affected_positions
-            if (tile := self._tiles.get(position)) is not None
-        }
-        old_directional_metadata: Dict[str, Any] = {}
-        new_directional_metadata: Dict[str, Any] = {}
-        try:
-            if old_position is not None:
-                self._entities_by_position[old_position].discard(entity_uuid)
-                old_directional_metadata = (
-                    self.recompute_tile_directional_blocking(old_position)
-                )
-            self._entity_positions[entity_uuid] = new_position
-            self._entities_by_position[new_position].add(entity_uuid)
-            new_directional_metadata = self.recompute_tile_directional_blocking(
-                new_position
+        expected_old_position: Optional[Tuple[int, int]],
+        new_position: Optional[Tuple[int, int]],
+    ) -> GridEntityMembershipReceipt:
+        """Atomically replace the one Entity UUID membership row."""
+        if not self._events_enabled:
+            raise PositionCommitError(
+                ValueError("Entity occupancy requires enabled GridMap events"),
             )
+        self._validate_entity_position(expected_old_position)
+        self._validate_entity_position(new_position)
+        block = BaseBlock.get(entity_uuid)
+        if block is None:
+            raise PositionCommitError(
+                ValueError(f"entity identity {entity_uuid} is not registered"),
+            )
+        if new_position is not None and block.position != new_position:
+            raise PositionCommitError(
+                ValueError("Entity objective position does not match destination"),
+            )
+        if expected_old_position is not None and block.position not in {
+            expected_old_position,
+            new_position,
+        }:
+            raise PositionCommitError(
+                ValueError("Entity objective position does not match transition"),
+            )
+
+        old_tile = (
+            self._tiles.get(expected_old_position)
+            if expected_old_position is not None
+            else None
+        )
+        new_tile = (
+            self._tiles.get(new_position)
+            if new_position is not None
+            else None
+        )
+        if expected_old_position is not None and old_tile is None:
+            raise PositionCommitError(ValueError("source Tile does not exist"))
+        if new_position is not None and new_tile is None:
+            raise PositionCommitError(ValueError("destination Tile does not exist"))
+        if (
+            expected_old_position is not None
+            and old_tile is not None
+            and entity_uuid not in old_tile.get_entity_uuids()
+        ):
+            raise PositionCommitError(
+                ValueError("source Tile does not contain the Entity UUID"),
+            )
+        if (
+            new_tile is not None
+            and new_position != expected_old_position
+            and entity_uuid in new_tile.get_entity_uuids()
+        ):
+            raise PositionCommitError(
+                ValueError("destination Tile already contains the Entity UUID"),
+            )
+
+        if expected_old_position == new_position:
+            return GridEntityMembershipReceipt(
+                entity_uuid=entity_uuid,
+                old_position=expected_old_position,
+                new_position=new_position,
+            )
+
+        old_members = old_tile.get_entity_uuids() if old_tile is not None else None
+        new_members = new_tile.get_entity_uuids() if new_tile is not None else None
+        try:
+            if old_tile is not None and old_members is not None:
+                old_members.discard(entity_uuid)
+                old_tile._replace_entity_uuids(old_members)
+            if new_tile is not None and new_members is not None:
+                new_members.add(entity_uuid)
+                new_tile._replace_entity_uuids(new_members)
             self.invalidate_occupancy_paths()
-        except Exception as exc:
-            self._entities_by_position[new_position].discard(entity_uuid)
-            if not self._entities_by_position[new_position]:
-                self._entities_by_position.pop(new_position, None)
-            if old_position is None:
-                self._entity_positions.pop(entity_uuid, None)
-            else:
-                self._entity_positions[entity_uuid] = old_position
-                self._entities_by_position[old_position].add(entity_uuid)
-            for position, snapshot in directional_snapshots.items():
-                tile = self._tiles.get(position)
-                if tile is None:
-                    continue
-                for field_name, value in snapshot.items():
-                    setattr(tile, field_name, value)
-            self.invalidate_occupancy_paths()
+        except BaseException as exc:
+            if old_tile is not None and old_members is not None:
+                old_tile._replace_entity_uuids(old_members | {entity_uuid})
+            if new_tile is not None and new_members is not None:
+                new_tile._replace_entity_uuids(new_members - {entity_uuid})
             raise PositionCommitError(exc) from exc
 
-        return GridEntityPositionReceipt(
+        return GridEntityMembershipReceipt(
             entity_uuid=entity_uuid,
-            old_position=old_position,
+            old_position=expected_old_position,
             new_position=new_position,
-            old_directional_metadata=old_directional_metadata,
-            new_directional_metadata=new_directional_metadata,
         )
 
-    def publish_staged_entity_position(
+    def _publish_entity_membership(
         self,
-        receipt: GridEntityPositionReceipt,
+        receipt: GridEntityMembershipReceipt,
         *,
         parent_event: Optional[UUID] = None,
     ) -> None:
-        """Publish LEFT then ENTERED for an already committed GridMap index."""
-        if self._entity_positions.get(receipt.entity_uuid) != receipt.new_position:
-            raise ValueError("staged position receipt no longer matches GridMap")
-        if not self._events_enabled:
-            return
+        """Publish facts for an already committed Entity membership row."""
+        block = BaseBlock.get(receipt.entity_uuid)
+        if block is None:
+            raise ValueError("membership receipt identity no longer exists")
+        if receipt.new_position is not None:
+            tile = self._tiles.get(receipt.new_position)
+            if tile is None or receipt.entity_uuid not in tile.get_entity_uuids():
+                raise ValueError("membership receipt destination is not committed")
+        if receipt.old_position is not None and receipt.old_position == receipt.new_position:
+            raise ValueError("membership receipt cannot publish a no-op")
         if receipt.old_position is not None:
             event = SpatialChangeEvent.entity_left(
                 receipt.old_position,
                 receipt.entity_uuid,
                 receipt.new_position,
                 parent_event=parent_event,
-                **receipt.old_directional_metadata,
             )
-            self._fire_spatial_event(event)
-        event = SpatialChangeEvent.entity_entered(
-            receipt.new_position,
-            receipt.entity_uuid,
-            receipt.old_position,
-            parent_event=parent_event,
-            **receipt.new_directional_metadata,
-        )
-        self._fire_spatial_event(event)
+            self._fire_committed_spatial_event(event)
+        if receipt.new_position is not None:
+            event = SpatialChangeEvent.entity_entered(
+                receipt.new_position,
+                receipt.entity_uuid,
+                receipt.old_position,
+                parent_event=parent_event,
+            )
+            self._fire_committed_spatial_event(event)
 
     def get_entity_position(self, entity_uuid: UUID) -> Optional[Tuple[int, int]]:
-        """Get an entity's position."""
-        return self._entity_positions.get(entity_uuid)
+        """Return a neutral block coordinate only for a present Tile member."""
+        block = BaseBlock.get(entity_uuid)
+        if block is None:
+            return None
+        position = block.get_position()
+        self._validate_entity_position(position, allow_none=False)
+        tile = self._tiles.get(position)
+        if tile is None or entity_uuid not in tile.get_entity_uuids():
+            return None
+        return position
 
     def get_entities_at(self, position: Tuple[int, int]) -> Set[UUID]:
-        """Get all entity UUIDs at a position."""
-        return self._entities_by_position.get(position, set()).copy()
+        """Return a defensive UUID snapshot from one authoritative Tile."""
+        self._validate_entity_position(position, allow_none=False)
+        tile = self._tiles.get(position)
+        if tile is None:
+            return set()
+        entity_uuids = tile.get_entity_uuids()
+        for entity_uuid in entity_uuids:
+            block = BaseBlock.get(entity_uuid)
+            if block is None or block.get_position() != position:
+                raise RuntimeError(
+                    f"Tile membership {entity_uuid} does not match {position}",
+                )
+        return entity_uuids
 
-    def get_all_object_positions(self) -> Dict[UUID, Tuple[int, int]]:
-        """Get all placed object positions."""
-        return self._object_positions.copy()
+    @property
+    def last_operation_diagnostics(self) -> GridMapOperationDiagnostics:
+        """Return the immutable counters from the most recent measured query."""
+        return self._last_operation_diagnostics
 
-    def place_object(self, object_uuid: UUID, position: Tuple[int, int],
-                      parent_event: Optional[UUID] = None) -> None:
-        """Place an object on the grid at a position."""
-        old_position = self._object_positions.get(object_uuid)
-        if old_position is not None and old_position != position:
-            self.remove_object(object_uuid, parent_event=parent_event, clear_object_location=False)
+    def _begin_operation_diagnostics(self, operation: str) -> None:
+        self._last_operation_diagnostics = GridMapOperationDiagnostics(operation)
 
-        self._object_positions[object_uuid] = position
-        self._objects_by_position[position].add(object_uuid)
-        directional_metadata = self.recompute_tile_directional_blocking(position)
+    def _finish_operation_diagnostics(
+        self,
+        operation: str,
+        *,
+        tiles_inspected: int = 0,
+        bands_inspected: int = 0,
+        bands_replaced: int = 0,
+        placement_iterator_rows_visited: int = 0,
+    ) -> None:
+        self._last_operation_diagnostics = GridMapOperationDiagnostics(
+            operation=operation,
+            tiles_inspected=tiles_inspected,
+            bands_inspected=bands_inspected,
+            bands_replaced=bands_replaced,
+            placement_iterator_rows_visited=placement_iterator_rows_visited,
+        )
+
+    @staticmethod
+    def _opposite_direction(direction: CardinalDirection) -> CardinalDirection:
+        return {
+            CardinalDirection.NORTH: CardinalDirection.SOUTH,
+            CardinalDirection.SOUTH: CardinalDirection.NORTH,
+            CardinalDirection.EAST: CardinalDirection.WEST,
+            CardinalDirection.WEST: CardinalDirection.EAST,
+        }[direction]
+
+    @staticmethod
+    def _directional_neighbor(
+        position: Tuple[int, int],
+        direction: CardinalDirection,
+    ) -> Tuple[int, int]:
+        """Return the one adjacent cell on an authored boundary side."""
+        offsets = {
+            CardinalDirection.NORTH: (0, 1),
+            CardinalDirection.SOUTH: (0, -1),
+            CardinalDirection.EAST: (1, 0),
+            CardinalDirection.WEST: (-1, 0),
+        }
+        dx, dy = offsets[direction]
+        return position[0] + dx, position[1] + dy
+
+    def _capture_boundary_views(
+        self,
+        placements: Iterable[WorldObjectPlacement],
+        *,
+        structure_overrides: Optional[Dict[UUID, Optional[BoundaryStructure]]] = None,
+    ) -> tuple[
+        Dict[Tuple[Tuple[int, int], Tuple[int, int]], WorldEdgeView],
+        Set[Tuple[int, int]],
+        Set[Tuple[int, int]],
+    ]:
+        """Capture only live ordered edges incident to the supplied side owners."""
+        views: Dict[
+            Tuple[Tuple[int, int], Tuple[int, int]],
+            WorldEdgeView,
+        ] = {}
+        owners: Set[Tuple[int, int]] = set()
+        endpoints: Set[Tuple[int, int]] = set()
+        for placement in placements:
+            if (
+                placement.kind is not WorldPlacementKind.BOUNDARY
+                or placement.boundary_direction is None
+            ):
+                continue
+            owner = placement.position
+            owners.add(owner)
+            endpoints.add(owner)
+            neighbor = self._directional_neighbor(
+                owner,
+                placement.boundary_direction,
+            )
+            if neighbor not in self._tiles:
+                continue
+            endpoints.add(neighbor)
+            views[(owner, neighbor)] = self._derive_world_edge(
+                owner,
+                neighbor,
+                structure_overrides=structure_overrides,
+            )[0]
+        return views, owners, endpoints
+
+    def _boundary_answer(
+        self,
+        view: WorldEdgeView,
+    ) -> tuple[bool, bool, bool, bool]:
+        """Return optical, propagation, walking, and nonwalking edge answers."""
+        return (
+            self._edge_channel_allows(view, WorldEdgeChannel.OPTICAL),
+            self._edge_channel_allows(view, WorldEdgeChannel.PROPAGATION),
+            self._edge_channel_allows(
+                view,
+                WorldEdgeChannel.MOVEMENT,
+                movement_mode=MovementMode.WALKING,
+            ),
+            self._edge_channel_allows(
+                view,
+                WorldEdgeChannel.MOVEMENT,
+                movement_mode=MovementMode.FLYING,
+            ),
+        )
+
+    def _aggregate_boundary_changes(
+        self,
+        before_views: Mapping[
+            Tuple[Tuple[int, int], Tuple[int, int]],
+            WorldEdgeView,
+        ],
+        after_views: Mapping[
+            Tuple[Tuple[int, int], Tuple[int, int]],
+            WorldEdgeView,
+        ],
+    ) -> Set[str]:
+        """Compare one bounded before/after side set without retaining a signature."""
+        changed: Set[str] = set()
+        open_answer = (True, True, True, True)
+        for edge in set(before_views) | set(after_views):
+            before = before_views.get(edge)
+            after = after_views.get(edge)
+            before_answer = open_answer if before is None else self._boundary_answer(before)
+            after_answer = open_answer if after is None else self._boundary_answer(after)
+            if before_answer[0] != after_answer[0]:
+                changed.add(WorldEdgeChannel.OPTICAL.value)
+            if before_answer[1] != after_answer[1]:
+                changed.add(WorldEdgeChannel.PROPAGATION.value)
+            if before_answer[2] != after_answer[2] or before_answer[3] != after_answer[3]:
+                changed.add(WorldEdgeChannel.MOVEMENT.value)
+        return changed
+
+    def _object_senses_hint(
+        self,
+        object_uuid: UUID,
+        position: Tuple[int, int],
+        *,
+        changed_channels: Set[str],
+        owners: Set[Tuple[int, int]],
+        endpoints: Set[Tuple[int, int]],
+        placed: bool = False,
+        removed: bool = False,
+    ) -> SensesUpdateHint:
+        """Build bounded endpoint evidence and aggregate-only channel flags."""
+        endpoint_positions = set(endpoints)
+        if "optical" in changed_channels and not endpoint_positions:
+            endpoint_positions.add(position)
+        return SensesUpdateHint(
+            requires_fov="optical" in changed_channels,
+            requires_paths="movement" in changed_channels,
+            object_placed=(object_uuid, position) if placed else None,
+            object_removed=(object_uuid, position) if removed else None,
+            light_changed_positions=(
+                endpoint_positions if "optical" in changed_channels else None
+            ),
+            directional_positions=set(owners) or None,
+            directional_neighbors=(endpoint_positions - owners) or None,
+            directional_channels_changed=(
+                set(changed_channels) or None
+            ),
+            requires_light_recompute="optical" in changed_channels,
+            requires_propagation_recompute="propagation" in changed_channels,
+        )
+
+    def _placement_band_heights(
+        self,
+        placement: WorldObjectPlacement,
+    ) -> range:
+        return range(placement.base_height_steps, placement.top_height_steps)
+
+    def _placement_work_counts(
+        self,
+        placements: Iterable[WorldObjectPlacement],
+    ) -> Tuple[int, int]:
+        """Count only local Tiles and bands touched by placement admission."""
+        tiles: set[Tuple[int, int]] = set()
+        bands: set[Tuple[Tuple[int, int], Optional[CardinalDirection], int]] = set()
+        for placement in placements:
+            tiles.add(placement.position)
+            bands.update(self._placement_band_keys(placement))
+        return len(tiles), len(bands)
+
+    def _resolve_object_placement(
+        self,
+        object_uuid: UUID,
+        position: Tuple[int, int],
+        boundary_direction: Optional[CardinalDirection] = None,
+        orientation: Optional[CardinalDirection] = None,
+        base_height_steps: Optional[int] = None,
+    ) -> WorldObjectPlacement:
+        """Resolve a provider-owned placement capability against one Tile."""
+        if (
+            type(position) is not tuple
+            or len(position) != 2
+            or any(type(value) is not int for value in position)
+        ):
+            raise TypeError("object placement position must be a pair of exact integers")
+        tile = self._tiles.get(position)
+        if tile is None:
+            raise ValueError(f"cannot place object on missing tile {position}")
         obj = BaseBlock.get(object_uuid)
-        blocks_optics = obj.blocks_optics_at_center() if obj else False
-        blocks_propagation = obj.blocks_propagation() if obj else False
-        blocks_walking = obj.blocks_walking() if obj else False
-        revision_channels: Set[str] = set()
-        if blocks_optics:
-            revision_channels.add("optical")
-        if blocks_propagation:
-            revision_channels.add("propagation")
-        if blocks_walking:
-            revision_channels.add("movement")
+        if obj is None:
+            raise ValueError(f"cannot place unknown object {object_uuid}")
+        spec = obj.get_world_placement_spec()
+        if base_height_steps is not None and type(base_height_steps) is not int:
+            raise TypeError("base_height_steps must be an exact integer number of steps")
+        if boundary_direction is not None and type(boundary_direction) is not CardinalDirection:
+            raise TypeError("boundary_direction must be a CardinalDirection or None")
+        if orientation is not None and type(orientation) is not CardinalDirection:
+            raise TypeError("orientation must be a CardinalDirection or None")
+        if spec.kind is WorldPlacementKind.BOUNDARY:
+            if boundary_direction is None:
+                raise ValueError("boundary placements require a boundary_direction")
+            committed_orientation = orientation
+        else:
+            if boundary_direction is not None:
+                raise ValueError("center placements cannot define boundary_direction")
+            committed_orientation = orientation
+        base_height = tile.height if base_height_steps is None else base_height_steps
+        if spec.kind is WorldPlacementKind.CENTER and base_height != tile.height:
+            raise ValueError("center placements must begin at the Tile support height")
+        return WorldObjectPlacement(
+            object_uuid=object_uuid,
+            tile_uuid=tile.uuid,
+            position=position,
+            kind=spec.kind,
+            occupies_bands=spec.occupies_bands,
+            boundary_direction=boundary_direction,
+            base_height_steps=base_height,
+            top_height_steps=base_height + spec.vertical_extent_steps,
+            orientation=committed_orientation,
+        )
+
+    def _placement_band_snapshots(
+        self,
+        placement: WorldObjectPlacement,
+    ) -> Tuple[Tuple[Tile, CardinalDirection | None, int, TileObjectBand], ...]:
+        tile = self._tiles[placement.position]
+        if placement.kind is WorldPlacementKind.CENTER:
+            return tuple(
+                (tile, None, height, tile._center_object_bands.get(height, TileObjectBand()))
+                for height in self._placement_band_heights(placement)
+            )
+        assert placement.boundary_direction is not None
+        return tuple(
+            (
+                tile,
+                placement.boundary_direction,
+                height,
+                tile._boundary_object_bands.get(placement.boundary_direction, {}).get(
+                    height,
+                    TileObjectBand(),
+                ),
+            )
+            for height in self._placement_band_heights(placement)
+        )
+
+    def _validate_placement_collision(
+        self,
+        placement: WorldObjectPlacement,
+        *,
+        staged_occupants: Optional[
+            Mapping[Tuple[Tuple[int, int], Optional[CardinalDirection], int], UUID]
+        ] = None,
+    ) -> None:
+        """Check all occupied center or boundary bands before mutation."""
+        if not placement.occupies_bands:
+            return
+        for _tile, direction, height, band in self._placement_band_snapshots(placement):
+            key = (placement.position, direction, height)
+            incumbent = band.occupant_uuid
+            if staged_occupants is not None and key in staged_occupants:
+                incumbent = staged_occupants[key]
+            if incumbent not in (None, placement.object_uuid):
+                raise ValueError(
+                    f"placement band is occupied by {incumbent}",
+                )
+
+    def validate_object_placement(
+        self,
+        object_uuid: UUID,
+        position: Tuple[int, int],
+        boundary_direction: Optional[CardinalDirection] = None,
+        orientation: Optional[CardinalDirection] = None,
+        base_height_steps: Optional[int] = None,
+    ) -> WorldObjectPlacement:
+        """Resolve and validate a placement without mutating GridMap state."""
+        placement = self._resolve_object_placement(
+            object_uuid,
+            position,
+            boundary_direction,
+            orientation,
+            base_height_steps,
+        )
+        self._validate_placement_collision(placement)
+        return placement
+
+    def validate_object_placement_batch(
+        self,
+        object_uuids: Iterable[UUID],
+        position: Tuple[int, int],
+    ) -> Tuple[WorldObjectPlacement, ...]:
+        """Return jointly admissible immutable placements without mutation.
+
+        The local staged occupants reuse the same collision authority as normal
+        placement admission. They exist only for this pure preflight and are
+        discarded with the returned candidates.
+        """
+        candidates: list[WorldObjectPlacement] = []
+        seen_object_uuids: set[UUID] = set()
+        staged_occupants: Dict[
+            Tuple[Tuple[int, int], Optional[CardinalDirection], int], UUID
+        ] = {}
+        for object_uuid in object_uuids:
+            if object_uuid in seen_object_uuids:
+                raise ValueError(
+                    f"placement batch contains duplicate object {object_uuid}",
+                )
+            seen_object_uuids.add(object_uuid)
+            candidate = self._resolve_object_placement(object_uuid, position)
+            self._validate_placement_collision(
+                candidate,
+                staged_occupants=staged_occupants,
+            )
+            if candidate.occupies_bands:
+                for key in self._placement_band_keys(candidate):
+                    staged_occupants[key] = candidate.object_uuid
+            candidates.append(candidate)
+        return tuple(candidates)
+
+    def _replace_placement_bands(
+        self,
+        placement: WorldObjectPlacement,
+        *,
+        add: bool,
+    ) -> int:
+        tile = self._tiles[placement.position]
+        replacements = 0
+        for _tile, direction, height, old_band in self._placement_band_snapshots(placement):
+            object_uuids = set(old_band.object_uuids)
+            if add:
+                object_uuids.add(placement.object_uuid)
+            else:
+                object_uuids.discard(placement.object_uuid)
+            occupant_uuid = old_band.occupant_uuid
+            if placement.occupies_bands:
+                occupant_uuid = placement.object_uuid if add else None
+            new_band = TileObjectBand(
+                object_uuids=frozenset(object_uuids),
+                occupant_uuid=occupant_uuid,
+            )
+            if new_band == old_band:
+                continue
+            if direction is None:
+                tile._replace_center_object_band(
+                    height,
+                    new_band if new_band.object_uuids else None,
+                )
+            else:
+                tile._replace_boundary_object_band(
+                    direction,
+                    height,
+                    new_band if new_band.object_uuids else None,
+                )
+            replacements += 1
+        return replacements
+
+    def _placement_band_keys(
+        self,
+        placement: WorldObjectPlacement,
+    ) -> Tuple[Tuple[Tuple[int, int], Optional[CardinalDirection], int], ...]:
+        """Return the authoritative Tile-band keys for one placement row."""
+        return tuple(
+            (
+                placement.position,
+                placement.boundary_direction
+                if placement.kind is WorldPlacementKind.BOUNDARY
+                else None,
+                height,
+            )
+            for height in self._placement_band_heights(placement)
+        )
+
+    def _snapshot_object_mutation(
+        self,
+        placements: Iterable[WorldObjectPlacement],
+    ) -> Dict[
+        Tuple[Tuple[int, int], Optional[CardinalDirection], int],
+        Tuple[Tile, Optional[CardinalDirection], int, Optional[TileObjectBand]],
+    ]:
+        """Capture only the immutable bands a command may touch."""
+        band_snapshots: Dict[
+            Tuple[Tuple[int, int], Optional[CardinalDirection], int],
+            Tuple[Tile, Optional[CardinalDirection], int, Optional[TileObjectBand]],
+        ] = {}
+        for placement in placements:
+            tile = self._tiles[placement.position]
+            for position, direction, height in self._placement_band_keys(placement):
+                if direction is None:
+                    band = tile._center_object_bands.get(height)
+                else:
+                    band = tile._boundary_object_bands.get(direction, {}).get(height)
+                band_snapshots.setdefault(
+                    (position, direction, height),
+                    (tile, direction, height, band),
+                )
+        return band_snapshots
+
+    def _restore_object_mutation(
+        self,
+        object_uuid: UUID,
+        previous: Optional[WorldObjectPlacement],
+        band_snapshots: Mapping[
+            Tuple[Tuple[int, int], Optional[CardinalDirection], int],
+            Tuple[Tile, Optional[CardinalDirection], int, Optional[TileObjectBand]],
+        ],
+    ) -> None:
+        """Restore a failed placement command and invalidate dependent caches."""
+        for _key, (tile, direction, height, band) in band_snapshots.items():
+            if direction is None:
+                tile._replace_center_object_band(height, band)
+            else:
+                tile._replace_boundary_object_band(direction, height, band)
+        if previous is None:
+            self._object_placements.pop(object_uuid, None)
+        else:
+            self._object_placements[object_uuid] = previous
+        self.invalidate_spatial_caches({"movement", "optical", "propagation"})
+
+    def get_object_placement(self, object_uuid: UUID) -> Optional[WorldObjectPlacement]:
+        """Return the immutable committed placement for one object."""
+        return self._object_placements.get(object_uuid)
+
+    def get_all_object_placements(self) -> Tuple[WorldObjectPlacement, ...]:
+        """Return immutable placement rows in deterministic UUID order."""
+        self._begin_operation_diagnostics("get_all_object_placements")
+        placements = tuple(
+            self._object_placements[object_uuid]
+            for object_uuid in sorted(self._object_placements, key=str)
+        )
+        self._finish_operation_diagnostics(
+            "get_all_object_placements",
+            placement_iterator_rows_visited=len(placements),
+        )
+        return placements
+
+    def rebuild_object_placements(
+        self,
+        serialized_placements: Iterable[WorldObjectPlacement | Mapping[str, object]],
+    ) -> Tuple[WorldObjectPlacement, ...]:
+        """Atomically rebuild Tile bands and reverse placements from cold values."""
+        self._begin_operation_diagnostics("rebuild_object_placements")
+        values: list[WorldObjectPlacement] = []
+        seen_object_uuids: set[UUID] = set()
+        provider_structures: Dict[UUID, Optional[BoundaryStructure]] = {}
+        for raw_value in serialized_placements:
+            placement = (
+                raw_value
+                if isinstance(raw_value, WorldObjectPlacement)
+                else WorldObjectPlacement.model_validate(raw_value, strict=True)
+            )
+            if placement.object_uuid in seen_object_uuids:
+                raise ValueError(
+                    f"serialized object placements contain duplicate object {placement.object_uuid}",
+                )
+            seen_object_uuids.add(placement.object_uuid)
+            tile = self._tiles.get(placement.position)
+            if tile is None or tile.uuid != placement.tile_uuid:
+                raise ValueError(
+                    f"serialized placement {placement.object_uuid} does not identify its exact Tile",
+                )
+            provider = BaseBlock.get(placement.object_uuid)
+            if provider is None:
+                raise ValueError(
+                    f"serialized placement {placement.object_uuid} has no registered provider",
+                )
+            spec = provider.get_world_placement_spec()
+            # Resolve structural after-values only for boundary placements
+            # before touching any live bands; center mechanics never enter an
+            # ordered edge layer.
+            if placement.kind is WorldPlacementKind.BOUNDARY:
+                provider_structures[placement.object_uuid] = (
+                    provider.get_boundary_structure()
+                )
+            if placement.kind is not spec.kind:
+                raise ValueError("serialized placement kind differs from provider policy")
+            if placement.occupies_bands is not spec.occupies_bands:
+                raise ValueError("serialized placement occupancy differs from provider policy")
+            if placement.top_height_steps - placement.base_height_steps != spec.vertical_extent_steps:
+                raise ValueError("serialized placement extent differs from provider policy")
+            if placement.kind is WorldPlacementKind.CENTER:
+                if placement.boundary_direction is not None:
+                    raise ValueError("serialized center placement defines a boundary side")
+                if placement.base_height_steps != tile.height:
+                    raise ValueError("serialized center placement is not support-relative")
+            elif placement.boundary_direction is None:
+                raise ValueError("serialized boundary placement is missing its boundary side")
+            values.append(placement)
+
+        staged_members: Dict[
+            Tuple[Tuple[int, int], Optional[CardinalDirection], int],
+            set[UUID],
+        ] = {}
+        staged_occupants: Dict[
+            Tuple[Tuple[int, int], Optional[CardinalDirection], int],
+            UUID,
+        ] = {}
+
+        def admit_band(
+            placement: WorldObjectPlacement,
+            position: Tuple[int, int],
+            height: int,
+            direction: Optional[CardinalDirection],
+        ) -> None:
+            key = (position, direction, height)
+            members = staged_members.setdefault(key, set())
+            occupants = staged_occupants
+            members.add(placement.object_uuid)
+            if placement.occupies_bands:
+                incumbent = occupants.get(key)
+                if incumbent is not None and incumbent != placement.object_uuid:
+                    raise ValueError("serialized placement has an occupying band collision")
+                occupants[key] = placement.object_uuid
+
+        for placement in values:
+            direction = placement.boundary_direction
+            for height in self._placement_band_heights(placement):
+                admit_band(placement, placement.position, height, direction)
+
+        staged_bands: Dict[
+            Tuple[Tuple[int, int], Optional[CardinalDirection], int],
+            TileObjectBand,
+        ] = {}
+        for key, members in staged_members.items():
+            staged_bands[key] = TileObjectBand(
+                object_uuids=frozenset(members),
+                occupant_uuid=staged_occupants.get(key),
+            )
+
+        new_placements = {placement.object_uuid: placement for placement in values}
+        old_placements = dict(self._object_placements)
+        for placement in old_placements.values():
+            if placement.object_uuid in provider_structures:
+                continue
+            provider = BaseBlock.get(placement.object_uuid)
+            if provider is None:
+                raise ValueError(
+                    f"live placement {placement.object_uuid} has no registered provider",
+                )
+            if placement.kind is WorldPlacementKind.BOUNDARY:
+                provider_structures[placement.object_uuid] = (
+                    provider.get_boundary_structure()
+                )
+        old_band_keys = {
+            key
+            for placement in old_placements.values()
+            for key in self._placement_band_keys(placement)
+        }
+        new_band_keys = set(staged_bands)
+        affected_band_keys = old_band_keys | new_band_keys
+        affected_positions = {
+            position
+            for position, _direction, _height in affected_band_keys
+        }
+        changed_uuids = {
+            object_uuid
+            for object_uuid in set(old_placements) | set(new_placements)
+            if old_placements.get(object_uuid) != new_placements.get(object_uuid)
+        }
+        topology_placements = tuple(
+            placement
+            for object_uuid, placement in old_placements.items()
+            if object_uuid in changed_uuids
+        ) + tuple(
+            placement
+            for object_uuid, placement in new_placements.items()
+            if object_uuid in changed_uuids
+        )
+        before_boundary_views, _before_boundary_owners, before_boundary_endpoints = (
+            self._capture_boundary_views(
+                topology_placements,
+                structure_overrides=provider_structures,
+            )
+        )
+        optical_positions: set[Tuple[int, int]] = set()
+        revision_channels: set[str] = set()
+        for object_uuid in changed_uuids:
+            provider = BaseBlock.get(object_uuid)
+            if provider is None:
+                continue
+            old = old_placements.get(object_uuid)
+            new = new_placements.get(object_uuid)
+            positions = {
+                placement.position
+                for placement in (old, new)
+                if placement is not None
+            }
+            if not any(
+                placement is not None
+                and placement.kind is WorldPlacementKind.CENTER
+                for placement in (old, new)
+            ):
+                continue
+            blocks_walking = provider.blocks_walking()
+            blocks_propagation = provider.blocks_propagation()
+            blocks_optics = provider.blocks_optics_at_center()
+            # Resolve center provider mechanics before mutation; these values
+            # are reused for center revision and light decisions below.
+            if blocks_walking:
+                revision_channels.add("movement")
+            if blocks_propagation:
+                revision_channels.add("propagation")
+            if blocks_optics:
+                revision_channels.add("optical")
+                optical_positions.update(positions)
+
+        band_snapshots: Dict[
+            Tuple[Tuple[int, int], Optional[CardinalDirection], int],
+            Optional[TileObjectBand],
+        ] = {}
+        for key in affected_band_keys:
+            position, direction, height = key
+            tile = self._tiles[position]
+            if direction is None:
+                band = tile._center_object_bands.get(height)
+            else:
+                band = tile._boundary_object_bands.get(direction, {}).get(height)
+            band_snapshots[key] = band
+
+        revision_names = (
+            "_spatial_revision",
+            "_optical_revision",
+            "_movement_revision",
+            "_light_revision",
+            "_propagation_revision",
+        )
+        revision_snapshots = {
+            name: getattr(self, name)
+            for name in revision_names
+        }
+        light_source_snapshots: Dict[UUID, Dict[Tuple[int, int], LightLevel]] = {}
+        light_tile_snapshots: Dict[
+            Tuple[int, int],
+            Tuple[Dict[UUID, LightLevel], Dict[UUID, LightLevel]],
+        ] = {}
+        events_enabled = self._events_enabled
+        pending_event_count = len(self._pending_events)
+        pending_committed_event_count = len(self._pending_committed_events)
+
+        def restore_rebuild_state() -> None:
+            for key, band in band_snapshots.items():
+                position, direction, height = key
+                tile = self._tiles[position]
+                if direction is None:
+                    tile._replace_center_object_band(height, band)
+                else:
+                    tile._replace_boundary_object_band(direction, height, band)
+            self._object_placements = old_placements
+            for name, value in revision_snapshots.items():
+                setattr(self, name, value)
+            self._fov_cache.clear()
+            self._path_cache.clear()
+            self._propagation_fov_cache.clear()
+            self._propagation_transition_cache.clear()
+            self._propagation_blocking_cache.clear()
+            self._propagation_filter_cache.clear()
+            for source_uuid, affected in light_source_snapshots.items():
+                source = self._light_sources.get(source_uuid)
+                if source is not None:
+                    source.affected_tiles = dict(affected)
+            for position, (illuminations, caps) in light_tile_snapshots.items():
+                tile = self._tiles[position]
+                tile._illuminations = dict(illuminations)
+                tile._illumination_caps = dict(caps)
+
+        self._events_enabled = False
+        try:
+            # The old reverse map is the removal authority. Only its old rows
+            # and the staged new rows are touched; distant Tiles remain alone.
+            bands_replaced = 0
+            for key in affected_band_keys:
+                position, direction, height = key
+                tile = self._tiles[position]
+                old_band = band_snapshots[key]
+                band = staged_bands.get(key)
+                if old_band == band:
+                    continue
+                if direction is None:
+                    tile._replace_center_object_band(height, band)
+                else:
+                    tile._replace_boundary_object_band(direction, height, band)
+                bands_replaced += 1
+            self._object_placements = new_placements
+            after_boundary_views, after_boundary_owners, after_boundary_endpoints = (
+                self._capture_boundary_views(
+                    topology_placements,
+                    structure_overrides=provider_structures,
+                )
+            )
+            boundary_channels = self._aggregate_boundary_changes(
+                before_boundary_views,
+                after_boundary_views,
+            )
+            revision_channels.update(boundary_channels)
+            if WorldEdgeChannel.OPTICAL.value in boundary_channels:
+                optical_positions.update(
+                    before_boundary_endpoints | after_boundary_endpoints
+                )
+            self._bump_spatial_revisions(revision_channels)
+            if optical_positions:
+                for source_uuid, source in self._light_sources.items():
+                    if not self._is_light_effectively_active(source):
+                        continue
+                    total_radius_tiles = (
+                        source.bright_radius_feet + source.dim_radius_feet
+                    ) / 5
+                    if not any(
+                        math.sqrt(
+                            (position[0] - source.position[0]) ** 2
+                            + (position[1] - source.position[1]) ** 2
+                        ) <= total_radius_tiles
+                        for position in optical_positions
+                    ):
+                        continue
+                    light_source_snapshots[source_uuid] = dict(source.affected_tiles)
+                    possible_positions = set(source.affected_tiles)
+                    radius_tiles = max(
+                        (source.bright_radius_feet + source.dim_radius_feet) // 5,
+                        1,
+                    )
+                    possible_positions.update(
+                        position
+                        for position in circle_positions(source.position, radius_tiles)
+                        if position in self._tiles
+                    )
+                    for position in possible_positions:
+                        tile = self._tiles.get(position)
+                        if tile is None:
+                            continue
+                        light_tile_snapshots[position] = (
+                            dict(tile._illuminations),
+                            dict(tile._illumination_caps),
+                        )
+            self.recompute_lights_at_positions(optical_positions)
+
+            live_bands: Dict[
+                Tuple[Tuple[int, int], Optional[CardinalDirection], int],
+                TileObjectBand,
+            ] = {}
+            for key in affected_band_keys:
+                position, direction, height = key
+                tile = self._tiles[position]
+                band = (
+                    tile._center_object_bands.get(height)
+                    if direction is None
+                    else tile._boundary_object_bands.get(direction, {}).get(height)
+                )
+                if band is not None:
+                    live_bands[key] = band
+            self._assert_object_placement_bijection(
+                new_placements,
+                live_bands,
+            )
+            self._last_operation_diagnostics = GridMapOperationDiagnostics(
+                operation="rebuild_object_placements",
+                tiles_inspected=len(affected_positions),
+                bands_inspected=len(affected_band_keys),
+                bands_replaced=bands_replaced,
+                placement_iterator_rows_visited=len(values),
+            )
+            return tuple(
+                self._object_placements[uuid]
+                for uuid in sorted(self._object_placements, key=str)
+            )
+        except Exception:
+            restore_rebuild_state()
+            self._last_operation_diagnostics = GridMapOperationDiagnostics(
+                operation="rebuild_object_placements",
+            )
+            raise
+        finally:
+            self._events_enabled = events_enabled
+            del self._pending_events[pending_event_count:]
+            del self._pending_committed_events[pending_committed_event_count:]
+
+    def _assert_object_placement_bijection(
+        self,
+        placements: Mapping[UUID, WorldObjectPlacement],
+        bands: Mapping[
+            Tuple[Tuple[int, int], Optional[CardinalDirection], int],
+            TileObjectBand,
+        ],
+    ) -> None:
+        """Prove every affected live band UUID has one placement."""
+        forward_members: Dict[UUID, int] = defaultdict(int)
+        for band in bands.values():
+            for object_uuid in band.object_uuids:
+                forward_members[object_uuid] += 1
+        for object_uuid, placement in placements.items():
+            expected_keys = self._placement_band_keys(placement)
+            expected = len(expected_keys)
+            for key in expected_keys:
+                band = bands.get(key)
+                if band is None or object_uuid not in band.object_uuids:
+                    raise ValueError("rebuilt placement bands are not bijective with placements")
+                if placement.occupies_bands and band.occupant_uuid != object_uuid:
+                    raise ValueError("rebuilt occupying bands have the wrong occupant")
+            if forward_members.get(object_uuid, 0) != expected:
+                raise ValueError("rebuilt placement bands are not bijective with placements")
+        extra = set(forward_members).difference(placements)
+        if extra:
+            raise ValueError("rebuilt bands contain an unplaced object")
+
+    def get_object_position(self, object_uuid: UUID) -> Optional[Tuple[int, int]]:
+        """Return an object's committed grid position, or None if unplaced."""
+        placement = self.get_object_placement(object_uuid)
+        return placement.position if placement is not None else None
+
+    def get_center_objects_at(
+        self,
+        position: Tuple[int, int],
+        height: Optional[int] = None,
+    ) -> Set[UUID]:
+        """Return object UUIDs indexed in center bands at one Tile."""
+        self._begin_operation_diagnostics("get_center_objects_at")
+        tile = self._tiles.get(position)
+        if tile is None:
+            self._finish_operation_diagnostics("get_center_objects_at", tiles_inspected=1)
+            return set()
+        bands = (
+            ((height, tile._center_object_bands.get(height, TileObjectBand())),)
+            if height is not None
+            else tuple(tile._center_object_bands.items())
+        )
+        result = {
+            object_uuid
+            for _band_height, band in bands
+            for object_uuid in band.object_uuids
+        }
+        self._finish_operation_diagnostics(
+            "get_center_objects_at",
+            tiles_inspected=1,
+            bands_inspected=len(bands),
+        )
+        return result
+
+    def get_boundary_objects_at(
+        self,
+        position: Tuple[int, int],
+        direction: CardinalDirection,
+        height: Optional[int] = None,
+    ) -> Set[UUID]:
+        """Return object UUIDs indexed on one Tile-relative boundary."""
+        self._begin_operation_diagnostics("get_boundary_objects_at")
+        tile = self._tiles.get(position)
+        if tile is None:
+            self._finish_operation_diagnostics("get_boundary_objects_at", tiles_inspected=1)
+            return set()
+        direction_bands = tile._boundary_object_bands.get(direction, {})
+        bands = (
+            ((height, direction_bands.get(height, TileObjectBand())),)
+            if height is not None
+            else tuple(direction_bands.items())
+        )
+        result = {
+            object_uuid
+            for _band_height, band in bands
+            for object_uuid in band.object_uuids
+        }
+        self._finish_operation_diagnostics(
+            "get_boundary_objects_at",
+            tiles_inspected=1,
+            bands_inspected=len(bands),
+        )
+        return result
+
+    def get_objects_at(self, position: Tuple[int, int]) -> Set[UUID]:
+        """Return all center and boundary object UUIDs anchored at a Tile."""
+        self._begin_operation_diagnostics("get_objects_at")
+        tile = self._tiles.get(position)
+        if tile is None:
+            self._finish_operation_diagnostics("get_objects_at", tiles_inspected=1)
+            return set()
+        result = {
+            object_uuid
+            for band in tile._center_object_bands.values()
+            for object_uuid in band.object_uuids
+        }
+        result.update(
+            object_uuid
+            for direction_bands in tile._boundary_object_bands.values()
+            for band in direction_bands.values()
+            for object_uuid in band.object_uuids
+        )
+        self._finish_operation_diagnostics(
+            "get_objects_at",
+            tiles_inspected=1,
+            bands_inspected=(
+                len(tile._center_object_bands)
+                + sum(len(bands) for bands in tile._boundary_object_bands.values())
+            ),
+        )
+        return result
+
+    def _emit_object_state_event(
+        self,
+        object_uuid: UUID,
+        placement: WorldObjectPlacement,
+        *,
+        object_name: Optional[str],
+        blocks_optics: bool,
+        blocks_propagation: bool,
+        blocks_walking: bool,
+        previous_placement: Optional[WorldObjectPlacement] = None,
+        parent_event: Optional[UUID] = None,
+        object_boundary_structure: Optional[BoundaryStructure] = None,
+        revision_channels: Set[str],
+        senses_hint: SensesUpdateHint,
+    ) -> None:
         self._bump_spatial_revisions(revision_channels)
         if self._events_enabled:
-            obj_name = obj.name if obj else None
-            obj_map_char = obj.get_map_char() if obj else None
             self._fire_spatial_event(SpatialChangeEvent.object_placed(
-                position, object_uuid,
+                placement.position,
+                object_uuid,
                 parent_event=parent_event,
                 blocks_optics=blocks_optics,
                 blocks_propagation=blocks_propagation,
                 blocks_walking=blocks_walking,
-                object_name=obj_name,
-                object_map_char=obj_map_char,
-                **directional_metadata,
+                object_name=object_name,
+                placement=placement,
+                previous_placement=previous_placement,
+                object_boundary_structure=object_boundary_structure,
+                senses_hint=senses_hint,
             ))
 
-    def remove_object(self, object_uuid: UUID,
-                       parent_event: Optional[UUID] = None,
-                       clear_object_location: bool = True) -> None:
-        """Remove an object from the grid."""
+    def place_object(
+        self,
+        object_uuid: UUID,
+        position: Tuple[int, int],
+        *,
+        boundary_direction: Optional[CardinalDirection] = None,
+        base_height_steps: Optional[int] = None,
+        orientation: Optional[CardinalDirection] = None,
+        parent_event: Optional[UUID] = None,
+    ) -> WorldObjectPlacement:
+        """Atomically admit an unplaced object at one resolved placement."""
+        self._begin_operation_diagnostics("place_object")
+        current = self.get_object_placement(object_uuid)
+        candidate = self.validate_object_placement(
+            object_uuid,
+            position,
+            boundary_direction=boundary_direction,
+            orientation=orientation,
+            base_height_steps=base_height_steps,
+        )
+        tiles_inspected, bands_inspected = self._placement_work_counts((candidate,))
+        if current is not None:
+            if current == candidate:
+                self._finish_operation_diagnostics(
+                    "place_object",
+                    tiles_inspected=tiles_inspected,
+                    bands_inspected=bands_inspected,
+                )
+                return current
+            raise ValueError(
+                f"object {object_uuid} is already placed; use move_object or orient_object",
+            )
         obj = BaseBlock.get(object_uuid)
+        object_boundary_structure = None
+        structure_overrides: Dict[UUID, Optional[BoundaryStructure]] = {}
+        if candidate.kind is WorldPlacementKind.BOUNDARY and obj is not None:
+            object_boundary_structure = obj.get_boundary_structure()
+            structure_overrides[object_uuid] = object_boundary_structure
         blocks_optics = obj.blocks_optics_at_center() if obj else False
         blocks_propagation = obj.blocks_propagation() if obj else False
         blocks_walking = obj.blocks_walking() if obj else False
-        position = self._object_positions.pop(object_uuid, None)
-        if position is not None:
-            self._objects_by_position[position].discard(object_uuid)
-            if obj is not None:
-                obj.on_grid_object_removed(position, clear_location=clear_object_location)
-            directional_metadata = self.recompute_tile_directional_blocking(position)
-            revision_channels: Set[str] = set()
-            if blocks_optics:
-                revision_channels.add("optical")
-            if blocks_propagation:
-                revision_channels.add("propagation")
-            if blocks_walking:
-                revision_channels.add("movement")
-            self._bump_spatial_revisions(revision_channels)
-            if self._events_enabled:
-                self._fire_spatial_event(SpatialChangeEvent.object_removed(
-                    position, object_uuid,
+        object_name = obj.name if obj else None
+        before_views, before_owners, before_endpoints = self._capture_boundary_views(
+            (candidate,),
+            structure_overrides=structure_overrides,
+        )
+        band_snapshots = self._snapshot_object_mutation((candidate,))
+        try:
+            replacements = self._replace_placement_bands(candidate, add=True)
+            self._object_placements[object_uuid] = candidate
+        except Exception:
+            self._restore_object_mutation(
+                object_uuid,
+                None,
+                band_snapshots,
+            )
+            raise
+        try:
+            after_views, after_owners, after_endpoints = self._capture_boundary_views(
+                (candidate,),
+                structure_overrides=structure_overrides,
+            )
+        except Exception:
+            self._restore_object_mutation(
+                object_uuid,
+                None,
+                band_snapshots,
+            )
+            raise
+        revision_channels = self._aggregate_boundary_changes(
+            before_views,
+            after_views,
+        )
+        if candidate.kind is WorldPlacementKind.CENTER:
+            revision_channels.update({
+                channel
+                for channel, blocked in (
+                    (WorldEdgeChannel.OPTICAL.value, blocks_optics),
+                    (WorldEdgeChannel.PROPAGATION.value, blocks_propagation),
+                    (WorldEdgeChannel.MOVEMENT.value, blocks_walking),
+                )
+                if blocked
+            })
+        senses_hint = self._object_senses_hint(
+            object_uuid,
+            candidate.position,
+            changed_channels=revision_channels,
+            owners=before_owners | after_owners,
+            endpoints=before_endpoints | after_endpoints,
+            placed=True,
+        )
+        self._last_operation_diagnostics = GridMapOperationDiagnostics(
+            operation="place_object",
+            tiles_inspected=tiles_inspected,
+            bands_inspected=bands_inspected,
+            bands_replaced=replacements,
+        )
+        self._emit_object_state_event(
+            object_uuid,
+            candidate,
+            object_name=object_name,
+            blocks_optics=blocks_optics,
+            blocks_propagation=blocks_propagation,
+            blocks_walking=blocks_walking,
+            parent_event=parent_event,
+            object_boundary_structure=object_boundary_structure,
+            revision_channels=revision_channels,
+            senses_hint=senses_hint,
+        )
+        self._last_operation_diagnostics = GridMapOperationDiagnostics(
+            operation="place_object",
+            tiles_inspected=tiles_inspected,
+            bands_inspected=bands_inspected,
+            bands_replaced=replacements,
+        )
+        return candidate
+
+    def move_object(
+        self,
+        object_uuid: UUID,
+        position: Tuple[int, int],
+        *,
+        boundary_direction: Optional[CardinalDirection] = None,
+        base_height_steps: Optional[int] = None,
+        orientation: Optional[CardinalDirection] = None,
+        parent_event: Optional[UUID] = None,
+    ) -> WorldObjectPlacement:
+        """Atomically move one committed object with departure then arrival facts."""
+        self._begin_operation_diagnostics("move_object")
+        if not self._events_enabled:
+            raise RuntimeError(
+                "move_object requires enabled spatial event publication"
+            )
+        previous = self.get_object_placement(object_uuid)
+        if previous is None:
+            raise ValueError(f"object {object_uuid} is not placed")
+        candidate = self.validate_object_placement(
+            object_uuid,
+            position,
+            boundary_direction=boundary_direction,
+            orientation=orientation,
+            base_height_steps=base_height_steps,
+        )
+        tiles_inspected, bands_inspected = self._placement_work_counts(
+            (previous, candidate),
+        )
+        if candidate == previous:
+            self._finish_operation_diagnostics(
+                "move_object",
+                tiles_inspected=tiles_inspected,
+                bands_inspected=bands_inspected,
+            )
+            return previous
+        obj = BaseBlock.get(object_uuid)
+        object_boundary_structure = None
+        structure_overrides: Dict[UUID, Optional[BoundaryStructure]] = {}
+        if (
+            (previous.kind is WorldPlacementKind.BOUNDARY
+             or candidate.kind is WorldPlacementKind.BOUNDARY)
+            and obj is not None
+        ):
+            object_boundary_structure = obj.get_boundary_structure()
+            structure_overrides[object_uuid] = object_boundary_structure
+        blocks_optics = obj.blocks_optics_at_center() if obj else False
+        blocks_propagation = obj.blocks_propagation() if obj else False
+        blocks_walking = obj.blocks_walking() if obj else False
+        object_name = obj.name if obj else None
+        before_views, before_owners, before_endpoints = self._capture_boundary_views(
+            (previous, candidate),
+            structure_overrides=structure_overrides,
+        )
+        band_snapshots = self._snapshot_object_mutation(
+            (previous, candidate),
+        )
+        try:
+            old_replacements = self._replace_placement_bands(previous, add=False)
+            self._object_placements.pop(object_uuid, None)
+        except Exception:
+            self._restore_object_mutation(
+                object_uuid,
+                previous,
+                band_snapshots,
+            )
+            raise
+        try:
+            absent_views, absent_owners, absent_endpoints = self._capture_boundary_views(
+                (previous, candidate),
+                structure_overrides=structure_overrides,
+            )
+        except Exception:
+            self._restore_object_mutation(
+                object_uuid,
+                previous,
+                band_snapshots,
+            )
+            raise
+        departure_channels = self._aggregate_boundary_changes(
+            before_views,
+            absent_views,
+        )
+        if previous.kind is WorldPlacementKind.CENTER:
+            departure_channels.update({
+                channel
+                for channel, blocked in (
+                    (WorldEdgeChannel.OPTICAL.value, blocks_optics),
+                    (WorldEdgeChannel.PROPAGATION.value, blocks_propagation),
+                    (WorldEdgeChannel.MOVEMENT.value, blocks_walking),
+                )
+                if blocked
+            })
+        departure_hint = self._object_senses_hint(
+            object_uuid,
+            previous.position,
+            changed_channels=departure_channels,
+            owners=before_owners | absent_owners,
+            endpoints=before_endpoints | absent_endpoints,
+            removed=True,
+        )
+        self._bump_spatial_revisions(departure_channels)
+        self._last_operation_diagnostics = GridMapOperationDiagnostics(
+            operation="move_object",
+            tiles_inspected=tiles_inspected,
+            bands_inspected=bands_inspected,
+            bands_replaced=old_replacements,
+        )
+        self._fire_spatial_event(SpatialChangeEvent.object_removed(
+            previous.position,
+            object_uuid,
+            parent_event=parent_event,
+            blocks_optics=blocks_optics,
+            blocks_propagation=blocks_propagation,
+            blocks_walking=blocks_walking,
+            previous_placement=previous,
+            new_position=candidate.position,
+            object_boundary_structure=None,
+            senses_hint=departure_hint,
+        ))
+
+        new_replacements = self._replace_placement_bands(candidate, add=True)
+        self._object_placements[object_uuid] = candidate
+        after_views, after_owners, after_endpoints = self._capture_boundary_views(
+            (previous, candidate),
+            structure_overrides=structure_overrides,
+        )
+        arrival_channels = self._aggregate_boundary_changes(
+            absent_views,
+            after_views,
+        )
+        if candidate.kind is WorldPlacementKind.CENTER:
+            arrival_channels.update({
+                channel
+                for channel, blocked in (
+                    (WorldEdgeChannel.OPTICAL.value, blocks_optics),
+                    (WorldEdgeChannel.PROPAGATION.value, blocks_propagation),
+                    (WorldEdgeChannel.MOVEMENT.value, blocks_walking),
+                )
+                if blocked
+            })
+        arrival_hint = self._object_senses_hint(
+            object_uuid,
+            candidate.position,
+            changed_channels=arrival_channels,
+            owners=absent_owners | after_owners,
+            endpoints=absent_endpoints | after_endpoints,
+            placed=True,
+        )
+        self._bump_spatial_revisions(arrival_channels)
+        self._fire_spatial_event(SpatialChangeEvent.object_placed(
+            candidate.position,
+            object_uuid,
+            parent_event=parent_event,
+            blocks_optics=blocks_optics,
+            blocks_propagation=blocks_propagation,
+            blocks_walking=blocks_walking,
+            object_name=object_name,
+            placement=candidate,
+            previous_placement=previous,
+            object_boundary_structure=object_boundary_structure,
+            senses_hint=arrival_hint,
+        ))
+        self._last_operation_diagnostics = GridMapOperationDiagnostics(
+            operation="move_object",
+            tiles_inspected=tiles_inspected,
+            bands_inspected=bands_inspected,
+            bands_replaced=old_replacements + new_replacements,
+        )
+        return candidate
+
+    def orient_object(
+        self,
+        object_uuid: UUID,
+        orientation: Optional[CardinalDirection],
+        *,
+        parent_event: Optional[UUID] = None,
+    ) -> WorldObjectPlacement:
+        """Atomically change one object's orientation in place."""
+        self._begin_operation_diagnostics("orient_object")
+        previous = self.get_object_placement(object_uuid)
+        if previous is None:
+            raise ValueError(f"object {object_uuid} is not placed")
+        candidate = self._resolve_object_placement(
+            object_uuid,
+            previous.position,
+            previous.boundary_direction,
+            orientation,
+            previous.base_height_steps,
+        )
+        self._validate_placement_collision(candidate)
+        tiles_inspected, bands_inspected = self._placement_work_counts((candidate,))
+        if candidate == previous:
+            self._finish_operation_diagnostics(
+                "orient_object",
+                tiles_inspected=tiles_inspected,
+                bands_inspected=bands_inspected,
+            )
+            return previous
+        obj = BaseBlock.get(object_uuid)
+        object_boundary_structure = None
+        structure_overrides: Dict[UUID, Optional[BoundaryStructure]] = {}
+        if previous.kind is WorldPlacementKind.BOUNDARY and obj is not None:
+            object_boundary_structure = obj.get_boundary_structure()
+            structure_overrides[object_uuid] = object_boundary_structure
+        blocks_optics = obj.blocks_optics_at_center() if obj else False
+        blocks_propagation = obj.blocks_propagation() if obj else False
+        blocks_walking = obj.blocks_walking() if obj else False
+        object_name = obj.name if obj else None
+        before_views, before_owners, before_endpoints = self._capture_boundary_views(
+            (previous,),
+            structure_overrides=structure_overrides,
+        )
+        band_snapshots = self._snapshot_object_mutation((previous,))
+        try:
+            self._object_placements[object_uuid] = candidate
+        except Exception:
+            self._restore_object_mutation(
+                object_uuid,
+                previous,
+                band_snapshots,
+            )
+            raise
+        try:
+            after_views, after_owners, after_endpoints = self._capture_boundary_views(
+                (candidate,),
+                structure_overrides=structure_overrides,
+            )
+        except Exception:
+            self._restore_object_mutation(
+                object_uuid,
+                previous,
+                band_snapshots,
+            )
+            raise
+        senses_hint = self._object_senses_hint(
+            object_uuid,
+            candidate.position,
+            changed_channels=self._aggregate_boundary_changes(
+                before_views,
+                after_views,
+            ),
+            owners=before_owners | after_owners,
+            endpoints=before_endpoints | after_endpoints,
+        )
+        if self._events_enabled:
+            self._fire_spatial_event(SpatialChangeEvent.object_changed(
+                candidate.position,
+                object_uuid,
+                parent_event=parent_event,
+                placement=candidate,
+                previous_placement=previous,
+                object_name=object_name,
+                object_blocks_movement=blocks_walking,
+                object_blocks_optics=blocks_optics,
+                object_blocks_propagation=blocks_propagation,
+                object_boundary_structure=object_boundary_structure,
+                senses_hint=senses_hint,
+            ))
+        self._finish_operation_diagnostics(
+            "orient_object",
+            tiles_inspected=tiles_inspected,
+            bands_inspected=bands_inspected,
+        )
+        return candidate
+
+    def remove_object(
+        self,
+        object_uuid: UUID,
+        parent_event: Optional[UUID] = None,
+    ) -> None:
+        """Terminally remove one committed placement and publish its prior fact."""
+        self._begin_operation_diagnostics("remove_object")
+        previous = self._object_placements.get(object_uuid)
+        if previous is None:
+            self._finish_operation_diagnostics("remove_object")
+            return
+        obj = BaseBlock.get(object_uuid)
+        object_boundary_structure = None
+        structure_overrides: Dict[UUID, Optional[BoundaryStructure]] = {}
+        if previous.kind is WorldPlacementKind.BOUNDARY and obj is not None:
+            object_boundary_structure = obj.get_boundary_structure()
+            structure_overrides[object_uuid] = object_boundary_structure
+        before_views, before_owners, before_endpoints = self._capture_boundary_views(
+            (previous,),
+            structure_overrides=structure_overrides,
+        )
+        band_snapshots = self._snapshot_object_mutation((previous,))
+        self._object_placements.pop(object_uuid, None)
+        replacements = self._replace_placement_bands(previous, add=False)
+        try:
+            after_views, after_owners, after_endpoints = self._capture_boundary_views(
+                (previous,),
+                structure_overrides=structure_overrides,
+            )
+        except Exception:
+            self._restore_object_mutation(
+                object_uuid,
+                previous,
+                band_snapshots,
+            )
+            raise
+        blocks_optics = obj.blocks_optics_at_center() if obj else False
+        blocks_propagation = obj.blocks_propagation() if obj else False
+        blocks_walking = obj.blocks_walking() if obj else False
+        revision_channels = self._aggregate_boundary_changes(
+            before_views,
+            after_views,
+        )
+        if previous.kind is WorldPlacementKind.CENTER:
+            revision_channels.update({
+                channel
+                for channel, blocked in (
+                    (WorldEdgeChannel.OPTICAL.value, blocks_optics),
+                    (WorldEdgeChannel.PROPAGATION.value, blocks_propagation),
+                    (WorldEdgeChannel.MOVEMENT.value, blocks_walking),
+                )
+                if blocked
+            })
+        self._bump_spatial_revisions(revision_channels)
+        senses_hint = self._object_senses_hint(
+            object_uuid,
+            previous.position,
+            changed_channels=revision_channels,
+            owners=before_owners | after_owners,
+            endpoints=before_endpoints | after_endpoints,
+            removed=True,
+        )
+        if obj is not None:
+            obj.on_grid_object_removed(previous.position, parent_event=parent_event)
+        self._last_operation_diagnostics = GridMapOperationDiagnostics(
+            operation="remove_object",
+            tiles_inspected=1,
+            bands_inspected=len(self._placement_band_keys(previous)),
+            bands_replaced=replacements,
+        )
+        if self._events_enabled:
+            self._fire_spatial_event(SpatialChangeEvent.object_removed(
+                previous.position,
+                object_uuid,
+                parent_event=parent_event,
+                blocks_optics=blocks_optics,
+                blocks_propagation=blocks_propagation,
+                blocks_walking=blocks_walking,
+                previous_placement=previous,
+                object_boundary_structure=None,
+                senses_hint=senses_hint,
+            ))
+        self._last_operation_diagnostics = GridMapOperationDiagnostics(
+            operation="remove_object",
+            tiles_inspected=1,
+            bands_inspected=len(self._placement_band_keys(previous)),
+            bands_replaced=replacements,
+        )
+
+    def update_object_boundary_structure(
+        self,
+        object_uuid: UUID,
+        structure: BoundaryStructure,
+        *,
+        previous_structure: Optional[BoundaryStructure] = None,
+        parent_event: Optional[UUID] = None,
+    ) -> None:
+        """Publish one committed current-structure change without band mutation."""
+        placement = self._object_placements.get(object_uuid)
+        if placement is None:
+            return
+        provider = BaseBlock.get(object_uuid)
+        if provider is None or placement.kind is not WorldPlacementKind.BOUNDARY:
+            raise ValueError("boundary structure requires a placed boundary provider")
+        structure_overrides: Dict[UUID, Optional[BoundaryStructure]] = {
+            object_uuid: previous_structure,
+        }
+        before_views, before_owners, before_endpoints = self._capture_boundary_views(
+            (placement,),
+            structure_overrides=structure_overrides,
+        )
+        structure_overrides[object_uuid] = structure
+        after_views, after_owners, after_endpoints = self._capture_boundary_views(
+            (placement,),
+            structure_overrides=structure_overrides,
+        )
+        changed_channel_names = self._aggregate_boundary_changes(
+            before_views,
+            after_views,
+        )
+        self._bump_spatial_revisions(changed_channel_names)
+        senses_hint = self._object_senses_hint(
+            object_uuid,
+            placement.position,
+            changed_channels=changed_channel_names,
+            owners=before_owners | after_owners,
+            endpoints=before_endpoints | after_endpoints,
+        )
+        if self._events_enabled:
+            self._fire_spatial_event(
+                SpatialChangeEvent.object_changed(
+                    placement.position,
+                    object_uuid,
                     parent_event=parent_event,
-                    blocks_optics=blocks_optics,
-                    blocks_propagation=blocks_propagation,
-                    blocks_walking=blocks_walking,
-                    **directional_metadata,
-                ))
-
-    def get_objects_at(self, position: Tuple[int, int]) -> Set[UUID]:
-        """Get all object UUIDs at a position."""
-        return set(self._objects_by_position.get(position, set()))
-
-    def get_object_position(self, object_uuid: UUID) -> Optional[Tuple[int, int]]:
-        """Get an object's grid position, or None if not placed."""
-        return self._object_positions.get(object_uuid)
+                    placement=placement,
+                    previous_placement=placement,
+                    object_name=provider.name,
+                    blocks_walking_changed=WorldEdgeChannel.MOVEMENT.value in changed_channel_names,
+                    blocks_optics_changed=WorldEdgeChannel.OPTICAL.value in changed_channel_names,
+                    blocks_propagation_changed=WorldEdgeChannel.PROPAGATION.value in changed_channel_names,
+                    object_blocks_movement=provider.blocks_walking(),
+                    object_blocks_optics=provider.blocks_optics_at_center(),
+                    object_blocks_propagation=provider.blocks_propagation(),
+                    object_is_open=provider.get_spatial_open_state(),
+                    object_boundary_structure=structure,
+                    senses_hint=senses_hint,
+                )
+            )
 
     def get_objects_with_conditions(self) -> List[BaseBlock]:
-        """Get placed objects with active conditions (for environment step).
-
-        Returns BaseBlock (not BaseItem) — GridMap stays type-unaware.
-        """
+        """Get placed objects with active conditions (for environment step)."""
         result: List[BaseBlock] = []
-        for obj_uuid in self._object_positions:
-            block = BaseBlock.get(obj_uuid)
+        for placement in self.get_all_object_placements():
+            block = BaseBlock.get(placement.object_uuid)
             if block is not None and block.active_conditions:
                 result.append(block)
         return result
-
-    def _has_directional_blockers(
-        self,
-        channel: str,
-        origin: Tuple[int, int],
-        max_distance: Optional[float],
-    ) -> bool:
-        """Return whether the queried region contains a directional blocker."""
-        if max_distance is None:
-            positions = self._tiles
-        else:
-            radius = math.ceil(max_distance)
-            positions = (
-                (x, y)
-                for x in range(origin[0] - radius, origin[0] + radius + 1)
-                for y in range(origin[1] - radius, origin[1] + radius + 1)
-                if (x - origin[0]) ** 2 + (y - origin[1]) ** 2
-                <= max_distance * max_distance
-            )
-        for position in positions:
-            tile = self._tiles.get(position)
-            if tile is None:
-                continue
-            for direction in DIRECTIONS:
-                if not tile.allows_direction(direction, channel):
-                    return True
-        return False
 
     def _transition_clear(self, start: Tuple[int, int], end: Tuple[int, int],
                           channel: str,
@@ -2385,22 +3795,8 @@ class GridMap:
         max_y = min(self._max_y, math.ceil(origin[1] + radius))
 
         line_cache: Dict[Tuple[int, int], Tuple[Tuple[int, int], ...]] = {}
-        if channel == "propagation":
-            transition_cache = self._propagation_transition_cache
-            blocking_cache = self._propagation_blocking_cache
-        elif channel == "optical":
-            cache_key = (channel, self._optical_revision)
-            transition_cache = self._directional_transition_cache.setdefault(
-                cache_key,
-                {},
-            )
-            blocking_cache = self._directional_blocking_cache.setdefault(
-                cache_key,
-                {},
-            )
-        else:
-            transition_cache: Dict[Tuple[Tuple[int, int], Tuple[int, int]], bool] = {}
-            blocking_cache: Dict[Tuple[int, int], bool] = {}
+        transition_cache: Dict[Tuple[Tuple[int, int], Tuple[int, int]], bool] = {}
+        blocking_cache: Dict[Tuple[int, int], bool] = {}
         def get_line_offsets(end: Tuple[int, int]) -> Tuple[Tuple[int, int], ...]:
             key = (end[0] - origin[0], end[1] - origin[1])
             cached = line_cache.get(key)
@@ -2513,31 +3909,7 @@ class GridMap:
                 self._fov_cache[cache_key] = list(cached)
                 return list(cached)
 
-        visible_positions: List[Tuple[int, int]] = []
-        blocking_cache: Dict[Tuple[int, int], bool] = {}
-
-        def mark_visible(x: int, y: int) -> None:
-            visible_positions.append((x, y))
-
-        def is_blocking_for(x: int, y: int) -> bool:
-            position = (x, y)
-            cached = blocking_cache.get(position)
-            if cached is not None:
-                return cached
-            blocked = self.is_blocking_optics(x, y)
-            blocking_cache[position] = blocked
-            return blocked
-
-        if self._has_directional_blockers("optical", origin, max_distance):
-            visible_positions = self._compute_directional_fov(
-                origin,
-                max_distance,
-                "optical",
-            )
-            self._fov_cache[cache_key] = list(visible_positions)
-            return list(visible_positions)
-
-        compute_fov(origin, is_blocking_for, mark_visible, max_distance)
+        visible_positions = self._compute_directional_fov(origin, max_distance, "optical")
         self._fov_cache[cache_key] = list(visible_positions)
         return list(visible_positions)
 
@@ -2880,13 +4252,17 @@ class GridMap:
             if anchor:
                 anchor.detach_light_source(light_uuid)
 
-    def cleanup_block_light_sources(self, block_uuid: UUID) -> None:
+    def cleanup_block_light_sources(
+        self,
+        block_uuid: UUID,
+        parent_event: Optional[UUID] = None,
+    ) -> None:
         """Permanently remove all light sources attached to a destroyed block."""
         block = BaseBlock.get(block_uuid)
         if block is None:
             return
         for light_uuid in block.get_attached_light_sources():
-            self.remove_light_source(light_uuid)
+            self.remove_light_source(light_uuid, parent_event=parent_event)
         self._block_light_suppressions.pop(block_uuid, None)
 
     def _is_light_effectively_active(self, source: LightSourceData) -> bool:
@@ -3109,20 +4485,45 @@ class GridMap:
         )
 
     def _move_attached_lights_before_entry_completion(self, event: Event) -> None:
-        """Commit attached illumination while the entry effect is current."""
-        if (
-            event.event_type is not EventType.SPATIAL_ENTITY_ENTERED
-            or not isinstance(event, SpatialChangeEvent)
-            or event.entity_uuid is None
-        ):
+        """Settle attached illumination at the existing anchor-entry boundary."""
+        if not isinstance(event, SpatialChangeEvent):
             return
-        anchor = BaseBlock.get(event.entity_uuid)
+        if (
+            event.event_type is EventType.SPATIAL_ENTITY_LEFT
+            and event.old_position is None
+            and event.entity_uuid is not None
+        ):
+            self.set_block_light_suppressed(
+                event.entity_uuid,
+                ENTITY_WORLD_PRESENCE_LIGHT_SUPPRESSION_TOKEN,
+                True,
+                parent_event=event.uuid,
+            )
+            return
+        if event.event_type is EventType.SPATIAL_ENTITY_ENTERED:
+            anchor_uuid = event.entity_uuid
+        elif event.event_type is EventType.SPATIAL_OBJECT_PLACED:
+            anchor_uuid = event.object_uuid
+        else:
+            return
+        if anchor_uuid is None:
+            return
+        anchor = BaseBlock.get(anchor_uuid)
         if anchor is None:
             return
         for light_uuid in anchor.get_attached_light_sources():
-            self.move_light_source(
-                light_uuid,
-                event.position,
+            source = self._light_sources.get(light_uuid)
+            if source is not None and source.position != event.position:
+                self.move_light_source(
+                    light_uuid,
+                    event.position,
+                    parent_event=event.uuid,
+                )
+        if event.event_type is EventType.SPATIAL_ENTITY_ENTERED:
+            self.set_block_light_suppressed(
+                anchor_uuid,
+                ENTITY_WORLD_PRESENCE_LIGHT_SUPPRESSION_TOKEN,
+                False,
                 parent_event=event.uuid,
             )
 
@@ -3163,7 +4564,10 @@ class GridMap:
         hint = event.senses_hint
         if hint is None or not (hint.requires_fov or hint.requires_light_recompute):
             return
-        self.recompute_lights_at_position(event.position, parent_event=event.uuid)
+        positions = set(hint.light_changed_positions or ())
+        if not positions:
+            positions.add(event.position)
+        self.recompute_lights_at_positions(positions, parent_event=event.uuid)
 
     def recompute_lights_at_position(self, position: Tuple[int, int],
                                      parent_event: Optional[UUID] = None) -> None:
@@ -3178,13 +4582,28 @@ class GridMap:
         affected_tiles membership, since geometry changes may have previously
         removed the position from affected_tiles (e.g. remove_tile + set_tile).
         """
+        self.recompute_lights_at_positions({position}, parent_event=parent_event)
+
+    def recompute_lights_at_positions(
+        self,
+        positions: Set[Tuple[int, int]],
+        *,
+        parent_event: Optional[UUID] = None,
+    ) -> None:
+        """Recompute each relevant active light source once for a position set."""
+        if not positions:
+            return
         for source in self._light_sources.values():
             if not self._is_light_effectively_active(source):
                 continue
             total_radius_tiles = (source.bright_radius_feet + source.dim_radius_feet) / 5
-            dx = position[0] - source.position[0]
-            dy = position[1] - source.position[1]
-            if math.sqrt(dx * dx + dy * dy) > total_radius_tiles:
+            if not any(
+                math.sqrt(
+                    (position[0] - source.position[0]) ** 2
+                    + (position[1] - source.position[1]) ** 2
+                ) <= total_radius_tiles
+                for position in positions
+            ):
                 continue
 
             old_affected = dict(source.affected_tiles)
@@ -3230,7 +4649,7 @@ class GridMap:
         tile = self._tiles.get((x, y))
         if tile is None or tile.blocks_propagation():
             return True
-        for obj_uuid in self._objects_by_position.get((x, y), set()):
+        for obj_uuid in self.get_center_objects_at((x, y)):
             block = BaseBlock.get(obj_uuid)
             if block is not None and block.blocks_propagation():
                 return True
@@ -3247,16 +4666,7 @@ class GridMap:
             return list(cached)
         visible_positions: List[Tuple[int, int]] = []
 
-        def mark_visible(x: int, y: int) -> None:
-            visible_positions.append((x, y))
-
-        def is_blocking_for(x: int, y: int) -> bool:
-            return self.is_blocking_propagation(x, y)
-
-        if self._has_directional_blockers("propagation", origin, max_distance):
-            visible_positions = self._compute_directional_fov(origin, max_distance, "propagation")
-        else:
-            compute_fov(origin, is_blocking_for, mark_visible, max_distance)
+        visible_positions = self._compute_directional_fov(origin, max_distance, "propagation")
 
         self._propagation_fov_cache[cache_key] = tuple(visible_positions)
         return list(visible_positions)
@@ -3355,44 +4765,58 @@ class GridMap:
             self._propagation_filter_cache.popitem(last=False)
         return visible_positions
 
-    def get_barrier_positions(self) -> Set[Tuple[int, int]]:
-        """Return all positions that block AoE propagation.
+    def get_barrier_positions(
+        self,
+        footprint: Iterable[Tuple[int, int]],
+    ) -> Set[Tuple[int, int]]:
+        """Return bounded positions needing ordered propagation evaluation.
 
-        Used for fast-path: if geometric_shape & barrier_positions is empty,
-        skip shadowcast entirely."""
-        if self._barrier_positions_cache is not None:
-            return set(self._barrier_positions_cache)
+        Center blockers are tested directly. Boundary blockers are discovered
+        only across the four edges incident to each supplied footprint
+        position; the caller still performs the authoritative ordered
+        propagation evaluation for the resulting bounded candidate set.
+        """
+        positions = set(footprint)
         barriers: Set[Tuple[int, int]] = set()
-        for pos, tile in self._tiles.items():
-            if tile.blocks_propagation():
-                barriers.add(pos)
-            elif any(not tile.allows_direction(direction, "propagation") for direction in DIRECTIONS):
-                barriers.add(pos)
-        for pos, obj_uuids in self._objects_by_position.items():
-            for obj_uuid in obj_uuids:
-                block = BaseBlock.get(obj_uuid)
-                if block is not None and block.blocks_propagation():
-                    barriers.add(pos)
-        self._barrier_positions_cache = frozenset(barriers)
-        return set(barriers)
+        for position in positions:
+            if self.is_blocking_propagation(position[0], position[1]):
+                barriers.add(position)
+                continue
+            for neighbor in (
+                (position[0] - 1, position[1]),
+                (position[0] + 1, position[1]),
+                (position[0], position[1] - 1),
+                (position[0], position[1] + 1),
+            ):
+                if neighbor in self._tiles and not self.can_propagate_transition(
+                    position,
+                    neighbor,
+                ):
+                    barriers.add(position)
+                    break
+        return barriers
 
     def clear(self) -> None:
-        """Clear all tiles, entity positions, object positions, subscriptions, and light sources."""
+        """Clear all tiles, entity positions, object placements, and light sources."""
+        if any(tile.get_entity_uuids() for tile in self._tiles.values()):
+            raise ValueError("cannot clear a map while entities are deployed")
         if self._spatial_conditions:
             raise ValueError(
                 "cannot clear a map while spatial conditions are active",
             )
-        registered_objects = tuple(self._object_positions.items())
-        for object_uuid, position in registered_objects:
+        if any(tile.active_conditions for tile in self._tiles.values()):
+            raise ValueError("cannot clear a map while direct Tile conditions are active")
+        for light_uuid in tuple(self._light_sources):
+            self.remove_light_source(light_uuid)
+        registered_objects = tuple(self._object_placements.values())
+        for placement in registered_objects:
+            object_uuid = placement.object_uuid
             obj = BaseBlock.get(object_uuid)
             if obj is not None:
-                obj.on_grid_object_removed(position, clear_location=True)
+                obj.on_grid_object_removed(placement.position)
         self._tiles.clear()
         self._tiles_by_uuid.clear()
-        self._entities_by_position.clear()
-        self._entity_positions.clear()
-        self._object_positions.clear()
-        self._objects_by_position.clear()
+        self._object_placements.clear()
         self._spatial_conditions.clear()
         self._spatial_condition_positions.clear()
         self._spatial_condition_layers.clear()
@@ -3415,9 +4839,6 @@ class GridMap:
         self._fov_cache.clear()
         self._propagation_fov_cache.clear()
         self._propagation_filter_cache.clear()
-        self._barrier_positions_cache = None
-        self._directional_transition_cache.clear()
-        self._directional_blocking_cache.clear()
         self._propagation_transition_cache.clear()
         self._propagation_blocking_cache.clear()
 

@@ -1,10 +1,14 @@
 """Engine semantic tests for items, inventory, and equipment."""
+from dnd.types.materials import Material, TileSurface
 
 from uuid import UUID, uuid4
+
+import pytest
 
 from dnd.actions.operations import execute_use_action, setup_standard_actions
 from dnd.blocks.base_item import (
     BaseItem,
+    EquippableItem,
     UsableItem,
 )
 from dnd.blocks.equipment import (
@@ -13,10 +17,11 @@ from dnd.blocks.equipment import (
     Weapon,
 )
 from dnd.content.items.authored_item_builders import build_authored_item
+from dnd.content.items.environment_item_builders import build_directional_door
 from dnd.types.equipment import BodyPart, WeaponProperty, WeaponSlot
 from dnd.blocks.inventory import Inventory
 from dnd.core.base_block import BaseBlock
-from dnd.types.world import LightLevel
+from dnd.types.world import CardinalDirection, LightLevel, WorldEdgeChannel
 from dnd.core.base_object import BaseObject
 from dnd.core.events.events_registry import (
     Event,
@@ -26,20 +31,23 @@ from dnd.core.events.events_registry import (
     EventType,
     Trigger,
 )
+from dnd.core.events.item_events import ItemLocationStateEvent
 from dnd.core.events.world_events import (
     SpatialEffectInteractionEvent,
+    SpatialChangeEvent,
+    WorldInitializedEvent,
+    WorldObjectState,
 )
 from dnd.types.spatial_effects import SpatialEffectInteractionOperation
 from dnd.core.gridmap import get_map
 from dnd.types.damage import DamageType
+from dnd.types.items import ItemLocation
 from dnd.types.rolls import AdvantageStatus
+from dnd.types.world_placement import WorldPlacementKind, WorldPlacementSpec
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import BaseValue
 from dnd.entities.entity import Entity
-from dnd.items.environment_interactables import (
-    StorageChest,
-    DoorObject,
-)
+from dnd.items.environment_interactables import StorageChest
 from dnd.items.torches import Torch, WallTorch
 from tests.engine.support import (
     create_test_monster,
@@ -62,7 +70,7 @@ def reset_item_state(
     BaseValue._registry.clear()
     grid = get_map()
     grid.disable_events()
-    grid.create_rectangle(0, 0, width, height)
+    grid.create_rectangle(0, 0, width, height, surface=TileSurface(base_material=Material.STONE))
     if default_light is not LightLevel.BRIGHT_LIGHT:
         for position in grid.get_all_tiles():
             grid.set_tile_base_light(position, default_light)
@@ -76,6 +84,389 @@ def put_in_inventory(entity: Entity, item: BaseItem) -> None:
     item.stored_in_uuid = entity.inventory.uuid
 
 
+def test_authored_static_blockers_expose_exact_center_capabilities() -> None:
+    """Direct authored blockers carry explicit, immutable center placement facts."""
+    reset_item_state()
+    expected = {
+        "environment.blocker.crate": (False, False, False, False),
+        "environment.blocker.boulder": (True, True, False, True),
+        "environment.blocker.barricade": (True, True, True, True),
+    }
+
+    for item_id, (occupies_bands, blocks_movement, blocks_optics, blocks_propagation) in expected.items():
+        item = build_authored_item(item_id, uuid4())
+        spec = item.get_world_placement_spec()
+        assert spec.kind is WorldPlacementKind.CENTER
+        assert spec.occupies_bands is occupies_bands
+        assert spec.vertical_extent_steps == 1
+        assert item.blocks_movement is blocks_movement
+        assert item.blocks_optics_field is blocks_optics
+        assert item.blocks_propagation_field is blocks_propagation
+
+        with pytest.raises(ValueError):
+            item.world_placement_spec = spec
+
+
+def test_authored_center_blockers_use_public_admission_and_collision() -> None:
+    """Center occupancy comes from authored facts and uses canonical GridMap admission."""
+    reset_item_state()
+    grid = get_map()
+    boulder = build_authored_item("environment.blocker.boulder", uuid4())
+    crate = build_authored_item("environment.blocker.crate", uuid4())
+    barricade = build_authored_item("environment.blocker.barricade", uuid4())
+
+    placement_cursor = EventQueue.event_cursor()
+    boulder_placement = boulder.place_on_grid((1, 1))
+    crate_placement = crate.place_on_grid((1, 1))
+    barricade_placement = barricade.place_on_grid((2, 1))
+    assert boulder_placement.kind is WorldPlacementKind.CENTER
+    assert boulder_placement.occupies_bands is True
+    assert (boulder_placement.base_height_steps, boulder_placement.top_height_steps) == (0, 1)
+    assert crate_placement.occupies_bands is False
+    assert barricade_placement.occupies_bands is True
+    placement_facts = [
+        event
+        for _index, event in EventQueue.iter_events_since(placement_cursor)
+        if isinstance(event, SpatialChangeEvent)
+        and event.object_uuid in {boulder.uuid, crate.uuid, barricade.uuid}
+    ]
+    assert len(placement_facts) == 12
+    for phase in (
+        EventPhase.DECLARATION,
+        EventPhase.EXECUTION,
+        EventPhase.EFFECT,
+        EventPhase.COMPLETION,
+    ):
+        assert sum(event.phase is phase for event in placement_facts) == 3
+    completion_facts = [
+        event for event in placement_facts
+        if event.phase is EventPhase.COMPLETION
+    ]
+    assert len(completion_facts) == 3
+    assert [
+        (event.object_uuid, event.placement)
+        for event in completion_facts
+    ] == [
+        (boulder.uuid, boulder_placement),
+        (crate.uuid, crate_placement),
+        (barricade.uuid, barricade_placement),
+    ]
+
+    duplicate = build_authored_item("environment.blocker.boulder", uuid4())
+    cursor = EventQueue.event_cursor()
+    with pytest.raises(ValueError, match="occupied"):
+        duplicate.place_on_grid((1, 1))
+
+    assert grid.get_object_placement(duplicate.uuid) is None
+    assert [
+        event for _index, event in EventQueue.iter_events_since(cursor)
+        if isinstance(event, SpatialChangeEvent)
+        and event.object_uuid == duplicate.uuid
+    ] == []
+    assert grid.get_object_placement(boulder.uuid) == boulder_placement
+    assert grid.get_object_placement(crate.uuid) == crate_placement
+    assert grid.get_object_placement(barricade.uuid) == barricade_placement
+
+
+def test_authored_center_occupant_round_trips_world_state_and_cold_rebuild() -> None:
+    """A direct authored blocker restores semantic state and exact placement publicly."""
+    reset_item_state()
+    grid = get_map()
+    boulder = build_authored_item("environment.blocker.boulder", uuid4())
+    placement = boulder.place_on_grid((1, 1))
+    item_state = boulder.to_item_state()
+    world_event = WorldInitializedEvent(
+        source_entity_uuid=uuid4(),
+        source_entity_name="World",
+        phase=EventPhase.COMPLETION,
+        use_register=False,
+        battlefield_id="test.authored.center.blocker",
+        battlefield_name="Authored center blocker",
+        bounds=grid.bounds,
+        width=grid.width,
+        height=grid.height,
+        tiles=(),
+        objects=(WorldObjectState(placement=placement, item=item_state),),
+        connectors=(),
+    )
+    restored_event = WorldInitializedEvent.model_validate_json(
+        world_event.model_dump_json(),
+    )
+    assert restored_event.objects[0].item == item_state
+    assert restored_event.objects[0].placement == placement
+
+    grid.remove_object(boulder.uuid)
+    restored = grid.rebuild_object_placements(
+        [row.placement for row in restored_event.objects],
+    )
+    assert restored == (placement,)
+    assert grid.get_object_placement(boulder.uuid) == placement
+    assert boulder.to_item_state() == item_state
+
+
+def test_authored_center_placement_diagnostics_are_local() -> None:
+    """Center admission diagnostics ignore distant Tiles and objects."""
+    def place_and_measure(*, distant: bool) -> tuple[int, int, int]:
+        reset_item_state(width=2 if not distant else 40, height=2 if not distant else 40)
+        grid = get_map()
+        if distant:
+            distant_crate = build_authored_item("environment.blocker.crate", uuid4())
+            distant_crate.place_on_grid((39, 39))
+        boulder = build_authored_item("environment.blocker.boulder", uuid4())
+        boulder.place_on_grid((0, 0))
+        diagnostics = grid.last_operation_diagnostics
+        assert diagnostics.operation == "place_object"
+        return (
+            diagnostics.tiles_inspected,
+            diagnostics.bands_inspected,
+            diagnostics.bands_replaced,
+        )
+
+    assert place_and_measure(distant=False) == place_and_measure(distant=True)
+
+
+class ExclusiveFloorItem(BaseItem):
+    """Test-only occupying center provider for failed floor admissions."""
+
+    def get_world_placement_spec(self) -> WorldPlacementSpec:
+        return WorldPlacementSpec(
+            kind=WorldPlacementKind.CENTER,
+            occupies_bands=True,
+            vertical_extent_steps=1,
+        )
+
+
+class ExclusiveEquippableItem(EquippableItem):
+    """Test-only equippable provider whose floor fallback occupies a band."""
+
+    def compatible_equipment_slots(self):
+        return (WeaponSlot.MELEE_MAIN,)
+
+    def default_equipment_slot(self):
+        return WeaponSlot.MELEE_MAIN
+
+    def equipment_event_type(self, *, equipping: bool):
+        return EventType.WEAPON_EQUIP if equipping else EventType.WEAPON_UNEQUIP
+
+    def get_world_placement_spec(self) -> WorldPlacementSpec:
+        return WorldPlacementSpec(
+            kind=WorldPlacementKind.CENTER,
+            occupies_bands=True,
+            vertical_extent_steps=1,
+        )
+
+
+class DualSlotEquippableItem(EquippableItem):
+    """Test gear whose replacement can displace both weapon-hand slots."""
+
+    claims_both: bool = False
+
+    def compatible_equipment_slots(self):
+        return (WeaponSlot.MELEE_MAIN, WeaponSlot.MELEE_OFF)
+
+    def default_equipment_slot(self):
+        return WeaponSlot.MELEE_MAIN
+
+    def occupied_equipment_slots(self, selected_slot):
+        if self.claims_both:
+            return frozenset((WeaponSlot.MELEE_MAIN, WeaponSlot.MELEE_OFF))
+        return frozenset((selected_slot,))
+
+    def equipment_event_type(self, *, equipping: bool):
+        return EventType.WEAPON_EQUIP if equipping else EventType.WEAPON_UNEQUIP
+
+    def get_world_placement_spec(self) -> WorldPlacementSpec:
+        return WorldPlacementSpec(
+            kind=WorldPlacementKind.CENTER,
+            occupies_bands=True,
+            vertical_extent_steps=1,
+        )
+
+
+def test_unplaced_item_has_no_stale_range_position() -> None:
+    """Entity range checks use the neutral typed location seam."""
+    reset_item_state()
+    entity = create_test_monster("monster.skeleton", name="Range actor", position=(0, 0))
+    item = BaseItem(source_entity_uuid=uuid4(), name="Unplaced item")
+
+    assert item.get_position() is None
+    assert entity.distance_to_object(item) is None
+
+
+def test_failed_drop_preserves_inventory_and_publishes_no_floor_fact() -> None:
+    """A blocked drop fails before ownership mutation or a success fact."""
+    reset_item_state()
+    entity = create_test_monster("monster.skeleton", name="Dropper", position=(0, 0))
+    blocker = ExclusiveFloorItem(source_entity_uuid=uuid4(), name="Drop blocker")
+    blocker.place_on_grid((1, 0))
+    item = ExclusiveFloorItem(source_entity_uuid=entity.uuid, name="Dropped item")
+    put_in_inventory(entity, item)
+    cursor = EventQueue.event_cursor()
+
+    with pytest.raises(ValueError, match="occupied"):
+        entity.drop_item(item.uuid, (1, 0))
+
+    assert entity.inventory.items[item.uuid] is item
+    assert item.owner_uuid == entity.uuid
+    assert item.stored_in_uuid == entity.inventory.uuid
+    floor_facts = [
+        event
+        for _index, event in EventQueue.iter_events_since(cursor)
+        if isinstance(event, ItemLocationStateEvent)
+        and event.item_state.item_uuid == item.uuid
+        and event.location is ItemLocation.FLOOR
+    ]
+    assert floor_facts == []
+
+
+def test_two_displacement_shadow_rejects_joint_floor_fallback_without_mutation() -> None:
+    """Sequential fallback admission mirrors Inventory weight and floor atomicity."""
+    reset_item_state()
+    entity = create_test_monster("monster.skeleton", name="Two-hand tester", position=(0, 0))
+    entity.inventory.weight_capacity = 10
+    first = DualSlotEquippableItem(
+        source_entity_uuid=entity.uuid,
+        name="Light displaced",
+        stack_id="same-stack",
+        weight=2,
+    )
+    second = DualSlotEquippableItem(
+        source_entity_uuid=entity.uuid,
+        name="Heavy displaced",
+        stack_id="same-stack",
+        weight=4,
+    )
+    replacement = DualSlotEquippableItem(
+        source_entity_uuid=entity.uuid,
+        name="Two-slot replacement",
+        claims_both=True,
+    )
+    put_in_inventory(entity, first)
+    assert entity.equip_item(first.uuid, WeaponSlot.MELEE_MAIN)
+    put_in_inventory(entity, second)
+    assert entity.equip_item(second.uuid, WeaponSlot.MELEE_OFF)
+    entity.inventory.weight_capacity = 3
+    put_in_inventory(entity, replacement)
+    blocker = ExclusiveFloorItem(source_entity_uuid=uuid4(), name="Fallback blocker")
+    blocker.place_on_grid(entity.position)
+    cursor = EventQueue.event_cursor()
+
+    assert entity.equip_item(replacement.uuid) is False
+    assert entity.equipment.get_item_by_slot(WeaponSlot.MELEE_MAIN) is first
+    assert entity.equipment.get_item_by_slot(WeaponSlot.MELEE_OFF) is second
+    assert entity.inventory.items[replacement.uuid] is replacement
+    assert replacement.owner_uuid == entity.uuid
+    assert get_map().get_object_position(first.uuid) is None
+    assert get_map().get_object_position(second.uuid) is None
+    assert get_map().get_object_position(blocker.uuid) == entity.position
+    assert [
+        event for _index, event in EventQueue.iter_events_since(cursor)
+        if event.event_type in {
+            EventType.WEAPON_EQUIP,
+            EventType.WEAPON_UNEQUIP,
+            EventType.ITEM_LOCATION_STATE,
+        }
+    ] == []
+
+
+def test_two_occupying_floor_fallbacks_are_jointly_admitted_before_equip() -> None:
+    """Two occupying fallbacks cannot partially commit onto an empty floor."""
+    reset_item_state()
+    entity = create_test_monster(
+        "monster.skeleton",
+        name="Joint admission tester",
+        position=(0, 0),
+    )
+    first = DualSlotEquippableItem(
+        source_entity_uuid=entity.uuid,
+        name="First incumbent",
+        stack_id="same-stack",
+        weight=2,
+    )
+    second = DualSlotEquippableItem(
+        source_entity_uuid=entity.uuid,
+        name="Second incumbent",
+        stack_id="same-stack",
+        weight=3,
+    )
+    replacement = DualSlotEquippableItem(
+        source_entity_uuid=entity.uuid,
+        name="Claims both",
+        claims_both=True,
+    )
+    put_in_inventory(entity, first)
+    assert entity.equip_item(first.uuid, WeaponSlot.MELEE_MAIN)
+    put_in_inventory(entity, second)
+    assert entity.equip_item(second.uuid, WeaponSlot.MELEE_OFF)
+    put_in_inventory(entity, replacement)
+    entity.inventory.weight_capacity = 0
+    before_inventory = dict(entity.inventory.items)
+    before_equipment = (
+        entity.equipment.weapon_melee_main,
+        entity.equipment.weapon_melee_off,
+    )
+    assert get_map().get_objects_at(entity.position) == set()
+    cursor = EventQueue.event_cursor()
+
+    assert entity.equip_item(replacement.uuid) is False
+
+    assert dict(entity.inventory.items) == before_inventory
+    assert (
+        entity.equipment.weapon_melee_main,
+        entity.equipment.weapon_melee_off,
+    ) == before_equipment
+    assert get_map().get_objects_at(entity.position) == set()
+    assert all(get_map().get_object_position(item.uuid) is None for item in (
+        first,
+        second,
+        replacement,
+    ))
+    assert [
+        event
+        for _index, event in EventQueue.iter_events_since(cursor)
+        if event.event_type in {
+            EventType.WEAPON_EQUIP,
+            EventType.WEAPON_UNEQUIP,
+            EventType.ITEM_LOCATION_STATE,
+            EventType.SPATIAL_OBJECT_PLACED,
+            EventType.SPATIAL_OBJECT_REMOVED,
+            EventType.SPATIAL_OBJECT_CHANGED,
+        }
+    ] == []
+
+
+def test_equipment_floor_fallback_failure_is_preflighted_without_success_facts() -> None:
+    """A displaced item that cannot be stored or dropped leaves equipment intact."""
+    reset_item_state()
+    entity = create_test_monster("monster.skeleton", name="Overloaded", position=(0, 0))
+    blocker = ExclusiveFloorItem(source_entity_uuid=uuid4(), name="Fallback blocker")
+    blocker.place_on_grid((0, 0))
+    equipped = ExclusiveEquippableItem(source_entity_uuid=entity.uuid, name="Equipped")
+    replacement = ExclusiveEquippableItem(source_entity_uuid=entity.uuid, name="Replacement")
+    put_in_inventory(entity, equipped)
+    assert entity.equip_item(equipped.uuid, WeaponSlot.MELEE_MAIN)
+    put_in_inventory(entity, replacement)
+    entity.inventory.max_slots = 0
+    cursor = EventQueue.event_cursor()
+
+    assert entity.equip_item(replacement.uuid, WeaponSlot.MELEE_MAIN) is False
+
+    assert entity.equipment.weapon_melee_main is equipped
+    assert entity.inventory.items[replacement.uuid] is replacement
+    assert not replacement.is_equipped
+    assert get_map().get_object_placement(equipped.uuid) is None
+    success_facts = [
+        event
+        for _index, event in EventQueue.iter_events_since(cursor)
+        if event.event_type in {
+            EventType.WEAPON_EQUIP,
+            EventType.WEAPON_UNEQUIP,
+            EventType.ITEM_LOCATION_STATE,
+        }
+    ]
+    assert success_facts == []
+
+
 def test_eb_13_001_floor_loot_and_drop_update_authoritative_location() -> None:
     """EB-13-001: floor, inventory, and dropped item state are mutually exclusive."""
     reset_item_state()
@@ -84,7 +475,7 @@ def test_eb_13_001_floor_loot_and_drop_update_authoritative_location() -> None:
 
     item.place_on_grid((1, 0))
 
-    assert item.tile_uuid is not None
+    assert get_map().get_object_placement(item.uuid) is not None
     assert item.get_position() == (1, 0)
     assert get_map().get_object_position(item.uuid) == (1, 0)
 
@@ -93,7 +484,7 @@ def test_eb_13_001_floor_loot_and_drop_update_authoritative_location() -> None:
     assert entity.inventory.has_item(item.uuid)
     assert item.owner_uuid == entity.uuid
     assert item.stored_in_uuid == entity.inventory.uuid
-    assert item.tile_uuid is None
+    assert get_map().get_object_placement(item.uuid) is None
     assert get_map().get_object_position(item.uuid) is None
     assert item.get_position() == entity.position
 
@@ -103,7 +494,7 @@ def test_eb_13_001_floor_loot_and_drop_update_authoritative_location() -> None:
     assert not entity.inventory.has_item(item.uuid)
     assert item.owner_uuid is None
     assert item.stored_in_uuid is None
-    assert item.tile_uuid is not None
+    assert get_map().get_object_placement(item.uuid) is not None
     assert item.get_position() == (0, 1)
     assert get_map().get_object_position(item.uuid) == (0, 1)
 
@@ -730,7 +1121,7 @@ def test_eb_13_021_raw_inventory_add_rehomes_existing_locations() -> None:
     assert first_owner.inventory.has_item(floor_item.uuid)
     assert floor_item.owner_uuid == first_owner.uuid
     assert floor_item.stored_in_uuid == first_owner.inventory.uuid
-    assert floor_item.tile_uuid is None
+    assert get_map().get_object_placement(floor_item.uuid) is None
     assert get_map().get_object_position(floor_item.uuid) is None
     assert floor_item.get_position() == first_owner.position
 
@@ -790,23 +1181,114 @@ def test_eb_13_009_environment_use_actions_are_stateful_and_spatial() -> None:
     """EB-13-009: environment items provide state-dependent use actions."""
     reset_item_state()
     entity = create_test_monster("monster.skeleton", name="Explorer", position=(0, 0), darkvision=False)
-    door = build_authored_item(
-        "environment.door",
-        uuid4(),
+    door = build_directional_door(
+        blocked_channels=tuple(WorldEdgeChannel),
     )
-    get_map().place_object(door.uuid, (1, 0))
+    get_map().place_object(
+        door.uuid,
+        (1, 0),
+        boundary_direction=CardinalDirection.WEST,
+    )
     entity.materialize_navigation(max_distance=5)
 
-    assert door.uuid in entity.senses.objects
-    assert door.blocks_movement
+    assert get_map().get_object_position(door.uuid) == (1, 0)
+    assert not get_map().can_transition((0, 0), (1, 0), entity.uuid)
     assert [action.name for action in door.get_use_actions(entity.uuid)] == ["Open Door"]
 
     event = execute_use_action(entity, door.uuid, "Open Door")
 
     assert event is not None and not event.canceled
     assert door.is_open
-    assert not door.blocks_movement
+    assert get_map().can_transition((0, 0), (1, 0), entity.uuid)
     assert [action.name for action in door.get_use_actions(entity.uuid)] == ["Close Door"]
+
+
+def test_boundary_door_actions_toggle_one_placed_provider_and_occupied_close_is_atomic() -> None:
+    """One placed door toggles its structure and refuses an occupied close."""
+    reset_item_state()
+    grid = get_map()
+    user = create_test_monster(
+        "monster.skeleton",
+        name="Door User",
+        position=(0, 0),
+        darkvision=False,
+    )
+    door = build_directional_door(
+        blocked_channels=tuple(WorldEdgeChannel),
+    )
+    grid.place_object(
+        door.uuid,
+        (1, 0),
+        boundary_direction=CardinalDirection.WEST,
+    )
+    Entity.materialize_all_navigation(max_distance=5)
+
+    opened = execute_use_action(user, door.uuid, "Open Door")
+    assert opened is not None and not opened.canceled
+    assert door.is_open
+    assert grid.can_transition((0, 0), (1, 0), user.uuid)
+    close_action = door.get_use_actions(user.uuid)[0]
+
+    occupant = create_test_monster(
+        "monster.skeleton",
+        name="Doorway Occupant",
+        position=(1, 0),
+        darkvision=False,
+    )
+    cursor = EventQueue.event_cursor()
+    close = close_action.instantiate().apply()
+
+    assert close is not None and close.canceled
+    assert door.is_open
+    assert grid.get_object_position(door.uuid) == (1, 0)
+    assert grid.get_entity_position(occupant.uuid) == (1, 0)
+    assert not any(
+        isinstance(event, SpatialChangeEvent)
+        and event.phase is EventPhase.COMPLETION
+        and event.object_uuid == door.uuid
+        for _, event in EventQueue.iter_events_since(cursor)
+    )
+
+
+def test_two_boundary_doors_discover_and_toggle_independent_actions() -> None:
+    """Two authored side placements expose and commit independent door actions."""
+    reset_item_state()
+    actor = create_test_monster(
+        "monster.skeleton",
+        name="Two Door User",
+        position=(3, 1),
+        darkvision=False,
+    )
+    first = build_directional_door(
+        blocked_channels=tuple(WorldEdgeChannel),
+    )
+    second = build_directional_door(
+        blocked_channels=tuple(WorldEdgeChannel),
+    )
+    grid = get_map()
+    grid.place_object(first.uuid, (4, 1), boundary_direction=CardinalDirection.WEST)
+    grid.place_object(second.uuid, (3, 2), boundary_direction=CardinalDirection.NORTH)
+    Entity.materialize_all_navigation(max_distance=5)
+
+    available = actor.get_available_actions()
+    discovered = {
+        info.source_item_uuid
+        for info in available.all_actions
+        if info.is_item_use
+    }
+    assert {first.uuid, second.uuid} <= discovered
+
+    first_open = execute_use_action(actor, first.uuid, "Open Door")
+    second_open = execute_use_action(actor, second.uuid, "Open Door")
+    assert first_open is not None and not first_open.canceled
+    assert second_open is not None and not second_open.canceled
+    assert first.is_open and second.is_open
+
+    first_close = execute_use_action(actor, first.uuid, "Close Door")
+    second_close = execute_use_action(actor, second.uuid, "Close Door")
+    assert first_close is not None and not first_close.canceled
+    assert second_close is not None and not second_close.canceled
+    assert not first.is_open and not second.is_open
 
 
 def test_eb_13_010_breakable_items_destroy_and_spill_nested_inventory() -> None:
@@ -823,6 +1305,7 @@ def test_eb_13_010_breakable_items_destroy_and_spill_nested_inventory() -> None:
     gem.stored_in_uuid = chest.chest_inventory.uuid
     chest.place_on_grid((2, 1))
 
+    cursor = EventQueue.event_cursor()
     damage = chest.receive_damage(99, DamageType.BLUDGEONING, uuid4())
 
     assert damage > 0
@@ -832,7 +1315,16 @@ def test_eb_13_010_breakable_items_destroy_and_spill_nested_inventory() -> None:
     assert get_map().get_object_position(gem.uuid) == (2, 1)
     assert gem.owner_uuid is None
     assert gem.stored_in_uuid is None
-    assert gem.tile_uuid is not None
+    assert get_map().get_object_placement(gem.uuid) is not None
+    floor_facts = [
+        event
+        for _index, event in EventQueue.iter_events_since(cursor)
+        if isinstance(event, ItemLocationStateEvent)
+        and event.item_state.item_uuid == gem.uuid
+        and event.location is ItemLocation.FLOOR
+    ]
+    assert len(floor_facts) == 1
+    assert floor_facts[0].world_placement == get_map().get_object_placement(gem.uuid)
 
 
 def test_eb_13_011_torch_lifecycle_manages_attached_light_sources() -> None:
@@ -890,6 +1382,81 @@ def test_eb_13_011_torch_lifecycle_manages_attached_light_sources() -> None:
     assert grid.get_object_position(torch.uuid) == (1, 0)
     assert origin_tile.resolved_light_level == LightLevel.DARKNESS
     assert drop_tile.resolved_light_level == LightLevel.DARKNESS
+
+
+def test_wall_torch_attached_light_follows_move_and_terminal_removal() -> None:
+    """A lit fixture follows its committed placement and cleans up once."""
+    reset_item_state(default_light=LightLevel.BRIGHT_LIGHT)
+    grid = get_map()
+    torch = WallTorch(source_entity_uuid=uuid4())
+    torch.mount(
+        (0, 0),
+        boundary_direction=CardinalDirection.EAST,
+        base_height_steps=1,
+        orientation=CardinalDirection.WEST,
+        lit=True,
+    )
+    assert torch.is_lit
+    assert grid.get_tile(0, 0).resolved_light_level is LightLevel.VERY_BRIGHT
+
+    grid.move_object(
+        torch.uuid,
+        (3, 0),
+        boundary_direction=CardinalDirection.EAST,
+        base_height_steps=1,
+        orientation=CardinalDirection.WEST,
+    )
+
+    assert grid.get_object_position(torch.uuid) == (3, 0)
+    assert grid.get_tile(3, 0).resolved_light_level is LightLevel.VERY_BRIGHT
+    grid.remove_object(torch.uuid)
+    assert torch.is_lit is False
+    assert torch._light_source_uuid is None
+    assert grid.get_tile(3, 0).resolved_light_level is LightLevel.BRIGHT_LIGHT
+
+
+def test_terminal_torch_cleanup_keeps_previous_mechanics_and_outer_parent() -> None:
+    """Light cleanup precedes one removal fact while sharing its outer cause."""
+    reset_item_state(default_light=LightLevel.DARKNESS)
+    grid = get_map()
+    torch = WallTorch(source_entity_uuid=uuid4())
+    torch.mount(
+        (0, 0),
+        boundary_direction=CardinalDirection.EAST,
+        base_height_steps=1,
+        orientation=CardinalDirection.WEST,
+        lit=True,
+    )
+    placement = grid.get_object_placement(torch.uuid)
+    parent = Event(
+        source_entity_uuid=uuid4(),
+        event_type=EventType.SPATIAL_OBJECT_REMOVED,
+        phase=EventPhase.COMPLETION,
+        use_register=False,
+    )
+    cursor = EventQueue.event_cursor()
+
+    grid.remove_object(torch.uuid, parent_event=parent.uuid)
+
+    changes = [
+        event
+        for _index, event in EventQueue.iter_events_since(cursor)
+        if isinstance(event, SpatialChangeEvent)
+        and event.phase is EventPhase.COMPLETION
+        and event.event_type in {
+            EventType.SPATIAL_LIGHT_CHANGED,
+            EventType.SPATIAL_OBJECT_REMOVED,
+        }
+    ]
+    assert [event.event_type for event in changes] == [
+        EventType.SPATIAL_LIGHT_CHANGED,
+        EventType.SPATIAL_OBJECT_REMOVED,
+    ]
+    assert all(event.parent_event == parent.uuid for event in changes)
+    removed = changes[-1]
+    assert removed.previous_placement == placement
+    assert removed.object_blocks_optics is False
+    assert torch.is_lit is False
 
 
 def test_torches_do_not_commit_lit_state_without_a_light_anchor() -> None:

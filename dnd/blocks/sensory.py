@@ -20,7 +20,7 @@ from dnd.core.events.world_events import (
 from dnd.core.gridmap import get_map
 from dnd.core.values import ModifiableValue
 from dnd.types.senses import OpticalObscurement, PerceivedContact, SenseMode, SensesType
-from dnd.types.world import LightLevel
+from dnd.types.world import CardinalDirection, LightLevel, WorldEdgeChannel
 
 
 K = TypeVar("K")
@@ -516,9 +516,8 @@ class SpatialSensesSystem:
         self.observers_by_object.clear()
 
     def register_observer(self, observer_uuid: UUID, senses: Senses) -> None:
-        """Register an undeployed observer before its entry fact is published."""
+        """Register an observer without reducing its subjective footprint."""
         self.senses_by_observer[observer_uuid] = senses
-        self.refresh_observer(observer_uuid)
 
     def unregister_observer(self, observer_uuid: UUID) -> None:
         self.senses_by_observer.pop(observer_uuid, None)
@@ -718,6 +717,55 @@ class SpatialSensesSystem:
             radius = max_distance if sense_range == 0 else (sense_range + 4) // 5
             nonvisual_positions[sense_type] = set(grid.compute_propagation_fov(origin, radius))
 
+        boundary_route_evidence: Dict[
+            UUID,
+            Set[Tuple[Position, bool, Tuple[SensesType, ...]]],
+        ] = defaultdict(set)
+
+        def collect_boundary_route_evidence(
+            source_positions: Set[Position],
+            channel: WorldEdgeChannel,
+            *,
+            visual: bool,
+            evidence_senses_by_position: Optional[
+                Dict[Position, Set[SensesType]]
+            ] = None,
+            evidence_senses: Tuple[SensesType, ...] = (),
+        ) -> None:
+            for source_position in sorted(source_positions):
+                route_senses = (
+                    tuple(sorted(
+                        evidence_senses_by_position.get(source_position, set()),
+                        key=lambda value: value.value,
+                    ))
+                    if evidence_senses_by_position is not None
+                    else evidence_senses
+                )
+                for direction in CardinalDirection:
+                    exit_layer, entry_layer = grid.get_boundary_route_layers(
+                        source_position,
+                        direction,
+                        channel,
+                    )
+                    for object_uuid in (*exit_layer, *entry_layer):
+                        boundary_route_evidence[object_uuid].add(
+                            (source_position, visual, route_senses),
+                        )
+
+        collect_boundary_route_evidence(
+            set(visible),
+            WorldEdgeChannel.OPTICAL,
+            visual=True,
+            evidence_senses_by_position=visual_modes_by_position,
+        )
+        for sense_type, positions in nonvisual_positions.items():
+            collect_boundary_route_evidence(
+                positions,
+                WorldEdgeChannel.PROPAGATION,
+                visual=False,
+                evidence_senses=(sense_type,),
+            )
+
         entity_contacts: Dict[UUID, PerceivedContact] = {}
         object_contacts: Dict[UUID, PerceivedContact] = {}
         candidate_positions = set(visible)
@@ -737,7 +785,7 @@ class SpatialSensesSystem:
                 )
                 if contact is not None:
                     entity_contacts[entity_uuid] = contact
-            for object_uuid in sorted(grid.get_objects_at(position), key=str):
+            for object_uuid in sorted(grid.get_center_objects_at(position), key=str):
                 block = BaseBlock.get(object_uuid)
                 if block is None or not block.should_include_in_senses_objects():
                     continue
@@ -748,6 +796,39 @@ class SpatialSensesSystem:
                 )
                 if contact is not None:
                     object_contacts[object_uuid] = contact
+
+        for object_uuid in sorted(boundary_route_evidence, key=str):
+            block = BaseBlock.get(object_uuid)
+            placement = grid.get_object_placement(object_uuid)
+            if (
+                block is None
+                or placement is None
+                or placement.boundary_direction is None
+                or not block.should_include_in_senses_objects()
+            ):
+                continue
+            evidence = tuple(sorted(
+                boundary_route_evidence[object_uuid],
+                key=lambda row: (
+                    row[0],
+                    not row[1],
+                    tuple(sense.value for sense in row[2]),
+                ),
+            ))
+            contact = self._resolve_contact(
+                owner,
+                senses,
+                block,
+                placement.position,
+                False,
+                set(),
+                nonvisual_positions,
+                modes,
+                route_evidence=evidence,
+                contact_position=placement.position,
+            )
+            if contact is not None:
+                object_contacts[object_uuid] = contact
 
         senses.replace_perception(
             position=origin,
@@ -785,26 +866,49 @@ class SpatialSensesSystem:
         visual_modes: Set[SensesType],
         nonvisual_positions: Dict[SensesType, Set[Position]],
         modes: Dict[SensesType, int],
+        route_evidence: Optional[
+            Tuple[Tuple[Position, bool, Tuple[SensesType, ...]], ...]
+        ] = None,
+        contact_position: Optional[Position] = None,
     ) -> Optional[PerceivedContact]:
         if subject.stealth_dc is not None and subject.stealth_dc >= owner.get_passive_perception():
             return None
-        distance = senses.get_feet_distance(position)
-        invisibility_bypassed = not subject.is_invisible or any((
-            self._sense_in_range(modes, SensesType.TRUESIGHT, distance),
-            self._sense_in_range(modes, SensesType.SEE_INVISIBLE, distance),
-        ))
-        visual = cell_visual and invisibility_bypassed
-        special = {
-            sense_type
-            for sense_type, positions in nonvisual_positions.items()
-            if position in positions
+        evidence = route_evidence or ((
+            position,
+            cell_visual,
+            tuple(sorted(visual_modes, key=lambda value: value.value)),
+        ),)
+        visual = False
+        special: Set[SensesType] = set()
+        nonvisual_types = {
+            SensesType.BLINDSIGHT,
+            SensesType.TREMORSENSE,
         }
-        if visual:
-            special.update(visual_modes)
+        for evidence_position, evidence_visual, evidence_modes in evidence:
+            distance = senses.get_feet_distance(evidence_position)
+            invisibility_bypassed = not subject.is_invisible or any((
+                self._sense_in_range(modes, SensesType.TRUESIGHT, distance),
+                self._sense_in_range(modes, SensesType.SEE_INVISIBLE, distance),
+            ))
+            route_visual = evidence_visual and invisibility_bypassed
+            route_special = {
+                sense_type
+                for sense_type, positions in nonvisual_positions.items()
+                if evidence_position in positions
+            }
+            route_special.update(
+                sense_type
+                for sense_type in evidence_modes
+                if sense_type in nonvisual_types
+            )
+            if route_visual:
+                visual = True
+                special.update(evidence_modes)
+            special.update(route_special)
         if not visual and not special:
             return None
         return PerceivedContact(
-            position=position,
+            position=contact_position or position,
             visual=visual,
             special_senses=tuple(sorted(special, key=lambda value: value.value)),
         )
@@ -853,7 +957,10 @@ class SpatialSensesSystem:
         if not isinstance(event, SpatialChangeEvent):
             return set()
         if (
-            event.event_type is EventType.SPATIAL_ENTITY_LEFT
+            event.event_type in {
+                EventType.SPATIAL_ENTITY_LEFT,
+                EventType.SPATIAL_OBJECT_REMOVED,
+            }
             and event.old_position is not None
         ):
             return set()
@@ -891,9 +998,23 @@ class SpatialSensesSystem:
                 changed_uuid = hint.perceivability_block
                 candidates.update(self.observers_by_entity.get(changed_uuid, set()))
                 candidates.update(self.observers_by_object.get(changed_uuid, set()))
-                block = BaseBlock.get(changed_uuid)
-                if block is not None:
-                    candidates.update(grid.get_subscribers_at(block.position))
+                placement = grid.get_object_placement(changed_uuid)
+                if placement is not None and placement.boundary_direction is not None:
+                    owner_position = placement.position
+                    candidates.update(grid.get_subscribers_at(owner_position))
+                    offsets = {
+                        CardinalDirection.NORTH: (0, 1),
+                        CardinalDirection.SOUTH: (0, -1),
+                        CardinalDirection.EAST: (1, 0),
+                        CardinalDirection.WEST: (-1, 0),
+                    }
+                    offset_x, offset_y = offsets[placement.boundary_direction]
+                    neighbor_position = (
+                        owner_position[0] + offset_x,
+                        owner_position[1] + offset_y,
+                    )
+                    if grid.get_tile(*neighbor_position) is not None:
+                        candidates.update(grid.get_subscribers_at(neighbor_position))
             if hint.requires_paths:
                 for position in positions:
                     candidates.update(self.observers_by_known_position.get(position, set()))

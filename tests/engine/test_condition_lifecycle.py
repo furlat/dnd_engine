@@ -1,4 +1,5 @@
 """Engine semantic tests for condition application and cleanup."""
+from dnd.types.materials import Material, TileSurface
 
 from contextlib import contextmanager
 import random
@@ -56,7 +57,7 @@ def reset_condition_state() -> None:
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
     BaseValue._registry.clear()
-    get_map().create_rectangle(0, 0, 12, 12)
+    get_map().create_rectangle(0, 0, 12, 12, surface=TileSurface(base_material=Material.STONE))
 
 
 def configured_entity(

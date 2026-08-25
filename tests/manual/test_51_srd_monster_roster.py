@@ -1,4 +1,5 @@
 """SRD-derived monster roster and arena coverage tests."""
+from dnd.types.materials import Material, TileSurface
 
 from uuid import uuid4
 
@@ -68,7 +69,7 @@ def test_each_srd_monster_builds_with_legal_actions() -> None:
     """Every SRD roster row should create a live entity with action rows."""
     for monster_id in SRD_CREATURE_RECIPES_BY_ID:
         reset_authored_encounter_state()
-        get_map().create_rectangle(0, 0, 3, 3)
+        get_map().create_rectangle(0, 0, 3, 3, surface=TileSurface(base_material=Material.STONE))
         monster = _materialize_roster_fixture(
             monster_id,
             name=f"Roster {monster_id}",

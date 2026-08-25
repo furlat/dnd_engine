@@ -61,6 +61,8 @@ from dnd.core.events.world_events import (
 from dnd.types.spatial_effects import SpatialEffectInteractionOperation
 from dnd.core.gridmap import get_map
 from dnd.types.items import ItemLightSourceState
+from dnd.types.world import CardinalDirection
+from dnd.types.world_placement import WorldPlacementKind, WorldPlacementSpec
 from dnd.entities.entity import Entity
 
 
@@ -646,7 +648,14 @@ class WallTorch(UsableItem):
         description="Whether the wall torch currently has a light source.",
     )
     _light_source_uuid: Optional[UUID] = None
-    _wall_torch_position: Optional[Tuple[int, int]] = None
+
+    def get_world_placement_spec(self) -> WorldPlacementSpec:
+        """Return the one-band nonoccupying boundary attachment capability."""
+        return WorldPlacementSpec(
+            kind=WorldPlacementKind.BOUNDARY,
+            occupies_bands=False,
+            vertical_extent_steps=1,
+        )
 
     def get_use_actions(self, user_entity_uuid: UUID) -> List[BaseAction]:
         """Return the light or extinguish action according to lit state."""
@@ -681,21 +690,23 @@ class WallTorch(UsableItem):
         """Create this fixture's fixed light source."""
         if self.is_lit:
             return
-        if self._wall_torch_position is None:
+        position = get_map().get_object_position(self.uuid)
+        if position is None:
             return
         self.is_lit = True
         self._light_source_uuid = get_map().add_light_source(
-            position=self._wall_torch_position,
+            position=position,
             very_bright_radius_feet=self.very_bright_radius_feet,
             bright_radius_feet=self.bright_radius_feet,
             dim_radius_feet=self.dim_radius_feet,
+            anchor_uuid=self.uuid,
             parent_event=parent_event,
         )
         flame_event = SpatialEffectInteractionEvent(
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.uuid,
             operation=SpatialEffectInteractionOperation.IGNITE,
-            positions=(self._wall_torch_position,),
+            positions=(position,),
             source_object_uuid=self.uuid,
             source_content_ref=self.content_ref,
             parent_event=parent_event,
@@ -716,6 +727,15 @@ class WallTorch(UsableItem):
             )
             self._light_source_uuid = None
 
+    def on_grid_object_removed(
+        self,
+        position: Tuple[int, int],
+        parent_event: Optional[UUID] = None,
+    ) -> None:
+        """Extinguish the attached light when the mounted object truly retires."""
+        del position
+        self.put_out(parent_event=parent_event)
+
     def douse_exposed_flame(
         self,
         parent_event: Optional[UUID] = None,
@@ -730,11 +750,19 @@ class WallTorch(UsableItem):
         self,
         position: Tuple[int, int],
         *,
+        boundary_direction: CardinalDirection,
+        base_height_steps: int,
+        orientation: CardinalDirection,
         lit: bool = True,
     ) -> None:
         """Place an already identity-bound fixture and apply its light state."""
-        self._wall_torch_position = position
-        self.place_on_grid(position)
+        get_map().place_object(
+            self.uuid,
+            position,
+            boundary_direction=boundary_direction,
+            base_height_steps=base_height_steps,
+            orientation=orientation,
+        )
         if lit:
             self.light()
 

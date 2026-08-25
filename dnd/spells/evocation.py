@@ -1228,17 +1228,13 @@ class Thunderwave(SpellAction):
         for _ in range(distance_tiles):
             next_pos = (current_pos[0] + direction[0], current_pos[1] + direction[1])
 
-            if not grid.can_transition(current_pos, next_pos, target_uuid):
+            blocked_by = grid.identify_blocker_at(
+                next_pos,
+                target_uuid,
+                source_position=current_pos,
+            )
+            if blocked_by is not None:
                 was_blocked = True
-                blocked_by = grid.identify_blocker_at(next_pos, target_uuid)
-                break
-
-            entities_at_pos = grid.get_entities_at(next_pos)
-            other_entities = [e for e in entities_at_pos if e != target_uuid]
-            if other_entities:
-                was_blocked = True
-                blocker = BaseBlock.get(other_entities[0])
-                blocked_by = blocker.name if blocker else "entity"
                 break
 
             last_valid_pos = next_pos

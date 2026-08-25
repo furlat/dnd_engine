@@ -4,6 +4,7 @@ Unlike the archived helper, these cases use the real ``ActionSurge`` resource
 action rather than manufacturing an action modifier.  The four test docstrings
 retain the one-for-one legacy coverage map, including the Surge-first order.
 """
+from dnd.types.materials import Material, TileSurface
 
 from uuid import uuid4
 
@@ -29,7 +30,7 @@ from tests.engine.support import force_attack_miss, reset_combat_state, set_hp
 
 def _reset_state() -> None:
     reset_combat_state()
-    get_map().create_rectangle(0, 0, 20, 20)
+    get_map().create_rectangle(0, 0, 20, 20, surface=TileSurface(base_material=Material.STONE))
 
 
 def _create_fighter(*, extra_attacks: int) -> Entity:

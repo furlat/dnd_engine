@@ -338,16 +338,14 @@ def pack_tactics_advantage(source_entity_uuid: UUID, target_entity_uuid: Optiona
     target = Entity.get(target_entity_uuid)
     if not source or not target:
         return None
-    for candidate in Entity.get_all_entities():
-        if candidate.uuid in {source.uuid, target.uuid}:
-            continue
-        if not source.is_ally(candidate):
-            continue
-        if not candidate.can_take_actions():
-            continue
-        if candidate.distance_to_entity(target) <= 5:
-            return AdvantageModifier(name="Pack Tactics", value=AdvantageStatus.ADVANTAGE, source_entity_uuid=source.uuid, target_entity_uuid=target.uuid)
-    return None
+    if not _has_adjacent_ally(source, target):
+        return None
+    return AdvantageModifier(
+        name="Pack Tactics",
+        value=AdvantageStatus.ADVANTAGE,
+        source_entity_uuid=source.uuid,
+        target_entity_uuid=target.uuid,
+    )
 
 
 class SunlightSensitivityFeature(BaseCondition):
@@ -1774,7 +1772,20 @@ class RampageAvailable(BaseCondition):
 
 def _has_adjacent_ally(source: Entity, target: Entity) -> bool:
     """Return whether source has an active ally adjacent to target."""
-    for candidate in Entity.get_all_entities():
+    positions = {
+        (target.position[0] + dx, target.position[1] + dy)
+        for dx in (-1, 0, 1)
+        for dy in (-1, 0, 1)
+    }
+    candidate_uuids = {
+        candidate_uuid
+        for position in positions
+        for candidate_uuid in get_map().get_entities_at(position)
+    }
+    for candidate_uuid in sorted(candidate_uuids, key=str):
+        candidate = Entity.get(candidate_uuid)
+        if candidate is None:
+            continue
         if candidate.uuid in {source.uuid, target.uuid}:
             continue
         if not source.is_ally(candidate):

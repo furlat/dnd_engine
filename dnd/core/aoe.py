@@ -57,6 +57,38 @@ class AoEShape(BaseObject):
         """Return the explicit or default origin for this shape."""
         return self.origin_override or self._default_origin(caster_pos)
 
+    def get_geometric_footprint(
+        self,
+        caster_pos: Tuple[int, int],
+        *,
+        target_override: Optional[Tuple[int, int]] = None,
+    ) -> frozenset[Tuple[int, int]]:
+        """Return one pure geometric candidate footprint."""
+        shape = (
+            self.model_copy(update={"target": target_override})
+            if target_override is not None
+            else self
+        )
+        origin = shape.get_origin(caster_pos)
+        return frozenset(shape._get_positions_in_shape(origin))
+
+    def _compute_objective_footprint(
+        self,
+        caster_pos: Tuple[int, int],
+    ) -> Set[Tuple[int, int]]:
+        """Return this ordinary shape's bounded propagation footprint."""
+        grid = get_map()
+        self.computed_origin = self.get_origin(caster_pos)
+        geometric = set(self.get_geometric_footprint(caster_pos))
+        barriers = grid.get_barrier_positions(geometric)
+        if geometric.isdisjoint(barriers):
+            return geometric
+        return grid.filter_propagation_positions(
+            self.computed_origin,
+            geometric,
+            self._get_max_radius_tiles(),
+        )
+
     def footprint_target_key(
         self,
         caster_pos: Tuple[int, int],
@@ -90,27 +122,14 @@ class AoEShape(BaseObject):
         self,
         caster_pos: Tuple[int, int],
         senses: "Senses",
-        fov_cache: Optional[dict[tuple[tuple[int, int], int], Set[tuple[int, int]]]] = None,
-        barrier_positions: Optional[Set[Tuple[int, int]]] = None,
         caster_uuid: Optional[UUID] = None,
         caster_visible_positions: Optional[AbstractSet[Tuple[int, int]]] = None,
     ) -> "AoEShape":
         """Compute affected positions using caster-visible state.
 
-        For shapes where origin != caster position (e.g., Fireball exploding
-        at target location), we compute FOV from the origin and intersect
-        with caster's FOV. This ensures preview matches actual execution.
-
-        AoE propagation uses physical barriers only (walls, closed doors);
-        magical darkness does NOT block AoE spread per D&D 5e rules.
-
         Args:
             caster_pos: Caster's current position.
             senses: Caster's Senses block with pre-computed visibility.
-            fov_cache: Optional cache for FOV computations keyed by (origin, radius).
-                When provided, avoids redundant propagation FOV calls.
-            barrier_positions: Optional pre-computed set of positions that block AoE
-                propagation.
             caster_uuid: Optional caster UUID that is always known to the caster.
             caster_visible_positions: Optional immutable visibility snapshot shared
                 by every candidate in one action-discovery query.
@@ -118,40 +137,17 @@ class AoEShape(BaseObject):
         Returns:
             Self for chaining.
         """
-        self.computed_origin = self.get_origin(caster_pos)
-
         caster_fov = (
             caster_visible_positions
             if caster_visible_positions is not None
             else {pos for pos, visible in senses.visible.items() if visible}
         )
-
-        if self.computed_origin != caster_pos:
-            geometric = self._get_positions_in_shape(self.computed_origin)
-
-            if barrier_positions is not None and geometric.isdisjoint(barrier_positions):
-                origin_fov = geometric
-            else:
-                cache_key = (self.computed_origin, self._get_max_radius_tiles())
-                if fov_cache is not None and cache_key in fov_cache:
-                    origin_fov = fov_cache[cache_key]
-                else:
-                    grid = get_map()
-                    origin_fov = set(
-                        grid.compute_propagation_fov(
-                            self.computed_origin, self._get_max_radius_tiles()
-                        )
-                    )
-                    if fov_cache is not None:
-                        fov_cache[cache_key] = origin_fov
-
-            if origin_fov is geometric:
-                self.affected_positions = geometric.intersection(caster_fov)
-            else:
-                self.affected_positions = geometric.intersection(caster_fov, origin_fov)
-        else:
-            geometric = self._get_positions_in_shape(self.computed_origin)
-            self.affected_positions = geometric.intersection(caster_fov)
+        objective_positions = self._compute_objective_footprint(caster_pos)
+        authorized_positions = set(caster_fov)
+        authorized_positions.add(caster_pos)
+        self.affected_positions = objective_positions.intersection(
+            authorized_positions,
+        )
 
         self._resolve_subjective_entities(caster_pos, senses, caster_uuid)
         return self
@@ -191,11 +187,7 @@ class AoEShape(BaseObject):
             for entity_uuid, contact in senses.entities.items()
             if contact.position in self.affected_positions
         }
-        if (
-            self.computed_origin != caster_pos
-            and caster_uuid is not None
-            and caster_pos in self.affected_positions
-        ):
+        if caster_uuid is not None and caster_pos in self.affected_positions:
             self.affected_entity_uuids.add(caster_uuid)
 
     def compute_objective(self, caster_pos: Tuple[int, int]) -> "AoEShape":
@@ -214,20 +206,7 @@ class AoEShape(BaseObject):
             Self for chaining.
         """
         grid = get_map()
-        self.computed_origin = self.get_origin(caster_pos)
-
-        geometric = self._get_positions_in_shape(self.computed_origin)
-
-        barriers = grid.get_barrier_positions()
-        if geometric.isdisjoint(barriers):
-            self.affected_positions = geometric
-        else:
-            fov_from_origin = set(
-                grid.compute_propagation_fov(
-                    self.computed_origin, self._get_max_radius_tiles()
-                )
-            )
-            self.affected_positions = geometric.intersection(fov_from_origin)
+        self.affected_positions = self._compute_objective_footprint(caster_pos)
 
         self.affected_entity_uuids = set()
         for pos in self.affected_positions:
@@ -396,12 +375,18 @@ class Cylinder(AoEShape):
     def _get_positions_in_shape(self, origin: Tuple[int, int]) -> Set[Tuple[int, int]]:
         return circle_positions(origin, self.radius_feet // 5, include_center=True)
 
+    def _compute_objective_footprint(
+        self,
+        caster_pos: Tuple[int, int],
+    ) -> Set[Tuple[int, int]]:
+        """Return the complete cylinder geometry without propagation filtering."""
+        self.computed_origin = self.get_origin(caster_pos)
+        return set(self.get_geometric_footprint(caster_pos))
+
     def compute_subjective(
         self,
         caster_pos: Tuple[int, int],
         senses: "Senses",
-        fov_cache: Optional[dict[tuple[tuple[int, int], int], Set[tuple[int, int]]]] = None,
-        barrier_positions: Optional[Set[Tuple[int, int]]] = None,
         caster_uuid: Optional[UUID] = None,
         caster_visible_positions: Optional[AbstractSet[Tuple[int, int]]] = None,
     ) -> "AoEShape":
@@ -409,8 +394,6 @@ class Cylinder(AoEShape):
         return self.compute_for_targeting(
             caster_pos,
             senses,
-            fov_cache=fov_cache,
-            barrier_positions=barrier_positions,
             caster_uuid=caster_uuid,
             caster_visible_positions=caster_visible_positions,
         )
@@ -419,8 +402,6 @@ class Cylinder(AoEShape):
         self,
         caster_pos: Tuple[int, int],
         senses: "Senses",
-        fov_cache: Optional[dict[tuple[tuple[int, int], int], Set[tuple[int, int]]]] = None,
-        barrier_positions: Optional[Set[Tuple[int, int]]] = None,
         caster_uuid: Optional[UUID] = None,
         caster_visible_positions: Optional[AbstractSet[Tuple[int, int]]] = None,
     ) -> "AoEShape":
@@ -428,9 +409,7 @@ class Cylinder(AoEShape):
 
         Only filters entities by caster perception (can't target what you can't see).
         """
-        self.computed_origin = self.get_origin(caster_pos)
-        geometric = self._get_positions_in_shape(self.computed_origin)
-        self.affected_positions = geometric
+        self.affected_positions = self._compute_objective_footprint(caster_pos)
 
         self.affected_entity_uuids = set()
         grid = get_map()
@@ -446,9 +425,7 @@ class Cylinder(AoEShape):
 
         No shadowcast/LOS filtering: the effect rains down vertically.
         """
-        self.computed_origin = self.get_origin(caster_pos)
-        geometric = self._get_positions_in_shape(self.computed_origin)
-        self.affected_positions = geometric
+        self.affected_positions = self._compute_objective_footprint(caster_pos)
 
         grid = get_map()
         self.affected_entity_uuids = set()

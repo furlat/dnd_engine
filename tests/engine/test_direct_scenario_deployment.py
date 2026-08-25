@@ -10,12 +10,23 @@ from dnd.content.scenarios.scenario_catalog import (
     AUTHORED_ROSTERS,
     encounter_definition,
 )
+from dnd.blocks.base_item import BaseItem
+from dnd.content.scenarios.battlefield_builders import build_battlefield
 from dnd.content.scenarios.scenario_deployment import prepare_scenario
 from dnd.content.scenarios.scenario_definitions import FixedRosterOpeningPolicy
 from dnd.core.events.events_registry import EventPhase, EventQueue, EventType
+from dnd.core.events.world_events import WorldInitializedEvent
+from dnd.core.gridmap import get_map
 from dnd.game import Game
 from dnd.items.torches import Torch
 from dnd.runtime_reset import reset_engine_runtime
+from dnd.types.materials import Material, TileSurface
+from dnd.types.world import CardinalDirection, WorldEdgeChannel
+from dnd.types.world_placement import (
+    BoundaryStructureKind,
+    WorldObjectPlacement,
+    WorldPlacementKind,
+)
 
 
 def test_cold_scenario_catalog_preserves_the_audited_authored_surface() -> None:
@@ -130,6 +141,147 @@ def test_world_birth_and_deployment_are_ordered_event_facts() -> None:
     assert event_types.count(EventType.SPATIAL_ENTITY_ENTERED) == (
         4 * len(assembled.entities)
     )
+
+
+def test_real_world_initialized_fact_keeps_surface_and_object_identity() -> None:
+    """Cold battlefield bootstrap carries exact semantic Tiles and placements."""
+    reset_engine_runtime()
+    built = build_battlefield("battlefield.field_cache_bright")
+    world = next(
+        event
+        for event in EventQueue.get_events_chronological()
+        if isinstance(event, WorldInitializedEvent)
+    )
+    tile_state = next(state for state in world.tiles if state.position == (0, 0))
+    tile = get_map().get_tile(0, 0)
+    assert tile is not None
+    assert tile_state.surface == TileSurface(base_material=Material.STONE)
+    assert tile_state.surface == tile.surface
+    assert world.objects
+    object_state = next(
+        state
+        for state in world.objects
+        if state.placement.object_uuid == built.object_uuids["field_cache"]
+    )
+    runtime_item = BaseItem.get(object_state.item.item_uuid)
+    assert runtime_item is not None
+    assert object_state.item == runtime_item.to_item_state()
+    assert object_state.contained_items == tuple(
+        child.to_item_state()
+        for child in sorted(
+            runtime_item.get_storage_block().items.values(),
+            key=lambda child: str(child.uuid),
+        )
+    )
+    assert object_state.placement.object_uuid == object_state.item.item_uuid
+    assert object_state.placement == get_map().get_object_placement(
+        object_state.item.item_uuid,
+    )
+    assert object_state.item.item_uuid in set(built.object_uuids.values())
+
+
+def test_world_initialized_round_trip_preserves_cliff_and_wall_torch_boundary_state() -> None:
+    """Cold world facts retain concrete boundary placement and light state."""
+    reset_engine_runtime()
+    standard = build_battlefield("battlefield.standard_hazards_closed")
+    standard_worlds = [
+        event
+        for event in EventQueue.get_events_chronological()
+        if isinstance(event, WorldInitializedEvent)
+        and event.phase is EventPhase.COMPLETION
+    ]
+    assert len(standard_worlds) == 1
+    standard_world = standard_worlds[0]
+    standard_torch = standard.environment.wall_torches[0]
+    standard_torch_state = next(
+        state
+        for state in standard_world.objects
+        if state.placement.object_uuid == standard_torch.uuid
+    )
+    assert standard_torch_state.item == standard_torch.to_item_state()
+    assert standard_torch_state.item.light_source is not None
+    assert standard_torch_state.item.light_source.is_lit is True
+    assert standard_torch_state.item.boundary_structure is None
+    assert standard_torch_state.placement == WorldObjectPlacement(
+        object_uuid=standard_torch.uuid,
+        tile_uuid=get_map().get_tile(14, 1).uuid,
+        position=(14, 1),
+        kind=WorldPlacementKind.BOUNDARY,
+        occupies_bands=False,
+        boundary_direction=CardinalDirection.EAST,
+        base_height_steps=1,
+        top_height_steps=2,
+        orientation=CardinalDirection.WEST,
+    )
+    exit_layer, entry_layer = get_map().get_boundary_route_layers(
+        (14, 1),
+        CardinalDirection.EAST,
+        WorldEdgeChannel.OPTICAL,
+    )
+    assert standard_torch.uuid in exit_layer
+    assert entry_layer == ()
+    EventQueue.reset()
+    restored_standard = WorldInitializedEvent.model_validate_json(
+        standard_world.model_dump_json(),
+    )
+    assert restored_standard == standard_world
+    standard_light_before = get_map().get_tile(14, 1).resolved_light_level
+    standard_placements = tuple(
+        row.placement for row in restored_standard.objects
+    )
+    rebuild_cursor = EventQueue.event_cursor()
+    standard_rebuilt = get_map().rebuild_object_placements(standard_placements)
+    assert set(standard_rebuilt) == set(standard_placements)
+    assert set(get_map().get_all_object_placements()) == set(standard_placements)
+    assert list(EventQueue.iter_events_since(rebuild_cursor)) == []
+    assert get_map().get_tile(14, 1).resolved_light_level is standard_light_before
+
+    reset_engine_runtime()
+    proving = build_battlefield("battlefield.elevation_proving_ground")
+    proving_worlds = [
+        event
+        for event in EventQueue.get_events_chronological()
+        if isinstance(event, WorldInitializedEvent)
+        and event.phase is EventPhase.COMPLETION
+    ]
+    assert len(proving_worlds) == 1
+    proving_world = proving_worlds[0]
+    cliff_uuid = proving.object_uuids["cliff"]
+    cliff_state = next(
+        state
+        for state in proving_world.objects
+        if state.placement.object_uuid == cliff_uuid
+    )
+    assert cliff_state.item == BaseItem.get(cliff_uuid).to_item_state()
+    assert cliff_state.placement.kind is WorldPlacementKind.BOUNDARY
+    assert cliff_state.placement.occupies_bands is True
+    assert cliff_state.placement.boundary_direction is CardinalDirection.WEST
+    assert (
+        cliff_state.placement.base_height_steps,
+        cliff_state.placement.top_height_steps,
+    ) == (0, 2)
+    assert cliff_state.placement.orientation is None
+    assert cliff_state.item.boundary_structure is not None
+    assert cliff_state.item.boundary_structure.structure is BoundaryStructureKind.CLIFF
+    assert cliff_state.item.boundary_structure.material is Material.STONE
+    assert cliff_state.item.boundary_structure.blocked_channels == (
+        WorldEdgeChannel.MOVEMENT,
+    )
+    EventQueue.reset()
+    restored_proving = WorldInitializedEvent.model_validate_json(
+        proving_world.model_dump_json(),
+    )
+    assert restored_proving == proving_world
+    complete_placements = tuple(
+        row.placement for row in restored_proving.objects
+    )
+    get_map().remove_object(cliff_uuid)
+    rebuild_cursor = EventQueue.event_cursor()
+    rebuilt = get_map().rebuild_object_placements(complete_placements)
+    assert set(rebuilt) == set(complete_placements)
+    assert get_map().get_object_placement(cliff_uuid) == cliff_state.placement
+    assert list(EventQueue.iter_events_since(rebuild_cursor)) == []
+    assert set(get_map().get_all_object_placements()) == set(complete_placements)
 
 
 def test_scenario_setup_uses_real_item_condition_and_reaction_mechanics() -> None:

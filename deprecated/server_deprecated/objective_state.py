@@ -77,7 +77,9 @@ def build_objective_game_state(
     """
     entity_rows = tuple(entities)
     floor_objects: list[APIFloorObject] = []
-    for obj_uuid, obj_pos in grid.get_all_object_positions().items():
+    for placement in grid.get_all_object_placements():
+        obj_uuid = placement.object_uuid
+        obj_pos = placement.position
         obj = BaseBlock.get(obj_uuid)
         if obj is None:
             continue

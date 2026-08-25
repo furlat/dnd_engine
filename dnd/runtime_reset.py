@@ -14,6 +14,7 @@ from dnd.core.gridmap import GridMap, get_map
 from dnd.core.values import BaseValue
 from dnd.encounters.encounter import Encounter
 from dnd.entities.entity import Entity
+from dnd.types.materials import Material, TileSurface
 
 
 def reset_engine_runtime(
@@ -51,14 +52,18 @@ def reset_engine_runtime(
     Dice._registry.clear()
     DiceRoll._registry.clear()
     Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
     Controller.clear_registry()
     Encounter.clear_registry()
     Encounter._combat_log_listeners.clear()
     GridMap.reset()
     grid = get_map()
     if grid_size is not None:
-        grid.create_rectangle(0, 0, *grid_size)
+        grid.create_rectangle(
+            0,
+            0,
+            *grid_size,
+            surface=TileSurface(base_material=Material.STONE),
+        )
     return grid
 
 

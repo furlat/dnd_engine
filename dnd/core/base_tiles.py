@@ -1,12 +1,14 @@
 """Tile primitives for terrain, lighting, and directional borders."""
 
+from dataclasses import dataclass
 from typing import Dict, Optional, Tuple
 from uuid import UUID, uuid4
 from pydantic import Field, PrivateAttr, StrictInt, model_validator
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition
-from dnd.types.world import MovementMode, LightLevel
+from dnd.types.world import CardinalDirection, MovementMode, LightLevel
 from dnd.types.spatial_effects import SpatialEffectLayer
+from dnd.types.materials import Material, TileSurface
 from dnd.core.values import ModifiableValue
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.world_edges import ElevationSurfaceKind, SlopeAxis
@@ -31,6 +33,22 @@ def validate_elevation_surface_tuple(
         raise ValueError("stairs and ramps require a slope axis")
 
 
+@dataclass(frozen=True, slots=True)
+class TileObjectBand:
+    """Immutable occupancy snapshot for one vertical Tile band."""
+
+    object_uuids: frozenset[UUID] = frozenset()
+    occupant_uuid: Optional[UUID] = None
+
+
+def _empty_boundary_object_bands() -> Dict[
+    CardinalDirection,
+    Dict[int, TileObjectBand],
+]:
+    """Create all four private boundary-band buckets for one Tile."""
+    return {direction: {} for direction in CardinalDirection}
+
+
 class Tile(BaseBlock):
     """Single grid cell stored by `GridMap`.
 
@@ -40,6 +58,7 @@ class Tile(BaseBlock):
     """
 
     name: str = Field(default="Floor", description="The name of the tile")
+    surface: TileSurface = Field(description="Validated semantic support surface.")
     walkable: bool = Field(default=True, description="Whether the tile can be walked on (legacy, use walking_cost)")
     blocks_optics: bool = Field(
         default=False,
@@ -85,30 +104,6 @@ class Tile(BaseBlock):
         description="Burrowing movement cost for this tile.",
     )
 
-    border_north: bool = Field(default=True, description="Can enter from north (y+1)")
-    border_south: bool = Field(default=True, description="Can enter from south (y-1)")
-    border_east: bool = Field(default=True, description="Can enter from east (x+1)")
-    border_west: bool = Field(default=True, description="Can enter from west (x-1)")
-    optical_border_north: bool = Field(default=True, description="Ordinary optics can cross north")
-    optical_border_south: bool = Field(default=True, description="Ordinary optics can cross south")
-    optical_border_east: bool = Field(default=True, description="Ordinary optics can cross east")
-    optical_border_west: bool = Field(default=True, description="Ordinary optics can cross west")
-    propagation_border_north: bool = Field(default=True, description="Physical propagation can cross north")
-    propagation_border_south: bool = Field(default=True, description="Physical propagation can cross south")
-    propagation_border_east: bool = Field(default=True, description="Physical propagation can cross east")
-    propagation_border_west: bool = Field(default=True, description="Physical propagation can cross west")
-    object_movement_border_north: bool = Field(default=True, description="Object-derived movement contribution north")
-    object_movement_border_south: bool = Field(default=True, description="Object-derived movement contribution south")
-    object_movement_border_east: bool = Field(default=True, description="Object-derived movement contribution east")
-    object_movement_border_west: bool = Field(default=True, description="Object-derived movement contribution west")
-    object_optical_border_north: bool = Field(default=True, description="Object-derived optical contribution north")
-    object_optical_border_south: bool = Field(default=True, description="Object-derived optical contribution south")
-    object_optical_border_east: bool = Field(default=True, description="Object-derived optical contribution east")
-    object_optical_border_west: bool = Field(default=True, description="Object-derived optical contribution west")
-    object_propagation_border_north: bool = Field(default=True, description="Object-derived propagation contribution north")
-    object_propagation_border_south: bool = Field(default=True, description="Object-derived propagation contribution south")
-    object_propagation_border_east: bool = Field(default=True, description="Object-derived propagation contribution east")
-    object_propagation_border_west: bool = Field(default=True, description="Object-derived propagation contribution west")
 
     height: StrictInt = Field(default=0, description="Support elevation in five-foot steps.")
     elevation_surface_kind: ElevationSurfaceKind = Field(
@@ -125,10 +120,16 @@ class Tile(BaseBlock):
     )
     _illuminations: Dict[UUID, LightLevel] = PrivateAttr(default_factory=dict)
     _illumination_caps: Dict[UUID, LightLevel] = PrivateAttr(default_factory=dict)
+    _entity_uuids: set[UUID] = PrivateAttr(default_factory=set)
     _spatial_condition_uuids: Dict[
         SpatialEffectLayer,
         set[UUID],
     ] = PrivateAttr(default_factory=dict)
+    _center_object_bands: Dict[int, TileObjectBand] = PrivateAttr(default_factory=dict)
+    _boundary_object_bands: Dict[
+        CardinalDirection,
+        Dict[int, TileObjectBand],
+    ] = PrivateAttr(default_factory=_empty_boundary_object_bands)
 
     @model_validator(mode="after")
     def validate_elevation_surface(self) -> "Tile":
@@ -204,6 +205,49 @@ class Tile(BaseBlock):
             conditions[condition_uuid] = condition
         return conditions
 
+    def get_entity_uuids(self) -> set[UUID]:
+        """Return a defensive snapshot of the Tile's entity membership."""
+        return set(self._entity_uuids)
+
+    def _replace_entity_uuids(self, entity_uuids: set[UUID]) -> None:
+        """Replace complete entity membership; called only by GridMap."""
+        self._entity_uuids = set(entity_uuids)
+
+    def get_center_object_bands(self) -> Tuple[Tuple[int, TileObjectBand], ...]:
+        """Return immutable center-band snapshots ordered by height."""
+        return tuple(sorted(self._center_object_bands.items()))
+
+    def get_boundary_object_bands(
+        self,
+        direction: CardinalDirection,
+    ) -> Tuple[Tuple[int, TileObjectBand], ...]:
+        """Return immutable boundary-band snapshots ordered by height."""
+        return tuple(sorted(self._boundary_object_bands.get(direction, {}).items()))
+
+    def _replace_center_object_band(
+        self,
+        height: int,
+        band: Optional[TileObjectBand],
+    ) -> None:
+        """Replace one complete center band; owned by GridMap placement commits."""
+        if band is None:
+            self._center_object_bands.pop(height, None)
+        else:
+            self._center_object_bands[height] = band
+
+    def _replace_boundary_object_band(
+        self,
+        direction: CardinalDirection,
+        height: int,
+        band: Optional[TileObjectBand],
+    ) -> None:
+        """Replace one complete boundary band; owned by GridMap placement commits."""
+        direction_bands = self._boundary_object_bands.setdefault(direction, {})
+        if band is None:
+            direction_bands.pop(height, None)
+        else:
+            direction_bands[height] = band
+
     def blocks_walking(self, requesting_entity_uuid: Optional['UUID'] = None,
                        mode: MovementMode = MovementMode.WALKING) -> bool:
         """A tile blocks walking if its movement cost for the given mode is 0 or less."""
@@ -262,170 +306,10 @@ class Tile(BaseBlock):
             directions.append("south")
         return tuple(directions)
 
-    def _intrinsic_border(self, direction: str, channel: str) -> bool:
-        if channel == "movement":
-            if direction == "north":
-                return self.border_north
-            if direction == "south":
-                return self.border_south
-            if direction == "east":
-                return self.border_east
-            if direction == "west":
-                return self.border_west
-        elif channel == "optical":
-            if direction == "north":
-                return self.optical_border_north
-            if direction == "south":
-                return self.optical_border_south
-            if direction == "east":
-                return self.optical_border_east
-            if direction == "west":
-                return self.optical_border_west
-        elif channel == "propagation":
-            if direction == "north":
-                return self.propagation_border_north
-            if direction == "south":
-                return self.propagation_border_south
-            if direction == "east":
-                return self.propagation_border_east
-            if direction == "west":
-                return self.propagation_border_west
-        return True
-
-    def _derived_border(self, direction: str, channel: str) -> bool:
-        if channel == "movement":
-            if direction == "north":
-                return self.object_movement_border_north
-            if direction == "south":
-                return self.object_movement_border_south
-            if direction == "east":
-                return self.object_movement_border_east
-            if direction == "west":
-                return self.object_movement_border_west
-        elif channel == "optical":
-            if direction == "north":
-                return self.object_optical_border_north
-            if direction == "south":
-                return self.object_optical_border_south
-            if direction == "east":
-                return self.object_optical_border_east
-            if direction == "west":
-                return self.object_optical_border_west
-        elif channel == "propagation":
-            if direction == "north":
-                return self.object_propagation_border_north
-            if direction == "south":
-                return self.object_propagation_border_south
-            if direction == "east":
-                return self.object_propagation_border_east
-            if direction == "west":
-                return self.object_propagation_border_west
-        return True
-
-    def set_intrinsic_border(self, channel: str, direction: str, passable: bool) -> bool:
-        """Set a tile-authored directional border. Returns True if changed."""
-        old_value = self._intrinsic_border(direction, channel)
-        if old_value == passable:
-            return False
-        if channel == "movement":
-            if direction == "north":
-                self.border_north = passable
-            elif direction == "south":
-                self.border_south = passable
-            elif direction == "east":
-                self.border_east = passable
-            elif direction == "west":
-                self.border_west = passable
-            else:
-                return False
-        elif channel == "optical":
-            if direction == "north":
-                self.optical_border_north = passable
-            elif direction == "south":
-                self.optical_border_south = passable
-            elif direction == "east":
-                self.optical_border_east = passable
-            elif direction == "west":
-                self.optical_border_west = passable
-            else:
-                return False
-        elif channel == "propagation":
-            if direction == "north":
-                self.propagation_border_north = passable
-            elif direction == "south":
-                self.propagation_border_south = passable
-            elif direction == "east":
-                self.propagation_border_east = passable
-            elif direction == "west":
-                self.propagation_border_west = passable
-            else:
-                return False
-        else:
-            return False
-        return True
-
-    def set_object_border(self, channel: str, direction: str, passable: bool) -> bool:
-        """Set object/entity-derived directional border state. Returns True if changed."""
-        old_value = self._derived_border(direction, channel)
-        if old_value == passable:
-            return False
-        if channel == "movement":
-            if direction == "north":
-                self.object_movement_border_north = passable
-            elif direction == "south":
-                self.object_movement_border_south = passable
-            elif direction == "east":
-                self.object_movement_border_east = passable
-            elif direction == "west":
-                self.object_movement_border_west = passable
-            else:
-                return False
-        elif channel == "optical":
-            if direction == "north":
-                self.object_optical_border_north = passable
-            elif direction == "south":
-                self.object_optical_border_south = passable
-            elif direction == "east":
-                self.object_optical_border_east = passable
-            elif direction == "west":
-                self.object_optical_border_west = passable
-            else:
-                return False
-        elif channel == "propagation":
-            if direction == "north":
-                self.object_propagation_border_north = passable
-            elif direction == "south":
-                self.object_propagation_border_south = passable
-            elif direction == "east":
-                self.object_propagation_border_east = passable
-            elif direction == "west":
-                self.object_propagation_border_west = passable
-            else:
-                return False
-        else:
-            return False
-        return True
-
-    def allows_direction(self, direction: str, channel: str = "movement",
-                         include_derived: bool = True) -> bool:
-        """Check one tile-relative direction for a channel."""
-        if direction not in {"north", "south", "east", "west"}:
-            return True
-        if not self._intrinsic_border(direction, channel):
-            return False
-        if include_derived and not self._derived_border(direction, channel):
-            return False
-        return True
-
-    def allows_directions(self, directions: Tuple[str, ...], channel: str = "movement",
-                          include_derived: bool = True) -> bool:
-        """Check orthogonal or diagonal directional crossing."""
-        if not directions:
-            return True
-        return all(self.allows_direction(direction, channel, include_derived) for direction in directions)
-
     @classmethod
     def create(cls, position: Tuple[int, int],
+               *,
+               surface: TileSurface,
                walkable: bool = True,
                blocks_optics: bool = False,
                blocks_propagation: bool = False,
@@ -488,6 +372,7 @@ class Tile(BaseBlock):
             uuid=tile_uuid,
             source_entity_uuid=tile_uuid,
             position=position,
+            surface=surface,
             walkable=walkable,
             blocks_optics=blocks_optics,
             blocks_propagation_field=blocks_propagation,
@@ -506,19 +391,32 @@ class Tile(BaseBlock):
 
 def floor_factory(position: Tuple[int, int]) -> Tile:
     """Create a floor tile (bright light, outdoor default)."""
-    return Tile.create(position, walkable=True, name="Floor", sprite_name="floor.png")
+    return Tile.create(
+        position,
+        surface=TileSurface(base_material=Material.STONE),
+        walkable=True,
+        name="Floor",
+        sprite_name="floor.png",
+    )
 
 
 def dark_floor_factory(position: Tuple[int, int]) -> Tile:
     """Create a dark floor tile (darkness, dungeon default)."""
-    return Tile.create(position, walkable=True, name="Floor", sprite_name="floor.png",
-                       default_light=LightLevel.DARKNESS)
+    return Tile.create(
+        position,
+        surface=TileSurface(base_material=Material.STONE),
+        walkable=True,
+        name="Floor",
+        sprite_name="floor.png",
+        default_light=LightLevel.DARKNESS,
+    )
 
 
 def wall_factory(position: Tuple[int, int]) -> Tile:
     """Create a wall tile."""
     tile = Tile.create(
         position,
+        surface=TileSurface(base_material=Material.STONE),
         walkable=False,
         blocks_optics=True,
         blocks_propagation=True,
@@ -537,7 +435,13 @@ def wall_factory(position: Tuple[int, int]) -> Tile:
 
 def water_factory(position: Tuple[int, int]) -> Tile:
     """Create a water tile (can't walk, can see through, can swim)."""
-    tile = Tile.create(position, walkable=False, name="Water", sprite_name="water.png")
+    tile = Tile.create(
+        position,
+        surface=TileSurface(base_material=Material.WATER),
+        walkable=False,
+        name="Water",
+        sprite_name="water.png",
+    )
 
     for mod_uuid in list(tile.swimming_cost.self_static.max_constraints.keys()):
         tile.swimming_cost.self_static.remove_max_constraint(mod_uuid)
@@ -561,6 +465,7 @@ def difficult_terrain_factory(
     """Create a difficult terrain tile (walking costs 2x movement)."""
     tile = Tile.create(
         position,
+        surface=TileSurface(base_material=Material.EARTH),
         walkable=True,
         name="Difficult Terrain",
         sprite_name="rough.png",

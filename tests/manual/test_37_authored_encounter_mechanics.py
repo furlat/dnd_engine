@@ -15,7 +15,7 @@ from dnd.content.scenarios.scenario_deployment import (
     assemble_scenario,
 )
 from dnd.core.base_block import BaseBlock
-from dnd.types.world import LightLevel
+from dnd.types.world import CardinalDirection, LightLevel
 from dnd.core.base_actions import (
     ActionAvailabilityStatus,
     TargetType,
@@ -971,6 +971,20 @@ def test_multi_object_control_room_exposes_several_nearby_object_actions() -> No
     assert any(isinstance(obj, StorageChest) for obj in cache_objects)
     assert any(obj.name == "Fireball Cannon" for obj in cannon_objects)
     assert any(obj.name == "Wall Torch" for obj in torch_objects)
+    torch = next(obj for obj in torch_objects if obj.name == "Wall Torch")
+    torch_placement = get_map().get_object_placement(torch.uuid)
+    assert torch_placement is not None
+    assert (
+        torch_placement.boundary_direction,
+        torch_placement.base_height_steps,
+        torch_placement.top_height_steps,
+        torch_placement.orientation,
+    ) == (
+        CardinalDirection.WEST,
+        1,
+        2,
+        CardinalDirection.EAST,
+    )
     assert any(name.startswith("Pull Lever") for name in display_names)
     assert any(name.startswith("Loot All") for name in display_names)
     assert any(name.startswith("Extinguish Wall Torch") for name in display_names)

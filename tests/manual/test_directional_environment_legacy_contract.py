@@ -1,4 +1,5 @@
 """Maintained directional wall/door regressions displaced by the d80 rework."""
+from dnd.types.materials import Material, TileSurface
 
 from uuid import uuid4
 
@@ -50,7 +51,7 @@ from tests.engine.support import reset_combat_state
 
 def _reset_directional_scene() -> None:
     reset_combat_state()
-    get_map().create_rectangle(0, 0, 9, 7)
+    get_map().create_rectangle(0, 0, 9, 7, surface=TileSurface(base_material=Material.STONE))
 
 
 def _assert_standard_directional_barrier() -> None:

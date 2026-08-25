@@ -1,4 +1,5 @@
 """Manual Chapter 17 checks for encounters, turns, and controllers."""
+from dnd.types.materials import Material, TileSurface
 
 from uuid import UUID, uuid4
 
@@ -87,12 +88,11 @@ def reset_encounter_tutorial_state(width: int = 16, height: int = 10) -> None:
     BaseCondition._registry.clear()
     BaseValue._registry.clear()
     Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
     Controller.clear_registry()
     Encounter.clear_registry()
     Encounter._combat_log_listeners.clear()
     GridMap.reset()
-    get_map().create_rectangle(0, 0, width, height)
+    get_map().create_rectangle(0, 0, width, height, surface=TileSurface(base_material=Material.STONE))
 
 
 def create_encounter_pair() -> tuple[Entity, Entity]:

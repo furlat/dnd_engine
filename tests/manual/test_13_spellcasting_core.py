@@ -1,4 +1,5 @@
 """Manual Chapter 13 checks for spellcasting core."""
+from dnd.types.materials import Material, TileSurface
 
 from uuid import uuid4
 
@@ -376,9 +377,8 @@ def reset_spell_tutorial_state(width: int = 10, height: int = 6) -> None:
     BaseCondition._registry.clear()
     BaseValue._registry.clear()
     Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
     GridMap.reset()
-    get_map().create_rectangle(0, 0, width, height)
+    get_map().create_rectangle(0, 0, width, height, surface=TileSurface(base_material=Material.STONE))
 
 
 def create_spell_actor(

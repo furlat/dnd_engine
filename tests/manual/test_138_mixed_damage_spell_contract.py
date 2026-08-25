@@ -21,6 +21,7 @@ from dnd.entities.entity import Entity
 from dnd.content.spatial_effect_recipes import ICE_STORM_SURFACE_RECIPE
 from dnd.spatial.area_conditions import SpatialCondition
 from dnd.spells.evocation import IceStorm
+from dnd.types.materials import Material, TileSurface
 from tests.engine.support import get_hp, has_condition
 from tests.manual.spell_regression_support import (
     create_spell_regression_actor,
@@ -108,6 +109,7 @@ def test_ice_storm_executes_upcast_save_cylinder_and_terrain_lifecycle() -> None
     grid.set_tile(
         9,
         4,
+        surface=TileSurface(base_material=Material.STONE),
         walkable=False,
         blocks_optics=True,
         blocks_propagation=True,

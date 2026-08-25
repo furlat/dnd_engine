@@ -1,4 +1,5 @@
 """Engine semantic tests for encounters, controllers, and API surfaces."""
+from dnd.types.materials import Material, TileSurface
 
 import asyncio
 import json
@@ -137,7 +138,7 @@ def reset_chapter_18_state(width: int = 16, height: int = 10) -> None:
     event_stream.ensure_attached()
     event_stream._clear_source_journal()
     sim.reset()
-    get_map().create_rectangle(0, 0, width, height)
+    get_map().create_rectangle(0, 0, width, height, surface=TileSurface(base_material=Material.STONE))
 
 
 def create_book_pair() -> tuple[Entity, Entity]:

@@ -1,7 +1,10 @@
 """Engine semantic tests for action templates, costs, and discovery."""
+from dnd.types.materials import Material, TileSurface
 
 from typing import cast
 from uuid import uuid4
+
+import pytest
 
 from dnd.actions.standard import (
     Dash,
@@ -27,12 +30,17 @@ from dnd.blocks.equipment import (
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
 from dnd.content.items.authored_item_builders import build_authored_item
+from dnd.content.items.environment_item_builders import (
+    build_directional_door,
+    build_directional_wall,
+)
 from dnd.core.base_actions import (
     ActionAvailabilityStatus,
     ActionCategory,
     Cost,
     TargetType,
 )
+from dnd.spells.evocation import BurningHands, IceStorm, LightningBolt
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition
 from dnd.types.conditions import HazardFilter
@@ -43,6 +51,7 @@ from dnd.core.events.events_registry import (
 )
 from dnd.core.gridmap import get_map
 from dnd.types.damage import DamageType
+from dnd.types.world import CardinalDirection, WorldEdgeChannel
 from dnd.core.values import BaseValue
 from dnd.entities.entity import Entity, EntityConfig
 from dnd.spells.transmutation import BonusDash, ExpeditiousRetreatEffect
@@ -61,7 +70,7 @@ def reset_action_state() -> None:
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
     BaseValue._registry.clear()
-    get_map().create_rectangle(0, 0, 20, 20)
+    get_map().create_rectangle(0, 0, 20, 20, surface=TileSurface(base_material=Material.STONE))
 
 
 def configured_entity(
@@ -307,6 +316,184 @@ def test_eb_09_006_nearby_environment_use_actions_are_distance_gated() -> None:
 
     assert nearby.uuid in source_item_uuids
     assert far.uuid not in source_item_uuids
+
+
+def test_boundary_wall_is_not_an_action_target_and_preserves_channel_selectivity() -> None:
+    """A structural wall blocks only its authored channels and is not usable."""
+    reset_action_state()
+    entity = configured_entity(position=(2, 2))
+    wall = build_directional_wall(
+        blocked_channels=(
+            WorldEdgeChannel.MOVEMENT,
+            WorldEdgeChannel.PROPAGATION,
+        ),
+    )
+    grid = get_map()
+    grid.place_object(
+        wall.uuid,
+        (3, 2),
+        boundary_direction=CardinalDirection.EAST,
+    )
+    Entity.materialize_all_navigation(max_distance=20)
+
+    assert not grid.can_transition((3, 2), (4, 2), entity.uuid)
+    assert grid.can_optical_transition((3, 2), (4, 2))
+    assert not grid.can_propagate_transition((3, 2), (4, 2))
+    available = get_available_actions(entity)
+    assert all(
+        info.source_item_uuid != wall.uuid
+        for info in available.all_actions
+    )
+    assert all(
+        target.target_uuid != wall.uuid
+        for info in available.all_actions
+        for target in info.valid_targets
+    )
+
+
+def test_far_boundary_door_does_not_surface_use_action() -> None:
+    """A canonical door outside the public interaction range stays undiscovered."""
+    reset_action_state()
+    entity = configured_entity(position=(1, 1))
+    door = build_directional_door(
+        blocked_channels=tuple(WorldEdgeChannel),
+    )
+    get_map().place_object(
+        door.uuid,
+        (8, 1),
+        boundary_direction=CardinalDirection.WEST,
+    )
+    Entity.materialize_all_navigation(max_distance=20)
+
+    available = get_available_actions(entity)
+    assert all(
+        info.source_item_uuid != door.uuid
+        for info in available.all_actions
+    )
+
+
+@pytest.mark.parametrize("shape_kind", ["line", "cone"])
+def test_caster_origin_preview_obeys_propagation(shape_kind: str) -> None:
+    """Public caster-origin spell previews stop at a propagation-only boundary."""
+    reset_action_state()
+    grid = get_map()
+    caster = create_test_entity(
+        name="Origin caster",
+        config=EntityConfig(
+            ability_scores=AbilityScoresConfig(
+                intelligence=AbilityConfig(ability_score=16),
+            ),
+            action_economy=ActionEconomyConfig(spell_slots={1: 1, 3: 1}),
+            spellcasting=SpellcastingConfig(spellcasting_ability="intelligence"),
+            proficiency_bonus=3,
+            position=(2, 2),
+            faction="heroes",
+        ),
+    )
+    setup_standard_actions(caster)
+    near_boundary = create_test_monster(
+        "monster.skeleton",
+        name="Near propagation boundary",
+        position=(3, 2),
+        faction="monsters",
+    )
+    behind_boundary = create_test_monster(
+        "monster.skeleton",
+        name="Behind propagation boundary",
+        position=(4, 2),
+        faction="monsters",
+    )
+    wall = build_directional_wall(
+        display_name="Propagation-only boundary",
+        blocked_channels=(WorldEdgeChannel.PROPAGATION,),
+    )
+    grid.place_object(
+        wall.uuid,
+        (3, 2),
+        boundary_direction=CardinalDirection.EAST,
+    )
+
+    spell_type = LightningBolt if shape_kind == "line" else BurningHands
+    register_spell(caster, spell_type, caster_level=5)
+    available = get_available_actions(caster)
+    spell_name = "Lightning Bolt__slot_3" if shape_kind == "line" else "Burning Hands__slot_1"
+    spell_info = find_action(available, spell_name)
+    preview = next(
+        target for target in spell_info.valid_targets if target.position == (5, 1)
+    )
+
+    if shape_kind == "line":
+        assert caster.position in set(preview.affected_positions or [])
+    assert (3, 2) in set(preview.affected_positions or [])
+    assert (4, 2) not in set(preview.affected_positions or [])
+    assert near_boundary.uuid in set(preview.affected_entity_uuids or [])
+    assert behind_boundary.uuid not in set(preview.affected_entity_uuids or [])
+
+
+def test_targeted_cylinder_preview_keeps_full_geometry_and_filters_hidden_contacts() -> None:
+    """Public targeted cylinder previews retain geometry but filter hidden contacts."""
+    reset_action_state()
+    grid = get_map()
+    grid.set_tile(
+        2,
+        1,
+        surface=TileSurface(base_material=Material.STONE),
+        walkable=False,
+        blocks_optics=True,
+        blocks_propagation=True,
+        name="Horizontal wall",
+    )
+    caster = create_test_entity(
+        name="Cylinder caster",
+        config=EntityConfig(
+            ability_scores=AbilityScoresConfig(
+                intelligence=AbilityConfig(ability_score=16),
+            ),
+            health=HealthConfig(
+                hit_dices=[
+                    HitDiceConfig(
+                        hit_dice_value=8,
+                        hit_dice_count=2,
+                        mode="maximums",
+                    )
+                ]
+            ),
+            action_economy=ActionEconomyConfig(spell_slots={4: 1}),
+            spellcasting=SpellcastingConfig(spellcasting_ability="intelligence"),
+            proficiency_bonus=3,
+            position=(0, 1),
+            faction="heroes",
+        ),
+    )
+    setup_standard_actions(caster)
+    visible_target = create_test_monster(
+        "monster.skeleton",
+        name="Visible cylinder target",
+        position=(1, 1),
+        faction="monsters",
+    )
+    hidden_target = create_test_monster(
+        "monster.skeleton",
+        name="Hidden cylinder target",
+        position=(3, 1),
+        faction="monsters",
+    )
+    register_spell(caster, IceStorm, caster_level=5)
+    available = get_available_actions(caster)
+    spell_info = find_action(available, "Ice Storm__slot_4")
+    preview = next(
+        target for target in spell_info.valid_targets if target.position == (1, 1)
+    )
+
+    affected_positions = set(preview.affected_positions or [])
+    affected_uuids = set(preview.affected_entity_uuids or [])
+    assert (1, 1) in affected_positions
+    assert (3, 1) in affected_positions
+    assert (4, 1) in affected_positions
+    assert visible_target.uuid in affected_uuids
+    assert caster.uuid in affected_uuids
+    assert hidden_target.uuid not in caster.senses.entities
+    assert hidden_target.uuid not in affected_uuids
 
 
 def test_eb_09_007_action_overrides_change_cost_display_and_consumption() -> None:

@@ -12,7 +12,7 @@ from dnd.content.scenarios.battlefield_definitions import (
     BattlefieldLayoutDefinition,
 )
 from dnd.core.base_block import BaseBlock
-from dnd.types.world import MovementMode
+from dnd.types.world import CardinalDirection, MovementMode, WorldEdgeChannel
 from dnd.types.equipment import WeaponSlot
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
 from dnd.core.events.events_registry import (
@@ -25,7 +25,7 @@ from dnd.core.gridmap import get_map
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.world_edges import ElevationSurfaceKind, SlopeAxis
 from dnd.core.traversal_connectors import TraversalConnectorKind
-from dnd.items.environment import DirectionalDoor, OpenDirectionalDoorAction
+from dnd.items.environment import CliffFace, DirectionalDoor, OpenDirectionalDoorAction
 from dnd.actions.standard import (
     Attack,
     AttackEvent,
@@ -96,6 +96,30 @@ def test_elevation_proving_battlefield_cold_layout_matches_runtime() -> None:
     assert gap.get_movement_cost(MovementMode.SWIMMING) == 0
     landing = grid.get_tile(11, 9)
     assert landing is not None and landing.height == 1
+    cliff_row = next(
+        row for row in definition.layout.objects if row.kind == "cliff"
+    )
+    cliff = BaseBlock.get(built.object_uuids["cliff"])
+    assert isinstance(cliff, CliffFace)
+    cliff_placement = grid.get_object_placement(cliff.uuid)
+    assert cliff_placement is not None
+    assert cliff_row.boundary_direction is CardinalDirection.WEST
+    assert cliff.get_boundary_structure().blocked_channels == (
+        WorldEdgeChannel.MOVEMENT,
+    )
+    assert (
+        cliff_placement.position,
+        cliff_placement.boundary_direction,
+        cliff_placement.base_height_steps,
+        cliff_placement.top_height_steps,
+        cliff_placement.orientation,
+    ) == (
+        cliff_row.position,
+        cliff_row.boundary_direction,
+        cliff_row.base_height_steps,
+        cliff_row.base_height_steps + 2,
+        cliff_row.orientation,
+    )
     assert BaseCondition.get(built.object_uuids["landing_hazard"]) is not None
     authored_connectors = definition.layout.connectors
     runtime_connectors = grid.get_all_connectors()
@@ -110,7 +134,7 @@ def test_elevation_proving_battlefield_cold_layout_matches_runtime() -> None:
         row.authored_id: row
         for row in authored_connectors
     }
-def test_elevation_proving_battlefield_exercises_reciprocal_edge_rules() -> None:
+def test_elevation_proving_battlefield_exercises_ordered_edge_rules() -> None:
     reset_engine_runtime()
     built = build_battlefield(PROVING_BATTLEFIELD_ID)
     grid = get_map()
@@ -126,9 +150,30 @@ def test_elevation_proving_battlefield_exercises_reciprocal_edge_rules() -> None
         (11, 5),
         movement_mode=MovementMode.WALKING,
     )
-    assert grid.can_transition(
+    assert not grid.can_transition(
         (10, 5),
         (11, 5),
+        movement_mode=MovementMode.FLYING,
+    )
+    cliff_uuid = built.object_uuids["cliff"]
+    edge = grid.get_world_edge((10, 5), (11, 5))
+    assert any(
+        row.provider_uuid == cliff_uuid
+        for row in edge.entry_contributions
+    )
+    assert grid.can_optical_transition((10, 5), (11, 5))
+    assert grid.can_propagate_transition((10, 5), (11, 5))
+    cliff_free_edge = grid.get_world_edge((11, 5), (12, 5))
+    assert all(
+        row.provider_uuid != cliff_uuid
+        for row in (
+            *cliff_free_edge.exit_contributions,
+            *cliff_free_edge.entry_contributions,
+        )
+    )
+    assert grid.can_transition(
+        (11, 5),
+        (12, 5),
         movement_mode=MovementMode.FLYING,
     )
 
@@ -148,8 +193,8 @@ def test_elevation_proving_battlefield_exercises_reciprocal_edge_rules() -> None
         movement_mode=MovementMode.WALKING,
     )
     assert closed.key == opened.key
-    assert any(row.provider_uuid == door.uuid for row in closed.structural_contributions)
-    assert any(row.provider_uuid == door.uuid for row in opened.structural_contributions)
+    assert any(row.provider_uuid == door.uuid for row in closed.entry_contributions)
+    assert any(row.provider_uuid == door.uuid for row in opened.exit_contributions)
 
 
 def test_elevation_proving_battlefield_surface_axes_are_authored_not_inferred() -> None:

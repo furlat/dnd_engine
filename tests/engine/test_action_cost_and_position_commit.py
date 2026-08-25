@@ -22,7 +22,9 @@ from dnd.core.gridmap import get_map
 from dnd.core.positioning import PositionCommitError, PositionPublicationError
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import StaticValue
+from dnd.content.monsters.monster_builders import create_monster
 from dnd.entities.entity import Entity
+from dnd.game import Game
 from tests.engine.test_combat_actions import reset_core_action_state, strong_entity
 
 
@@ -215,34 +217,6 @@ def test_debit_undo_rejects_forged_handle_before_removing_any_modifier() -> None
     assert unrelated.uuid in economy.movement.self_static.value_modifiers
 
 
-def test_position_staging_failure_restores_all_four_position_owners(monkeypatch: pytest.MonkeyPatch) -> None:
-    reset_core_action_state()
-    entity = strong_entity("Mover", (1, 1), "heroes")
-    grid = get_map()
-    original = grid.recompute_tile_directional_blocking
-
-    def fail_at_destination(position: tuple[int, int]):
-        if position == (2, 1):
-            raise RuntimeError("injected staging failure")
-        return original(position)
-
-    monkeypatch.setattr(grid, "recompute_tile_directional_blocking", fail_at_destination)
-    before_events = EventQueue.event_cursor()
-
-    with pytest.raises(PositionCommitError) as error:
-        Entity.update_entity_position(entity, (2, 1))
-
-    assert error.value.position_committed is False
-    assert entity.position == (1, 1)
-    assert entity.senses.position == (1, 1)
-    assert Entity.get_all_entities_at_position((1, 1)) == [entity]
-    assert Entity.get_all_entities_at_position((2, 1)) == []
-    assert grid.get_entity_position(entity.uuid) == (1, 1)
-    assert grid.get_entities_at((1, 1)) == {entity.uuid}
-    assert grid.get_entities_at((2, 1)) == set()
-    assert EventQueue.event_cursor() == before_events
-
-
 def test_spatial_publication_failure_keeps_committed_objective_position_and_raises() -> None:
     reset_core_action_state()
     entity = strong_entity("Mover", (1, 1), "heroes")
@@ -272,6 +246,246 @@ def test_spatial_publication_failure_keeps_committed_objective_position_and_rais
     assert error.value.position_committed is True
     assert entity.position == (2, 1)
     assert entity.senses.position == (1, 1)
-    assert Entity.get_all_entities_at_position((2, 1)) == [entity]
+    assert get_map().get_entities_at((2, 1)) == {entity.uuid}
     assert grid.get_entity_position(entity.uuid) == (2, 1)
     assert grid.get_entities_at((2, 1)) == {entity.uuid}
+
+
+def test_committed_entity_membership_facts_ignore_declaration_veto() -> None:
+    reset_core_action_state()
+    entity = strong_entity("Committed mover", (1, 1), "heroes")
+    grid = get_map()
+    parent_uuid = uuid4()
+    observed_effects = []
+
+    def veto_declaration_and_observe_effect(event, _source_uuid):
+        if event.phase is EventPhase.DECLARATION:
+            return event.cancel(status_message="declaration veto")
+        observed_effects.append((event.event_type, event.uuid))
+        return None
+
+    handler = EventHandler(
+        name="Veto committed spatial declarations",
+        source_entity_uuid=uuid4(),
+        trigger_conditions=[
+            Trigger(
+                name="Veto Entity LEFT declaration",
+                event_type=EventType.SPATIAL_ENTITY_LEFT,
+                event_phase=EventPhase.DECLARATION,
+                event_source_entity_uuid=entity.uuid,
+            ),
+            Trigger(
+                name="Veto Entity ENTERED declaration",
+                event_type=EventType.SPATIAL_ENTITY_ENTERED,
+                event_phase=EventPhase.DECLARATION,
+                event_source_entity_uuid=entity.uuid,
+            ),
+            Trigger(
+                name="Observe Entity LEFT effect",
+                event_type=EventType.SPATIAL_ENTITY_LEFT,
+                event_phase=EventPhase.EFFECT,
+                event_source_entity_uuid=entity.uuid,
+            ),
+            Trigger(
+                name="Observe Entity ENTERED effect",
+                event_type=EventType.SPATIAL_ENTITY_ENTERED,
+                event_phase=EventPhase.EFFECT,
+                event_source_entity_uuid=entity.uuid,
+            ),
+        ],
+        event_processor=veto_declaration_and_observe_effect,
+    )
+    EventQueue.add_event_handler(handler)
+    cursor = EventQueue.event_cursor()
+    try:
+        Entity.update_entity_position(entity, (2, 1), parent_event=parent_uuid)
+    finally:
+        EventQueue.remove_event_handler(handler)
+
+    assert entity.position == (2, 1)
+    assert entity.senses.position == (2, 1)
+    assert grid.get_entity_position(entity.uuid) == (2, 1)
+    assert grid.get_entities_at((1, 1)) == set()
+    assert grid.get_entities_at((2, 1)) == {entity.uuid}
+    spatial_events = [
+        event
+        for _, event in EventQueue.iter_events_since(cursor)
+        if event.event_type in {
+            EventType.SPATIAL_ENTITY_LEFT,
+            EventType.SPATIAL_ENTITY_ENTERED,
+        }
+    ]
+    assert [event.event_type for event in spatial_events] == [
+        EventType.SPATIAL_ENTITY_LEFT,
+        EventType.SPATIAL_ENTITY_LEFT,
+        EventType.SPATIAL_ENTITY_LEFT,
+        EventType.SPATIAL_ENTITY_LEFT,
+        EventType.SPATIAL_ENTITY_ENTERED,
+        EventType.SPATIAL_ENTITY_ENTERED,
+        EventType.SPATIAL_ENTITY_ENTERED,
+        EventType.SPATIAL_ENTITY_ENTERED,
+    ]
+    assert [event.phase for event in spatial_events[:4]] == [
+        EventPhase.DECLARATION,
+        EventPhase.EXECUTION,
+        EventPhase.EFFECT,
+        EventPhase.COMPLETION,
+    ]
+    assert [event.phase for event in spatial_events[4:]] == [
+        EventPhase.DECLARATION,
+        EventPhase.EXECUTION,
+        EventPhase.EFFECT,
+        EventPhase.COMPLETION,
+    ]
+    assert len({event.lineage_uuid for event in spatial_events[:4]}) == 1
+    assert len({event.lineage_uuid for event in spatial_events[4:]}) == 1
+    assert all(event.parent_event == parent_uuid for event in spatial_events)
+    assert observed_effects == [
+        (EventType.SPATIAL_ENTITY_LEFT, spatial_events[2].uuid),
+        (EventType.SPATIAL_ENTITY_ENTERED, spatial_events[6].uuid),
+    ]
+
+
+def test_disabled_entity_occupancy_attempts_are_atomic_and_publish_nothing() -> None:
+    reset_core_action_state()
+    grid = get_map()
+    game = Game()
+    entity = create_monster("creature.commoner", uuid4(), faction="heroes")
+    game.deploy_entity(entity, (1, 1))
+    unpublished = create_monster("creature.commoner", uuid4(), faction="heroes")
+    unpublished_position = unpublished.position
+
+    tracked_positions = ((1, 1), (2, 1), (3, 1), (4, 1))
+
+    def snapshot() -> tuple[object, ...]:
+        return (
+            entity.position,
+            entity.is_deployed,
+            entity.is_spatially_suspended,
+            game.get_entity(entity.uuid) is entity,
+            grid.get_entity_position(entity.uuid),
+            tuple(
+                frozenset(grid.get_entities_at(position))
+                for position in tracked_positions
+            ),
+            grid.occupancy_revision,
+            EventQueue.event_cursor(),
+            entity.senses.position,
+            tuple(
+                grid.get_tile(*position).resolved_light_level
+                for position in tracked_positions
+            ),
+        )
+
+    cursor = EventQueue.event_cursor()
+    before_disabled = snapshot()
+
+    grid.disable_events()
+
+    with pytest.raises(PositionCommitError):
+        Entity.update_entity_position(entity, (2, 1))
+    assert snapshot() == before_disabled
+
+    with pytest.raises(PositionCommitError):
+        Entity.update_entity_position(entity, (3, 1))
+    assert snapshot() == before_disabled
+
+    with pytest.raises(PositionCommitError):
+        game.deploy_entity(unpublished, (4, 1))
+    assert unpublished.position == unpublished_position
+    assert not unpublished.is_deployed
+    assert not unpublished.is_spatially_suspended
+    assert game.get_entity(unpublished.uuid) is None
+    assert grid.get_entity_position(unpublished.uuid) is None
+    assert snapshot() == before_disabled
+
+    with pytest.raises(PositionCommitError):
+        game.remove_entity(entity.uuid)
+    assert snapshot() == before_disabled
+
+    with pytest.raises(PositionCommitError):
+        entity.suspend_spatial_presence()
+    assert snapshot() == before_disabled
+
+    grid.enable_events(flush_pending=True)
+    assert EventQueue.event_cursor() == cursor
+    assert [
+        event
+        for _, event in EventQueue.iter_events_since(cursor)
+        if event.event_type
+        in {
+            EventType.SPATIAL_ENTITY_LEFT,
+            EventType.SPATIAL_ENTITY_ENTERED,
+        }
+    ] == []
+
+    parent_uuid = uuid4()
+    Entity.update_entity_position(entity, (2, 1), parent_event=parent_uuid)
+    assert entity.position == (2, 1)
+    assert entity.senses.position == (2, 1)
+    assert grid.get_entity_position(entity.uuid) == (2, 1)
+    assert grid.get_entities_at((1, 1)) == set()
+    assert grid.get_entities_at((2, 1)) == {entity.uuid}
+
+    move_cursor = cursor
+
+    spatial_events = [
+        event
+        for _, event in EventQueue.iter_events_since(move_cursor)
+        if event.event_type in {
+            EventType.SPATIAL_ENTITY_LEFT,
+            EventType.SPATIAL_ENTITY_ENTERED,
+        }
+    ]
+    assert [event.event_type for event in spatial_events] == [
+        EventType.SPATIAL_ENTITY_LEFT,
+        EventType.SPATIAL_ENTITY_LEFT,
+        EventType.SPATIAL_ENTITY_LEFT,
+        EventType.SPATIAL_ENTITY_LEFT,
+        EventType.SPATIAL_ENTITY_ENTERED,
+        EventType.SPATIAL_ENTITY_ENTERED,
+        EventType.SPATIAL_ENTITY_ENTERED,
+        EventType.SPATIAL_ENTITY_ENTERED,
+    ]
+    assert [event.phase for event in spatial_events[:4]] == [
+        EventPhase.DECLARATION,
+        EventPhase.EXECUTION,
+        EventPhase.EFFECT,
+        EventPhase.COMPLETION,
+    ]
+    assert [event.phase for event in spatial_events[4:]] == [
+        EventPhase.DECLARATION,
+        EventPhase.EXECUTION,
+        EventPhase.EFFECT,
+        EventPhase.COMPLETION,
+    ]
+    assert all(event.parent_event == parent_uuid for event in spatial_events)
+
+    entity.suspend_spatial_presence()
+    suspended_cursor = EventQueue.event_cursor()
+    suspended_before_disabled = snapshot()
+    grid.disable_events()
+
+    with pytest.raises(PositionCommitError):
+        entity.restore_spatial_presence((4, 1))
+    assert snapshot() == suspended_before_disabled
+
+    grid.enable_events(flush_pending=True)
+    assert EventQueue.event_cursor() == suspended_cursor
+    assert [
+        event
+        for _, event in EventQueue.iter_events_since(suspended_cursor)
+        if event.event_type
+        in {
+            EventType.SPATIAL_ENTITY_LEFT,
+            EventType.SPATIAL_ENTITY_ENTERED,
+        }
+    ] == []
+
+    entity.restore_spatial_presence((4, 1))
+    assert entity.is_deployed
+    assert not entity.is_spatially_suspended
+    assert entity.position == (4, 1)
+    assert entity.senses.position == (4, 1)
+    assert grid.get_entity_position(entity.uuid) == (4, 1)
+    assert grid.get_entities_at((4, 1)) == {entity.uuid}

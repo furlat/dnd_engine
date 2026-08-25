@@ -1,4 +1,5 @@
 """Haste's restricted action budget and Extra Attack ordering invariants."""
+from dnd.types.materials import Material, TileSurface
 
 from uuid import UUID, uuid4
 
@@ -71,7 +72,7 @@ HASTE_ACTION_RESOURCE = "haste_action"
 def _reset_runtime() -> None:
     """Give every case fresh registries and a visible combat grid."""
     reset_combat_state()
-    get_map().create_rectangle(0, 0, 12, 12)
+    get_map().create_rectangle(0, 0, 12, 12, surface=TileSurface(base_material=Material.STONE))
 
 
 def _create_creature(

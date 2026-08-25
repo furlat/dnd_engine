@@ -1,4 +1,5 @@
 """Objective illumination and replayed subjective-perception contracts."""
+from dnd.types.materials import Material, TileSurface
 
 from uuid import UUID
 
@@ -16,7 +17,7 @@ def reset_objective_scene(*, default_light: LightLevel) -> None:
     reset_combat_state()
     grid = get_map()
     grid.disable_events()
-    grid.create_rectangle(0, 0, 6, 1)
+    grid.create_rectangle(0, 0, 6, 1, surface=TileSurface(base_material=Material.STONE))
     for position in grid.get_all_tiles():
         grid.set_tile_base_light(position, default_light)
     grid.enable_events(flush_pending=False)

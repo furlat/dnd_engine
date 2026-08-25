@@ -112,6 +112,7 @@ from dnd.types.senses import OpticalObscurement
 from dnd.core.base_block import BaseBlock
 from dnd.types.world import LightLevel
 from dnd.core.gridmap import get_map
+from dnd.types.items import ItemLocation
 from dnd.entities.entity import Entity
 from dnd.conditions import Concentrating, ConcentrationActionMarker, Prone
 from dnd.actions.standard import (
@@ -4198,6 +4199,12 @@ class HeroesFeast(SpellAction):
 
         feast = build_heroes_feast_object(caster.uuid)
         feast.place_on_grid(position)
+        feast.publish_location_state(
+            ItemLocation.FLOOR,
+            world_placement=get_map().get_object_placement(feast.uuid),
+            source_entity_uuid=caster.uuid,
+            parent_event=effect_event,
+        )
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,

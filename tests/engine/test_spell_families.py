@@ -1,4 +1,5 @@
 """Engine semantic tests for spell families and implemented spells."""
+from dnd.types.materials import Material, TileSurface
 
 from typing import Optional, cast
 from unittest.mock import patch
@@ -26,7 +27,7 @@ from dnd.core.base_actions import (
     TargetType,
 )
 from dnd.core.base_block import BaseBlock
-from dnd.types.world import LightLevel
+from dnd.types.world import CardinalDirection, LightLevel
 from dnd.types.senses import OpticalObscurement, SenseMode, SensesType
 from dnd.core.base_conditions import BaseCondition
 from dnd.types.conditions import ConditionTag, DurationType
@@ -52,6 +53,8 @@ from dnd.core.events.world_events import (
     SpatialEffectChangeEvent,
     SpatialEffectInteractionEvent,
 )
+from dnd.core.events.item_events import ItemLocationStateEvent
+from dnd.types.items import ItemLocation
 from dnd.types.spatial_effects import (
     SpatialEffectAnchorKind,
     SpatialEffectChangeOperation,
@@ -108,6 +111,7 @@ from dnd.spells.conjuration import (
     Web,
     WebRestrained,
     WebZone,
+    HeroesFeast,
 )
 from dnd.spells.divination import Guidance, SeeInvisibility
 from dnd.spells.evocation import ContinualFlame, CureWounds, GustOfWind, GustOfWindZone, HealingWord, RayOfFrostEffect
@@ -144,7 +148,7 @@ def reset_spell_family_state(width: int = 12, height: int = 8) -> None:
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
     BaseValue._registry.clear()
-    get_map().create_rectangle(0, 0, width, height)
+    get_map().create_rectangle(0, 0, width, height, surface=TileSurface(base_material=Material.STONE))
 
 
 def active_spatial_condition(
@@ -3107,6 +3111,7 @@ def test_eb_15_028_gas_and_ice_zones_match_srd_turn_start_edges() -> None:
     grid.set_tile(
         11,
         10,
+        surface=TileSurface(base_material=Material.STONE),
         walkable=False,
         blocks_optics=True,
         blocks_propagation=True,
@@ -3286,6 +3291,67 @@ def test_object_spell_shared_validator_rejects_out_of_reach_target() -> None:
     assert event.status_message == "Target object is out of reach"
 
 
+def test_heroes_feast_publishes_exactly_one_floor_fact() -> None:
+    """Spell-created floor objects have one exact committed placement fact."""
+    reset_spell_family_state()
+    caster = create_family_caster(position=(1, 1), spell_slots={6: 1})
+    cursor = EventQueue.event_cursor()
+
+    assert_completed_spell(
+        HeroesFeast(
+            source_entity_uuid=caster.uuid,
+            end_position=(2, 1),
+            template=False,
+        ).apply()
+    )
+    feast_uuid = next(iter(get_map().get_objects_at((2, 1))))
+    floor_facts = [
+        candidate
+        for _index, candidate in EventQueue.iter_events_since(cursor)
+        if isinstance(candidate, ItemLocationStateEvent)
+        and candidate.item_state.item_uuid == feast_uuid
+        and candidate.location is ItemLocation.FLOOR
+    ]
+    assert len(floor_facts) == 1
+    assert floor_facts[0].world_placement == get_map().get_object_placement(feast_uuid)
+    assert floor_facts[0].world_placement is not None
+    assert floor_facts[0].world_placement.object_uuid == feast_uuid
+
+
+def test_continual_flame_relocates_and_cleans_up_with_its_anchor() -> None:
+    """An anchored permanent flame follows relocation and terminal removal."""
+    reset_spell_family_state(width=8, height=3)
+    caster = create_family_caster(position=(0, 1), spell_slots={2: 1})
+    focus = BaseItem(source_entity_uuid=caster.uuid, name="Flame focus")
+    focus.place_on_grid((1, 1))
+    Entity.materialize_all_navigation(max_distance=40)
+
+    assert_completed_spell(
+        ContinualFlame(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=focus.uuid,
+            template=False,
+        ).apply()
+    )
+    condition = next(
+        candidate
+        for candidate in get_map().get_spatial_conditions()
+        if candidate.anchor_uuid == focus.uuid
+    )
+    assert condition.position == (1, 1)
+    assert get_map().get_tile(1, 1).resolved_light_level is LightLevel.BRIGHT_LIGHT
+
+    grid = get_map()
+    grid.move_object(focus.uuid, (3, 1))
+
+    assert condition.position == (3, 1)
+    assert condition.affected_positions == {(3, 1)}
+    assert get_map().get_tile(3, 1).resolved_light_level is LightLevel.BRIGHT_LIGHT
+    grid.remove_object(focus.uuid)
+    assert condition.uuid not in {candidate.uuid for candidate in grid.get_spatial_conditions()}
+    assert get_map().get_tile(3, 1).resolved_light_level is LightLevel.BRIGHT_LIGHT
+
+
 def test_entity_spell_shared_validator_rejects_unseen_target() -> None:
     """Single-target spells cannot bypass line of sight with a custom validator."""
     reset_spell_family_state()
@@ -3436,6 +3502,7 @@ def test_eb_15_045_gust_terrain_removal_restores_cached_move_targets() -> None:
         grid.set_tile(
             x,
             9,
+            surface=TileSurface(base_material=Material.STONE),
             walkable=False,
             blocks_optics=True,
             blocks_propagation=True,
@@ -3444,6 +3511,7 @@ def test_eb_15_045_gust_terrain_removal_restores_cached_move_targets() -> None:
         grid.set_tile(
             x,
             11,
+            surface=TileSurface(base_material=Material.STONE),
             walkable=False,
             blocks_optics=True,
             blocks_propagation=True,
@@ -3512,9 +3580,21 @@ def test_eb_15_043_sleet_storm_douses_exposed_flames() -> None:
     torchbearer.loot_item(carried_torch)
     carried_torch.ignite(torchbearer.uuid)
     wall_torch = build_wall_torch()
-    wall_torch.mount((10, 6), lit=True)
+    wall_torch.mount(
+        (10, 6),
+        boundary_direction=CardinalDirection.EAST,
+        base_height_steps=1,
+        orientation=CardinalDirection.WEST,
+        lit=True,
+    )
     outside_torch = build_wall_torch()
-    outside_torch.mount((1, 1), lit=True)
+    outside_torch.mount(
+        (1, 1),
+        boundary_direction=CardinalDirection.EAST,
+        base_height_steps=1,
+        orientation=CardinalDirection.WEST,
+        lit=True,
+    )
     carried_light_uuid = carried_torch._light_source_uuid
     wall_light_uuid = wall_torch._light_source_uuid
     outside_light_uuid = outside_torch._light_source_uuid

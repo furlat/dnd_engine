@@ -1,4 +1,5 @@
 """Tile-owned duration and encounter environment-step regressions."""
+from dnd.types.materials import Material, TileSurface
 
 from uuid import uuid4
 
@@ -31,7 +32,7 @@ def test_tile_duration_expiry_removes_owned_cross_block_effect() -> None:
     """Tiles use BaseBlock duration and linked-condition cleanup unchanged."""
     reset_combat_state()
     grid = get_map()
-    grid.create_rectangle(0, 0, 8, 8)
+    grid.create_rectangle(0, 0, 8, 8, surface=TileSurface(base_material=Material.STONE))
     target = create_test_monster("monster.skeleton",
         name="Tile Duration Target",
         position=(3, 3),
@@ -65,7 +66,7 @@ def test_encounter_round_boundary_advances_tile_durations() -> None:
     """The environment step advances each tile exactly once per completed round."""
     reset_combat_state()
     grid = get_map()
-    grid.create_rectangle(0, 0, 8, 8)
+    grid.create_rectangle(0, 0, 8, 8, surface=TileSurface(base_material=Material.STONE))
     first = create_test_monster("monster.skeleton",
         name="Tile Duration First",
         position=(0, 0),

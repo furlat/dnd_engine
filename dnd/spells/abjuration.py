@@ -100,6 +100,11 @@ from dnd.actions.standard import (
 )
 from dnd.conditions import Exhaustion
 from dnd.entities.creature_transforms import apply_incapacitated_transform
+from dnd.entities.creature_transforms import (
+    ModifierOwnership,
+    remove_modifier_ownership,
+)
+from dnd.core.positioning import PositionCommitError, PositionPublicationError
 from dnd.spells.content_metadata import (
     srd_action_identity,
     srd_reaction_identity,
@@ -1358,8 +1363,8 @@ class GlobeOfInvulnerability(SpellAction):
 class BanishedCondition(BaseCondition):
     """Remove a banished entity from spatial play until cleanup.
 
-    The condition stores the original position, owns incapacitation directly,
-    removes the target from spatial registries, and restores it when removed.
+    The condition owns incapacitation directly and suspends the target's
+    world presence until removal restores it.
     """
     name: str = Field(default="Banished", description="Condition name.")
     description: str = Field(default="Banished to another plane - removed from play", description="Rules-facing condition summary.")
@@ -1372,32 +1377,23 @@ class BanishedCondition(BaseCondition):
         default=ConditionAgencyDenial.FULL_TURN,
         description="Banishment removes the target's turn agency.",
     )
-    original_position: Tuple[int, int] = Field(default=(0, 0), description="Grid position restored when banishment ends.")
+    _provisional_modifier_ownership: ModifierOwnership = PrivateAttr(
+        default_factory=list,
+    )
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if not isinstance(target, Entity):
             return [], [], [], [], None
 
-        self.original_position = target.position
+        target.suspend_spatial_presence(parent_event=declaration_event.uuid)
+
         outs = apply_incapacitated_transform(
             target,
             name=self.name,
             effect_source_uuid=self.source_entity_uuid,
         )
-
-        grid = get_map()
-        pos = self.original_position
-        grid._entity_positions.pop(target.uuid, None)
-        if pos in grid._entities_by_position:
-            grid._entities_by_position[pos].discard(target.uuid)
-
-        if target in Entity._entity_by_position[pos]:
-            Entity._entity_by_position[pos].remove(target)
-
-        if grid._events_enabled:
-            spatial_event = SpatialChangeEvent.entity_left(pos, target.uuid, None, parent_event=declaration_event.uuid)
-            grid._fire_spatial_event(spatial_event)
+        self._provisional_modifier_ownership = list(outs)
 
         effect_event = declaration_event.phase_to(
             EventPhase.EFFECT,
@@ -1405,37 +1401,90 @@ class BanishedCondition(BaseCondition):
         )
         return outs, [], [], [], effect_event
 
+    def _finalize_application(self, effect_event: Event) -> None:
+        """Transfer provisional denial ownership to BaseCondition's ledger."""
+        del effect_event
+        self._provisional_modifier_ownership.clear()
+
+    def _release_owned_runtime_state(
+        self,
+        *,
+        parent_event: Optional[Event] = None,
+    ) -> None:
+        """Release provisional denial rows and compensate uncommitted suspension."""
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        try:
+            if isinstance(target, Entity) and target.is_spatially_suspended:
+                try:
+                    target.restore_spatial_presence(
+                        target.position,
+                        parent_event=parent_event.uuid if parent_event else None,
+                    )
+                except PositionPublicationError as compensation_error:
+                    position = target.position
+                    grid = get_map()
+                    restored = (
+                        target.is_deployed
+                        and not target.is_spatially_suspended
+                        and grid.get_entity_position(target.uuid) == position
+                        and target.uuid in grid.get_entities_at(position)
+                    )
+                    if not restored:
+                        raise RuntimeError(
+                            "Banishment suspension compensation did not restore "
+                            "objective presence",
+                        ) from compensation_error
+                except PositionCommitError as compensation_error:
+                    raise RuntimeError(
+                        "Banishment suspension compensation invariant failed "
+                        "before committed presence",
+                    ) from compensation_error
+                except BaseException as compensation_error:
+                    raise RuntimeError(
+                        "Banishment suspension compensation invariant failed "
+                        "before committed presence",
+                    ) from compensation_error
+        finally:
+            remove_modifier_ownership(self._provisional_modifier_ownership)
+            self._provisional_modifier_ownership.clear()
+
     def _remove(self, removal_event: Optional[Event] = None) -> Optional[Event]:
-        """Return entity to original position when banishment ends."""
+        """Restore the retained objective position when banishment ends."""
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if target:
             grid = get_map()
-            pos = self.original_position
+            pos = target.position
 
             occupants = grid.get_entities_at(pos) - {target.uuid}
             if occupants:
-                for occ_uuid in occupants:
+                for occ_uuid in sorted(occupants, key=str):
                     occ = Entity.get(occ_uuid)
                     if occ:
                         for dx, dy in [(0, 1), (1, 0), (0, -1), (-1, 0), (1, 1), (-1, 1), (1, -1), (-1, -1)]:
                             adj = (pos[0] + dx, pos[1] + dy)
                             if grid.is_walkable_for(adj[0], adj[1], occ_uuid):
-                                Entity.update_entity_position(occ, adj)
+                                Entity.update_entity_position(
+                                    occ,
+                                    adj,
+                                    parent_event=removal_event.uuid if removal_event else None,
+                                )
                                 break
                     break
 
-            grid._entity_positions[target.uuid] = pos
-            if pos not in grid._entities_by_position:
-                grid._entities_by_position[pos] = set()
-            grid._entities_by_position[pos].add(target.uuid)
-
-            if target not in Entity._entity_by_position[pos]:
-                Entity._entity_by_position[pos].append(target)
-
-            if grid._events_enabled:
-                spatial_event = SpatialChangeEvent.entity_entered(pos, target.uuid, None,
-                                                                   parent_event=removal_event.uuid if removal_event else None)
-                grid._fire_spatial_event(spatial_event)
+            if target.is_spatially_suspended:
+                try:
+                    target.restore_spatial_presence(
+                        pos,
+                        parent_event=removal_event.uuid if removal_event else None,
+                    )
+                except PositionPublicationError:
+                    if not target.is_deployed:
+                        raise
+                    # The membership commit succeeded; ordinary condition
+                    # cleanup must still finish without a second restore.
+                    pass
+                except PositionCommitError:
+                    raise
 
         return super()._remove(removal_event)
 

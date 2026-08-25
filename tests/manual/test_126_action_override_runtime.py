@@ -17,6 +17,7 @@ Legacy-case coverage map:
 * spell-owned multi-target semantics: F25, F25b, F26
 * position-AoE event metadata: EX-F18
 """
+from dnd.types.materials import Material, TileSurface
 
 from typing import cast
 from uuid import UUID, uuid4
@@ -90,7 +91,7 @@ from tests.engine.support import create_test_entity
 def reset_override_state(width: int = 12, height: int = 6) -> None:
     """Reset all registries and create the small open grid used by one case."""
     reset_combat_state()
-    get_map().create_rectangle(0, 0, width, height)
+    get_map().create_rectangle(0, 0, width, height, surface=TileSurface(base_material=Material.STONE))
 
 
 def create_caster(

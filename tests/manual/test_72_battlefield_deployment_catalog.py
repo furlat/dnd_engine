@@ -15,9 +15,16 @@ from dnd.content.scenarios.scenario_compatibility import (
     check_built_encounter_compatibility,
     check_encounter_compatibility,
 )
+from dnd.core.base_block import BaseBlock
 from dnd.core.gridmap import get_map
+from dnd.items.environment import DirectionalDoor
 from dnd.runtime_reset import reset_engine_runtime
-from dnd.types.world import CardinalDirection, LightLevel, MovementMode
+from dnd.types.world import (
+    CardinalDirection,
+    LightLevel,
+    MovementMode,
+    WorldEdgeChannel,
+)
 
 
 def test_battlefield_catalog_has_ten_exact_mechanical_states() -> None:
@@ -55,7 +62,7 @@ def test_battlefield_layouts_retain_terrain_barriers_and_objects() -> None:
         obj for obj in closed.layout.objects if obj.kind == "door"
     )
     assert door.position == (7, 7)
-    assert door.blocked_directions == (CardinalDirection.WEST,)
+    assert door.boundary_direction is CardinalDirection.WEST
     assert door.is_open is False
 
     opened = get_battlefield("battlefield.standard_hazards_open")
@@ -63,8 +70,38 @@ def test_battlefield_layouts_retain_terrain_barriers_and_objects() -> None:
         obj for obj in opened.layout.objects if obj.kind == "door"
     )
     assert open_door.position == door.position
-    assert open_door.blocked_directions == ()
+    assert open_door.boundary_direction is CardinalDirection.WEST
     assert open_door.is_open is True
+
+    closed_torches = [
+        obj for obj in closed.layout.objects if obj.kind == "wall_torch"
+    ]
+    assert [
+        (
+            row.position,
+            row.boundary_direction,
+            row.base_height_steps,
+            row.orientation,
+        )
+        for row in closed_torches
+    ] == [
+        ((14, 1), CardinalDirection.EAST, 1, CardinalDirection.WEST),
+        ((14, 13), CardinalDirection.EAST, 1, CardinalDirection.WEST),
+    ]
+
+    reset_engine_runtime()
+    closed_built = build_battlefield("battlefield.standard_hazards_closed")
+    closed_runtime = BaseBlock.get(closed_built.object_uuids["door"])
+    assert isinstance(closed_runtime, DirectionalDoor)
+    assert closed_runtime.get_boundary_structure().blocked_channels == tuple(
+        WorldEdgeChannel
+    )
+
+    reset_engine_runtime()
+    open_built = build_battlefield("battlefield.standard_hazards_open")
+    open_runtime = BaseBlock.get(open_built.object_uuids["door"])
+    assert isinstance(open_runtime, DirectionalDoor)
+    assert open_runtime.get_boundary_structure().blocked_channels == ()
 
     labyrinth = get_battlefield("battlefield.reveal_labyrinth_dark")
     assert {
@@ -81,6 +118,30 @@ def test_battlefield_layouts_retain_terrain_barriers_and_objects() -> None:
         ("loot_chest", (5, 10)),
         ("trap_lever", (5, 12)),
     }
+    control_torch = next(
+        obj
+        for obj in control_room.layout.objects
+        if obj.kind == "wall_torch" and obj.position == (4, 10)
+    )
+    assert (
+        control_torch.position,
+        control_torch.boundary_direction,
+        control_torch.base_height_steps,
+        control_torch.orientation,
+    ) == (
+        (4, 10),
+        CardinalDirection.WEST,
+        1,
+        CardinalDirection.EAST,
+    )
+    proving = get_battlefield("battlefield.elevation_proving_ground")
+    cliff = next(obj for obj in proving.layout.objects if obj.kind == "cliff")
+    assert (
+        cliff.position,
+        cliff.boundary_direction,
+        cliff.base_height_steps,
+        cliff.orientation,
+    ) == ((11, 5), CardinalDirection.WEST, 0, None)
 
 
 def test_every_battlefield_has_one_builder_and_layout_matches_runtime() -> None:
@@ -98,6 +159,35 @@ def test_every_battlefield_has_one_builder_and_layout_matches_runtime() -> None:
                     tile.get_movement_cost(MovementMode.WALKING)
                     == cell.walking_cost
                 )
+        for authored in definition.layout.objects:
+            if authored.kind not in {"wall_torch", "cliff"}:
+                continue
+            assert authored.boundary_direction is not None
+            matching = [
+                BaseBlock.get(object_uuid)
+                for object_uuid in grid.get_boundary_objects_at(
+                    authored.position,
+                    authored.boundary_direction,
+                )
+                if BaseBlock.get(object_uuid) is not None
+            ]
+            assert len(matching) == 1, (
+                definition.battlefield_id,
+                authored,
+            )
+            placement = grid.get_object_placement(matching[0].uuid)
+            assert placement is not None
+            assert (
+                placement.position,
+                placement.boundary_direction,
+                placement.base_height_steps,
+                placement.orientation,
+            ) == (
+                authored.position,
+                authored.boundary_direction,
+                authored.base_height_steps,
+                authored.orientation,
+            )
     reset_engine_runtime()
 
 

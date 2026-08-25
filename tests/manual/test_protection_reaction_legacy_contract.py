@@ -1,4 +1,5 @@
 """Behavioral coverage for the archived Protection fighting-style matrix."""
+from dnd.types.materials import Material, TileSurface
 
 from dataclasses import dataclass
 
@@ -34,7 +35,7 @@ class ProtectionScene:
 
 def _protection_scene(*, shield: bool = True) -> ProtectionScene:
     reset_combat_state()
-    get_map().create_rectangle(0, 0, 14, 10)
+    get_map().create_rectangle(0, 0, 14, 10, surface=TileSurface(base_material=Material.STONE))
     protector = create_test_monster("monster.skeleton", 
         name="Protection Fighter",
         position=(4, 4),

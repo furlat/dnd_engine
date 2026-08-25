@@ -3,6 +3,7 @@
 Each test maps to one archived case and asserts state directly instead of
 returning booleans (which made the legacy file emit pytest warnings).
 """
+from dnd.types.materials import Material, TileSurface
 
 from uuid import UUID, uuid4
 
@@ -36,7 +37,7 @@ from tests.engine.support import force_attack_miss, reset_combat_state, set_hp
 
 def _reset_state() -> None:
     reset_combat_state()
-    get_map().create_rectangle(0, 0, 20, 20)
+    get_map().create_rectangle(0, 0, 20, 20, surface=TileSurface(base_material=Material.STONE))
 
 
 def _create_light_dagger(source_uuid: UUID) -> Weapon:

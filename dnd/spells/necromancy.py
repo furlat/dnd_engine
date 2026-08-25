@@ -1247,9 +1247,13 @@ class EyebitePanickedEffect(BaseCondition):
         current_position = target.position
 
         for next_position in path[1:]:
-            if not grid.can_transition(current_position, next_position, target.uuid):
+            blocked_by = grid.identify_blocker_at(
+                next_position,
+                target.uuid,
+                source_position=current_position,
+            )
+            if blocked_by is not None:
                 blocked = True
-                blocked_by = grid.identify_blocker_at(next_position, target.uuid)
                 break
             step_cost = self._path_cost_feet(target, [current_position, next_position])
             Entity.update_entity_position(target, next_position, parent_event=forced_event.uuid)

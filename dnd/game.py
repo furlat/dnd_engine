@@ -4,6 +4,7 @@ from typing import Optional
 from uuid import UUID
 
 from dnd.entities.entity import Entity
+from dnd.core.positioning import PositionCommitError, PositionPublicationError
 
 
 class Game:
@@ -21,7 +22,12 @@ class Game:
         existing = self.entities.get(entity.uuid)
         if existing is not None and existing is not entity:
             raise ValueError(f"entity identity {entity.uuid} is already owned")
-        entity._attach_to_world(position)
+        try:
+            entity._attach_to_world(position)
+        except PositionPublicationError:
+            if entity.is_deployed:
+                self.entities[entity.uuid] = entity
+            raise
         self.entities[entity.uuid] = entity
 
     def get_entity(self, entity_uuid: UUID) -> Optional[Entity]:
@@ -30,9 +36,17 @@ class Game:
 
     def remove_entity(self, entity_uuid: UUID) -> Optional[Entity]:
         """Remove one entity from game ownership and spatial occupancy."""
-        entity = self.entities.pop(entity_uuid, None)
-        if entity is not None:
+        entity = self.entities.get(entity_uuid)
+        if entity is None:
+            return None
+        try:
             entity._detach_from_world()
+        except PositionCommitError:
+            raise
+        except PositionPublicationError:
+            self.entities.pop(entity_uuid, None)
+            raise
+        self.entities.pop(entity_uuid, None)
         return entity
 
     def close(self) -> None:

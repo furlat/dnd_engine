@@ -1,4 +1,5 @@
 """Engine semantic tests for spellcasting core."""
+from dnd.types.materials import Material, TileSurface
 
 from typing import Optional, cast
 from uuid import uuid4
@@ -77,7 +78,7 @@ def reset_spell_state(width: int = 8, height: int = 4) -> None:
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
     BaseValue._registry.clear()
-    get_map().create_rectangle(0, 0, width, height)
+    get_map().create_rectangle(0, 0, width, height, surface=TileSurface(base_material=Material.STONE))
 
 
 def create_spellcaster(

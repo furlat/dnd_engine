@@ -1,4 +1,5 @@
 """Focused checks for core combat flow."""
+from dnd.types.materials import Material, TileSurface
 
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -54,7 +55,7 @@ def reset_combat_tutorial_state(width: int = 8, height: int = 8) -> None:
     BaseBlock._registry.clear()
     Dice._registry.clear()
     DiceRoll._registry.clear()
-    get_map().create_rectangle(0, 0, width, height)
+    get_map().create_rectangle(0, 0, width, height, surface=TileSurface(base_material=Material.STONE))
 
 
 @contextmanager

@@ -1,4 +1,5 @@
 """Engine semantic tests for monsters and preset actors."""
+from dnd.types.materials import Material, TileSurface
 
 from uuid import uuid4
 
@@ -48,7 +49,7 @@ def reset_monster_state(width: int = 30, height: int = 15) -> None:
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
     BaseValue._registry.clear()
-    get_map().create_rectangle(0, 0, width, height)
+    get_map().create_rectangle(0, 0, width, height, surface=TileSurface(base_material=Material.STONE))
 
 
 def action_template_names(entity: Entity) -> set[str]:

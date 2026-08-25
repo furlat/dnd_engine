@@ -118,11 +118,6 @@ _SPECIAL_DIRECT_ITEMS = (
         "A stateful door that blocks selected world-edge channels while closed.",
     ),
     ItemCatalogEntry(
-        "environment.door",
-        "Door",
-        "A fixed door that blocks movement and sight while closed.",
-    ),
-    ItemCatalogEntry(
         "environment.campfire",
         "Campfire",
         "A fixed camp object that supports resting and cooking.",
@@ -141,6 +136,11 @@ _SPECIAL_DIRECT_ITEMS = (
         "environment.directional_wall",
         "Directional Wall",
         "A wall that blocks selected world-edge channels.",
+    ),
+    ItemCatalogEntry(
+        "environment.cliff_face",
+        "Cliff Face",
+        "A fixed movement-only cliff boundary.",
     ),
     ItemCatalogEntry(
         "environment.wall_torch",

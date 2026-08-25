@@ -1,0 +1,369 @@
+{
+  "manifest_version": 1,
+  "plan_sha256": "ae189282687fdcb7baa88ca3b393af593c6db345029a89da9cfcc36b76f021c1",
+  "scope": "All modified or untracked Python and JSON files in the shared checkout; this manifest plus plan and ledger Markdown files are excluded.",
+  "algorithm": "For every scoped member, sha256 is SHA-256 of its exact raw bytes. Members are the sorted lexicographic set of modified or untracked .py/.json paths from git status, excluding this manifest and Markdown governance files.",
+  "member_count": 90,
+  "files": [
+    {
+      "path": "deprecated/server_deprecated/mapeditor_support.py",
+      "sha256": "eb68ad81e42f428b454309865fd59828cf1ace86320dfec266e9097df7300927"
+    },
+    {
+      "path": "deprecated/server_deprecated/objective_state.py",
+      "sha256": "882bd7fe2a5603c0cc87a6b8fe1c677429cd8e5be1b3b8b584ba4e2cd92e0659"
+    },
+    {
+      "path": "dnd/blocks/base_item.py",
+      "sha256": "81f914334f74bd417f4d632a499a074976b8b111c8309312d691ed5314bc3a7f"
+    },
+    {
+      "path": "dnd/blocks/equipment.py",
+      "sha256": "7d718f100d900722ae1f24d714cbd567eeef693f203546ed089099f01b44463d"
+    },
+    {
+      "path": "dnd/blocks/inventory.py",
+      "sha256": "4867c283e4ee47307ca11818fe40dcfc063bfa327f4203b74484bf03f3304dfd"
+    },
+    {
+      "path": "dnd/blocks/sensory.py",
+      "sha256": "7a8cbfd78712f8b68a1f8402a7adb22b40b09325e66ccafbc492716c65169355"
+    },
+    {
+      "path": "dnd/content/scenarios/battlefield_builders.py",
+      "sha256": "5e990964a0cb0de7284e0c9d6575d721bca72a254c2a55dc708e0a1947942219"
+    },
+    {
+      "path": "dnd/core/base_block.py",
+      "sha256": "a97916628e8378100d9e449cc33e0a5278b7a2c3e1a6a5e0daf027329e2c6c40"
+    },
+    {
+      "path": "dnd/core/base_tiles.py",
+      "sha256": "0ce6c94354043395a60bea508cee45c3229b459eab19b62ff8c771f2242ed9c7"
+    },
+    {
+      "path": "dnd/core/events/item_events.py",
+      "sha256": "90a03fc71b5fd53d54cd5faf23c4ffdcf963011f966e60a00b5045b8eacafd64"
+    },
+    {
+      "path": "dnd/core/events/world_events.py",
+      "sha256": "b1fc6ba353c096533787b283049b131c5ba248db7913be57d3a94b40ff2695b4"
+    },
+    {
+      "path": "dnd/core/gridmap.py",
+      "sha256": "5ac0c8194a5124fc0292ee27979c09921d81f06ebaf55f704c8abc9ef1a80924"
+    },
+    {
+      "path": "dnd/core/world_edges.py",
+      "sha256": "2df6abb9d94c047509070fa2426325feb62a1480cacc03dfeced33a49da71ddd"
+    },
+    {
+      "path": "dnd/entities/entity.py",
+      "sha256": "f0f83f19f20c9782b6f3ef69b747a5cb000bebee21082b61c6021d8317f757f6"
+    },
+    {
+      "path": "dnd/items/environment_interactables.py",
+      "sha256": "da8cd9ad48ceaa9b759351a7ad3760e78f705581d0eace397274771b4abbcdfe"
+    },
+    {
+      "path": "dnd/items/torches.py",
+      "sha256": "b768597a0968b9da6c9e6fca0aea031bf92eafc070d51d98e0f90cc90cb13883"
+    },
+    {
+      "path": "dnd/maps/arena_layout.py",
+      "sha256": "fcc5da13fab80b4f8162f67178a478eabeba0b51ec0d1fca3d3590afcd964056"
+    },
+    {
+      "path": "dnd/runtime_reset.py",
+      "sha256": "4ce0d645cdb68047a7d4d909cb4525cd6802b74ac600312d16a4c15bdea11b87"
+    },
+    {
+      "path": "dnd/spatial/area_conditions.py",
+      "sha256": "d6fbeffb9625bf924d3ebe89025d2367fc3c697418905ac316bcf4cdae10293e"
+    },
+    {
+      "path": "dnd/spells/conjuration.py",
+      "sha256": "19e341ce34e476049c55b50c56e7302e2901b330f079cf53259a0065665ef5a6"
+    },
+    {
+      "path": "dnd/types/materials.py",
+      "sha256": "2fec57e8afd4e37637e7b955ee81fbd3d0d34c9fc1e16d6d5916aefdd5cc41af"
+    },
+    {
+      "path": "dnd/types/world_placement.py",
+      "sha256": "29071d4787c613d0e3fe79b84b587ae08210c188bf600af87be27b34df23f014"
+    },
+    {
+      "path": "tests/architecture/test_dependency_boundaries.py",
+      "sha256": "a1b9f0b459a5ace8611c769a8a10837013221632f85bac2ff2f7b9d5eacd69fe"
+    },
+    {
+      "path": "tests/engine/test_action_discovery.py",
+      "sha256": "5762b5a7171a6d5d2f453652da363ae0bf06bf5065b4a236bc3c3ee61a74108a"
+    },
+    {
+      "path": "tests/engine/test_cold_presentation_facts.py",
+      "sha256": "5242e4b18f3dbfb396c3601046dfd7d31102e15a24b43143d0adb4828c48485c"
+    },
+    {
+      "path": "tests/engine/test_combat_actions.py",
+      "sha256": "b0102afdce527aa186dab6f184d72cdae21b9f392efcd9fd81439f4bfe9fba85"
+    },
+    {
+      "path": "tests/engine/test_condition_lifecycle.py",
+      "sha256": "a1771cb03a06f12e2d550fb7a6ce284dac5923d974ee7e86303bd7390fd1065b"
+    },
+    {
+      "path": "tests/engine/test_dice_event_semantics.py",
+      "sha256": "4ea3979b1e51c9726e0f4846a1477d6a75497fffbdd17e872f649aa3faaed2ff"
+    },
+    {
+      "path": "tests/engine/test_direct_scenario_deployment.py",
+      "sha256": "c9fe9ba825c2eea1cf53101279cb7e3c22de7e4d3ff8a3770234fd75f60ff4b6"
+    },
+    {
+      "path": "tests/engine/test_elevation_proving_battlefield.py",
+      "sha256": "40455f8e64ab98d8073fddf54874f2dab8b0481740fa291578a8735c9be495d3"
+    },
+    {
+      "path": "tests/engine/test_encounter_apis.py",
+      "sha256": "515bdc951d1d25d750f3d7f6b8fb6504f20a0b89d72733b0f340ef9908725a46"
+    },
+    {
+      "path": "tests/engine/test_entity_composition.py",
+      "sha256": "e7e569eb64dacbaed90306cce64a15ed4667809037a604c88e5903e7f3c239ac"
+    },
+    {
+      "path": "tests/engine/test_equipment_replication_facts.py",
+      "sha256": "fd9bce32c150e3c56d355307a1a7511c607ef397727cab9163e8503e6e34736b"
+    },
+    {
+      "path": "tests/engine/test_event_wire_visibility_contract.py",
+      "sha256": "33a084087646f1932b9d7487ed5b8e6663412a35d3bacf175178a1c019d38584"
+    },
+    {
+      "path": "tests/engine/test_grid_pathfinding.py",
+      "sha256": "31e38756699fd34618ad25b2db1fbd6aee7555380b1275d1311ea404b2777af8"
+    },
+    {
+      "path": "tests/engine/test_items_inventory_equipment.py",
+      "sha256": "38e4bab2a82f94271d0c59a6ac21ef1feedcd07b65d65afa48770203b877785b"
+    },
+    {
+      "path": "tests/engine/test_manual_10_standard_conditions.py",
+      "sha256": "fd209758eb747ea33b6c789d91bd7c3ec212e5f6c5ba012c2a148710858f9c88"
+    },
+    {
+      "path": "tests/engine/test_manual_11_grid_tiles_terrain_movement.py",
+      "sha256": "5a38ad6190a7cc6a900de920e1ef680db46d2dc54eacd79cd6d19b0e3524b0a1"
+    },
+    {
+      "path": "tests/engine/test_manual_14_core_combat_flow.py",
+      "sha256": "e261550a1e37aa7412721c4f99d34a17dd194c095d393f8ef6d24abd584fe291"
+    },
+    {
+      "path": "tests/engine/test_manual_20_encounters_turns_controllers_apis.py",
+      "sha256": "f0aac60fdef9acf00888029f86d670a30f089ba8db6c33969bae4087031bfd59"
+    },
+    {
+      "path": "tests/engine/test_monster_presets.py",
+      "sha256": "31fb95bbcd338928ae03311f4b5bfe639c21b968cf4e9e3e5901d7263beba902"
+    },
+    {
+      "path": "tests/engine/test_objective_state.py",
+      "sha256": "da5d23054014c095857ad5c878924bef84f257fd7c453edc2d6b05810aaf9e4e"
+    },
+    {
+      "path": "tests/engine/test_runtime_reset.py",
+      "sha256": "08d1cb9e93d6361b50455bd142ec9aaac353c58284008d07af98d2214fe06715"
+    },
+    {
+      "path": "tests/engine/test_senses_light_stealth.py",
+      "sha256": "0389f0ffd584e0756e1d2a8d6a619c326db5db8fc6b5422dc9d039a66759b30f"
+    },
+    {
+      "path": "tests/engine/test_spatial_effects.py",
+      "sha256": "b196f73463792d5e845bf118fe6a1d166e5f1f2d28ba75485cabeedd15e8acd4"
+    },
+    {
+      "path": "tests/engine/test_spell_families.py",
+      "sha256": "c97a114cca262d475c3b1c20bcf807a2b4986e80935859ef8c704abdd4230d6c"
+    },
+    {
+      "path": "tests/engine/test_spellcasting.py",
+      "sha256": "82564ea7bb66b9f0d9ba97525b0d7a76c5c09492d4235c1a964237dd65e026b1"
+    },
+    {
+      "path": "tests/engine/test_standard_conditions.py",
+      "sha256": "113afb303cc5db28d01ec3ab39d938f14b018c2c262dff1914b4fa59a52c6678"
+    },
+    {
+      "path": "tests/engine/test_tile_surface_contract.py",
+      "sha256": "5f0bc15f74018f87b68c2be38f4b969dab13b10ab7af713f93d1a6811d8a7368"
+    },
+    {
+      "path": "tests/engine/test_traversal_connectors.py",
+      "sha256": "e0e80d6ae71a2d72ae64a1aac961bababbe84b5979f591c5f692bd19cd1ec284"
+    },
+    {
+      "path": "tests/engine/test_world_edge_identity_and_elevation.py",
+      "sha256": "40f55f9fe307e2e66b01a6facb78254fe4a10668c7f488a678b9f5cc54d5c08d"
+    },
+    {
+      "path": "tests/manual/spell_regression_support.py",
+      "sha256": "17bc3e5fb0d7202f687348c143ce66140d92e8b3a5c0ec1b4848fbdddd0636a9"
+    },
+    {
+      "path": "tests/manual/test_08_world_model_and_movement.py",
+      "sha256": "0e336d7f09bbbc443ae1f5621158fd645942fe3db732636eb6eff7e1aa1905a1"
+    },
+    {
+      "path": "tests/manual/test_09_action_discovery_and_costs.py",
+      "sha256": "8427050da84457bfb92ea89969c52c5027c24910ea0af31fc2122285e62551db"
+    },
+    {
+      "path": "tests/manual/test_103_game_summary_store.py",
+      "sha256": "dff0e7edc1f4df175513eefe03092758f2365ad9d45df8461292a1223cd2961a"
+    },
+    {
+      "path": "tests/manual/test_10_combat_resolution.py",
+      "sha256": "64e8e0463651679901a70fa91decc75047d052b49e6a90d77c9f365190ba845e"
+    },
+    {
+      "path": "tests/manual/test_112_server_life_state_contract.py",
+      "sha256": "8a843750006037248dc62543f0623b90f3556455620958c2318f3bccf02679cb"
+    },
+    {
+      "path": "tests/manual/test_11_equipment_inventory_and_items.py",
+      "sha256": "950e56f510c7c97df69142b1cc1dc37e20fd9022a1ed7fc5604308fb129bca2c"
+    },
+    {
+      "path": "tests/manual/test_121_canonical_presentation_mapper.py",
+      "sha256": "80cc7c22d3d55194085402801a65d915d4b4598a0c20e98ee3f7990be26a0ebb"
+    },
+    {
+      "path": "tests/manual/test_125_haste_restricted_action.py",
+      "sha256": "5e0f5c768e64a12a6ee7531e14dffa34984bca5b6bb85b00f893f34029929793"
+    },
+    {
+      "path": "tests/manual/test_126_action_override_runtime.py",
+      "sha256": "653eb3a9256a427d3dc0166c18bbcd7f94a945ad502b2e8e289b5f884b2df0a8"
+    },
+    {
+      "path": "tests/manual/test_126_action_surge_extra_attack_legacy_contract.py",
+      "sha256": "327eb56913864cb341304198ef51436b168915a9c968a7edc4baaf5796b8533e"
+    },
+    {
+      "path": "tests/manual/test_126_jump_legacy_contract.py",
+      "sha256": "82a9bcc9a7040c025b477663f4cc51967b4a59203e6c32fa013a9863e79441c3"
+    },
+    {
+      "path": "tests/manual/test_126_shatter.py",
+      "sha256": "c1f9d47c95e619dd7399abc00456d5c5d23ec0c3903be25726810a27b2c8fcf9"
+    },
+    {
+      "path": "tests/manual/test_126_slow_legacy_contract.py",
+      "sha256": "c688c0e5358fdfc99bc887b70b21b14e01cbf005581740b4dc35afcf7c48036a"
+    },
+    {
+      "path": "tests/manual/test_126_two_weapon_fighting_legacy_contract.py",
+      "sha256": "4f401965c3fa77f6a5b0475cb2a9b93903fa8286d02f8867e0e955e89ae2f528"
+    },
+    {
+      "path": "tests/manual/test_127_lightning_bolt.py",
+      "sha256": "791ae49e5e9b88c9c84661963ca093ceccb28173e09644768491986a3f61b759"
+    },
+    {
+      "path": "tests/manual/test_131_advanced_item_world_legacy_contract.py",
+      "sha256": "13f8364c13bc3e64f643160a5c1792a7213da26c11a35b9eaabc7f9e2b5a0bdc"
+    },
+    {
+      "path": "tests/manual/test_131_inventory_use_actions_legacy_contract.py",
+      "sha256": "0368f1e9efa524af123ea0db5694ab5e82c0ad9a3110faae4fcb9d12fea3e06c"
+    },
+    {
+      "path": "tests/manual/test_133_item_core_lifecycle_legacy_contract.py",
+      "sha256": "e0c79a1fb024869a293bf1901db721a128912ad1ea5aa7326e1701b1088d2b5a"
+    },
+    {
+      "path": "tests/manual/test_134_stackable_usable_item_legacy_contract.py",
+      "sha256": "29994fc81dda619cce776cbb1754ca2bc3fee9de58d4aedcad12e4cefd8d6179"
+    },
+    {
+      "path": "tests/manual/test_135_stealth_lighting_legacy_contract.py",
+      "sha256": "d637d6d9d370c16e7f26fd23f1db71ac5c1f9b1dd9e788ae6e00daebfb356e35"
+    },
+    {
+      "path": "tests/manual/test_138_mixed_damage_spell_contract.py",
+      "sha256": "3f95fa21c40cbb2fa4fea7c6740b58a2b2180a276b9912d4c18d7863cfe7992d"
+    },
+    {
+      "path": "tests/manual/test_13_spellcasting_core.py",
+      "sha256": "fd61df7eb6c4f5670c0b698de0e3b919c6e923429133b6bd97ceb662a336cd5c"
+    },
+    {
+      "path": "tests/manual/test_14_spell_families.py",
+      "sha256": "78c41f7dd3714e1e553be98b704562fd91dc4cba13b8a92a5f2fde5a972bf5e6"
+    },
+    {
+      "path": "tests/manual/test_17_encounters_turns_controllers.py",
+      "sha256": "b51eb609b07a66ff930f6e2ff89f2161b490e1c570c8863f8c42484769c2e8f4"
+    },
+    {
+      "path": "tests/manual/test_18_sessions_api_client_contract.py",
+      "sha256": "299020177c081a52b718246d91af53ea4f70c4427e1054a18c6399a2ac0f846e"
+    },
+    {
+      "path": "tests/manual/test_20_content_extension_basics.py",
+      "sha256": "0ca3cae7f28c73742a519a407ac6281d5328ee8d45566bb84ba9bf824c6407d2"
+    },
+    {
+      "path": "tests/manual/test_21_spell_and_feature_extensions.py",
+      "sha256": "48a89817bdd9d1f7bb60bb1a10d177225be2c46c846923411cd9f8d184d62276"
+    },
+    {
+      "path": "tests/manual/test_50_counterspell_engine_contract.py",
+      "sha256": "3af724a1ff2d8e7cdd7f7cdd02b4b03732ab5d76ef458c93cbd05f279ff4612d"
+    },
+    {
+      "path": "tests/manual/test_51_srd_monster_roster.py",
+      "sha256": "1329c68733dbeb622b115ad782d97a00399fe2600a09d506159114a29fb4af54"
+    },
+    {
+      "path": "tests/manual/test_aoe_shape_legacy_contract.py",
+      "sha256": "2fab97a0748b1a6f70f135d5e845fdd8c478b97a2ecbf70820b7f7c1a314b707"
+    },
+    {
+      "path": "tests/manual/test_directional_environment_legacy_contract.py",
+      "sha256": "8f82ffc4c7c134d076cdf6bf58df89244ee4e40dec787db4a8f2611b73179b70"
+    },
+    {
+      "path": "tests/manual/test_legacy_information_privacy_coverage.py",
+      "sha256": "305195ebc2ef337b5f87196dcbfac0a233a8700a5a370571a27cd877c3ec5a86"
+    },
+    {
+      "path": "tests/manual/test_legacy_reactive_reaction_coverage.py",
+      "sha256": "cbe94db49b2b3a6dc034b87af1e098698eaa311b2c4d76a9a4b339b65a197569"
+    },
+    {
+      "path": "tests/manual/test_protection_reaction_legacy_contract.py",
+      "sha256": "5f01bd2dc69992061ff4d84195fe5fd5ce31ac1380c6a48c25321d8580b4a2ee"
+    },
+    {
+      "path": "tests/manual/test_remaining_spell_legacy_contract.py",
+      "sha256": "ee6148d2df33eb3c0e24622d758dd086d4416578784dbab25b8d4a4a214aae77"
+    },
+    {
+      "path": "tests/manual/test_remaining_zone_spell_legacy_contract.py",
+      "sha256": "57e66b932b138dd32e0d46cdf464b9ffa01317fbf58c8dc386476246969aa745"
+    },
+    {
+      "path": "tests/manual/test_spike_zone_movement_legacy_contract.py",
+      "sha256": "5d9b9e44fa2f9aa7bf592cada018ae3104c26131ebf41381398ee7835b51afe9"
+    },
+    {
+      "path": "tests/manual/test_tile_condition_duration_legacy_contract.py",
+      "sha256": "9f6727fffddc09d77d042f7ff891a4a0d8e66718902d35d89cf7f61dcbc872a8"
+    }
+  ]
+}

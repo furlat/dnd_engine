@@ -5,6 +5,7 @@ collection without recording where its 36 behavioral cases went.  This module
 keeps an explicit old-case-to-active-selector ledger and restores the missing
 world, visibility, targeting, and lifecycle combinations using current APIs.
 """
+from dnd.types.materials import Material, TileSurface
 
 from uuid import UUID, uuid4
 
@@ -136,7 +137,7 @@ class DropTrackingItem(BaseItem):
 def reset_item_world(width: int = 20, height: int = 20) -> None:
     """Reset every engine registry and build one bright rectangular floor."""
     reset_combat_state()
-    get_map().create_rectangle(0, 0, width, height)
+    get_map().create_rectangle(0, 0, width, height, surface=TileSurface(base_material=Material.STONE))
 
 
 def create_actor(
@@ -430,7 +431,7 @@ def test_nonbreakable_or_unseen_items_are_not_object_targets() -> None:
     )
     pillar.place_on_grid((2, 5))
     for y in range(10):
-        grid.set_tile(3, y, walkable=False, visible=False, name="Wall")
+        grid.set_tile(3, y, surface=TileSurface(base_material=Material.STONE), walkable=False, blocks_optics=True, blocks_propagation=True, name="Wall")
     hidden = create_floor_item((5, 5), name="Hidden Gem")
     Entity.materialize_all_navigation()
 

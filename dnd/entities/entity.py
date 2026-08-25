@@ -105,7 +105,10 @@ from dnd.core.events.item_events import (
 from dnd.types.items import ItemLocation
 from dnd.blocks.appearance import Appearance, AppearanceConfig
 from dnd.types.abilities import AbilityName, SkillName
-from dnd.core.gridmap import get_map
+from dnd.core.gridmap import (
+    ENTITY_WORLD_PRESENCE_LIGHT_SUPPRESSION_TOKEN,
+    get_map,
+)
 from dnd.core.positioning import PositionCommitError, PositionPublicationError
 from dnd.core.elevation import creature_volume_distance_feet, support_distance_feet
 from dnd.core.geometry import supercover_line
@@ -136,6 +139,7 @@ from dnd.core.base_actions import (
     PositionDiscoveryContract,
     target_resolution_sort_key,
 )
+from dnd.core.aoe import Cylinder
 from dnd.core.events.action_events import (
     BaseCost,
 )
@@ -335,6 +339,10 @@ class Entity(BaseBlock):
         default=False,
         description="Whether the entity currently occupies the game world.",
     )
+    is_spatially_suspended: bool = Field(
+        default=False,
+        description="Whether the entity is retained by a world-presence mechanic without occupancy.",
+    )
     ability_scores: AbilityScores = Field(
         default_factory=lambda: AbilityScores.create(source_entity_uuid=uuid4()),
         description="Ability score block owned by this entity."
@@ -491,11 +499,6 @@ class Entity(BaseBlock):
         Tuple[AvailableTarget, ...],
     ] = PrivateAttr(default_factory=dict)
     _aoe_contact_alive: Dict[UUID, bool] = PrivateAttr(default_factory=dict)
-    _aoe_origin_fov_cache_revision: Optional[int] = PrivateAttr(default=None)
-    _aoe_origin_fov_cache: Dict[
-        Tuple[Tuple[int, int], int],
-        Set[Tuple[int, int]],
-    ] = PrivateAttr(default_factory=dict)
     _fast_move_target_cache_revision: Optional[Tuple[int, int]] = PrivateAttr(default=None)
     _fast_move_target_cache: Dict[
         Tuple[Any, ...],
@@ -521,8 +524,8 @@ class Entity(BaseBlock):
     _progression_receipts: Dict[str, Any] = PrivateAttr(default_factory=dict)
 
     _entity_registry: ClassVar[Dict[UUID, 'Entity']] = {}
-    _entity_by_position: ClassVar[DefaultDict[Tuple[int, int], List['Entity']]] = defaultdict(list)
     _LIFE_STATE_LIGHT_SUPPRESSION_TOKEN: ClassVar[str] = "entity.life_state.dead"
+    _WORLD_PRESENCE_LIGHT_SUPPRESSION_TOKEN: ClassVar[str] = ENTITY_WORLD_PRESENCE_LIGHT_SUPPRESSION_TOKEN
 
     def add_feature_source(self, feature_id: str, source_id: UUID) -> None:
         """Install one direct semantic feature identity from an exact source."""
@@ -618,6 +621,11 @@ class Entity(BaseBlock):
         """Register entity identity without publishing it into the world."""
         super().model_post_init(__context)
         self.__class__._entity_registry[self.uuid] = self
+        get_map().set_block_light_suppressed(
+            self.uuid,
+            self._WORLD_PRESENCE_LIGHT_SUPPRESSION_TOKEN,
+            not self.is_deployed,
+        )
         self._reconcile_initial_life_state()
 
     def _attach_to_world(self, position: Tuple[int, int]) -> None:
@@ -626,37 +634,112 @@ class Entity(BaseBlock):
             raise RuntimeError("cannot deploy an entity before creation commits")
         if self.is_deployed:
             raise RuntimeError("entity is already deployed")
+        if self.is_spatially_suspended:
+            raise RuntimeError("suspended entities must be restored before deployment")
+        grid = get_map()
         old_position = self.position
         self._set_position(position)
-        self.__class__._entity_by_position[position].append(self)
-        self.is_deployed = True
         try:
+            receipt = grid._commit_entity_membership(self.uuid, None, position)
+            self.is_deployed = True
             spatial_senses_system.register_observer(self.uuid, self.senses)
             spatial_senses_system.attach()
-            get_map().register_entity(self.uuid, position)
-        except Exception:
+            grid._ensure_light_pre_completion_callback()
+        except BaseException as exc:
             spatial_senses_system.unregister_observer(self.uuid)
-            positioned = self.__class__._entity_by_position.get(position)
-            if positioned is not None and self in positioned:
-                positioned.remove(self)
-                if not positioned:
-                    self.__class__._entity_by_position.pop(position, None)
+            if grid.get_entity_position(self.uuid) == position:
+                self._set_position(position)
+                grid._commit_entity_membership(self.uuid, position, None)
             self._set_position(old_position)
             self.is_deployed = False
+            if isinstance(exc, PositionCommitError):
+                raise
+            raise PositionCommitError(exc) from exc
+        try:
+            grid._publish_entity_membership(receipt)
+        except PositionPublicationError:
             raise
+        except BaseException as exc:
+            raise PositionPublicationError(exc) from exc
 
     def _detach_from_world(self) -> None:
-        """Silently remove world occupancy during Game teardown."""
+        """Remove present or suspended world ownership during Game teardown."""
+        if self.is_spatially_suspended:
+            self.is_spatially_suspended = False
+            return
         if not self.is_deployed:
             return
-        spatial_senses_system.unregister_observer(self.uuid)
-        get_map().unregister_entity(self.uuid)
-        positioned = self.__class__._entity_by_position.get(self.position)
-        if positioned is not None and self in positioned:
-            positioned.remove(self)
-            if not positioned:
-                self.__class__._entity_by_position.pop(self.position, None)
+        grid = get_map()
+        receipt = grid._commit_entity_membership(self.uuid, self.position, None)
         self.is_deployed = False
+        spatial_senses_system.unregister_observer(self.uuid)
+        try:
+            grid._publish_entity_membership(receipt)
+        except PositionPublicationError:
+            raise
+        except BaseException as exc:
+            raise PositionPublicationError(exc) from exc
+
+    def suspend_spatial_presence(
+        self,
+        *,
+        parent_event: Optional[UUID] = None,
+    ) -> None:
+        """Commit world absence while retaining Entity identity and coordinate."""
+        if not self.is_deployed or self.is_spatially_suspended:
+            raise RuntimeError("only a present Entity can be suspended")
+        grid = get_map()
+        if grid.get_entity_position(self.uuid) != self.position:
+            raise PositionCommitError(
+                ValueError("Entity membership does not match its objective position"),
+            )
+        receipt = grid._commit_entity_membership(self.uuid, self.position, None)
+        self.is_deployed = False
+        self.is_spatially_suspended = True
+        spatial_senses_system.unregister_observer(self.uuid)
+        try:
+            grid._publish_entity_membership(receipt, parent_event=parent_event)
+        except PositionPublicationError:
+            raise
+        except BaseException as exc:
+            raise PositionPublicationError(exc) from exc
+
+    def restore_spatial_presence(
+        self,
+        position: Tuple[int, int],
+        *,
+        parent_event: Optional[UUID] = None,
+    ) -> None:
+        """Restore one suspended Entity into an admitted live Tile."""
+        if not self.is_spatially_suspended or self.is_deployed:
+            raise RuntimeError("only a suspended Entity can be restored")
+        grid = get_map()
+        old_position = self.position
+        self._set_position(position)
+        try:
+            receipt = grid._commit_entity_membership(self.uuid, None, position)
+            self.is_deployed = True
+            self.is_spatially_suspended = False
+            spatial_senses_system.register_observer(self.uuid, self.senses)
+            spatial_senses_system.attach()
+            grid._ensure_light_pre_completion_callback()
+        except BaseException as exc:
+            self._set_position(position)
+            if grid.get_entity_position(self.uuid) == position:
+                grid._commit_entity_membership(self.uuid, position, None)
+            self._set_position(old_position)
+            self.is_deployed = False
+            self.is_spatially_suspended = True
+            spatial_senses_system.unregister_observer(self.uuid)
+            if isinstance(exc, PositionCommitError):
+                raise
+            raise PositionCommitError(exc) from exc
+        try:
+            grid._publish_entity_membership(receipt, parent_event=parent_event)
+        except PositionPublicationError:
+            raise
+        except BaseException as exc:
+            raise PositionPublicationError(exc) from exc
 
     @classmethod
     def update_entity_position(
@@ -678,28 +761,25 @@ class Entity(BaseBlock):
         if old_position == new_position:
             return
         grid = get_map()
-        old_entities = list(cls._entity_by_position.get(old_position, []))
-        new_entities = list(cls._entity_by_position.get(new_position, []))
-        old_senses_position = entity.senses.position
+        if grid.get_entity_position(entity.uuid) != old_position:
+            raise PositionCommitError(
+                ValueError("Entity membership does not match its objective position"),
+            )
+        entity._set_position(new_position)
         try:
-            cls._entity_by_position[old_position].remove(entity)
-            cls._entity_by_position[new_position].append(entity)
-            entity._set_position(new_position)
-            grid_receipt = grid.stage_entity_position(entity.uuid, new_position)
+            grid_receipt = grid._commit_entity_membership(
+                entity.uuid,
+                old_position,
+                new_position,
+            )
         except Exception as exc:
-            cls._entity_by_position[old_position] = old_entities
-            if new_entities:
-                cls._entity_by_position[new_position] = new_entities
-            else:
-                cls._entity_by_position.pop(new_position, None)
-            entity.position = old_position
-            entity.senses.position = old_senses_position
+            entity._set_position(old_position)
             if isinstance(exc, PositionCommitError):
                 raise
             raise PositionCommitError(exc) from exc
 
         try:
-            grid.publish_staged_entity_position(
+            grid._publish_entity_membership(
                 grid_receipt,
                 parent_event=parent_event,
             )
@@ -737,13 +817,8 @@ class Entity(BaseBlock):
         grid = get_map()
         grid.cleanup_block_light_sources(self.uuid)
         spatial_senses_system.unregister_observer(self.uuid)
-        grid.unregister_entity(self.uuid)
-        positioned = self.__class__._entity_by_position.get(self.position)
-        if positioned is not None:
-            if self in positioned:
-                positioned.remove(self)
-            if not positioned:
-                self.__class__._entity_by_position.pop(self.position, None)
+        if grid.get_entity_position(self.uuid) is not None:
+            grid._commit_entity_membership(self.uuid, self.position, None)
         self.__class__._entity_registry.pop(self.uuid, None)
         for obj in tuple(BaseObject._registry.values()):
             if obj.source_entity_uuid == self.uuid:
@@ -759,18 +834,6 @@ class Entity(BaseBlock):
     def get_all_entities(cls) -> List['Entity']:
         """Return all entities currently in the entity registry."""
         return list(cls._entity_registry.values())
-
-    @classmethod
-    def get_all_entities_at_position(cls, position: Tuple[int,int]) -> List['Entity']:
-        """Return the live entity list indexed at a grid position.
-
-        Args:
-            position: Grid position to inspect.
-
-        Returns:
-            The registry list for that position.
-        """
-        return cls._entity_by_position[position]
 
     @classmethod
     def get(cls, uuid: UUID) -> Optional['Entity']:
@@ -913,7 +976,10 @@ class Entity(BaseBlock):
         blocker. Objective movement execution still rejects that destination
         and records the collision when the attempted route reaches it.
         """
-        for occupant in self.get_all_entities_at_position(position):
+        for occupant_uuid in get_map().get_entities_at(position):
+            occupant = Entity.get(occupant_uuid)
+            if occupant is None:
+                continue
             if occupant.uuid == self.uuid:
                 continue
             if not occupant._blocks_walking_without_origin_traversal(
@@ -953,7 +1019,8 @@ class Entity(BaseBlock):
             if any(
                 candidate.health.life_state is not LifeState.DEAD
                 and size_order.index(candidate.size) > own_size_index
-                for candidate in self.get_all_entities_at_position(position)
+                for candidate_uuid in get_map().get_entities_at(position)
+                if (candidate := Entity.get(candidate_uuid)) is not None
             ):
                 return True
         return False
@@ -3058,10 +3125,7 @@ class Entity(BaseBlock):
         """Return support distance to one placed object, if it has a position."""
         if isinstance(obj, Entity):
             return self.distance_to_entity(obj)
-        position = get_map().get_object_position(obj.uuid)
-        if position is None:
-            candidate = getattr(obj, "position", None)
-            position = candidate if type(candidate) is tuple else None
+        position = obj.get_position()
         if position is None:
             return None
         return self.distance_to_position(position)
@@ -4076,30 +4140,25 @@ class Entity(BaseBlock):
         if location is ItemLocation.INVENTORY:
             owner_uuid: Optional[UUID] = self.uuid
             container_uuid: Optional[UUID] = self.inventory.uuid
-            tile_uuid: Optional[UUID] = None
-            position: Optional[Tuple[int, int]] = None
+            world_placement = None
         elif location is ItemLocation.EQUIPMENT:
             owner_uuid = self.uuid
             container_uuid = self.equipment.uuid
-            tile_uuid = None
-            position = None
+            world_placement = None
         elif location is ItemLocation.FLOOR:
             owner_uuid = None
             container_uuid = None
-            tile_uuid = item.tile_uuid
-            position = item.position
+            world_placement = get_map().get_object_placement(item.uuid)
         else:
             owner_uuid = None
             container_uuid = None
-            tile_uuid = None
-            position = None
+            world_placement = None
 
         return item.publish_location_state(
             location,
             owner_uuid=owner_uuid,
             container_uuid=container_uuid,
-            tile_uuid=tile_uuid,
-            position=position,
+            world_placement=world_placement,
             equipment_slot=equipment_slot,
             merged_into_item_uuid=merged_into_item_uuid,
             entity_armor_class_after=self.ac_bonus().normalized_score,
@@ -4162,7 +4221,6 @@ class Entity(BaseBlock):
         if not result.succeeded:
             return False
         merged = result.inserted_item is None
-        item.tile_uuid = None
         gridmap = get_map()
         if gridmap.get_object_position(item_uuid) is not None:
             gridmap.remove_object(item_uuid)
@@ -4192,10 +4250,14 @@ class Entity(BaseBlock):
         Returns:
             The dropped item, or None if not found in inventory.
         """
-        item = self.inventory.remove_item(item_uuid)
+        item = self.inventory.items.get(item_uuid)
         if item is None:
             return None
         drop_pos = position if position is not None else self.position
+        gridmap = get_map()
+        gridmap.validate_object_placement(item.uuid, drop_pos)
+        item = self.inventory.remove_item(item_uuid)
+        assert item is not None
         item.owner_uuid = None
         item.stored_in_uuid = None
         item.place_on_grid(drop_pos)
@@ -4213,11 +4275,101 @@ class Entity(BaseBlock):
         if result.succeeded:
             self._publish_inventory_add_result(item, result)
             return
+        gridmap = get_map()
+        gridmap.validate_object_placement(item.uuid, self.position)
         item.owner_uuid = None
         item.stored_in_uuid = None
         item.place_on_grid(self.position)
         item.drop(entity_uuid=self.uuid, position=self.position)
         self._publish_owned_item_location(item, ItemLocation.FLOOR)
+
+    def _validate_equipment_fallbacks(
+        self,
+        fallback_items: Tuple[BaseItem, ...],
+        *,
+        remove_from_inventory_uuid: Optional[UUID] = None,
+    ) -> None:
+        """Admit every possible floor fallback without mutating ownership."""
+        shadow_rows = [
+            [
+                item.uuid,
+                item.stack_id,
+                item.stack_count,
+                item.max_stack,
+                item.weight,
+            ]
+            for item in self.inventory.items.values()
+            if item.uuid != remove_from_inventory_uuid
+        ]
+        shadow_weight = sum(
+            item.weight * item.stack_count
+            for item in self.inventory.items.values()
+            if item.uuid != remove_from_inventory_uuid
+        )
+        shadow_slots = len(shadow_rows)
+        floor_fallback_uuids: list[UUID] = []
+
+        for fallback_item in fallback_items:
+            incoming_full_weight = fallback_item.weight * fallback_item.stack_count
+            remaining = fallback_item.stack_count
+            receiving_row = None
+            if fallback_item.stack_id is not None:
+                for row in shadow_rows:
+                    if (
+                        row[0] != fallback_item.uuid
+                        and row[1] == fallback_item.stack_id
+                        and row[2] < row[3]
+                    ):
+                        receiving_row = row
+                        break
+            remainder_count = (
+                fallback_item.stack_count
+                if receiving_row is None
+                else max(
+                    0,
+                    fallback_item.stack_count
+                    - (receiving_row[3] - receiving_row[2]),
+                )
+            )
+            can_store = (
+                self.inventory.weight_capacity is None
+                or shadow_weight + incoming_full_weight
+                <= self.inventory.weight_capacity
+            )
+            if can_store and remainder_count > 0:
+                can_store = (
+                    self.inventory.max_slots is None
+                    or shadow_slots < self.inventory.max_slots
+                )
+
+            if not can_store:
+                floor_fallback_uuids.append(fallback_item.uuid)
+                continue
+
+            if receiving_row is not None:
+                transfer = min(
+                    receiving_row[3] - receiving_row[2],
+                    remaining,
+                )
+                receiving_row[2] += transfer
+                remaining -= transfer
+                shadow_weight += receiving_row[4] * transfer
+            if remaining > 0:
+                shadow_rows.append([
+                    fallback_item.uuid,
+                    fallback_item.stack_id,
+                    remaining,
+                    fallback_item.max_stack,
+                    fallback_item.weight,
+                ])
+                shadow_slots += 1
+                shadow_weight += fallback_item.weight * remaining
+
+        if floor_fallback_uuids:
+            get_map().validate_object_placement_batch(
+                floor_fallback_uuids,
+                self.position,
+            )
 
     def on_owned_item_destroyed(
         self,
@@ -4262,14 +4414,24 @@ class Entity(BaseBlock):
             return False
         item = self.inventory.items[item_uuid]
         assert isinstance(item, EquippableItem)
+        selected_slot, displaced_items = self.equipment.get_equipment_displacement(
+            item,
+            slot,
+        )
+        try:
+            self._validate_equipment_fallbacks(
+                tuple(displaced_items),
+                remove_from_inventory_uuid=item.uuid,
+            )
+        except ValueError:
+            return False
         result = self.equipment.equip_transaction(item, slot)
         if not result.succeeded:
             return False
 
         self.inventory.remove_item(item_uuid)
-        selected_slot = result.selected_slot
-        if selected_slot is None:
-            raise RuntimeError("Successful equipment transaction omitted its selected slot")
+        if result.selected_slot is not selected_slot:
+            raise RuntimeError("Equipment transaction changed its selected slot")
         self._publish_owned_item_location(
             item,
             ItemLocation.EQUIPMENT,
@@ -4290,6 +4452,13 @@ class Entity(BaseBlock):
         Returns:
             The unequipped item, or None if slot was empty or unequip canceled.
         """
+        item = self.equipment.get_item_by_slot(slot)
+        if item is None:
+            return None
+        try:
+            self._validate_equipment_fallbacks((item,))
+        except ValueError:
+            return None
         item = self.equipment.unequip(slot)
         if item is None:
             return None
@@ -4875,8 +5044,6 @@ class Entity(BaseBlock):
         template: BaseAction,
         include_dead: bool,
         caster_visible_positions: AbstractSet[Tuple[int, int]],
-        fov_cache: dict,
-        barrier_positions: Set[Tuple[int, int]],
         idx: int,
     ) -> Optional[AvailableTarget]:
         """Compute AoE preview metadata for a candidate position.
@@ -4888,8 +5055,6 @@ class Entity(BaseBlock):
             template: Action template being discovered.
             include_dead: Whether zero-HP entities stay targetable.
             caster_visible_positions: Visibility snapshot shared by this query.
-            fov_cache: Shared field-of-view cache for AoE computation.
-            barrier_positions: Positions that block AoE projection.
             idx: Discovery index to assign if the position is valid.
 
         Returns:
@@ -4905,15 +5070,18 @@ class Entity(BaseBlock):
             cached_footprint = frozenset(
                 self._compute_aoe_propagation_footprint(
                     shape,
-                    fov_cache,
-                    barrier_positions,
                 )
             )
             self._aoe_footprint_cache[footprint_key] = cached_footprint
+        subjective_positions = (
+            set(cached_footprint)
+            if isinstance(shape, Cylinder)
+            else set(cached_footprint.intersection(caster_visible_positions))
+        )
         shape.set_subjective_footprint(
             self.position,
             self.senses,
-            set(cached_footprint.intersection(caster_visible_positions)),
+            subjective_positions,
             caster_uuid=self.uuid,
         )
 
@@ -4969,28 +5137,14 @@ class Entity(BaseBlock):
     def _compute_aoe_propagation_footprint(
         self,
         shape: Any,
-        fov_cache: dict,
-        barrier_positions: Set[Tuple[int, int]],
     ) -> Set[Tuple[int, int]]:
-        """Return shape geometry plus propagation before subjective visibility.
+        """Return the shape's objective footprint before subjective visibility.
 
         The result is safe to cache inside authoritative engine state because
         it contains no target facts. Each discovery pass still intersects it
         with the actor's current visible cells before resolving entity UUIDs.
         """
-        computed_origin = shape.get_origin(self.position)
-        shape.computed_origin = computed_origin
-        geometric = shape._get_positions_in_shape(computed_origin)
-        if computed_origin == self.position:
-            return set(geometric)
-        if geometric.isdisjoint(barrier_positions):
-            return set(geometric)
-        grid = get_map()
-        return grid.filter_propagation_positions(
-            computed_origin,
-            set(geometric),
-            shape._get_max_radius_tiles(),
-        )
+        return set(shape._compute_objective_footprint(self.position))
 
     def _aoe_discovery_cache_key(
         self,
@@ -6140,8 +6294,6 @@ class Entity(BaseBlock):
     def _collect_aoe_actions(
         self,
         include_dead: bool,
-        fov_cache: dict,
-        barrier_positions: Set[Tuple[int, int]],
         discovery_variants: Optional[Mapping[UUID, List[BaseAction]]] = None,
         caster_visible_positions: Optional[AbstractSet[Tuple[int, int]]] = None,
         legal_only: bool = False,
@@ -6150,8 +6302,6 @@ class Entity(BaseBlock):
 
         Args:
             include_dead: Whether zero-HP entities stay targetable.
-            fov_cache: Shared field-of-view cache for AoE computation.
-            barrier_positions: Positions that block AoE projection.
 
         Returns:
             Available AoE action metadata.
@@ -6264,8 +6414,6 @@ class Entity(BaseBlock):
                             template,
                             include_dead,
                             visible_position_set,
-                            fov_cache,
-                            barrier_positions,
                             len(valid_positions),
                         )
                         if target is not None:
@@ -6386,8 +6534,6 @@ class Entity(BaseBlock):
         result: AvailableActionsResult,
         potential_targets: Dict[UUID, Tuple[int, int]],
         include_dead: bool,
-        fov_cache: dict,
-        barrier_positions: Set[Tuple[int, int]],
         caster_visible_positions: Optional[AbstractSet[Tuple[int, int]]] = None,
         legal_only: bool = False,
     ) -> None:
@@ -6397,8 +6543,6 @@ class Entity(BaseBlock):
             result: Discovery result mutated in place.
             potential_targets: Outer discovery target pool keyed by UUID.
             include_dead: Whether zero-HP entities stay targetable.
-            fov_cache: Shared field-of-view cache for AoE computation.
-            barrier_positions: Positions that block AoE projection.
         """
         grid = get_map()
         visible_position_set = self._prepare_aoe_caches(caster_visible_positions)
@@ -6642,7 +6786,7 @@ class Entity(BaseBlock):
                         use_template,
                         include_dead,
                         visible_position_set,
-                        fov_cache, barrier_positions, use_idx
+                        use_idx,
                     )
                     if target is not None:
                         use_valid_positions.append(target)
@@ -6852,12 +6996,6 @@ class Entity(BaseBlock):
         if paths_need_refresh:
             self.materialize_navigation(max_distance=20, path_max_distance=required_path_distance)
 
-        grid = get_map()
-        if self._aoe_origin_fov_cache_revision != grid.propagation_revision:
-            self._aoe_origin_fov_cache_revision = grid.propagation_revision
-            self._aoe_origin_fov_cache.clear()
-        fov_cache: dict = self._aoe_origin_fov_cache
-        barrier_positions = grid.get_barrier_positions()
         caster_visible_positions = frozenset(
             position
             for position, visible in self.senses.visible.items()
@@ -6882,8 +7020,6 @@ class Entity(BaseBlock):
         result.position_actions.extend(
             self._collect_aoe_actions(
                 include_dead,
-                fov_cache,
-                barrier_positions,
                 discovery_variants,
                 caster_visible_positions,
                 legal_only,
@@ -6896,8 +7032,6 @@ class Entity(BaseBlock):
             result,
             potential_targets,
             include_dead,
-            fov_cache,
-            barrier_positions,
             caster_visible_positions,
             legal_only,
         )

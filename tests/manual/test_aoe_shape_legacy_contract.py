@@ -19,6 +19,7 @@ from dnd.core.events.world_events import (
 )
 from dnd.core.gridmap import get_map
 from dnd.entities.entity import Entity
+from dnd.types.materials import Material, TileSurface
 from tests.manual.spell_regression_support import (
     create_spell_regression_actor,
     reset_spell_regression_arena,
@@ -133,6 +134,7 @@ def test_aoe_shapes_preserve_extent_width_entities_and_wall_occlusion() -> None:
     grid.set_tile(
         5,
         11,
+        surface=TileSurface(base_material=Material.STONE),
         walkable=False,
         blocks_optics=True,
         blocks_propagation=True,
@@ -151,6 +153,7 @@ def test_aoe_shapes_preserve_extent_width_entities_and_wall_occlusion() -> None:
     grid.set_tile(
         7,
         5,
+        surface=TileSurface(base_material=Material.STONE),
         walkable=False,
         blocks_optics=True,
         blocks_propagation=True,

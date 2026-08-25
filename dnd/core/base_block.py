@@ -20,6 +20,11 @@ from dnd.core.events.world_events import (
 )
 from dnd.types import senses as sense_types
 from dnd.types import world as world_types
+from dnd.types.world_placement import (
+    BoundaryStructure,
+    WorldPlacementKind,
+    WorldPlacementSpec,
+)
 
 from collections import defaultdict
 
@@ -146,20 +151,24 @@ class BaseBlock(BaseModel):
         """Map glyph for blocks that have one."""
         return None
 
-    def get_spatial_open_state(self) -> Optional[bool]:
-        """Open/closed state for spatial objects that expose one."""
+    def get_position(self) -> Optional[Tuple[int, int]]:
+        """Return this block's neutral objective coordinate when available."""
+        return self.position
+
+    def get_world_placement_spec(self) -> WorldPlacementSpec:
+        """Return the neutral center, nonoccupying placement capability."""
+        return WorldPlacementSpec(
+            kind=WorldPlacementKind.CENTER,
+            occupies_bands=False,
+            vertical_extent_steps=1,
+        )
+
+    def get_boundary_structure(self) -> Optional[BoundaryStructure]:
+        """Return current authored boundary semantics, when this block has them."""
         return None
 
-    def get_objective_directional_structural_channels(
-        self,
-        direction: str,
-    ) -> Optional[Tuple[str, ...]]:
-        """Return noncontextual current channels for one authored structure.
-
-        ``None`` means this block does not author that edge. An empty tuple
-        means the provider identity remains present while currently open.
-        """
-        del direction
+    def get_spatial_open_state(self) -> Optional[bool]:
+        """Open/closed state for spatial objects that expose one."""
         return None
 
     def should_include_in_senses_objects(self) -> bool:
@@ -356,23 +365,6 @@ class BaseBlock(BaseModel):
         """Whether this block prevents physical propagation through its position."""
         return False
 
-    def blocks_directional_movement(self, direction: str,
-                                    requesting_entity_uuid: Optional[UUID] = None,
-                                    mode: 'world_types.MovementMode' = world_types.MovementMode.WALKING,
-                                    subjective: bool = False) -> bool:
-        """Whether this block prevents movement out of its tile in a direction."""
-        return False
-
-    def blocks_directional_optics(self, direction: str) -> bool:
-        """Whether this block prevents ordinary optics crossing one boundary."""
-        return False
-
-    def blocks_directional_propagation(self, direction: str,
-                                       requesting_entity_uuid: Optional[UUID] = None,
-                                       subjective: bool = False) -> bool:
-        """Whether this block prevents physical propagation out of its tile in a direction."""
-        return False
-
     def set_stealth_dc(self, value: Optional[int], parent_event: Optional[UUID] = None) -> None:
         """Set stealth DC and notify observers."""
         self.stealth_dc = value
@@ -389,8 +381,11 @@ class BaseBlock(BaseModel):
         The observer authority re-evaluates subscribed observers. This fact
         does not dispatch position-indexed zone handlers.
         """
+        position = self.get_position()
+        if position is None:
+            return
         event = SpatialChangeEvent.perceivability_changed(
-            self.position,
+            position,
             self.uuid,
             is_invisible=self.is_invisible,
             stealth_dc=self.stealth_dc,
@@ -594,17 +589,13 @@ class BaseBlock(BaseModel):
         """
         return False
 
-    def on_grid_object_removed(self, position: Tuple[int, int], clear_location: bool = True) -> None:
-        """React after this block is removed from GridMap object indexes.
-
-        Args:
-            position: Grid position the object occupied before removal.
-            clear_location: Whether the removal represents an authoritative
-                location clear instead of an internal reindexing step.
-
-        The base implementation is a no-op. Floor-aware subclasses override
-        this hook to synchronize their own location fields.
-        """
+    def on_grid_object_removed(
+        self,
+        position: Tuple[int, int],
+        parent_event: Optional[UUID] = None,
+    ) -> None:
+        """React after this block is terminally removed from GridMap."""
+        del parent_event
         pass
 
     @classmethod

@@ -6,6 +6,7 @@ from uuid import UUID, uuid4
 
 from dnd.types.world import LightLevel
 from dnd.core.gridmap import GridMap
+from dnd.types.materials import Material, TileSurface
 from dnd.types.world import WorldEdgeChannel, CardinalDirection
 from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.content.items.environment_item_builders import (
@@ -35,8 +36,6 @@ WALL_POSITIONS: Tuple[Tuple[int, int], ...] = tuple(
     if (WALL_COLUMN, y) != DOOR_POSITION
 )
 
-DOOR_DIRECTIONS: Tuple[CardinalDirection, ...] = (CardinalDirection.WEST,)
-WALL_DIRECTIONS: Tuple[CardinalDirection, ...] = DOOR_DIRECTIONS
 STANDARD_BLOCKING_CHANNELS: Tuple[WorldEdgeChannel, ...] = (
     DIRECTIONAL_CHANNELS
 )
@@ -50,7 +49,13 @@ DIFFICULT_TERRAIN_POSITIONS: Tuple[Tuple[int, int], ...] = (
     *((x, y) for x in range(6, 9) for y in range(0, 3)),
     *((x, y) for x in range(6, 9) for y in range(12, 15)),
 )
-WALL_TORCH_POSITIONS: Tuple[Tuple[int, int], ...] = ((14, 1), (14, 13))
+WALL_TORCH_MOUNTS: Tuple[
+    Tuple[Tuple[int, int], CardinalDirection, int, CardinalDirection],
+    ...,
+] = (
+    ((14, 1), CardinalDirection.EAST, 1, CardinalDirection.WEST),
+    ((14, 13), CardinalDirection.EAST, 1, CardinalDirection.WEST),
+)
 HEALING_POTION_POSITIONS: Tuple[Tuple[int, int], ...] = ((1, 12), (3, 13))
 TRAP_LEVER_POSITION = (5, 12)
 
@@ -72,29 +77,53 @@ class StandardArenaObjects:
 
 def create_standard_arena_floor(grid: GridMap) -> None:
     """Create the standard 15x15 arena floor."""
-    grid.create_rectangle(ARENA_ORIGIN[0], ARENA_ORIGIN[1], ARENA_WIDTH, ARENA_HEIGHT)
+    grid.create_rectangle(
+        ARENA_ORIGIN[0],
+        ARENA_ORIGIN[1],
+        ARENA_WIDTH,
+        ARENA_HEIGHT,
+        surface=TileSurface(base_material=Material.STONE),
+    )
 
 
 def place_standard_directional_barrier(grid: GridMap) -> StandardBarrierObjects:
     """Place the standard arena directional wall strip and door."""
     walls = []
     for position in WALL_POSITIONS:
-        grid.set_tile(position[0], position[1], walkable=True, name="Floor")
+        grid.set_tile(
+            position[0],
+            position[1],
+            surface=TileSurface(base_material=Material.STONE),
+            walkable=True,
+            name="Floor",
+        )
         wall = build_directional_wall(
-            blocked_directions=WALL_DIRECTIONS,
             blocked_channels=STANDARD_BLOCKING_CHANNELS,
         )
-        wall.place_on_grid(position)
+        grid.place_object(
+            wall.uuid,
+            position,
+            boundary_direction=CardinalDirection.WEST,
+        )
         walls.append(wall)
 
-    grid.set_tile(DOOR_POSITION[0], DOOR_POSITION[1], walkable=True, name="Floor")
+    grid.set_tile(
+        DOOR_POSITION[0],
+        DOOR_POSITION[1],
+        surface=TileSurface(base_material=Material.STONE),
+        walkable=True,
+        name="Floor",
+    )
     door = build_directional_door(
         display_name="Door",
-        blocked_directions=DOOR_DIRECTIONS,
         blocked_channels=STANDARD_BLOCKING_CHANNELS,
         is_open=False,
     )
-    door.place_on_grid(DOOR_POSITION)
+    grid.place_object(
+        door.uuid,
+        DOOR_POSITION,
+        boundary_direction=CardinalDirection.WEST,
+    )
 
     return StandardBarrierObjects(door=door, walls=tuple(walls))
 
@@ -129,9 +158,15 @@ def build_standard_arena_environment(grid: GridMap) -> StandardArenaObjects:
     darken_arena(grid)
 
     wall_torches_list = []
-    for position in WALL_TORCH_POSITIONS:
+    for position, boundary_direction, base_height_steps, orientation in WALL_TORCH_MOUNTS:
         wall_torch = build_wall_torch()
-        wall_torch.mount(position, lit=True)
+        wall_torch.mount(
+            position,
+            boundary_direction=boundary_direction,
+            base_height_steps=base_height_steps,
+            orientation=orientation,
+            lit=True,
+        )
         wall_torches_list.append(wall_torch)
     wall_torches = tuple(wall_torches_list)
 

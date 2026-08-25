@@ -17,6 +17,7 @@ from dnd.core.events.events_registry import (
 from dnd.core.gridmap import GridMap, get_map
 from dnd.core.values import BaseValue, ModifiableValue
 from dnd.entities.entity import Entity, EntityConfig
+from dnd.types.materials import Material, TileSurface
 from tests.engine.support import create_test_entity
 
 
@@ -28,12 +29,18 @@ def reset_entity_anatomy_state() -> None:
     BaseValue._registry.clear()
     BaseBlock._registry.clear()
     Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
 
 
 def create_tutorial_hero() -> Entity:
     """Create the complete Aria actor used by the anatomy examples."""
     hero_id = uuid4()
+    get_map().create_rectangle(
+        0,
+        0,
+        8,
+        8,
+        surface=TileSurface(base_material=Material.STONE),
+    )
 
     return create_test_entity(
         name="Aria",
@@ -95,6 +102,13 @@ def create_tutorial_hero() -> Entity:
 def test_first_actor_example_prints_runtime_shape(capsys) -> None:
     """The first actor example prints the runtime shape it creates."""
     reset_entity_anatomy_state()
+    get_map().create_rectangle(
+        0,
+        0,
+        8,
+        8,
+        surface=TileSurface(base_material=Material.STONE),
+    )
 
     hero_id = uuid4()
     hero = create_test_entity(

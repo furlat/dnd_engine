@@ -1,4 +1,5 @@
 """Manual Chapter 14 checks for spell families and implemented spells."""
+from dnd.types.materials import Material, TileSurface
 
 from typing import cast
 from uuid import uuid4
@@ -79,9 +80,8 @@ def reset_spell_family_state(width: int = 12, height: int = 8) -> None:
     BaseCondition._registry.clear()
     BaseValue._registry.clear()
     Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
     GridMap.reset()
-    get_map().create_rectangle(0, 0, width, height)
+    get_map().create_rectangle(0, 0, width, height, surface=TileSurface(base_material=Material.STONE))
 
 
 def create_spell_family_actor(

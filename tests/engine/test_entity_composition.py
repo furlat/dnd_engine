@@ -1,4 +1,5 @@
 """Engine semantic tests for entity composition."""
+from dnd.types.materials import Material, TileSurface
 
 from contextlib import contextmanager
 from typing import Iterator
@@ -64,6 +65,13 @@ def reset_entity_state() -> None:
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
     BaseValue._registry.clear()
+    get_map().create_rectangle(
+        0,
+        0,
+        8,
+        8,
+        surface=TileSurface(base_material=Material.STONE),
+    )
 
 
 @contextmanager
@@ -155,7 +163,7 @@ def test_eb_06_001_entity_create_wires_identity_registries_and_blocks() -> None:
     assert entity.uuid == entity.source_entity_uuid
     assert Entity.get(entity.uuid) is entity
     assert BaseBlock.get(entity.uuid) is entity
-    assert entity in Entity.get_all_entities_at_position((2, 3))
+    assert entity.uuid in get_map().get_entities_at((2, 3))
     assert get_map().get_entity_position(entity.uuid) == (2, 3)
 
     top_level_blocks = [
@@ -357,7 +365,7 @@ def test_eb_06_006_targeted_skill_bonus_imports_target_outgoing_modifiers() -> N
 def test_eb_06_007_standard_actions_register_templates_and_handlers() -> None:
     """EB-06-007: setup_standard_actions registers reusable action templates."""
     reset_entity_state()
-    get_map().create_rectangle(0, 0, 8, 8)
+    get_map().create_rectangle(0, 0, 8, 8, surface=TileSurface(base_material=Material.STONE))
     entity = configured_entity("Actor", (1, 1), "heroes")
 
     setup_standard_actions(entity)
@@ -467,7 +475,7 @@ def test_eb_06_010_configured_entity_defaults_to_zero_hit_points() -> None:
 def test_eb_06_011_visible_entities_filter_into_allies_and_enemies() -> None:
     """EB-06-011: senses entities are filtered through faction relationships."""
     reset_entity_state()
-    get_map().create_rectangle(0, 0, 8, 8)
+    get_map().create_rectangle(0, 0, 8, 8, surface=TileSurface(base_material=Material.STONE))
     hero = configured_entity("Hero", (2, 2), "heroes")
     ally = configured_entity("Ally", (2, 3), "heroes")
     enemy = configured_entity("Enemy", (3, 2), "monsters")
@@ -502,7 +510,7 @@ def test_eb_06_011_visible_entities_filter_into_allies_and_enemies() -> None:
 def test_eb_06_012_equipped_weapons_create_and_remove_attack_templates() -> None:
     """EB-06-012: weapon equip events keep attack templates synchronized."""
     reset_entity_state()
-    get_map().create_rectangle(0, 0, 8, 8)
+    get_map().create_rectangle(0, 0, 8, 8, surface=TileSurface(base_material=Material.STONE))
     entity = configured_entity("Actor", (1, 1), "heroes")
     setup_standard_actions(entity)
 

@@ -189,10 +189,10 @@ def test_suppress_on_entry_restore_on_exit() -> None:
     _cast_antimagic_field(caster)
     assert has_condition(target, "Blinded")
 
-    get_map().move_entity(target.uuid, (6, 4))
+    Entity.update_entity_position(target, (6, 4))
     assert not has_condition(target, "Blinded")
 
-    get_map().move_entity(target.uuid, (11, 4))
+    Entity.update_entity_position(target, (11, 4))
     assert has_condition(target, "Blinded")
 
 
@@ -227,7 +227,7 @@ def test_zone_follows_caster() -> None:
     _cast_antimagic_field(caster)
     assert not has_condition(target, "Blinded")
 
-    get_map().move_entity(caster.uuid, (12, 4))
+    Entity.update_entity_position(caster, (12, 4))
 
     zone = _active_antimagic_zone()
     field = zone
@@ -390,7 +390,7 @@ def test_zone_movement_suppress_new_entity() -> None:
     _cast_antimagic_field(caster)
     assert has_condition(target, "Blinded")
 
-    get_map().move_entity(caster.uuid, (12, 5))
+    Entity.update_entity_position(caster, (12, 5))
 
     zone = _active_antimagic_zone()
     field = zone

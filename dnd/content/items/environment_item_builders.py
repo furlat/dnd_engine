@@ -5,12 +5,11 @@ from uuid import UUID, uuid4
 from dnd.actions.standard import SpellAction
 from dnd.blocks.base_item import UsableItem
 from dnd.core.base_actions import BaseAction
-from dnd.items.environment import DirectionalDoor, DirectionalWall
+from dnd.items.environment import CliffFace, DirectionalDoor, DirectionalWall
 from dnd.items.environment_interactables import (
     ActivateDeviceAction,
     ArcaneDevice,
     CookAction,
-    DoorObject,
     LootAllAction,
     PullLeverAction,
     RestAction,
@@ -21,7 +20,7 @@ from dnd.items.spell_items import SpellGrantingItem
 from dnd.items.torches import WallTorch
 from dnd.spells.evocation import Fireball
 from dnd.spells.evocation import MagicMissile
-from dnd.types.world import CardinalDirection, WorldEdgeChannel
+from dnd.types.world import WorldEdgeChannel
 
 
 def _bind_item_behavior(item_id: str, action: BaseAction) -> None:
@@ -33,7 +32,6 @@ def _bind_item_behavior(item_id: str, action: BaseAction) -> None:
 def build_directional_wall(
     *,
     display_name: str = "Directional Wall",
-    blocked_directions: tuple[CardinalDirection, ...],
     blocked_channels: tuple[WorldEdgeChannel, ...],
 ) -> DirectionalWall:
     """Construct one fixed directional wall from direct topology facts."""
@@ -41,15 +39,22 @@ def build_directional_wall(
         source_entity_uuid=uuid4(),
         semantic_key="environment.directional_wall",
         name=display_name,
-        blocked_directions=blocked_directions,
         blocked_channels=blocked_channels,
+    )
+
+
+def build_cliff_face(*, display_name: str = "Cliff Face") -> CliffFace:
+    """Construct one fixed movement-only cliff boundary."""
+    return CliffFace(
+        source_entity_uuid=uuid4(),
+        semantic_key="environment.cliff_face",
+        name=display_name,
     )
 
 
 def build_directional_door(
     *,
     display_name: str = "Directional Door",
-    blocked_directions: tuple[CardinalDirection, ...],
     blocked_channels: tuple[WorldEdgeChannel, ...],
     is_open: bool = False,
 ) -> DirectionalDoor:
@@ -58,25 +63,8 @@ def build_directional_door(
         source_entity_uuid=uuid4(),
         semantic_key="environment.directional_door",
         name=display_name,
-        blocked_directions=blocked_directions,
         blocked_channels=blocked_channels,
         is_open=is_open,
-    )
-
-
-def build_door(
-    source_entity_uuid: UUID,
-    *,
-    is_open: bool = False,
-) -> DoorObject:
-    """Construct one fixed door with state-derived open/close actions."""
-    return DoorObject(
-        source_entity_uuid=source_entity_uuid,
-        semantic_key="environment.door",
-        is_open=is_open,
-        blocks_movement=not is_open,
-        blocks_optics_field=not is_open,
-        blocks_propagation_field=not is_open,
     )
 
 
@@ -253,7 +241,7 @@ __all__ = [
     "build_arcane_device",
     "build_arcane_machine_gun",
     "build_campfire",
-    "build_door",
+    "build_cliff_face",
     "build_directional_door",
     "build_directional_wall",
     "build_fireball_cannon",

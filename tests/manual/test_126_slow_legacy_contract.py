@@ -4,6 +4,7 @@ The July test rework archived the executable Slow suite without replacing all
 of its behavioral assertions.  Each test below names the legacy case it keeps
 active so future reorganizations can prove one-for-one coverage.
 """
+from dnd.types.materials import Material, TileSurface
 
 from uuid import UUID, uuid4
 
@@ -65,7 +66,7 @@ from tests.engine.support import (
 
 def _reset_state() -> None:
     reset_combat_state()
-    get_map().create_rectangle(0, 0, 20, 20)
+    get_map().create_rectangle(0, 0, 20, 20, surface=TileSurface(base_material=Material.STONE))
 
 
 def _create_caster() -> Entity:

@@ -3,20 +3,21 @@
 from typing import Optional, Protocol, Tuple, runtime_checkable
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from dnd.core.events.events_registry import Event, EventType
 from dnd.types.damage import DamageType
 from dnd.types.equipment import ArmorType, EquipmentSlot, WeaponProperty
 from dnd.types.items import (
     ItemChargeState,
-    ItemDirectionalStructureState,
     ItemKind,
     ItemLightSourceState,
     ItemLocation,
     ItemRarity,
 )
+from dnd.types.world_placement import BoundaryStructure
 from dnd.types.rolls import DieSize
+from dnd.types.world_placement import WorldObjectPlacement
 
 
 class ItemState(BaseModel):
@@ -48,7 +49,7 @@ class ItemState(BaseModel):
     current_hit_points: Optional[int] = Field(default=None, ge=0)
     maximum_hit_points: Optional[int] = Field(default=None, ge=0)
     charge_state: Optional[ItemChargeState] = None
-    directional_structure: Optional[ItemDirectionalStructureState] = None
+    boundary_structure: Optional[BoundaryStructure] = None
     light_source: Optional[ItemLightSourceState] = None
     is_open: Optional[bool] = None
     blocks_movement: bool = False
@@ -100,10 +101,9 @@ class ItemLocationStateEvent(Event):
         default=None,
         description="Inventory or equipment block UUID after the mutation.",
     )
-    tile_uuid: Optional[UUID] = Field(default=None, description="Floor tile UUID after the mutation.")
-    position: Optional[Tuple[int, int]] = Field(
+    world_placement: Optional[WorldObjectPlacement] = Field(
         default=None,
-        description="Floor position after the mutation.",
+        description="Exact committed floor placement after the mutation.",
     )
     equipment_slot: Optional[EquipmentSlot] = Field(
         default=None,
@@ -118,6 +118,20 @@ class ItemLocationStateEvent(Event):
         ge=0,
         description="Exact aggregate owner AC after an entity-owned mutation.",
     )
+
+    @model_validator(mode="after")
+    def validate_location_placement(self) -> "ItemLocationStateEvent":
+        """Keep floor and non-floor facts mutually exclusive and exact."""
+        if self.location is ItemLocation.FLOOR:
+            if self.world_placement is None:
+                raise ValueError("floor item facts require world_placement")
+            if self.world_placement.object_uuid != self.item_state.item_uuid:
+                raise ValueError(
+                    "world_placement.object_uuid must match item_state.item_uuid",
+                )
+        elif self.world_placement is not None:
+            raise ValueError("non-floor item facts cannot define world_placement")
+        return self
 
 class ItemChargeConsumptionEvent(Event):
     """Finite usable-item resource consumption owned by the item domain."""

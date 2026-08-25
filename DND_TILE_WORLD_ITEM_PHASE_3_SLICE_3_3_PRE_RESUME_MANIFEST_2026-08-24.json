@@ -1,0 +1,111 @@
+{
+  "manifest_version": 1,
+  "phase": "3.3-pre-resume",
+  "status": "UNTRUSTED_INTERMEDIATE_FROZEN_FOR_SUPERVISED_CONTINUATION",
+  "master_plan_sha256": "50411e5575e6336ca0301acf032797cdf1d5ea885df5ccd37d6619f593e7a193",
+  "phase_3_guidance_sha256": "ed3b4afbe88ab4278c27429b3c9b1727a8ccdc144c3019ab5dcef00ca1715cd0",
+  "active_runtime_amendment_sha256": "f10e2fbbcb6ba8732d078f0c4f2f5276716eb51e32c083068f3cae93c9ba52d6",
+  "active_runtime_ledger_sha256": "63e25aac3f0136daa8d43b860c328fe8b7b9f26529f65792b123dc77293c059a",
+  "accepted_slice_3_1_manifest_sha256": "2501ed3fb35c9b17ad5ef3dcd3bc289ef2145c9ea2ea60ab47164bacba099320",
+  "scope": "Exact active Python mechanics and active tests changed after accepted Slice 3.1 and retained after excluded-file cleanup. This is a supervised continuation checkpoint, not implementation approval.",
+  "algorithm": "SHA-256 of exact raw bytes for the sorted governed retained active paths. Markdown governance, this manifest, deprecated/server/editor, inactive content-system packaging, SDK, TypeScript/JavaScript, generated transport, and presentation artifacts are excluded.",
+  "member_count": 24,
+  "files": [
+    {
+      "path": "dnd/actions/standard.py",
+      "sha256": "4be96b8149eceaf4d22f3e0c06484748c91e44db130eddd2555c8933cd6b5296"
+    },
+    {
+      "path": "dnd/blocks/base_item.py",
+      "sha256": "62f8cd454c7cb2492cbdda98b43a8ae4a0eccd4e1f4539395e223e25066dcc6a"
+    },
+    {
+      "path": "dnd/content/items/authored_item_builders.py",
+      "sha256": "7388c5e77424950c3d81fd22594d6be17129eb10cfe7825f9ea269e03afbb03f"
+    },
+    {
+      "path": "dnd/content/items/environment_item_builders.py",
+      "sha256": "b525df147a0ce0d8ac92506a92e7fa121189860895dc85b04ec12628b64d93f7"
+    },
+    {
+      "path": "dnd/content/items/item_catalog.py",
+      "sha256": "bdfe041535dbe03e89790d4070aa5047508f62bee422b950b7f908c9058ebba2"
+    },
+    {
+      "path": "dnd/content/scenarios/battlefield_builders.py",
+      "sha256": "150537b5380ec3373ccbd72ecafbaaa71389f6eb58f6600b950fdd8bdab2a115"
+    },
+    {
+      "path": "dnd/content/scenarios/battlefield_definitions.py",
+      "sha256": "1076e91cab7b973bc6ded57393e0b074b3e2216f453fc99767d546d504112303"
+    },
+    {
+      "path": "dnd/content/scenarios/scenario_compatibility.py",
+      "sha256": "c88cf823b15a171f96eec945f6ce64bcd6f5edcd20ffe04a3d78bc243efa917b"
+    },
+    {
+      "path": "dnd/core/aoe.py",
+      "sha256": "81bec8bc1b3364553330c83d298d7eb2d5abb87595ee36da08f05ebf7b54456f"
+    },
+    {
+      "path": "dnd/core/base_block.py",
+      "sha256": "51aecb446f130f960d9790edd303df62bb8990a586c260a4de4633c15f639f1e"
+    },
+    {
+      "path": "dnd/core/base_conditions.py",
+      "sha256": "3be0bfab99b1997fdb169405cc2d6effa0855b0555330f992a906c9c108e5619"
+    },
+    {
+      "path": "dnd/core/base_tiles.py",
+      "sha256": "61daa05225ad17cfcb8b7923493ef8bb18ddf7f685a9c7143c2fb7d897746d28"
+    },
+    {
+      "path": "dnd/core/events/item_events.py",
+      "sha256": "3dee524f5f25af6a12565b3905097d743e2f8996120a7de6a67906e590c5ed2c"
+    },
+    {
+      "path": "dnd/core/events/world_events.py",
+      "sha256": "f7efd536cc209ce675a38e001039b6532e0471598f24cbbcef6803ff7e898e10"
+    },
+    {
+      "path": "dnd/core/gridmap.py",
+      "sha256": "ef86a03d6ade3d3cd4d18fedc4ca96088485e6bd3f96c698dcbb4343210f7815"
+    },
+    {
+      "path": "dnd/entities/entity.py",
+      "sha256": "90ff351203de3027f60225c3ff9b1d45e88d378d36cdbf5c29b3c6af4212bcbe"
+    },
+    {
+      "path": "dnd/items/environment.py",
+      "sha256": "e2761b6627fce4090c5dd05cd0c32588cff27a8b69ee6ebe7ac7c9414721fa39"
+    },
+    {
+      "path": "dnd/items/environment_interactables.py",
+      "sha256": "767b40d16724f209df3f0cbbf1d04afc642b42948914e255e451bc07d9de4b45"
+    },
+    {
+      "path": "dnd/maps/arena_layout.py",
+      "sha256": "4c4ddb21d4005e80e49abc52d0d927adccccddd7631f538bfdf5ca036abada7e"
+    },
+    {
+      "path": "dnd/spatial/area_conditions.py",
+      "sha256": "8025cc9ba9e789367367f62b2dc11ad58f543f11282d4b3fcb10b85865da1ac3"
+    },
+    {
+      "path": "dnd/types/items.py",
+      "sha256": "18d0efd8fcfd07f5f9205f77dcbe0ddc49456a51b9e55f01f23605f67d358d69"
+    },
+    {
+      "path": "dnd/types/world_placement.py",
+      "sha256": "dba8133a6373266af24c5496e13f0631fadd6739e071d666659e40aac9a8b0a5"
+    },
+    {
+      "path": "tests/engine/test_grid_pathfinding.py",
+      "sha256": "fc25f38f98fb4200f8aee18f85bd1bd4308f499e5a6bfb8174d79a2d6db2335a"
+    },
+    {
+      "path": "tests/engine/test_tile_surface_contract.py",
+      "sha256": "de6aa0114f1564c934c1afeeb788a807ce6ff8f15dad29bc81a657c564335189"
+    }
+  ]
+}

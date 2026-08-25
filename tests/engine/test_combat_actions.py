@@ -1,4 +1,5 @@
 """Engine semantic tests for core actions and combat flow."""
+from dnd.types.materials import Material, TileSurface
 
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -87,7 +88,7 @@ def reset_core_action_state() -> None:
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
     BaseValue._registry.clear()
-    get_map().create_rectangle(0, 0, 20, 20)
+    get_map().create_rectangle(0, 0, 20, 20, surface=TileSurface(base_material=Material.STONE))
 
 
 @contextmanager
@@ -298,6 +299,99 @@ def test_eb_10_002_attack_hit_rolls_damage_and_consumes_action() -> None:
     assert attacker.action_economy.actions.normalized_score == 0
     assert EventQueue.get_events_by_type(EventType.DAMAGE_ROLL_RESULT)
     assert EventQueue.get_events_by_type(EventType.TAKE_DAMAGE)
+
+
+@pytest.mark.parametrize(
+    ("ally_suspended", "expected_advantage"),
+    (
+        (False, AdvantageStatus.ADVANTAGE),
+        (True, AdvantageStatus.NONE),
+    ),
+)
+def test_pack_tactics_public_attack_respects_co_located_ally_presence(
+    ally_suspended: bool,
+    expected_advantage: AdvantageStatus,
+) -> None:
+    """Pack Tactics sees a present co-located ally, not its retained position."""
+    reset_core_action_state()
+    attacker = create_test_monster(
+        "creature.wolf",
+        name="Pack attacker",
+        position=(5, 5),
+        faction="heroes",
+    )
+    target = create_test_monster(
+        "creature.zombie",
+        name="Pack target",
+        position=(6, 5),
+        faction="monsters",
+    )
+    ally = create_test_monster(
+        "creature.kobold",
+        name="Co-located ally",
+        position=(6, 5),
+        faction="heroes",
+    )
+    if ally_suspended:
+        ally.suspend_spatial_presence()
+    Entity.materialize_all_navigation(max_distance=20)
+    hit_modifier = force_attack_hit(attacker)
+    try:
+        with fixed_dice(10, 4):
+            event = Attack(
+                source_entity_uuid=attacker.uuid,
+                target_entity_uuid=target.uuid,
+                weapon_slot=WeaponSlot.MELEE_MAIN,
+            ).apply()
+    finally:
+        remove_attack_modifier(attacker, hit_modifier)
+
+    assert event is not None
+    assert event.dice_roll is not None
+    assert event.dice_roll.advantage_status is expected_advantage
+
+
+@pytest.mark.parametrize("ally_suspended", (False, True))
+def test_sneak_attack_public_damage_respects_co_located_ally_presence(
+    ally_suspended: bool,
+) -> None:
+    """Sneak Attack adds its public damage only for a present co-located ally."""
+    reset_core_action_state()
+    attacker = create_test_monster(
+        "creature.spy",
+        name="Sneak attacker",
+        position=(5, 5),
+        faction="heroes",
+    )
+    target = create_test_monster(
+        "creature.zombie",
+        name="Sneak target",
+        position=(6, 5),
+        faction="monsters",
+    )
+    ally = create_test_monster(
+        "creature.kobold",
+        name="Sneak co-located ally",
+        position=(6, 5),
+        faction="heroes",
+    )
+    if ally_suspended:
+        ally.suspend_spatial_presence()
+    Entity.materialize_all_navigation(max_distance=20)
+    hit_modifier = force_attack_hit(attacker)
+    try:
+        with fixed_dice(10, 4, 4, 4, 4, 4):
+            event = Attack(
+                source_entity_uuid=attacker.uuid,
+                target_entity_uuid=target.uuid,
+                weapon_slot=WeaponSlot.MELEE_MAIN,
+            ).apply()
+    finally:
+        remove_attack_modifier(attacker, hit_modifier)
+
+    assert event is not None
+    assert event.damage_rolls is not None
+    assert len(event.damage_rolls) == (1 if ally_suspended else 2)
 
 
 def test_attack_declaration_handlers_dispatch_once_per_attack() -> None:
@@ -1434,7 +1528,7 @@ def test_eb_10_010_natural_rolls_drive_crit_and_crit_miss_outcomes() -> None:
 def test_eb_10_011_ranged_range_flags_and_disadvantage() -> None:
     """EB-10-011: ranged weapons distinguish normal, long, and impossible range."""
     reset_core_action_state()
-    get_map().create_rectangle(0, 0, 80, 5)
+    get_map().create_rectangle(0, 0, 80, 5, surface=TileSurface(base_material=Material.STONE))
 
     archer = create_test_monster("monster.goblin_archer", name="Archer", position=(0, 0), faction="heroes")
     normal_target = create_test_monster("monster.skeleton", name="Normal Target", position=(16, 0), faction="monsters")
@@ -1487,7 +1581,7 @@ def test_eb_10_011_ranged_range_flags_and_disadvantage() -> None:
 def test_eb_10_013_threatened_ranged_attacks_roll_with_disadvantage() -> None:
     """EB-10-013: adjacent visible enemies impose ranged-attack disadvantage."""
     reset_core_action_state()
-    get_map().create_rectangle(0, 0, 30, 10)
+    get_map().create_rectangle(0, 0, 30, 10, surface=TileSurface(base_material=Material.STONE))
 
     archer = create_test_monster("monster.goblin_archer", name="Threatened Archer", position=(5, 5), faction="heroes")
     create_test_monster("monster.goblin", name="Adjacent Enemy", position=(5, 6), faction="monsters")
@@ -1513,7 +1607,7 @@ def test_eb_10_013_threatened_ranged_attacks_roll_with_disadvantage() -> None:
     assert threatened_event.attack_outcome in {AttackOutcome.MISS, AttackOutcome.CRIT_MISS}
 
     reset_core_action_state()
-    get_map().create_rectangle(0, 0, 30, 10)
+    get_map().create_rectangle(0, 0, 30, 10, surface=TileSurface(base_material=Material.STONE))
 
     archer = create_test_monster("monster.goblin_archer", name="Long Threatened Archer", position=(5, 5), faction="heroes")
     create_test_monster("monster.goblin", name="Adjacent Enemy", position=(5, 6), faction="monsters")

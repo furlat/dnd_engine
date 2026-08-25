@@ -7,6 +7,7 @@ item-specific combinations that generic spell tests cannot cover: discovery
 binding, charge budgets, consumption, environment ownership, and effect
 lifecycle cleanup.
 """
+from dnd.types.materials import Material, TileSurface
 
 from uuid import UUID, uuid4
 
@@ -197,7 +198,7 @@ LEGACY_CASE_TO_ACTIVE_SELECTOR: dict[str, str] = {
 def reset_item_arena(width: int = 20, height: int = 20) -> None:
     """Reset engine-global state and create one rectangular floor."""
     reset_combat_state()
-    get_map().create_rectangle(0, 0, width, height)
+    get_map().create_rectangle(0, 0, width, height, surface=TileSurface(base_material=Material.STONE))
 
 
 def create_caster(

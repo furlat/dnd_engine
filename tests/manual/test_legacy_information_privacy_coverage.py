@@ -5,6 +5,7 @@ subjective server projector is now the privacy authority, so this file restores
 the two genuine engine gaps and points every superseded case at its maintained
 privacy contract without reviving the unsafe compatibility path.
 """
+from dnd.types.materials import Material, TileSurface
 
 from dataclasses import dataclass
 from typing import Literal
@@ -116,7 +117,7 @@ def test_information_privacy_manifest_accounts_for_all_10_cases() -> None:
 def test_position_aoe_can_resolve_with_zero_affected_entities() -> None:
     """Fireball can spend its action and slot on a legal empty grid position."""
     reset_combat_state()
-    get_map().create_rectangle(0, 0, 15, 15)
+    get_map().create_rectangle(0, 0, 15, 15, surface=TileSurface(base_material=Material.STONE))
     caster = create_test_monster("monster.generic_caster", 
         name="Wizard",
         position=(2, 2),

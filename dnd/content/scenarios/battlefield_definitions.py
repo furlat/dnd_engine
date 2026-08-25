@@ -19,6 +19,7 @@ BattlefieldTerrain = Literal["gap", "water", "difficult_terrain", "spikes"]
 BattlefieldObjectKind = Literal[
     "wall",
     "door",
+    "cliff",
     "wall_torch",
     "healing_potion",
     "trap_lever",
@@ -51,8 +52,37 @@ class BattlefieldObjectDefinition(BaseModel):
     position: tuple[int, int]
     kind: BattlefieldObjectKind
     label: str
-    blocked_directions: tuple[CardinalDirection, ...] = ()
+    boundary_direction: CardinalDirection | None = None
+    base_height_steps: StrictInt | None = None
+    orientation: CardinalDirection | None = None
     is_open: bool | None = None
+
+    @model_validator(mode="after")
+    def _validate_boundary_side(self) -> Self:
+        boundary_kinds = {"wall", "door", "cliff", "wall_torch"}
+        if self.kind in boundary_kinds and self.boundary_direction is None:
+            raise ValueError(
+                "authored boundary objects require boundary_direction",
+            )
+        if self.kind not in boundary_kinds and (
+            self.boundary_direction is not None
+            or self.base_height_steps is not None
+            or self.orientation is not None
+        ):
+            raise ValueError(
+                "center objects cannot author boundary, base, or orientation",
+            )
+        if self.kind == "cliff" and self.base_height_steps is None:
+            raise ValueError("authored cliffs require base_height_steps")
+        if self.kind == "wall_torch" and (
+            self.base_height_steps is None or self.orientation is None
+        ):
+            raise ValueError(
+                "authored wall torches require base_height_steps and orientation",
+            )
+        if self.kind != "door" and self.is_open is not None:
+            raise ValueError("is_open is valid only for doors")
+        return self
 
 
 class BattlefieldElevationDefinition(BaseModel):

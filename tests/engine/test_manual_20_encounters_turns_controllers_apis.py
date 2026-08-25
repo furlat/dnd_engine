@@ -1,4 +1,5 @@
 """Focused checks for encounters, turns, controllers, and APIs."""
+from dnd.types.materials import Material, TileSurface
 
 import warnings
 from typing import Optional
@@ -113,7 +114,7 @@ def reset_runtime_tutorial_state(width: int = 16, height: int = 10) -> None:
     event_stream._clear_source_journal()
     sim.reset()
 
-    get_map().create_rectangle(0, 0, width, height)
+    get_map().create_rectangle(0, 0, width, height, surface=TileSurface(base_material=Material.STONE))
 
 
 def create_runtime_pair() -> tuple[Entity, Entity]:
