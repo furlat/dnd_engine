@@ -66,7 +66,6 @@ class Armor(EquippableItem):
     """Equippable armor item with AC and slot metadata."""
 
     name: str = Field(default="Armor", description="Name of the armor.")
-    map_char: str = Field(default="\u03b4", description="Character to display on the map grid")
     description: Optional[str] = Field(
         default=None,
         description="Detailed description of the armor"
@@ -231,7 +230,6 @@ class Shield(EquippableItem):
     """Equippable shield that occupies the melee off-hand slot."""
 
     name: str = Field(default="Shield", description="Name of the shield")
-    map_char: str = Field(default="\u03a3", description="Character to display on the map grid")
     description: Optional[str] = Field(
         default=None,
         description="Detailed description of the shield"
@@ -272,7 +270,6 @@ class Weapon(EquippableItem):
     """Equippable weapon with attack, damage, range, and property metadata."""
 
     name: str = Field(default="Weapon", description="Name of the weapon")
-    map_char: str = Field(default="\u2020", description="Character to display on the map grid")
     description: Optional[str] = Field(
         default=None,
         description="Detailed description of the weapon"

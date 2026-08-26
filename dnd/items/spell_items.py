@@ -98,10 +98,6 @@ class SpellGrantingItem(UsableItem):
         default=True,
         description="Whether the spell-bearing item can be picked up.",
     )
-    map_char: str = Field(
-        default="\u03c3",
-        description="Map glyph for spell-bearing items.",
-    )
     is_consumable: bool = Field(
         default=True,
         description="Whether the item is destroyed after its final charge.",
@@ -587,8 +583,6 @@ def _scroll(
         content_ref=item_context.requested_ref,
         name=display_name,
         description=description,
-        visual_item_name=display_name,
-        visual_variant_id=stack_suffix,
         scroll_cast_level=cast_level,
         use_action_templates=[template],
         stack_id=stack_suffix,
@@ -859,8 +853,6 @@ def _build_wand_of_magic_missiles(
         content_ref=item_context.requested_ref,
         name="Wand of Magic Missiles",
         description="Casts Magic Missile by spending one charge.",
-        visual_item_name="Wand of Magic Missiles",
-        visual_variant_id="magic_missiles",
         scroll_cast_level=1,
         charges=parameters.charges,
         max_charges=parameters.charges,
@@ -913,8 +905,6 @@ def _build_wand_of_fire(
         description=(
             "Casts Burning Hands or Fireball at fixed per-spell charge costs."
         ),
-        visual_item_name="Wand of Fire",
-        visual_variant_id="fire",
         scroll_cast_level=1,
         charges=parameters.charges,
         max_charges=parameters.charges,
@@ -974,8 +964,6 @@ def _build_acid_flask(
         content_ref=item_context.requested_ref,
         name="Acid Flask",
         description="Throw for a two-by-two 2d4 acid splash.",
-        visual_item_name="Acid Flask",
-        visual_variant_id="acid_flask",
         scroll_cast_level=0,
         use_action_templates=[
             _AcidFlaskSpell(
@@ -985,7 +973,6 @@ def _build_acid_flask(
             ),
         ],
         stack_id="acid_flask",
-        map_char="!",
     )
 
 
@@ -1053,7 +1040,6 @@ def build_acid_flask(source_entity_uuid: UUID) -> SpellGrantingItem:
         scroll_cast_level=0,
         use_action_templates=[action],
         stack_id="acid_flask",
-        map_char="!",
     )
     _bind_direct_item_action(item, action)
     return item

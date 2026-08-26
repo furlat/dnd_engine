@@ -1,0 +1,459 @@
+{
+  "accepted_phase4_manifest_sha256": "e66f767412230e0ed9e0c024b1e155d27b581599375ee330d5759dcd498b0d85",
+  "active_runtime_scope_amendment_sha256": "f10e2fbbcb6ba8732d078f0c4f2f5276716eb51e32c083068f3cae93c9ba52d6",
+  "certification": {
+    "architecture_result": "41 passed in 24.06s",
+    "compile_result": "exit 0 for all 10 governed changed Python files",
+    "dependency_result": "clean",
+    "diff_check_result": "exit 0",
+    "final_union_result": "650 passed in 217.62s (0:03:37)",
+    "hard_cut_result": "clean in active scope; one known excluded residue in tests/engine/test_dice_event_semantics.py",
+    "locality_result": "4 passed in 6.15s",
+    "private_light_result": "clean; only public get_attached_light_sources usage",
+    "status": "READY_FOR_INDEPENDENT_REVIEW"
+  },
+  "excluded_worktree_diff": [
+    "DND_TILE_WORLD_ITEM_PHASE_5_AUTHORED_BOOTSTRAP_IMPLEMENTATION_PLAN_2026-08-26.md",
+    "DND_TILE_WORLD_ITEM_PHASE_5_IMPLEMENTATION_LEDGER_2026-08-26.md",
+    "DND_TILE_WORLD_ITEM_PHASE_5_IMPLEMENTATION_MANIFEST_2026-08-26.json",
+    "No excluded production/test paths changed."
+  ],
+  "files": [
+    {
+      "path": "dnd/actions/standard.py",
+      "sha256": "1cac5d57a2736e0b364fec3d639711574376856e9f94d7a0a57e5890380a3899"
+    },
+    {
+      "path": "dnd/blocks/base_item.py",
+      "sha256": "970d4c0bd01ff337c10ba53ed780bb93f67d8ed81795d78944c4d026bd83730b"
+    },
+    {
+      "path": "dnd/blocks/equipment.py",
+      "sha256": "7d718f100d900722ae1f24d714cbd567eeef693f203546ed089099f01b44463d"
+    },
+    {
+      "path": "dnd/blocks/inventory.py",
+      "sha256": "4867c283e4ee47307ca11818fe40dcfc063bfa327f4203b74484bf03f3304dfd"
+    },
+    {
+      "path": "dnd/blocks/sensory.py",
+      "sha256": "392415627ac4b82b179e2a377226185a91b176441076f119c3ab93774b8ec95b"
+    },
+    {
+      "path": "dnd/content/items/authored_item_builders.py",
+      "sha256": "7388c5e77424950c3d81fd22594d6be17129eb10cfe7825f9ea269e03afbb03f"
+    },
+    {
+      "path": "dnd/content/items/authored_item_definitions.py",
+      "sha256": "2a60936ffcdfedfaec639ef73b0fbab0df7913325183c0bcd27ca13213cf70ab"
+    },
+    {
+      "path": "dnd/content/items/environment_item_builders.py",
+      "sha256": "a099dba1b891f25e2cc2c5914ca7db95f3345bfadb3d1922e63fcd2d53cd7619"
+    },
+    {
+      "path": "dnd/content/items/item_catalog.py",
+      "sha256": "bce7cd163d2fa8ecdea77fe1bdd91ed2202835f784ced6a42f2ee4b37c621f04"
+    },
+    {
+      "path": "dnd/content/scenarios/battlefield_builders.py",
+      "sha256": "53dc39a35d357cc00a65c565d87d86e27e60ea373356fb47216204af8a0cc5e9"
+    },
+    {
+      "path": "dnd/content/scenarios/battlefield_definitions.py",
+      "sha256": "9da232343bcb626c24a6e960706017e91057fc8ffc44262cbb5e6843899dc710"
+    },
+    {
+      "path": "dnd/content/scenarios/scenario_compatibility.py",
+      "sha256": "4ff0f54d3134cb5879e0f45e597ab8c978f3ed58c6839f9369eb7f1bcdf987c6"
+    },
+    {
+      "path": "dnd/content/spike_trap_materialization.py",
+      "sha256": "48506856b4e1033a56b81bf258b79253d829eff3df6e6e2ee706d74d15bee27c"
+    },
+    {
+      "path": "dnd/core/aoe.py",
+      "sha256": "5d389d86a7b0bbc50f591578c2c17b359466e0d51c83a3f52d590e24f123c4c2"
+    },
+    {
+      "path": "dnd/core/base_block.py",
+      "sha256": "51aecb446f130f960d9790edd303df62bb8990a586c260a4de4633c15f639f1e"
+    },
+    {
+      "path": "dnd/core/base_conditions.py",
+      "sha256": "3be0bfab99b1997fdb169405cc2d6effa0855b0555330f992a906c9c108e5619"
+    },
+    {
+      "path": "dnd/core/base_tiles.py",
+      "sha256": "0ae0c598f51ee722185f193f7a0317f2ae44d2d7f12fa20508c8c2c75dc873ed"
+    },
+    {
+      "path": "dnd/core/events/item_events.py",
+      "sha256": "5332af7ebdf377612c8453e3d80f4318005302bec538b41aa186bd361a4eb90d"
+    },
+    {
+      "path": "dnd/core/events/world_events.py",
+      "sha256": "6b45b33ac6e4a5d7241e9eb7a62490b3403024216b35b54c16f4bfe96bfe80b7"
+    },
+    {
+      "path": "dnd/core/gridmap.py",
+      "sha256": "f79cc49eae10054b29ef34cae18bb602865ef11acfbd51c713eb1026a3a93022"
+    },
+    {
+      "path": "dnd/core/world_edges.py",
+      "sha256": "2df6abb9d94c047509070fa2426325feb62a1480cacc03dfeced33a49da71ddd"
+    },
+    {
+      "path": "dnd/entities/entity.py",
+      "sha256": "317ea1d6f67392669a7d1a7c3c5f56830d916527a7994ec108eef74d372c0ae3"
+    },
+    {
+      "path": "dnd/game.py",
+      "sha256": "bc7cc5fdb533be5e1862fc9a6934aef8ab31a8eb4d89fcc05ff54a9e8f0898b1"
+    },
+    {
+      "path": "dnd/items/environment.py",
+      "sha256": "64a7a5a106539f2dde73df9e2de7f07f4fe7c997fad77871b656b873dc9bc398"
+    },
+    {
+      "path": "dnd/items/environment_interactables.py",
+      "sha256": "68d83a9c27302a1cde436b385f259c20f949f6a66541073014707bd18eb9f6b6"
+    },
+    {
+      "path": "dnd/items/torches.py",
+      "sha256": "408b30a82e057f26e2f37ca4c1b15f2ee661e08bf1809b8c123f2c1129b5777b"
+    },
+    {
+      "path": "dnd/maps/arena_layout.py",
+      "sha256": "19a9086f45f8ad8aff6b1a2503038f2ddf6fdeb05794100e390993787fe4d9c1"
+    },
+    {
+      "path": "dnd/monsters/traits.py",
+      "sha256": "dc00f4aa03d3064565f7d267cbf1e73178cc2ae8f39472d377bac45da2132a4b"
+    },
+    {
+      "path": "dnd/runtime_reset.py",
+      "sha256": "83d94f109aec7a7f252e3792cf922336d85eb63ff5aefd09494eac1e71ed077f"
+    },
+    {
+      "path": "dnd/spatial/area_conditions.py",
+      "sha256": "bda6dd3d47fdbcb7771a5a388b502117eb2464781b6fbc17e4d032f83ffe6755"
+    },
+    {
+      "path": "dnd/spells/abjuration.py",
+      "sha256": "6403623f13afc210bdd1ff3dc10bed0d6e5d00435bbaafdec934f0157cb1b65c"
+    },
+    {
+      "path": "dnd/spells/conjuration.py",
+      "sha256": "19e341ce34e476049c55b50c56e7302e2901b330f079cf53259a0065665ef5a6"
+    },
+    {
+      "path": "dnd/spells/evocation.py",
+      "sha256": "ed5d6a871c27442149f3200421eb0617214f16297b5af757e47304578af3766a"
+    },
+    {
+      "path": "dnd/spells/necromancy.py",
+      "sha256": "5f76590764966b00502d83dfe089fea70c506cf92e8228e8152ed17efd383565"
+    },
+    {
+      "path": "dnd/types/items.py",
+      "sha256": "039b15aeb9a2d3e0ed5f2566608b253f87b7444cd63d608f7c8ab832385ffa1f"
+    },
+    {
+      "path": "dnd/types/materials.py",
+      "sha256": "2fec57e8afd4e37637e7b955ee81fbd3d0d34c9fc1e16d6d5916aefdd5cc41af"
+    },
+    {
+      "path": "dnd/types/world_placement.py",
+      "sha256": "dba8133a6373266af24c5496e13f0631fadd6739e071d666659e40aac9a8b0a5"
+    },
+    {
+      "path": "tests/architecture/test_content_ledger_boundary.py",
+      "sha256": "16b45ddb4f7517fbafb8bd9f87cbc74cd954c347b276ee2ae75655d0308f6bdf"
+    },
+    {
+      "path": "tests/architecture/test_dependency_boundaries.py",
+      "sha256": "c8ae369d82d132e4b6d0b1bd9016cd383e0c0be130cf363cc8fc9d17b31c11dc"
+    },
+    {
+      "path": "tests/engine/test_action_cost_and_position_commit.py",
+      "sha256": "efb37b67bacdac03d005432ecc240bd46243a1a09530a9f14cc9ccecc1550119"
+    },
+    {
+      "path": "tests/engine/test_action_discovery.py",
+      "sha256": "85588e0c68b05cd3aa959ea228ab3706125f4471fa2184031779a184b3cf2e4b"
+    },
+    {
+      "path": "tests/engine/test_combat_actions.py",
+      "sha256": "7a4faaa6d491c82d4bdc805db613caa03b299d1d4add5a448c4cc456f3fca71f"
+    },
+    {
+      "path": "tests/engine/test_condition_lifecycle.py",
+      "sha256": "a1771cb03a06f12e2d550fb7a6ce284dac5923d974ee7e86303bd7390fd1065b"
+    },
+    {
+      "path": "tests/engine/test_condition_transform_ownership.py",
+      "sha256": "0a743d782ed0520dc2393fbfa2ceffec4fec4281aa099e2a50d1f609b59f15ca"
+    },
+    {
+      "path": "tests/engine/test_direct_scenario_deployment.py",
+      "sha256": "76f3223eb55c29cc27dcb4f131e51596df01afa390aebe3fc8567fd76d09972f"
+    },
+    {
+      "path": "tests/engine/test_direct_spatial_effect_materialization.py",
+      "sha256": "9028387a4afe13aa8bad6a53a3bae76b7312d434b4ca004594338b59c3f88c7b"
+    },
+    {
+      "path": "tests/engine/test_elevated_jump_transaction.py",
+      "sha256": "866d623c0ad31d76977e10c781b359762b75a67701fe8ec922c3e456aaadd5a0"
+    },
+    {
+      "path": "tests/engine/test_elevation_performance_contract.py",
+      "sha256": "fc16daa7e8da08cb3058881ab162f5a5c821a9edb2deb9e6ece4eda7396443d8"
+    },
+    {
+      "path": "tests/engine/test_elevation_proving_battlefield.py",
+      "sha256": "7b5f1b85872a934084fd252ccd8f62ce6befc517eecfb4da1d9d47b7df9837ea"
+    },
+    {
+      "path": "tests/engine/test_entity_composition.py",
+      "sha256": "92baee75257eea716969979098087bcd17b50421ca9e44e3e982e2f6a0a4b891"
+    },
+    {
+      "path": "tests/engine/test_event_wire_visibility_contract.py",
+      "sha256": "a5dd95d382b0354059bc24925468f3839ed562b0ab1708702896d964e5bb4a93"
+    },
+    {
+      "path": "tests/engine/test_grid_pathfinding.py",
+      "sha256": "69fdefdc02e08678e59b22f21aa52882e0048fa243307f7c135e76365bb2a9c0"
+    },
+    {
+      "path": "tests/engine/test_items_inventory_equipment.py",
+      "sha256": "f4dfcd45a0b83fc9ee2e8729a0b56925bd9842687e1ab00ff86af5c0a8af1a2b"
+    },
+    {
+      "path": "tests/engine/test_life_state_ownership.py",
+      "sha256": "6c488fb9a7a000ab9330991a32583504d65ba6d0b4c7224aaf97a1166354c757"
+    },
+    {
+      "path": "tests/engine/test_manual_07_entity_composition.py",
+      "sha256": "61e3812f6498a245169862773b840c883faf6d74efca0fbbed8b6cad419ea2a5"
+    },
+    {
+      "path": "tests/engine/test_manual_09_conditions.py",
+      "sha256": "df710d90f44ae8d765fb3ed7dc02ba3e0ac88e9651409d136c1113aab6bc7cc2"
+    },
+    {
+      "path": "tests/engine/test_manual_10_standard_conditions.py",
+      "sha256": "d2fb7a53a354a0ba6c5ec85312fee9d743b7748401a0d1d9b33ee3ae533685f8"
+    },
+    {
+      "path": "tests/engine/test_manual_11_grid_tiles_terrain_movement.py",
+      "sha256": "7e421b0475053efdc4e858a3e11a427d6012007dceb7a0f9ce6f523af56ff94d"
+    },
+    {
+      "path": "tests/engine/test_move_settlement.py",
+      "sha256": "1171ed33a7194779d1295fb983cb2337e87f4305852d8b45f787be8a2540a426"
+    },
+    {
+      "path": "tests/engine/test_objective_state.py",
+      "sha256": "da5d23054014c095857ad5c878924bef84f257fd7c453edc2d6b05810aaf9e4e"
+    },
+    {
+      "path": "tests/engine/test_runtime_identity_registries.py",
+      "sha256": "d0d8cdd8812d4c310c327dd7c466bd78b67af9f01c2a97064321d4b609ae9562"
+    },
+    {
+      "path": "tests/engine/test_runtime_reset.py",
+      "sha256": "325c08d351a3310e313b185ae59990e106ecd0cbd09dd4508dc3bb6232aab9d8"
+    },
+    {
+      "path": "tests/engine/test_senses_light_stealth.py",
+      "sha256": "f30ae3f8c44b204cddff28e7814fc3e34a213d85742e76b9fceff32cab78bb8b"
+    },
+    {
+      "path": "tests/engine/test_spatial_effects.py",
+      "sha256": "d0039320f39cad3385e1995ecbe4141750567256da4e17e249282bccd9663dfd"
+    },
+    {
+      "path": "tests/engine/test_spell_families.py",
+      "sha256": "c90e6f965d71c6b47be7e0e50aa62f9657cfb2486f779b91ee86a2ac522517ae"
+    },
+    {
+      "path": "tests/engine/test_tile_surface_contract.py",
+      "sha256": "552193064ee7ba4f5d929639f9f881b058870d86d4048631e0bdf29e36dbe335"
+    },
+    {
+      "path": "tests/engine/test_traversal_connectors.py",
+      "sha256": "21a297435aa411b19aa84e5823c3465001bb3526f135fdf44fa0a29fe8dd618c"
+    },
+    {
+      "path": "tests/engine/test_world_edge_identity_and_elevation.py",
+      "sha256": "172cdbef80c0fba9c004c647fdabfb6aa026875b09458729f4d2cc981a109f38"
+    },
+    {
+      "path": "tests/manual/test_01_runtime_identity_and_registries.py",
+      "sha256": "79a9f5070f910767442dc9d0420bac411706fa15b280ac448c77e41f3c7ec940"
+    },
+    {
+      "path": "tests/manual/test_02_entity_anatomy.py",
+      "sha256": "7b15ba1f0f2dd83d657a53ba0a824954f81555561ae494c33d7df05fb86d034e"
+    },
+    {
+      "path": "tests/manual/test_08_world_model_and_movement.py",
+      "sha256": "846f2435b24992244f7a0f69205bc9f070c15104e5b0c468dbfb9e6965a9fec5"
+    },
+    {
+      "path": "tests/manual/test_10_combat_resolution.py",
+      "sha256": "3e38fdaccfd3f348c32ff9fe2f929b3b3ff466edbe703f1bb507c6f34a79d5a0"
+    },
+    {
+      "path": "tests/manual/test_128_antimagic_field.py",
+      "sha256": "4023d085615fe17b3d9a982c473e94f00f4ebd70ab378dbb05564dc93d2791f3"
+    },
+    {
+      "path": "tests/manual/test_133_new_spells_batch4_legacy_contract.py",
+      "sha256": "cc4bdb181f23142f4ef47ccee5bf9b706a513ac1e17cdfe7e1b6f8397b419027"
+    },
+    {
+      "path": "tests/manual/test_13_spellcasting_core.py",
+      "sha256": "d546b0f237086aad6e984343e39af453421f715b79c94346e4342a32a2d63ab9"
+    },
+    {
+      "path": "tests/manual/test_14_spell_families.py",
+      "sha256": "fee958901d8dfe92cdbd20320852ed1759f5836e889fac2a93bb280e1e12843f"
+    },
+    {
+      "path": "tests/manual/test_17_encounters_turns_controllers.py",
+      "sha256": "5348b31c6814bfffafc75638907523aa9e62352f482e60098cbf4800f9122ccc"
+    },
+    {
+      "path": "tests/manual/test_37_authored_encounter_mechanics.py",
+      "sha256": "eb456707520f283f0a2330dcc94ba3b74ef6f0167cb53e259340d4b11c164a74"
+    },
+    {
+      "path": "tests/manual/test_53_srd_monster_traits.py",
+      "sha256": "f5c3327fd429adcf93fb36b1148674aaecf46140be0c912aea816c63c2e67122"
+    },
+    {
+      "path": "tests/manual/test_72_battlefield_deployment_catalog.py",
+      "sha256": "ca7d241e249b5b5c0d39ee18dac082be248ce9a351a4065986b6ee9a11591106"
+    }
+  ],
+  "frozen_path_inputs": [
+    "tests/engine/test_tile_surface_contract.py",
+    "tests/engine/test_world_edge_identity_and_elevation.py",
+    "tests/engine/test_senses_light_stealth.py",
+    "tests/engine/test_grid_pathfinding.py",
+    "tests/engine/test_action_discovery.py",
+    "tests/engine/test_elevation_proving_battlefield.py",
+    "tests/engine/test_elevation_performance_contract.py",
+    "tests/engine/test_spatial_effects.py",
+    "tests/engine/test_direct_spatial_effect_materialization.py",
+    "tests/engine/test_condition_lifecycle.py",
+    "tests/engine/test_event_lifecycle.py",
+    "tests/engine/test_event_wire_visibility_contract.py",
+    "tests/engine/test_objective_state.py",
+    "tests/engine/test_direct_scenario_deployment.py",
+    "tests/engine/test_items_inventory_equipment.py",
+    "tests/engine/test_spell_families.py",
+    "tests/engine/test_move_settlement.py",
+    "tests/engine/test_action_cost_and_position_commit.py",
+    "tests/engine/test_traversal_connectors.py",
+    "tests/engine/test_elevated_jump_transaction.py",
+    "tests/engine/test_runtime_reset.py",
+    "tests/engine/test_manual_11_grid_tiles_terrain_movement.py",
+    "tests/architecture",
+    "tests/manual/test_08_world_model_and_movement.py",
+    "tests/manual/test_37_authored_encounter_mechanics.py",
+    "tests/manual/test_72_battlefield_deployment_catalog.py",
+    "tests/manual/test_17_encounters_turns_controllers.py::test_turn_start_full_senses_refresh_emits_seen_cell_delta"
+  ],
+  "how_to_test_sha256": "96ba573eb50504f9e2c9c8676acc2f352ae198466d79f46e75c57d3f29995013",
+  "manifest_version": "1.0",
+  "master_sha256": "50411e5575e6336ca0301acf032797cdf1d5ea885df5ccd37d6619f593e7a193",
+  "member_breakdown": {
+    "production_count": 37,
+    "test_count": 43
+  },
+  "member_count": 80,
+  "membership_algorithm": "Sorted unique union of the accepted Phase 4 manifest members and every authorized active Phase 5 production/test path changed by Slice 5.1/5.2; hashes are SHA-256 of current raw file bytes.",
+  "node_set_accounting": {
+    "accepted_phase3_baseline_count": 614,
+    "accepted_phase3_baseline_sha256": "774c745d442d5db6b8bfb2878309b4eae118e08d264ae4a12370f2a21db05641",
+    "accepted_phase4_candidate_count": 647,
+    "accepted_phase4_candidate_sha256": "0062d230c5a85ab1a08eb4ad6ebdf7c75ffed01e99d81b10dba561e9440e9cbe",
+    "final_count": 650,
+    "final_sha256": "8202c5f659be52244112818848d40d01f2a358adf3cce17200ccd075e172c2e6",
+    "phase5_added_node_count": 3,
+    "phase5_added_nodes": [
+      "tests/engine/test_direct_scenario_deployment.py::test_authored_dynamic_setup_rejects_public_lifecycle_cancellation[ignite]",
+      "tests/engine/test_direct_scenario_deployment.py::test_authored_dynamic_setup_rejects_public_lifecycle_cancellation[light-change]",
+      "tests/engine/test_direct_scenario_deployment.py::test_cold_world_plus_dynamic_facts_reproduces_live_authored_state"
+    ],
+    "phase5_replaced_node": {
+      "removed": "tests/engine/test_elevation_performance_contract.py::test_battlefield_composition_work_tracks_authored_elevation_cells",
+      "replacement": "tests/engine/test_elevation_performance_contract.py::test_final_tiles_preserve_authored_elevation_and_identity"
+    }
+  },
+  "node_set_algorithm": "Collect the accepted Phase 4 frozen_path_inputs plus outside_path_selector_inputs with pytest --collect-only -q -p no:cacheprovider; retain test node lines containing ::, sort, deduplicate, join with terminal newline, and SHA-256 the UTF-8 bytes.",
+  "outside_path_selector_inputs": [
+    "tests/engine/test_runtime_identity_registries.py::test_entity_membership_has_no_block_route_and_rejects_live_tile_mutations",
+    "tests/engine/test_runtime_identity_registries.py::test_entity_tile_membership_is_defensive_and_co_located_noop_is_quiet",
+    "tests/engine/test_runtime_identity_registries.py::test_suspended_entity_keeps_game_identity_without_observer_or_second_left",
+    "tests/engine/test_runtime_identity_registries.py::test_missing_tile_move_is_publicly_atomic_for_occupancy_events_light_and_senses",
+    "tests/engine/test_runtime_identity_registries.py::test_public_entity_lifecycle_revision_deltas_are_exact",
+    "tests/engine/test_runtime_identity_registries.py::test_entity_membership_queries_are_map_size_invariant_at_public_boundary",
+    "tests/engine/test_condition_transform_ownership.py::test_banishment_suspend_precommit_failure_is_publicly_atomic",
+    "tests/engine/test_condition_transform_ownership.py::test_banishment_suspend_publication_failure_compensates_without_condition_or_denial",
+    "tests/engine/test_condition_transform_ownership.py::test_banishment_provisional_failure_releases_all_denial_ownership",
+    "tests/engine/test_condition_transform_ownership.py::test_banishment_owns_denial_and_restores_spatial_registration",
+    "tests/engine/test_condition_transform_ownership.py::test_banishment_restore_failure_keeps_condition_retryable_and_then_cleans_up",
+    "tests/engine/test_condition_transform_ownership.py::test_banishment_restore_publication_failure_keeps_presence_and_finishes_cleanup",
+    "tests/engine/test_life_state_ownership.py::test_undeployed_attached_light_stays_absent_until_public_deploy",
+    "tests/engine/test_life_state_ownership.py::test_world_presence_and_death_light_suppressions_compose_through_restore",
+    "tests/engine/test_life_state_ownership.py::test_death_suppresses_lights_reversibly_and_preserves_other_owners",
+    "tests/engine/test_life_state_ownership.py::test_light_desired_state_and_nonblocking_survive_death_and_revival",
+    "tests/engine/test_life_state_ownership.py::test_revival_reintroduces_entity_to_incremental_senses",
+    "tests/engine/test_combat_actions.py::test_pack_tactics_public_attack_respects_co_located_ally_presence",
+    "tests/engine/test_combat_actions.py::test_sneak_attack_public_damage_respects_co_located_ally_presence",
+    "tests/manual/test_133_new_spells_batch4_legacy_contract.py::test_banishment_removes_and_restores_spatial_perception",
+    "tests/manual/test_133_new_spells_batch4_legacy_contract.py::test_banishment_return_selects_one_stable_origin_occupant",
+    "tests/manual/test_133_new_spells_batch4_legacy_contract.py::test_banishment_return_displaces_an_occupant",
+    "tests/manual/test_133_new_spells_batch4_legacy_contract.py::test_banishment_return_co_locates_when_every_displacement_offset_is_blocked",
+    "tests/manual/test_133_new_spells_batch4_legacy_contract.py::test_banishment_successful_save_preserves_spatial_state",
+    "tests/manual/test_53_srd_monster_traits.py::test_pack_tactics_sunlight_and_keen_senses_use_contextual_values",
+    "tests/engine/test_condition_transform_ownership.py::test_banishment_compensation_failure_preserves_publication_chain_without_presence"
+  ],
+  "phase": "Phase 5 Authored Bootstrap",
+  "phase4_completion_ledger_sha256": "b8f5fb6e1f7aed573900120f5705e561465ad4c45d76eaaf57763f4da2b86395",
+  "phase5_plan_sha256": "892e07aea27cb777fcb6fda6a7f7415d46bd4825a582d5f6001fb383f4a10870",
+  "scope": {
+    "active_in_process": "dnd/** and active collecting tests/** only",
+    "governed_exclusions": [
+      "server/**",
+      "deprecated/**",
+      "dnd/server/**",
+      "dnd/content_system/**",
+      "SDK/transport/generated/renderer/editor/cross-language surfaces",
+      "inactive legacy/server/content-system/circus tests",
+      "governing Markdown/JSON artifacts",
+      "unrelated dirty worktree paths"
+    ],
+    "phase5_added_files": [
+      "dnd/content/spike_trap_materialization.py",
+      "tests/engine/test_elevation_performance_contract.py"
+    ],
+    "phase5_changed_existing_files": [
+      "dnd/content/scenarios/battlefield_builders.py",
+      "dnd/core/events/item_events.py",
+      "dnd/core/gridmap.py",
+      "dnd/items/environment_interactables.py",
+      "dnd/maps/arena_layout.py",
+      "tests/engine/test_direct_scenario_deployment.py",
+      "tests/engine/test_elevation_proving_battlefield.py",
+      "tests/manual/test_72_battlefield_deployment_catalog.py"
+    ]
+  },
+  "status": "READY_FOR_INDEPENDENT_REVIEW"
+}

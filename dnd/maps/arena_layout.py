@@ -1,13 +1,15 @@
 """Shared standard arena layout construction."""
 
 from dataclasses import dataclass
-from typing import Tuple
+from typing import Mapping, Tuple
 from uuid import UUID, uuid4
 
 from dnd.types.world import LightLevel
+from dnd.core.base_tiles import Tile, difficult_terrain_factory, water_factory
 from dnd.core.gridmap import GridMap
 from dnd.types.materials import Material, TileSurface
 from dnd.types.world import WorldEdgeChannel, CardinalDirection
+from dnd.core.world_edges import ElevationSurfaceKind, SlopeAxis
 from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.content.items.environment_item_builders import (
     build_directional_door,
@@ -18,10 +20,6 @@ from dnd.content.items.environment_item_builders import (
 from dnd.items.environment import DIRECTIONAL_CHANNELS, DirectionalDoor, DirectionalWall
 from dnd.items.environment_interactables import TrapLever
 from dnd.items.torches import WallTorch
-from dnd.content.spike_trap_materialization import (
-    materialize_spike_trap_condition,
-)
-from dnd.core.base_tiles import difficult_terrain_factory, water_factory
 
 ARENA_WIDTH = 15
 ARENA_HEIGHT = 15
@@ -75,28 +73,82 @@ class StandardArenaObjects:
     spike_condition_uuid: UUID
 
 
-def create_standard_arena_floor(grid: GridMap) -> None:
-    """Create the standard 15x15 arena floor."""
-    grid.create_rectangle(
-        ARENA_ORIGIN[0],
-        ARENA_ORIGIN[1],
-        ARENA_WIDTH,
-        ARENA_HEIGHT,
-        surface=TileSurface(base_material=Material.STONE),
-    )
+def create_standard_arena_floor(
+    grid: GridMap,
+    *,
+    water_positions: Tuple[Tuple[int, int], ...] = (),
+    difficult_positions: Tuple[Tuple[int, int], ...] = (),
+    gap_positions: Tuple[Tuple[int, int], ...] = (),
+    elevation_by_position: Mapping[
+        Tuple[int, int],
+        Tuple[int, ElevationSurfaceKind, SlopeAxis | None],
+    ] | None = None,
+) -> None:
+    """Create each authored arena Tile once with its final state.
+
+    Object-free floors retain the existing rectangle fast path. Authored
+    terrain/elevation variants are created directly at their final
+    coordinates so later builder steps never replace a live Tile identity.
+    """
+    water = set(water_positions)
+    difficult = set(difficult_positions)
+    gaps = set(gap_positions)
+    elevations = elevation_by_position or {}
+    if not water and not difficult and not gaps and not elevations:
+        grid.create_rectangle(
+            ARENA_ORIGIN[0],
+            ARENA_ORIGIN[1],
+            ARENA_WIDTH,
+            ARENA_HEIGHT,
+            surface=TileSurface(base_material=Material.STONE),
+        )
+        return
+
+    for x in range(ARENA_ORIGIN[0], ARENA_ORIGIN[0] + ARENA_WIDTH):
+        for y in range(ARENA_ORIGIN[1], ARENA_ORIGIN[1] + ARENA_HEIGHT):
+            position = (x, y)
+            height, surface_kind, slope_axis = elevations.get(
+                position,
+                (0, ElevationSurfaceKind.ORDINARY, None),
+            )
+            if position in gaps:
+                tile = Tile.create(
+                    position,
+                    surface=TileSurface(base_material=Material.STONE),
+                    walking_cost=0,
+                    flying_cost=1,
+                    swimming_cost=0,
+                    burrowing_cost=0,
+                    name="Gap",
+                    height=height,
+                    elevation_surface_kind=surface_kind,
+                    slope_axis=slope_axis,
+                )
+            elif position in water:
+                tile = water_factory(position)
+            elif position in difficult:
+                tile = difficult_terrain_factory(
+                    position,
+                    height=height,
+                    elevation_surface_kind=surface_kind,
+                    slope_axis=slope_axis,
+                )
+            else:
+                tile = Tile.create(
+                    position,
+                    surface=TileSurface(base_material=Material.STONE),
+                    name="Floor",
+                    height=height,
+                    elevation_surface_kind=surface_kind,
+                    slope_axis=slope_axis,
+                )
+            grid.set_tile(x, y, tile=tile)
 
 
 def place_standard_directional_barrier(grid: GridMap) -> StandardBarrierObjects:
     """Place the standard arena directional wall strip and door."""
     walls = []
     for position in WALL_POSITIONS:
-        grid.set_tile(
-            position[0],
-            position[1],
-            surface=TileSurface(base_material=Material.STONE),
-            walkable=True,
-            name="Floor",
-        )
         wall = build_directional_wall(
             blocked_channels=STANDARD_BLOCKING_CHANNELS,
         )
@@ -107,13 +159,6 @@ def place_standard_directional_barrier(grid: GridMap) -> StandardBarrierObjects:
         )
         walls.append(wall)
 
-    grid.set_tile(
-        DOOR_POSITION[0],
-        DOOR_POSITION[1],
-        surface=TileSurface(base_material=Material.STONE),
-        walkable=True,
-        name="Floor",
-    )
     door = build_directional_door(
         display_name="Door",
         blocked_channels=STANDARD_BLOCKING_CHANNELS,
@@ -136,24 +181,13 @@ def darken_arena(grid: GridMap) -> None:
 
 def build_standard_arena_environment(grid: GridMap) -> StandardArenaObjects:
     """Build the standard arena environment without combat entities."""
-    create_standard_arena_floor(grid)
-    barrier = place_standard_directional_barrier(grid)
-
-    for position in WATER_POSITIONS:
-        grid.set_tile(
-            position[0],
-            position[1],
-            tile=water_factory(position),
-            fire_event=False,
-        )
-
-    spike_condition = materialize_spike_trap_condition(
-        set(SPIKE_ZONE_POSITIONS),
+    create_standard_arena_floor(
+        grid,
+        water_positions=WATER_POSITIONS,
+        difficult_positions=DIFFICULT_TERRAIN_POSITIONS,
     )
-
-    for position in DIFFICULT_TERRAIN_POSITIONS:
-        tile = difficult_terrain_factory(position)
-        grid.set_tile(position[0], position[1], tile=tile, fire_event=False)
+    barrier = place_standard_directional_barrier(grid)
+    spike_condition_uuid = uuid4()
 
     darken_arena(grid)
 
@@ -165,7 +199,7 @@ def build_standard_arena_environment(grid: GridMap) -> StandardArenaObjects:
             boundary_direction=boundary_direction,
             base_height_steps=base_height_steps,
             orientation=orientation,
-            lit=True,
+            lit=False,
         )
         wall_torches_list.append(wall_torch)
     wall_torches = tuple(wall_torches_list)
@@ -179,7 +213,7 @@ def build_standard_arena_environment(grid: GridMap) -> StandardArenaObjects:
         potion.place_on_grid(position)
         healing_potion_uuids.append(potion.uuid)
 
-    lever = build_trap_lever(spike_condition.uuid, charges=1)
+    lever = build_trap_lever(spike_condition_uuid, charges=1)
     lever.place_on_grid(TRAP_LEVER_POSITION)
 
     return StandardArenaObjects(
@@ -187,5 +221,5 @@ def build_standard_arena_environment(grid: GridMap) -> StandardArenaObjects:
         wall_torches=wall_torches,
         healing_potion_uuids=tuple(healing_potion_uuids),
         trap_lever=lever,
-        spike_condition_uuid=spike_condition.uuid,
+        spike_condition_uuid=spike_condition_uuid,
     )

@@ -47,8 +47,11 @@ def test_acolyte_loadout_builds_without_content_refs_or_renderer_fields() -> Non
             entry.item_id for entry in ACOLYTE_STARTING_LOADOUT
         ]
         assert all(item.content_ref is None for item in items)
-        assert all(item.visual_item_name is None for item in items)
-        assert all(item.visual_variant_id is None for item in items)
+        assert all(
+            "visual_item_name" not in item.model_dump()
+            and "visual_variant_id" not in item.model_dump()
+            for item in items
+        )
         incense = next(item for item in items if item.semantic_key == "gear.incense")
         assert incense.stack_count == 5
         assert incense.max_stack == 20
@@ -96,8 +99,11 @@ def test_every_cold_weapon_and_wearable_definition_builds_directly() -> None:
         )
         assert tuple(item.get_semantic_key() for item in built) == definition_ids
         assert all(item.content_ref is None for item in built)
-        assert all(item.visual_item_name is None for item in built)
-        assert all(item.visual_variant_id is None for item in built)
+        assert all(
+            "visual_item_name" not in item.model_dump()
+            and "visual_variant_id" not in item.model_dump()
+            for item in built
+        )
     finally:
         reset_engine_runtime()
 
@@ -166,7 +172,8 @@ def test_remaining_authored_weapons_build_without_presentation_state(
         item = build_authored_item(item_id, uuid4())
         assert item.get_semantic_key() == item_id
         assert item.content_ref is None
-        assert item.visual_item_name is None
-        assert item.visual_variant_id is None
+        payload = item.model_dump()
+        assert "visual_item_name" not in payload
+        assert "visual_variant_id" not in payload
     finally:
         reset_engine_runtime()

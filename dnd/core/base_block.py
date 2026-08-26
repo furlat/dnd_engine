@@ -82,10 +82,6 @@ class BaseBlock(BaseModel):
         description="Dictionary of all ModifiableValue instances that are attributes of this class."
     )
 
-    position: Tuple[int, int] = Field(
-        default_factory=lambda: (0, 0),
-        description="Grid position used by spatial blocks and propagated to child blocks."
-    )
     faction: Optional[str] = Field(default=None, description="Faction for ally/enemy detection. None = no faction.")
     stealth_dc: Optional[int] = Field(default=None, exclude=True,
         description="Stealth DC required to perceive. Set by Hidden condition.")
@@ -145,15 +141,11 @@ class BaseBlock(BaseModel):
 
     _registry: ClassVar[Dict[UUID, 'BaseBlock']] = {}
 
-    model_config = ConfigDict(validate_assignment=False)
-
-    def get_map_char(self) -> Optional[str]:
-        """Map glyph for blocks that have one."""
-        return None
+    model_config = ConfigDict(extra="forbid", validate_assignment=False)
 
     def get_position(self) -> Optional[Tuple[int, int]]:
-        """Return this block's neutral objective coordinate when available."""
-        return self.position
+        """Return no coordinate unless a spatial owner implements the seam."""
+        return None
 
     def get_world_placement_spec(self) -> WorldPlacementSpec:
         """Return the neutral center, nonoccupying placement capability."""
@@ -326,14 +318,6 @@ class BaseBlock(BaseModel):
             for block in self.blocks.values():
                 values.extend(block.get_values(deep=True))
         return values
-
-    def set_position(self, position: Tuple[int,int]) -> None:
-        """
-        Set the position of the block.
-        """
-        self.position = position
-        for block in self.blocks.values():
-            block.set_position(position)
 
     def blocks_walking(self, requesting_entity_uuid: Optional[UUID] = None,
                        mode: 'world_types.MovementMode' = world_types.MovementMode.WALKING) -> bool:

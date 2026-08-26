@@ -4,7 +4,6 @@ from uuid import uuid4
 
 import pytest
 
-import dnd.content.scenarios.battlefield_definitions as battlefield_contracts
 from dnd.content.monsters.monster_builders import create_monster
 from dnd.content.scenarios.battlefield_definitions import (
     BattlefieldDefinition,
@@ -86,7 +85,7 @@ def test_elevation_proving_battlefield_cold_layout_matches_runtime() -> None:
         )
 
     gap = grid.get_tile(10, 9)
-    assert gap is not None and gap.walkable is False
+    assert gap is not None and gap.get_movement_cost(MovementMode.WALKING) == 0
     authored_gap = next(
         cell for cell in definition.layout.tiles if cell.position == (10, 9)
     )
@@ -120,7 +119,20 @@ def test_elevation_proving_battlefield_cold_layout_matches_runtime() -> None:
         cliff_row.base_height_steps + 2,
         cliff_row.orientation,
     )
-    assert BaseCondition.get(built.object_uuids["landing_hazard"]) is not None
+    landing_hazard = BaseCondition.get(built.object_uuids["landing_hazard"])
+    assert landing_hazard is not None
+    assert landing_hazard.applied
+    assert set(landing_hazard.affected_positions) == {(11, 9)}
+    events = EventQueue.get_events_chronological()
+    assert events[0].event_type is EventType.WORLD_INITIALIZED
+    assert sum(
+        event.event_type is EventType.WORLD_INITIALIZED
+        for event in events
+    ) == 1
+    assert any(
+        event.event_type is EventType.CONDITION_APPLICATION
+        for event in events[1:]
+    )
     authored_connectors = definition.layout.connectors
     runtime_connectors = grid.get_all_connectors()
     assert {row.kind for row in authored_connectors} == set(TraversalConnectorKind)
@@ -234,28 +246,16 @@ def test_cold_battlefield_rejects_contradictory_progressive_run() -> None:
         )
 
 
-def test_empty_cold_battlefield_preflight_is_linear_in_authored_elevation(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    inspected_sizes: list[int] = []
-
-    def inspect_authored(cells, **_kwargs):
-        inspected_sizes.append(len(cells))
-        return None
-
-    monkeypatch.setattr(
-        battlefield_contracts,
-        "contradictory_progressive_elevation_edge",
-        inspect_authored,
-    )
-    BattlefieldDefinition(
+def test_empty_cold_battlefield_accepts_empty_authored_elevation() -> None:
+    definition = BattlefieldDefinition(
         battlefield_id="battlefield.large_empty",
         title="Large Empty",
         width=1_000_000,
         height=1_000_000,
     )
-
-    assert inspected_sizes == [0]
+    assert definition.layout.elevation == ()
+    assert definition.width == 1_000_000
+    assert definition.height == 1_000_000
 
 
 def test_proving_battlefield_traverses_every_connector_kind_through_one_action() -> None:

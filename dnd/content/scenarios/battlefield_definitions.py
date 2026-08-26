@@ -39,8 +39,10 @@ class BattlefieldTileDefinition(BaseModel):
 
     position: tuple[int, int]
     terrain: BattlefieldTerrain
-    walkable: bool = True
-    walking_cost: int = Field(default=1, ge=1)
+    walking_cost: StrictInt = Field(default=1, ge=0)
+    flying_cost: StrictInt = Field(default=1, ge=0)
+    swimming_cost: StrictInt = Field(default=0, ge=0)
+    burrowing_cost: StrictInt = Field(default=0, ge=0)
     hazardous: bool = False
 
 

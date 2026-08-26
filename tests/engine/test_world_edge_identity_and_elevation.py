@@ -532,7 +532,17 @@ def test_elevation_commit_rejects_global_tile_registry_replacement() -> None:
     assert tile is not None
 
     def replace_registry_owner(event: Event, _source_uuid: UUID) -> Event:
-        impostor = Tile.model_validate(tile.model_dump())
+        impostor = Tile.model_validate(
+            tile.model_dump(
+                exclude={
+                    "contextual_immunity_names",
+                    "values_dict_uuid_name",
+                    "values_dict_name_uuid",
+                    "blocks_dict_uuid_name",
+                    "blocks_dict_name_uuid",
+                },
+            ),
+        )
         assert impostor is not tile
         assert BaseBlock.get(tile.uuid) is impostor
         return event
@@ -932,7 +942,7 @@ def test_elevation_mutation_and_replacement_dirty_materialized_actor_paths() -> 
     reset_core_action_state()
     actor = strong_entity("Path Owner", (0, 0), "heroes")
     Entity.materialize_all_navigation(max_distance=20)
-    assert actor.senses._paths_dirty is False
+    path_revision_before_elevation = actor.senses.path_revision
 
     grid = get_map()
     grid.set_tile_elevation(
@@ -941,10 +951,9 @@ def test_elevation_mutation_and_replacement_dirty_materialized_actor_paths() -> 
         surface_kind=ElevationSurfaceKind.RAMP,
         slope_axis=SlopeAxis.EAST_WEST,
     )
-    assert actor.senses._paths_dirty is True
-
     Entity.materialize_all_navigation(max_distance=20)
-    assert actor.senses._paths_dirty is False
+    assert actor.senses.path_revision > path_revision_before_elevation
+    path_revision_before_replacement = actor.senses.path_revision
     replacement = Tile.create(
         (1, 0),
         height=2,
@@ -965,7 +974,8 @@ def test_elevation_mutation_and_replacement_dirty_materialized_actor_paths() -> 
     EventQueue.add_event_handler(veto)
     try:
         grid.set_tile(1, 0, tile=replacement)
-        assert actor.senses._paths_dirty is True
+        Entity.materialize_all_navigation(max_distance=20)
+        assert actor.senses.path_revision > path_revision_before_replacement
     finally:
         EventQueue.remove_event_handler(veto)
 
@@ -974,14 +984,15 @@ def test_removing_ordinary_support_dirties_paths_and_recomputes_fov() -> None:
     reset_core_action_state()
     actor = strong_entity("Removal Observer", (0, 0), "heroes")
     Entity.materialize_all_navigation(max_distance=20)
-    assert actor.senses._paths_dirty is False
     assert (1, 0) in actor.senses.visible
     assert (1, 0) in actor.senses.paths
+    path_revision_before_removal = actor.senses.path_revision
 
     get_map().remove_tile(1, 0)
 
-    assert actor.senses._paths_dirty is True
     assert (1, 0) not in actor.senses.visible
+    Entity.materialize_all_navigation(max_distance=20)
+    assert actor.senses.path_revision > path_revision_before_removal
 
 
 def test_clear_remove_replace_and_missing_edge_do_not_leave_duplicate_authority() -> None:

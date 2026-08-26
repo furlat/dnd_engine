@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 
 from dnd.core.elevation import support_distance_feet
 from dnd.core.geometry import circle_positions, supercover_line, supercover_line_offsets
-from dnd.core.dijkstra import breadth_first_paths, dijkstra
+from dnd.core.dijkstra import dijkstra
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition
 from dnd.types.world import CardinalDirection, MovementMode, LightLevel
@@ -74,13 +74,14 @@ class GridEntityMembershipReceipt:
 
 @dataclass(frozen=True, slots=True)
 class GridMapOperationDiagnostics:
-    """Read-only counters for one measured GridMap placement query."""
+    """Read-only counters for one measured GridMap operation."""
 
     operation: str
     tiles_inspected: int = 0
     bands_inspected: int = 0
     bands_replaced: int = 0
     placement_iterator_rows_visited: int = 0
+    path_edge_queries: int = 0
 
 
 class LightSourceData(BaseModel):
@@ -99,7 +100,7 @@ class LightSourceData(BaseModel):
 class GridMap:
     """Singleton-like manager for grid state and spatial queries.
 
-    The map owns tile storage, entity/object position indexes, event-backed
+    The map owns tile storage, entity/object spatial membership, event-backed
     spatial changes, cell subscriptions, light sources, FOV, and pathfinding.
     """
 
@@ -396,15 +397,28 @@ class GridMap:
             tuple(sorted(senses.objects, key=str)),
         )
 
+    @staticmethod
+    def _tile_movement_costs(tile: Tile) -> Tuple[int, int, int, int]:
+        """Return the complete effective traversal-cost tuple for one Tile."""
+        return (
+            tile.get_movement_cost(MovementMode.WALKING),
+            tile.get_movement_cost(MovementMode.FLYING),
+            tile.get_movement_cost(MovementMode.SWIMMING),
+            tile.get_movement_cost(MovementMode.BURROWING),
+        )
+
     def set_tile(
         self,
         x: int,
         y: int,
         surface: Optional[TileSurface] = None,
-        walkable: bool = True,
+        walking_cost: int = 1,
+        flying_cost: int = 1,
+        swimming_cost: int = 0,
+        burrowing_cost: int = 0,
         blocks_optics: bool = False,
         blocks_propagation: bool = False,
-                 name: str = "Floor", sprite_name: Optional[str] = None,
+                 name: str = "Floor",
                  fire_event: bool = True, tile: Optional[Tile] = None,
                  height: int = 0,
                  elevation_surface_kind: ElevationSurfaceKind = ElevationSurfaceKind.ORDINARY,
@@ -415,6 +429,8 @@ class GridMap:
         Otherwise creates a new Tile object with the given parameters.
         Returns the stored tile.
         """
+        if type(x) is not int or type(y) is not int:
+            raise ValueError("tile position must be an exact tuple[int, int]")
         validate_elevation_surface_tuple(
             height if tile is None else tile.height,
             (
@@ -461,11 +477,13 @@ class GridMap:
             tile = Tile.create(
                 position=position,
                 surface=surface,
-                walkable=walkable,
+                walking_cost=walking_cost,
+                flying_cost=flying_cost,
+                swimming_cost=swimming_cost,
+                burrowing_cost=burrowing_cost,
                 blocks_optics=blocks_optics,
                 blocks_propagation=blocks_propagation,
                 name=name,
-                sprite_name=sprite_name,
                 height=height,
                 elevation_surface_kind=elevation_surface_kind,
                 slope_axis=slope_axis,
@@ -479,7 +497,7 @@ class GridMap:
         if old_tile is None:
             revision_channels.update({"movement", "optical", "propagation"})
         else:
-            if old_tile.walkable != tile.walkable:
+            if self._tile_movement_costs(old_tile) != self._tile_movement_costs(tile):
                 revision_channels.add("movement")
             if (
                 old_tile.height,
@@ -502,16 +520,18 @@ class GridMap:
                 revision_channels.add("illumination")
         self._bump_spatial_revisions(revision_channels)
 
-        if fire_event and self._events_enabled:
-            old_walkable = old_tile.walkable if old_tile else None
+        if fire_event:
             old_blocks_optics = old_tile.blocks_optics if old_tile else None
             old_blocks_propagation = (
                 old_tile.blocks_propagation_field if old_tile else None
             )
-            tile_walkable = tile.walkable
             tile_blocks_optics = tile.blocks_optics
             tile_blocks_propagation = tile.blocks_propagation_field
-            scalar_walk_changed = old_tile is None or old_walkable != tile_walkable
+            scalar_movement_changed = (
+                old_tile is None
+                or self._tile_movement_costs(old_tile)
+                != self._tile_movement_costs(tile)
+            )
             scalar_optics_changed = (
                 old_tile is None or old_blocks_optics != tile_blocks_optics
             )
@@ -525,7 +545,7 @@ class GridMap:
                 tile.slope_axis,
             )
             if (
-                scalar_walk_changed
+                scalar_movement_changed
                 or scalar_optics_changed
                 or scalar_propagation_changed
                 or scalar_elevation_changed
@@ -533,7 +553,7 @@ class GridMap:
                 hint = SensesUpdateHint(
                     requires_fov=scalar_optics_changed,
                     requires_paths=(
-                        scalar_walk_changed
+                        scalar_movement_changed
                         or scalar_elevation_changed
                     ),
                     requires_light_recompute=scalar_optics_changed,
@@ -541,16 +561,16 @@ class GridMap:
                 )
                 event = SpatialChangeEvent.tile_changed(
                     position,
-                    tile_walkable,
-                    tile_blocks_optics,
-                    tile_blocks_propagation,
+                    tile_walking_cost=tile.get_movement_cost(MovementMode.WALKING),
+                    tile_flying_cost=tile.get_movement_cost(MovementMode.FLYING),
+                    tile_swimming_cost=tile.get_movement_cost(MovementMode.SWIMMING),
+                    tile_burrowing_cost=tile.get_movement_cost(MovementMode.BURROWING),
+                    tile_blocks_optics=tile_blocks_optics,
+                    tile_blocks_propagation=tile_blocks_propagation,
                     tile_surface=tile.surface,
                     senses_hint=hint,
                 )
-                if scalar_elevation_changed:
-                    self._fire_committed_spatial_event(event)
-                else:
-                    self._fire_spatial_event(event)
+                self._fire_committed_spatial_event(event)
 
         return tile
 
@@ -571,17 +591,15 @@ class GridMap:
             return False
 
         tile.surface = surface
-        if self._events_enabled:
-            event = SpatialChangeEvent.tile_changed(
-                position,
-                tile.walkable,
-                tile.blocks_optics,
-                tile.blocks_propagation_field,
-                tile_surface=surface,
-                senses_hint=SensesUpdateHint(),
-                parent_event=parent_event,
-            )
-            self._fire_committed_spatial_event(event)
+        event = SpatialChangeEvent.tile_changed(
+            position,
+            tile_blocks_optics=tile.blocks_optics,
+            tile_blocks_propagation=tile.blocks_propagation_field,
+            tile_surface=surface,
+            senses_hint=SensesUpdateHint(),
+            parent_event=parent_event,
+        )
+        self._fire_committed_spatial_event(event)
         return True
 
     def set_tile_elevation(
@@ -1022,6 +1040,12 @@ class GridMap:
         )
         if connector.uuid in self._connectors_by_uuid:
             raise ValueError(f"duplicate connector UUID {connector.uuid}")
+        if not self._events_enabled:
+            if not self.connector_supports_are_current(connector):
+                raise ValueError("connector supports changed before initial registration")
+            self._index_connector(connector)
+            self._connector_revision += 1
+            return connector
         effect = self._publish_connector_change(
             TraversalConnectorChangeOperation.REGISTER,
             connector_uuid=connector.uuid,
@@ -2045,11 +2069,13 @@ class GridMap:
         width: int,
         height: int,
         surface: TileSurface,
-        walkable: bool = True,
+        walking_cost: int = 1,
+        flying_cost: int = 1,
+        swimming_cost: int = 0,
+        burrowing_cost: int = 0,
         blocks_optics: bool = False,
         blocks_propagation: bool = False,
         name: str = "Floor",
-        sprite_name: Optional[str] = None,
     ) -> None:
         """Create a rectangular area of tiles (batch operation, no events during)."""
         positions = {
@@ -2074,11 +2100,13 @@ class GridMap:
                     tile = Tile.create(
                         position=(tx, ty),
                         surface=surface,
-                        walkable=walkable,
+                        walking_cost=walking_cost,
+                        flying_cost=flying_cost,
+                        swimming_cost=swimming_cost,
+                        burrowing_cost=burrowing_cost,
                         blocks_optics=blocks_optics,
                         blocks_propagation=blocks_propagation,
-                        name=name,
-                        sprite_name=sprite_name
+                        name=name
                     )
                     self._tiles[(tx, ty)] = tile
                     self._tiles_by_uuid[tile.uuid] = (tx, ty)
@@ -2124,11 +2152,12 @@ class GridMap:
             raise PositionCommitError(
                 ValueError(f"entity identity {entity_uuid} is not registered"),
             )
-        if new_position is not None and block.position != new_position:
+        block_position = block.get_position()
+        if new_position is not None and block_position != new_position:
             raise PositionCommitError(
                 ValueError("Entity objective position does not match destination"),
             )
-        if expected_old_position is not None and block.position not in {
+        if expected_old_position is not None and block_position not in {
             expected_old_position,
             new_position,
         }:
@@ -2273,6 +2302,7 @@ class GridMap:
         bands_inspected: int = 0,
         bands_replaced: int = 0,
         placement_iterator_rows_visited: int = 0,
+        path_edge_queries: int = 0,
     ) -> None:
         self._last_operation_diagnostics = GridMapOperationDiagnostics(
             operation=operation,
@@ -2280,6 +2310,7 @@ class GridMap:
             bands_inspected=bands_inspected,
             bands_replaced=bands_replaced,
             placement_iterator_rows_visited=placement_iterator_rows_visited,
+            path_edge_queries=path_edge_queries,
         )
 
     @staticmethod
@@ -3939,6 +3970,10 @@ class GridMap:
         Returns:
             `(distances, paths)` where distances account for terrain costs.
         """
+        self._begin_operation_diagnostics("compute_paths")
+        path_edge_consultations: Set[
+            Tuple[Tuple[int, int], Tuple[int, int]]
+        ] = set()
         if self._bounds_dirty:
             self._update_bounds()
 
@@ -3964,6 +3999,10 @@ class GridMap:
         if cached is not None:
             self._path_cache.move_to_end(cache_key)
             cached_distances, cached_paths = cached
+            self._finish_operation_diagnostics(
+                "compute_paths",
+                path_edge_queries=0,
+            )
             return (
                 dict(cached_distances),
                 {position: list(path) for position, path in cached_paths.items()},
@@ -3994,18 +4033,6 @@ class GridMap:
                 movement_mode,
                 ignore_difficult_terrain=ignore_difficult_terrain,
             )
-
-        def unit_movement_costs() -> bool:
-            for tile in self._tiles.values():
-                cost = tile.get_movement_cost(movement_mode)
-                if (
-                    movement_mode is MovementMode.WALKING
-                    and ignore_difficult_terrain
-                ):
-                    cost = min(cost, 1.0)
-                if cost != 1:
-                    return False
-            return True
 
         def raw_can_enter_tile(from_pos: Tuple[int, int], to_pos: Tuple[int, int]) -> bool:
             return self.can_transition(
@@ -4040,6 +4067,7 @@ class GridMap:
             cached = edge_cost_cache.get(key)
             if cached is not None:
                 return cached
+            path_edge_consultations.add(key)
             value = raw_get_edge_cost(from_pos, to_pos)
             edge_cost_cache[key] = value
             return value
@@ -4049,6 +4077,7 @@ class GridMap:
             cached = transition_cache.get(key)
             if cached is not None:
                 return cached
+            path_edge_consultations.add(key)
             value = raw_can_enter_tile(from_pos, to_pos)
             transition_cache[key] = value
             return value
@@ -4072,37 +4101,24 @@ class GridMap:
             )
             if len(self._path_cache) > 128:
                 self._path_cache.popitem(last=False)
+            self._finish_operation_diagnostics(
+                "compute_paths",
+                path_edge_queries=len(path_edge_consultations),
+            )
             return sentinel_result
 
-        use_unit_pathfinder = unit_movement_costs() and (
-            movement_mode is not MovementMode.FLYING
-            or len({tile.height for tile in self._tiles.values()}) <= 1
+        result = dijkstra(
+            start,
+            walkable_check,
+            grid_width,
+            grid_height,
+            diagonal=True,
+            max_distance=max_distance,
+            edge_cost_func=get_edge_cost,
+            can_enter=can_enter_tile,
+            min_x=self._min_x,
+            min_y=self._min_y,
         )
-        if use_unit_pathfinder:
-            result = breadth_first_paths(
-                start,
-                walkable_check,
-                grid_width,
-                grid_height,
-                diagonal=True,
-                max_distance=max_distance,
-                can_enter=can_enter_tile,
-                min_x=self._min_x,
-                min_y=self._min_y,
-            )
-        else:
-            result = dijkstra(
-                start,
-                walkable_check,
-                grid_width,
-                grid_height,
-                diagonal=True,
-                max_distance=max_distance,
-                edge_cost_func=get_edge_cost,
-                can_enter=can_enter_tile,
-                min_x=self._min_x,
-                min_y=self._min_y,
-            )
         distances, paths = result
         self._path_cache[cache_key] = (
             dict(distances),
@@ -4110,6 +4126,10 @@ class GridMap:
         )
         if len(self._path_cache) > 128:
             self._path_cache.popitem(last=False)
+        self._finish_operation_diagnostics(
+            "compute_paths",
+            path_edge_queries=len(path_edge_consultations),
+        )
         return result
 
     def get_path(self, start: Tuple[int, int], end: Tuple[int, int],
@@ -4797,7 +4817,7 @@ class GridMap:
         return barriers
 
     def clear(self) -> None:
-        """Clear all tiles, entity positions, object placements, and light sources."""
+        """Clear all tiles, entity membership, object placements, and light sources."""
         if any(tile.get_entity_uuids() for tile in self._tiles.values()):
             raise ValueError("cannot clear a map while entities are deployed")
         if self._spatial_conditions:

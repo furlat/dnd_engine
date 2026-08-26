@@ -1,11 +1,12 @@
 """Independent spatial conditions and reusable area mechanics."""
 
-from typing import Callable, Dict, List, Optional, Set, Tuple, TypeAlias
+from dataclasses import dataclass
+from typing import Callable, Dict, Iterable, Iterator, List, Optional, Set, Tuple, TypeAlias
 
 from dnd.types.world import LightLevel, MovementMode
 from dnd.types.senses import OpticalObscurement
 from uuid import UUID, uuid4
-from pydantic import Field, PrivateAttr, model_validator
+from pydantic import Field, PrivateAttr, StrictInt, model_validator
 
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition, SpellProtectionRegistry
@@ -65,6 +66,14 @@ InteractionExecutor: TypeAlias = Callable[
 ]
 
 
+@dataclass(frozen=True, slots=True)
+class SpatialConditionWorkDiagnostics:
+    """Immutable count of footprint positions visited by one condition command."""
+
+    operation: str = "none"
+    positions_visited: int = 0
+
+
 class SpatialCondition(BaseCondition):
     """One condition that owns its world footprint and mechanics directly."""
 
@@ -76,7 +85,7 @@ class SpatialCondition(BaseCondition):
         default=None,
         description="Rules faction retained from the creating source.",
     )
-    position: Tuple[int, int] = Field(
+    position: Tuple[StrictInt, StrictInt] = Field(
         description="Authoritative anchor position of the condition.",
     )
     affected_positions: Set[Tuple[int, int]] = Field(
@@ -93,6 +102,24 @@ class SpatialCondition(BaseCondition):
     trigger_kinds: frozenset[SpatialEffectTriggerKind] = Field(
         default_factory=frozenset,
     )
+
+    def get_position(self) -> Tuple[StrictInt, StrictInt]:
+        """Return this condition's strict anchor coordinate."""
+        return self.position
+
+    @staticmethod
+    def _validate_exact_anchor_position(
+        position: Tuple[int, int],
+    ) -> None:
+        """Require an exact non-coercive anchor coordinate before mutation."""
+        if (
+            type(position) is not tuple
+            or len(position) != 2
+            or any(type(component) is not int for component in position)
+        ):
+            raise ValueError(
+                "spatial condition position must be an exact tuple[int, int]"
+            )
     first_per_turn_trigger_kinds: frozenset[
         SpatialEffectTriggerKind
     ] = Field(default_factory=frozenset)
@@ -129,6 +156,43 @@ class SpatialCondition(BaseCondition):
     ] = PrivateAttr(default_factory=tuple)
     _replacement_builder: Optional[ReplacementBuilder] = PrivateAttr(default=None)
     _interaction_executor: Optional[InteractionExecutor] = PrivateAttr(default=None)
+    _last_work_diagnostics: SpatialConditionWorkDiagnostics = PrivateAttr(
+        default_factory=SpatialConditionWorkDiagnostics,
+    )
+    _work_operation: Optional[str] = PrivateAttr(default=None)
+    _work_positions_visited: int = PrivateAttr(default=0)
+
+    @property
+    def last_work_diagnostics(self) -> SpatialConditionWorkDiagnostics:
+        """Return the immutable work count for the most recent condition command."""
+        return self._last_work_diagnostics
+
+    def _begin_work_diagnostics(self, operation: str) -> None:
+        """Start counting footprint work already performed by this owner."""
+        self._work_operation = operation
+        self._work_positions_visited = 0
+
+    def _record_work_positions(self, count: int) -> None:
+        """Count one owner-local footprint iteration without affecting behavior."""
+        if self._work_operation is not None:
+            self._work_positions_visited += count
+
+    def _iter_work_positions(
+        self,
+        positions: Iterable[Tuple[int, int]],
+    ) -> Iterator[Tuple[int, int]]:
+        """Yield owner-local footprint positions while an operation is active."""
+        for position in positions:
+            self._record_work_positions(1)
+            yield position
+
+    def _finish_work_diagnostics(self) -> None:
+        """Freeze the current owner-local work count."""
+        self._last_work_diagnostics = SpatialConditionWorkDiagnostics(
+            operation=self._work_operation or "none",
+            positions_visited=self._work_positions_visited,
+        )
+        self._work_operation = None
 
     @model_validator(mode="after")
     def validate_spatial_identity(self) -> "SpatialCondition":
@@ -183,19 +247,19 @@ class SpatialCondition(BaseCondition):
         """Return the objective physical optical answer for one covered Tile."""
         return self.blocks_physical_optics and position in self.affected_positions
 
-    @staticmethod
     def _physical_optics_snapshot(
+        self,
         grid,
         positions: Set[Tuple[int, int]],
     ) -> Dict[Tuple[int, int], bool]:
         """Capture each complete objective center-optics answer locally."""
         return {
             position: grid.is_blocking_optics(*position)
-            for position in positions
+            for position in self._iter_work_positions(positions)
         }
 
-    @staticmethod
     def _settle_physical_optics(
+        self,
         grid,
         before: Dict[Tuple[int, int], bool],
         positions: Set[Tuple[int, int]],
@@ -203,10 +267,10 @@ class SpatialCondition(BaseCondition):
         parent_event: Optional[Event],
     ) -> None:
         """Settle one aggregate optical change after footprint indexes commit."""
-        after = SpatialCondition._physical_optics_snapshot(grid, positions)
+        after = self._physical_optics_snapshot(grid, positions)
         changed = {
             position
-            for position in positions
+            for position in self._iter_work_positions(positions)
             if before.get(position, False) != after.get(position, False)
         }
         if not changed:
@@ -294,10 +358,11 @@ class SpatialCondition(BaseCondition):
     ) -> Set[Tuple[int, int]]:
         """Resolve same-identity arbitration before mechanics are installed."""
         grid = get_map()
-        if any(not grid.has_tile(*position) for position in positions):
-            raise ValueError(
-                "Spatial condition positions must identify existing tiles",
-            )
+        for position in self._iter_work_positions(positions):
+            if not grid.has_tile(*position):
+                raise ValueError(
+                    "Spatial condition positions must identify existing tiles",
+                )
         if self.occupancy_policy is SpatialEffectOccupancyPolicy.OVERLAPPING:
             return positions
 
@@ -314,7 +379,7 @@ class SpatialCondition(BaseCondition):
                 )
             displaced_cells[authorized.uuid] = set(replaced_positions)
         incoming_rank = self.material_arbitration_rank()
-        for position in sorted(positions):
+        for position in self._iter_work_positions(sorted(positions)):
             for incumbent in grid.get_spatial_conditions_at(
                 position,
                 layer=self.layer,
@@ -378,6 +443,17 @@ class SpatialCondition(BaseCondition):
         """Publish contributor facts after the complete spatial commit."""
         del parent_event
 
+    def _discard_pending_runtime_facts(self) -> None:
+        """Discard provisional contributor facts during failed restoration."""
+        return
+
+    def _discard_pending_terrain_positions(
+        self,
+        positions: Set[Tuple[int, int]],
+    ) -> None:
+        """Discard terrain rows transferred to an incoming condition."""
+        del positions
+
     def _release_positions_for_replacement(
         self,
         positions: Set[Tuple[int, int]],
@@ -412,6 +488,7 @@ class SpatialCondition(BaseCondition):
             removed = original - remaining
             self._committed_displacement_uuids.add(incumbent_uuid)
             incumbent._release_positions_for_replacement(removed)
+            incumbent._discard_pending_terrain_positions(removed)
             incumbent.affected_positions = set(remaining)
             if remaining:
                 grid.set_spatial_condition_positions(
@@ -488,6 +565,7 @@ class SpatialCondition(BaseCondition):
         self._displaced_footprints.clear()
         self._committed_displacement_uuids.clear()
         for incumbent in restored:
+            incumbent._discard_pending_runtime_facts()
             incumbent._publish_pending_runtime_facts(None)
 
     def _apply(
@@ -520,6 +598,7 @@ class SpatialCondition(BaseCondition):
         replacing_condition_uuid: Optional[UUID] = None,
     ) -> Optional[Event]:
         """Activate this condition through the ordinary condition lifecycle."""
+        self._begin_work_diagnostics("activate")
         grid = get_map()
         if self.applied or grid.has_spatial_condition(self.uuid):
             raise ValueError("Spatial condition is already active")
@@ -568,6 +647,7 @@ class SpatialCondition(BaseCondition):
         self._created_event_published = True
         self.apply_appearance_trigger(parent_event=created or parent_event)
         self._activation_positions = None
+        self._finish_work_diagnostics()
         return result
 
     def discard_uncommitted_runtime_state(self) -> None:
@@ -581,6 +661,8 @@ class SpatialCondition(BaseCondition):
         self.affected_positions.clear()
         self._restore_displaced_footprints()
         self._publish_pending_runtime_facts(None)
+        if self._work_operation is not None:
+            self._finish_work_diagnostics()
 
     def discard_from_runtime_owner(self) -> bool:
         """Discard this uncommitted independently owned condition tree."""
@@ -701,7 +783,9 @@ class SpatialCondition(BaseCondition):
         previous_positions: Optional[Set[Tuple[int, int]]] = None,
     ) -> bool:
         """Remove mechanics, children, Tile indexes, facts, and identity."""
+        self._begin_work_diagnostics("deactivate")
         if self._retiring:
+            self._finish_work_diagnostics()
             return False
         self._retiring = True
         previous = (
@@ -754,9 +838,12 @@ class SpatialCondition(BaseCondition):
                 )
                 self._created_event_published = False
             self.remove_from_register()
+            self._finish_work_diagnostics()
             return True
         finally:
             self._retiring = False
+            if self._work_operation is not None:
+                self._finish_work_diagnostics()
 
     def progress_spatial_duration(
         self,
@@ -1099,6 +1186,7 @@ class SpatialCondition(BaseCondition):
         parent_event: Event,
     ) -> None:
         """Relocate a generic attached footprint through public state."""
+        self._validate_exact_anchor_position(position)
         grid = get_map()
         previous = set(self.affected_positions)
         old_position = self.position
@@ -1213,6 +1301,10 @@ class AreaCondition(SpatialCondition):
     _turn_start_handler_uuid: Optional[UUID] = PrivateAttr(default=None)
     _turn_end_handler_uuid: Optional[UUID] = PrivateAttr(default=None)
     _terrain_modifier_uuids: Dict[UUID, List[UUID]] = PrivateAttr(default_factory=dict)
+    _pending_terrain_before_values: Dict[
+        Tuple[int, int],
+        Tuple[int, int, int, int],
+    ] = PrivateAttr(default_factory=dict)
     _light_modifier_positions: Set[Tuple[int, int]] = PrivateAttr(default_factory=set)
     _pending_light_changed_positions: Set[Tuple[int, int]] = PrivateAttr(
         default_factory=set,
@@ -1322,11 +1414,9 @@ class AreaCondition(SpatialCondition):
         if SpatialEffectTriggerKind.APPEAR not in self.trigger_kinds:
             return
         grid = get_map()
-        occupant_uuids = {
-            entity_uuid
-            for position in self.affected_positions
-            for entity_uuid in grid.get_entities_at(position)
-        }
+        occupant_uuids: Set[UUID] = set()
+        for position in self._iter_work_positions(self.affected_positions):
+            occupant_uuids.update(grid.get_entities_at(position))
         spell_level = self._protection_spell_level()
         source = Entity.get(self.source_entity_uuid)
         source_position = source.position if source is not None else (0, 0)
@@ -1363,11 +1453,9 @@ class AreaCondition(SpatialCondition):
         if trigger_kind not in self.trigger_kinds:
             return
         grid = get_map()
-        occupant_uuids = {
-            entity_uuid
-            for position in positions
-            for entity_uuid in grid.get_entities_at(position)
-        }
+        occupant_uuids: Set[UUID] = set()
+        for position in self._iter_work_positions(positions):
+            occupant_uuids.update(grid.get_entities_at(position))
         spell_level = self._protection_spell_level()
         source = Entity.get(self.source_entity_uuid)
         source_position = source.position if source is not None else (0, 0)
@@ -1403,11 +1491,9 @@ class AreaCondition(SpatialCondition):
         if trigger_kind not in self.trigger_kinds:
             return
         grid = get_map()
-        occupant_uuids = {
-            entity_uuid
-            for position in positions
-            for entity_uuid in grid.get_entities_at(position)
-        }
+        occupant_uuids: Set[UUID] = set()
+        for position in self._iter_work_positions(positions):
+            occupant_uuids.update(grid.get_entities_at(position))
         for entity_uuid in sorted(occupant_uuids, key=str):
             entity = Entity.get(entity_uuid)
             if entity is None:
@@ -1497,11 +1583,12 @@ class AreaCondition(SpatialCondition):
     def resolve_area_footprint(self) -> Set[Tuple[int, int]]:
         """Resolve valid cells after map bounds and spell protection."""
         grid = get_map()
-        positions = {
-            position
-            for position in self._compute_affected_positions()
-            if grid.has_tile(*position)
-        }
+        positions: Set[Tuple[int, int]] = set()
+        for position in self._iter_work_positions(
+            self._compute_affected_positions()
+        ):
+            if grid.has_tile(*position):
+                positions.add(position)
         spell_level = self._protection_spell_level()
         if spell_level is None or not self.magical_origin:
             return positions
@@ -1545,6 +1632,72 @@ class AreaCondition(SpatialCondition):
         self._turn_end_handler_uuid = None
         self._remove_terrain_modifiers()
         self._remove_light_modifiers()
+        if self._uncommitted_state_discarded:
+            self._pending_terrain_before_values.clear()
+
+    @staticmethod
+    def _tile_movement_costs(tile) -> Tuple[int, int, int, int]:
+        """Return one Tile's complete effective traversal-cost tuple."""
+        return (
+            tile.get_movement_cost(MovementMode.WALKING),
+            tile.get_movement_cost(MovementMode.FLYING),
+            tile.get_movement_cost(MovementMode.SWIMMING),
+            tile.get_movement_cost(MovementMode.BURROWING),
+        )
+
+    def _record_terrain_before_value(
+        self,
+        position: Tuple[int, int],
+        costs: Tuple[int, int, int, int],
+    ) -> None:
+        """Retain one committed Tile tuple until the condition fact boundary."""
+        self._pending_terrain_before_values.setdefault(position, costs)
+
+    def _capture_terrain_baseline(
+        self,
+        positions: Set[Tuple[int, int]],
+    ) -> None:
+        """Capture admitted Tile tuples before provisional area mechanics."""
+        grid = get_map()
+        for position in self._iter_work_positions(sorted(positions)):
+            tile = grid.get_tile(*position)
+            if tile is not None:
+                self._pending_terrain_before_values.setdefault(
+                    position,
+                    self._tile_movement_costs(tile),
+                )
+
+    def _publish_pending_terrain_changes(
+        self,
+        parent_event: Optional[Event],
+    ) -> None:
+        """Publish sorted committed Tile-cost facts after condition application."""
+        if not self._pending_terrain_before_values:
+            return
+        grid = get_map()
+        pending = self._pending_terrain_before_values
+        self._pending_terrain_before_values = {}
+        for position in self._iter_work_positions(sorted(pending)):
+            tile = grid.get_tile(*position)
+            if tile is None:
+                continue
+            after = self._tile_movement_costs(tile)
+            if pending[position] == after:
+                continue
+            walking, flying, swimming, burrowing = after
+            event = SpatialChangeEvent.tile_changed(
+                position,
+                tile_walking_cost=walking,
+                tile_flying_cost=flying,
+                tile_swimming_cost=swimming,
+                tile_burrowing_cost=burrowing,
+                senses_hint=SensesUpdateHint(requires_paths=True),
+                source_entity_uuid=self.source_entity_uuid,
+                parent_event=(
+                    parent_event.uuid if parent_event is not None else None
+                ),
+            )
+            grid._fire_committed_spatial_event(event)
 
     def _apply_terrain_modifiers(
         self,
@@ -1567,9 +1720,10 @@ class AreaCondition(SpatialCondition):
         target_positions = (
             positions if positions is not None else self.affected_positions
         )
-        for pos in target_positions:
+        for pos in self._iter_work_positions(sorted(target_positions)):
             tile = grid.get_tile(*pos)
             if tile:
+                before = self._tile_movement_costs(tile)
                 mod = NumericalModifier.create(
                     source_entity_uuid=self.source_entity_uuid,
                     name=f"{self.name} Difficult Terrain",
@@ -1578,22 +1732,12 @@ class AreaCondition(SpatialCondition):
                 mod_uuid = tile.walking_cost.self_static.add_value_modifier(mod)
                 self._terrain_modifier_uuids[tile.walking_cost.uuid] = [mod_uuid]
                 outs.append((tile.walking_cost.uuid, mod_uuid))
-                modified_positions.append(pos)
+                if before != self._tile_movement_costs(tile):
+                    modified_positions.append(pos)
+                    self._record_terrain_before_value(pos, before)
 
         if modified_positions:
             grid.invalidate_spatial_caches({"movement"})
-            hint = SensesUpdateHint(requires_paths=True)
-            representative_pos = modified_positions[0]
-            tile = grid.get_tile(*representative_pos)
-            if tile:
-                event = SpatialChangeEvent.tile_changed(
-                    representative_pos,
-                    tile.walkable,
-                    tile.blocks_optics,
-                    tile.blocks_propagation_field,
-                    senses_hint=hint,
-                )
-                EventQueue.publish_lifecycle(event)
 
         return outs
 
@@ -1611,16 +1755,23 @@ class AreaCondition(SpatialCondition):
             True when at least one owned modifier was removed.
         """
         grid = get_map()
-        representative_positions = (
+        target_positions = (
             set(self.affected_positions) if positions is None else positions
         )
+        before_costs = {}
+        for position in self._iter_work_positions(sorted(target_positions)):
+            tile = grid.get_tile(*position)
+            if tile is not None:
+                before_costs[position] = self._tile_movement_costs(tile)
         owned_modifiers: List[Tuple[UUID, List[UUID]]]
         if positions is None:
             owned_modifiers = list(self._terrain_modifier_uuids.items())
             self._terrain_modifier_uuids.clear()
+            removed_positions = set(target_positions)
         else:
             owned_modifiers = []
-            for position in positions:
+            removed_positions = set()
+            for position in self._iter_work_positions(sorted(positions)):
                 tile = grid.get_tile(*position)
                 if tile is None:
                     continue
@@ -1631,6 +1782,7 @@ class AreaCondition(SpatialCondition):
                 )
                 if modifier_uuids:
                     owned_modifiers.append((value_uuid, modifier_uuids))
+                    removed_positions.add(position)
 
         removed_any = bool(owned_modifiers)
         for value_uuid, modifier_uuids in owned_modifiers:
@@ -1654,19 +1806,13 @@ class AreaCondition(SpatialCondition):
         if not removed_any:
             return False
         grid.invalidate_spatial_caches({"movement"})
-        hint = SensesUpdateHint(requires_paths=True)
-        representative_position = next(iter(representative_positions), None)
-        if representative_position is not None:
-            tile = grid.get_tile(*representative_position)
-            if tile is not None:
-                event = SpatialChangeEvent.tile_changed(
-                    representative_position,
-                    tile.walkable,
-                    tile.blocks_optics,
-                    tile.blocks_propagation_field,
-                    senses_hint=hint,
+        for position in self._iter_work_positions(sorted(removed_positions)):
+            tile = grid.get_tile(*position)
+            if tile is not None and before_costs.get(position) != self._tile_movement_costs(tile):
+                self._record_terrain_before_value(
+                    position,
+                    before_costs[position],
                 )
-                EventQueue.publish_lifecycle(event)
         return True
 
     def _remove_terrain_modifiers(self) -> None:
@@ -1751,7 +1897,26 @@ class AreaCondition(SpatialCondition):
         parent_event: Optional[Event],
     ) -> None:
         """Publish deferred objective light state after the spatial commit."""
+        self._publish_pending_terrain_changes(parent_event)
         self._publish_pending_light_changes(parent_event)
+
+    def _discard_pending_runtime_facts(self) -> None:
+        """Discard provisional terrain facts during failed condition restoration."""
+        super()._discard_pending_runtime_facts()
+        self._pending_terrain_before_values.clear()
+
+    def _discard_pending_terrain_positions(
+        self,
+        positions: Set[Tuple[int, int]],
+    ) -> None:
+        """Discard rows for cells transferred to a replacing condition."""
+        for position in self._iter_work_positions(positions):
+            self._pending_terrain_before_values.pop(position, None)
+
+    def _finalize_application(self, effect_event: Event) -> None:
+        """Publish terrain facts only after the condition application commits."""
+        super()._finalize_application(effect_event)
+        self._publish_pending_runtime_facts(effect_event)
 
     def _remove_light_modifiers(self) -> None:
         """Remove every light modifier through the batched primitive."""
@@ -1789,7 +1954,7 @@ class AreaCondition(SpatialCondition):
 
     def _release_positions(self, positions: Set[Tuple[int, int]]) -> None:
         """Release positional mechanics before a footprint index shrinks."""
-        for position in positions:
+        for position in self._iter_work_positions(positions):
             self._remove_terrain_modifier_at(position)
             self._remove_light_modifier_at(position)
         retained = self.affected_positions - positions
@@ -1812,6 +1977,7 @@ class AreaCondition(SpatialCondition):
         if self._activation_positions is None:
             raise RuntimeError("Area condition has no admitted footprint")
         self.affected_positions = set(self._activation_positions)
+        self._capture_terrain_baseline(self.affected_positions)
         spell_level = self._protection_spell_level()
 
         if SpatialEffectTriggerKind.ENTER in self.trigger_kinds:
@@ -1925,6 +2091,7 @@ class AreaCondition(SpatialCondition):
         """
         old_positions = set(self.affected_positions)
         old_position = self.position
+        self._validate_exact_anchor_position(new_center)
         self.position = new_center
         try:
             new_positions = self._compute_affected_positions()
@@ -1933,7 +2100,7 @@ class AreaCondition(SpatialCondition):
         grid = get_map()
         new_positions = {
             position
-            for position in new_positions
+            for position in self._iter_work_positions(new_positions)
             if grid.has_tile(*position)
         }
         removed_positions = old_positions - new_positions
@@ -1971,6 +2138,7 @@ class AreaCondition(SpatialCondition):
             )
             self._restore_positions(removed_positions)
             self._pending_light_changed_positions.clear()
+            self._pending_terrain_before_values.clear()
             self._settle_physical_optics(
                 grid,
                 physical_before,
@@ -1985,7 +2153,7 @@ class AreaCondition(SpatialCondition):
             physical_positions,
             parent_event=parent_event,
         )
-        self._publish_pending_light_changes(parent_event)
+        self._publish_pending_runtime_facts(parent_event)
 
         self.apply_effect_exit_trigger(
             removed_positions,

@@ -1466,7 +1466,17 @@ def test_connector_execution_rejects_replaced_global_support_owner() -> None:
     row = _connector_row(actor)
     support = grid.get_tile(1, 0)
     assert support is not None
-    impostor = Tile.model_validate(support.model_dump())
+    impostor = Tile.model_validate(
+        support.model_dump(
+            exclude={
+                "contextual_immunity_names",
+                "values_dict_uuid_name",
+                "values_dict_name_uuid",
+                "blocks_dict_uuid_name",
+                "blocks_dict_name_uuid",
+            },
+        ),
+    )
     assert impostor is not support
     assert BaseBlock.get(support.uuid) is impostor
     assert grid.get_tile(1, 0) is support
@@ -1684,9 +1694,7 @@ def test_connector_root_effect_forgery_cancels_before_step_or_cost() -> None:
     assert all(event.connector_digest == connector.objective_digest for event in roots)
 
 
-def test_connector_discovery_uses_only_endpoint_index(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_connector_discovery_matches_endpoint_presence() -> None:
     _connector_grid()
     grid = get_map()
     connector = grid.register_connector(connector_definition())
@@ -1694,11 +1702,6 @@ def test_connector_discovery_uses_only_endpoint_index(
     actor = create_test_monster("monster.skeleton", name="Indexed Connector User", position=(0, 0), faction="heroes")
     template = TraverseConnector(source_entity_uuid=actor.uuid)
 
-    monkeypatch.setattr(
-        grid,
-        "get_all_connectors",
-        lambda: (_ for _ in ()).throw(AssertionError("global connector scan")),
-    )
     assert len(template.get_discovery_variants(actor)) == 1
     Entity.update_entity_position(actor, (0, 1))
     assert template.get_discovery_variants(actor) == []

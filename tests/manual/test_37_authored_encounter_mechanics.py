@@ -222,7 +222,7 @@ def test_standard_skeleton_door_arena_uses_current_baseline_content() -> None:
     assert grid.get_object_position(arena.environment.barrier.door.uuid) == DOOR_POSITION
     assert water_tile is not None
     assert water_tile.name == "Water"
-    assert water_tile.walkable is False
+    assert water_tile.get_movement_cost(MovementMode.WALKING) == 0
     assert difficult_tile is not None
     assert difficult_tile.name == "Difficult Terrain"
     assert difficult_tile.get_movement_cost(MovementMode.WALKING) > 1
@@ -270,7 +270,7 @@ def test_goblin_water_skirmish_samples_goblins_caster_and_route_blockers() -> No
     assert arena.environment is not None
     assert water_tile is not None
     assert water_tile.name == "Water"
-    assert water_tile.walkable is False
+    assert water_tile.get_movement_cost(MovementMode.WALKING) == 0
     assert equipped_item_name(arena.hero, WeaponSlot.RANGED_MAIN) == "Longbow"
     assert "Nimble Escape: Hide" in monster_actions["Validation Goblin Skirmisher"]
     assert "Nimble Escape: Disengage" in monster_actions["Validation Goblin Archer"]
@@ -415,7 +415,7 @@ def test_forced_movement_hazard_bridge_places_thunderwave_near_hazards() -> None
     assert "Thunderwave" in action_template_names(warlock)
     assert "Thunderwave" in action_template_names(mage)
     assert water_tile is not None
-    assert water_tile.walkable is False
+    assert water_tile.get_movement_cost(MovementMode.WALKING) == 0
     assert spike_tile is not None
     assert spike_tile.active_conditions == {}
     spike_effect = BaseCondition.get(
@@ -454,7 +454,7 @@ def test_zone_control_web_gauntlet_adds_control_spells_and_route_pressure() -> N
     assert {"Web", "Grease", "Spike Growth", "Fog Cloud"} <= action_template_names(control_mage)
     assert {"Nimble Escape: Hide", "Nimble Escape: Disengage"} <= action_template_names(goblin_archer)
     assert water_tile is not None
-    assert water_tile.walkable is False
+    assert water_tile.get_movement_cost(MovementMode.WALKING) == 0
 
 
 def test_support_attrition_cache_includes_wounded_ally_and_support_actions() -> None:
@@ -541,7 +541,7 @@ def test_ranged_loadout_kiting_ring_keeps_ranged_gear_and_terrain_pressure() -> 
     assert {"Nimble Escape: Hide", "Nimble Escape: Disengage"} <= action_template_names(goblin_archer)
     assert {"Eldritch Blast", "Thunderwave", "Necrotic Bless"} <= action_template_names(warlock)
     assert water_tile is not None
-    assert water_tile.walkable is False
+    assert water_tile.get_movement_cost(MovementMode.WALKING) == 0
     assert difficult_tile is not None
     assert difficult_tile.get_movement_cost(MovementMode.WALKING) > 1
 
@@ -575,7 +575,7 @@ def test_teleport_escape_skirmish_samples_mobility_and_ranged_pressure() -> None
     assert {"Misty Step", "Dimension Door", "Blur", "Mirror Image", "Ray of Frost"} <= action_template_names(escape_mage)
     assert {"Nimble Escape: Hide", "Nimble Escape: Disengage"} <= action_template_names(goblin_archer)
     assert water_tile is not None
-    assert water_tile.walkable is False
+    assert water_tile.get_movement_cost(MovementMode.WALKING) == 0
     assert difficult_tile is not None
     assert difficult_tile.get_movement_cost(MovementMode.WALKING) > 1
 

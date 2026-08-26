@@ -50,6 +50,7 @@ class ItemState(BaseModel):
     maximum_hit_points: Optional[int] = Field(default=None, ge=0)
     charge_state: Optional[ItemChargeState] = None
     boundary_structure: Optional[BoundaryStructure] = None
+    linked_spatial_condition_uuid: Optional[UUID] = None
     light_source: Optional[ItemLightSourceState] = None
     is_open: Optional[bool] = None
     blocks_movement: bool = False

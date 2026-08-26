@@ -11,6 +11,7 @@ from pydantic import (
     Field,
     field_serializer,
     model_validator,
+    StrictInt,
 )
 
 from dnd.core.action_execution import MovementProvocationPolicy
@@ -62,13 +63,12 @@ class WorldTileState(BaseModel):
     position: Tuple[int, int]
     surface: TileSurface
     name: str
-    walkable: bool
     blocks_optics: bool
     blocks_propagation: bool
-    walking_cost: float
-    flying_cost: float
-    swimming_cost: float
-    burrowing_cost: float
+    walking_cost: StrictInt = Field(ge=0)
+    flying_cost: StrictInt = Field(ge=0)
+    swimming_cost: StrictInt = Field(ge=0)
+    burrowing_cost: StrictInt = Field(ge=0)
     elevation_steps: int
     surface_kind: ElevationSurfaceKind
     slope_axis: Optional[SlopeAxis] = None
@@ -530,6 +530,8 @@ class SpatialChangeEvent(SpatiallyIndexedEvent):
     handlers, combat logs, and frontend reducers.
     """
 
+    model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
+
     name: str = Field(default="Spatial Change", description="A spatial change event")
     event_type: EventType = Field(default=EventType.SPATIAL_ENTITY_ENTERED, description="Type of spatial change")
     change_type: SpatialChangeType = Field(description="Specific type of spatial change")
@@ -552,7 +554,26 @@ class SpatialChangeEvent(SpatiallyIndexedEvent):
         default=None,
         description="Exact committed placement before an object mutation.",
     )
-    tile_walkable: Optional[bool] = Field(default=None, description="New walkable state (for tile changes)")
+    tile_walking_cost: Optional[StrictInt] = Field(
+        default=None,
+        ge=0,
+        description="Complete effective walking cost after-value for a Tile change.",
+    )
+    tile_flying_cost: Optional[StrictInt] = Field(
+        default=None,
+        ge=0,
+        description="Complete effective flying cost after-value for a Tile change.",
+    )
+    tile_swimming_cost: Optional[StrictInt] = Field(
+        default=None,
+        ge=0,
+        description="Complete effective swimming cost after-value for a Tile change.",
+    )
+    tile_burrowing_cost: Optional[StrictInt] = Field(
+        default=None,
+        ge=0,
+        description="Complete effective burrowing cost after-value for a Tile change.",
+    )
     tile_blocks_optics: Optional[bool] = Field(default=None, description="Final intrinsic Tile optical policy")
     tile_blocks_propagation: Optional[bool] = Field(default=None, description="Final intrinsic Tile propagation policy")
     tile_surface: Optional[TileSurface] = Field(
@@ -669,13 +690,18 @@ class SpatialChangeEvent(SpatiallyIndexedEvent):
     def tile_changed(
         cls,
         position: Tuple[int, int],
-        walkable: bool,
-        blocks_optics: bool,
-        blocks_propagation: bool,
+        *,
+        tile_walking_cost: Optional[int] = None,
+        tile_flying_cost: Optional[int] = None,
+        tile_swimming_cost: Optional[int] = None,
+        tile_burrowing_cost: Optional[int] = None,
+        tile_blocks_optics: Optional[bool] = None,
+        tile_blocks_propagation: Optional[bool] = None,
         tile_surface: Optional[TileSurface] = None,
-                     source_entity_uuid: Optional[UUID] = None,
-                     senses_hint: Optional['SensesUpdateHint'] = None,
-                     parent_event: Optional[UUID] = None) -> 'SpatialChangeEvent':
+        source_entity_uuid: Optional[UUID] = None,
+        senses_hint: Optional['SensesUpdateHint'] = None,
+        parent_event: Optional[UUID] = None,
+    ) -> 'SpatialChangeEvent':
         """Create an event for a tile property change.
 
         Event starts at DECLARATION phase to allow full lifecycle.
@@ -694,9 +720,12 @@ class SpatialChangeEvent(SpatiallyIndexedEvent):
             event_type=EventType.SPATIAL_TILE_CHANGED,
             change_type=SpatialChangeType.TILE_CHANGED,
             position=position,
-            tile_walkable=walkable,
-            tile_blocks_optics=blocks_optics,
-            tile_blocks_propagation=blocks_propagation,
+            tile_walking_cost=tile_walking_cost,
+            tile_flying_cost=tile_flying_cost,
+            tile_swimming_cost=tile_swimming_cost,
+            tile_burrowing_cost=tile_burrowing_cost,
+            tile_blocks_optics=tile_blocks_optics,
+            tile_blocks_propagation=tile_blocks_propagation,
             tile_surface=tile_surface,
             phase=EventPhase.DECLARATION,
             use_register=False,

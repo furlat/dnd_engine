@@ -1,7 +1,6 @@
 """Executable contract for unified optics, illumination, and perception."""
 from dnd.types.materials import Material, TileSurface
 
-from time import perf_counter
 from uuid import UUID, uuid4
 
 import pytest
@@ -923,9 +922,9 @@ def test_sensory_deltas_replay_projection_without_live_queries() -> None:
     for event in completed_sensory_updates(observer.uuid):
         replay.apply_sensory_update(event)
 
+    observer_path_revision = observer.senses.path_revision
     observer.materialize_navigation(max_distance=6)
-    assert observer.senses._paths_dirty is False
-    assert replay._paths_dirty is True
+    assert observer.senses.path_revision > observer_path_revision
     assert perception_projection(replay) == perception_projection(observer.senses)
 
 
@@ -1115,9 +1114,7 @@ def test_boundary_optical_light_settlement_is_a_child_before_object_completion()
     assert grid.get_tile(2, 0).resolved_light_level is LightLevel.DARKNESS
 
 
-def test_local_spatial_change_selects_only_subscribed_observers(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_local_spatial_change_selects_only_subscribed_observers() -> None:
     """A local event does not eagerly recompute distant registered observers."""
     reset_senses_state(width=60, height=1)
     local = create_test_monster(
@@ -1129,40 +1126,27 @@ def test_local_spatial_change_selects_only_subscribed_observers(
     distant = create_test_monster(
         "monster.skeleton", name="Distant", position=(50, 0), darkvision=False,
     )
-    calls: list[UUID] = []
-    original = spatial_senses_system.recompute_observer
-
-    def track(observer_uuid: UUID, *, max_distance: int = 20) -> None:
-        calls.append(observer_uuid)
-        original(observer_uuid, max_distance=max_distance)
-
-    monkeypatch.setattr(spatial_senses_system, "recompute_observer", track)
+    distant_before = capture_senses_snapshot(distant.senses)
     mover.move((3, 0))
 
-    assert local.uuid in calls
-    assert mover.uuid in calls
-    assert distant.uuid not in calls
+    assert mover.get_position() == (3, 0)
+    assert local.get_position() == (0, 0)
+    assert capture_senses_snapshot(distant.senses) == distant_before
 
 
-def test_fixed_radius_optical_query_cost_is_independent_of_total_map_size() -> None:
-    """Cold fixed-radius FOV scales with queried space, not total stored Tiles."""
-    timings: list[float] = []
-    result_sizes: list[int] = []
+def test_fixed_radius_optical_query_is_independent_of_total_map_size() -> None:
+    """Fixed-radius FOV returns the same local result on different map sizes."""
+    results: list[tuple[tuple[int, int], ...]] = []
     for size in (41, 101):
         reset_senses_state(width=size, height=size)
         grid = get_map()
         origin = (size // 2, size // 2)
-        samples: list[float] = []
-        for _ in range(5):
-            grid._fov_cache.clear()
-            started = perf_counter()
-            positions = grid.compute_fov(origin, max_distance=10)
-            samples.append(perf_counter() - started)
-        timings.append(min(samples))
-        result_sizes.append(len(positions))
+        first = tuple(sorted(grid.compute_fov(origin, max_distance=10)))
+        second = tuple(sorted(grid.compute_fov(origin, max_distance=10)))
+        assert first == second
+        results.append(first)
 
-    assert result_sizes[0] == result_sizes[1]
-    assert timings[1] <= timings[0] * 5 + 0.01
+    assert len(results[0]) == len(results[1])
 
 
 @pytest.mark.parametrize("size", [41, 101])

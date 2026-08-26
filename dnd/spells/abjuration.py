@@ -3342,6 +3342,7 @@ class AntimagicFieldZone(SpatialCondition):
         parent_event: Event,
     ) -> None:
         """Recenter suppression and membership when the field anchor moves."""
+        self._validate_exact_anchor_position(position)
         caster_uuid = type_cast(UUID, self.source_entity_uuid)
         grid = get_map()
         old_positions = set(self.affected_positions)

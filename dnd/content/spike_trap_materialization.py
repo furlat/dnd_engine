@@ -45,6 +45,7 @@ def _begin_environment_effect_event(
 def materialize_spike_trap_condition(
     positions: Set[Tuple[int, int]],
     *,
+    condition_uuid: Optional[UUID] = None,
     stealth_dc: Optional[int] = None,
     source_entity_uuid: Optional[UUID] = None,
     parent_event: Optional[Event] = None,
@@ -58,16 +59,19 @@ def materialize_spike_trap_condition(
         source_uuid,
         name="Install Spike Trap",
     )
+    condition_fields: dict[str, object] = {
+        "affected_positions": set(positions),
+        "condition_stealth_dc": stealth_dc,
+    }
+    if condition_uuid is not None:
+        condition_fields["uuid"] = condition_uuid
     condition = materialize_spatial_condition(
         SPIKE_TRAP_EFFECT_RECIPE,
         source_uuid,
         position=min(positions),
         faction=None,
         condition_type=SpikeTrap,
-        condition_fields={
-            "affected_positions": set(positions),
-            "condition_stealth_dc": stealth_dc,
-        },
+        condition_fields=condition_fields,
     )
     result = condition.activate(parent_event=causal_event)
     if result is None or result.canceled or not condition.applied:

@@ -15,9 +15,19 @@ from dnd.content.scenarios.scenario_compatibility import (
     check_built_encounter_compatibility,
     check_encounter_compatibility,
 )
+from dnd.blocks.base_item import BaseItem
 from dnd.core.base_block import BaseBlock
+from dnd.core.base_conditions import BaseCondition
+from dnd.core.events.events_registry import EventPhase, EventQueue, EventType
+from dnd.core.events.item_events import ItemLocationStateEvent
+from dnd.core.events.world_events import (
+    SpatialChangeEvent,
+    SpatialEffectInteractionEvent,
+    WorldInitializedEvent,
+)
 from dnd.core.gridmap import get_map
 from dnd.items.environment import DirectionalDoor
+from dnd.items.torches import WallTorch
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.types.world import (
     CardinalDirection,
@@ -153,12 +163,17 @@ def test_every_battlefield_has_one_builder_and_layout_matches_runtime() -> None:
         for cell in definition.layout.tiles:
             tile = grid.get_tile(*cell.position)
             assert tile is not None, (definition.battlefield_id, cell.position)
-            assert tile.walkable is cell.walkable
-            if cell.walkable:
-                assert (
-                    tile.get_movement_cost(MovementMode.WALKING)
-                    == cell.walking_cost
-                )
+            assert (
+                tile.get_movement_cost(MovementMode.WALKING),
+                tile.get_movement_cost(MovementMode.FLYING),
+                tile.get_movement_cost(MovementMode.SWIMMING),
+                tile.get_movement_cost(MovementMode.BURROWING),
+            ) == (
+                cell.walking_cost,
+                cell.flying_cost,
+                cell.swimming_cost,
+                cell.burrowing_cost,
+            )
         for authored in definition.layout.objects:
             if authored.kind not in {"wall_torch", "cliff"}:
                 continue
@@ -188,6 +203,85 @@ def test_every_battlefield_has_one_builder_and_layout_matches_runtime() -> None:
                 authored.base_height_steps,
                 authored.orientation,
             )
+        events = EventQueue.get_events_chronological()
+        assert isinstance(events[0], WorldInitializedEvent)
+        assert events[0].phase is EventPhase.COMPLETION
+        assert sum(
+            event.event_type is EventType.WORLD_INITIALIZED
+            for event in events
+        ) == 1
+        if built.environment is not None:
+            condition = BaseCondition.get(built.environment.spike_condition_uuid)
+            assert condition is not None
+            assert condition.applied
+            assert set(condition.affected_positions) == {
+                (x, y) for x in range(5) for y in range(11, 15)
+            }
+        elif "landing_hazard" in built.object_uuids:
+            condition = BaseCondition.get(built.object_uuids["landing_hazard"])
+            assert condition is not None
+            assert condition.applied
+            assert set(condition.affected_positions) == {(11, 9)}
+        else:
+            assert get_map().get_spatial_conditions() == []
+        torch_rows = [
+            placement
+            for placement in get_map().get_all_object_placements()
+            if isinstance(BaseItem.get(placement.object_uuid), WallTorch)
+        ]
+        previous_item_fact_index = 0
+        for placement in sorted(
+            torch_rows,
+            key=lambda row: (row.position, str(row.object_uuid)),
+        ):
+            torch = BaseItem.get(placement.object_uuid)
+            assert isinstance(torch, WallTorch)
+            assert torch.is_lit
+            item_facts = [
+                (index, event)
+                for index, event in enumerate(events)
+                if isinstance(event, ItemLocationStateEvent)
+                and event.item_state.item_uuid == torch.uuid
+            ]
+            assert len(item_facts) == 1
+            item_fact_index, item_fact = item_facts[0]
+            torch_events = [
+                (index, event)
+                for index, event in enumerate(
+                    events[previous_item_fact_index + 1:item_fact_index],
+                    start=previous_item_fact_index + 1,
+                )
+                if index > previous_item_fact_index
+                and (
+                    (
+                        isinstance(event, SpatialChangeEvent)
+                        and event.event_type is EventType.SPATIAL_LIGHT_CHANGED
+                        and event.phase is EventPhase.COMPLETION
+                    )
+                    or (
+                        isinstance(event, SpatialEffectInteractionEvent)
+                        and event.event_type is EventType.SPATIAL_EFFECT_INTERACTION
+                        and event.operation.value == "ignite"
+                        and event.source_object_uuid == torch.uuid
+                        and event.target_entity_uuid == torch.uuid
+                        and event.phase is EventPhase.COMPLETION
+                    )
+                )
+            ]
+            light_index = next(
+                index for index, event in torch_events
+                if isinstance(event, SpatialChangeEvent)
+                and event.event_type is EventType.SPATIAL_LIGHT_CHANGED
+            )
+            ignite_index = next(
+                index for index, event in torch_events
+                if isinstance(event, SpatialEffectInteractionEvent)
+            )
+            assert light_index < ignite_index
+            assert item_fact.item_state == torch.to_item_state()
+            assert item_fact.world_placement == placement
+            assert item_fact.parent_event == events[ignite_index].uuid
+            previous_item_fact_index = item_fact_index
     reset_engine_runtime()
 
 

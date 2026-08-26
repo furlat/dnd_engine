@@ -2,14 +2,18 @@
 
 import pytest
 from uuid import uuid4
+from pydantic import ValidationError
 
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_object import BaseObject
 from dnd.core.events.events_registry import EventQueue, EventType
 from dnd.core.gridmap import get_map
 from dnd.core.positioning import PositionCommitError
-from dnd.blocks.sensory import capture_senses_snapshot
+from dnd.blocks.base_item import BaseItem
+from dnd.blocks.sensory import Senses, capture_senses_snapshot
+from dnd.core.base_tiles import Tile
 from dnd.content.monsters.monster_builders import create_monster
+from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.game import Game
 from dnd.core.values import (
     BaseValue,
@@ -19,7 +23,9 @@ from dnd.core.values import (
 )
 from dnd.entities.entity import Entity, EntityConfig
 from dnd.types.materials import Material, TileSurface
+from dnd.types.spatial_effects import SpatialEffectLayer, SpatialEffectOccupancyPolicy
 from dnd.types.world import LightLevel
+from dnd.spatial.area_conditions import SpatialCondition
 from tests.engine.support import create_test_entity, reset_combat_state
 
 
@@ -38,6 +44,128 @@ def reset_identity_state() -> None:
     BaseValue._registry.clear()
     BaseBlock._registry.clear()
     Entity._entity_registry.clear()
+
+
+def test_slice_6_1_position_owners_are_strict_and_base_blocks_are_neutral() -> None:
+    """The objective-position cut leaves only explicit strict owners."""
+    reset_identity_state()
+    source_uuid = uuid4()
+    surface = TileSurface(base_material=Material.STONE)
+    condition_ref = ContentRef(
+        pack_id="test.pack",
+        definition_kind=ContentDefinitionKind.SPATIAL_EFFECT,
+        content_id="spatial.position_probe",
+        content_version=1,
+        definition_contract_hash="0" * 64,
+    )
+
+    tile = Tile(
+        source_entity_uuid=source_uuid,
+        surface=surface,
+        position=(1, 2),
+    )
+    entity = Entity(source_entity_uuid=source_uuid, position=(3, 4))
+    senses = Senses(source_entity_uuid=source_uuid, position=(5, 6))
+    condition = SpatialCondition(
+        source_entity_uuid=source_uuid,
+        content_ref=condition_ref,
+        position=(7, 8),
+        layer=SpatialEffectLayer.FIELD,
+        occupancy_policy=SpatialEffectOccupancyPolicy.OVERLAPPING,
+        use_register=False,
+    )
+    config = EntityConfig(position=(9, 10))
+
+    assert tile.get_position() == (1, 2)
+    assert entity.get_position() == (3, 4)
+    assert senses.get_position() == (5, 6)
+    assert condition.get_position() == (7, 8)
+    assert config.position == (9, 10)
+
+    for owner_factory in (
+        lambda value: Tile(
+            source_entity_uuid=source_uuid,
+            surface=surface,
+            position=value,
+        ),
+        lambda value: Entity(source_entity_uuid=source_uuid, position=value),
+        lambda value: Senses(source_entity_uuid=source_uuid, position=value),
+        lambda value: SpatialCondition(
+            source_entity_uuid=source_uuid,
+            content_ref=condition_ref,
+            position=value,
+            layer=SpatialEffectLayer.FIELD,
+            occupancy_policy=SpatialEffectOccupancyPolicy.OVERLAPPING,
+            use_register=False,
+        ),
+        lambda value: EntityConfig(position=value),
+    ):
+        for invalid_position in ((True, 2), (1.5, 2), ("1", 2)):
+            with pytest.raises(ValidationError):
+                owner_factory(invalid_position)
+
+    base_block = BaseBlock(source_entity_uuid=source_uuid)
+    floor_item = BaseItem(source_entity_uuid=source_uuid)
+    contained_item = BaseItem(
+        source_entity_uuid=source_uuid,
+        owner_uuid=base_block.uuid,
+    )
+    assert base_block.get_position() is None
+    assert floor_item.get_position() is None
+    assert contained_item.get_position() is None
+    assert "position" not in BaseItem.model_fields
+    assert "position" not in floor_item.model_dump()
+    with pytest.raises(ValidationError):
+        BaseItem(source_entity_uuid=source_uuid, position=(1, 2))
+    assert not hasattr(BaseBlock, "set_position")
+
+
+@pytest.mark.parametrize("invalid_x, invalid_y", ((True, 2), (1.5, 2), ("1", 2)))
+def test_set_tile_rejects_non_exact_coordinates_before_any_public_change(
+    invalid_x: object,
+    invalid_y: object,
+) -> None:
+    """Tile admission rejects coercible coordinates before the candidate moves."""
+    reset_identity_state()
+    grid = get_map()
+    candidate = Tile.create(
+        position=(1, 1),
+        surface=TileSurface(base_material=Material.STONE),
+    )
+    before_tiles = grid.get_all_tiles()
+    before_candidate = (
+        candidate.uuid,
+        candidate.get_position(),
+        BaseBlock.get(candidate.uuid) is candidate,
+        grid.get_tile_by_uuid(candidate.uuid),
+    )
+    before_revisions = (
+        grid.movement_revision,
+        grid.optical_revision,
+        grid.propagation_revision,
+    )
+    before_cursor = EventQueue.event_cursor()
+
+    with pytest.raises(ValueError, match="exact tuple"):
+        grid.set_tile(
+            invalid_x,
+            invalid_y,
+            tile=candidate,
+        )
+
+    assert grid.get_all_tiles() == before_tiles
+    assert (
+        candidate.uuid,
+        candidate.get_position(),
+        BaseBlock.get(candidate.uuid) is candidate,
+        grid.get_tile_by_uuid(candidate.uuid),
+    ) == before_candidate
+    assert (
+        grid.movement_revision,
+        grid.optical_revision,
+        grid.propagation_revision,
+    ) == before_revisions
+    assert EventQueue.event_cursor() == before_cursor
 
 
 def test_eb_01_001_base_object_registration_lifecycle() -> None:
@@ -340,7 +468,7 @@ def test_suspended_entity_keeps_game_identity_without_observer_or_second_left() 
 
 
 def test_entity_membership_queries_are_map_size_invariant_at_public_boundary() -> None:
-    """Small and large maps expose the same bounded occupancy result and delta."""
+    """Small and large maps expose the same occupancy result and revision delta."""
     observations = []
     for size in (8, 40):
         reset_identity_state()

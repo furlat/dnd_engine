@@ -8,6 +8,9 @@ from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 from dnd.blocks.base_item import BaseItem
 from dnd.blocks.inventory import Inventory
+from dnd.core.base_block import BaseBlock
+from dnd.core.base_conditions import BaseCondition
+from dnd.core.base_tiles import Tile
 from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.content.items.environment_item_builders import (
     build_directional_door,
@@ -28,7 +31,6 @@ from dnd.content.scenarios.battlefield_definitions import (
     LightLevelName,
 )
 from dnd.types.world import CardinalDirection, MovementMode
-from dnd.types.materials import Material, TileSurface
 from dnd.core.world_edges import ElevationSurfaceKind, SlopeAxis
 from dnd.core.traversal_connectors import (
     ConnectorActionCostType,
@@ -36,19 +38,20 @@ from dnd.core.traversal_connectors import (
     TraversalConnectorDefinition,
     TraversalConnectorKind,
 )
-from dnd.content.spike_trap_materialization import (
-    materialize_spike_trap_condition,
-)
 from dnd.core.gridmap import GridMap, get_map
-from dnd.core.events.events_registry import EventPhase, EventQueue
+from dnd.core.events.events_registry import EventPhase, EventQueue, EventType
 from dnd.core.events.world_events import (
+    SpatialChangeEvent,
+    SpatialEffectInteractionEvent,
     WorldConnectorState,
     WorldInitializedEvent,
     WorldObjectState,
     WorldTileState,
 )
+from dnd.content.spike_trap_materialization import materialize_spike_trap_condition
 from dnd.items.environment import DirectionalDoor, DirectionalWall
 from dnd.items.environment_interactables import StorageChest
+from dnd.items.torches import WallTorch
 from dnd.maps.arena_layout import (
     DIFFICULT_TERRAIN_POSITIONS,
     DOOR_POSITION,
@@ -65,6 +68,8 @@ from dnd.maps.arena_layout import (
     create_standard_arena_floor,
     darken_arena,
 )
+from dnd.types.items import ItemLocation
+from dnd.types.spatial_effects import SpatialEffectInteractionOperation
 @dataclass(frozen=True)
 class BuiltBattlefield:
     """Runtime objects created for one catalog battlefield."""
@@ -97,16 +102,20 @@ def _terrain_cell(
     position: tuple[int, int],
     terrain: BattlefieldTerrain,
     *,
-    walkable: bool = True,
     walking_cost: int = 1,
+    flying_cost: int = 1,
+    swimming_cost: int = 0,
+    burrowing_cost: int = 0,
     hazardous: bool = False,
 ) -> BattlefieldTileDefinition:
     """Create one non-default authored terrain cell."""
     return BattlefieldTileDefinition(
         position=position,
         terrain=terrain,
-        walkable=walkable,
         walking_cost=walking_cost,
+        flying_cost=flying_cost,
+        swimming_cost=swimming_cost,
+        burrowing_cost=burrowing_cost,
         hazardous=hazardous,
     )
 
@@ -136,7 +145,17 @@ def _object_definition(
 def _standard_hazards_layout(*, open_door: bool) -> BattlefieldLayoutDefinition:
     """Project the shared standard hazard layout without constructing runtime objects."""
     cells = (
-        *(_terrain_cell(position, "water", walkable=False) for position in WATER_POSITIONS),
+        *(
+            _terrain_cell(
+                position,
+                "water",
+                walking_cost=0,
+                flying_cost=1,
+                swimming_cost=1,
+                burrowing_cost=0,
+            )
+            for position in WATER_POSITIONS
+        ),
         *(
             _terrain_cell(position, "difficult_terrain", walking_cost=2)
             for position in DIFFICULT_TERRAIN_POSITIONS
@@ -211,7 +230,14 @@ def _elevation_proving_layout() -> BattlefieldLayoutDefinition:
     """Project the maintained level, slope, cliff, and jump proving geometry."""
     return BattlefieldLayoutDefinition(
         tiles=(
-            _terrain_cell((10, 9), "gap", walkable=False),
+            _terrain_cell(
+                (10, 9),
+                "gap",
+                walking_cost=0,
+                flying_cost=1,
+                swimming_cost=0,
+                burrowing_cost=0,
+            ),
             _terrain_cell((11, 9), "spikes", hazardous=True),
         ),
         objects=tuple(
@@ -541,13 +567,6 @@ def _place_directional_barrier(
     door: DirectionalDoor | None = None
     for y in range(3, 12):
         position = (column, y)
-        grid.set_tile(
-            column,
-            y,
-            surface=TileSurface(base_material=Material.STONE),
-            walkable=True,
-            name="Floor",
-        )
         if y == door_y:
             door = build_directional_door(
                 display_name=f"{label} Door",
@@ -711,7 +730,7 @@ def _build_multi_object_dark(
         boundary_direction=torch_definition.boundary_direction,
         base_height_steps=torch_definition.base_height_steps,
         orientation=torch_definition.orientation,
-        lit=True,
+        lit=False,
     )
     cannon = build_fireball_cannon(charges=2)
     cannon.place_on_grid((6, 11))
@@ -740,24 +759,22 @@ def _build_elevation_proving_ground(
     grid: GridMap,
 ) -> BuiltBattlefield:
     """Build the maintained non-connector elevation proving geometry."""
-    create_standard_arena_floor(grid)
     layout = definition.layout
-    for cell in layout.tiles:
-        if not cell.walkable:
-            grid.set_tile(
-                cell.position[0],
-                cell.position[1],
-                surface=TileSurface(base_material=Material.STONE),
-                walkable=False,
-                name="Gap",
-            )
-    for elevation in layout.elevation:
-        grid.set_tile_elevation(
-            elevation.position,
-            height=elevation.elevation_steps,
-            surface_kind=elevation.surface_kind,
-            slope_axis=elevation.slope_axis,
+    elevation_by_position = {
+        elevation.position: (
+            elevation.elevation_steps,
+            elevation.surface_kind,
+            elevation.slope_axis,
         )
+        for elevation in layout.elevation
+    }
+    create_standard_arena_floor(
+        grid,
+        gap_positions=tuple(
+            cell.position for cell in layout.tiles if cell.terrain == "gap"
+        ),
+        elevation_by_position=elevation_by_position,
+    )
     runtime_connectors = {}
     for connector_definition in layout.connectors:
         connector = grid.register_connector(connector_definition)
@@ -783,7 +800,7 @@ def _build_elevation_proving_ground(
         base_height_steps=cliff_definition.base_height_steps,
         orientation=cliff_definition.orientation,
     )
-    landing_hazard = materialize_spike_trap_condition({(11, 9)})
+    landing_hazard_uuid = uuid4()
     return BuiltBattlefield(
         definition=definition,
         environment=None,
@@ -809,7 +826,7 @@ def _build_elevation_proving_ground(
         object_uuids={
             "door": barrier.door.uuid,
             "cliff": cliff.uuid,
-            "landing_hazard": landing_hazard.uuid,
+            "landing_hazard": landing_hazard_uuid,
             **{
                 authored_id: connector_uuid
                 for authored_id, connector_uuid in runtime_connectors.items()
@@ -850,15 +867,215 @@ def build_battlefield(battlefield_id: str) -> BuiltBattlefield:
     definition = get_battlefield(battlefield_id)
     builder = _BUILDERS[battlefield_id]
     grid = get_map()
+    cursor_before = EventQueue.event_cursor()
+    if cursor_before != 0:
+        raise ValueError("authored battlefield requires an empty EventQueue")
+    if (
+        grid.get_all_tiles()
+        or grid.get_all_object_placements()
+        or grid.get_all_connectors()
+        or grid.get_spatial_conditions()
+    ):
+        raise ValueError("authored battlefield requires an empty GridMap")
+    if any(isinstance(block, Tile) for block in BaseBlock._registry.values()):
+        raise ValueError("authored battlefield requires no registered Tile")
+
     grid.disable_events()
     try:
         built = builder(definition, grid)
+        world_event = _world_initialized_event(built, grid)
+        _validate_cold_world(built, grid, world_event, cursor_before)
     except Exception:
         grid.enable_events(flush_pending=False)
         raise
     grid.enable_events(flush_pending=False)
-    EventQueue.publish_completed_fact(_world_initialized_event(built, grid))
+    published_world_event = EventQueue.publish_completed_fact(world_event)
+    _materialize_authored_spike_traps(built)
+    _settle_authored_wall_torches(grid, published_world_event)
     return built
+
+
+def _materialize_authored_spike_traps(
+    built: BuiltBattlefield,
+) -> None:
+    """Activate each reserved authored SpikeTrap after world publication."""
+    reserved: list[tuple[UUID, set[tuple[int, int]]]] = []
+    if built.environment is not None:
+        reserved.append(
+            (built.environment.spike_condition_uuid, set(SPIKE_ZONE_POSITIONS)),
+        )
+    if "landing_hazard" in built.object_uuids:
+        reserved.append(
+            (built.object_uuids["landing_hazard"], {(11, 9)}),
+        )
+
+    for condition_uuid, positions in reserved:
+        condition = materialize_spike_trap_condition(
+            positions,
+            condition_uuid=condition_uuid,
+        )
+        if condition.uuid != condition_uuid or BaseCondition.get(condition_uuid) is not condition:
+            raise RuntimeError(
+                "authored SpikeTrap materialization changed its reserved identity",
+            )
+
+
+def _settle_authored_wall_torches(
+    grid: GridMap,
+    parent_event: WorldInitializedEvent,
+) -> None:
+    """Light authored WallTorches and publish their complete item facts."""
+    placements = {
+        placement.object_uuid: placement
+        for placement in grid.get_all_object_placements()
+    }
+    torches: list[tuple[tuple[int, int], UUID, WallTorch]] = []
+    for object_uuid, placement in placements.items():
+        item = BaseItem.get(object_uuid)
+        if isinstance(item, WallTorch):
+            torches.append((placement.position, object_uuid, item))
+
+    for _position, object_uuid, torch in sorted(torches, key=lambda row: (row[0], str(row[1]))):
+        placement = placements[object_uuid]
+        cursor = EventQueue.event_cursor()
+        torch.light(parent_event=parent_event.uuid)
+        synchronous_events = tuple(EventQueue.iter_events_since(cursor))
+        light_completions = [
+            (index, event)
+            for index, event in synchronous_events
+            if isinstance(event, SpatialChangeEvent)
+            and event.event_type is EventType.SPATIAL_LIGHT_CHANGED
+            and event.phase is EventPhase.COMPLETION
+            and not event.canceled
+        ]
+        ignite_completions = [
+            (index, event)
+            for index, event in synchronous_events
+            if isinstance(event, SpatialEffectInteractionEvent)
+            and event.event_type is EventType.SPATIAL_EFFECT_INTERACTION
+            and event.operation is SpatialEffectInteractionOperation.IGNITE
+            and event.source_object_uuid == object_uuid
+            and event.target_entity_uuid == object_uuid
+            and event.phase is EventPhase.COMPLETION
+            and not event.canceled
+        ]
+        if (
+            not light_completions
+            or not ignite_completions
+            or light_completions[0][0] >= ignite_completions[0][0]
+        ):
+            raise RuntimeError(
+                f"authored WallTorch {object_uuid} did not complete light and IGNITE setup",
+            )
+        torch.publish_location_state(
+            ItemLocation.FLOOR,
+            world_placement=placement,
+            parent_event=ignite_completions[0][1],
+        )
+
+
+def _validate_cold_world(
+    built: BuiltBattlefield,
+    grid: GridMap,
+    world_event: WorldInitializedEvent,
+    cursor_before: int,
+) -> None:
+    """Validate the actor-free authored state before publishing its world fact."""
+    if EventQueue.event_cursor() != cursor_before:
+        raise RuntimeError("cold authored build advanced the EventQueue")
+
+    current_tiles = grid.get_all_tiles()
+    world_tiles = {row.position: row for row in world_event.tiles}
+    if set(current_tiles) != set(world_tiles):
+        raise RuntimeError("cold world Tile positions are not a closed set")
+    current_tile_uuids = {tile.uuid: position for position, tile in current_tiles.items()}
+    registered_tiles = {
+        block_uuid: block
+        for block_uuid, block in BaseBlock._registry.items()
+        if isinstance(block, Tile)
+    }
+    current_tiles_by_uuid = {
+        tile.uuid: tile
+        for tile in current_tiles.values()
+    }
+    if (
+        set(registered_tiles) != set(current_tiles_by_uuid)
+        or any(
+            registered_tiles[tile_uuid] is not tile
+            for tile_uuid, tile in current_tiles_by_uuid.items()
+        )
+    ):
+        raise RuntimeError("cold world registered Tile closure does not match GridMap")
+    world_tile_uuids = {row.tile_uuid: row.position for row in world_event.tiles}
+    if current_tile_uuids != world_tile_uuids:
+        raise RuntimeError("cold world Tile UUID closure does not match the snapshot")
+    for position, tile in current_tiles.items():
+        if BaseBlock.get(tile.uuid) is not tile:
+            raise RuntimeError("cold world Tile is not registry-identical")
+        if tile.active_conditions_by_uuid or tile.get_spatial_condition_uuids():
+            raise RuntimeError("cold world Tile has a direct condition footprint")
+        if tile.get_entity_uuids():
+            raise RuntimeError("cold world Tile has entity membership")
+        if world_tiles[position].tile_uuid != tile.uuid:
+            raise RuntimeError("cold world Tile row identity mismatch")
+
+    if grid.get_spatial_conditions():
+        raise RuntimeError("cold authored world owns a SpatialCondition")
+
+    placements = grid.get_all_object_placements()
+    placement_by_uuid = {placement.object_uuid: placement for placement in placements}
+    world_objects = {row.placement.object_uuid: row for row in world_event.objects}
+    if set(placement_by_uuid) != set(world_objects):
+        raise RuntimeError("cold world object closure does not match the snapshot")
+    authored_wall_torch_count = sum(
+        row.kind == "wall_torch"
+        for row in built.definition.layout.objects
+    )
+    placed_wall_torches = []
+    for object_uuid, placement in placement_by_uuid.items():
+        item = BaseItem.get(object_uuid)
+        if item is None:
+            raise RuntimeError(f"cold world object {object_uuid} is not a BaseItem")
+        if world_objects[object_uuid].placement != placement:
+            raise RuntimeError("cold world object placement mismatch")
+        if isinstance(item, WallTorch):
+            placed_wall_torches.append(item)
+            if item.is_lit or item.get_attached_light_sources():
+                raise RuntimeError("cold authored WallTorch is not unlit")
+    if len(placed_wall_torches) != authored_wall_torch_count:
+        raise RuntimeError("cold authored WallTorch classification is incomplete")
+
+    connector_by_uuid = {connector.uuid: connector for connector in grid.get_all_connectors()}
+    if set(connector_by_uuid) != {row.connector_uuid for row in world_event.connectors}:
+        raise RuntimeError("cold world connector closure does not match the snapshot")
+    for row in world_event.connectors:
+        connector = connector_by_uuid[row.connector_uuid]
+        if row.authored_id != connector.authored_id:
+            raise RuntimeError("cold world connector identity mismatch")
+
+    authored_spike_positions = {
+        cell.position
+        for cell in built.definition.layout.tiles
+        if cell.terrain == "spikes"
+    }
+    reserved_condition_uuids = set()
+    expected_spike_positions: set[tuple[int, int]] | None = None
+    if built.environment is not None:
+        reserved_condition_uuids.add(built.environment.spike_condition_uuid)
+        expected_spike_positions = set(SPIKE_ZONE_POSITIONS)
+        if authored_spike_positions != expected_spike_positions:
+            raise RuntimeError("cold standard spike footprint is not exact")
+    elif "landing_hazard" in built.object_uuids:
+        reserved_condition_uuids.add(built.object_uuids["landing_hazard"])
+        expected_spike_positions = {(11, 9)}
+        if authored_spike_positions != expected_spike_positions:
+            raise RuntimeError("cold proving landing footprint is not exact")
+    elif authored_spike_positions:
+        raise RuntimeError("cold authored spike positions have no reserved identity")
+    if expected_spike_positions is not None and not expected_spike_positions.issubset(current_tiles):
+        raise RuntimeError("cold authored spike footprint is outside current Tiles")
+    if any(BaseCondition.get(condition_uuid) is not None for condition_uuid in reserved_condition_uuids):
+        raise RuntimeError("cold authored SpikeTrap identity is already live")
 
 
 def _world_initialized_event(
@@ -871,7 +1088,6 @@ def _world_initialized_event(
             position=position,
             surface=tile.surface,
             name=tile.name,
-            walkable=tile.walkable,
             blocks_optics=tile.blocks_optics,
             blocks_propagation=tile.blocks_propagation_field,
             walking_cost=tile.get_movement_cost(MovementMode.WALKING),

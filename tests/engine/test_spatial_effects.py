@@ -72,11 +72,11 @@ from dnd.spells.conjuration import (
     GreaseZone,
     SleetStormZone,
 )
-from dnd.spells.abjuration import FreedomOfMovementEffect
+from dnd.spells.abjuration import AntimagicFieldZone, FreedomOfMovementEffect
 from dnd.conditions import Concentrating
 from dnd.types.conditions import DurationType
 from dnd.types.damage import DamageType, ResistanceStatus
-from dnd.types.world import LightLevel
+from dnd.types.world import LightLevel, MovementMode
 from dnd.types.spatial_effects import (
     SpatialEffectAnchorKind,
     SpatialEffectChangeOperation,
@@ -166,6 +166,18 @@ def _light_completions_since(cursor: int) -> list[tuple[int, SpatialChangeEvent]
         if isinstance(event, SpatialChangeEvent)
         and event.event_type is EventType.SPATIAL_LIGHT_CHANGED
         and event.phase is EventPhase.COMPLETION
+    ]
+
+
+def _terrain_completions_since(cursor: int) -> list[SpatialChangeEvent]:
+    """Return public completed Tile-cost facts in event order."""
+    return [
+        event
+        for _, event in EventQueue.iter_events_since(cursor)
+        if isinstance(event, SpatialChangeEvent)
+        and event.event_type is EventType.SPATIAL_TILE_CHANGED
+        and event.phase is EventPhase.COMPLETION
+        and event.tile_walking_cost is not None
     ]
 
 
@@ -902,6 +914,147 @@ class MovingGreaseZone(GreaseZone):
         return {self.position}
 
 
+@pytest.mark.parametrize("invalid_position", ((True, 2), (1.5, 2), ("2", 2)))
+def test_relocation_rejects_non_exact_coordinates_without_public_mutation(
+    invalid_position: object,
+) -> None:
+    """Generic and AreaCondition relocation reject coercible coordinates atomically."""
+    reset_engine_runtime(grid_size=(8, 8))
+    source_uuid = uuid4()
+    parent = _root_action(source_uuid)
+    generic = _materialize_test_condition(
+        FIRE_SURFACE_RECIPE,
+        source_uuid,
+        {(2, 2)},
+        condition_type=SpatialCondition,
+    )
+    area = _materialize_test_condition(
+        GREASE_SURFACE_RECIPE,
+        source_uuid,
+        {(4, 4)},
+        condition_type=FixedGreaseZone,
+    )
+    generic.activate(parent_event=parent)
+    area.activate(parent_event=parent)
+    before = {
+        condition.uuid: (
+            condition.position,
+            set(condition.affected_positions),
+            get_map().get_spatial_condition_positions(condition.uuid),
+        )
+        for condition in (generic, area)
+    }
+    before_revisions = (
+        get_map().movement_revision,
+        get_map().optical_revision,
+        get_map().propagation_revision,
+    )
+    before_cursor = EventQueue.event_cursor()
+
+    with pytest.raises(ValueError, match="exact tuple"):
+        generic.relocate_anchor(invalid_position, parent_event=parent)
+    with pytest.raises(ValueError, match="exact tuple"):
+        area.move_zone(invalid_position, parent_event=parent)
+
+    assert {
+        condition.uuid: (
+            condition.position,
+            set(condition.affected_positions),
+            get_map().get_spatial_condition_positions(condition.uuid),
+        )
+        for condition in (generic, area)
+    } == before
+    assert (
+        get_map().movement_revision,
+        get_map().optical_revision,
+        get_map().propagation_revision,
+    ) == before_revisions
+    assert EventQueue.event_cursor() == before_cursor
+
+
+@pytest.mark.parametrize("invalid_position", ((True, 2), (1.5, 2), ("2", 2)))
+def test_specialized_relocation_rejects_non_exact_coordinates_before_runtime_changes(
+    invalid_position: object,
+) -> None:
+    """Active specialized relocations reject exact-coordinate violations atomically."""
+    reset_engine_runtime(grid_size=(8, 8))
+    caster = create_test_entity(
+        name="Specialized relocation caster",
+        config=EntityConfig(position=(0, 0), faction="test-faction"),
+    )
+    focus = BaseItem(source_entity_uuid=caster.uuid, name="Flame focus")
+    focus.place_on_grid((6, 6))
+    antimagic = materialize_spatial_condition(
+        ANTIMAGIC_FIELD_RECIPE,
+        caster.uuid,
+        position=(2, 2),
+        faction="test-faction",
+        condition_type=AntimagicFieldZone,
+    )
+    flame = materialize_spatial_condition(
+        CONTINUAL_FLAME_FIELD_RECIPE,
+        caster.uuid,
+        position=(6, 6),
+        faction="test-faction",
+        condition_type=ContinualFlameCondition,
+        anchor_uuid=focus.uuid,
+    )
+    parent = _root_action(caster.uuid)
+    antimagic.activate(parent_event=parent)
+    flame.activate(parent_event=parent)
+    before = {
+        condition.uuid: (
+            condition.position,
+            set(condition.affected_positions),
+            get_map().get_spatial_condition_positions(condition.uuid),
+        )
+        for condition in (antimagic, flame)
+    }
+    before_tiles = {
+        position: tile.resolved_light_level
+        for position, tile in get_map().get_all_tiles().items()
+    }
+    before_sources = focus.get_attached_light_sources()
+    before_suppression = {
+        entity_uuid: list(marker_uuids)
+        for entity_uuid, marker_uuids in antimagic.suppression_markers.items()
+    }
+    before_revisions = (
+        get_map().movement_revision,
+        get_map().optical_revision,
+        get_map().propagation_revision,
+    )
+    before_cursor = EventQueue.event_cursor()
+
+    for condition in (antimagic, flame):
+        with pytest.raises(ValueError, match="exact tuple"):
+            condition.relocate_anchor(invalid_position, parent_event=parent)
+
+    assert {
+        condition.uuid: (
+            condition.position,
+            set(condition.affected_positions),
+            get_map().get_spatial_condition_positions(condition.uuid),
+        )
+        for condition in (antimagic, flame)
+    } == before
+    assert {
+        position: tile.resolved_light_level
+        for position, tile in get_map().get_all_tiles().items()
+    } == before_tiles
+    assert focus.get_attached_light_sources() == before_sources
+    assert antimagic.suppression_markers == before_suppression
+    assert (
+        get_map().movement_revision,
+        get_map().optical_revision,
+        get_map().propagation_revision,
+    ) == before_revisions
+    assert {
+        condition.uuid for condition in get_map().get_spatial_conditions()
+    } == {antimagic.uuid, flame.uuid}
+    assert EventQueue.event_cursor() == before_cursor
+
+
 def test_equal_same_material_replaces_only_its_overlap() -> None:
     """An equal later surface owns overlap while the remainder stays active."""
     reset_engine_runtime(grid_size=(8, 8))
@@ -927,6 +1080,187 @@ def test_equal_same_material_replaces_only_its_overlap() -> None:
     assert first.affected_positions == {(2, 2)}
     assert second.affected_positions == {(2, 3), (3, 3)}
     assert first.affected_positions.isdisjoint(second.affected_positions)
+
+
+def test_full_same_material_replacement_publishes_no_net_terrain_fact() -> None:
+    """A full replacement with equal net costs emits no intermediate tuple."""
+    reset_engine_runtime(grid_size=(5, 5))
+    source_uuid = uuid4()
+    parent = _root_action(source_uuid)
+    incumbent = _materialize_test_condition(
+        GREASE_SURFACE_RECIPE,
+        source_uuid,
+        {(2, 2)},
+        condition_type=FixedGreaseZone,
+        extra_fields={"arbitration_potency": 10},
+    )
+    replacement = _materialize_test_condition(
+        GREASE_SURFACE_RECIPE,
+        source_uuid,
+        {(2, 2)},
+        condition_type=FixedGreaseZone,
+        extra_fields={"arbitration_potency": 20},
+    )
+    incumbent.activate(parent_event=parent)
+    cursor = EventQueue.event_cursor()
+
+    replacement.activate(parent_event=parent)
+
+    tile = get_map().get_tile(2, 2)
+    assert tile is not None
+    live = (
+        tile.get_movement_cost(MovementMode.WALKING),
+        tile.get_movement_cost(MovementMode.FLYING),
+        tile.get_movement_cost(MovementMode.SWIMMING),
+        tile.get_movement_cost(MovementMode.BURROWING),
+    )
+    assert live == (2, 1, 0, 0)
+    assert _terrain_completions_since(cursor) == []
+
+    detached = {(2, 2): (2, 1, 0, 0)}
+    for event in _terrain_completions_since(cursor):
+        detached[event.position] = (
+            event.tile_walking_cost,
+            event.tile_flying_cost,
+            event.tile_swimming_cost,
+            event.tile_burrowing_cost,
+        )
+    assert detached == {(2, 2): live}
+
+
+def test_partial_same_material_replacement_publishes_only_net_changed_cells() -> None:
+    """Replacement facts use final tuples and transfer overlap ownership."""
+    reset_engine_runtime(grid_size=(5, 5))
+    source_uuid = uuid4()
+    parent = _root_action(source_uuid)
+    incumbent = _materialize_test_condition(
+        GREASE_SURFACE_RECIPE,
+        source_uuid,
+        {(2, 2), (2, 3)},
+        condition_type=FixedGreaseZone,
+        extra_fields={"arbitration_potency": 10},
+    )
+    replacement = _materialize_test_condition(
+        GREASE_SURFACE_RECIPE,
+        source_uuid,
+        {(2, 3), (3, 3)},
+        condition_type=FixedGreaseZone,
+        extra_fields={"arbitration_potency": 15},
+    )
+    incumbent.activate(parent_event=parent)
+    cursor = EventQueue.event_cursor()
+
+    replacement.activate(parent_event=parent)
+
+    activation_facts = _terrain_completions_since(cursor)
+    assert [event.position for event in activation_facts] == [(3, 3)]
+    assert (
+        activation_facts[0].tile_walking_cost,
+        activation_facts[0].tile_flying_cost,
+        activation_facts[0].tile_swimming_cost,
+        activation_facts[0].tile_burrowing_cost,
+    ) == (2, 1, 0, 0)
+    live_projection = {
+        position: (
+            get_map().get_tile(*position).get_movement_cost(MovementMode.WALKING),
+            get_map().get_tile(*position).get_movement_cost(MovementMode.FLYING),
+            get_map().get_tile(*position).get_movement_cost(MovementMode.SWIMMING),
+            get_map().get_tile(*position).get_movement_cost(MovementMode.BURROWING),
+        )
+        for position in ((2, 2), (2, 3), (3, 3))
+    }
+    detached = {
+        (2, 2): (2, 1, 0, 0),
+        (2, 3): (2, 1, 0, 0),
+        (3, 3): (1, 1, 0, 0),
+    }
+    for event in activation_facts:
+        detached[event.position] = (
+            event.tile_walking_cost,
+            event.tile_flying_cost,
+            event.tile_swimming_cost,
+            event.tile_burrowing_cost,
+        )
+    assert detached == live_projection
+
+    removal_cursor = EventQueue.event_cursor()
+    incumbent.deactivate(parent_event=parent)
+    removal_facts = _terrain_completions_since(removal_cursor)
+    assert [event.position for event in removal_facts] == [(2, 2)]
+    assert (
+        removal_facts[0].tile_walking_cost,
+        removal_facts[0].tile_flying_cost,
+        removal_facts[0].tile_swimming_cost,
+        removal_facts[0].tile_burrowing_cost,
+    ) == (1, 1, 0, 0)
+    for event in removal_facts:
+        detached[event.position] = (
+            event.tile_walking_cost,
+            event.tile_flying_cost,
+            event.tile_swimming_cost,
+            event.tile_burrowing_cost,
+        )
+    live_after_removal = {
+        position: (
+            get_map().get_tile(*position).get_movement_cost(MovementMode.WALKING),
+            get_map().get_tile(*position).get_movement_cost(MovementMode.FLYING),
+            get_map().get_tile(*position).get_movement_cost(MovementMode.SWIMMING),
+            get_map().get_tile(*position).get_movement_cost(MovementMode.BURROWING),
+        )
+        for position in ((2, 2), (2, 3), (3, 3))
+    }
+    assert detached == live_after_removal
+
+
+def test_authorized_material_transformation_publishes_final_terrain_tuple() -> None:
+    """Oil-to-fire replacement publishes the committed loss of terrain cost."""
+    reset_engine_runtime(grid_size=(5, 5))
+    source_uuid = uuid4()
+    parent = _root_action(source_uuid)
+    oil = _materialize_test_condition(
+        OIL_SURFACE_RECIPE,
+        source_uuid,
+        {(2, 2)},
+    )
+    fire = _materialize_test_condition(
+        FIRE_SURFACE_RECIPE,
+        source_uuid,
+        {(2, 2)},
+    )
+    oil.activate(parent_event=parent)
+    cursor = EventQueue.event_cursor()
+
+    fire.activate(
+        parent_event=parent,
+        replacing_condition_uuid=oil.uuid,
+    )
+
+    facts = _terrain_completions_since(cursor)
+    assert [event.position for event in facts] == [(2, 2)]
+    assert (
+        facts[0].tile_walking_cost,
+        facts[0].tile_flying_cost,
+        facts[0].tile_swimming_cost,
+        facts[0].tile_burrowing_cost,
+    ) == (1, 1, 0, 0)
+    tile = get_map().get_tile(2, 2)
+    assert tile is not None
+    live = (
+        tile.get_movement_cost(MovementMode.WALKING),
+        tile.get_movement_cost(MovementMode.FLYING),
+        tile.get_movement_cost(MovementMode.SWIMMING),
+        tile.get_movement_cost(MovementMode.BURROWING),
+    )
+    detached = {(2, 2): (2, 1, 0, 0)}
+    for event in facts:
+        detached[event.position] = (
+            event.tile_walking_cost,
+            event.tile_flying_cost,
+            event.tile_swimming_cost,
+            event.tile_burrowing_cost,
+        )
+    assert live == (1, 1, 0, 0)
+    assert detached == {(2, 2): live}
 
 
 def test_weaker_same_material_cannot_downgrade_the_incumbent() -> None:
@@ -1082,6 +1416,15 @@ def test_failed_same_material_activation_restores_the_incumbent() -> None:
         extra_fields={"arbitration_potency": 20},
     )
     incumbent.activate(parent_event=parent)
+    tile = get_map().get_tile(2, 2)
+    assert tile is not None
+    before_costs = (
+        tile.get_movement_cost(MovementMode.WALKING),
+        tile.get_movement_cost(MovementMode.FLYING),
+        tile.get_movement_cost(MovementMode.SWIMMING),
+        tile.get_movement_cost(MovementMode.BURROWING),
+    )
+    cursor = EventQueue.event_cursor()
 
     with pytest.raises(RuntimeError, match="intentional condition failure"):
         failed.activate(parent_event=parent)
@@ -1091,9 +1434,19 @@ def test_failed_same_material_activation_restores_the_incumbent() -> None:
     assert get_map().get_spatial_condition_uuids_at((2, 2)) == {
         incumbent.uuid,
     }
-    tile = get_map().get_tile(2, 2)
-    assert tile is not None
-    assert tile.walking_cost.normalized_score == 2
+    assert (
+        tile.get_movement_cost(MovementMode.WALKING),
+        tile.get_movement_cost(MovementMode.FLYING),
+        tile.get_movement_cost(MovementMode.SWIMMING),
+        tile.get_movement_cost(MovementMode.BURROWING),
+    ) == before_costs
+    assert not [
+        event
+        for _, event in EventQueue.iter_events_since(cursor)
+        if isinstance(event, SpatialChangeEvent)
+        and event.event_type is EventType.SPATIAL_TILE_CHANGED
+        and event.phase is EventPhase.COMPLETION
+    ]
 
 
 def test_failed_physical_activation_restores_optics_without_false_facts() -> None:

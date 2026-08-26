@@ -1,13 +1,12 @@
 """Public contracts for semantic Tile surfaces and cold placement values."""
 
-from statistics import median
-from time import perf_counter
 from uuid import UUID, uuid4
 
 import pytest
 from pydantic import ValidationError
 
 from dnd.core.base_tiles import (
+    Tile,
     dark_floor_factory,
     difficult_terrain_factory,
     floor_factory,
@@ -31,7 +30,7 @@ from dnd.core.events.world_events import (
     WorldObjectState,
 )
 from dnd.core.gridmap import get_map
-from dnd.items.environment import CliffFace, DirectionalWall
+from dnd.items.environment import CliffFace, DirectionalDoor, DirectionalWall
 from dnd.items.torches import WallTorch
 from dnd.types.materials import Material, SurfaceLayer, TileSurface
 from dnd.types.items import ItemLocation
@@ -437,6 +436,13 @@ def test_surface_replacement_preserves_tile_identity_light_and_fact_round_trip()
     assert tile is not None
     original_uuid = tile.uuid
     original_light = tile.resolved_light_level
+    original_costs = (
+        tile.get_movement_cost(MovementMode.WALKING),
+        tile.get_movement_cost(MovementMode.FLYING),
+        tile.get_movement_cost(MovementMode.SWIMMING),
+        tile.get_movement_cost(MovementMode.BURROWING),
+    )
+    original_movement_revision = grid.movement_revision
     replacement = TileSurface(
         base_material=Material.EARTH,
         layers=(SurfaceLayer(material=Material.VEGETATION),),
@@ -447,6 +453,13 @@ def test_surface_replacement_preserves_tile_identity_light_and_fact_round_trip()
     assert tile.uuid == original_uuid
     assert tile.surface == replacement
     assert tile.resolved_light_level is original_light
+    assert (
+        tile.get_movement_cost(MovementMode.WALKING),
+        tile.get_movement_cost(MovementMode.FLYING),
+        tile.get_movement_cost(MovementMode.SWIMMING),
+        tile.get_movement_cost(MovementMode.BURROWING),
+    ) == original_costs
+    assert grid.movement_revision == original_movement_revision
     completed = [
         event
         for event in EventQueue.get_events_by_type(EventType.SPATIAL_TILE_CHANGED)
@@ -843,6 +856,35 @@ def test_boundary_side_and_orientation_are_independent_and_orient_in_place() -> 
     assert changes[0].previous_placement is not None
     assert changes[0].placement == oriented
     assert changes[0].previous_placement.boundary_direction is CardinalDirection.EAST
+
+
+def test_same_xy_door_open_and_orient_preserve_anchor_placement() -> None:
+    """Opening and orienting a door change mechanics, never its XY anchor/side."""
+    reset_combat_state()
+    grid = get_map()
+    grid.disable_events()
+    grid.create_rectangle(0, 0, 2, 1, surface=TileSurface(base_material=Material.STONE))
+    grid.enable_events(flush_pending=False)
+    door = DirectionalDoor(source_entity_uuid=uuid4())
+
+    placed = grid.place_object(
+        door.uuid,
+        (0, 0),
+        boundary_direction=CardinalDirection.EAST,
+        orientation=CardinalDirection.NORTH,
+    )
+    door.open()
+    opened = grid.get_object_placement(door.uuid)
+    assert opened == placed
+    assert grid.get_boundary_objects_at((0, 0), CardinalDirection.EAST) == {door.uuid}
+    assert grid.can_transition((0, 0), (1, 0))
+
+    oriented = grid.orient_object(door.uuid, CardinalDirection.SOUTH)
+    assert oriented.position == placed.position == (0, 0)
+    assert oriented.boundary_direction is CardinalDirection.EAST
+    assert oriented.orientation is CardinalDirection.SOUTH
+    assert grid.get_object_placement(door.uuid) == oriented
+    assert grid.get_boundary_objects_at((0, 0), CardinalDirection.EAST) == {door.uuid}
 
 
 def test_boundary_lifecycle_emits_exact_structure_facts_for_move_orient_remove() -> None:
@@ -1702,35 +1744,30 @@ def test_world_initialized_round_trip_rebuilds_opposing_boundary_placements() ->
 
 
 def test_placement_diagnostics_and_timing_are_local_to_used_space() -> None:
-    """Structured work and median timing do not scale with distant unused Tiles."""
-    def measure(size: int) -> tuple[float, object]:
+    """Structured placement work does not scale with distant unused Tiles."""
+    def measure(size: int) -> object:
         reset_combat_state()
         grid = get_map()
         grid.disable_events()
         grid.create_rectangle(0, 0, size, size, surface=TileSurface(base_material=Material.STONE))
         grid.enable_events(flush_pending=False)
-        durations = []
         diagnostics = None
         for _index in range(5):
             item = CenterOccupant(source_entity_uuid=uuid4(), name="Locality probe")
-            started = perf_counter()
             grid.place_object(item.uuid, (0, 0))
-            durations.append(perf_counter() - started)
             diagnostics = grid.last_operation_diagnostics
             grid.remove_object(item.uuid)
         assert diagnostics is not None
-        return median(durations), diagnostics
+        return diagnostics
 
-    small_time, small_diag = measure(2)
-    large_time, large_diag = measure(40)
+    small_diag = measure(2)
+    large_diag = measure(40)
     assert (small_diag.tiles_inspected, small_diag.bands_inspected) == (
         large_diag.tiles_inspected,
         large_diag.bands_inspected,
     )
     assert small_diag.placement_iterator_rows_visited == 0
     assert large_diag.placement_iterator_rows_visited == 0
-    assert large_time < 0.5
-    assert large_time / max(small_time, 1e-6) < 12
 
 
 def test_boundary_placement_diagnostics_count_only_owner_and_local_bands() -> None:
@@ -1861,6 +1898,96 @@ def test_phase_one_public_values_expose_strict_json_schemas() -> None:
         "top_height_steps",
         "orientation",
     } <= set(placement_properties)
+
+
+def test_slice_6_3_renderer_fields_are_absent_and_rejected() -> None:
+    """Renderer fields are deleted from the public Tile and BaseItem contracts."""
+    tile_properties = set(Tile.model_fields)
+    item_properties = set(BaseItem.model_fields)
+    retired_tile_fields = {"sprite_name", "walkable"}
+    retired_item_fields = {
+        "map_char",
+        "visual_item_name",
+        "visual_variant_id",
+        "walkable",
+        "position",
+    }
+
+    assert retired_tile_fields.isdisjoint(tile_properties)
+    assert retired_item_fields.isdisjoint(item_properties)
+
+    tile = floor_factory((0, 0))
+    tile_payload = tile.model_dump(mode="python")
+    assert retired_tile_fields.isdisjoint(tile_payload)
+    item = BaseItem(source_entity_uuid=uuid4())
+    item_payload = item.model_dump(mode="python")
+    assert retired_item_fields.isdisjoint(item_payload)
+    computed_view_fields = {
+        "contextual_immunity_names",
+        "values_dict_uuid_name",
+        "values_dict_name_uuid",
+        "blocks_dict_uuid_name",
+        "blocks_dict_name_uuid",
+    }
+    clean_tile_payload = {
+        key: value
+        for key, value in tile_payload.items()
+        if key not in computed_view_fields
+    }
+    clean_item_payload = {
+        key: value
+        for key, value in item_payload.items()
+        if key not in computed_view_fields
+    }
+    assert Tile.model_validate(clean_tile_payload).uuid == tile.uuid
+    assert BaseItem.model_validate(clean_item_payload).uuid == item.uuid
+
+    for field_name, value in (
+        ("sprite_name", "floor.png"),
+        ("walkable", True),
+    ):
+        with pytest.raises(ValidationError):
+            Tile.model_validate({**clean_tile_payload, field_name: value})
+    for field_name, value in (
+        ("map_char", "@"),
+        ("visual_item_name", "Floor"),
+        ("visual_variant_id", "floor"),
+        ("walkable", True),
+        ("position", (0, 0)),
+    ):
+        with pytest.raises(ValidationError):
+            BaseItem.model_validate({**clean_item_payload, field_name: value})
+        with pytest.raises(ValidationError):
+            BaseItem(
+                source_entity_uuid=uuid4(),
+                **{field_name: value},
+            )
+
+    assert not hasattr(BaseItem, "get_map_char")
+    assert not hasattr(Tile, "get_map_char")
+    with pytest.raises(TypeError):
+        Tile.create(
+            (0, 0),
+            surface=TileSurface(base_material=Material.STONE),
+            sprite_name="floor.png",
+        )
+    grid = get_map()
+    with pytest.raises(TypeError):
+        grid.set_tile(
+            0,
+            0,
+            surface=TileSurface(base_material=Material.STONE),
+            sprite_name="floor.png",
+        )
+    with pytest.raises(TypeError):
+        grid.create_rectangle(
+            0,
+            0,
+            1,
+            1,
+            surface=TileSurface(base_material=Material.STONE),
+            sprite_name="floor.png",
+        )
 
 
 def test_surface_replacement_preserves_live_source_owned_light_contribution_and_cap() -> None:

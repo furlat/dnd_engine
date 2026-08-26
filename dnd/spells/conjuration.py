@@ -4129,7 +4129,6 @@ class HeroesFeastObject(UsableItem):
     name: str = Field(default="Heroes' Feast", description="Display name for the heroes feast object item.")
     description: str = Field(default="A magnificent feast — eat to gain immunity to poison/frightened and +HP", description="Rules-facing summary for the heroes feast object item.")
     is_pickable: bool = Field(default=False, description="Whether heroes feast object can be picked up as an item.")
-    map_char: str = Field(default="F", description="Single-character map glyph used for heroes feast object.")
     consumed_by: Set[UUID] = Field(default_factory=set, description="Entity UUIDs that have already used heroes feast object.")
     caster_uuid: Optional[UUID] = Field(default=None, description="Caster UUID used for ownership and effect attribution by heroes feast object.")
 

@@ -276,7 +276,6 @@ def _build_field_kit(
         content_ref=context.requested_ref,
         name="Field Kit",
         description="A compact kit that deploys tactical focus gear.",
-        map_char="kit",
         charges=parameters.charges,
         max_charges=parameters.charges,
         use_action_templates=[
@@ -327,7 +326,6 @@ def build_field_kit(
         semantic_key=item_id,
         name="Field Kit",
         description="A compact kit that deploys tactical focus gear.",
-        map_char="kit",
         charges=charges,
         max_charges=charges,
         use_action_templates=[action],

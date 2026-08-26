@@ -19,6 +19,7 @@ from dnd.core.events.events_registry import (
     Event,
     EventPhase,
 )
+from dnd.core.events.item_events import ItemState
 from dnd.types.abilities import SkillName
 from dnd.types.items import ItemLocation
 from dnd.core.gridmap import get_map
@@ -76,7 +77,25 @@ class TrapLever(UsableItem):
 
     name: str = Field(default="Trap Lever", description="Display name for the trap lever.")
     is_pickable: bool = Field(default=False, description="Trap levers are fixed environment objects.")
-    map_char: str = Field(default="\u03bb", description="Map glyph for the trap lever.")
+
+    def to_item_state(
+        self,
+        *,
+        stack_count: Optional[int] = None,
+    ) -> ItemState:
+        """Expose the exact authored condition target without serializing actions."""
+        targets = {
+            action.trap_condition_uuid
+            for action in self.use_action_templates
+            if isinstance(action, PullLeverAction)
+            and action.trap_condition_uuid is not None
+        }
+        if len(targets) > 1:
+            raise ValueError("Trap Lever has multiple distinct condition targets")
+        linked_uuid = next(iter(targets), None)
+        return super().to_item_state(stack_count=stack_count).model_copy(
+            update={"linked_spatial_condition_uuid": linked_uuid},
+        )
 
 
 class LootAllAction(BaseAction):
@@ -131,7 +150,6 @@ class StorageChest(UsableItem):
 
     name: str = Field(default="Chest", description="Display name for the storage chest.")
     is_pickable: bool = Field(default=False, description="Chests are fixed environment objects by default.")
-    map_char: str = Field(default="\u03a9", description="Map glyph for the storage chest.")
     is_targetable: bool = Field(default=False, description="Whether attacks can target this chest.")
     chest_inventory: Inventory = Field(
         default_factory=lambda: Inventory(source_entity_uuid=uuid4(), name="Chest Storage"),
