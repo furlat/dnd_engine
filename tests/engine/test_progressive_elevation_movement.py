@@ -7,6 +7,7 @@ from dnd.actions.standard import (
     MovementEvent,
     Shove,
 )
+from dnd.actions.operations import execute_available_action, get_available_actions
 from dnd.core.events.action_events import (
     ShoveEvent,
 )
@@ -200,39 +201,29 @@ def test_flying_discovery_uses_directed_edge_costs_and_affordability() -> None:
     grid = get_map()
     _set_elevation((1, 0), 2)
     _set_elevation((2, 1), 2)
-    Entity.materialize_all_navigation(max_distance=20)
-    _, paths = grid.compute_paths(
-        mover.position,
-        requesting_entity_uuid=mover.uuid,
+    mover.register_action(Move(
+        source_entity_uuid=mover.uuid,
         movement_mode=MovementMode.FLYING,
-        subjective=True,
+        template=True,
+    ))
+    mover.action_economy.consume("movement", 20)
+    assert mover.action_economy.movement.normalized_score == 10
+    Entity.materialize_all_navigation(max_distance=20)
+    available = get_available_actions(mover, legal_only=True)
+    move_info = next(
+        action for action in available.position_actions
+        if action.template_name == "Move"
+        and action.execution_template is not None
+        and action.execution_template.movement_mode is MovementMode.FLYING
     )
-
-    adjacent_targets = mover._collect_fast_move_targets(
-        paths,
-        30,
-        MovementMode.FLYING,
-    )
-    adjacent = next(
-        target for target in adjacent_targets if target.position == (1, 0)
-    )
+    adjacent = next(target for target in move_info.valid_targets if target.position == (1, 0))
     assert adjacent.path_cost == 10
-    assert not any(
-        target.position == (1, 0)
-        for target in mover._collect_fast_move_targets(
-            paths,
-            5,
-            MovementMode.FLYING,
-        )
-    )
-    assert mover._movement_path_cost_feet(
-        paths[(2, 1)],
-        MovementMode.FLYING,
-    ) == 15
-    assert mover._movement_path_cost_feet(
-        [(0, 0), (0, 1)],
-        MovementMode.WALKING,
-    ) == 5
+    assert all(target.position != (2, 1) for target in move_info.valid_targets)
+
+    result = execute_available_action(mover, move_info, adjacent)
+    assert isinstance(result, MovementEvent)
+    assert result.phase is EventPhase.COMPLETION
+    assert mover.position == adjacent.position
 
 
 def test_progressive_walking_cost_uses_destination_terrain_not_vertical_distance() -> None:

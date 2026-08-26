@@ -1,6 +1,7 @@
 """Authored scenarios through the in-process Game and event boundary."""
 
 from collections import Counter
+from uuid import uuid4
 
 import pytest
 
@@ -11,17 +12,37 @@ from dnd.content.scenarios.scenario_catalog import (
     encounter_definition,
 )
 from dnd.blocks.base_item import BaseItem
+from dnd.blocks.sensory import Senses, capture_senses_snapshot
+from dnd.core.base_block import BaseBlock
+from dnd.core.base_conditions import BaseCondition, ConditionApplicationEvent
+from dnd.core.base_tiles import Tile
 from dnd.content.scenarios.battlefield_builders import build_battlefield
 from dnd.content.scenarios.scenario_deployment import prepare_scenario
 from dnd.content.scenarios.scenario_definitions import FixedRosterOpeningPolicy
-from dnd.core.events.events_registry import EventPhase, EventQueue, EventType
-from dnd.core.events.world_events import WorldInitializedEvent
+from dnd.core.events.events_registry import (
+    EventHandler,
+    EventPhase,
+    EventQueue,
+    EventType,
+    Trigger,
+)
+from dnd.core.events.item_events import ItemLocationStateEvent
+from dnd.core.events.world_events import (
+    SensoryUpdateEvent,
+    SensoryUpdateReason,
+    SpatialChangeEvent,
+    SpatialEffectChangeEvent,
+    SpatialEffectInteractionEvent,
+    WorldInitializedEvent,
+)
 from dnd.core.gridmap import get_map
 from dnd.game import Game
-from dnd.items.torches import Torch
+from dnd.items.environment_interactables import PullLeverAction
+from dnd.items.torches import Torch, WallTorch
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.types.materials import Material, TileSurface
 from dnd.types.world import CardinalDirection, WorldEdgeChannel
+from dnd.types.spatial_effects import SpatialEffectChangeOperation
 from dnd.types.world_placement import (
     BoundaryStructureKind,
     WorldObjectPlacement,
@@ -142,6 +163,139 @@ def test_world_birth_and_deployment_are_ordered_event_facts() -> None:
         4 * len(assembled.entities)
     )
 
+    authored_spike_uuid = assembled.battlefield.environment.spike_condition_uuid
+    authored_torch_uuids = {
+        row.placement.object_uuid
+        for row in world.objects
+        if row.item.semantic_key == "environment.wall_torch"
+    }
+    authored_setup = [
+        (index, event)
+        for index, event in enumerate(events)
+        if (
+            (
+                isinstance(event, ConditionApplicationEvent)
+                and event.condition.uuid == authored_spike_uuid
+            )
+            or (
+                isinstance(event, SpatialEffectChangeEvent)
+                and event.spatial_effect_uuid == authored_spike_uuid
+            )
+            or (
+                isinstance(event, SpatialChangeEvent)
+                and event.event_type is EventType.SPATIAL_LIGHT_CHANGED
+                and event.phase is EventPhase.COMPLETION
+                and index < first_birth
+            )
+            or (
+                isinstance(event, SpatialEffectInteractionEvent)
+                and event.operation.value == "ignite"
+                and event.source_object_uuid in authored_torch_uuids
+            )
+            or (
+                isinstance(event, ItemLocationStateEvent)
+                and event.item_state.item_uuid in authored_torch_uuids
+            )
+        )
+        and event.phase is EventPhase.COMPLETION
+    ]
+    assert authored_setup
+    assert all(world_index < index < first_birth for index, _event in authored_setup)
+    assert {
+        event.spatial_effect_uuid
+        for _index, event in authored_setup
+        if isinstance(event, SpatialEffectChangeEvent)
+    } == {authored_spike_uuid}
+    assert {
+        event.source_object_uuid
+        for _index, event in authored_setup
+        if isinstance(event, SpatialEffectInteractionEvent)
+    } == authored_torch_uuids
+    assert {
+        event.item_state.item_uuid
+        for _index, event in authored_setup
+        if isinstance(event, ItemLocationStateEvent)
+    } == authored_torch_uuids
+
+    def perception_projection(senses: Senses) -> tuple[object, ...]:
+        snapshot = capture_senses_snapshot(senses)
+        return (
+            snapshot.position,
+            snapshot.visible,
+            snapshot.seen,
+            snapshot.entities,
+            snapshot.objects,
+            snapshot.effective_light_levels,
+            tuple(senses.get_sense_modes()),
+            snapshot.passive_perception,
+            snapshot.visual_access,
+        )
+
+    for entity in assembled.entities:
+        birth_index = next(
+            index
+            for index, event in enumerate(events)
+            if event.event_type is EventType.ENTITY_CREATED
+            and event.entity_uuid == entity.uuid
+        )
+        entered = [
+            (index, event)
+            for index, event in enumerate(events)
+            if isinstance(event, SpatialChangeEvent)
+            and event.event_type is EventType.SPATIAL_ENTITY_ENTERED
+            and event.entity_uuid == entity.uuid
+        ]
+        assert birth_index < entered[0][0]
+        assert len({event.lineage_uuid for _index, event in entered}) == 1
+        entered_effect_index, entered_effect = next(
+            (index, event)
+            for index, event in entered
+            if event.phase is EventPhase.EFFECT
+        )
+        entered_completion_index = next(
+            index
+            for index, event in entered
+            if event.phase is EventPhase.COMPLETION
+        )
+        assert birth_index < entered_effect_index < entered_completion_index
+        self_updates = [
+            (index, event)
+            for index, event in enumerate(events)
+            if isinstance(event, SensoryUpdateEvent)
+            and event.phase is EventPhase.COMPLETION
+            and event.observer_uuid == entity.uuid
+            and event.update_reason is SensoryUpdateReason.SELF_MOVEMENT
+            and event.cause_event_uuid == entered_effect.uuid
+        ]
+        assert len(self_updates) == 1
+        update_index, self_update = self_updates[0]
+        assert update_index < entered_completion_index
+        assert self_update.parent_event == entered_effect.uuid
+        assert (
+            self_update.observer_position_changed
+            or self_update.visible_cells_added
+            or self_update.visible_cells_removed
+            or self_update.seen_cells_added
+            or self_update.entity_contacts_changed
+            or self_update.entity_contacts_removed
+            or self_update.object_contacts_changed
+            or self_update.object_contacts_removed
+            or self_update.effective_light_levels_changed
+            or self_update.sense_modes_changed
+            or self_update.passive_perception_changed
+            or self_update.visual_access_changed
+        )
+
+        replay = Senses.create(source_entity_uuid=entity.uuid)
+        for event in events:
+            if (
+                isinstance(event, SensoryUpdateEvent)
+                and event.phase is EventPhase.COMPLETION
+                and event.observer_uuid == entity.uuid
+            ):
+                replay.apply_sensory_update(event)
+        assert perception_projection(replay) == perception_projection(entity.senses)
+
 
 def test_real_world_initialized_fact_keeps_surface_and_object_identity() -> None:
     """Cold battlefield bootstrap carries exact semantic Tiles and placements."""
@@ -179,9 +333,172 @@ def test_real_world_initialized_fact_keeps_surface_and_object_identity() -> None
     )
     assert object_state.item.item_uuid in set(built.object_uuids.values())
 
+    reset_engine_runtime()
+    build_battlefield("battlefield.open_floor_bright")
+    open_grid = get_map()
+    open_events_before = tuple(EventQueue.get_events_chronological())
+    open_tiles_before = open_grid.get_all_tiles()
+    open_registered_before = {
+        block_uuid: block
+        for block_uuid, block in BaseBlock._registry.items()
+        if isinstance(block, Tile)
+    }
+    open_world_before = next(
+        event for event in open_events_before
+        if isinstance(event, WorldInitializedEvent)
+    )
+    with pytest.raises(ValueError, match="empty"):
+        build_battlefield("battlefield.open_floor_dark")
+    assert tuple(EventQueue.get_events_chronological()) == open_events_before
+    assert open_grid.get_all_object_placements() == ()
+    assert open_grid.get_all_connectors() == ()
+    assert open_grid.get_spatial_conditions() == []
+    open_tiles_after = open_grid.get_all_tiles()
+    assert set(open_tiles_after) == set(open_tiles_before)
+    assert all(
+        open_tiles_after[position] is tile
+        for position, tile in open_tiles_before.items()
+    )
+    open_registered_after = {
+        block_uuid: block
+        for block_uuid, block in BaseBlock._registry.items()
+        if isinstance(block, Tile)
+    }
+    assert set(open_registered_after) == set(open_registered_before)
+    assert all(
+        open_registered_after[tile_uuid] is tile
+        for tile_uuid, tile in open_registered_before.items()
+    )
+    assert open_world_before == next(
+        event for event in EventQueue.get_events_chronological()
+        if isinstance(event, WorldInitializedEvent)
+    )
+
+
+@pytest.mark.parametrize(
+    "canceled_event_type",
+    (
+        EventType.SPATIAL_LIGHT_CHANGED,
+        EventType.SPATIAL_EFFECT_INTERACTION,
+    ),
+    ids=("light-change", "ignite"),
+)
+def test_authored_dynamic_setup_rejects_public_lifecycle_cancellation(
+    canceled_event_type: EventType,
+) -> None:
+    """Post-world authored setup records cancellation and does not claim success."""
+    reset_engine_runtime()
+    canceled = []
+
+    def cancel(event, _source_uuid):
+        canceled.append(event.event_type)
+        return event.cancel(status_message="authored setup canceled")
+
+    handler = EventHandler(
+        source_entity_uuid=uuid4(),
+        trigger_conditions=[
+            Trigger(
+                event_type=canceled_event_type,
+                event_phase=EventPhase.DECLARATION,
+            ),
+        ],
+        event_processor=cancel,
+    )
+    EventQueue.add_event_handler(handler)
+    try:
+        with pytest.raises(RuntimeError, match="WallTorch"):
+            build_battlefield("battlefield.standard_hazards_closed")
+    finally:
+        handler.remove()
+
+    events = EventQueue.get_events_chronological()
+    assert events[0].event_type is EventType.WORLD_INITIALIZED
+    assert events[0].phase is EventPhase.COMPLETION
+    assert canceled == [canceled_event_type]
+    canceled_facts = [
+        event
+        for event in events
+        if event.event_type is canceled_event_type
+        and event.phase is EventPhase.CANCEL
+        and event.canceled
+    ]
+    assert len(canceled_facts) == 1
+    first_torch_uuid = next(
+        placement.object_uuid
+        for placement in sorted(
+            get_map().get_all_object_placements(),
+            key=lambda row: (row.position, str(row.object_uuid)),
+        )
+        if isinstance(BaseItem.get(placement.object_uuid), WallTorch)
+    )
+    assert not any(
+        isinstance(event, ItemLocationStateEvent)
+        and event.item_state.item_uuid == first_torch_uuid
+        for event in events
+    )
+
+
+def test_cold_world_plus_dynamic_facts_reproduces_live_authored_state() -> None:
+    """Detached public facts settle the same condition, light, and item state."""
+    reset_engine_runtime()
+    built = build_battlefield("battlefield.standard_hazards_closed")
+    events = EventQueue.get_events_chronological()
+    world = events[0]
+    assert isinstance(world, WorldInitializedEvent)
+
+    detached_items = {
+        row.item.item_uuid: row.item
+        for row in world.objects
+    }
+    detached_light = {
+        state.position: state.resolved_light.value
+        for state in world.tiles
+    }
+    detached_condition = None
+    for event in events[1:]:
+        if (
+            isinstance(event, SpatialEffectChangeEvent)
+            and event.phase is EventPhase.COMPLETION
+            and event.operation is SpatialEffectChangeOperation.CREATED
+        ):
+            detached_condition = (
+                event.spatial_effect_uuid,
+                set(event.affected_positions),
+                event.spatial_effect_content_ref,
+            )
+        elif (
+            isinstance(event, SpatialChangeEvent)
+            and event.event_type is EventType.SPATIAL_LIGHT_CHANGED
+            and event.phase is EventPhase.COMPLETION
+        ):
+            for key, level in (event.light_level_map or {}).items():
+                x, y = (int(value) for value in key.split(","))
+                detached_light[(x, y)] = level
+        elif isinstance(event, ItemLocationStateEvent):
+            detached_items[event.item_state.item_uuid] = event.item_state
+
+    live_items = {
+        placement.object_uuid: BaseItem.get(placement.object_uuid).to_item_state()
+        for placement in get_map().get_all_object_placements()
+        if BaseItem.get(placement.object_uuid) is not None
+    }
+    assert detached_items == live_items
+    assert detached_light == {
+        position: tile.resolved_light_level.value
+        for position, tile in get_map().get_all_tiles().items()
+    }
+    assert detached_condition is not None
+    live_condition = BaseCondition.get(built.environment.spike_condition_uuid)
+    assert live_condition is not None
+    assert detached_condition[:2] == (
+        live_condition.uuid,
+        set(live_condition.affected_positions),
+    )
+    assert detached_condition[2] == live_condition.content_ref
+
 
 def test_world_initialized_round_trip_preserves_cliff_and_wall_torch_boundary_state() -> None:
-    """Cold world facts retain concrete boundary placement and light state."""
+    """Cold world facts precede settled authored condition and light state."""
     reset_engine_runtime()
     standard = build_battlefield("battlefield.standard_hazards_closed")
     standard_worlds = [
@@ -193,15 +510,52 @@ def test_world_initialized_round_trip_preserves_cliff_and_wall_torch_boundary_st
     assert len(standard_worlds) == 1
     standard_world = standard_worlds[0]
     standard_torch = standard.environment.wall_torches[0]
+    assert all(torch.is_lit for torch in standard.environment.wall_torches)
+    assert all(
+        torch.get_attached_light_sources()
+        for torch in standard.environment.wall_torches
+    )
+    assert (
+        BaseItem.get(standard.environment.trap_lever.uuid)
+        is standard.environment.trap_lever
+    )
+    standard_condition = BaseCondition.get(standard.environment.spike_condition_uuid)
+    assert standard_condition is not None
+    assert standard_condition.applied
+    assert set(standard_condition.affected_positions) == {
+        (x, y) for x in range(5) for y in range(11, 15)
+    }
     standard_torch_state = next(
         state
         for state in standard_world.objects
         if state.placement.object_uuid == standard_torch.uuid
     )
-    assert standard_torch_state.item == standard_torch.to_item_state()
     assert standard_torch_state.item.light_source is not None
-    assert standard_torch_state.item.light_source.is_lit is True
+    assert standard_torch_state.item.light_source.is_lit is False
+    assert standard_torch.to_item_state().light_source is not None
+    assert standard_torch.to_item_state().light_source.is_lit is True
     assert standard_torch_state.item.boundary_structure is None
+    lever_state = next(
+        state
+        for state in standard_world.objects
+        if state.placement.object_uuid == standard.environment.trap_lever.uuid
+    )
+    assert (
+        lever_state.item.linked_spatial_condition_uuid
+        == standard.environment.spike_condition_uuid
+    )
+    lever_actions = [
+        action
+        for action in standard.environment.trap_lever.use_action_templates
+        if isinstance(action, PullLeverAction)
+    ]
+    assert len(lever_actions) == 1
+    assert (
+        lever_state.item.linked_spatial_condition_uuid
+        == lever_actions[0].trap_condition_uuid
+        == standard.environment.spike_condition_uuid
+        == standard_condition.uuid
+    )
     assert standard_torch_state.placement == WorldObjectPlacement(
         object_uuid=standard_torch.uuid,
         tile_uuid=get_map().get_tile(14, 1).uuid,
@@ -220,6 +574,26 @@ def test_world_initialized_round_trip_preserves_cliff_and_wall_torch_boundary_st
     )
     assert standard_torch.uuid in exit_layer
     assert entry_layer == ()
+    torch_item_facts = [
+        event
+        for event in EventQueue.get_events_chronological()
+        if isinstance(event, ItemLocationStateEvent)
+        and event.item_state.item_uuid == standard_torch.uuid
+    ]
+    assert len(torch_item_facts) == 1
+    torch_item_fact = torch_item_facts[0]
+    assert torch_item_fact.item_state == standard_torch.to_item_state()
+    assert torch_item_fact.world_placement == standard_torch_state.placement
+    ignite = [
+        event
+        for event in EventQueue.get_events_chronological()
+        if isinstance(event, SpatialEffectInteractionEvent)
+        and event.source_object_uuid == standard_torch.uuid
+        and event.operation.value == "ignite"
+        and event.phase is EventPhase.COMPLETION
+    ]
+    assert len(ignite) == 1
+    assert torch_item_fact.parent_event == ignite[0].uuid
     EventQueue.reset()
     restored_standard = WorldInitializedEvent.model_validate_json(
         standard_world.model_dump_json(),

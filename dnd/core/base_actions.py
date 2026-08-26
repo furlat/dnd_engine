@@ -90,7 +90,10 @@ def target_resolution_sort_key(target_uuid: UUID) -> tuple[bool, int, int, str, 
     target = BaseBlock.get(target_uuid)
     if target is None:
         return (True, 0, 0, "", str(target_uuid))
-    x, y = target.position
+    target_position = target.get_position()
+    if target_position is None:
+        return (True, 0, 0, "", str(target_uuid))
+    x, y = target_position
     return (False, x, y, target.name or "", str(target_uuid))
 
 
@@ -987,7 +990,10 @@ class BaseAction(BaseObject):
                 source_block = BaseBlock.get(self.source_entity_uuid)
                 if source_block:
                     shape = self.aoe_shape.model_copy(update={'target': self.end_position})
-                    shape.compute_objective(source_block.position)
+                    source_position = source_block.get_position()
+                    if source_position is None:
+                        return []
+                    shape.compute_objective(source_position)
                     targets = sorted(
                         shape.affected_entity_uuids,
                         key=target_resolution_sort_key,

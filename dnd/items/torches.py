@@ -275,11 +275,6 @@ class Torch(UsableItem):
         default=True,
         description="Portable torches can be picked up.",
     )
-    map_char: str = Field(
-        default="\u2666",
-        description="Map glyph for the torch.",
-    )
-
     very_bright_radius_feet: int = Field(
         default=10,
         description="Very-bright light radius emitted while lit.",
@@ -626,11 +621,6 @@ class WallTorch(UsableItem):
         default=False,
         description="Wall torches cannot be equipped.",
     )
-    map_char: str = Field(
-        default="\u2666",
-        description="Map glyph for the wall torch.",
-    )
-
     very_bright_radius_feet: int = Field(
         default=5,
         description="Very-bright light radius emitted while lit.",

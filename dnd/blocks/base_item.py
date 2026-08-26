@@ -105,15 +105,6 @@ class BaseItem(BaseBlock):
         default=None,
         description="Items with same stack_id merge into one stack. None = never stacks.",
     )
-    map_char: str = Field(default="\u03c6", description="Character to display on the map grid")
-    visual_item_name: Optional[str] = Field(
-        default=None,
-        description="Renderer item catalog key. Defaults to name when omitted.",
-    )
-    visual_variant_id: Optional[str] = Field(
-        default=None,
-        description="Renderer sub-item variant id under visual_item_name.",
-    )
     tags: List[str] = Field(
         default_factory=list,
         description="Free-form tags used by item queries and filtering.",
@@ -219,10 +210,6 @@ class BaseItem(BaseBlock):
     def blocks_propagation(self) -> bool:
         """Whether this item blocks physical propagation through its grid position."""
         return self.blocks_propagation_field
-
-    def get_map_char(self) -> Optional[str]:
-        """Return the glyph used to render this item on text maps."""
-        return self.map_char
 
     def should_include_in_senses_objects(self) -> bool:
         """Return whether senses should list this floor object."""

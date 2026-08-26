@@ -3112,7 +3112,7 @@ def test_eb_15_028_gas_and_ice_zones_match_srd_turn_start_edges() -> None:
         11,
         10,
         surface=TileSurface(base_material=Material.STONE),
-        walkable=False,
+            walking_cost=0,
         blocks_optics=True,
         blocks_propagation=True,
         name="Wall",
@@ -3503,7 +3503,7 @@ def test_eb_15_045_gust_terrain_removal_restores_cached_move_targets() -> None:
             x,
             9,
             surface=TileSurface(base_material=Material.STONE),
-            walkable=False,
+            walking_cost=0,
             blocks_optics=True,
             blocks_propagation=True,
             name="Wall",
@@ -3512,7 +3512,7 @@ def test_eb_15_045_gust_terrain_removal_restores_cached_move_targets() -> None:
             x,
             11,
             surface=TileSurface(base_material=Material.STONE),
-            walkable=False,
+            walking_cost=0,
             blocks_optics=True,
             blocks_propagation=True,
             name="Wall",
@@ -3554,7 +3554,6 @@ def test_eb_15_045_gust_terrain_removal_restores_cached_move_targets() -> None:
 
     assert_completed_spell(cast_event)
     assert mover.position == (5, 10)
-    assert mover.senses._paths_dirty is True
     assert grid.movement_revision > revision_before
 
     targets_during = move_targets()
@@ -3563,7 +3562,6 @@ def test_eb_15_045_gust_terrain_removal_restores_cached_move_targets() -> None:
 
     caster.remove_condition("Concentrating")
 
-    assert mover.senses._paths_dirty is True
     assert grid.movement_revision > revision_during
     targets_restored = move_targets()
     assert targets_restored == targets_before

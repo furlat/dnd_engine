@@ -30,6 +30,7 @@ from dnd.core.events.events_registry import (
     EventPhase,
     EventQueue,
     EventType,
+    Trigger,
 )
 from dnd.core.events.world_events import (
     ForcedMovementEvent,
@@ -151,7 +152,7 @@ def test_eb_11_001_tiles_are_grid_stored_blocks_with_uuid_lookup() -> None:
         3,
         4,
         surface=TileSurface(base_material=Material.STONE),
-        walkable=True,
+        walking_cost=1,
         blocks_optics=False,
         name="Marble Floor",
     )
@@ -189,6 +190,74 @@ def test_eb_11_002_tile_movement_modes_define_walkability() -> None:
 
     assert difficult.get_movement_cost(MovementMode.WALKING) == 2
     assert difficult.get_movement_cost(MovementMode.FLYING) == 1
+
+
+def test_slice_6_2_tile_cost_inputs_are_strict_nonnegative_and_complete() -> None:
+    """Public Tile construction owns exactly four strict traversal costs."""
+    reset_grid_state(width=1, height=1)
+    grid = get_map()
+    tile = grid.set_tile(
+        1,
+        0,
+        surface=TileSurface(base_material=Material.STONE),
+        walking_cost=0,
+        flying_cost=2,
+        swimming_cost=3,
+        burrowing_cost=4,
+    )
+    assert (
+        tile.get_movement_cost(MovementMode.WALKING),
+        tile.get_movement_cost(MovementMode.FLYING),
+        tile.get_movement_cost(MovementMode.SWIMMING),
+        tile.get_movement_cost(MovementMode.BURROWING),
+    ) == (0, 2, 3, 4)
+    assert "walkable" not in type(tile).model_fields
+
+    movement_revision = grid.movement_revision
+    optical_revision = grid.optical_revision
+    propagation_revision = grid.propagation_revision
+    cursor = EventQueue.event_cursor()
+    tile = grid.set_tile(
+        1,
+        0,
+        surface=TileSurface(base_material=Material.STONE),
+        walking_cost=0,
+        flying_cost=3,
+        swimming_cost=3,
+        burrowing_cost=4,
+        name="Changed cost tile",
+    )
+    assert grid.movement_revision == movement_revision + 1
+    assert grid.optical_revision == optical_revision
+    assert grid.propagation_revision == propagation_revision
+    changed_facts = [
+        event
+        for _, event in EventQueue.iter_events_since(cursor)
+        if isinstance(event, SpatialChangeEvent)
+        and event.event_type is EventType.SPATIAL_TILE_CHANGED
+        and event.phase is EventPhase.COMPLETION
+    ]
+    assert len(changed_facts) == 1
+    assert (
+        changed_facts[0].tile_walking_cost,
+        changed_facts[0].tile_flying_cost,
+        changed_facts[0].tile_swimming_cost,
+        changed_facts[0].tile_burrowing_cost,
+    ) == (0, 3, 3, 4)
+
+    for invalid_costs in (
+        {"walking_cost": True},
+        {"flying_cost": 1.5},
+        {"swimming_cost": "1"},
+        {"burrowing_cost": -1},
+    ):
+        with pytest.raises(ValueError):
+            grid.set_tile(
+                2,
+                0,
+                surface=TileSurface(base_material=Material.STONE),
+                **invalid_costs,
+            )
 
 
 def test_eb_11_003_dijkstra_paths_sum_tile_costs_and_can_ignore_difficult_terrain() -> None:
@@ -436,11 +505,10 @@ def test_eb_11_015_dead_entities_become_non_blocking_for_paths() -> None:
     assert blocker.blocks_walking(requesting_entity_uuid=mover.uuid) is False
     assert grid.is_walkable_for(2, 0, mover.uuid)
     assert blocker.uuid not in mover.senses.entities
-    assert mover.senses._paths_dirty is True
-
+    path_revision_before_refresh = mover.senses.path_revision
     mover.get_available_actions()
 
-    assert mover.senses._paths_dirty is False
+    assert mover.senses.path_revision > path_revision_before_refresh
     assert mover.senses.paths[(2, 0)] == [(0, 0), (1, 0), (2, 0)]
     assert mover.senses.paths[(4, 0)] == [(0, 0), (1, 0), (2, 0), (3, 0), (4, 0)]
 
@@ -948,7 +1016,7 @@ def test_eb_11_014_hidden_hazard_perception_change_recomputes_safe_paths() -> No
     assert (2, 1) in initial_path
     assert not grid.is_position_hazardous_for(2, 1, observer.uuid)
     assert observer.senses.safe_paths == {}
-    assert observer.senses._paths_dirty is False
+    path_revision_before_condition = observer.senses.path_revision
 
     observer.add_condition(
         PerceptionBoost(
@@ -961,16 +1029,15 @@ def test_eb_11_014_hidden_hazard_perception_change_recomputes_safe_paths() -> No
     assert hidden_trap.condition_stealth_dc is not None
     assert observer.get_passive_perception() > hidden_trap.condition_stealth_dc
     assert grid.is_position_hazardous_for(2, 1, observer.uuid)
-    assert observer.senses._paths_dirty is True
     assert observer.senses.safe_paths == {}
 
     observer.get_available_actions()
 
+    assert observer.senses.path_revision > path_revision_before_condition
     recomputed_path = observer.senses.paths[destination]
     safe_path = observer.senses.safe_paths[destination]
     assert (2, 1) in recomputed_path
     assert (2, 1) not in safe_path
-    assert observer.senses._paths_dirty is False
 
 
 def test_eb_11_009_geometry_and_aoe_are_grid_aware_where_needed() -> None:
@@ -981,7 +1048,7 @@ def test_eb_11_009_geometry_and_aoe_are_grid_aware_where_needed() -> None:
         2,
         1,
         surface=TileSurface(base_material=Material.STONE),
-        walkable=False,
+        walking_cost=0,
         blocks_optics=True,
         blocks_propagation=True,
         name="Wall",
@@ -1064,7 +1131,7 @@ def test_eb_11_019_cylinder_subjective_preview_matches_targeting_footprint() -> 
         2,
         1,
         surface=TileSurface(base_material=Material.STONE),
-        walkable=False,
+        walking_cost=0,
         blocks_optics=True,
         blocks_propagation=True,
         name="Wall",
@@ -1152,19 +1219,54 @@ def test_eb_11_020_region_retirement_cleans_spatial_handlers_and_terrain() -> No
 def test_zone_terrain_changes_publish_one_complete_spatial_lifecycle() -> None:
     """Zone-owned terrain notifications use the canonical spatial lifecycle."""
     reset_grid_state(width=6, height=3)
+    grid = get_map()
     caster = create_test_monster("monster.skeleton", 
         name="Zone Caster",
         position=(0, 1),
         faction="heroes",
     )
+    grid.set_tile(
+        3,
+        1,
+        surface=TileSurface(base_material=Material.STONE),
+        walking_cost=3,
+        fire_event=False,
+        name="Heterogeneous floor",
+    )
     cursor = EventQueue.event_cursor()
 
-    install_entry_cleanup_effect(caster, center=(2, 1))
+    declaration_calls = 0
+
+    def reject_tile_declaration(event: Event, _source_uuid: UUID) -> Event:
+        nonlocal declaration_calls
+        declaration_calls += 1
+        return event.cancel("committed Tile facts cannot be vetoed")
+
+    blocker = EventHandler(
+        name="Reject committed Tile declarations",
+        source_entity_uuid=caster.uuid,
+        trigger_conditions=[Trigger(
+            event_type=EventType.SPATIAL_TILE_CHANGED,
+            event_phase=EventPhase.DECLARATION,
+        )],
+        event_processor=reject_tile_declaration,
+    )
+    EventQueue.add_event_handler(blocker)
+
+    zone = install_entry_cleanup_effect(caster, center=(2, 1))
+    blocker.remove()
+    assert declaration_calls == 0
 
     by_lineage: dict[UUID, list[EventPhase]] = {}
+    activation_facts: list[SpatialChangeEvent] = []
     for _, event in EventQueue.iter_events_since(cursor):
         if event.event_type is not EventType.SPATIAL_TILE_CHANGED:
             continue
+        if (
+            isinstance(event, SpatialChangeEvent)
+            and event.phase is EventPhase.COMPLETION
+        ):
+            activation_facts.append(event)
         by_lineage.setdefault(event.lineage_uuid, []).append(event.phase)
     assert by_lineage
     assert all(
@@ -1177,16 +1279,65 @@ def test_zone_terrain_changes_publish_one_complete_spatial_lifecycle() -> None:
         ]
         for phases in by_lineage.values()
     )
+    affected = sorted({event.position for event in activation_facts})
+    assert affected == [(1, 1), (2, 0), (2, 1), (2, 2), (3, 1)]
+    base_costs = {
+        position: (1, 1, 0, 0)
+        for position in affected
+    }
+    base_costs[(3, 1)] = (3, 1, 0, 0)
+    expected_costs = {
+        position: (walking + 1, flying, swimming, burrowing)
+        for position, (walking, flying, swimming, burrowing)
+        in base_costs.items()
+    }
+    assert {
+        event.position: (
+            event.tile_walking_cost,
+            event.tile_flying_cost,
+            event.tile_swimming_cost,
+            event.tile_burrowing_cost,
+        )
+        for event in activation_facts
+    } == expected_costs
+    detached = dict(base_costs)
+    for event in sorted(activation_facts, key=lambda row: row.position):
+        detached[event.position] = (
+            event.tile_walking_cost,
+            event.tile_flying_cost,
+            event.tile_swimming_cost,
+            event.tile_burrowing_cost,
+        )
+    assert detached == expected_costs
+    removal_cursor = EventQueue.event_cursor()
+    assert zone.deactivate()
+    removal_facts = [
+        event
+        for _, event in EventQueue.iter_events_since(removal_cursor)
+        if isinstance(event, SpatialChangeEvent)
+        and event.event_type is EventType.SPATIAL_TILE_CHANGED
+        and event.phase is EventPhase.COMPLETION
+    ]
+    assert [event.position for event in removal_facts] == affected
+    assert {
+        event.position: (
+            event.tile_walking_cost,
+            event.tile_flying_cost,
+            event.tile_swimming_cost,
+            event.tile_burrowing_cost,
+        )
+        for event in removal_facts
+    } == base_costs
 
 
 def test_eb_11_010_walkability_is_cost_driven_not_the_legacy_flag() -> None:
-    """EB-11-010: GridMap walkability reads movement cost, not only tile.walkable."""
+    """EB-11-010: GridMap walkability reads movement cost only."""
     reset_grid_state(width=2, height=1)
     grid = get_map()
     tile = grid.get_tile(1, 0)
     assert tile is not None
 
-    tile.walkable = False
+    assert not hasattr(tile, "walkable")
     assert tile.get_movement_cost(MovementMode.WALKING) == 1
     assert grid.is_walkable(1, 0)
 

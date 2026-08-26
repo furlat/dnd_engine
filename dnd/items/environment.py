@@ -62,7 +62,6 @@ class DirectionalWall(BaseItem):
         is_targetable: Whether the wall can be directly targeted.
         blocks_movement: Global movement blocker flag.
         blocks_optics_field: Global optical blocker flag.
-        map_char: Map-editor glyph.
         include_in_senses_objects: Whether senses expose the wall as an object.
         include_in_available_object_actions: Whether object action discovery
             includes the wall.
@@ -75,7 +74,6 @@ class DirectionalWall(BaseItem):
     is_targetable: bool = Field(default=False, description="Whether the wall can be directly targeted.")
     blocks_movement: bool = Field(default=False, description="Global movement blocker flag for the wall.")
     blocks_optics_field: bool = Field(default=False, description="Global optical blocker flag for the wall.")
-    map_char: str = Field(default="W", description="Map-editor glyph for the wall.")
     include_in_senses_objects: bool = Field(
         default=True,
         description="Whether senses expose the wall as a visible object.",
@@ -260,7 +258,6 @@ class DirectionalDoor(UsableItem):
         is_targetable: Whether the door can be directly targeted.
         blocks_movement: Global movement blocker flag.
         blocks_optics_field: Global optical blocker flag.
-        map_char: Map-editor glyph.
         include_in_senses_objects: Whether senses expose the door as an object.
         include_in_available_object_actions: Whether object action discovery
             includes the door.
@@ -273,7 +270,6 @@ class DirectionalDoor(UsableItem):
     is_targetable: bool = Field(default=False, description="Whether the door can be directly targeted.")
     blocks_movement: bool = Field(default=False, description="Global movement blocker flag for the door.")
     blocks_optics_field: bool = Field(default=False, description="Global optical blocker flag for the door.")
-    map_char: str = Field(default="D", description="Map-editor glyph for the door.")
     include_in_senses_objects: bool = Field(
         default=True,
         description="Whether senses expose the door as a visible object.",

@@ -438,7 +438,7 @@ def test_targeted_cylinder_preview_keeps_full_geometry_and_filters_hidden_contac
         2,
         1,
         surface=TileSurface(base_material=Material.STONE),
-        walkable=False,
+        walking_cost=0,
         blocks_optics=True,
         blocks_propagation=True,
         name="Horizontal wall",

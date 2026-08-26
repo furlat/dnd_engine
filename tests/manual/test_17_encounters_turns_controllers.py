@@ -191,6 +191,7 @@ def test_turn_start_full_senses_refresh_emits_seen_cell_delta() -> None:
 
     encounter.end_turn()
     clean_cursor = EventQueue.event_cursor()
+    path_revision_before_unchanged_start = hero.senses.path_revision
     hero.on_turn_start(
         encounter_uuid=encounter.uuid,
         round_number=encounter.round_number,
@@ -203,6 +204,7 @@ def test_turn_start_full_senses_refresh_emits_seen_cell_delta() -> None:
         and event.observer_uuid == hero.uuid
         and event.update_reason == SensoryUpdateReason.TURN_START
     ]
+    assert hero.senses.path_revision == path_revision_before_unchanged_start
 
 
 def test_first_encounter_example_prints_turn_and_combat_log(capsys) -> None:

@@ -378,10 +378,6 @@ class _HealingPotion(UsableItem):
         default=True,
         description="Healing potions can be picked up.",
     )
-    map_char: str = Field(
-        default="\u03b8",
-        description="Map glyph for the healing potion.",
-    )
     is_consumable: bool = Field(
         default=True,
         description=(
@@ -1114,10 +1110,6 @@ class _PotionOfGreaterInvisibility(UsableItem):
         default=True,
         description="Greater invisibility potions can be picked up.",
     )
-    map_char: str = Field(
-        default="\u03b8",
-        description="Map glyph for the potion.",
-    )
     is_consumable: bool = Field(
         default=True,
         description="The potion is consumed when used.",
@@ -1276,10 +1268,6 @@ class _PotionOfHaste(UsableItem):
     is_pickable: bool = Field(
         default=True,
         description="Haste potions can be picked up.",
-    )
-    map_char: str = Field(
-        default="\u03b8",
-        description="Map glyph for the potion.",
     )
     is_consumable: bool = Field(
         default=True,

@@ -1,4 +1,4 @@
-"""Tile primitives for terrain, lighting, and directional borders."""
+"""Tile primitives for terrain, lighting, and movement."""
 
 from dataclasses import dataclass
 from typing import Dict, Optional, Tuple
@@ -10,7 +10,6 @@ from dnd.types.world import CardinalDirection, MovementMode, LightLevel
 from dnd.types.spatial_effects import SpatialEffectLayer
 from dnd.types.materials import Material, TileSurface
 from dnd.core.values import ModifiableValue
-from dnd.core.modifiers import NumericalModifier
 from dnd.core.world_edges import ElevationSurfaceKind, SlopeAxis
 
 
@@ -53,13 +52,16 @@ class Tile(BaseBlock):
     """Single grid cell stored by `GridMap`.
 
     Tiles inherit condition and event-handler support from `BaseBlock`. They
-    carry movement-mode costs, per-channel directional borders, elevation, and
-    objective lighting state; `GridMap` owns spatial queries and pathfinding.
+    carry movement-mode costs, elevation, and objective lighting state;
+    `GridMap` owns spatial queries and pathfinding.
     """
 
     name: str = Field(default="Floor", description="The name of the tile")
+    position: Tuple[StrictInt, StrictInt] = Field(
+        default=(0, 0),
+        description="Strict objective coordinate owned by this Tile.",
+    )
     surface: TileSurface = Field(description="Validated semantic support surface.")
-    walkable: bool = Field(default=True, description="Whether the tile can be walked on (legacy, use walking_cost)")
     blocks_optics: bool = Field(
         default=False,
         description="Whether the Tile intrinsically blocks ordinary XY optics.",
@@ -68,8 +70,11 @@ class Tile(BaseBlock):
         default=False,
         description="Whether the Tile intrinsically blocks physical propagation.",
     )
-    sprite_name: Optional[str] = Field(default=None, description="The name of the sprite to use for the tile")
     allow_events_conditions: bool = Field(default=True, description="Tiles can have conditions")
+
+    def get_position(self) -> Tuple[StrictInt, StrictInt]:
+        """Return this Tile's strict objective coordinate."""
+        return self.position
 
     walking_cost: ModifiableValue = Field(
         default_factory=lambda: ModifiableValue.create(
@@ -141,7 +146,7 @@ class Tile(BaseBlock):
         )
         return self
 
-    def get_movement_cost(self, mode: MovementMode) -> float:
+    def get_movement_cost(self, mode: MovementMode) -> int:
         """Get the movement cost for a specific mode."""
         cost_map = {
             MovementMode.WALKING: self.walking_cost,
@@ -310,62 +315,54 @@ class Tile(BaseBlock):
     def create(cls, position: Tuple[int, int],
                *,
                surface: TileSurface,
-               walkable: bool = True,
+               walking_cost: int = 1,
+               flying_cost: int = 1,
+               swimming_cost: int = 0,
+               burrowing_cost: int = 0,
                blocks_optics: bool = False,
                blocks_propagation: bool = False,
                name: str = "Floor",
-               sprite_name: Optional[str] = None,
                height: int = 0,
                elevation_surface_kind: ElevationSurfaceKind = ElevationSurfaceKind.ORDINARY,
                slope_axis: Optional[SlopeAxis] = None,
                default_light: LightLevel = LightLevel.BRIGHT_LIGHT) -> 'Tile':
         """Create a tile with movement-mode `ModifiableValue` costs."""
+        costs = {
+            "walking_cost": walking_cost,
+            "flying_cost": flying_cost,
+            "swimming_cost": swimming_cost,
+            "burrowing_cost": burrowing_cost,
+        }
+        for cost_name, cost in costs.items():
+            if type(cost) is not int or cost < 0:
+                raise ValueError(
+                    f"{cost_name} must be a nonnegative strict integer",
+                )
+
         tile_uuid = uuid4()
 
         walking_cost = ModifiableValue.create(
             source_entity_uuid=tile_uuid,
-            base_value=1 if walkable else 0,
+            base_value=costs["walking_cost"],
             value_name="Walking Cost"
         )
-        if not walkable:
-            walking_cost.self_static.add_max_constraint(
-                NumericalModifier.create(
-                    source_entity_uuid=tile_uuid,
-                    name="Impassable",
-                    value=0
-                )
-            )
 
         flying_cost = ModifiableValue.create(
             source_entity_uuid=tile_uuid,
-            base_value=1,
+            base_value=costs["flying_cost"],
             value_name="Flying Cost"
         )
 
         swimming_cost = ModifiableValue.create(
             source_entity_uuid=tile_uuid,
-            base_value=0,
+            base_value=costs["swimming_cost"],
             value_name="Swimming Cost"
-        )
-        swimming_cost.self_static.add_max_constraint(
-            NumericalModifier.create(
-                source_entity_uuid=tile_uuid,
-                name="No Water",
-                value=0
-            )
         )
 
         burrowing_cost = ModifiableValue.create(
             source_entity_uuid=tile_uuid,
-            base_value=0,
+            base_value=costs["burrowing_cost"],
             value_name="Burrowing Cost"
-        )
-        burrowing_cost.self_static.add_max_constraint(
-            NumericalModifier.create(
-                source_entity_uuid=tile_uuid,
-                name="No Earth",
-                value=0
-            )
         )
 
         return cls(
@@ -373,11 +370,9 @@ class Tile(BaseBlock):
             source_entity_uuid=tile_uuid,
             position=position,
             surface=surface,
-            walkable=walkable,
             blocks_optics=blocks_optics,
             blocks_propagation_field=blocks_propagation,
             name=name,
-            sprite_name=sprite_name,
             walking_cost=walking_cost,
             flying_cost=flying_cost,
             swimming_cost=swimming_cost,
@@ -394,9 +389,7 @@ def floor_factory(position: Tuple[int, int]) -> Tile:
     return Tile.create(
         position,
         surface=TileSurface(base_material=Material.STONE),
-        walkable=True,
         name="Floor",
-        sprite_name="floor.png",
     )
 
 
@@ -405,9 +398,7 @@ def dark_floor_factory(position: Tuple[int, int]) -> Tile:
     return Tile.create(
         position,
         surface=TileSurface(base_material=Material.STONE),
-        walkable=True,
         name="Floor",
-        sprite_name="floor.png",
         default_light=LightLevel.DARKNESS,
     )
 
@@ -417,18 +408,13 @@ def wall_factory(position: Tuple[int, int]) -> Tile:
     tile = Tile.create(
         position,
         surface=TileSurface(base_material=Material.STONE),
-        walkable=False,
+        walking_cost=0,
+        flying_cost=0,
+        swimming_cost=0,
+        burrowing_cost=0,
         blocks_optics=True,
         blocks_propagation=True,
         name="Wall",
-        sprite_name="wall.png",
-    )
-    tile.flying_cost.self_static.add_max_constraint(
-        NumericalModifier.create(
-            source_entity_uuid=tile.uuid,
-            name="Solid",
-            value=0
-        )
     )
     return tile
 
@@ -438,18 +424,11 @@ def water_factory(position: Tuple[int, int]) -> Tile:
     tile = Tile.create(
         position,
         surface=TileSurface(base_material=Material.WATER),
-        walkable=False,
+        walking_cost=0,
+        flying_cost=1,
+        swimming_cost=1,
+        burrowing_cost=0,
         name="Water",
-        sprite_name="water.png",
-    )
-
-    for mod_uuid in list(tile.swimming_cost.self_static.max_constraints.keys()):
-        tile.swimming_cost.self_static.remove_max_constraint(mod_uuid)
-
-    tile.swimming_cost = ModifiableValue.create(
-        source_entity_uuid=tile.uuid,
-        base_value=1,
-        value_name="Swimming Cost"
     )
 
     return tile
@@ -466,20 +445,11 @@ def difficult_terrain_factory(
     tile = Tile.create(
         position,
         surface=TileSurface(base_material=Material.EARTH),
-        walkable=True,
+        walking_cost=2,
         name="Difficult Terrain",
-        sprite_name="rough.png",
         height=height,
         elevation_surface_kind=elevation_surface_kind,
         slope_axis=slope_axis,
-    )
-
-    tile.walking_cost.self_static.add_value_modifier(
-        NumericalModifier.create(
-            source_entity_uuid=tile.uuid,
-            name="Difficult Terrain",
-            value=1
-        )
     )
 
     return tile

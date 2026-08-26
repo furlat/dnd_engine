@@ -3841,6 +3841,7 @@ class ContinualFlameCondition(SpatialCondition):
         parent_event: Event,
     ) -> None:
         """Move the field footprint and light with its exact world object."""
+        self._validate_exact_anchor_position(position)
         if self._light_source_uuid is None:
             raise RuntimeError("Continual Flame anchor runtime is unavailable")
         grid = get_map()

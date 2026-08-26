@@ -17,6 +17,7 @@ from dnd.actions.standard import (
     MovementEvent,
     Shove,
 )
+from dnd.actions.operations import execute_action, get_available_actions
 from dnd.core.events.action_events import (
     JumpEvent,
     ShoveEvent,
@@ -77,6 +78,7 @@ from tests.engine.support import (
     force_attack_hit,
     force_attack_miss,
     remove_attack_modifier,
+    set_hp,
     reset_combat_state,
 )
 
@@ -902,6 +904,95 @@ def test_eb_10_021_forced_movement_traverses_terrain_without_step_costs() -> Non
     assert forced_event.combat_log is not None
     assert len(forced_event.combat_log.sub_entries) == 2
     assert target.get_hp() == hp_before - 8
+
+
+def test_spike_trap_ordinary_step_resolves_damage_and_continues() -> None:
+    """A public ordinary movement triggers damage and continues past a trap."""
+    reset_core_action_state()
+    grid = get_map()
+    for x in range(0, 10):
+        for y in range(0, 5):
+            grid.set_tile(
+                x,
+                y,
+                surface=TileSurface(base_material=Material.STONE),
+                walking_cost=0,
+            )
+    for x in range(1, 9):
+        grid.set_tile(
+            x,
+            2,
+            surface=TileSurface(base_material=Material.STONE),
+            walking_cost=1,
+        )
+    walker = strong_entity(name="Spike Step", position=(1, 2), faction="heroes")
+    materialize_spike_trap_condition({(2, 2), (3, 2)})
+    Entity.materialize_all_navigation(max_distance=20)
+    hp_before = walker.get_hp()
+
+    move = next(
+        action for action in get_available_actions(walker).position_actions
+        if action.template_name == "Move"
+    )
+    target = next(target for target in move.valid_targets if target.position == (5, 2))
+    with fixed_dice(2, 2):
+        move_event = execute_action(
+            walker,
+            "Move",
+            target,
+            prefer_safe=False,
+        )
+
+    assert move_event is not None and not move_event.canceled
+    assert walker.position == (5, 2)
+    # Spike Trap is 2d4 on each of the two entered cells; fixed 2,2 dice
+    # therefore prove both public entry triggers, not merely some damage.
+    assert hp_before - walker.get_hp() == 8
+    assert walker.health.life_state is LifeState.ALIVE
+
+
+def test_spike_trap_lethal_step_stops_at_the_trigger_tile() -> None:
+    """A lethal public trap stops at its first trigger before the destination."""
+    reset_core_action_state()
+    grid = get_map()
+    for x in range(0, 10):
+        for y in range(0, 5):
+            grid.set_tile(
+                x,
+                y,
+                surface=TileSurface(base_material=Material.STONE),
+                walking_cost=0,
+            )
+    for x in range(1, 9):
+        grid.set_tile(
+            x,
+            2,
+            surface=TileSurface(base_material=Material.STONE),
+            walking_cost=1,
+        )
+    walker = strong_entity(name="Lethal Spike Step", position=(1, 2), faction="heroes")
+    set_hp(walker, 2)
+    materialize_spike_trap_condition({(2, 2), (3, 2)})
+    Entity.materialize_all_navigation(max_distance=20)
+
+    move = next(
+        action for action in get_available_actions(walker).position_actions
+        if action.template_name == "Move"
+    )
+    target = next(target for target in move.valid_targets if target.position == (5, 2))
+    with fixed_dice(4, 4):
+        move_event = execute_action(
+            walker,
+            "Move",
+            target,
+            prefer_safe=False,
+        )
+
+    assert move_event is not None and not move_event.canceled
+    assert walker.position == (2, 2)
+    assert move_event.end_position == (2, 2)
+    assert walker.health.life_state is LifeState.DEAD
+    assert "Dead" not in walker.active_conditions
 
 
 def test_eb_10_022_shove_uses_videogame_bonus_action_forced_movement() -> None:

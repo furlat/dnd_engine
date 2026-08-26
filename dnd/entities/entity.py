@@ -1,6 +1,6 @@
 from typing import AbstractSet, DefaultDict, Dict, Mapping, Optional, Any, Iterator, List, ClassVar, Sequence, Union, Tuple, Set
 from uuid import UUID, uuid4
-from pydantic import BaseModel, Field, PrivateAttr, computed_field
+from pydantic import BaseModel, Field, PrivateAttr, StrictInt, computed_field
 from collections import defaultdict
 from contextlib import contextmanager
 
@@ -253,7 +253,7 @@ class EntityConfig(BaseModel):
         default_factory=list,
         description="Static named modifiers applied to initiative."
     )
-    position: Tuple[int, int] = Field(
+    position: Tuple[StrictInt, StrictInt] = Field(
         default_factory=lambda: (0, 0),
         description="Starting grid position for the entity."
     )
@@ -306,11 +306,19 @@ class Entity(BaseBlock):
     """
 
     name: str = Field(default="Entity", description="Display name for this entity.")
+    position: Tuple[StrictInt, StrictInt] = Field(
+        default=(0, 0),
+        description="Strict objective coordinate owned by this Entity.",
+    )
     entity_kind_id: str = Field(
         default="entity.neutral",
         min_length=1,
         description="Concrete renderer-agnostic entity identity.",
     )
+
+    def get_position(self) -> Tuple[StrictInt, StrictInt]:
+        """Return this Entity's strict objective coordinate."""
+        return self.position
     species: Optional[Species] = Field(
         default=None,
         description="Concrete ancestry carried as ordinary entity state.",
@@ -748,7 +756,7 @@ class Entity(BaseBlock):
         new_position: Tuple[int, int],
         parent_event: Optional[UUID] = None
     ) -> None:
-        """Update entity position in both class registry and GridMap.
+        """Update the Entity-owned objective position and GridMap membership.
 
         Args:
             entity: Entity to move.

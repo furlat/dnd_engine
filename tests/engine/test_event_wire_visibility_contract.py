@@ -3,12 +3,15 @@ from dnd.types.materials import Material, TileSurface
 
 from uuid import UUID, uuid4
 
+import pytest
+
 from dnd.actions.standard import Move
 from dnd.blocks.base_item import BaseItem
 from dnd.blocks.sensory import spatial_senses_system
 from dnd.core.events.events_registry import EventPhase, EventQueue, EventType
 from dnd.core.events.world_events import (
     SensoryUpdateEvent,
+    SpatialChangeEvent,
     StepMovementEvent,
     WorldObjectState,
     WorldTileState,
@@ -18,6 +21,7 @@ from dnd.core.world_edges import ElevationSurfaceKind
 from dnd.types.world import LightLevel
 from dnd.types.senses import SenseMode, SensesType
 from dnd.types.world_placement import WorldObjectPlacement, WorldPlacementKind
+from pydantic import ValidationError
 from tests.engine.support import create_test_monster, reset_combat_state
 
 
@@ -113,7 +117,6 @@ def test_bootstrap_tile_and_object_carry_final_optical_channels() -> None:
         position=(1, 0),
         surface=TileSurface(base_material=Material.STONE),
         name="Opaque grate",
-        walkable=True,
         blocks_optics=True,
         blocks_propagation=False,
         walking_cost=1,
@@ -128,6 +131,54 @@ def test_bootstrap_tile_and_object_carry_final_optical_channels() -> None:
     assert WorldTileState.model_validate_json(tile.model_dump_json()) == tile
     assert tile.blocks_optics is True
     assert tile.blocks_propagation is False
+
+
+def test_slice_6_2_tile_facts_have_strict_four_costs_and_no_walkable_field() -> None:
+    """Cold and incremental Tile facts expose the same strict cost authority."""
+    tile = WorldTileState(
+        tile_uuid=uuid4(),
+        position=(1, 0),
+        surface=TileSurface(base_material=Material.STONE),
+        name="Strict cost tile",
+        blocks_optics=False,
+        blocks_propagation=False,
+        walking_cost=0,
+        flying_cost=1,
+        swimming_cost=0,
+        burrowing_cost=0,
+        elevation_steps=0,
+        surface_kind=ElevationSurfaceKind.ORDINARY,
+        default_light=LightLevel.BRIGHT_LIGHT,
+        resolved_light=LightLevel.BRIGHT_LIGHT,
+    )
+    assert "walkable" not in type(tile).model_fields
+    assert tile.model_dump(mode="json")["walking_cost"] == 0
+    for invalid in (True, 1.5, "1", -1):
+        with pytest.raises(ValidationError):
+            WorldTileState.model_validate({**tile.model_dump(), "walking_cost": invalid})
+
+    change = SpatialChangeEvent.tile_changed(
+        (1, 0),
+        tile_walking_cost=0,
+        tile_flying_cost=1,
+        tile_swimming_cost=0,
+        tile_burrowing_cost=0,
+    )
+    assert change.tile_walking_cost == 0
+    assert change.tile_burrowing_cost == 0
+    for invalid in (True, 1.5, "1", -1):
+        with pytest.raises(ValidationError):
+            SpatialChangeEvent.tile_changed(
+                (1, 0),
+                tile_walking_cost=invalid,
+                tile_flying_cost=1,
+                tile_swimming_cost=0,
+                tile_burrowing_cost=0,
+            )
+    with pytest.raises(ValidationError):
+        SpatialChangeEvent.model_validate(
+            {**change.model_dump(), "tile_walkable": True},
+        )
 
     item = BaseItem(
         source_entity_uuid=uuid4(),

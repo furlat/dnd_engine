@@ -574,7 +574,6 @@ def build_authored_item(
                 source_entity_uuid,
                 blocker.hit_points,
             ),
-            map_char=blocker.map_character,
             blocks_movement=blocker.blocks_movement,
             blocks_optics_field=blocker.blocks_optics,
             blocks_propagation_field=blocker.blocks_propagation,

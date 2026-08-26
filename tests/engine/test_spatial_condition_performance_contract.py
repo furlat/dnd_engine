@@ -1,13 +1,14 @@
 """Scaling contracts for direct spatial-condition ownership."""
 
-from statistics import median
-from time import perf_counter
 from uuid import UUID, uuid4
+
+import pytest
 
 from dnd.content.spatial_effect_materialization import (
     materialize_spatial_condition,
 )
-from dnd.content.spatial_effect_recipes import FIRE_SURFACE_RECIPE
+from dnd.content.spatial_effect_recipes import DAYLIGHT_FIELD_RECIPE, FIRE_SURFACE_RECIPE
+from dnd.spatial.environmental_conditions import FireSurface
 from dnd.core.events.events_registry import (
     Event,
     EventPhase,
@@ -34,36 +35,40 @@ def _square_footprint(side: int) -> set[tuple[int, int]]:
     return {(x, y) for x in range(side) for y in range(side)}
 
 
-def _measure_condition_cycle(side: int) -> float:
-    """Measure one public activation/removal cycle for a square footprint."""
+def _measure_condition_cycle(
+    side: int,
+    *,
+    recipe=FIRE_SURFACE_RECIPE,
+    condition_type=FireSurface,
+) -> tuple[object, object, set[tuple[int, int]]]:
+    """Record one public activation/removal cycle for a square footprint."""
     grid = get_map()
     source_uuid = uuid4()
     parent = _root_event(source_uuid)
     footprint = _square_footprint(side)
     condition = materialize_spatial_condition(
-        FIRE_SURFACE_RECIPE,
+        recipe,
         source_uuid,
         position=(0, 0),
         faction=None,
-        condition_type=SpatialCondition,
+        condition_type=condition_type,
         condition_fields={"affected_positions": footprint},
     )
 
-    started = perf_counter()
     condition.activate(parent_event=parent)
-    activation_elapsed = perf_counter() - started
+    activation_work = condition.last_work_diagnostics
 
     assert grid.get_spatial_condition_positions(condition.uuid) == footprint
     assert grid.get_spatial_conditions_at((0, 0)) == [condition]
-    assert len(EventQueue.get_spatial_handlers_at(
-        (0, 0),
-        EventType.SPATIAL_EFFECT_INTERACTION,
-        EventPhase.EFFECT,
-    )) == 1
+    if condition.spatial_handler_uuids:
+        assert len(EventQueue.get_spatial_handlers_at(
+            (0, 0),
+            EventType.SPATIAL_EFFECT_INTERACTION,
+            EventPhase.EFFECT,
+        )) == 1
 
-    started = perf_counter()
     condition.deactivate(parent_event=parent)
-    deactivation_elapsed = perf_counter() - started
+    deactivation_work = condition.last_work_diagnostics
 
     assert grid.get_spatial_condition_positions(condition.uuid) == set()
     assert grid.get_spatial_conditions_at((0, 0)) == []
@@ -72,32 +77,64 @@ def _measure_condition_cycle(side: int) -> float:
         EventType.SPATIAL_EFFECT_INTERACTION,
         EventPhase.EFFECT,
     ) == []
-    return activation_elapsed + deactivation_elapsed
+    return activation_work, deactivation_work, footprint
 
 
-def test_spatial_condition_time_scales_with_covered_cells() -> None:
-    """A sixteen-fold footprint increase remains bounded linear work."""
+@pytest.mark.parametrize(
+    ("recipe", "condition_type", "expected_activation", "expected_deactivation"),
+    (
+        (DAYLIGHT_FIELD_RECIPE, SpatialCondition, 16, 12),
+        (FIRE_SURFACE_RECIPE, FireSurface, 28, 16),
+    ),
+)
+def test_condition_structured_work_counts_exact_owned_footprint_iterations(
+    recipe,
+    condition_type,
+    expected_activation: int,
+    expected_deactivation: int,
+) -> None:
+    """Both occupancy policies count their actual local footprint iterations."""
+    reset_engine_runtime(grid_size=(24, 24))
+    activation, deactivation, footprint = _measure_condition_cycle(
+        2,
+        recipe=recipe,
+        condition_type=condition_type,
+    )
+
+    assert len(footprint) == 4
+    assert activation.operation == "activate"
+    assert deactivation.operation == "deactivate"
+    assert activation.positions_visited == expected_activation
+    assert deactivation.positions_visited == expected_deactivation
+
+
+def test_spatial_condition_work_scales_with_covered_cells() -> None:
+    """Owner-counted condition work grows with the changed footprint only."""
     reset_engine_runtime(grid_size=(48, 48))
-    elapsed_by_size = {
-        side: median(_measure_condition_cycle(side) for _ in range(3))
+    measurements = {
+        side: _measure_condition_cycle(side)
         for side in (8, 32)
     }
 
-    assert elapsed_by_size[32] < 3.0
-    assert elapsed_by_size[32] <= max(0.05, elapsed_by_size[8] * 40)
+    small_activation, small_deactivation, small_footprint = measurements[8]
+    large_activation, large_deactivation, large_footprint = measurements[32]
+    assert len(large_footprint) == len(small_footprint) * 16
+    assert large_activation.operation == "activate"
+    assert large_deactivation.operation == "deactivate"
+    assert large_activation.positions_visited == (
+        small_activation.positions_visited * 16
+    )
+    assert large_deactivation.positions_visited == (
+        small_deactivation.positions_visited * 16
+    )
 
 
-def test_spatial_condition_time_does_not_scale_with_unused_world_area() -> None:
-    """The same footprint stays local when the surrounding map is nine times larger."""
-    elapsed_by_world_size: dict[int, float] = {}
+def test_spatial_condition_work_does_not_scale_with_unused_world_area() -> None:
+    """The same footprint has identical owner-counted work on larger maps."""
+    work_by_world_size = {}
     for world_size in (24, 72):
         reset_engine_runtime(grid_size=(world_size, world_size))
-        elapsed_by_world_size[world_size] = median(
-            _measure_condition_cycle(8) for _ in range(3)
-        )
+        activation, deactivation, _ = _measure_condition_cycle(8)
+        work_by_world_size[world_size] = (activation, deactivation)
 
-    assert elapsed_by_world_size[72] < 1.0
-    assert elapsed_by_world_size[72] <= max(
-        0.05,
-        elapsed_by_world_size[24] * 4,
-    )
+    assert work_by_world_size[72] == work_by_world_size[24]

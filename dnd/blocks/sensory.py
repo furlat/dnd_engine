@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import DefaultDict, Dict, List, Optional, Self, Set, Tuple, TypeVar
 from uuid import UUID
 
-from pydantic import Field, PrivateAttr
+from pydantic import Field, PrivateAttr, StrictInt
 
 from dnd.core.base_block import BaseBlock
 from dnd.core.elevation import support_distance_feet
@@ -29,6 +29,11 @@ Position = Tuple[int, int]
 
 class Senses(BaseBlock):
     """Materialized subjective perception plus derived navigation caches."""
+
+    position: Tuple[StrictInt, StrictInt] = Field(
+        default=(0, 0),
+        description="Strict reducer-owned subjective coordinate.",
+    )
 
     visual_access: ModifiableValue = Field(
         default_factory=lambda: ModifiableValue.create(
@@ -101,6 +106,10 @@ class Senses(BaseBlock):
     _last_visual_access: int = PrivateAttr(default=1)
     _path_revision: int = PrivateAttr(default=0)
     _path_max_distance: Optional[int] = PrivateAttr(default=None)
+
+    def get_position(self) -> Tuple[StrictInt, StrictInt]:
+        """Return this Senses block's strict subjective coordinate."""
+        return self.position
 
     @property
     def path_revision(self) -> int:

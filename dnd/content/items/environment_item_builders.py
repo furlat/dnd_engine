@@ -99,7 +99,6 @@ def build_campfire(source_entity_uuid: UUID) -> UsableItem:
         name="Campfire",
         description="A fixed camp object that supports resting and cooking.",
         is_pickable=False,
-        map_char="*",
         use_action_templates=actions,
     )
     for action in actions:

@@ -371,7 +371,7 @@ def test_batch_tile_creation_does_not_emit_tile_change_events(capsys) -> None:
         1,
         1,
         surface=TileSurface(base_material=Material.STONE),
-        walkable=False,
+        walking_cost=0,
         blocks_optics=True,
         blocks_propagation=True,
         name="Wall",
@@ -392,7 +392,7 @@ def test_batch_tile_creation_does_not_emit_tile_change_events(capsys) -> None:
         f"tile-change completions after edit: {len(tile_change_completions)}",
         f"changed tile position: {tile_change_completions[0].position}",
         f"changed tile name: {changed_tile.name}",
-        f"changed tile walkable: {changed_tile.walkable}",
+        f"changed tile walking cost: {changed_tile.get_movement_cost(MovementMode.WALKING)}",
     ]
 
     print("\n".join(batch_lines))
@@ -403,7 +403,7 @@ def test_batch_tile_creation_does_not_emit_tile_change_events(capsys) -> None:
         "tile-change completions after edit: 1",
         "changed tile position: (1, 1)",
         "changed tile name: Wall",
-        "changed tile walkable: False",
+        "changed tile walking cost: 0",
     ]
     assert batch_lines == expected_batch_lines
     assert capsys.readouterr().out.splitlines() == expected_batch_lines

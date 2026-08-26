@@ -69,7 +69,6 @@ class StaticBlockerDefinition(AuthoredItemDefinition):
     """Cold mechanical facts for one behavior-free world blocker."""
 
     hit_points: int = 1
-    map_character: str = "?"
     blocks_movement: bool = False
     blocks_optics: bool = False
     blocks_propagation: bool = False
@@ -79,8 +78,6 @@ class StaticBlockerDefinition(AuthoredItemDefinition):
         AuthoredItemDefinition.__post_init__(self)
         if self.hit_points < 1:
             raise ValueError("static blocker hit_points must be positive")
-        if len(self.map_character) != 1:
-            raise ValueError("static blocker map_character must be one character")
         if not isinstance(self.placement_spec, WorldPlacementSpec):
             raise ValueError(
                 "static blocker placement must be a WorldPlacementSpec",
@@ -137,7 +134,6 @@ _STATIC_BLOCKERS = (
         "A destructible crate.",
         ("breakable", "crate", "environment"),
         hit_points=20,
-        map_character="C",
         placement_spec=WorldPlacementSpec(
             kind=WorldPlacementKind.CENTER,
             occupies_bands=False,
@@ -150,7 +146,6 @@ _STATIC_BLOCKERS = (
         "A durable boulder that blocks movement.",
         ("blocker", "boulder", "environment"),
         hit_points=30,
-        map_character="B",
         blocks_movement=True,
         blocks_propagation=True,
         placement_spec=WorldPlacementSpec(
@@ -165,7 +160,6 @@ _STATIC_BLOCKERS = (
         "A destructible barricade that blocks movement and sight.",
         ("barricade", "blocker", "breakable", "environment"),
         hit_points=20,
-        map_character="X",
         blocks_movement=True,
         blocks_optics=True,
         blocks_propagation=True,
