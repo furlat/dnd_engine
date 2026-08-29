@@ -240,6 +240,8 @@ class SpikeGrowth(SpellAction):
             new_phase=EventPhase.EFFECT,
             status_message=f"{caster.name} casts Spike Growth at {target_pos}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         zone = materialize_spatial_condition(
             SPIKE_GROWTH_SURFACE_RECIPE,
@@ -261,6 +263,8 @@ class SpikeGrowth(SpellAction):
 
         concentration = self.ensure_concentration(effect_event)
         concentration.add_linked_condition(zone.uuid, zone.uuid)
+
+        self._close_concentration(effect_event)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -666,6 +670,8 @@ class Slow(SpellAction):
             target_entity_name=target.name,
             status_message=f"WIS save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         if success:
             return effect_event.phase_to(
@@ -892,6 +898,8 @@ class Haste(SpellAction):
             target_entity_name=target.name,
             status_message=f"Hasting {target.name}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         haste_effect = HasteEffect(
             source_entity_uuid=caster.uuid,
@@ -904,6 +912,8 @@ class Haste(SpellAction):
         concentration = self.ensure_concentration(effect_event)
         if haste_effect.applied:
             concentration.add_linked_condition(target.uuid, haste_effect.uuid)
+
+        self._close_concentration(effect_event)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -978,6 +988,8 @@ class DarkvisionSpell(SpellAction):
             new_phase=EventPhase.EFFECT,
             status_message=f"{caster.name} grants darkvision to {target.name}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         darkvision_effect = DarkvisionEffect(
             source_entity_uuid=caster.uuid,
@@ -1056,6 +1068,8 @@ class Disintegrate(SpellAction):
             target_entity_name=target.name,
             status_message=f"DEX save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         if success:
             return effect_event.phase_to(
@@ -1153,6 +1167,8 @@ class JumpSpell(SpellAction):
             new_phase=EventPhase.EFFECT,
             status_message=f"{caster.name} casts Jump on {target.name}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         jump_effect = JumpEffect(
             source_entity_uuid=caster.uuid,
@@ -1240,6 +1256,8 @@ class ExpeditiousRetreat(SpellAction):
             new_phase=EventPhase.EFFECT,
             status_message=f"{caster.name} casts Expeditious Retreat"
         )
+        if effect_event.canceled:
+            return effect_event
 
         retreat_effect = ExpeditiousRetreatEffect(
             source_entity_uuid=caster.uuid,
@@ -1250,6 +1268,8 @@ class ExpeditiousRetreat(SpellAction):
 
         concentration = self.ensure_concentration(effect_event)
         concentration.add_linked_condition(caster.uuid, retreat_effect.uuid)
+
+        self._close_concentration(effect_event)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -1340,12 +1360,14 @@ class EnhanceAbility(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        concentration = self.ensure_concentration(execution_event)
-
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
             status_message=f"Enhancing {self.enhance_ability_type.title()} on {target.name}"
         )
+        if effect_event.canceled:
+            return effect_event
+
+        concentration = self.ensure_concentration(effect_event)
 
         effect = EnhanceAbilityEffect(
             source_entity_uuid=caster.uuid,
@@ -1356,6 +1378,8 @@ class EnhanceAbility(SpellAction):
         target.add_condition(effect, parent_event=effect_event)
         if effect.applied:
             concentration.add_linked_condition(target.uuid, effect.uuid)
+
+        self._close_concentration(effect_event)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -1488,12 +1512,14 @@ class EnlargeReduce(SpellAction):
                     status_message=f"{target.name} resists {self.name} (CON save)"
                 )
 
-        concentration = self.ensure_concentration(execution_event)
-
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
             status_message=f"{'Enlarging' if self.enlarge_mode == 'enlarge' else 'Reducing'} {target.name}"
         )
+        if effect_event.canceled:
+            return effect_event
+
+        concentration = self.ensure_concentration(effect_event)
 
         effect = EnlargeReduceEffect(
             source_entity_uuid=caster.uuid,
@@ -1504,6 +1530,8 @@ class EnlargeReduce(SpellAction):
         target.add_condition(effect, parent_event=effect_event)
         if effect.applied:
             concentration.add_linked_condition(target.uuid, effect.uuid)
+
+        self._close_concentration(effect_event)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -1557,6 +1585,8 @@ class TelekinesisRestrain(BaseAction):
             new_phase=EventPhase.EFFECT,
             status_message=f"Restraining {grabbed.name} with Telekinesis"
         )
+        if effect_event.canceled:
+            return effect_event
 
         restrained = Restrained(
             source_entity_uuid=caster.uuid,
@@ -1659,6 +1689,8 @@ class TelekinesisMove(BaseAction):
             new_phase=EventPhase.EFFECT,
             status_message=f"Moving {grabbed.name} to {target_pos}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         forced_event = ForcedMovementEvent(
             source_entity_uuid=caster.uuid,
@@ -1780,6 +1812,8 @@ class TelekinesisGrab(BaseAction):
             new_phase=EventPhase.EFFECT,
             status_message=f"STR save: {'Success' if success else 'Failure'}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         if success:
             return effect_event.phase_to(
@@ -1848,6 +1882,8 @@ class Telekinesis(SpellAction):
             new_phase=EventPhase.EFFECT,
             status_message=f"{caster.name} casts Telekinesis"
         )
+        if effect_event.canceled:
+            return effect_event
 
         grab = TelekinesisGrab(
             source_entity_uuid=caster.uuid,
@@ -1874,6 +1910,8 @@ class Telekinesis(SpellAction):
                 costs=[],
             )
             first_grab.apply()
+
+        self._close_concentration(effect_event)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -1989,6 +2027,8 @@ class Regenerate(SpellAction):
             target_entity_name=target.name,
             status_message=f"Regenerate heals {target.name}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         healing_roll = fire_heal_roll_result(caster.uuid, target.uuid, healing, effect_event, "Regenerate")
         actual = target.receive_healing(

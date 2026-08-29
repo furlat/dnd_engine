@@ -257,16 +257,15 @@ def test_canceled_multislot_equip_has_no_public_events_or_location_mutation() ->
         EventType.ARMOR_UNEQUIP,
     }
 
-    def observe_equipment_event(event: Event) -> None:
-        if event.event_type in equipment_event_types:
-            observed_events.append(event)
-
-    EventQueue.add_on_event_callback(observe_equipment_event)
     cursor = EventQueue.event_cursor()
     try:
         assert not entity.equipment.equip(greatsword, WeaponSlot.MELEE_MAIN)
     finally:
-        EventQueue.remove_on_event_callback(observe_equipment_event)
+        observed_events.extend(
+            event
+            for _, event in EventQueue.iter_events_since(cursor)
+            if event.event_type in equipment_event_types
+        )
 
     assert validation_counts == {"main": 1, "shield": 1}
     assert observed_events == []

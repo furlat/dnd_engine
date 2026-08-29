@@ -74,7 +74,6 @@ class TutorialArmorBonusCondition(BaseCondition):
 def reset_block_state() -> None:
     """Clear global state touched by block tutorial examples."""
     EventQueue.reset()
-    EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
     BaseValue._registry.clear()
     BaseBlock._registry.clear()

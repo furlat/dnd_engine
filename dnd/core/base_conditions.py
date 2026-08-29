@@ -235,6 +235,12 @@ class ConditionApplicationEvent(Event):
         """Return the immutable origin inherited by the applied condition."""
         return self.condition.effect_origin
 
+    def resolve_sub_events(self) -> None:
+        """Reduce observer state after this condition application commits."""
+        from dnd.blocks.sensory import spatial_senses_system
+
+        spatial_senses_system.reduce_event(self)
+
     def generate_combat_log(self) -> Optional[CombatLogEntry]:
         """Generate combat log for condition application."""
         cond = self.condition
@@ -359,6 +365,12 @@ class ConditionRemovalEvent(Event):
     def get_effect_origin(self) -> Optional[EffectOrigin]:
         """Return the immutable origin owned by the removed condition."""
         return self.condition.effect_origin
+
+    def resolve_sub_events(self) -> None:
+        """Reduce observer state after this condition removal commits."""
+        from dnd.blocks.sensory import spatial_senses_system
+
+        spatial_senses_system.reduce_event(self)
 
     def generate_combat_log(self) -> Optional[CombatLogEntry]:
         """Generate combat log for condition removal."""

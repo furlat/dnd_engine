@@ -29,6 +29,7 @@ from dnd.types.equipment import WeaponSlot
 from dnd.types.items import ItemKind
 from dnd.core.events.events_registry import EventPhase, EventQueue, EventType
 from dnd.game import Game
+from dnd.runtime_reset import reset_engine_runtime
 
 
 @pytest.fixture(autouse=True)
@@ -105,17 +106,7 @@ def test_composition_commits_one_terminal_creation_fact() -> None:
 def test_creation_fact_uses_the_normal_completion_metadata_path() -> None:
     entity = create_entity(uuid4(), entity_kind_id="test.completion-metadata")
     observer_uuid = str(uuid4())
-    completion_inputs: list[EventPhase] = []
-    committed_inputs: list[bool] = []
-
-    def observe_completion(event) -> None:
-        if event.event_type is EventType.ENTITY_CREATED:
-            completion_inputs.append(event.phase)
-            committed = Entity.get(event.entity_uuid)
-            assert committed is not None
-            committed_inputs.append(committed.creation_committed)
-
-    EventQueue.add_pre_completion_callback(observe_completion)
+    cursor = EventQueue.event_cursor()
     EventQueue.set_identified_entity_observer_computer(
         lambda event: (
             {str(entity.uuid): {observer_uuid}}
@@ -125,9 +116,17 @@ def test_creation_fact_uses_the_normal_completion_metadata_path() -> None:
     )
     try:
         compose_entity(entity)
-        fact = EventQueue.get_events_by_type(EventType.ENTITY_CREATED)[0]
-        assert completion_inputs == [EventPhase.COMPLETION]
-        assert committed_inputs == [True]
+        facts = [
+            event
+            for _, event in EventQueue.iter_events_since(cursor)
+            if event.event_type is EventType.ENTITY_CREATED
+        ]
+        assert len(facts) == 1
+        fact = facts[0]
+        assert fact.phase is EventPhase.COMPLETION
+        committed = Entity.get(fact.entity_uuid)
+        assert committed is not None
+        assert committed.creation_committed is True
         assert fact.located_entity_observer_uuids == {
             str(entity.uuid): {observer_uuid},
         }
@@ -136,6 +135,7 @@ def test_creation_fact_uses_the_normal_completion_metadata_path() -> None:
 
 
 def test_game_deploys_only_after_the_creation_fact() -> None:
+    reset_engine_runtime(grid_size=(8, 8))
     entity = create_entity(uuid4(), entity_kind_id="test.deployable")
     game = Game()
     try:

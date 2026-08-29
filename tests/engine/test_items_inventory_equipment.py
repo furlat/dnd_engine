@@ -21,7 +21,13 @@ from dnd.content.items.environment_item_builders import build_directional_door
 from dnd.types.equipment import BodyPart, WeaponProperty, WeaponSlot
 from dnd.blocks.inventory import Inventory
 from dnd.core.base_block import BaseBlock
+from dnd.core.base_conditions import (
+    BaseCondition,
+    ConditionRemovalEvent,
+    Duration,
+)
 from dnd.types.world import CardinalDirection, LightLevel, WorldEdgeChannel
+from dnd.types.conditions import DurationType
 from dnd.core.base_object import BaseObject
 from dnd.core.events.events_registry import (
     Event,
@@ -31,7 +37,7 @@ from dnd.core.events.events_registry import (
     EventType,
     Trigger,
 )
-from dnd.core.events.item_events import ItemLocationStateEvent
+from dnd.core.events.item_events import ItemChargeConsumptionEvent, ItemLocationStateEvent
 from dnd.core.events.world_events import (
     SpatialEffectInteractionEvent,
     SpatialChangeEvent,
@@ -64,7 +70,6 @@ def reset_item_state(
 ) -> None:
     """Clear global state and create a rectangular item test grid."""
     reset_combat_state()
-    EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
     BaseValue._registry.clear()
@@ -82,6 +87,175 @@ def put_in_inventory(entity: Entity, item: BaseItem) -> None:
     assert entity.inventory.add_item(item)
     item.owner_uuid = entity.uuid
     item.stored_in_uuid = entity.inventory.uuid
+
+
+class TurnStartDurationProbe(BaseCondition):
+    """One-round condition used to prove each TurnStart duration owner."""
+
+    name: str = "Turn Start Duration Probe"
+
+
+def _one_round_probe(*, name: str, source_uuid: UUID, target_uuid: UUID) -> TurnStartDurationProbe:
+    """Build one independently named one-round duration probe."""
+    return TurnStartDurationProbe(
+        name=name,
+        source_entity_uuid=source_uuid,
+        target_entity_uuid=target_uuid,
+        duration=Duration(
+            duration=1,
+            duration_type=DurationType.ROUNDS,
+        ),
+    )
+
+
+def _reaches_event(event: Event, ancestor: Event) -> bool:
+    """Return whether one stored event descends from the exact ancestor fact."""
+    current = event
+    visited = set()
+    while current.parent_event is not None:
+        assert current.uuid not in visited
+        visited.add(current.uuid)
+        parent = EventQueue.get_event_by_uuid(current.parent_event)
+        assert parent is not None
+        if parent.uuid == ancestor.uuid:
+            return True
+        current = parent
+    return False
+
+
+def test_turn_start_execution_cancel_is_terminal_without_duration_mutation() -> None:
+    """Execution cancellation publishes no later mechanics or duration children."""
+    reset_item_state()
+    entity = create_test_monster(
+        "monster.skeleton",
+        name="Canceled Turn Owner",
+        position=(0, 0),
+    )
+    equipped_item = entity.equipment.get_all_equipped_items()[0]
+    inventory_item = BaseItem(
+        source_entity_uuid=entity.uuid,
+        name="Canceled Turn Inventory Item",
+    )
+    put_in_inventory(entity, inventory_item)
+    probes = (
+        _one_round_probe(
+            name="Canceled Entity Duration",
+            source_uuid=entity.uuid,
+            target_uuid=entity.uuid,
+        ),
+        _one_round_probe(
+            name="Canceled Equipped Duration",
+            source_uuid=entity.uuid,
+            target_uuid=equipped_item.uuid,
+        ),
+        _one_round_probe(
+            name="Canceled Inventory Duration",
+            source_uuid=entity.uuid,
+            target_uuid=inventory_item.uuid,
+        ),
+    )
+    entity.add_condition(probes[0])
+    equipped_item.add_condition(probes[1])
+    inventory_item.add_condition(probes[2])
+
+    def cancel_turn_start(event: Event, _source_entity_uuid: UUID) -> Event:
+        return event.cancel(status_message="Turn start veto")
+
+    EventQueue.add_event_handler(EventHandler(
+        source_entity_uuid=entity.uuid,
+        name="Cancel Turn Start Execution",
+        validation_only=True,
+        trigger_conditions=[Trigger(
+            event_type=EventType.TURN_START,
+            event_phase=EventPhase.EXECUTION,
+            event_target_entity_uuid=entity.uuid,
+        )],
+        event_processor=cancel_turn_start,
+    ))
+    cursor = EventQueue.event_cursor()
+
+    terminal = entity.on_turn_start()
+
+    events = [event for _, event in EventQueue.iter_events_since(cursor)]
+    assert terminal.phase is EventPhase.CANCEL
+    assert events[-1] is terminal
+    assert not entity.is_my_turn
+    assert not any(isinstance(event, ConditionRemovalEvent) for event in events)
+    assert all(probe.applied for probe in probes)
+    assert all(probe.duration.duration == 1 for probe in probes)
+    assert probes[0].name in entity.active_conditions
+    assert probes[1].name in equipped_item.active_conditions
+    assert probes[2].name in inventory_item.active_conditions
+
+
+def test_turn_start_execution_owns_entity_equipped_and_inventory_expiration() -> None:
+    """All three TurnStart duration owners expire before the root terminal."""
+    reset_item_state()
+    entity = create_test_monster(
+        "monster.skeleton",
+        name="Turn Duration Owner",
+        position=(0, 0),
+    )
+    equipped_item = entity.equipment.get_all_equipped_items()[0]
+    inventory_item = BaseItem(
+        source_entity_uuid=entity.uuid,
+        name="Turn Duration Inventory Item",
+    )
+    put_in_inventory(entity, inventory_item)
+    probes = (
+        _one_round_probe(
+            name="Entity Turn Expiration",
+            source_uuid=entity.uuid,
+            target_uuid=entity.uuid,
+        ),
+        _one_round_probe(
+            name="Equipped Turn Expiration",
+            source_uuid=entity.uuid,
+            target_uuid=equipped_item.uuid,
+        ),
+        _one_round_probe(
+            name="Inventory Turn Expiration",
+            source_uuid=entity.uuid,
+            target_uuid=inventory_item.uuid,
+        ),
+    )
+    entity.add_condition(probes[0])
+    equipped_item.add_condition(probes[1])
+    inventory_item.add_condition(probes[2])
+    cursor = EventQueue.event_cursor()
+
+    terminal = entity.on_turn_start()
+
+    events = [event for _, event in EventQueue.iter_events_since(cursor)]
+    execution = next(
+        event
+        for event in events
+        if event.event_type is EventType.TURN_START
+        and event.phase is EventPhase.EXECUTION
+    )
+    removals = [
+        event
+        for event in events
+        if isinstance(event, ConditionRemovalEvent)
+        and event.phase is EventPhase.COMPLETION
+    ]
+    assert terminal.phase is EventPhase.COMPLETION
+    assert events[-1] is terminal
+    assert {event.target_entity_uuid for event in removals} == {
+        entity.uuid,
+        equipped_item.uuid,
+        inventory_item.uuid,
+    }
+    assert all(_reaches_event(event, execution) for event in removals)
+    terminal_index = EventQueue.get_event_index(terminal.uuid)
+    assert terminal_index is not None
+    assert all(
+        EventQueue.get_event_index(event.uuid) < terminal_index
+        for event in removals
+    )
+    assert probes[0].name not in entity.active_conditions
+    assert probes[1].name not in equipped_item.active_conditions
+    assert probes[2].name not in inventory_item.active_conditions
 
 
 def test_authored_static_blockers_expose_exact_center_capabilities() -> None:
@@ -1077,6 +1251,117 @@ def test_eb_13_008_consumable_use_actions_consume_charges_and_stacks() -> None:
     assert entity.action_economy.bonus_actions.normalized_score == 0
     assert not entity.inventory.has_item(potion.uuid)
     assert BaseBlock.get(potion.uuid) is None
+
+
+def test_canceled_item_action_consumes_its_execution_charge_once() -> None:
+    """An execution-interrupted item action charges before its effect reaction."""
+    reset_item_state()
+    entity = create_test_monster(
+        "monster.skeleton",
+        name="Interrupted Patient",
+        position=(0, 0),
+        darkvision=False,
+    )
+    potion = build_authored_item("consumable.healing_potion", entity.uuid)
+    assert isinstance(potion, UsableItem)
+    put_in_inventory(entity, potion)
+    charges_before = potion.charges
+
+    def cancel_healing(event: Event, _source_entity_uuid: UUID) -> Event:
+        return event.cancel(status_message="Canceled before item charge completion")
+
+    entity.add_event_handler(EventHandler(
+        name="Cancel item-backed healing",
+        source_entity_uuid=entity.uuid,
+        trigger_conditions=[Trigger(
+            event_type=EventType.HEAL,
+            event_phase=EventPhase.EFFECT,
+            event_source_entity_uuid=entity.uuid,
+        ), Trigger(
+            event_type=EventType.BASE_ACTION,
+            event_phase=EventPhase.EFFECT,
+            event_source_entity_uuid=entity.uuid,
+        )],
+        event_processor=cancel_healing,
+    ))
+
+    cursor = EventQueue.event_cursor()
+    result = execute_use_action(entity, potion.uuid, "Drink Potion")
+
+    assert result is not None
+    assert result.canceled
+    assert potion.charges == charges_before - 1
+    assert not entity.inventory.has_item(potion.uuid)
+    events = [event for _, event in EventQueue.iter_events_since(cursor)]
+    charge_completions = [
+        event
+        for event in events
+        if isinstance(event, ItemChargeConsumptionEvent)
+        and event.phase is EventPhase.COMPLETION
+    ]
+    assert len(charge_completions) == 1
+    action_declarations = [
+        event
+        for event in events
+        if event.event_type is EventType.BASE_ACTION
+        and event.phase is EventPhase.DECLARATION
+    ]
+    assert len(action_declarations) == 1
+    assert charge_completions[0].parent_event == action_declarations[0].uuid
+
+
+def test_item_removed_after_declaration_fails_closed_before_item_action_effect() -> None:
+    """A finite item disappearing after declaration cannot grant a free use."""
+    reset_item_state()
+    entity = create_test_monster(
+        "monster.skeleton",
+        name="Missing Source Patient",
+        position=(0, 0),
+        darkvision=False,
+    )
+    potion = build_authored_item(
+        "consumable.healing_potion",
+        entity.uuid,
+    )
+    assert isinstance(potion, UsableItem)
+    put_in_inventory(entity, potion)
+    set_hp(entity, 1)
+    hp_before = get_hp(entity)
+
+    def destroy_declared_item(event: Event, _: UUID) -> Event:
+        potion.destroy(parent_event=event)
+        return event
+
+    handler = EventHandler(
+        name="Remove finite item after declaration",
+        source_entity_uuid=entity.uuid,
+        trigger_conditions=[Trigger(
+            event_type=EventType.BASE_ACTION,
+            event_phase=EventPhase.DECLARATION,
+            event_source_entity_uuid=entity.uuid,
+        )],
+        event_processor=destroy_declared_item,
+    )
+    entity.add_event_handler(handler)
+    cursor = EventQueue.event_cursor()
+    try:
+        result = execute_use_action(entity, potion.uuid, "Drink Potion")
+    finally:
+        EventQueue.remove_event_handler(handler)
+
+    assert result is not None and result.canceled
+    assert get_hp(entity) == hp_before
+    assert BaseBlock.get(potion.uuid) is None
+    assert not entity.inventory.has_item(potion.uuid)
+    events = [event for _, event in EventQueue.iter_events_since(cursor)]
+    assert not any(event.event_type is EventType.HEAL for event in events)
+    root_events = [
+        event
+        for event in events
+        if event.lineage_uuid == result.lineage_uuid
+    ]
+    assert root_events[-1].uuid == result.uuid
+    assert root_events[-1].phase is EventPhase.CANCEL
 
 
 def test_eb_13_020_generic_use_actions_require_sufficient_charges() -> None:

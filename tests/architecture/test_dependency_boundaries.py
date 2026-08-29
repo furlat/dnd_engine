@@ -338,12 +338,34 @@ class ImportReference:
     syntax: str
     function_local: bool = False
     dynamic: bool = False
+    function_name: str | None = None
 
     @property
     def location(self) -> str:
         """Return a stable source location."""
         relative_path = self.path.relative_to(REPOSITORY_ROOT).as_posix()
         return f"{relative_path}:{self.line}"
+
+
+_CUT_1_ALLOWED_LOCAL_IMPORTS = frozenset({
+    ("dnd.core.base_conditions", "resolve_sub_events", "dnd.blocks.sensory"),
+    ("dnd.core.events.encounter_events", "resolve_sub_events", "dnd.blocks.sensory"),
+    ("dnd.core.events.encounter_events", "resolve_sub_events", "dnd.core.base_conditions"),
+    ("dnd.core.events.world_events", "resolve_sub_events", "dnd.core.gridmap"),
+    ("dnd.core.events.world_events", "resolve_sub_events", "dnd.blocks.sensory"),
+})
+
+
+def _is_allowed_cut_1_local_import(reference: ImportReference) -> bool:
+    """Recognize only the method-local imports authorized by Cut 1."""
+    return (
+        reference.function_local
+        and (
+            reference.importer,
+            reference.function_name,
+            reference.target,
+        ) in _CUT_1_ALLOWED_LOCAL_IMPORTS
+    )
 
 
 @dataclass(frozen=True)
@@ -492,13 +514,24 @@ class _ImportCollector(ast.NodeVisitor):
         self.source_module = source_module
         self.known_modules = known_modules
         self.function_depth = 0
+        self.function_names: list[str] = []
         self.references: list[ImportReference] = []
 
     def _visit_function(self, node: ast.AST) -> None:
         """Visit one function-like scope."""
         self.function_depth += 1
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            self.function_names.append(node.name)
+        else:
+            self.function_names.append("<lambda>")
         self.generic_visit(node)
+        self.function_names.pop()
         self.function_depth -= 1
+
+    @property
+    def function_name(self) -> str | None:
+        """Return the innermost function name, when the import is local."""
+        return self.function_names[-1] if self.function_names else None
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
         self._visit_function(node)
@@ -518,6 +551,7 @@ class _ImportCollector(ast.NodeVisitor):
                 target=alias.name,
                 syntax=f"import {alias.name}",
                 function_local=self.function_depth > 0,
+                function_name=self.function_name,
             ))
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
@@ -536,6 +570,7 @@ class _ImportCollector(ast.NodeVisitor):
                 target=target,
                 syntax=f"from {imported_from} import {alias.name}",
                 function_local=self.function_depth > 0,
+                function_name=self.function_name,
             ))
 
 
@@ -891,7 +926,11 @@ def test_production_has_no_function_local_or_dynamic_project_imports() -> None:
     local_imports = [
         reference
         for reference in _import_references()
-        if reference.function_local and not reference.dynamic
+        if (
+            reference.function_local
+            and not reference.dynamic
+            and not _is_allowed_cut_1_local_import(reference)
+        )
     ]
     dynamic_violations = list(_dynamic_import_violations())
     messages: list[str] = []
@@ -958,6 +997,8 @@ def test_internal_import_graph_has_no_cycles() -> None:
     known_modules = frozenset(_source_modules())
     graph = {module_name: set() for module_name in known_modules}
     for reference in _import_references():
+        if _is_allowed_cut_1_local_import(reference):
+            continue
         target = _known_project_target(reference.target, known_modules)
         if target is not None:
             graph[reference.importer].add(target)
@@ -1654,4 +1695,93 @@ def test_weapon_attack_events_have_one_metadata_snapshot_boundary() -> None:
         "create_weapon_attack_declaration_event; only NaturalAttack owns an "
         "explicit non-equipment snapshot.\n"
         + "\n".join(details)
+    )
+
+
+def test_no_generic_pre_completion_callback_registration_remains() -> None:
+    """Cut 2 removes the generic pre-completion callback surface entirely."""
+
+    class RegistrationCollector(ast.NodeVisitor):
+        def __init__(self, module_name: str) -> None:
+            self.module_name = module_name
+            self.function_names: list[str] = []
+            self.registrations: list[tuple[str, str | None, str | None, int]] = []
+
+        def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+            self.function_names.append(node.name)
+            self.generic_visit(node)
+            self.function_names.pop()
+
+        def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+            self.function_names.append(node.name)
+            self.generic_visit(node)
+            self.function_names.pop()
+
+        def visit_Call(self, node: ast.Call) -> None:
+            if (
+                isinstance(node.func, ast.Attribute)
+                and node.func.attr == "add_pre_completion_callback"
+            ):
+                callback_name = None
+                if node.args and isinstance(node.args[0], ast.Name):
+                    callback_name = node.args[0].id
+                self.registrations.append(
+                    (
+                        self.module_name,
+                        self.function_names[-1] if self.function_names else None,
+                        callback_name,
+                        node.lineno,
+                    )
+                )
+            self.generic_visit(node)
+
+    registrations: list[tuple[str, str | None, str | None, int]] = []
+    for source_module in _source_modules().values():
+        collector = RegistrationCollector(source_module.name)
+        collector.visit(source_module.tree)
+        registrations.extend(collector.registrations)
+
+    assert registrations == [], (
+        "No generic pre-completion registration may remain:\n"
+        + "\n".join(
+            f"- {module}:{line} {function or '<module>'} -> {callback or '<dynamic>'}"
+            for module, function, callback, line in registrations
+        )
+    )
+
+
+def test_no_terminal_phase_handlers_are_declared_in_production() -> None:
+    """Cut 2 makes COMPLETION and CANCEL terminal facts, never handler inputs."""
+    findings: list[str] = []
+    for source_module in _source_modules().values():
+        for node in ast.walk(source_module.tree):
+            if not isinstance(node, ast.Call):
+                continue
+            if not (
+                isinstance(node.func, ast.Name)
+                and node.func.id == "Trigger"
+            ):
+                continue
+            phase_keyword = next(
+                (
+                    keyword.value
+                    for keyword in node.keywords
+                    if keyword.arg == "event_phase"
+                ),
+                None,
+            )
+            if (
+                isinstance(phase_keyword, ast.Attribute)
+                and isinstance(phase_keyword.value, ast.Name)
+                and phase_keyword.value.id == "EventPhase"
+                and phase_keyword.attr in {"COMPLETION", "CANCEL"}
+            ):
+                findings.append(
+                    f"- {source_module.display_path}:{node.lineno}: "
+                    f"EventPhase.{phase_keyword.attr}"
+                )
+
+    assert not findings, (
+        "Handlers may not trigger on terminal COMPLETION or CANCEL phases:\n"
+        + "\n".join(sorted(findings))
     )

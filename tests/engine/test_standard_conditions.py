@@ -87,7 +87,6 @@ def fixed_d20(*values: int):
 def reset_condition_state() -> None:
     """Clear global state touched by these condition examples."""
     reset_combat_state()
-    EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
     BaseValue._registry.clear()

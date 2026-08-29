@@ -49,7 +49,6 @@ from tests.engine.support import reset_combat_state
 def reset_combat_tutorial_state(width: int = 8, height: int = 8) -> None:
     """Clear global state and create a small combat arena."""
     reset_combat_state()
-    EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
     BaseValue._registry.clear()
     BaseBlock._registry.clear()

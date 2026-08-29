@@ -35,6 +35,11 @@ from dnd.types.rolls import AttackOutcome
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.combat_log import CombatLogEntryType
 from dnd.core.base_block import BaseBlock
+from dnd.core.base_conditions import (
+    BaseCondition,
+    ConditionApplicationEvent,
+    ConditionRemovalEvent,
+)
 from dnd.core.base_object import BaseObject
 from dnd.core.action_execution import MovementTerminationReason
 from dnd.types.equipment import WeaponSlot
@@ -42,6 +47,7 @@ from dnd.types.abilities import AbilityName
 from dnd.core.events.encounter_events import (
     DeathSaveEvent,
     DeathEvent,
+    LifeStateChangeEvent,
 )
 from dnd.core.events.events_registry import (
     Event,
@@ -55,6 +61,7 @@ from dnd.core.events.world_events import (
     ForcedMovementEvent,
     MovementTrajectory,
     SpatialChangeEvent,
+    SpatialEffectChangeEvent,
     StepMovementEvent,
 )
 from dnd.core.events.resolution_events import (
@@ -66,11 +73,13 @@ from dnd.content.spike_trap_materialization import materialize_spike_trap_condit
 from dnd.types.life import LifeState
 from dnd.types.damage import DamageType
 from dnd.types.creatures import Size
+from dnd.types.spatial_effects import SpatialEffectChangeOperation
 from dnd.core.modifiers import NumericalModifier
 from dnd.types.rolls import AdvantageStatus
 from dnd.core.values import BaseValue, ModifiableValue
 from dnd.entities.entity import Entity, EntityConfig
 from dnd.actions.reactions import add_opportunity_attack_handler
+from dnd.monsters.traits import LeadershipAura, LeadershipMembership
 from tests.engine.support import (
     create_test_entity,
     create_test_monster,
@@ -86,7 +95,6 @@ from tests.engine.support import (
 def reset_core_action_state() -> None:
     """Clear global state touched by these examples."""
     reset_combat_state()
-    EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
     BaseValue._registry.clear()
@@ -480,6 +488,227 @@ def test_damage_declaration_cancellation_prevents_application() -> None:
 
     assert applied == 0
     assert target.get_hp() == hp_before
+
+
+@pytest.mark.parametrize(
+    "phase",
+    (EventPhase.EXECUTION, EventPhase.EFFECT),
+    ids=("execution", "effect"),
+)
+@pytest.mark.parametrize(
+    "attempt",
+    ("cancel", "rewrite"),
+    ids=("cancel", "rewrite"),
+)
+def test_life_state_lifecycle_ignores_handler_attempts(
+    phase: EventPhase,
+    attempt: str,
+) -> None:
+    """Life-state facts commit before exposing any completed transition."""
+    reset_core_action_state()
+    source = create_test_monster(
+        "monster.goblin",
+        name="Life-state source",
+        position=(5, 5),
+        faction="heroes",
+    )
+    target = strong_entity(
+        "Life-state target",
+        position=(6, 5),
+        faction="monsters",
+        setup_actions=False,
+    )
+    handler_calls = []
+
+    def attempt_mutation(event, _source_uuid):
+        handler_calls.append(event)
+        if attempt == "cancel":
+            return event.cancel(status_message="life-state veto")
+        return event.model_copy(update={"new_state": LifeState.ALIVE})
+
+    handler = EventHandler(
+        source_entity_uuid=target.uuid,
+        trigger_conditions=[
+            Trigger(
+                event_type=EventType.LIFE_STATE_CHANGE,
+                event_phase=phase,
+                event_target_entity_uuid=target.uuid,
+            )
+        ],
+        event_processor=attempt_mutation,
+    )
+    target.add_event_handler(handler)
+    try:
+        target.receive_damage(
+            amount=target.get_hp() + 5,
+            damage_type=DamageType.SLASHING,
+            source_entity_uuid=source.uuid,
+        )
+    finally:
+        handler.remove()
+
+    life_events = [
+        event
+        for event in EventQueue.get_events_chronological()
+        if isinstance(event, LifeStateChangeEvent)
+        and event.entity_uuid == target.uuid
+    ]
+    assert handler_calls == []
+    assert [event.phase for event in life_events] == [
+        EventPhase.DECLARATION,
+        EventPhase.EXECUTION,
+        EventPhase.EFFECT,
+        EventPhase.COMPLETION,
+    ]
+    assert all(
+        event.previous_state is LifeState.ALIVE
+        and event.new_state is LifeState.DEAD
+        for event in life_events
+    )
+    assert target.health.life_state is LifeState.DEAD
+
+
+def test_life_state_retires_leadership_source_owned_conditions() -> None:
+    """A source leaving play removes its aura and linked membership in-tree."""
+    reset_core_action_state()
+    knight = create_test_monster(
+        "creature.knight",
+        name="Leadership source",
+        position=(5, 5),
+        faction="monsters",
+    )
+    ally = create_test_monster(
+        "creature.commoner",
+        name="Leadership ally",
+        position=(6, 5),
+        faction="monsters",
+    )
+    leadership = knight.get_action_template("Leadership")
+    assert leadership is not None
+
+    leadership_cursor = EventQueue.event_cursor()
+    leadership_event = leadership.instantiate().apply()
+    assert leadership_event is not None
+    assert leadership_event.phase is EventPhase.COMPLETION
+
+    aura = next(
+        condition
+        for condition in get_map().get_spatial_conditions()
+        if isinstance(condition, LeadershipAura)
+        and condition.anchor_uuid == knight.uuid
+    )
+    membership = ally.active_conditions.get("Leadership")
+    assert isinstance(membership, LeadershipMembership)
+    aura_uuid = aura.uuid
+    membership_uuid = membership.uuid
+    assert BaseCondition.get(aura_uuid) is aura
+    assert BaseCondition.get(membership_uuid) is membership
+
+    leadership_rows = [
+        event
+        for _, event in EventQueue.iter_events_since(leadership_cursor)
+    ]
+    created_rows = [
+        event
+        for event in leadership_rows
+        if (
+            isinstance(event, SpatialEffectChangeEvent)
+            and event.spatial_effect_uuid == aura_uuid
+            and event.operation is SpatialEffectChangeOperation.CREATED
+        )
+    ]
+    assert [event.phase for event in created_rows] == [
+        EventPhase.DECLARATION,
+        EventPhase.EXECUTION,
+        EventPhase.EFFECT,
+        EventPhase.COMPLETION,
+    ]
+    created_effect = next(
+        event for event in created_rows if event.phase is EventPhase.EFFECT
+    )
+    created_completion = next(
+        event
+        for event in created_rows
+        if event.phase is EventPhase.COMPLETION
+    )
+    membership_application_rows = [
+        event
+        for event in leadership_rows
+        if (
+            isinstance(event, ConditionApplicationEvent)
+            and event.condition.uuid == membership_uuid
+        )
+    ]
+    assert membership_application_rows
+    assert all(
+        event.parent_event == created_effect.uuid
+        for event in membership_application_rows
+    )
+    membership_application_completion = next(
+        event
+        for event in membership_application_rows
+        if event.phase is EventPhase.COMPLETION
+    )
+    assert leadership_rows.index(membership_application_completion) < leadership_rows.index(
+        created_completion
+    )
+
+    death_cursor = EventQueue.event_cursor()
+    instant_death = knight.receive_instant_death(
+        source_entity_uuid=ally.uuid,
+        source_description="native source-left-play regression",
+    )
+    assert instant_death.phase is EventPhase.COMPLETION
+    assert knight.health.life_state is LifeState.DEAD
+    assert BaseCondition.get(aura_uuid) is None
+    assert BaseCondition.get(membership_uuid) is None
+    assert all(
+        condition.uuid != aura_uuid
+        for condition in get_map().get_spatial_conditions()
+    )
+    assert ally.active_conditions.get("Leadership") is None
+
+    death_rows = [
+        event
+        for _, event in EventQueue.iter_events_since(death_cursor)
+    ]
+    life_rows = [
+        event
+        for event in death_rows
+        if isinstance(event, LifeStateChangeEvent)
+        and event.entity_uuid == knight.uuid
+    ]
+    assert [event.phase for event in life_rows] == [
+        EventPhase.DECLARATION,
+        EventPhase.EXECUTION,
+        EventPhase.EFFECT,
+        EventPhase.COMPLETION,
+    ]
+    life_effect = next(
+        event for event in life_rows if event.phase is EventPhase.EFFECT
+    )
+    life_completion = next(
+        event for event in life_rows if event.phase is EventPhase.COMPLETION
+    )
+    removal_rows = [
+        event
+        for event in death_rows
+        if isinstance(event, ConditionRemovalEvent)
+        and event.condition.uuid in {aura_uuid, membership_uuid}
+    ]
+    assert removal_rows
+    assert all(event.parent_event == life_effect.uuid for event in removal_rows)
+    removal_completion_rows = [
+        event for event in removal_rows if event.phase is EventPhase.COMPLETION
+    ]
+    assert {event.condition.uuid for event in removal_completion_rows} == {
+        aura_uuid,
+        membership_uuid,
+    }
+    assert all(
+        death_rows.index(event) < death_rows.index(life_completion)
+        for event in removal_completion_rows
+    )
 
 
 def test_movement_declaration_handlers_dispatch_once_per_move() -> None:

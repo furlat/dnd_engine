@@ -718,46 +718,12 @@ class MetamagicActive(BaseCondition):
                 )
             )
 
-        handler = EventHandler(
-            name="MetamagicAutoRemove",
-            source_entity_uuid=self.target_entity_uuid,
-            trigger_conditions=[
-                Trigger(
-                    name="CastSpell",
-                    event_type=EventType.CAST_SPELL,
-                    event_phase=EventPhase.EFFECT,
-                    event_source_entity_uuid=self.target_entity_uuid,
-                ),
-                Trigger(
-                    name="CommittedCastCanceled",
-                    event_type=EventType.CAST_SPELL,
-                    event_phase=EventPhase.CANCEL,
-                    event_source_entity_uuid=self.target_entity_uuid,
-                ),
-            ],
-            event_processor=self._on_spell_cast,
-        )
-        target.add_event_handler(handler)
-        handler_uuids = [handler.uuid]
-
         effect_event = declaration_event.phase_to(
             EventPhase.EFFECT,
             update={"condition": self},
             status_message=f"Metamagic ({self.metamagic_type}) activated",
         )
-        return [], handler_uuids, [], [], effect_event
-
-    def _on_spell_cast(self, event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
-        """Consume metamagic after a successful or execution-canceled cast."""
-        if (
-            event.phase is EventPhase.CANCEL
-            and event.canceled_from_phase is not EventPhase.EXECUTION
-        ):
-            return event
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if target and self.name in target.active_conditions:
-            target.remove_condition(self.name, parent_event=event)
-        return event
+        return [], [], [], [], effect_event
 
     def _release_owned_runtime_state(
         self,

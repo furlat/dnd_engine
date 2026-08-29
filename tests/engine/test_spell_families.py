@@ -5,6 +5,7 @@ from typing import Optional, cast
 from unittest.mock import patch
 from uuid import UUID, uuid4
 
+import pytest
 from pydantic import Field
 
 from dnd.actions.standard import (
@@ -53,6 +54,7 @@ from dnd.core.events.world_events import (
     SpatialEffectChangeEvent,
     SpatialEffectInteractionEvent,
 )
+from dnd.core.events.action_events import CounterspellReactionEvent
 from dnd.core.events.item_events import ItemLocationStateEvent
 from dnd.types.items import ItemLocation
 from dnd.types.spatial_effects import (
@@ -82,6 +84,7 @@ from tests.spell_test_exports import (
     SacredFlame,
 )
 from dnd.spells.abjuration import (
+    BeaconOfHope,
     DeathWard,
     FreedomOfMovement,
     FreedomOfMovementEffect,
@@ -89,7 +92,10 @@ from dnd.spells.abjuration import (
     LesserRestoration,
     MageArmor,
     ProtectionFromPoison,
+    ProtectionFromEnergy,
     RemoveCurse,
+    Stoneskin,
+    register_counterspell_reaction,
     register_shield_reaction,
 )
 from dnd.spells.conjuration import (
@@ -117,8 +123,8 @@ from dnd.spells.divination import Guidance, SeeInvisibility
 from dnd.spells.evocation import ContinualFlame, CureWounds, GustOfWind, GustOfWindZone, HealingWord, RayOfFrostEffect
 from dnd.spells.illusion import ColorSpray, Invisibility, MirrorImage
 from dnd.spells.illusion import MirrorImageEffect
-from dnd.spells.necromancy import AbilityCurseEffect, Eyebite, FalseLife
-from dnd.spells.transmutation import Haste, Slow, SlowedEffect, SpikeGrowth
+from dnd.spells.necromancy import AbilityCurseEffect, BestowCurse, Eyebite, FalseLife, NecroticBless
+from dnd.spells.transmutation import EnhanceAbility, EnlargeReduce, Haste, Slow, SlowedEffect, SpikeGrowth
 from dnd.spells.enchantment import Bane, Bless, HoldMonster, HoldPerson, PowerWordKill, Sleep
 from dnd.spatial.area_conditions import SpatialCondition
 from dnd.content.spatial_effect_recipes import (
@@ -144,7 +150,6 @@ from tests.engine.support import (
 def reset_spell_family_state(width: int = 12, height: int = 8) -> None:
     """Clear global state and create a rectangular spell-family test grid."""
     reset_combat_state()
-    EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
     BaseValue._registry.clear()
@@ -1592,7 +1597,6 @@ def test_eb_15_022_shield_handler_toggle_gates_attack_and_missile_reactions() ->
 def test_eb_15_036_shield_condition_log_nests_under_triggering_attack() -> None:
     """EB-15-036: Shield's condition application logs under its parent attack."""
     reset_spell_family_state()
-    captured_logs: list[CombatLogEntry] = []
     shielded = create_family_caster(
         name="Shielded Mage",
         position=(1, 1),
@@ -1606,18 +1610,15 @@ def test_eb_15_036_shield_condition_log_nests_under_triggering_attack() -> None:
     )
     register_shield_reaction(shielded)
     Entity.materialize_all_navigation()
-    EventQueue.set_combat_log_callback(
-        lambda event: captured_logs.append(event.combat_log) if event.combat_log else None
-    )
 
     attack_event = run_shield_attack(attacker, shielded, 10)
 
     assert attack_event.attack_outcome == AttackOutcome.MISS
     assert attack_event.combat_log is not None
     assert attack_event.combat_log.entry_type == CombatLogEntryType.ATTACK
-    assert len(captured_logs) == 1
-    assert captured_logs[0] is attack_event.combat_log
-    assert [entry.entry_type for entry in captured_logs] == [CombatLogEntryType.ATTACK]
+    assert [entry.entry_type for entry in [attack_event.combat_log]] == [
+        CombatLogEntryType.ATTACK,
+    ]
 
     shield_logs = [
         entry for entry in attack_event.combat_log.sub_entries
@@ -1637,6 +1638,7 @@ def test_eb_15_005_multi_target_concentration_links_each_effect() -> None:
     ally_one = create_family_target(name="Ally One", position=(2, 1), faction="heroes")
     ally_two = create_family_target(name="Ally Two", position=(3, 1), faction="heroes")
     Entity.materialize_all_navigation()
+    cursor = EventQueue.event_cursor()
 
     event = Bless(
         source_entity_uuid=caster.uuid,
@@ -1646,6 +1648,17 @@ def test_eb_15_005_multi_target_concentration_links_each_effect() -> None:
     ).apply()
 
     event = assert_completed_spell(event)
+    root_index = EventQueue.get_event_index(event.uuid)
+    assert root_index is not None
+    condition_completions = [
+        candidate
+        for index, candidate in EventQueue.iter_events_since(cursor)
+        if index < root_index
+        and candidate.event_type is EventType.CONDITION_APPLICATION
+        and candidate.phase is EventPhase.COMPLETION
+        and candidate.target_entity_uuid in {ally_one.uuid, ally_two.uuid}
+    ]
+    assert len(condition_completions) == 2
     assert event.total_targets == 2
     assert "Bless" in ally_one.active_conditions
     assert "Bless" in ally_two.active_conditions
@@ -1659,6 +1672,86 @@ def test_eb_15_005_multi_target_concentration_links_each_effect() -> None:
     assert "Concentrating" not in caster.active_conditions
     assert "Bless" not in ally_one.active_conditions
     assert "Bless" not in ally_two.active_conditions
+
+
+@pytest.mark.parametrize(
+    "spell_name",
+    ("BeaconOfHope", "HoldMonster", "Bane", "Bless", "NecroticBless"),
+)
+def test_named_multi_target_concentration_closes_after_all_target_effects(
+    spell_name: str,
+) -> None:
+    """Each named convolution keeps its links before the root terminal."""
+    reset_spell_family_state(width=12, height=8)
+    caster_slots = {6: 1} if spell_name == "HoldMonster" else (
+        {3: 1} if spell_name == "BeaconOfHope" else (
+            {2: 1} if spell_name == "NecroticBless" else {1: 1}
+        )
+    )
+    caster = create_family_caster(spell_slots=caster_slots)
+    first = create_family_target(
+        name="First target",
+        position=(2, 1),
+        faction="heroes" if spell_name in {"BeaconOfHope", "Bless"} else "monsters",
+    )
+    second = create_family_target(
+        name="Second target",
+        position=(3, 1),
+        faction="heroes" if spell_name in {"BeaconOfHope", "Bless"} else "monsters",
+    )
+    if spell_name == "HoldMonster":
+        penalize_save(first, "wisdom")
+        penalize_save(second, "wisdom")
+    elif spell_name == "Bane":
+        penalize_save(first, "charisma")
+        penalize_save(second, "charisma")
+    elif spell_name == "NecroticBless":
+        first.creature_type = CreatureType.UNDEAD
+        penalize_save(second, "charisma")
+    Entity.materialize_all_navigation()
+    spell_type = {
+        "BeaconOfHope": BeaconOfHope,
+        "HoldMonster": HoldMonster,
+        "Bane": Bane,
+        "Bless": Bless,
+        "NecroticBless": NecroticBless,
+    }[spell_name]
+    spell_kwargs = {
+        "source_entity_uuid": caster.uuid,
+        "target_entity_uuid": first.uuid,
+        "extra_target_entity_uuids": [second.uuid],
+        "template": False,
+    }
+    if spell_name == "HoldMonster":
+        spell_kwargs["cast_at_level"] = 6
+    event = assert_completed_spell(spell_type(**spell_kwargs).apply())
+
+    root_index = EventQueue.get_event_index(event.uuid)
+    assert root_index is not None
+    expected_condition_names = {
+        "BeaconOfHope": {"Beacon of Hope"},
+        "HoldMonster": {"Hold Monster"},
+        "Bane": {"Bane"},
+        "Bless": {"Bless"},
+        "NecroticBless": {"Bless", "Bane"},
+    }[spell_name]
+    target_condition_completions = [
+        candidate
+        for index, candidate in EventQueue.iter_events_since(0)
+        if index < root_index
+        and candidate.event_type is EventType.CONDITION_APPLICATION
+        and candidate.phase is EventPhase.COMPLETION
+        and candidate.target_entity_uuid in {first.uuid, second.uuid}
+        and getattr(candidate.condition, "name", None) in expected_condition_names
+    ]
+    assert len(target_condition_completions) == 2
+    assert {
+        candidate.target_entity_uuid for candidate in target_condition_completions
+    } == {first.uuid, second.uuid}
+    assert "Concentrating" in caster.active_conditions
+    concentration = caster.active_conditions["Concentrating"]
+    assert isinstance(concentration, Concentrating)
+    assert len(concentration.linked_conditions) == 2
 
 
 def test_eb_15_015_bless_and_bane_rewrite_save_d20_results() -> None:
@@ -1752,6 +1845,300 @@ def test_eb_15_016_guidance_rewrites_one_skill_check_then_cleans_up() -> None:
     assert "Guidance" not in caster.active_conditions
     assert "Concentrating" not in caster.active_conditions
     guided_event.phase_to(EventPhase.COMPLETION)
+
+
+def test_guidance_effect_cancellation_is_the_root_terminal_before_spell_state() -> None:
+    """An EFFECT veto cancels Guidance before it creates its condition tree."""
+    reset_spell_family_state()
+    caster = create_family_caster(spell_slots={1: 1})
+    before_cursor = EventQueue.event_cursor()
+
+    def cancel_effect(event: Event, _: UUID) -> Event:
+        return event.cancel(status_message="Guidance effect canceled")
+
+    handler = EventHandler(
+        name="Cancel Guidance effect",
+        source_entity_uuid=uuid4(),
+        trigger_conditions=[
+            Trigger(
+                name="Guidance effect",
+                event_type=EventType.CAST_SPELL,
+                event_phase=EventPhase.EFFECT,
+                event_source_entity_uuid=caster.uuid,
+            ),
+        ],
+        event_processor=cancel_effect,
+    )
+    EventQueue.add_event_handler(handler)
+    try:
+        result = Guidance(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=caster.uuid,
+            template=False,
+        ).apply()
+    finally:
+        EventQueue.remove_event_handler(handler)
+
+    assert isinstance(result, SpellEvent)
+    assert result.phase is EventPhase.CANCEL
+    assert result.is_last is True
+    assert "Guidance" not in caster.active_conditions
+    assert "Concentrating" not in caster.active_conditions
+    root_events = [
+        event
+        for _, event in EventQueue.iter_events_since(before_cursor)
+        if event.lineage_uuid == result.lineage_uuid
+    ]
+    assert root_events[-1].uuid == result.uuid
+    assert root_events[-1].phase is EventPhase.CANCEL
+    assert not any(event.phase is EventPhase.COMPLETION for event in root_events)
+    terminal_index = EventQueue.get_event_index(result.uuid)
+    assert terminal_index is not None
+    assert list(EventQueue.iter_events_since(terminal_index + 1)) == []
+
+
+@pytest.mark.parametrize(
+    ("spell_type", "slot_level"),
+    (
+        (ProtectionFromEnergy, 3),
+        (Stoneskin, 4),
+        (BestowCurse, 3),
+        (EnhanceAbility, 2),
+        (EnlargeReduce, 2),
+    ),
+)
+def test_single_target_concentration_begins_only_after_effect_admission(
+    spell_type: type,
+    slot_level: int,
+) -> None:
+    """An EFFECT veto cannot leave a slot or target condition behind."""
+    reset_spell_family_state()
+    caster = create_family_caster(spell_slots={slot_level: 1})
+    target = create_family_target(
+        name="Concentration target",
+        position=(2, 1),
+        faction="heroes",
+    )
+    Entity.materialize_all_navigation()
+    cursor = EventQueue.event_cursor()
+
+    def cancel_effect(event: Event, _: UUID) -> Event:
+        return event.cancel(status_message="Single-target effect canceled")
+
+    handler = EventHandler(
+        name="Cancel single-target concentration effect",
+        source_entity_uuid=uuid4(),
+        trigger_conditions=[Trigger(
+            event_type=EventType.CAST_SPELL,
+            event_phase=EventPhase.EFFECT,
+            event_source_entity_uuid=caster.uuid,
+        )],
+        event_processor=cancel_effect,
+    )
+    EventQueue.add_event_handler(handler)
+    try:
+        result = spell_type(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid,
+            template=False,
+        ).apply()
+    finally:
+        EventQueue.remove_event_handler(handler)
+
+    assert isinstance(result, SpellEvent)
+    assert result.phase is EventPhase.CANCEL
+    assert result.is_last is True
+    assert "Concentrating" not in caster.active_conditions
+    emitted = [row for _, row in EventQueue.iter_events_since(cursor)]
+    assert not any(
+        row.event_type is EventType.CONDITION_APPLICATION
+        for row in emitted
+    )
+    assert emitted[-1].uuid == result.uuid
+
+
+@pytest.mark.parametrize(
+    ("spell_type", "slot_level", "undead"),
+    (
+        (Bless, 1, False),
+        (NecroticBless, 2, True),
+    ),
+)
+def test_per_target_effect_veto_precedes_multi_target_concentration_state(
+    spell_type: type,
+    slot_level: int,
+    undead: bool,
+) -> None:
+    """A canceled target application cannot install or link its condition."""
+    reset_spell_family_state()
+    caster = create_family_caster(spell_slots={slot_level: 1})
+    target = create_family_target(
+        name="Vetoed target",
+        position=(2, 1),
+        faction="heroes",
+    )
+    if undead:
+        target.creature_type = CreatureType.UNDEAD
+    Entity.materialize_all_navigation()
+    cursor = EventQueue.event_cursor()
+
+    def cancel_target_effect(event: Event, _: UUID) -> Event | None:
+        if isinstance(event, SpellEvent) and event.application_index == 0:
+            return event.cancel(status_message="Target application canceled")
+        return None
+
+    handler = EventHandler(
+        name="Cancel one target application",
+        source_entity_uuid=uuid4(),
+        trigger_conditions=[Trigger(
+            event_type=EventType.CAST_SPELL,
+            event_phase=EventPhase.EFFECT,
+            event_source_entity_uuid=caster.uuid,
+        )],
+        event_processor=cancel_target_effect,
+    )
+    EventQueue.add_event_handler(handler)
+    try:
+        result = spell_type(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid,
+            template=False,
+        ).apply()
+    finally:
+        EventQueue.remove_event_handler(handler)
+
+    result = assert_completed_spell(result)
+    assert "Bless" not in target.active_conditions
+    assert "Bane" not in target.active_conditions
+    assert "Concentrating" not in caster.active_conditions
+    emitted = [row for _, row in EventQueue.iter_events_since(cursor)]
+    canceled_applications = [
+        row
+        for row in emitted
+        if isinstance(row, SpellEvent)
+        and row.application_index == 0
+        and row.phase is EventPhase.CANCEL
+    ]
+    assert len(canceled_applications) == 1
+    assert not any(
+        row.event_type is EventType.CONDITION_APPLICATION
+        for row in emitted
+    )
+    assert emitted[-1].uuid == result.uuid
+
+
+def test_multi_target_effect_cancellation_precedes_aoe_children_and_state() -> None:
+    """An AOE EFFECT veto produces no per-target effects or concentration cleanup."""
+    reset_spell_family_state()
+    caster = create_family_caster(spell_slots={3: 1})
+    first_target = create_family_target(name="First target", position=(2, 1))
+    second_target = create_family_target(name="Second target", position=(3, 1))
+    first_hp = get_hp(first_target)
+    second_hp = get_hp(second_target)
+    Entity.materialize_all_navigation()
+    before_cursor = EventQueue.event_cursor()
+
+    def cancel_effect(event: Event, _: UUID) -> Event:
+        return event.cancel(status_message="AOE effect canceled")
+
+    handler = EventHandler(
+        name="Cancel AOE effect",
+        source_entity_uuid=uuid4(),
+        trigger_conditions=[
+            Trigger(
+                name="AOE effect",
+                event_type=EventType.CAST_SPELL,
+                event_phase=EventPhase.EFFECT,
+                event_source_entity_uuid=caster.uuid,
+            ),
+        ],
+        event_processor=cancel_effect,
+    )
+    EventQueue.add_event_handler(handler)
+    try:
+        result = Fireball(
+            source_entity_uuid=caster.uuid,
+            end_position=(2, 1),
+            template=False,
+        ).apply()
+    finally:
+        EventQueue.remove_event_handler(handler)
+
+    assert isinstance(result, SpellEvent)
+    assert result.phase is EventPhase.CANCEL
+    assert result.is_last is True
+    assert get_hp(first_target) == first_hp
+    assert get_hp(second_target) == second_hp
+    assert "Concentrating" not in caster.active_conditions
+    root_events = [
+        event
+        for _, event in EventQueue.iter_events_since(before_cursor)
+        if event.lineage_uuid == result.lineage_uuid
+    ]
+    assert root_events[-1].uuid == result.uuid
+    assert root_events[-1].phase is EventPhase.CANCEL
+    assert not any(event.phase is EventPhase.COMPLETION for event in root_events)
+    assert not any(
+        event.parent_event in {root.uuid for root in root_events}
+        and event.lineage_uuid != result.lineage_uuid
+        for _, event in EventQueue.iter_events_since(before_cursor)
+    )
+
+
+def test_counterspell_is_a_parented_child_of_the_canceled_spell_log() -> None:
+    """Counterspell remains a child fact when it interrupts a spell root."""
+    reset_spell_family_state(width=12, height=8)
+    caster = create_family_caster(
+        name="Incoming Caster",
+        position=(1, 1),
+        spell_slots={1: 1},
+        faction="heroes",
+    )
+    counterspeller = create_family_caster(
+        name="Counterspeller",
+        position=(5, 1),
+        spell_slots={3: 1},
+        faction="monsters",
+    )
+    register_counterspell_reaction(counterspeller)
+    Entity.materialize_all_navigation()
+    cursor = EventQueue.event_cursor()
+
+    result = MagicMissile(
+        source_entity_uuid=caster.uuid,
+        target_entity_uuid=counterspeller.uuid,
+        template=False,
+    ).apply()
+
+    assert isinstance(result, SpellEvent)
+    assert result.canceled
+    reaction_rows = [
+        event
+        for _, event in EventQueue.iter_events_since(cursor)
+        if isinstance(event, CounterspellReactionEvent)
+    ]
+    assert reaction_rows
+    assert all(event.parent_event is not None for event in reaction_rows)
+    assert all(
+        EventQueue.get_event_by_uuid(event.parent_event).lineage_uuid == result.lineage_uuid
+        for event in reaction_rows
+        if event.parent_event is not None
+        and EventQueue.get_event_by_uuid(event.parent_event) is not None
+    )
+    assert reaction_rows[-1].parent_lineage == result.lineage_uuid
+    assert reaction_rows[-1].lineage_uuid in result.children_lineages
+    assert result.combat_log is not None
+    interruption_logs = [
+        entry
+        for entry in result.combat_log.sub_entries
+        if entry.entry_type is CombatLogEntryType.SPELL_INTERRUPTION
+    ]
+    assert len(interruption_logs) == 1
+    assert interruption_logs[0].source_uuid == str(counterspeller.uuid)
+    assert not any(
+        isinstance(event, CounterspellReactionEvent) and event.parent_event is None
+        for _, event in EventQueue.iter_events_since(cursor)
+    )
 
 
 def test_eb_15_024_d20_mutation_handlers_are_roll_type_scoped() -> None:
@@ -1942,6 +2329,7 @@ def test_eb_15_017_hold_person_successful_initial_save_has_truthful_synced_log()
     target = create_family_target(name="Resisting Humanoid", position=(3, 1))
     boost_save(target, "wisdom")
     Entity.materialize_all_navigation()
+    cursor = EventQueue.event_cursor()
 
     event = HoldPerson(
         source_entity_uuid=caster.uuid,
@@ -1950,6 +2338,18 @@ def test_eb_15_017_hold_person_successful_initial_save_has_truthful_synced_log()
     ).apply()
 
     event = assert_completed_spell(event)
+    root_index = EventQueue.get_event_index(event.uuid)
+    assert root_index is not None
+    concentration_removals = [
+        candidate
+        for index, candidate in EventQueue.iter_events_since(cursor)
+        if index < root_index
+        and candidate.event_type is EventType.CONDITION_REMOVAL
+        and candidate.phase is EventPhase.COMPLETION
+        and candidate.target_entity_uuid == caster.uuid
+        and getattr(candidate.condition, "name", None) == "Concentrating"
+    ]
+    assert len(concentration_removals) == 1
     assert event.save_success is True
     assert event.save_roll is not None
     assert event.save_bonus == event.save_roll.bonus

@@ -440,7 +440,7 @@ def compose_entity(
         if validate is not None:
             validate(entity)
         entity.creation_committed = True
-        EventQueue.publish_completed_fact(_created_event(entity))
+        EventQueue.publish_inert_terminal_fact(_created_event(entity))
     except Exception:
         while entity.applied_class_levels:
             _uninstall_last_level(entity)

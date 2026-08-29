@@ -39,7 +39,7 @@ from dnd.core.traversal_connectors import (
     TraversalConnectorKind,
 )
 from dnd.core.gridmap import GridMap, get_map
-from dnd.core.events.events_registry import EventPhase, EventQueue, EventType
+from dnd.core.events.events_registry import Event, EventPhase, EventQueue, EventType
 from dnd.core.events.world_events import (
     SpatialChangeEvent,
     SpatialEffectInteractionEvent,
@@ -889,14 +889,27 @@ def build_battlefield(battlefield_id: str) -> BuiltBattlefield:
         grid.enable_events(flush_pending=False)
         raise
     grid.enable_events(flush_pending=False)
-    published_world_event = EventQueue.publish_completed_fact(world_event)
-    _materialize_authored_spike_traps(built)
-    _settle_authored_wall_torches(grid, published_world_event)
+    published_world_declaration = EventQueue.publish_preflighted(world_event)
+    world_execution = published_world_declaration.phase_to(
+        EventPhase.EXECUTION,
+        use_register=False,
+    )
+    world_execution = EventQueue.publish_preflighted(world_execution)
+    world_effect = world_execution.phase_to(
+        EventPhase.EFFECT,
+        use_register=False,
+    )
+    world_effect = EventQueue.publish_preflighted(world_effect)
+    _materialize_authored_spike_traps(built, parent_event=world_effect)
+    _settle_authored_wall_torches(grid, world_effect)
+    world_effect.phase_to(EventPhase.COMPLETION)
     return built
 
 
 def _materialize_authored_spike_traps(
     built: BuiltBattlefield,
+    *,
+    parent_event: Event,
 ) -> None:
     """Activate each reserved authored SpikeTrap after world publication."""
     reserved: list[tuple[UUID, set[tuple[int, int]]]] = []
@@ -913,6 +926,7 @@ def _materialize_authored_spike_traps(
         condition = materialize_spike_trap_condition(
             positions,
             condition_uuid=condition_uuid,
+            parent_event=parent_event,
         )
         if condition.uuid != condition_uuid or BaseCondition.get(condition_uuid) is not condition:
             raise RuntimeError(
@@ -922,7 +936,7 @@ def _materialize_authored_spike_traps(
 
 def _settle_authored_wall_torches(
     grid: GridMap,
-    parent_event: WorldInitializedEvent,
+    parent_event: Event,
 ) -> None:
     """Light authored WallTorches and publish their complete item facts."""
     placements = {
@@ -970,7 +984,7 @@ def _settle_authored_wall_torches(
         torch.publish_location_state(
             ItemLocation.FLOOR,
             world_placement=placement,
-            parent_event=ignite_completions[0][1],
+            parent_event=parent_event,
         )
 
 
@@ -1157,7 +1171,7 @@ def _world_initialized_event(
             f"dnd-engine-world:{built.definition.battlefield_id}",
         ),
         source_entity_name="World",
-        phase=EventPhase.COMPLETION,
+        phase=EventPhase.DECLARATION,
         use_register=False,
         battlefield_id=built.definition.battlefield_id,
         battlefield_name=built.definition.title,

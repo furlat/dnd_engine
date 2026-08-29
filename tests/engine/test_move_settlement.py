@@ -27,6 +27,7 @@ from dnd.core.action_execution import (
     movement_continuation_scope,
 )
 from dnd.types.equipment import WeaponSlot
+from dnd.types.damage import DamageType
 from dnd.types.world import CardinalDirection, MovementMode, WorldEdgeChannel
 from dnd.core.events.events_registry import (
     Event,
@@ -274,23 +275,16 @@ def test_effect_cancellation_becomes_a_completed_zero_step_stop() -> None:
 def test_premature_root_completion_is_stopped_before_completion_systems() -> None:
     """A handler cannot run root completion work before accepted settlement."""
     mover = _open_movement_world()
-    completion_inputs: list[UUID] = []
-
-    def observe_completion_input(event: Event) -> None:
-        if event.event_type is EventType.MOVEMENT:
-            completion_inputs.append(event.uuid)
 
     def complete_early(event: Event, _source_uuid: UUID) -> Event:
         return event.phase_to(EventPhase.COMPLETION)
 
-    EventQueue.add_pre_completion_callback(observe_completion_input)
     _add_movement_handler(mover, EventPhase.EFFECT, complete_early)
     result = Move(source_entity_uuid=mover.uuid, end_position=(1, 0)).apply()
 
     assert isinstance(result, MovementEvent)
     assert result.phase is EventPhase.COMPLETION
     assert result.termination_reason is MovementTerminationReason.CANCELED
-    assert len(completion_inputs) == 1
     lineage = EventQueue.get_event_history(result.uuid)
     assert [event.phase for event in lineage].count(EventPhase.COMPLETION) == 1
 
@@ -396,7 +390,7 @@ def test_path_step_premature_completion_becomes_canonical_cancel() -> None:
 
 @pytest.mark.parametrize(
     "publication_path",
-    ("register", "publish_preflighted", "completion_sequence"),
+    ("register", "publish_preflighted"),
 )
 @pytest.mark.parametrize("invalid_first", (True, False))
 def test_public_storage_paths_cannot_publish_token_derived_forged_step(
@@ -405,12 +399,6 @@ def test_public_storage_paths_cannot_publish_token_derived_forged_step(
 ) -> None:
     """Every public storage path detaches an active guarded proposal token."""
     mover = _open_movement_world()
-    callback_events: list[StepMovementEvent] = []
-
-    def observe(event: Event) -> None:
-        if isinstance(event, StepMovementEvent):
-            callback_events.append(event)
-
     def forge_and_register(event: Event, _source_uuid: UUID) -> Event:
         step = cast(StepMovementEvent, event)
         forged = step.model_copy(update={
@@ -425,10 +413,8 @@ def test_public_storage_paths_cannot_publish_token_derived_forged_step(
         def publish_forged() -> None:
             if publication_path == "register":
                 EventQueue.register(forged)
-            elif publication_path == "publish_preflighted":
-                EventQueue.publish_preflighted(forged)
             else:
-                EventQueue.register_completion_sequence((forged,))
+                EventQueue.publish_preflighted(forged)
 
         if not invalid_first:
             EventQueue.register(step)
@@ -437,9 +423,15 @@ def test_public_storage_paths_cannot_publish_token_derived_forged_step(
             EventQueue.register(step)
         return step
 
-    EventQueue.add_on_event_callback(observe)
+    cursor = EventQueue.event_cursor()
     _add_step_handler(mover, forge_and_register)
     result = Move(source_entity_uuid=mover.uuid, end_position=(1, 0)).apply()
+
+    callback_events = [
+        event
+        for _index, event in EventQueue.iter_events_since(cursor)
+        if isinstance(event, StepMovementEvent)
+    ]
 
     assert isinstance(result, MovementEvent)
     assert result.termination_reason is MovementTerminationReason.STEP_CANCELED
@@ -458,7 +450,7 @@ def test_public_storage_paths_cannot_publish_token_derived_forged_step(
 
 @pytest.mark.parametrize(
     "publication_path",
-    ("register", "publish_preflighted", "completion_sequence"),
+    ("register", "publish_preflighted"),
 )
 @pytest.mark.parametrize("invalid_first", (True, False))
 def test_public_storage_paths_cannot_publish_token_derived_forged_root(
@@ -467,12 +459,6 @@ def test_public_storage_paths_cannot_publish_token_derived_forged_root(
 ) -> None:
     """The centralized storage fence also terminates a forged Move root."""
     mover = _open_movement_world()
-    callback_events: list[MovementEvent] = []
-
-    def observe(event: Event) -> None:
-        if isinstance(event, MovementEvent):
-            callback_events.append(event)
-
     def forge_and_publish(event: Event, _source_uuid: UUID) -> Event:
         movement = cast(MovementEvent, event)
         forged = movement.model_copy(update={
@@ -487,10 +473,8 @@ def test_public_storage_paths_cannot_publish_token_derived_forged_root(
         def publish_forged() -> None:
             if publication_path == "register":
                 EventQueue.register(forged)
-            elif publication_path == "publish_preflighted":
-                EventQueue.publish_preflighted(forged)
             else:
-                EventQueue.register_completion_sequence((forged,))
+                EventQueue.publish_preflighted(forged)
 
         if not invalid_first:
             EventQueue.register(movement)
@@ -499,9 +483,15 @@ def test_public_storage_paths_cannot_publish_token_derived_forged_root(
             EventQueue.register(movement)
         return movement
 
-    EventQueue.add_on_event_callback(observe)
+    cursor = EventQueue.event_cursor()
     _add_movement_handler(mover, EventPhase.EFFECT, forge_and_publish)
     result = Move(source_entity_uuid=mover.uuid, end_position=(1, 0)).apply()
+
+    callback_events = [
+        event
+        for _index, event in EventQueue.iter_events_since(cursor)
+        if isinstance(event, MovementEvent)
+    ]
 
     assert isinstance(result, MovementEvent)
     assert result.phase is EventPhase.COMPLETION
@@ -989,7 +979,12 @@ def test_effect_stop_marker_yields_to_later_objective_death() -> None:
         return event.cancel(status_message="stop after prior effects")
 
     def kill(event: Event, _source_uuid: UUID) -> Event:
-        set_hp(mover, 0)
+        mover.receive_damage(
+            mover.get_hp(),
+            DamageType.FORCE,
+            mover.uuid,
+            parent_event=event.uuid,
+        )
         return event
 
     _add_movement_handler(mover, EventPhase.EFFECT, veto)
@@ -1014,7 +1009,12 @@ def test_pre_entry_displacement_precedes_concurrent_death() -> None:
             (0, 1),
             parent_event=event.uuid,
         )
-        set_hp(mover, 0)
+        mover.receive_damage(
+            mover.get_hp(),
+            DamageType.FORCE,
+            mover.uuid,
+            parent_event=event.uuid,
+        )
         return event
 
     _add_movement_handler(mover, EventPhase.EFFECT, displace_and_kill)

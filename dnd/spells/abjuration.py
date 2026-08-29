@@ -708,12 +708,14 @@ class ProtectionFromEnergy(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        concentration = self.ensure_concentration(execution_event)
-
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
             status_message=f"Concentrating on {self.name}"
         )
+        if effect_event.canceled:
+            return effect_event
+
+        concentration = self.ensure_concentration(effect_event)
 
         protection = ProtectionFromEnergyEffect(
             source_entity_uuid=caster.uuid,
@@ -724,6 +726,8 @@ class ProtectionFromEnergy(SpellAction):
 
         if protection.applied:
             concentration.add_linked_condition(target.uuid, protection.uuid)
+
+        self._close_concentration(effect_event)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -828,12 +832,14 @@ class Stoneskin(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        concentration = self.ensure_concentration(execution_event)
-
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
             status_message=f"Concentrating on {self.name}"
         )
+        if effect_event.canceled:
+            return effect_event
+
+        concentration = self.ensure_concentration(effect_event)
 
         stoneskin = StoneskinEffect(
             source_entity_uuid=caster.uuid,
@@ -843,6 +849,8 @@ class Stoneskin(SpellAction):
 
         if stoneskin.applied:
             concentration.add_linked_condition(target.uuid, stoneskin.uuid)
+
+        self._close_concentration(effect_event)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -880,6 +888,7 @@ def _begin_counterspell_reaction(
         target_entity_name=original_caster.name,
         triggered_event_uuid=incoming_event.uuid,
         triggered_lineage_uuid=incoming_event.lineage_uuid,
+        parent_event=incoming_event.uuid,
         incoming_spell_name=incoming_event.name,
         incoming_spell_level=incoming_event.cast_at_level or incoming_event.spell_level,
         counterspell_slot_level=slot_level,
@@ -1334,6 +1343,8 @@ class GlobeOfInvulnerability(SpellAction):
             new_phase=EventPhase.EFFECT,
             status_message=f"{caster.name} casts Globe of Invulnerability (blocks L{max_blocked} and below)"
         )
+        if effect_event.canceled:
+            return effect_event
 
         zone = materialize_spatial_condition(
             GLOBE_OF_INVULNERABILITY_FIELD_RECIPE,
@@ -1353,6 +1364,8 @@ class GlobeOfInvulnerability(SpellAction):
 
         concentration = self.ensure_concentration(effect_event)
         concentration.add_linked_condition(zone.uuid, zone.uuid)
+
+        self._close_concentration(effect_event)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -1561,6 +1574,8 @@ class Banishment(SpellAction):
             target_entity_name=target.name,
             status_message=f"CHA save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         if success:
             return effect_event.phase_to(
@@ -1577,6 +1592,8 @@ class Banishment(SpellAction):
         concentration = self.ensure_concentration(effect_event)
         if banished.applied:
             concentration.add_linked_condition(target.uuid, banished.uuid)
+
+        self._close_concentration(effect_event)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -1663,6 +1680,8 @@ class LesserRestoration(SpellAction):
             target_entity_name=target.name,
             status_message=f"Lesser Restoration on {target.name}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         removed = _remove_first_condition_by_name(
             target=target,
@@ -1720,6 +1739,8 @@ class GreaterRestoration(SpellAction):
             target_entity_name=target.name,
             status_message=f"Greater Restoration on {target.name}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         removed = _remove_first_condition_by_name(
             target=target,
@@ -1795,6 +1816,8 @@ class RemoveCurse(SpellAction):
             target_entity_name=target.name,
             status_message=f"Remove Curse on {target.name}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         removed: List[str] = []
         for cond_name, cond in list(target.active_conditions.items()):
@@ -1942,6 +1965,8 @@ class ProtectionFromPoison(SpellAction):
             target_entity_name=target.name,
             status_message=f"Protection from Poison on {target.name}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         if "Poisoned" in target.active_conditions:
             target.remove_condition("Poisoned", parent_event=effect_event)
@@ -2083,6 +2108,8 @@ class DeathWard(SpellAction):
             target_entity_name=target.name,
             status_message=f"Death Ward on {target.name}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         condition = DeathWardEffect(
             source_entity_uuid=caster.uuid,
@@ -2218,6 +2245,8 @@ class FreedomOfMovementEscape(BaseAction):
             EventPhase.EFFECT,
             status_message=f"{entity.name} escapes nonmagical restraints",
         )
+        if effect_event.canceled:
+            return effect_event
         for condition_name in restraint_names:
             entity.remove_condition(condition_name, parent_event=effect_event)
         escaped = ", ".join(restraint_names)
@@ -2226,21 +2255,26 @@ class FreedomOfMovementEscape(BaseAction):
             status_message=f"{entity.name} escaped {escaped}",
         )
 
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
+    def _commit_costs(
+        self,
+        execution_event: ActionEvent,
+        declaration_event: ActionEvent,
+    ) -> ActionEvent:
         """Consume 5 feet of movement while ignoring the escaped restraint cap.
 
         Args:
-            completion_event: Completed action event carrying serialized costs.
+        execution_event: Execution event carrying serialized costs.
 
         Returns:
             Completion event after the movement cost is recorded.
         """
+        del declaration_event
         entity = Entity.get(self.source_entity_uuid)
         if entity is None or not isinstance(entity, Entity):
-            return completion_event.cancel(status_message="Entity not found")
-        movement_cost = sum(cost.cost for cost in completion_event.costs if cost.cost_type == "movement")
+            return execution_event.cancel(status_message="Entity not found")
+        movement_cost = sum(cost.cost for cost in execution_event.costs if cost.cost_type == "movement")
         if _freedom_of_movement_available_movement(entity) < movement_cost:
-            return completion_event.cancel(status_message="Not enough movement to escape")
+            return execution_event.cancel(status_message="Not enough movement to escape")
         if movement_cost > 0:
             cost_modifier = NumericalModifier.create(
                 source_entity_uuid=entity.uuid,
@@ -2248,7 +2282,7 @@ class FreedomOfMovementEscape(BaseAction):
                 value=-movement_cost,
             )
             entity.action_economy.movement.self_static.add_value_modifier(cost_modifier)
-        return completion_event
+        return execution_event
 
 
 class FreedomOfMovementEffect(BaseCondition):
@@ -2369,6 +2403,8 @@ class FreedomOfMovement(SpellAction):
             target_entity_name=target.name,
             status_message=f"Freedom of Movement on {target.name}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         condition = FreedomOfMovementEffect(
             source_entity_uuid=caster.uuid,
@@ -2504,6 +2540,8 @@ class Resistance(SpellAction):
             target_entity_name=target.name,
             status_message=f"Resistance cast on {target.name}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         resistance_effect = ResistanceEffect(
             source_entity_uuid=caster.uuid,
@@ -2516,6 +2554,8 @@ class Resistance(SpellAction):
         concentration = self.ensure_concentration(effect_event)
         if resistance_effect.applied:
             concentration.add_linked_condition(target.uuid, resistance_effect.uuid)
+
+        self._close_concentration(effect_event)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -2611,6 +2651,8 @@ class ShieldOfFaith(SpellAction):
             target_entity_name=target.name,
             status_message=f"Shield of Faith cast on {target.name}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         condition = ShieldOfFaithEffect(
             source_entity_uuid=caster.uuid,
@@ -2621,6 +2663,8 @@ class ShieldOfFaith(SpellAction):
         concentration = self.ensure_concentration(effect_event)
         if condition.applied:
             concentration.add_linked_condition(target.uuid, condition.uuid)
+
+        self._close_concentration(effect_event)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -2727,6 +2771,8 @@ class Aid(SpellAction):
             target_entity_name=target.name,
             status_message=f"Aid grants +{hp_bonus} max HP to {target.name}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         condition = AidEffect(
             source_entity_uuid=caster.uuid,
@@ -2918,6 +2964,8 @@ class Sanctuary(SpellAction):
             target_entity_name=target.name,
             status_message=f"Sanctuary cast on {target.name}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         condition = SanctuaryEffect(
             source_entity_uuid=caster.uuid,
@@ -3055,6 +3103,8 @@ class BeaconOfHope(SpellAction):
             target_entity_name=target.name,
             status_message=f"Beacon of Hope inspires {target.name}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         condition = BeaconOfHopeEffect(
             source_entity_uuid=caster.uuid,
@@ -3492,6 +3542,8 @@ class AntimagicField(SpellAction):
             new_phase=EventPhase.EFFECT,
             status_message=f"{caster.name} casts Antimagic Field"
         )
+        if effect_event.canceled:
+            return effect_event
 
         zone = materialize_spatial_condition(
             ANTIMAGIC_FIELD_RECIPE,
@@ -3508,6 +3560,8 @@ class AntimagicField(SpellAction):
 
         concentration = self.ensure_concentration(effect_event)
         concentration.add_linked_condition(zone.uuid, zone.uuid)
+
+        self._close_concentration(effect_event)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,

@@ -1705,11 +1705,6 @@ def test_functional_roll_replacement_is_reported_as_modified_handler_evidence() 
         total=14,
         roll_type=RollType.CHECK,
     )
-    dispatch_outcomes: list[HandlerDispatchOutcome] = []
-
-    EventQueue.add_on_handler_dispatch_callback(
-        lambda evidence: dispatch_outcomes.append(evidence.outcome)
-    )
     EventQueue.add_event_handler(
         EventHandler(
             source_entity_uuid=source_uuid,
@@ -1738,7 +1733,10 @@ def test_functional_roll_replacement_is_reported_as_modified_handler_evidence() 
     ).phase_to(EventPhase.EFFECT)
 
     assert result.get_effective_roll() == replacement
-    assert dispatch_outcomes == [HandlerDispatchOutcome.MODIFIED_EVENT]
+    assert [
+        presentation.outcome
+        for presentation in result.effective_handler_presentations
+    ] == [HandlerDispatchOutcome.MODIFIED_EVENT]
 
 
 def test_modified_result_emits_typed_combat_log_and_unmodified_result_is_silent() -> None:

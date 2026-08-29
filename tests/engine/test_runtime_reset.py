@@ -29,9 +29,7 @@ def test_reset_engine_runtime_clears_every_engine_registry_and_rebuilds_grid() -
     Controller._controller_registry[marker_uuid] = marker
     Encounter._encounter_registry[marker_uuid] = marker
     Encounter._active_encounter = marker
-    Encounter._combat_log_listeners.append(marker)
     SpellProtectionRegistry._protections.append(marker)
-    EventQueue._combat_log_callback = marker
     EventQueue._all_events.append(marker)
 
     GridMap.reset()
@@ -52,10 +50,8 @@ def test_reset_engine_runtime_clears_every_engine_registry_and_rebuilds_grid() -
     assert Controller._controller_registry == {}
     assert Encounter._encounter_registry == {}
     assert Encounter._active_encounter is None
-    assert Encounter._combat_log_listeners == []
     assert SpellProtectionRegistry._protections == []
     assert EventQueue._all_events == []
-    assert EventQueue._combat_log_callback is None
 
 
 def test_reset_engine_runtime_can_leave_the_new_grid_empty() -> None:

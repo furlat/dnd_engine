@@ -1,10 +1,10 @@
 """Turn-based encounter management.
 
 An encounter owns initiative order, round and turn boundaries, controller
-coordination, combat-log capture, and end-of-combat detection.
+coordination, a combat-log projection, and end-of-combat detection.
 """
 
-from typing import Any, Optional, Dict, List, ClassVar, Set, Tuple, Callable
+from typing import Any, Optional, Dict, List, ClassVar
 
 __all__ = [
     "AdvanceResult",
@@ -13,7 +13,6 @@ __all__ = [
 from uuid import UUID
 from datetime import UTC, datetime
 from pydantic import Field, computed_field
-import logging
 
 from dnd.core.base_object import BaseObject
 from dnd.core.dice import Dice
@@ -39,11 +38,6 @@ from dnd.entities.entity import Entity
 from dnd.encounters.controllers import Controller, TurnContext
 from dnd.types import encounter_state as encounter_types
 from dnd.actions.operations import execute_by_index
-
-logger = logging.getLogger(__name__)
-
-
-
 
 class AdvanceResult(BaseObject):
     """Result of advancing automated turns until external input is needed.
@@ -161,14 +155,14 @@ class Encounter(BaseObject):
         turn_state: Current turn lifecycle state.
         started_at: Wall-clock timestamp when the encounter started.
         ended_at: Wall-clock timestamp when the encounter ended.
-        combat_log: Unified combat-log entries captured for the encounter.
+        combat_log: Read-only combat-log projection over this encounter's
+            source-journal cursor window.
         current_turn_started_source_event_cursor: Objective cursor of turn start.
         current_turn_execution_id: Opaque causal identity of the active turn.
     """
 
     _encounter_registry: ClassVar[Dict[UUID, 'Encounter']] = {}
     _active_encounter: ClassVar[Optional['Encounter']] = None
-    _combat_log_listeners: ClassVar[List[Callable[['Encounter', int, CombatLogEntry, Event], None]]] = []
 
     name: str = Field(default="Encounter", description="Display name of the encounter.")
     combatants: Dict[UUID, CombatantState] = Field(
@@ -197,9 +191,15 @@ class Encounter(BaseObject):
         default=None,
         description="Wall-clock timestamp when the encounter ended.",
     )
-    combat_log: List[CombatLogEntry] = Field(
-        default_factory=list,
-        description="Unified combat-log entries captured for the encounter.",
+    combat_log_source_start: Optional[int] = Field(
+        default=None,
+        ge=0,
+        description="Inclusive event-journal cursor where encounter logs begin.",
+    )
+    combat_log_source_end: Optional[int] = Field(
+        default=None,
+        ge=0,
+        description="Exclusive event-journal cursor where encounter logs end.",
     )
     current_turn_started_source_event_cursor: Optional[int] = Field(
         default=None,
@@ -230,24 +230,6 @@ class Encounter(BaseObject):
         """Clear the encounter registry."""
         cls._encounter_registry.clear()
         cls._active_encounter = None
-
-    @classmethod
-    def add_combat_log_listener(
-        cls,
-        callback: Callable[['Encounter', int, CombatLogEntry, Event], None],
-    ) -> None:
-        """Register a passive listener for appended combat log entries."""
-        if callback not in cls._combat_log_listeners:
-            cls._combat_log_listeners.append(callback)
-
-    @classmethod
-    def remove_combat_log_listener(
-        cls,
-        callback: Callable[['Encounter', int, CombatLogEntry, Event], None],
-    ) -> None:
-        """Remove a combat log append listener."""
-        if callback in cls._combat_log_listeners:
-            cls._combat_log_listeners.remove(callback)
 
     def add_combatant(
         self,
@@ -378,10 +360,10 @@ class Encounter(BaseObject):
         self.state = encounter_types.EncounterState.ACTIVE
         self.started_at = datetime.now(UTC)
         self.round_number = 1
+        self.combat_log_source_start = EventQueue.event_cursor()
+        self.combat_log_source_end = None
 
         Encounter._active_encounter = self
-
-        EventQueue.set_combat_log_callback(self._on_event_combat_log)
 
         self._apply_surprise_reaction_lockouts()
 
@@ -392,8 +374,10 @@ class Encounter(BaseObject):
             encounter_uuid=self.uuid,
             combatant_uuids=list(self.combatants.keys()),
             initiative_order=self.initiative_order.copy(),
-            phase=EventPhase.COMPLETION
+            phase=EventPhase.COMPLETION,
+            use_register=False,
         )
+        event = EventQueue.publish_inert_terminal_fact(event)
 
         self._fire_round_start()
 
@@ -421,8 +405,6 @@ class Encounter(BaseObject):
         if Encounter._active_encounter is self:
             Encounter._active_encounter = None
 
-        EventQueue.set_combat_log_callback(None)
-
         self._notify_controllers_encounter_end()
 
         event = EncounterEndEvent(
@@ -430,10 +412,12 @@ class Encounter(BaseObject):
             encounter_uuid=self.uuid,
             combatant_uuids=list(self.combatants.keys()),
             reason=reason,
-            phase=EventPhase.COMPLETION
+            phase=EventPhase.COMPLETION,
+            use_register=False,
         )
-
-        return event
+        committed = EventQueue.publish_inert_terminal_fact(event)
+        self.combat_log_source_end = EventQueue.event_cursor()
+        return committed
 
     def _fire_round_start(self) -> RoundStartEvent:
         """Fire round start event."""
@@ -441,9 +425,10 @@ class Encounter(BaseObject):
             source_entity_uuid=self.uuid,
             encounter_uuid=self.uuid,
             round_number=self.round_number,
-            phase=EventPhase.COMPLETION
+            phase=EventPhase.COMPLETION,
+            use_register=False,
         )
-        return event
+        return EventQueue.publish_inert_terminal_fact(event)
 
     def _fire_round_end(self) -> RoundEndEvent:
         """Fire round end event."""
@@ -451,26 +436,39 @@ class Encounter(BaseObject):
             source_entity_uuid=self.uuid,
             encounter_uuid=self.uuid,
             round_number=self.round_number,
-            phase=EventPhase.COMPLETION
+            phase=EventPhase.DECLARATION,
+            use_register=False,
         )
-        return event
+        event = EventQueue.publish_declaration(event)
+        if event.canceled:
+            return event
+        event = event.phase_to(EventPhase.EXECUTION)
+        if event.canceled:
+            return event
+        effect = event.phase_to(EventPhase.EFFECT)
+        if effect.canceled:
+            return effect
+        self._environment_step(parent_event=effect)
+        return effect.phase_to(EventPhase.COMPLETION)
 
-    def _environment_step(self) -> None:
+    def _environment_step(self, *, parent_event: Event) -> None:
         """Advance world-owned condition durations once at each round end."""
         grid = get_map()
         for tile in grid.get_tiles_with_conditions():
             for cond_name in list(tile.active_conditions.keys()):
-                tile.advance_duration(cond_name)
+                tile.advance_duration(cond_name, parent_event=parent_event)
         for item_block in grid.get_objects_with_conditions():
             for cond_name in list(item_block.active_conditions.keys()):
-                item_block.advance_duration(cond_name)
+                item_block.advance_duration(
+                    cond_name,
+                    parent_event=parent_event,
+                )
         for condition in tuple(grid.get_spatial_conditions()):
-            condition.progress_spatial_duration()
+            condition.progress_spatial_duration(parent_event=parent_event)
 
     def _advance_round(self) -> None:
         """Advance to the next round."""
         self._fire_round_end()
-        self._environment_step()
 
         self.round_number += 1
         self.current_turn_index = 0
@@ -722,43 +720,31 @@ class Encounter(BaseObject):
             ),
         )
 
-    def _on_event_combat_log(self, event: Event) -> None:
-        """Callback for auto-capturing event combat logs.
+    def _iter_combat_log_events(self) -> List[Event]:
+        """Return top-level terminal facts in this encounter's source window."""
+        start = self.combat_log_source_start
+        if start is None:
+            return []
+        stop = self.combat_log_source_end
+        if stop is None:
+            stop = EventQueue.event_cursor()
+        return [
+            event
+            for index, event in EventQueue.iter_events_since(start)
+            if index < stop
+            and event.parent_event is None
+            and event.phase in (EventPhase.COMPLETION, EventPhase.CANCEL)
+            and event.combat_log is not None
+        ]
 
-        Called by EventQueue when a top-level event (parent_event=None)
-        completes with a combat_log. The combat_log already includes
-        nested sub_entries from child events.
-        """
-        self.add_event_to_combat_log(event)
-
-    def add_event_to_combat_log(self, event: Event) -> Optional[int]:
-        """
-        Add event's combat_log entry to encounter log.
-
-        Uses event.combat_log if available (auto-generated at COMPLETION phase).
-
-        Args:
-            event: The event containing the combat log entry.
-
-        Returns:
-            Log entry index if successful, None if no log entry was created.
-        """
-        if event is None or event.combat_log is None:
-            return None
-
-        self.combat_log.append(event.combat_log)
-        index = len(self.combat_log) - 1
-        for listener in list(self.__class__._combat_log_listeners):
-            try:
-                listener(self, index, event.combat_log, event)
-            except Exception:
-                logger.exception(
-                    "Passive combat-log listener %r failed for encounter %s log %s",
-                    listener,
-                    self.uuid,
-                    index,
-                )
-        return index
+    @property
+    def combat_log(self) -> List[CombatLogEntry]:
+        """Project objective logs from real top-level terminal event facts."""
+        return [
+            event.combat_log
+            for event in self._iter_combat_log_events()
+            if event.combat_log is not None
+        ]
 
     def get_combat_log(self, since: int = 0) -> List[CombatLogEntry]:
         """
@@ -771,10 +757,6 @@ class Encounter(BaseObject):
             List of CombatLogEntry
         """
         return self.combat_log[since:]
-
-    def clear_combat_log(self) -> None:
-        """Clear the combat log (call when starting new game)."""
-        self.combat_log = []
 
     def check_deaths(self) -> List[DeathEvent]:
         """
@@ -980,16 +962,8 @@ class Encounter(BaseObject):
                 return result.model_copy(update={"log_start_index": log_start})
 
     def advance_one_controller_action_boundary(self) -> AdvanceResult:
-        """Execute one decision as one passive replication transaction.
-
-        A turn boundary may emit many lifecycle events even when the
-        controller elects only to end its turn.  Player replication observes
-        the committed decision boundary, not every intermediate event write,
-        so retain those events in one causal batch and project the world once.
-        Nested action batches naturally join this outer transaction.
-        """
-        with EventQueue.batch_on_event_callbacks():
-            return self._advance_one_controller_action_boundary()
+        """Execute one decision and return its deterministic result."""
+        return self._advance_one_controller_action_boundary()
 
     def _advance_one_controller_action_boundary(self) -> AdvanceResult:
         """Implement one autonomous decision or expose a wait boundary."""

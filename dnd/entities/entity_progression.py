@@ -338,7 +338,7 @@ def apply_level(entity: Entity, step: ResolvedLevelStep) -> AppliedClassLevel:
     previous_total = len(entity.applied_class_levels)
     receipt = _install_level(entity, step)
     try:
-        EventQueue.publish_completed_fact(EntityLevelAddedEvent(
+        EventQueue.publish_inert_terminal_fact(EntityLevelAddedEvent(
             source_entity_uuid=entity.uuid,
             target_entity_uuid=entity.uuid,
             use_register=False,
@@ -366,7 +366,7 @@ def remove_last_level(
     previous_total = len(entity.applied_class_levels)
     level, receipt = _uninstall_last_level(entity, expected_step_id)
     try:
-        EventQueue.publish_completed_fact(EntityLevelRemovedEvent(
+        EventQueue.publish_inert_terminal_fact(EntityLevelRemovedEvent(
             source_entity_uuid=entity.uuid,
             target_entity_uuid=entity.uuid,
             use_register=False,

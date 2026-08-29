@@ -228,6 +228,8 @@ class CallLightningStrike(BaseAction):
             new_phase=EventPhase.EFFECT,
             status_message=f"DEX save: {save_roll.total} vs DC {self.spell_dc} - {'Success' if success else 'Failure'}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         damage_bonus = caster.get_spell_damage_bonus()
         lightning_damage = Damage(
@@ -310,6 +312,8 @@ class CallLightning(SpellAction):
             save_dc=dc,
             status_message=f"Storm cloud appears - requesting DEX save DC {dc}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
@@ -363,6 +367,8 @@ class CallLightning(SpellAction):
         caster.register_condition_action(marker, strike_action)
         caster.add_condition(marker, parent_event=effect_event)
         concentration.add_linked_condition(caster.uuid, marker.uuid)
+
+        self._close_concentration(effect_event)
 
         save_text = " (save for half)" if success else ""
         return effect_event.phase_to(
@@ -565,6 +571,8 @@ class AcidSplash(SpellAction):
             target_entity_name=target.name,
             status_message=f"DEX save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         if success:
             return effect_event.phase_to(
@@ -673,6 +681,8 @@ class MistyStep(SpellAction):
             new_phase=EventPhase.EFFECT,
             status_message=f"{caster.name} teleports from {start_pos} to {target_pos}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         Entity.update_entity_position(caster, target_pos)
 
@@ -883,6 +893,8 @@ class Grease(SpellAction):
             save_dc=dc,
             status_message=f"{caster.name} casts Grease at {target_pos}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         zone = materialize_spatial_condition(
             GREASE_SURFACE_RECIPE,
@@ -1218,6 +1230,8 @@ class Web(SpellAction):
             save_dc=dc,
             status_message=f"{caster.name} casts Web at {target_pos}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         zone = materialize_spatial_condition(
             WEB_SURFACE_RECIPE,
@@ -1241,6 +1255,8 @@ class Web(SpellAction):
         concentration = self.ensure_concentration(effect_event)
 
         concentration.add_linked_condition(zone.uuid, zone.uuid)
+
+        self._close_concentration(effect_event)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -1387,6 +1403,8 @@ class Entangle(SpellAction):
             save_dc=dc,
             status_message=f"{caster.name} casts Entangle at {target_pos}",
         )
+        if effect_event.canceled:
+            return effect_event
         zone = materialize_spatial_condition(
             ENTANGLE_FIELD_RECIPE,
             caster.uuid,
@@ -1405,6 +1423,7 @@ class Entangle(SpellAction):
             )
         concentration = self.ensure_concentration(effect_event)
         concentration.add_linked_condition(zone.uuid, zone.uuid)
+        self._close_concentration(effect_event)
         return effect_event.phase_to(
             EventPhase.COMPLETION,
             status_message=f"Entangle active at {target_pos}",
@@ -1650,6 +1669,8 @@ class EvardsBlackTentacles(SpellAction):
                 f"{caster.name} casts Evard's Black Tentacles at {target_pos}"
             ),
         )
+        if effect_event.canceled:
+            return effect_event
         zone = materialize_spatial_condition(
             EVARDS_BLACK_TENTACLES_FIELD_RECIPE,
             caster.uuid,
@@ -1668,6 +1689,7 @@ class EvardsBlackTentacles(SpellAction):
             )
         concentration = self.ensure_concentration(effect_event)
         concentration.add_linked_condition(zone.uuid, zone.uuid)
+        self._close_concentration(effect_event)
         return effect_event.phase_to(
             EventPhase.COMPLETION,
             status_message=f"Evard's Black Tentacles active at {target_pos}",
@@ -1945,6 +1967,8 @@ class Cloudkill(SpellAction):
             save_dc=dc,
             status_message=f"{caster.name} casts Cloudkill at {target_pos}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         zone = materialize_spatial_condition(
             CLOUDKILL_CLOUD_RECIPE,
@@ -1967,6 +1991,8 @@ class Cloudkill(SpellAction):
 
         concentration = self.ensure_concentration(effect_event)
         concentration.add_linked_condition(zone.uuid, zone.uuid)
+
+        self._close_concentration(effect_event)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -2300,6 +2326,8 @@ class SpiritGuardians(SpellAction):
             save_dc=dc,
             status_message=f"{caster.name} casts Spirit Guardians"
         )
+        if effect_event.canceled:
+            return effect_event
 
         zone = materialize_spatial_condition(
             SPIRIT_GUARDIANS_FIELD_RECIPE,
@@ -2323,6 +2351,8 @@ class SpiritGuardians(SpellAction):
         concentration = self.ensure_concentration(effect_event)
 
         concentration.add_linked_condition(zone.uuid, zone.uuid)
+
+        self._close_concentration(effect_event)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -2432,6 +2462,8 @@ class FogCloud(SpellAction):
             new_phase=EventPhase.EFFECT,
             status_message=f"{caster.name} casts Fog Cloud at {target_pos}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         zone = materialize_spatial_condition(
             FOG_CLOUD_RECIPE,
@@ -2452,6 +2484,8 @@ class FogCloud(SpellAction):
 
         concentration = self.ensure_concentration(effect_event)
         concentration.add_linked_condition(zone.uuid, zone.uuid)
+
+        self._close_concentration(effect_event)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -2565,6 +2599,8 @@ class Darkness(SpellAction):
             new_phase=EventPhase.EFFECT,
             status_message=f"{caster.name} casts Darkness at {target_pos}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         zone = materialize_spatial_condition(
             DARKNESS_FIELD_RECIPE,
@@ -2584,6 +2620,8 @@ class Darkness(SpellAction):
 
         concentration = self.ensure_concentration(effect_event)
         concentration.add_linked_condition(zone.uuid, zone.uuid)
+
+        self._close_concentration(effect_event)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -2754,6 +2792,8 @@ class Daylight(SpellAction):
             new_phase=EventPhase.EFFECT,
             status_message=f"{caster.name} casts Daylight at {target_pos}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         zone = materialize_spatial_condition(
             DAYLIGHT_FIELD_RECIPE,
@@ -2939,6 +2979,8 @@ class InsectPlague(SpellAction):
             save_ability="constitution", save_dc=dc,
             status_message=f"{caster.name} casts Insect Plague at {target_pos}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         zone = materialize_spatial_condition(
             INSECT_PLAGUE_FIELD_RECIPE,
@@ -2960,6 +3002,8 @@ class InsectPlague(SpellAction):
 
         concentration = self.ensure_concentration(effect_event)
         concentration.add_linked_condition(zone.uuid, zone.uuid)
+
+        self._close_concentration(effect_event)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -3176,6 +3220,8 @@ class IncendiaryCloud(SpellAction):
             save_ability="dexterity", save_dc=dc,
             status_message=f"{caster.name} casts Incendiary Cloud at {target_pos}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         zone = materialize_spatial_condition(
             INCENDIARY_CLOUD_RECIPE,
@@ -3197,6 +3243,8 @@ class IncendiaryCloud(SpellAction):
 
         concentration = self.ensure_concentration(effect_event)
         concentration.add_linked_condition(zone.uuid, zone.uuid)
+
+        self._close_concentration(effect_event)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -3367,6 +3415,8 @@ class StinkingCloud(SpellAction):
             save_ability="constitution", save_dc=dc,
             status_message=f"{caster.name} casts Stinking Cloud at {target_pos}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         zone = materialize_spatial_condition(
             STINKING_CLOUD_RECIPE,
@@ -3388,6 +3438,8 @@ class StinkingCloud(SpellAction):
 
         concentration = self.ensure_concentration(effect_event)
         concentration.add_linked_condition(zone.uuid, zone.uuid)
+
+        self._close_concentration(effect_event)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -3690,6 +3742,8 @@ class SleetStorm(SpellAction):
             save_ability="dexterity", save_dc=dc,
             status_message=f"{caster.name} casts Sleet Storm at {target_pos}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         zone = materialize_spatial_condition(
             SLEET_STORM_FIELD_RECIPE,
@@ -3709,6 +3763,8 @@ class SleetStorm(SpellAction):
             )
         concentration = self.ensure_concentration(effect_event)
         concentration.add_linked_condition(zone.uuid, zone.uuid)
+
+        self._close_concentration(effect_event)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -3784,6 +3840,8 @@ class DimensionDoor(SpellAction):
             new_phase=EventPhase.EFFECT,
             status_message=f"{caster.name} teleports from {old_pos} to {target_pos}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         Entity.update_entity_position(caster, target_pos)
         caster.materialize_navigation()
@@ -3931,6 +3989,8 @@ class GuardianOfFaith(SpellAction):
             new_phase=EventPhase.EFFECT,
             status_message=f"{caster.name} summons a Guardian of Faith"
         )
+        if effect_event.canceled:
+            return effect_event
 
         guardian = materialize_spatial_condition(
             GUARDIAN_OF_FAITH_FIELD_RECIPE,
@@ -4106,6 +4166,8 @@ class EatFromFeast(BaseAction):
             new_phase=EventPhase.EFFECT,
             status_message=f"{entity.name} eats from the Heroes' Feast"
         )
+        if effect_event.canceled:
+            return effect_event
 
         buff = HeroesFeastBuff(
             source_entity_uuid=self.caster_uuid,
@@ -4195,6 +4257,8 @@ class HeroesFeast(SpellAction):
             new_phase=EventPhase.EFFECT,
             status_message=f"{caster.name} conjures a Heroes' Feast"
         )
+        if effect_event.canceled:
+            return effect_event
 
         feast = build_heroes_feast_object(caster.uuid)
         feast.place_on_grid(position)

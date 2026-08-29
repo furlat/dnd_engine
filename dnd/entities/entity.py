@@ -112,12 +112,6 @@ from dnd.core.gridmap import (
 from dnd.core.positioning import PositionCommitError, PositionPublicationError
 from dnd.core.elevation import creature_volume_distance_feet, support_distance_feet
 from dnd.core.geometry import supercover_line
-from dnd.core.combat_log import (
-    CombatLogEntry,
-    CombatLogEntryType,
-    ConditionLogData,
-    EntitySpottedLogData,
-)
 from dnd.entities.creature_transforms import (
     CreatureTransformTarget,
     ModifierOwnership,
@@ -652,7 +646,6 @@ class Entity(BaseBlock):
             self.is_deployed = True
             spatial_senses_system.register_observer(self.uuid, self.senses)
             spatial_senses_system.attach()
-            grid._ensure_light_pre_completion_callback()
         except BaseException as exc:
             spatial_senses_system.unregister_observer(self.uuid)
             if grid.get_entity_position(self.uuid) == position:
@@ -730,7 +723,6 @@ class Entity(BaseBlock):
             self.is_spatially_suspended = False
             spatial_senses_system.register_observer(self.uuid, self.senses)
             spatial_senses_system.attach()
-            grid._ensure_light_pre_completion_callback()
         except BaseException as exc:
             self._set_position(position)
             if grid.get_entity_position(self.uuid) == position:
@@ -1136,30 +1128,6 @@ class Entity(BaseBlock):
             return declaration_event
 
         if self.check_condition_immunity(condition.name, condition=condition):
-            target_name = self.name
-            condition_name = condition.name
-            entry = CombatLogEntry(
-                entry_type=CombatLogEntryType.CONDITION_APPLIED,
-                source_name=target_name,
-                source_uuid=str(self.uuid),
-                target_name=target_name,
-                target_uuid=str(self.uuid),
-                compact=f"{{yellow:{target_name}}} is **immune** to {condition_name}",
-                verbose=f"{{yellow:{target_name}}} is **immune** to {condition_name}",
-                detailed=f"{{yellow:{target_name}}} is **immune** to {condition_name}",
-                success=False,
-                data=ConditionLogData(
-                    condition_name=condition_name,
-                    condition_behavior_id=(
-                        declaration_event.condition_behavior_id
-                    ),
-                    application_disposition=(
-                        ConditionApplicationDisposition.IMMUNE
-                    ),
-                ).model_dump(mode="json"),
-            )
-            EventQueue.push_combat_log(entry, self.uuid)
-
             canceled = declaration_event.cancel(
                 status_message=f"Condition {condition.name} is immune",
                 application_disposition=ConditionApplicationDisposition.IMMUNE,
@@ -1187,7 +1155,13 @@ class Entity(BaseBlock):
             declaration_event=declaration_event,
         )
 
-    def advance_duration_condition(self, condition_name: str, skip_save_throw: bool = False) -> bool:
+    def advance_duration_condition(
+        self,
+        condition_name: str,
+        skip_save_throw: bool = False,
+        *,
+        parent_event: Optional[Event] = None,
+    ) -> bool:
         """Progress a condition's duration and remove if expired.
 
         Handles saving throw checks for conditional removal. Uses Entity's
@@ -1196,6 +1170,7 @@ class Entity(BaseBlock):
         Args:
             condition_name: Name of the condition to progress
             skip_save_throw: If True, skip removal saving throw check
+            parent_event: Causal event that owns removal and cleanup children.
 
         Returns:
             True if condition was removed by save or expiration.
@@ -1215,12 +1190,27 @@ class Entity(BaseBlock):
                     not skip_save_throw
                     and lease.removal_saving_throw is not None
                 ):
+                    removal_save = lease.removal_saving_throw
+                    if parent_event is not None:
+                        removal_save = EventQueue.publish_declaration(
+                            removal_save.model_copy(
+                                update={
+                                    "uuid": uuid4(),
+                                    "lineage_uuid": uuid4(),
+                                    "parent_event": parent_event.uuid,
+                                    "use_register": False,
+                                },
+                            ),
+                        )
                     (_, _, success) = self.saving_throw(
-                        lease.removal_saving_throw,
+                        removal_save,
                     )
                     if success:
                         removed_any = (
-                            self.remove_condition_by_uuid(lease.uuid)
+                            self.remove_condition_by_uuid(
+                                lease.uuid,
+                                parent_event=parent_event,
+                            )
                             or removed_any
                         )
                         continue
@@ -1229,20 +1219,40 @@ class Entity(BaseBlock):
                         self.remove_condition_by_uuid(
                             lease.uuid,
                             expire=True,
+                            parent_event=parent_event,
                         )
                         or removed_any
                     )
             return removed_any
 
         if not skip_save_throw and condition.removal_saving_throw is not None:
-            (_, _, success) = self.saving_throw(condition.removal_saving_throw)
+            removal_save = condition.removal_saving_throw
+            if parent_event is not None:
+                removal_save = EventQueue.publish_declaration(
+                    removal_save.model_copy(
+                        update={
+                            "uuid": uuid4(),
+                            "lineage_uuid": uuid4(),
+                            "parent_event": parent_event.uuid,
+                            "use_register": False,
+                        },
+                    ),
+                )
+            (_, _, success) = self.saving_throw(removal_save)
             if success:
-                self.remove_condition(condition_name)
+                self.remove_condition(
+                    condition_name,
+                    parent_event=parent_event,
+                )
                 return True
 
         expired = condition.progress()
         if expired:
-            return self.remove_condition(condition_name, expire=True)
+            return self.remove_condition(
+                condition_name,
+                expire=True,
+                parent_event=parent_event,
+            )
         return False
 
     def reduce_condition_level(
@@ -1463,8 +1473,9 @@ class Entity(BaseBlock):
 
         The causal damage, death, healing, or revival event is the veto point.
         Once that event has accepted its effect, the derived life-state change
-        is non-vetoable: only its COMPLETION fact is published. This prevents a
-        handler from leaving zero-HP ALIVE or positive-HP DEAD combinations.
+        publishes a non-vetoable full lifecycle. Its state commits beneath the
+        stored EFFECT and before COMPLETION, so handlers cannot leave zero-HP
+        ALIVE or positive-HP DEAD combinations.
         """
         previous_state = self.health.life_state
         if previous_state is requested_state:
@@ -1484,14 +1495,27 @@ class Entity(BaseBlock):
             phase=EventPhase.DECLARATION,
             use_register=False,
         )
-        execution_event = event.phase_to(EventPhase.EXECUTION)
+        accepted = EventQueue.publish_preflighted(event)
+        execution_event = accepted.phase_to(
+            EventPhase.EXECUTION,
+            use_register=False,
+        )
+        execution_event = EventQueue.publish_preflighted(execution_event)
+        effect_event = execution_event.phase_to(
+            EventPhase.EFFECT,
+            use_register=False,
+        )
+        effect_event = EventQueue.publish_preflighted(effect_event)
         self._commit_life_state(
             previous_state,
             requested_state,
-            parent_event.uuid if parent_event is not None else None,
+            effect_event.uuid,
         )
-        effect_event = execution_event.phase_to(EventPhase.EFFECT)
-        return effect_event.phase_to(EventPhase.COMPLETION, use_register=True)
+        completion_event = effect_event.phase_to(
+            EventPhase.COMPLETION,
+            use_register=False,
+        )
+        return EventQueue.publish_preflighted(completion_event)
 
     def stabilize(self, parent_event: Optional[Event] = None) -> bool:
         """Stabilize a player-style dying entity at 0 HP.
@@ -1807,6 +1831,8 @@ class Entity(BaseBlock):
         if event.canceled:
             return event
         event = event.phase_to(EventPhase.EXECUTION)
+        if event.canceled:
+            return event
 
         self.make_death_save(
             parent_event=event.uuid,
@@ -1817,14 +1843,17 @@ class Entity(BaseBlock):
 
         condition_names = list(self.active_conditions.keys())
         for condition_name in condition_names:
-            self.advance_duration_condition(condition_name)
+            self.advance_duration_condition(
+                condition_name,
+                parent_event=event,
+            )
 
         for item in self.equipment.get_all_equipped_items():
             for cond_name in list(item.active_conditions.keys()):
-                item.advance_duration(cond_name)
+                item.advance_duration(cond_name, parent_event=event)
         for item in self.inventory.items.values():
             for cond_name in list(item.active_conditions.keys()):
-                item.advance_duration(cond_name)
+                item.advance_duration(cond_name, parent_event=event)
 
         self.action_economy.reset_all_costs()
         self.action_economy.on_turn_start()

@@ -639,13 +639,11 @@ class SpatialCondition(BaseCondition):
                 )
         self._displaced_footprints.clear()
         self._committed_displacement_uuids.clear()
-        created = self._publish_change(
+        self._publish_change(
             SpatialEffectChangeOperation.CREATED,
             previous_positions=set(),
             parent_event=parent_event,
         )
-        self._created_event_published = True
-        self.apply_appearance_trigger(parent_event=created or parent_event)
         self._activation_positions = None
         self._finish_work_diagnostics()
         return result
@@ -1022,7 +1020,7 @@ class SpatialCondition(BaseCondition):
         return SpatialEffectChangeEvent(
             source_entity_uuid=self.source_entity_uuid,
             source_entity_name=self.source_entity_name,
-            phase=EventPhase.COMPLETION,
+            phase=EventPhase.DECLARATION,
             use_register=False,
             parent_event=parent_event.uuid if parent_event is not None else None,
             operation=operation,
@@ -1042,14 +1040,19 @@ class SpatialCondition(BaseCondition):
         previous_positions: Set[Tuple[int, int]],
         parent_event: Optional[Event],
     ) -> Optional[SpatialEffectChangeEvent]:
-        """Publish one non-cancelable fact after committed state changes."""
-        return EventQueue.publish_completed_fact(
-            self._build_change_declaration(
-                operation,
-                previous_positions=previous_positions,
-                parent_event=parent_event,
-            )
+        """Publish one non-cancelable lifecycle after committed state changes."""
+        declaration = self._build_change_declaration(
+            operation,
+            previous_positions=previous_positions,
+            parent_event=parent_event,
         )
+        accepted = EventQueue.publish_preflighted(declaration)
+        execution = accepted.phase_to(EventPhase.EXECUTION)
+        effect = execution.phase_to(EventPhase.EFFECT)
+        if operation is SpatialEffectChangeOperation.CREATED:
+            self._created_event_published = True
+            self.apply_appearance_trigger(parent_event=effect)
+        return effect.phase_to(EventPhase.COMPLETION)
 
     def publish_revealed(
         self,

@@ -61,7 +61,6 @@ from tests.engine.support import create_test_entity, get_max_hp, reset_combat_st
 def reset_entity_state() -> None:
     """Clear global state touched by these entity examples."""
     reset_combat_state()
-    EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
     BaseValue._registry.clear()

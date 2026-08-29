@@ -146,7 +146,6 @@ class GridMap:
         self._pending_events: List['SpatialChangeEvent'] = []
         self._pending_committed_events: List['SpatialChangeEvent'] = []
 
-        self._blocking_callback_registered: bool = False
         self._spatial_revision: int = 0
         self._optical_revision: int = 0
         self._movement_revision: int = 0
@@ -181,11 +180,6 @@ class GridMap:
                 Dict[Tuple[int, int], Tuple[Tuple[int, int], ...]],
             ],
         ] = OrderedDict()
-        EventQueue.add_on_event_callback(
-            self._on_perceivability_changed,
-            event_types={EventType.SPATIAL_PERCEIVABILITY_CHANGED},
-            phases={EventPhase.DECLARATION},
-        )
 
     @classmethod
     def get_instance(cls) -> 'GridMap':
@@ -225,6 +219,24 @@ class GridMap:
         execution = current.phase_to(EventPhase.EXECUTION)
         effect = execution.phase_to(EventPhase.EFFECT)
         return effect.phase_to(EventPhase.COMPLETION, use_register=True)
+
+    def resolve_spatial_event(self, event: 'SpatialChangeEvent') -> None:
+        """Resolve committed spatial consequences for one concrete event."""
+        if event.event_type is EventType.SPATIAL_PERCEIVABILITY_CHANGED:
+            self.invalidate_occupancy_paths()
+        self._settle_attached_lights(event)
+        hint = event.senses_hint
+        if (
+            hint is not None
+            and (hint.requires_fov or hint.requires_light_recompute)
+        ):
+            positions = set(hint.light_changed_positions or ())
+            if not positions:
+                positions.add(event.position)
+            self.recompute_lights_at_positions(
+                positions,
+                parent_event=event.uuid,
+            )
 
     def enable_events(self, *, flush_pending: bool = True) -> None:
         """Enable events and either publish or discard buffered bootstrap facts."""
@@ -319,21 +331,6 @@ class GridMap:
         """Invalidate cached paths after entity blocking state changes."""
         self._occupancy_revision += 1
         self._path_cache.clear()
-
-    def _on_perceivability_changed(self, event: Event) -> None:
-        """Invalidate subjective occupancy paths when a blocker can appear or vanish.
-
-        Perceivability is observer-relative, so a Hidden or Invisible transition
-        can change which occupied cells a subjective path query may traverse
-        even though authoritative occupancy did not move. The map consumes the
-        spatial fact emitted by the block rather than making lower-level blocks
-        import the spatial registry.
-        """
-        if (
-            event.event_type == EventType.SPATIAL_PERCEIVABILITY_CHANGED
-            and event.phase == EventPhase.DECLARATION
-        ):
-            self.invalidate_occupancy_paths()
 
     def _bump_spatial_revisions(self, channels: Set[str]) -> None:
         """Advance channel revisions and clear dependent query caches."""
@@ -4253,9 +4250,6 @@ class GridMap:
         if self._is_light_effectively_active(source):
             self._apply_light_source(source, parent_event=parent_event)
 
-        self._ensure_light_pre_completion_callback()
-        self._ensure_blocking_callback()
-
         return source.uuid
 
     def remove_light_source(self, light_uuid: UUID,
@@ -4498,14 +4492,8 @@ class GridMap:
         )
         self._fire_spatial_event(event)
 
-    def _ensure_light_pre_completion_callback(self) -> None:
-        """Install carried-light settlement before indexed sensory reduction."""
-        EventQueue.add_pre_completion_callback(
-            self._move_attached_lights_before_entry_completion,
-        )
-
-    def _move_attached_lights_before_entry_completion(self, event: Event) -> None:
-        """Settle attached illumination at the existing anchor-entry boundary."""
+    def _settle_attached_lights(self, event: Event) -> None:
+        """Settle attached illumination at the committed spatial boundary."""
         if not isinstance(event, SpatialChangeEvent):
             return
         if (
@@ -4546,48 +4534,6 @@ class GridMap:
                 False,
                 parent_event=event.uuid,
             )
-
-    def _ensure_blocking_callback(self) -> None:
-        """Register vision-blocking callback for light recomputation (once)."""
-        if self._blocking_callback_registered:
-            return
-        self._blocking_callback_registered = True
-        EventQueue.add_on_event_callback(
-            self._on_vision_blocking_changed,
-            event_types={
-                EventType.SPATIAL_ENTITY_ENTERED,
-                EventType.SPATIAL_ENTITY_LEFT,
-                EventType.SPATIAL_TILE_CHANGED,
-                EventType.SPATIAL_OBJECT_PLACED,
-                EventType.SPATIAL_OBJECT_REMOVED,
-                EventType.SPATIAL_PERCEIVABILITY_CHANGED,
-                EventType.SPATIAL_OBJECT_CHANGED,
-            },
-            phases={EventPhase.DECLARATION},
-        )
-
-    def _on_vision_blocking_changed(self, event: Event) -> None:
-        """Recompute lights when vision-blocking geometry changes.
-
-        Reacts to ANY spatial event with requires_fov=True (the unified signal
-        that vision geometry changed). Fires at DECLARATION so light propagates
-        before senses evaluate.
-
-        Excludes SPATIAL_LIGHT_CHANGED to prevent recursion.
-        """
-        if event.phase != EventPhase.DECLARATION:
-            return
-        if event.event_type == EventType.SPATIAL_LIGHT_CHANGED:
-            return
-        if not isinstance(event, SpatialChangeEvent):
-            return
-        hint = event.senses_hint
-        if hint is None or not (hint.requires_fov or hint.requires_light_recompute):
-            return
-        positions = set(hint.light_changed_positions or ())
-        if not positions:
-            positions.add(event.position)
-        self.recompute_lights_at_positions(positions, parent_event=event.uuid)
 
     def recompute_lights_at_position(self, position: Tuple[int, int],
                                      parent_event: Optional[UUID] = None) -> None:

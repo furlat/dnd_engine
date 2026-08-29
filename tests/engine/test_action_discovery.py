@@ -66,7 +66,6 @@ from tests.engine.support import (
 def reset_action_state() -> None:
     """Clear global state touched by these action examples."""
     reset_combat_state()
-    EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
     BaseValue._registry.clear()

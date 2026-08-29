@@ -1,6 +1,6 @@
 """Committed entity birth and progression facts."""
 
-from typing import Optional
+from typing import ClassVar, Optional
 from uuid import UUID
 
 from pydantic import Field
@@ -36,6 +36,8 @@ _ArmorFormulaFact = tuple[int, tuple[AbilityName, ...], bool, bool]
 
 class EntityCreatedEvent(Event):
     """Terminal renderer-agnostic fact for one composed entity."""
+
+    inert_terminal_fact: ClassVar[bool] = True
 
     name: str = Field(default="Entity Created")
     event_type: EventType = Field(default=EventType.ENTITY_CREATED, frozen=True)
@@ -106,6 +108,8 @@ class EntityCreatedEvent(Event):
 class EntityLevelAddedEvent(Event):
     """Terminal fact for one successfully applied class-level step."""
 
+    inert_terminal_fact: ClassVar[bool] = True
+
     name: str = Field(default="Entity Level Added")
     event_type: EventType = Field(default=EventType.ENTITY_LEVEL_ADDED, frozen=True)
     entity_uuid: UUID
@@ -156,6 +160,8 @@ class EntityLevelAddedEvent(Event):
 
 class EntityLevelRemovedEvent(Event):
     """Terminal fact for one successfully removed class-level step."""
+
+    inert_terminal_fact: ClassVar[bool] = True
 
     name: str = Field(default="Entity Level Removed")
     event_type: EventType = Field(default=EventType.ENTITY_LEVEL_REMOVED, frozen=True)

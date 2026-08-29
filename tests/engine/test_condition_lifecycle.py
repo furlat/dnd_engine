@@ -53,7 +53,6 @@ def fixed_randint(value: int) -> Iterator[None]:
 def reset_condition_state() -> None:
     """Clear global state touched by these condition examples."""
     reset_combat_state()
-    EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
     BaseValue._registry.clear()
@@ -875,6 +874,7 @@ def test_eb_07_012_removal_save_succeeds_before_duration_decrements() -> None:
             target_entity_uuid=target.uuid,
             ability_name="dexterity",
             dc=5,
+            use_register=False,
         ),
     )
 
@@ -887,6 +887,50 @@ def test_eb_07_012_removal_save_succeeds_before_duration_decrements() -> None:
     assert condition.applied is False
     assert "EngineBookMarker" not in target.active_conditions
     assert condition.duration.duration == 2
+
+
+def test_turn_start_parents_duration_removal_save_and_terminal_last() -> None:
+    """Turn-start duration cleanup is one child tree, including its save."""
+    reset_condition_state()
+    source = configured_entity("Source")
+    target = configured_entity("Target", position=(2, 1))
+    condition = EngineBookMarkerCondition(
+        source_entity_uuid=source.uuid,
+        target_entity_uuid=target.uuid,
+        duration=Duration(duration=2, duration_type=DurationType.ROUNDS),
+        removal_saving_throw=SavingThrowEvent(
+            source_entity_uuid=source.uuid,
+            target_entity_uuid=target.uuid,
+            ability_name="dexterity",
+            dc=5,
+            use_register=False,
+        ),
+    )
+    target.add_condition(condition)
+    cursor = EventQueue.event_cursor()
+
+    with fixed_randint(20):
+        turn_start = target.on_turn_start(round_number=1, turn_index=0)
+
+    history = EventQueue.get_event_history(turn_start.uuid)
+    turn_execution = next(
+        event for event in history if event.phase is EventPhase.EXECUTION
+    )
+    save_events = [
+        event
+        for _, event in EventQueue.iter_events_since(cursor)
+        if event.event_type is EventType.SAVING_THROW
+    ]
+    assert save_events
+    assert all(event.parent_event == turn_execution.uuid for event in save_events)
+    assert all(event.lineage_uuid != condition.removal_saving_throw.lineage_uuid for event in save_events)
+
+    turn_terminal_index = EventQueue.get_event_index(turn_start.uuid)
+    assert turn_terminal_index is not None
+    assert all(
+        EventQueue.get_event_index(event.uuid) < turn_terminal_index
+        for event in save_events
+    )
 
 
 def test_eb_07_013_item_conditions_index_expire_and_destroy_cleanly() -> None:

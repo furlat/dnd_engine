@@ -808,19 +808,6 @@ def test_elevation_noop_effect_handler_publishes_exactly_four_versions() -> None
     grid = get_map()
     tile = grid.get_tile(0, 0)
     assert tile is not None
-    immediate = []
-    sequences = []
-    batches = []
-
-    def capture_event(event) -> None:
-        immediate.append(event)
-
-    def capture_sequence(events) -> None:
-        sequences.append(tuple(events))
-
-    def capture_batch(events) -> None:
-        batches.append(tuple(events))
-
     handler = EventHandler(
         name="No-op elevation effect",
         source_entity_uuid=uuid4(),
@@ -832,9 +819,7 @@ def test_elevation_noop_effect_handler_publishes_exactly_four_versions() -> None
         event_processor=lambda event, _source: event,
     )
     EventQueue.add_event_handler(handler)
-    EventQueue.add_on_event_callback(capture_event)
-    EventQueue.add_on_event_sequence_callback(capture_sequence)
-    EventQueue.add_on_event_batch_callback(capture_batch)
+    cursor = EventQueue.event_cursor()
     try:
         assert grid.set_tile_elevation(
             (0, 0),
@@ -844,9 +829,11 @@ def test_elevation_noop_effect_handler_publishes_exactly_four_versions() -> None
         )
     finally:
         EventQueue.remove_event_handler(handler)
-        EventQueue.remove_on_event_callback(capture_event)
-        EventQueue.remove_on_event_sequence_callback(capture_sequence)
-        EventQueue.remove_on_event_batch_callback(capture_batch)
+
+    immediate = [
+        event
+        for _index, event in EventQueue.iter_events_since(cursor)
+    ]
 
     versions = [
         event
@@ -865,20 +852,6 @@ def test_elevation_noop_effect_handler_publishes_exactly_four_versions() -> None
     assert [
         event.phase
         for event in immediate
-        if type(event) is TileElevationChangeEvent
-        and event.lineage_uuid == lineage
-    ] == expected_phases
-    assert [
-        event.phase
-        for sequence in sequences
-        for event in sequence
-        if type(event) is TileElevationChangeEvent
-        and event.lineage_uuid == lineage
-    ] == expected_phases
-    assert [
-        event.phase
-        for batch in batches
-        for event in batch
         if type(event) is TileElevationChangeEvent
         and event.lineage_uuid == lineage
     ] == expected_phases

@@ -180,7 +180,7 @@ class BaseItem(BaseBlock):
     ) -> ItemLocationStateEvent:
         """Publish one non-vetoable completion fact after location has committed."""
         source_uuid = source_entity_uuid or owner_uuid or self.source_entity_uuid
-        declaration = ItemLocationStateEvent(
+        completion = ItemLocationStateEvent(
             source_entity_uuid=source_uuid,
             target_entity_uuid=owner_uuid,
             parent_event=parent_event.uuid if parent_event is not None else None,
@@ -192,11 +192,10 @@ class BaseItem(BaseBlock):
             equipment_slot=equipment_slot,
             merged_into_item_uuid=merged_into_item_uuid,
             entity_armor_class_after=entity_armor_class_after,
+            phase=EventPhase.COMPLETION,
             use_register=False,
         )
-        execution = declaration.phase_to(EventPhase.EXECUTION)
-        effect = execution.phase_to(EventPhase.EFFECT)
-        return effect.phase_to(EventPhase.COMPLETION, use_register=True)
+        return EventQueue.publish_inert_terminal_fact(completion)
 
     def blocks_walking(self, requesting_entity_uuid: Optional[UUID] = None,
                        mode: MovementMode = MovementMode.WALKING) -> bool:
@@ -337,7 +336,7 @@ class BaseItem(BaseBlock):
             parent_event=parent_event_uuid,
         )
         for cond_name in list(self.active_conditions.keys()):
-            self.remove_condition(cond_name)
+            self.remove_condition(cond_name, parent_event=parent_event)
         if self.stored_in_uuid is not None:
             container = BaseBlock.get(self.stored_in_uuid)
             if container is not None:
@@ -774,28 +773,4 @@ class UsableItem(BaseItem):
             charges_after=max(0, self.charges),
             stack_count_after=self.stack_count,
             item_destroyed=BaseBlock.get(self.uuid) is None,
-        )
-
-
-def consume_item_charge_before_action_completion(event: Event) -> None:
-    """Consume one item-bound action resource before its root lineage completes."""
-    if not isinstance(event, ActionEvent):
-        return
-    if (
-        event.source_item_uuid is None
-        or event.item_charge_cost <= 0
-        or event.item_charge_action_lineage_uuid != event.lineage_uuid
-    ):
-        return
-    item = BaseBlock.get(event.source_item_uuid)
-    if not isinstance(item, UsableItem) or item.charges == -1:
-        return
-    result = item.consume_charge_with_event(
-        event.item_charge_cost,
-        event.source_entity_uuid,
-        event,
-    )
-    if result.canceled:
-        raise RuntimeError(
-            f"Item charge consumption was canceled for completed action lineage {event.lineage_uuid}"
         )

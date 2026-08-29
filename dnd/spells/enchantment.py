@@ -193,6 +193,8 @@ class CharmPerson(SpellAction):
             target_entity_name=target.name,
             status_message=f"WIS save: {save_roll.total} vs DC {dc}{fighting_text} - {'Success' if success else 'Failure'}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         if success:
             return effect_event.phase_to(
@@ -394,8 +396,6 @@ class HoldPerson(SpellAction):
             return execution_event.cancel(status_message="Caster or target not found")
 
         dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
-        concentration = self.ensure_concentration(execution_event)
-
         effect_event, _, success = self.resolve_saving_throw(
             execution_event,
             caster=caster,
@@ -403,8 +403,12 @@ class HoldPerson(SpellAction):
             ability_name=AbilityName.WISDOM,
             dc=dc,
         )
+        if effect_event.canceled:
+            return effect_event
+        concentration = self.ensure_concentration(execution_event)
 
         if success:
+            self._close_concentration(effect_event)
             return effect_event.phase_to(
                 new_phase=EventPhase.COMPLETION,
                 status_message=f"{self.name} - {target.name} saved"
@@ -420,6 +424,8 @@ class HoldPerson(SpellAction):
 
         if hold_effect.applied:
             concentration.add_linked_condition(target.uuid, hold_effect.uuid)
+
+        self._close_concentration(effect_event)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -618,6 +624,8 @@ class HoldMonster(SpellAction):
             ability_name=AbilityName.WISDOM,
             dc=dc,
         )
+        if effect_event.canceled:
+            return effect_event
 
         if success:
             return effect_event.phase_to(
@@ -682,6 +690,8 @@ class PowerWordKill(SpellAction):
             target_entity_name=target.name,
             status_message=f"Power Word Kill targeting {target.name} ({current_hp} HP)"
         )
+        if effect_event.canceled:
+            return effect_event
 
         if current_hp <= self.hp_threshold:
             instant_death_event = target.receive_instant_death(
@@ -975,6 +985,8 @@ class Sleep(SpellAction):
             target_entity_name=target.name,
             status_message=f"Sleep affecting {target.name} ({target.get_hp()} HP)"
         )
+        if effect_event.canceled:
+            return effect_event
 
         sleep_effect = SleepEffect(
             source_entity_uuid=caster.uuid,
@@ -1118,6 +1130,8 @@ class PowerWordStun(SpellAction):
             target_entity_name=target.name,
             status_message=f"Power Word Stun targeting {target.name} ({current_hp} HP)"
         )
+        if effect_event.canceled:
+            return effect_event
 
         if current_hp <= self.hp_threshold:
             dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
@@ -1358,6 +1372,8 @@ class Bane(SpellAction):
             target_entity_name=target.name,
             status_message=f"CHA save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}",
         )
+        if effect_event.canceled:
+            return effect_event
 
         if success:
             return effect_event.phase_to(
@@ -1436,21 +1452,23 @@ class Bless(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        concentration = self.ensure_concentration(execution_event)
-
-        bless_effect = BlessEffect(
-            source_entity_uuid=caster.uuid,
-            target_entity_uuid=target.uuid,
-        )
-        target.add_condition(bless_effect, parent_event=execution_event)
-        if bless_effect.applied:
-            concentration.add_linked_condition(target.uuid, bless_effect.uuid)
-
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
             target_entity_name=target.name,
             status_message=f"Bless - {target.name} is blessed",
         )
+        if effect_event.canceled:
+            return effect_event
+
+
+        concentration = self.ensure_concentration(effect_event)
+        bless_effect = BlessEffect(
+            source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid,
+        )
+        target.add_condition(bless_effect, parent_event=effect_event)
+        if bless_effect.applied:
+            concentration.add_linked_condition(target.uuid, bless_effect.uuid)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -1830,6 +1848,8 @@ class Command(SpellAction):
             target_entity_name=target.name,
             status_message=f"WIS save: {save_roll.total} vs DC {dc}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         if success:
             return effect_event.phase_to(

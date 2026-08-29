@@ -135,6 +135,8 @@ class FalseLife(SpellAction):
             dice_roll=temp_hp_roll,
             status_message=f"Rolled 1d4+{self.get_temp_hp_bonus()} = {temp_hp_roll.total} temporary HP"
         )
+        if effect_event.canceled:
+            return effect_event
 
         caster.grant_temporary_hit_points(
             temp_hp_roll.total,
@@ -330,6 +332,8 @@ class ChillTouch(SpellAction):
             is_threatened=resolution.is_threatened,
             status_message=f"Attack rolled {dice_roll.total} vs AC {target_ac.normalized_score}: {outcome.value}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         if outcome in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]:
             return effect_event.phase_to(
@@ -498,6 +502,8 @@ class Blight(SpellAction):
             target_entity_name=target.name,
             status_message=f"CON save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         num_dice = self.get_damage_dice_count()
         damage_bonus = caster.get_spell_damage_bonus()
@@ -743,6 +749,8 @@ class BlindnessDeafness(SpellAction):
             target_entity_name=target.name,
             status_message=f"CON save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         if success:
             return effect_event.phase_to(
@@ -850,25 +858,26 @@ class NecroticBless(SpellAction):
 
         dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
 
-        concentration = self.ensure_concentration(execution_event)
-
         is_undead = target.creature_type == CreatureType.UNDEAD
 
         if is_undead:
-            bless_effect = BlessEffect(
-                source_entity_uuid=caster.uuid,
-                target_entity_uuid=target.uuid,
-                tags={ConditionTag.MAGICAL},
-            )
-            target.add_condition(bless_effect, parent_event=execution_event)
-            if bless_effect.applied:
-                concentration.add_linked_condition(target.uuid, bless_effect.uuid)
-
             effect_event = execution_event.phase_to(
                 new_phase=EventPhase.EFFECT,
                 target_entity_name=target.name,
                 status_message=f"Necrotic Bless - {target.name} (undead) is blessed",
             )
+            if effect_event.canceled:
+                return effect_event
+
+            concentration = self.ensure_concentration(effect_event)
+            bless_effect = BlessEffect(
+                source_entity_uuid=caster.uuid,
+                target_entity_uuid=target.uuid,
+                tags={ConditionTag.MAGICAL},
+            )
+            target.add_condition(bless_effect, parent_event=effect_event)
+            if bless_effect.applied:
+                concentration.add_linked_condition(target.uuid, bless_effect.uuid)
             return effect_event.phase_to(
                 new_phase=EventPhase.COMPLETION,
                 status_message=f"Necrotic Bless - {target.name} (undead) is blessed",
@@ -891,6 +900,8 @@ class NecroticBless(SpellAction):
                 target_entity_name=target.name,
                 status_message=f"CHA save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}",
             )
+            if effect_event.canceled:
+                return effect_event
 
             if success:
                 return effect_event.phase_to(
@@ -898,6 +909,7 @@ class NecroticBless(SpellAction):
                     status_message=f"Necrotic Bless - {target.name} resists",
                 )
 
+            concentration = self.ensure_concentration(effect_event)
             bane_effect = BaneEffect(
                 source_entity_uuid=caster.uuid,
                 target_entity_uuid=target.uuid,
@@ -1461,6 +1473,8 @@ class EyebiteStrike(BaseAction):
             new_phase=EventPhase.EFFECT,
             status_message=f"WIS save: {'Success' if success else 'Failure'}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         if success:
             casting_state = self._get_casting_state(caster)
@@ -1547,6 +1561,8 @@ class Eyebite(SpellAction):
             new_phase=EventPhase.EFFECT,
             status_message=f"{caster.name} casts Eyebite"
         )
+        if effect_event.canceled:
+            return effect_event
 
         concentration = self.ensure_concentration(effect_event)
         marker = EyebiteCastingState(
@@ -1577,6 +1593,8 @@ class Eyebite(SpellAction):
                 costs=[],
             )
             first_strike.apply()
+
+        self._close_concentration(effect_event)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -1660,6 +1678,8 @@ class FingerOfDeath(SpellAction):
             target_entity_name=target.name,
             status_message=f"CON save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         num_dice = self.get_damage_dice_count()
         damage_bonus = caster.get_spell_damage_bonus()
@@ -1748,6 +1768,8 @@ class InflictWounds(SpellAction):
             is_threatened=resolution.is_threatened,
             status_message=f"Attack rolled {dice_roll.total} vs AC {target_ac.normalized_score}: {outcome.value}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         if outcome in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]:
             return effect_event.phase_to(
@@ -1860,6 +1882,8 @@ class Harm(SpellAction):
             new_phase=EventPhase.EFFECT,
             status_message=f"Harm vs {target.name}: {'SAVE' if success else 'FAIL'}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         if final_damage > 0:
             target.receive_damage(
@@ -2333,14 +2357,16 @@ class BestowCurse(SpellAction):
 
         dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
 
-        concentration = self.ensure_concentration(execution_event)
-
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
             save_ability="wisdom",
             save_dc=dc,
             status_message=f"Requesting WIS save DC {dc}"
         )
+        if effect_event.canceled:
+            return effect_event
+
+        concentration = self.ensure_concentration(effect_event)
 
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
@@ -2356,6 +2382,7 @@ class BestowCurse(SpellAction):
         )
 
         if success:
+            self._close_concentration(effect_event)
             return effect_event.phase_to(
                 new_phase=EventPhase.COMPLETION,
                 status_message=f"Bestow Curse — {target.name} saved"
@@ -2392,6 +2419,8 @@ class BestowCurse(SpellAction):
 
         if curse.applied:
             concentration.add_linked_condition(target.uuid, curse.uuid)
+
+        self._close_concentration(effect_event)
 
         option_desc = {
             1: f"disadvantage on {self.cursed_ability} checks/saves",

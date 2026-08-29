@@ -136,7 +136,6 @@ def install_entry_cleanup_effect(
 def reset_grid_state(width: int = 8, height: int = 8, x: int = 0, y: int = 0) -> None:
     """Clear global state and create a rectangular floor grid."""
     reset_combat_state()
-    EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
     BaseValue._registry.clear()

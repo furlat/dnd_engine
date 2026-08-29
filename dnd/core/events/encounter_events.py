@@ -1,6 +1,6 @@
 """Encounter, round, turn, death-save, and terminal life event facts."""
 
-from typing import List, Optional
+from typing import ClassVar, List, Optional
 from uuid import UUID
 
 from pydantic import Field
@@ -14,6 +14,7 @@ from dnd.core.combat_log import (
 )
 from dnd.core.dice import DiceRoll
 from dnd.core.events.events_registry import Event, EventType
+from dnd.types.conditions import ConditionRemovalTrigger
 from dnd.types.life import LifeState, LifeStateChangeReason
 
 class EncounterEvent(Event):
@@ -26,6 +27,8 @@ class EncounterEvent(Event):
 class EncounterStartEvent(EncounterEvent):
     """Fired when an encounter begins."""
 
+    inert_terminal_fact: ClassVar[bool] = True
+
     name: str = Field(default="Encounter Start", description="Human-readable encounter-start label.")
     event_type: EventType = Field(
         default=EventType.ENCOUNTER_START,
@@ -35,6 +38,8 @@ class EncounterStartEvent(EncounterEvent):
 
 class EncounterEndEvent(EncounterEvent):
     """Fired when an encounter ends."""
+
+    inert_terminal_fact: ClassVar[bool] = True
 
     name: str = Field(default="Encounter End", description="Human-readable encounter-end label.")
     event_type: EventType = Field(
@@ -52,6 +57,8 @@ class RoundEvent(Event):
 
 class RoundStartEvent(RoundEvent):
     """Fired at the start of a new round."""
+
+    inert_terminal_fact: ClassVar[bool] = True
 
     name: str = Field(default="Round Start", description="Human-readable round-start label.")
     event_type: EventType = Field(default=EventType.ROUND_START, description="Event category for round start.")
@@ -80,6 +87,12 @@ class TurnStartEvent(TurnEvent):
     bonus_actions_available: int = Field(default=1, description="Bonus actions available at turn start.")
     movement_available: int = Field(default=30, description="Movement available at turn start, in feet.")
     reaction_available: int = Field(default=1, description="Reactions available at turn start.")
+
+    def resolve_sub_events(self) -> None:
+        """Reduce the observer's turn-start projection."""
+        from dnd.blocks.sensory import spatial_senses_system
+
+        spatial_senses_system.reduce_event(self)
 
     def generate_combat_log(self) -> CombatLogEntry:
         """Generate a combat log entry for turn start."""
@@ -149,6 +162,57 @@ class LifeStateChangeEvent(Event):
         default=0,
         description="Normal hit points observed when the transition was requested.",
     )
+
+    def resolve_sub_events(self) -> None:
+        """Retire source-owned conditions, then reduce perception."""
+        if self.previous_state is LifeState.ALIVE and self.new_state is not LifeState.ALIVE:
+            from dnd.core.base_conditions import BaseCondition
+
+            candidate_uuids = sorted(
+                (
+                    condition.uuid
+                    for condition in BaseCondition._registry.values()
+                    if (
+                        isinstance(condition, BaseCondition)
+                        and condition.use_register
+                        and condition.applied
+                        and condition.source_entity_uuid == self.entity_uuid
+                        and ConditionRemovalTrigger.SOURCE_LEFT_PLAY
+                        in condition.removal_triggers
+                    )
+                ),
+                key=lambda condition_uuid: condition_uuid.int,
+            )
+            for condition_uuid in candidate_uuids:
+                condition = BaseCondition.get(condition_uuid)
+                if not isinstance(condition, BaseCondition):
+                    continue
+                if not (
+                    condition.use_register
+                    and condition.applied
+                    and condition.source_entity_uuid == self.entity_uuid
+                    and ConditionRemovalTrigger.SOURCE_LEFT_PLAY
+                    in condition.removal_triggers
+                ):
+                    continue
+                condition.remove_from_runtime_owner(parent_event=self)
+                current = BaseCondition.get(condition_uuid)
+                if (
+                    isinstance(current, BaseCondition)
+                    and current.use_register
+                    and current.applied
+                    and current.source_entity_uuid == self.entity_uuid
+                    and ConditionRemovalTrigger.SOURCE_LEFT_PLAY
+                    in current.removal_triggers
+                ):
+                    raise RuntimeError(
+                        "Source-left-play condition did not remove itself: "
+                        f"{type(current).__name__} {condition_uuid}"
+                    )
+
+        from dnd.blocks.sensory import spatial_senses_system
+
+        spatial_senses_system.reduce_event(self)
 
 class ReviveEvent(Event):
     """Typed revival request with revival-specific condition options."""
@@ -234,6 +298,12 @@ class DeathEvent(Event):
     killer_name: str = Field(default="", description="Display name of the killer, if known.")
     final_hp: int = Field(default=0, description="Final HP value after lethal damage.")
     encounter_uuid: Optional[UUID] = Field(default=None, description="Encounter where the death occurred, if any.")
+
+    def resolve_sub_events(self) -> None:
+        """Reduce perception after the death fact commits."""
+        from dnd.blocks.sensory import spatial_senses_system
+
+        spatial_senses_system.reduce_event(self)
 
     def generate_combat_log(self) -> CombatLogEntry:
         """Generate combat log entry for death."""

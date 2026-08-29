@@ -43,7 +43,6 @@ from tests.engine.support import create_test_entity, reset_combat_state
 def reset_standard_condition_state() -> None:
     """Clear global state touched by standard-condition examples."""
     reset_combat_state()
-    EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
     BaseValue._registry.clear()
     BaseBlock._registry.clear()

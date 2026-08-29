@@ -11,6 +11,7 @@ from dnd.core.events.events_registry import (
     EventQueue,
 )
 from dnd.core.gridmap import GridMap, get_map
+from dnd.blocks.sensory import spatial_senses_system
 from dnd.core.values import BaseValue
 from dnd.encounters.encounter import Encounter
 from dnd.entities.entity import Entity
@@ -43,7 +44,7 @@ def reset_engine_runtime(
     # Event systems reset first so registered systems can discard references
     # to live entities before their owning registries are cleared.
     EventQueue.reset()
-    EventQueue.set_combat_log_callback(None)
+    spatial_senses_system.reset()
     SpellProtectionRegistry.reset()
 
     BaseObject._registry.clear()
@@ -54,7 +55,6 @@ def reset_engine_runtime(
     Entity._entity_registry.clear()
     Controller.clear_registry()
     Encounter.clear_registry()
-    Encounter._combat_log_listeners.clear()
     GridMap.reset()
     grid = get_map()
     if grid_size is not None:
