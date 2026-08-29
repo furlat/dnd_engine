@@ -34,10 +34,15 @@ class ConditionCategory(str, Enum):
 
 
 class ConditionRemovalTrigger(str, Enum):
-    """Observable state transition that removes a condition."""
+    """Observable state transition that removes a condition.
+
+    ``SOURCE_LEFT_PLAY`` denotes the transition ALIVE -> any non-ALIVE state
+    of the condition source.
+    """
 
     POSITIVE_DAMAGE_APPLIED = "positive_damage_applied"
     SHAKE_AWAKE = "shake_awake"
+    SOURCE_LEFT_PLAY = "source_left_play"
 
 
 class ConditionAgencyDenial(str, Enum):
@@ -83,4 +88,3 @@ __all__ = [
     "DurationType",
     "HazardFilter",
 ]
-

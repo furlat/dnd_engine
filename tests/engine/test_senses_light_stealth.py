@@ -104,16 +104,16 @@ def perception_projection(senses: Senses) -> tuple[object, ...]:
     )
 
 
-def root_action(source_uuid: UUID) -> Event:
-    """Publish one ordinary root fact for a spatial-condition lifecycle."""
-    completed = EventQueue.publish_lifecycle(Event(
+def open_root_action(source_uuid: UUID) -> Event:
+    """Publish one ordinary root fact and leave its EFFECT open."""
+    root = EventQueue.publish_declaration(Event(
         source_entity_uuid=source_uuid,
         event_type=EventType.BASE_ACTION,
         phase=EventPhase.DECLARATION,
         use_register=False,
     ))
-    assert completed is not None
-    return completed
+    root = root.phase_to(EventPhase.EXECUTION)
+    return root.phase_to(EventPhase.EFFECT)
 
 
 def set_modes(observer_uuid: UUID, modes: list[SenseMode]) -> None:
@@ -133,7 +133,9 @@ def activate_fog(source_uuid: UUID, position: tuple[int, int]) -> FogCloudZone:
         condition_type=FogCloudZone,
         condition_fields={"zone_radius_feet": 0},
     )
-    result = fog.activate(parent_event=root_action(source_uuid))
+    root = open_root_action(source_uuid)
+    result = fog.activate(parent_event=root)
+    root.phase_to(EventPhase.COMPLETION)
     assert result is not None and not result.canceled and fog.applied
     return fog
 
@@ -148,7 +150,9 @@ def activate_darkness(source_uuid: UUID, position: tuple[int, int]) -> DarknessZ
         condition_type=DarknessZone,
         condition_fields={"zone_radius_feet": 0},
     )
-    result = darkness.activate(parent_event=root_action(source_uuid))
+    root = open_root_action(source_uuid)
+    result = darkness.activate(parent_event=root)
+    root.phase_to(EventPhase.COMPLETION)
     assert result is not None and not result.canceled and darkness.applied
     return darkness
 
@@ -486,14 +490,18 @@ def test_darkvision_has_exact_range_and_does_not_cross_fog_or_magic_darkness() -
     assert get_map().get_optical_obscurements_at((6, 0)) == (
         OpticalObscurement.HEAVY,
     )
-    fog.deactivate(parent_event=root_action(observer.uuid))
+    root = open_root_action(observer.uuid)
+    fog.deactivate(parent_event=root)
+    root.phase_to(EventPhase.COMPLETION)
 
     darkness = activate_darkness(observer.uuid, (6, 0))
     assert at_range.uuid not in observer.senses.entities
     assert get_map().get_optical_obscurements_at((6, 0)) == (
         OpticalObscurement.MAGICAL_DARKNESS,
     )
-    darkness.deactivate(parent_event=root_action(observer.uuid))
+    root = open_root_action(observer.uuid)
+    darkness.deactivate(parent_event=root)
+    root.phase_to(EventPhase.COMPLETION)
     assert observer.senses.entities[at_range.uuid].visual is True
 
 
@@ -529,10 +537,14 @@ def test_visual_special_senses_resolve_magic_darkness_but_not_heavy_fog(
             is LightLevel.BRIGHT_LIGHT
         )
 
-    darkness.deactivate(parent_event=root_action(observer.uuid))
+    root = open_root_action(observer.uuid)
+    darkness.deactivate(parent_event=root)
+    root.phase_to(EventPhase.COMPLETION)
     fog = activate_fog(observer.uuid, (3, 0))
     assert target.uuid not in observer.senses.entities
-    fog.deactivate(parent_event=root_action(observer.uuid))
+    root = open_root_action(observer.uuid)
+    fog.deactivate(parent_event=root)
+    root.phase_to(EventPhase.COMPLETION)
 
 
 @pytest.mark.parametrize("sense_type", [SensesType.BLINDSIGHT, SensesType.TREMORSENSE])
@@ -588,7 +600,9 @@ def test_darkness_activation_and_removal_publish_only_complete_optical_state() -
     assert target.uuid not in activation_updates[0].entity_contacts_changed
 
     cursor = EventQueue.event_cursor()
-    darkness.deactivate(parent_event=root_action(observer.uuid))
+    root = open_root_action(observer.uuid)
+    darkness.deactivate(parent_event=root)
+    root.phase_to(EventPhase.COMPLETION)
     removal_updates = [
         event for _, event in EventQueue.iter_events_since(cursor)
         if isinstance(event, SensoryUpdateEvent)

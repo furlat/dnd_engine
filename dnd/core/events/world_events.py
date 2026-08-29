@@ -398,6 +398,12 @@ class SpatialEffectChangeEvent(SpatiallyIndexedEvent):
             )
         return self
 
+    def resolve_sub_events(self) -> None:
+        """Reduce perception after this committed effect change."""
+        from dnd.blocks.sensory import spatial_senses_system
+
+        spatial_senses_system.reduce_event(self)
+
     def generate_combat_log(self) -> CombatLogEntry:
         """Describe effect creation, movement, transformation, or removal."""
         source_name = self.source_entity_name or "Unknown"
@@ -611,6 +617,14 @@ class SpatialChangeEvent(SpatiallyIndexedEvent):
         ):
             raise ValueError("previous_placement.object_uuid must match object_uuid")
         return self
+
+    def resolve_sub_events(self) -> None:
+        """Resolve physical spatial consequences, then observer deltas."""
+        from dnd.core.gridmap import get_map
+        from dnd.blocks.sensory import spatial_senses_system
+
+        get_map().resolve_spatial_event(self)
+        spatial_senses_system.reduce_event(self)
 
     @classmethod
     def entity_entered(cls, position: Tuple[int, int], entity_uuid: UUID,

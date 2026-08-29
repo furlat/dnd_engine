@@ -12,6 +12,7 @@ from dnd.blocks.action_economy import (
     Resource,
 )
 from dnd.core.events.events_registry import (
+    Event,
     EventHandler,
     EventPhase,
     EventQueue,
@@ -255,7 +256,6 @@ def test_committed_entity_membership_facts_ignore_declaration_veto() -> None:
     reset_core_action_state()
     entity = strong_entity("Committed mover", (1, 1), "heroes")
     grid = get_map()
-    parent_uuid = uuid4()
     observed_effects = []
 
     def veto_declaration_and_observe_effect(event, _source_uuid):
@@ -297,10 +297,20 @@ def test_committed_entity_membership_facts_ignore_declaration_veto() -> None:
     )
     EventQueue.add_event_handler(handler)
     cursor = EventQueue.event_cursor()
+    root = EventQueue.publish_declaration(Event(
+        source_entity_uuid=entity.uuid,
+        event_type=EventType.BASE_ACTION,
+        phase=EventPhase.DECLARATION,
+        use_register=False,
+    ))
+    root = root.phase_to(EventPhase.EXECUTION)
+    root = root.phase_to(EventPhase.EFFECT)
+    parent_uuid = root.uuid
     try:
         Entity.update_entity_position(entity, (2, 1), parent_event=parent_uuid)
     finally:
         EventQueue.remove_event_handler(handler)
+    root.phase_to(EventPhase.COMPLETION)
 
     assert entity.position == (2, 1)
     assert entity.senses.position == (2, 1)
@@ -419,8 +429,17 @@ def test_disabled_entity_occupancy_attempts_are_atomic_and_publish_nothing() -> 
         }
     ] == []
 
-    parent_uuid = uuid4()
+    root = EventQueue.publish_declaration(Event(
+        source_entity_uuid=entity.uuid,
+        event_type=EventType.BASE_ACTION,
+        phase=EventPhase.DECLARATION,
+        use_register=False,
+    ))
+    root = root.phase_to(EventPhase.EXECUTION)
+    root = root.phase_to(EventPhase.EFFECT)
+    parent_uuid = root.uuid
     Entity.update_entity_position(entity, (2, 1), parent_event=parent_uuid)
+    root.phase_to(EventPhase.COMPLETION)
     assert entity.position == (2, 1)
     assert entity.senses.position == (2, 1)
     assert grid.get_entity_position(entity.uuid) == (2, 1)

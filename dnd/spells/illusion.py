@@ -159,6 +159,8 @@ class Blur(SpellAction):
             new_phase=EventPhase.EFFECT,
             status_message=f"{caster.name} becomes blurred"
         )
+        if effect_event.canceled:
+            return effect_event
 
         blur_effect = BlurEffect(
             source_entity_uuid=caster.uuid,
@@ -169,6 +171,8 @@ class Blur(SpellAction):
         concentration = self.ensure_concentration(effect_event)
 
         concentration.add_linked_condition(caster.uuid, blur_effect.uuid)
+
+        self._close_concentration(effect_event)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -381,6 +385,8 @@ class Fear(SpellAction):
             target_entity_name=target.name,
             status_message=f"WIS save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         if success:
             return effect_event.phase_to(
@@ -600,6 +606,8 @@ class HypnoticPattern(SpellAction):
             target_entity_name=target.name,
             status_message=f"WIS save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         if success:
             return effect_event.phase_to(
@@ -784,6 +792,8 @@ class ColorSpray(SpellAction):
             target_entity_name=target.name,
             status_message=f"Color Spray affecting {target.name} ({target.get_hp()} HP)"
         )
+        if effect_event.canceled:
+            return effect_event
 
         color_spray_effect = ColorSprayEffect(
             source_entity_uuid=caster.uuid,
@@ -867,6 +877,8 @@ class Invisibility(SpellAction):
             new_phase=EventPhase.EFFECT,
             status_message=f"{caster.name} casts Invisibility on {target.name}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         invis_effect = InvisibilityEffect(
             source_entity_uuid=caster.uuid,
@@ -879,6 +891,8 @@ class Invisibility(SpellAction):
 
         if invis_effect.applied:
             concentration.add_linked_condition(target.uuid, invis_effect.uuid)
+
+        self._close_concentration(effect_event)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -940,6 +954,8 @@ class GreaterInvisibility(SpellAction):
             new_phase=EventPhase.EFFECT,
             status_message=f"{caster.name} casts Greater Invisibility on {target.name}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         invis_effect = GreaterInvisibilityEffect(
             source_entity_uuid=caster.uuid,
@@ -952,6 +968,8 @@ class GreaterInvisibility(SpellAction):
 
         if invis_effect.applied:
             concentration.add_linked_condition(target.uuid, invis_effect.uuid)
+
+        self._close_concentration(effect_event)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -1133,6 +1151,8 @@ class MirrorImage(SpellAction):
             new_phase=EventPhase.EFFECT,
             status_message=f"{caster.name} creates mirror images"
         )
+        if effect_event.canceled:
+            return effect_event
 
         mirror_effect = MirrorImageEffect(
             source_entity_uuid=caster.uuid,
@@ -1406,6 +1426,8 @@ class Silence(SpellAction):
             new_phase=EventPhase.EFFECT,
             status_message=f"{caster.name} casts Silence"
         )
+        if effect_event.canceled:
+            return effect_event
 
         zone = materialize_spatial_condition(
             SILENCE_FIELD_RECIPE,
@@ -1425,6 +1447,8 @@ class Silence(SpellAction):
 
         concentration = self.ensure_concentration(effect_event)
         concentration.add_linked_condition(zone.uuid, zone.uuid)
+
+        self._close_concentration(effect_event)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,

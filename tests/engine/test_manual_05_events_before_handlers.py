@@ -16,7 +16,6 @@ from dnd.core.events.events_registry import (
 def reset_event_state() -> None:
     """Clear global event state touched by this chapter's examples."""
     EventQueue.reset()
-    EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
 
 
@@ -64,12 +63,7 @@ def test_passive_observation_sees_stored_completion() -> None:
     reset_event_state()
     source_id = uuid4()
     target_id = uuid4()
-    observed_phases = []
-
-    def observe(event: Event) -> None:
-        observed_phases.append(event.phase)
-
-    EventQueue.add_on_event_callback(observe)
+    cursor = EventQueue.event_cursor()
 
     observed = Event(
         source_entity_uuid=source_id,
@@ -84,6 +78,11 @@ def test_passive_observation_sees_stored_completion() -> None:
     )
 
     assert observed_completion.phase == EventPhase.COMPLETION
+    observed_phases = [
+        event.phase
+        for _, event in EventQueue.iter_events_since(cursor)
+        if event.lineage_uuid == observed.lineage_uuid
+    ]
     assert observed_phases == [
         EventPhase.DECLARATION,
         EventPhase.EXECUTION,

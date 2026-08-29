@@ -1,6 +1,6 @@
 """Item state, placement, finite-resource, and equipment-transition facts."""
 
-from typing import Optional, Protocol, Tuple, runtime_checkable
+from typing import ClassVar, Optional, Protocol, Tuple, runtime_checkable
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -82,8 +82,26 @@ class ItemStateProvider(Protocol):
         """Return the item's renderer-independent state."""
         ...
 
+
+@runtime_checkable
+class FiniteChargeProvider(Protocol):
+    """Dependency-neutral contract for an item-backed finite action cost."""
+
+    charges: int
+
+    def consume_charge_with_event(
+        self,
+        amount: int,
+        source_entity_uuid: UUID,
+        parent_event: Event,
+    ) -> "ItemChargeConsumptionEvent":
+        """Consume a finite charge through its ordinary child event."""
+        ...
+
 class ItemLocationStateEvent(Event):
     """Post-commit, idempotent item state and placement fact."""
+
+    inert_terminal_fact: ClassVar[bool] = True
 
     name: str = Field(default="Item Location State", description="Item location-state fact label.")
     event_type: EventType = Field(
@@ -209,6 +227,7 @@ __all__ = [
     "ArmorEquipEvent",
     "ArmorUnequipEvent",
     "EquipmentEvent",
+    "FiniteChargeProvider",
     "ItemChargeConsumptionEvent",
     "ItemLocationStateEvent",
     "ItemState",

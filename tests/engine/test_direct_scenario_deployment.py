@@ -150,14 +150,25 @@ def test_world_birth_and_deployment_are_ordered_event_facts() -> None:
     events = EventQueue.get_events_chronological()
     event_types = [event.event_type for event in events]
 
-    world_index = event_types.index(EventType.WORLD_INITIALIZED)
+    world_start_index = next(
+        index
+        for index, event in enumerate(events)
+        if event.event_type is EventType.WORLD_INITIALIZED
+        and event.phase is EventPhase.DECLARATION
+    )
+    world_index = next(
+        index
+        for index, event in enumerate(events)
+        if event.event_type is EventType.WORLD_INITIALIZED
+        and event.phase is EventPhase.COMPLETION
+    )
     first_birth = event_types.index(EventType.ENTITY_CREATED)
     first_deployment = event_types.index(EventType.SPATIAL_ENTITY_ENTERED)
     world = events[world_index]
 
     assert world.phase is EventPhase.COMPLETION
     assert len(world.tiles) == 225
-    assert world_index < first_birth < first_deployment
+    assert world_start_index < world_index < first_birth < first_deployment
     assert event_types.count(EventType.ENTITY_CREATED) == len(assembled.entities)
     assert event_types.count(EventType.SPATIAL_ENTITY_ENTERED) == (
         4 * len(assembled.entities)
@@ -200,7 +211,10 @@ def test_world_birth_and_deployment_are_ordered_event_facts() -> None:
         and event.phase is EventPhase.COMPLETION
     ]
     assert authored_setup
-    assert all(world_index < index < first_birth for index, _event in authored_setup)
+    assert all(
+        world_start_index < index < world_index
+        for index, _event in authored_setup
+    )
     assert {
         event.spatial_effect_uuid
         for _index, event in authored_setup
@@ -412,8 +426,18 @@ def test_authored_dynamic_setup_rejects_public_lifecycle_cancellation(
         handler.remove()
 
     events = EventQueue.get_events_chronological()
-    assert events[0].event_type is EventType.WORLD_INITIALIZED
-    assert events[0].phase is EventPhase.COMPLETION
+    world = next(
+        event
+        for event in events
+        if event.event_type is EventType.WORLD_INITIALIZED
+        and event.phase is EventPhase.EFFECT
+    )
+    assert isinstance(world, WorldInitializedEvent)
+    assert not any(
+        event.event_type is EventType.WORLD_INITIALIZED
+        and event.phase is EventPhase.COMPLETION
+        for event in events
+    )
     assert canceled == [canceled_event_type]
     canceled_facts = [
         event
@@ -438,13 +462,76 @@ def test_authored_dynamic_setup_rejects_public_lifecycle_cancellation(
     )
 
 
+@pytest.mark.parametrize(
+    "phase",
+    (EventPhase.EXECUTION, EventPhase.EFFECT),
+    ids=("execution", "effect"),
+)
+@pytest.mark.parametrize(
+    "attempt",
+    ("cancel", "rewrite"),
+    ids=("cancel", "rewrite"),
+)
+def test_world_initialized_lifecycle_ignores_handler_attempts(
+    phase: EventPhase,
+    attempt: str,
+) -> None:
+    """World bootstrap stores every phase without a handler veto or rewrite."""
+    reset_engine_runtime()
+    handler_calls = []
+
+    def attempt_mutation(event, _source_uuid):
+        handler_calls.append(event)
+        if attempt == "cancel":
+            return event.cancel(status_message="world lifecycle veto")
+        return event.model_copy(update={"battlefield_name": "tampered"})
+
+    handler = EventHandler(
+        source_entity_uuid=uuid4(),
+        trigger_conditions=[
+            Trigger(
+                event_type=EventType.WORLD_INITIALIZED,
+                event_phase=phase,
+            )
+        ],
+        event_processor=attempt_mutation,
+    )
+    EventQueue.add_event_handler(handler)
+    try:
+        built = build_battlefield("battlefield.standard_hazards_closed")
+    finally:
+        handler.remove()
+
+    world_events = [
+        event
+        for event in EventQueue.get_events_chronological()
+        if isinstance(event, WorldInitializedEvent)
+    ]
+    assert handler_calls == []
+    assert [event.phase for event in world_events] == [
+        EventPhase.DECLARATION,
+        EventPhase.EXECUTION,
+        EventPhase.EFFECT,
+        EventPhase.COMPLETION,
+    ]
+    assert all(
+        event.battlefield_id == built.definition.battlefield_id
+        and event.battlefield_name == built.definition.title
+        for event in world_events
+    )
+
+
 def test_cold_world_plus_dynamic_facts_reproduces_live_authored_state() -> None:
     """Detached public facts settle the same condition, light, and item state."""
     reset_engine_runtime()
     built = build_battlefield("battlefield.standard_hazards_closed")
     events = EventQueue.get_events_chronological()
-    world = events[0]
-    assert isinstance(world, WorldInitializedEvent)
+    world = next(
+        event
+        for event in events
+        if isinstance(event, WorldInitializedEvent)
+        and event.phase is EventPhase.COMPLETION
+    )
 
     detached_items = {
         row.item.item_uuid: row.item
@@ -593,12 +680,32 @@ def test_world_initialized_round_trip_preserves_cliff_and_wall_torch_boundary_st
         and event.phase is EventPhase.COMPLETION
     ]
     assert len(ignite) == 1
-    assert torch_item_fact.parent_event == ignite[0].uuid
-    EventQueue.reset()
-    restored_standard = WorldInitializedEvent.model_validate_json(
-        standard_world.model_dump_json(),
+    world_effects = [
+        event
+        for event in EventQueue.get_events_chronological()
+        if isinstance(event, WorldInitializedEvent)
+        and event.phase is EventPhase.EFFECT
+    ]
+    assert len(world_effects) == 1
+    world_completion = next(
+        event
+        for event in EventQueue.get_events_chronological()
+        if isinstance(event, WorldInitializedEvent)
+        and event.phase is EventPhase.COMPLETION
     )
-    assert restored_standard == standard_world
+    assert torch_item_fact.parent_event == world_effects[0].uuid
+    chronological_indices = {
+        event.uuid: index
+        for index, event in enumerate(EventQueue.get_events_chronological())
+    }
+    assert chronological_indices[ignite[0].uuid] < chronological_indices[torch_item_fact.uuid]
+    assert chronological_indices[torch_item_fact.uuid] < chronological_indices[world_completion.uuid]
+    EventQueue.reset()
+    detached_standard_world = standard_world.model_copy(update={"use_register": False})
+    restored_standard = WorldInitializedEvent.model_validate_json(
+        detached_standard_world.model_dump_json(),
+    )
+    assert restored_standard == detached_standard_world
     standard_light_before = get_map().get_tile(14, 1).resolved_light_level
     standard_placements = tuple(
         row.placement for row in restored_standard.objects
@@ -642,10 +749,11 @@ def test_world_initialized_round_trip_preserves_cliff_and_wall_torch_boundary_st
         WorldEdgeChannel.MOVEMENT,
     )
     EventQueue.reset()
+    detached_proving_world = proving_world.model_copy(update={"use_register": False})
     restored_proving = WorldInitializedEvent.model_validate_json(
-        proving_world.model_dump_json(),
+        detached_proving_world.model_dump_json(),
     )
-    assert restored_proving == proving_world
+    assert restored_proving == detached_proving_world
     complete_placements = tuple(
         row.placement for row in restored_proving.objects
     )

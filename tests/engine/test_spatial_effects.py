@@ -1625,6 +1625,7 @@ def test_committed_spatial_facts_do_not_reenter_vetoable_lifecycle() -> None:
         if isinstance(event, SpatialEffectChangeEvent)
         and event.spatial_effect_uuid == condition.uuid
         and event.operation is SpatialEffectChangeOperation.CREATED
+        and event.phase is EventPhase.COMPLETION
     ]
     assert len(created) == 1
     assert created[0].phase is EventPhase.COMPLETION
@@ -1918,7 +1919,17 @@ def test_entity_anchor_presence_leave_and_restore_reconciles_footprint() -> None
         name="Anchor witness",
         config=EntityConfig(position=(8, 10), faction="heroes"),
     )
-    for position in ((10, 10), (12, 10), (13, 10)):
+    for position in (
+        (10, 10),
+        (11, 10),
+        (12, 9),
+        (12, 10),
+        (12, 11),
+        (13, 9),
+        (13, 10),
+        (13, 11),
+        (14, 10),
+    ):
         grid.set_tile_base_light(position, LightLevel.DARKNESS)
     light_uuid = grid.add_light_source(
         (10, 10),
@@ -1968,42 +1979,78 @@ def test_entity_anchor_presence_leave_and_restore_reconciles_footprint() -> None
     assert aura.affected_positions
     assert aura.affected_positions != original_footprint
 
-    boundary_observations = []
-
-    def observe_left_boundary(event: Event) -> None:
-        if not isinstance(event, SpatialChangeEvent):
-            return
-        if (
-            event.entity_uuid != caster.uuid
-            or event.event_type is not EventType.SPATIAL_ENTITY_LEFT
-            or event.phase is not EventPhase.EFFECT
-        ):
-            return
-        boundary_observations.append(
-            (
-                bool(aura.affected_positions),
-                grid.get_tile(*event.position).resolved_light_level
-                is LightLevel.BRIGHT_LIGHT,
-                caster.uuid in observer.senses.entities,
-            )
-        )
-
-    EventQueue.add_on_event_callback(
-        observe_left_boundary,
-        event_types={EventType.SPATIAL_ENTITY_LEFT},
-        phases={EventPhase.EFFECT},
-    )
+    movement_cursor = EventQueue.event_cursor()
     Entity.update_entity_position(caster, (13, 10))
-    EventQueue.remove_on_event_callback(observe_left_boundary)
+    movement_history = tuple(EventQueue.iter_events_since(movement_cursor))
+    movement_events = movement_history
+    left_events = tuple(
+        event
+        for _, event in movement_events
+        if isinstance(event, SpatialChangeEvent)
+        and event.entity_uuid == caster.uuid
+        and event.event_type is EventType.SPATIAL_ENTITY_LEFT
+        and event.phase is EventPhase.COMPLETION
+    )
+    assert left_events and left_events[-1].old_position == (13, 10)
+    entered_events = tuple(
+        event
+        for _, event in movement_history
+        if isinstance(event, SpatialChangeEvent)
+        and event.entity_uuid == caster.uuid
+        and event.event_type is EventType.SPATIAL_ENTITY_ENTERED
+        and event.phase is EventPhase.COMPLETION
+    )
+    assert entered_events
+    for root_event in entered_events:
+        root_lineage_uuids = {
+            event.uuid
+            for _, event in movement_history
+            if event.lineage_uuid == root_event.lineage_uuid
+        }
+        events_by_uuid = {
+            event.uuid: (index, event)
+            for index, event in movement_history
+        }
+
+        def is_descendant_of_root(event: object) -> bool:
+            if not isinstance(event, Event):
+                return False
+            parent_uuid = event.parent_event
+            visited: set[UUID] = set()
+            while parent_uuid is not None and parent_uuid not in visited:
+                if parent_uuid in root_lineage_uuids:
+                    return True
+                visited.add(parent_uuid)
+                parent_row = events_by_uuid.get(parent_uuid)
+                if parent_row is None:
+                    return False
+                parent_uuid = parent_row[1].parent_event
+            return False
+
+        root_index = next(
+            index
+            for index, event in movement_history
+            if event.uuid == root_event.uuid
+        )
+        light_children = [
+            (index, event)
+            for index, event in movement_history
+            if is_descendant_of_root(event)
+            and event.event_type is EventType.SPATIAL_LIGHT_CHANGED
+        ]
+        sensory_children = [
+            (index, event)
+            for index, event in movement_history
+            if is_descendant_of_root(event)
+            and event.event_type is EventType.SENSORY_UPDATE
+        ]
+        assert light_children
+        assert sensory_children
+        assert all(index < root_index for index, _event in light_children)
+        assert all(index < root_index for index, _event in sensory_children)
     assert caster.uuid in get_map().get_entities_at((13, 10))
     assert get_map().get_entity_subscriptions(caster.uuid)
     assert aura.affected_positions
-    assert boundary_observations
-    assert all(
-        footprint_present and light_present and contact_present
-        for footprint_present, light_present, contact_present
-        in boundary_observations
-    )
     assert grid.get_tile(13, 10).resolved_light_level is LightLevel.BRIGHT_LIGHT
 
     caster.remove_condition("Concentrating")

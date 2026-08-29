@@ -2,15 +2,19 @@
 
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import DefaultDict, Dict, List, Optional, Self, Set, Tuple, TypeVar
+from typing import DefaultDict, Dict, List, Mapping, Optional, Self, Set, Tuple, TypeVar, cast
 from uuid import UUID
 
 from pydantic import Field, PrivateAttr, StrictInt
 
 from dnd.core.base_block import BaseBlock
+from dnd.core.combat_log import CombatLogEntry, position_evidence_key
 from dnd.core.elevation import support_distance_feet
 from dnd.core.events.encounter_events import DeathEvent
 from dnd.core.events.events_registry import Event, EventPhase, EventQueue, EventType
+from dnd.core.events.knowledge import (
+    CapturedEvent,
+)
 from dnd.core.events.world_events import (
     SensoryUpdateEvent,
     SensoryUpdateReason,
@@ -23,8 +27,67 @@ from dnd.types.senses import OpticalObscurement, PerceivedContact, SenseMode, Se
 from dnd.types.world import CardinalDirection, LightLevel, WorldEdgeChannel
 
 
-K = TypeVar("K")
 Position = Tuple[int, int]
+K = TypeVar("K")
+
+
+def _observer_strings(party: "PartyKnowledge") -> frozenset[str]:
+    return frozenset(str(value) for value in party.observer_uuids)
+
+
+def _evidence_contains_party(
+    evidence: Mapping[str, Set[str]],
+    party: "PartyKnowledge",
+    key: str | None = None,
+) -> bool:
+    observers = _observer_strings(party)
+    if key is not None:
+        return bool(observers & evidence.get(key, set()))
+    return any(observers & values for values in evidence.values())
+
+
+def _controlled(party: "PartyKnowledge", participant_uuid: UUID | None) -> bool:
+    return participant_uuid is not None and participant_uuid in party.observer_uuids
+
+
+def _identified(
+    event: Event,
+    party: "PartyKnowledge",
+    participant_uuid: UUID | None,
+) -> bool:
+    if participant_uuid is None:
+        return False
+    return _controlled(party, participant_uuid) or _evidence_contains_party(
+        event.identified_entity_observer_uuids,
+        party,
+        str(participant_uuid),
+    )
+
+
+def _located(
+    event: Event,
+    party: "PartyKnowledge",
+    participant_uuid: UUID | None,
+) -> bool:
+    if participant_uuid is None:
+        return False
+    return _controlled(party, participant_uuid) or _evidence_contains_party(
+        event.located_entity_observer_uuids,
+        party,
+        str(participant_uuid),
+    )
+
+
+def _position_known(
+    event: Event,
+    party: "PartyKnowledge",
+    position: Position,
+) -> bool:
+    return _evidence_contains_party(
+        event.located_position_observer_uuids,
+        party,
+        position_evidence_key(position),
+    )
 
 
 class Senses(BaseBlock):
@@ -224,66 +287,23 @@ class Senses(BaseBlock):
         """Reduce one recorded after-value delta without querying live world state."""
         if event.observer_uuid != self.source_entity_uuid:
             raise ValueError("sensory update belongs to a different observer")
-
-        visible = dict(self.visible)
-        for position in event.visible_cells_removed:
-            visible.pop(position, None)
-        for position in event.visible_cells_added:
-            visible[position] = True
-
-        entities = dict(self.entities)
-        for entity_uuid in event.entity_contacts_removed:
-            entities.pop(entity_uuid, None)
-        entities.update(event.entity_contacts_changed)
-
-        objects = dict(self.objects)
-        for object_uuid in event.object_contacts_removed:
-            objects.pop(object_uuid, None)
-        objects.update(event.object_contacts_changed)
-
-        light_levels = dict(self.effective_light_levels)
-        for position in event.visible_cells_removed:
-            light_levels.pop(position, None)
-        for key, level in event.effective_light_levels_changed.items():
-            x_text, y_text = key.split(",", maxsplit=1)
-            light_levels[(int(x_text), int(y_text))] = LightLevel(level)
-
-        if event.sense_modes_changed and event.sense_modes is not None:
-            event_modes = [mode.model_copy(deep=True) for mode in event.sense_modes]
-            if self.get_sense_modes() != event_modes:
-                self.sense_modes = event_modes
-                self.sense_mode_sources.clear()
+        after = reduce_sensory_snapshot(capture_senses_snapshot(self), event)
+        if event.sense_modes_changed:
+            self.sense_modes = [mode.model_copy(deep=True) for mode in after.sense_modes]
+            self.sense_mode_sources.clear()
 
         self.replace_perception(
-            position=(
-                event.observer_position
-                if event.observer_position_changed
-                else self.position
-            ),
-            visible=visible,
-            seen=set(self.seen) | set(event.seen_cells_added),
-            entities=entities,
-            objects=objects,
-            effective_light_levels=light_levels,
-            passive_perception=(
-                event.passive_perception
-                if event.passive_perception_changed
-                and event.passive_perception is not None
-                else self._last_passive_perception
-            ),
-            sense_modes_hash=(
-                self.compute_sense_modes_hash()
-                if event.sense_modes_changed
-                else self._last_sense_modes_hash
-            ),
-            visual_access=(
-                event.visual_access
-                if event.visual_access_changed and event.visual_access is not None
-                else self._last_visual_access
-            ),
+            position=after.position,
+            visible={position: True for position in after.visible},
+            seen=set(after.seen),
+            entities=dict(after.entities),
+            objects=dict(after.objects),
+            effective_light_levels=dict(after.effective_light_levels),
+            passive_perception=after.passive_perception,
+            sense_modes_hash=after.sense_modes_hash,
+            visual_access=after.visual_access,
         )
-        if event.paths_dirty:
-            self._paths_dirty = True
+        self._paths_dirty = after.paths_dirty
 
     def replace_navigation(
         self,
@@ -355,7 +375,32 @@ class SensesSnapshot:
     paths_dirty: bool
     passive_perception: int
     sense_modes_hash: int
+    sense_modes: Tuple[SenseMode, ...]
     visual_access: int
+
+
+def _sense_modes_hash(modes: Tuple[SenseMode, ...]) -> int:
+    return hash(tuple(
+        (mode.sense_type.value, mode.range_feet)
+        for mode in modes
+    ))
+
+
+def cold_senses_snapshot() -> SensesSnapshot:
+    """Return the exact reducer seed for an observer with no prior events."""
+    return SensesSnapshot(
+        position=(0, 0),
+        visible=set(),
+        seen=set(),
+        entities={},
+        objects={},
+        effective_light_levels={},
+        paths_dirty=False,
+        passive_perception=0,
+        sense_modes_hash=hash(()),
+        sense_modes=(),
+        visual_access=1,
+    )
 
 
 def capture_senses_snapshot(senses: Senses) -> SensesSnapshot:
@@ -370,8 +415,231 @@ def capture_senses_snapshot(senses: Senses) -> SensesSnapshot:
         paths_dirty=senses._paths_dirty,
         passive_perception=senses._last_passive_perception,
         sense_modes_hash=senses._last_sense_modes_hash,
+        sense_modes=tuple(
+            mode.model_copy(deep=True)
+            for mode in senses.get_sense_modes()
+        ),
         visual_access=senses._last_visual_access,
     )
+
+
+def reduce_sensory_snapshot(
+    before: SensesSnapshot,
+    event: SensoryUpdateEvent,
+) -> SensesSnapshot:
+    """Apply one recorded sensory delta without consulting live world state."""
+    if event.sense_modes_changed and event.sense_modes is None:
+        raise ValueError("changed sense modes require their exact after-value")
+    if event.passive_perception_changed and event.passive_perception is None:
+        raise ValueError("changed passive perception requires its exact after-value")
+    if event.visual_access_changed and event.visual_access is None:
+        raise ValueError("changed visual access requires its exact after-value")
+
+    visible = set(before.visible)
+    visible.difference_update(event.visible_cells_removed)
+    visible.update(event.visible_cells_added)
+
+    entities = dict(before.entities)
+    for entity_uuid in event.entity_contacts_removed:
+        entities.pop(entity_uuid, None)
+    entities.update(event.entity_contacts_changed)
+
+    objects = dict(before.objects)
+    for object_uuid in event.object_contacts_removed:
+        objects.pop(object_uuid, None)
+    objects.update(event.object_contacts_changed)
+
+    light_levels = dict(before.effective_light_levels)
+    for position in event.visible_cells_removed:
+        light_levels.pop(position, None)
+    for key, level in event.effective_light_levels_changed.items():
+        x_text, y_text = key.split(",", maxsplit=1)
+        light_levels[(int(x_text), int(y_text))] = LightLevel(level)
+
+    sense_modes = (
+        tuple(mode.model_copy(deep=True) for mode in event.sense_modes or ())
+        if event.sense_modes_changed
+        else tuple(mode.model_copy(deep=True) for mode in before.sense_modes)
+    )
+    passive_perception = before.passive_perception
+    if event.passive_perception_changed:
+        assert event.passive_perception is not None
+        passive_perception = event.passive_perception
+    visual_access = before.visual_access
+    if event.visual_access_changed:
+        assert event.visual_access is not None
+        visual_access = event.visual_access
+    return SensesSnapshot(
+        position=(
+            event.observer_position
+            if event.observer_position_changed
+            else before.position
+        ),
+        visible=visible,
+        seen=set(before.seen) | set(event.seen_cells_added),
+        entities=entities,
+        objects=objects,
+        effective_light_levels=light_levels,
+        paths_dirty=before.paths_dirty or event.paths_dirty,
+        passive_perception=passive_perception,
+        sense_modes_hash=(
+            _sense_modes_hash(sense_modes)
+            if event.sense_modes_changed
+            else before.sense_modes_hash
+        ),
+        sense_modes=sense_modes,
+        visual_access=visual_access,
+    )
+
+
+def _clone_senses_snapshot(snapshot: SensesSnapshot) -> SensesSnapshot:
+    return SensesSnapshot(
+        position=snapshot.position,
+        visible=set(snapshot.visible),
+        seen=set(snapshot.seen),
+        entities=dict(snapshot.entities),
+        objects=dict(snapshot.objects),
+        effective_light_levels=dict(snapshot.effective_light_levels),
+        paths_dirty=snapshot.paths_dirty,
+        passive_perception=snapshot.passive_perception,
+        sense_modes_hash=snapshot.sense_modes_hash,
+        sense_modes=tuple(mode.model_copy(deep=True) for mode in snapshot.sense_modes),
+        visual_access=snapshot.visual_access,
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class ObserverKnowledge:
+    """Cold replay state for one controlled observer."""
+
+    observer_uuid: UUID
+    _state: SensesSnapshot
+
+    @classmethod
+    def cold(cls, observer_uuid: UUID) -> "ObserverKnowledge":
+        return cls(observer_uuid=observer_uuid, _state=cold_senses_snapshot())
+
+    @property
+    def state(self) -> SensesSnapshot:
+        """Return a defensive value copy of the replay state."""
+        return _clone_senses_snapshot(self._state)
+
+    def apply(self, event: SensoryUpdateEvent) -> "ObserverKnowledge":
+        """Return the state after one update belonging to this observer."""
+        if event.observer_uuid != self.observer_uuid:
+            raise ValueError("sensory update belongs to a different observer")
+        return ObserverKnowledge(
+            observer_uuid=self.observer_uuid,
+            _state=reduce_sensory_snapshot(self._state, event),
+        )
+
+
+def _join_contact(
+    existing: PerceivedContact | None,
+    incoming: PerceivedContact,
+) -> PerceivedContact:
+    if existing is None:
+        return incoming.model_copy(deep=True)
+    if existing.position != incoming.position:
+        raise ValueError("observer contacts disagree on one subject's exact position")
+    senses = tuple(sorted(
+        set(existing.special_senses) | set(incoming.special_senses),
+        key=lambda value: value.value,
+    ))
+    return PerceivedContact(
+        position=existing.position,
+        visual=existing.visual or incoming.visual,
+        special_senses=senses,
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class PartyKnowledge:
+    """The joined event-time knowledge of exactly two controlled observers."""
+
+    first: ObserverKnowledge
+    second: ObserverKnowledge
+
+    def __post_init__(self) -> None:
+        if self.first.observer_uuid == self.second.observer_uuid:
+            raise ValueError("party knowledge requires two distinct observers")
+
+    @classmethod
+    def cold(cls, first_uuid: UUID, second_uuid: UUID) -> "PartyKnowledge":
+        return cls(
+            first=ObserverKnowledge.cold(first_uuid),
+            second=ObserverKnowledge.cold(second_uuid),
+        )
+
+    @property
+    def observer_uuids(self) -> frozenset[UUID]:
+        return frozenset((self.first.observer_uuid, self.second.observer_uuid))
+
+    @property
+    def visible(self) -> frozenset[Position]:
+        return frozenset(self.first._state.visible | self.second._state.visible)
+
+    @property
+    def seen(self) -> frozenset[Position]:
+        return frozenset(self.first._state.seen | self.second._state.seen)
+
+    def _joined_contacts(self, attribute: str) -> Dict[UUID, PerceivedContact]:
+        joined: Dict[UUID, PerceivedContact] = {}
+        for observer in (self.first, self.second):
+            contacts = cast(
+                Mapping[UUID, PerceivedContact],
+                getattr(observer._state, attribute),
+            )
+            for subject_uuid, contact in contacts.items():
+                joined[subject_uuid] = _join_contact(joined.get(subject_uuid), contact)
+        return joined
+
+    @property
+    def entities(self) -> Dict[UUID, PerceivedContact]:
+        """Return a defensive party join of entity contacts."""
+        return self._joined_contacts("entities")
+
+    @property
+    def objects(self) -> Dict[UUID, PerceivedContact]:
+        """Return a defensive party join of object contacts."""
+        return self._joined_contacts("objects")
+
+    @property
+    def effective_light_levels(self) -> Dict[Position, LightLevel]:
+        """Return the brightest observer-effective light for visible cells."""
+        result: Dict[Position, LightLevel] = {}
+        visible = self.visible
+        for observer in (self.first, self.second):
+            for position, level in observer._state.effective_light_levels.items():
+                if position not in visible:
+                    continue
+                current = result.get(position)
+                if current is None or level.value > current.value:
+                    result[position] = level
+        return result
+
+    def identifies_entity(self, event: Event, participant_uuid: UUID | None) -> bool:
+        """Return event-time identity knowledge independently from location."""
+        return _identified(event, self, participant_uuid)
+
+    def locates_entity(self, event: Event, participant_uuid: UUID | None) -> bool:
+        """Return event-time exact-location knowledge independently from identity."""
+        return _located(event, self, participant_uuid)
+
+    def knows_position(self, event: Event, position: Position) -> bool:
+        """Return whether the event grants either observer this exact coordinate."""
+        return _position_known(event, self, position)
+
+    def apply(self, captured: CapturedEvent[Event]) -> "PartyKnowledge":
+        """Replay a captured controlled sensory update; other events are inert."""
+        event = captured._snapshot
+        if not isinstance(event, SensoryUpdateEvent):
+            return self
+        if event.observer_uuid == self.first.observer_uuid:
+            return PartyKnowledge(self.first.apply(event), self.second)
+        if event.observer_uuid == self.second.observer_uuid:
+            return PartyKnowledge(self.first, self.second.apply(event))
+        return self
 
 
 def _sorted_contacts(values: Dict[UUID, PerceivedContact]) -> Dict[UUID, PerceivedContact]:
@@ -379,7 +647,6 @@ def _sorted_contacts(values: Dict[UUID, PerceivedContact]) -> Dict[UUID, Perceiv
 
 
 def emit_sensory_update_delta(
-    senses: Senses,
     owner_uuid: UUID,
     cause_event: Event,
     before: SensesSnapshot,
@@ -456,7 +723,7 @@ def emit_sensory_update_delta(
         passive_perception=after.passive_perception if passive_changed else None,
         sense_modes_changed=modes_changed,
         sense_modes=(
-            [mode.model_copy(deep=True) for mode in senses.get_sense_modes()]
+            [mode.model_copy(deep=True) for mode in after.sense_modes]
             if modes_changed
             else None
         ),
@@ -480,27 +747,7 @@ class ObserverFootprint:
 class SpatialSensesSystem:
     """Single perception reducer and observer-evidence authority."""
 
-    SYSTEM_NAME = "spatial_senses"
     DEFAULT_VISUAL_RADIUS_CELLS = 20
-    SPATIAL_EVENTS = {
-        EventType.SPATIAL_ENTITY_ENTERED,
-        EventType.SPATIAL_ENTITY_LEFT,
-        EventType.SPATIAL_TILE_CHANGED,
-        EventType.SPATIAL_OBJECT_PLACED,
-        EventType.SPATIAL_OBJECT_REMOVED,
-        EventType.SPATIAL_OBJECT_CHANGED,
-        EventType.SPATIAL_PERCEIVABILITY_CHANGED,
-        EventType.SPATIAL_LIGHT_CHANGED,
-        EventType.SPATIAL_EFFECT_CHANGED,
-    }
-    EVENT_TYPES = {
-        EventType.DEATH,
-        EventType.CONDITION_APPLICATION,
-        EventType.CONDITION_REMOVAL,
-        EventType.LIFE_STATE_CHANGE,
-        EventType.TURN_START,
-        *SPATIAL_EVENTS,
-    }
 
     def __init__(self) -> None:
         self.senses_by_observer: Dict[UUID, Senses] = {}
@@ -510,7 +757,6 @@ class SpatialSensesSystem:
         self.observers_by_object: DefaultDict[UUID, Set[UUID]] = defaultdict(set)
 
     def attach(self) -> None:
-        EventQueue.add_pre_completion_system(self.SYSTEM_NAME, self, self.EVENT_TYPES)
         EventQueue.set_perceiver_computer(self.compute_perceivers)
         EventQueue.set_revealed_computer(self.compute_revealed_entities)
         EventQueue.set_identified_entity_observer_computer(
@@ -593,7 +839,7 @@ class SpatialSensesSystem:
     def compute_revealed_entities(
         self,
         event: Event,
-        _child_logs: List[object],
+        _child_logs: List[CombatLogEntry],
     ) -> Set[str]:
         """Derive reveals from recorded final perceivability and sensory facts."""
         revealed: Set[str] = set()
@@ -643,7 +889,7 @@ class SpatialSensesSystem:
         if senses is None or owner is None:
             return
         grid = get_map()
-        origin = owner.position
+        origin = cast(Position, owner.get_position())
         senses.position = origin
         modes = {mode.sense_type: mode.range_feet for mode in senses.get_sense_modes()}
         visual_access = senses.visual_access.normalized_score > 0
@@ -955,7 +1201,9 @@ class SpatialSensesSystem:
             EventType.LIFE_STATE_CHANGE,
         }:
             target = event.target_entity_uuid
-            return {target} if target in registered else set()
+            if target is None or target not in registered:
+                return set()
+            return {target}
         if isinstance(event, DeathEvent):
             return set(self.observers_by_entity.get(event.entity_uuid, set()))
         if isinstance(event, SpatialEffectChangeEvent):
@@ -994,7 +1242,11 @@ class SpatialSensesSystem:
         grid = get_map()
         for position in positions:
             candidates.update(grid.get_subscribers_at(position))
-        if event.entity_uuid in registered and event.event_type is EventType.SPATIAL_ENTITY_ENTERED:
+        if (
+            event.entity_uuid is not None
+            and event.entity_uuid in registered
+            and event.event_type is EventType.SPATIAL_ENTITY_ENTERED
+        ):
             candidates.add(event.entity_uuid)
         if hint is not None:
             if hint.entity_left is not None:
@@ -1029,8 +1281,7 @@ class SpatialSensesSystem:
                     candidates.update(self.observers_by_known_position.get(position, set()))
         return candidates & registered
 
-    def __call__(self, event: Event) -> None:
-        sensory_events: List[SensoryUpdateEvent] = []
+    def reduce_event(self, event: Event) -> None:
         for observer_uuid in sorted(self.candidate_observer_uuids(event), key=str):
             senses = self.senses_by_observer.get(observer_uuid)
             if senses is None:
@@ -1053,7 +1304,6 @@ class SpatialSensesSystem:
                 senses._paths_dirty = True
                 after = capture_senses_snapshot(senses)
             sensory_event = emit_sensory_update_delta(
-                senses,
                 observer_uuid,
                 event,
                 before,
@@ -1062,9 +1312,7 @@ class SpatialSensesSystem:
                 register_event=False,
             )
             if sensory_event is not None:
-                sensory_events.append(sensory_event)
-        if sensory_events:
-            EventQueue.register_completion_sequence(sensory_events)
+                EventQueue.register(sensory_event)
 
     @staticmethod
     def _reason_for(event: Event, observer_uuid: UUID) -> SensoryUpdateReason:

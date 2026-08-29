@@ -45,7 +45,6 @@ from tests.engine.support import (
 def reset_monster_state(width: int = 30, height: int = 15) -> None:
     """Clear global state and create a rectangular monster test grid."""
     reset_combat_state()
-    EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
     BaseValue._registry.clear()

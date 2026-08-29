@@ -59,7 +59,6 @@ from dnd.conditions import (
 )
 from dnd.blocks.base_item import (
     UsableItem,
-    consume_item_charge_before_action_completion,
 )
 from dnd.core.base_block import BaseBlock
 
@@ -717,7 +716,6 @@ def execute_use_action(
     else:
         instance = template.instantiate()
 
-    EventQueue.add_pre_completion_callback(consume_item_charge_before_action_completion)
     result = instance.apply()
 
     return result

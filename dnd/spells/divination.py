@@ -109,6 +109,8 @@ class SeeInvisibility(SpellAction):
             new_phase=EventPhase.EFFECT,
             status_message=f"{caster.name} casts See Invisibility"
         )
+        if effect_event.canceled:
+            return effect_event
 
         see_invis = SeeInvisibilityEffect(
             source_entity_uuid=caster.uuid,
@@ -202,6 +204,8 @@ class TrueSeeing(SpellAction):
             new_phase=EventPhase.EFFECT,
             status_message=f"{caster.name} grants True Seeing to {target.name}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         true_seeing = TrueSeeingEffect(
             source_entity_uuid=caster.uuid,
@@ -342,6 +346,8 @@ class Guidance(SpellAction):
             new_phase=EventPhase.EFFECT,
             status_message=f"{caster.name} casts Guidance on {target.name}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         guidance_effect = GuidanceEffect(
             source_entity_uuid=caster.uuid,
@@ -354,6 +360,8 @@ class Guidance(SpellAction):
         concentration = self.ensure_concentration(effect_event)
         if guidance_effect.applied:
             concentration.add_linked_condition(target.uuid, guidance_effect.uuid)
+
+        self._close_concentration(effect_event)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,

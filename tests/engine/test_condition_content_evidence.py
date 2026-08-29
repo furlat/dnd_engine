@@ -298,16 +298,6 @@ def test_posted_condition_cancel_is_validated_before_callbacks() -> None:
     )
     observed: list[tuple[EventPhase, bool, str | None]] = []
 
-    def capture(event: Event) -> None:
-        if isinstance(event, ConditionApplicationEvent):
-            observed.append(
-                (
-                    event.phase,
-                    event.canceled,
-                    event.condition_content_identity,
-                ),
-            )
-
     def forge_cancel(event: Event, _source_uuid: UUID) -> Event | None:
         if isinstance(event, ConditionApplicationEvent):
             return event.cancel(
@@ -316,7 +306,7 @@ def test_posted_condition_cancel_is_validated_before_callbacks() -> None:
             )
         return None
 
-    EventQueue.add_on_event_callback(capture)
+    cursor = EventQueue.event_cursor()
     EventQueue.add_event_handler(
         EventHandler(
             name="Post Forged Condition Cancel",
@@ -334,7 +324,15 @@ def test_posted_condition_cancel_is_validated_before_callbacks() -> None:
     try:
         result = skeleton.add_condition(condition)
     finally:
-        EventQueue.remove_on_event_callback(capture)
+        observed.extend(
+            (
+                event.phase,
+                event.canceled,
+                event.condition_content_identity,
+            )
+            for _, event in EventQueue.iter_events_since(cursor)
+            if isinstance(event, ConditionApplicationEvent)
+        )
 
     assert isinstance(result, ConditionApplicationEvent)
     assert result.canceled
@@ -366,11 +364,6 @@ def test_posted_condition_completion_is_rejected_before_effect_commit() -> None:
         target_entity_uuid=skeleton.uuid,
     )
     observed: list[tuple[EventPhase, bool]] = []
-    combat_logs: list[CombatLogEntry] = []
-
-    def capture(event: Event) -> None:
-        if isinstance(event, ConditionApplicationEvent):
-            observed.append((event.phase, event.canceled))
 
     def forge_completion(
         event: Event,
@@ -388,12 +381,7 @@ def test_posted_condition_completion_is_rejected_before_effect_commit() -> None:
             )
         return None
 
-    EventQueue.add_on_event_callback(capture)
-    EventQueue.set_combat_log_callback(
-        lambda event: combat_logs.append(event.combat_log)
-        if event.combat_log is not None
-        else None,
-    )
+    cursor = EventQueue.event_cursor()
     EventQueue.add_event_handler(
         EventHandler(
             name="Post Forged Condition Completion",
@@ -408,11 +396,12 @@ def test_posted_condition_completion_is_rejected_before_effect_commit() -> None:
             event_processor=forge_completion,
         )
     )
-    try:
-        result = skeleton.add_condition(condition)
-    finally:
-        EventQueue.remove_on_event_callback(capture)
-        EventQueue.set_combat_log_callback(None)
+    result = skeleton.add_condition(condition)
+    observed.extend(
+        (event.phase, event.canceled)
+        for _, event in EventQueue.iter_events_since(cursor)
+        if isinstance(event, ConditionApplicationEvent)
+    )
 
     assert isinstance(result, ConditionApplicationEvent)
     assert result.canceled
@@ -426,7 +415,7 @@ def test_posted_condition_completion_is_rejected_before_effect_commit() -> None:
         if isinstance(event, ConditionApplicationEvent)
     ]
     assert len({event.lineage_uuid for event in stored}) == 1
-    assert combat_logs == []
+    assert result.combat_log is None
     assert observed == [
         (EventPhase.DECLARATION, False),
         (EventPhase.EXECUTION, False),
@@ -621,17 +610,7 @@ def test_immune_entity_application_returns_and_logs_typed_truth() -> None:
         source_entity_uuid=skeleton.uuid,
         target_entity_uuid=skeleton.uuid,
     )
-    logs: list[CombatLogEntry] = []
-
-    def capture(event: Event) -> None:
-        if event.combat_log is not None:
-            logs.append(event.combat_log)
-
-    EventQueue.set_combat_log_callback(capture)
-    try:
-        result = skeleton.add_condition(condition)
-    finally:
-        EventQueue.set_combat_log_callback(None)
+    result = skeleton.add_condition(condition)
 
     assert isinstance(result, ConditionApplicationEvent)
     assert result.canceled
@@ -645,12 +624,12 @@ def test_immune_entity_application_returns_and_logs_typed_truth() -> None:
     )
     assert result.condition_content_identity == expected_identity
     assert "Poisoned" not in skeleton.active_conditions
-    assert len(logs) == 1
-    data = ConditionLogData.model_validate(logs[0].data)
+    assert result.combat_log is not None
+    data = ConditionLogData.model_validate(result.combat_log.data)
     assert data.condition_name == "Poisoned"
     assert data.condition_content_identity == expected_identity
     assert (
         data.application_disposition
         is ConditionApplicationDisposition.IMMUNE
     )
-    assert logs[0].success is False
+    assert result.combat_log.success is False

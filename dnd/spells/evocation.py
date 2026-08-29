@@ -172,6 +172,8 @@ class FireBolt(SpellAction):
             is_threatened=resolution.is_threatened,
             status_message=f"Attack rolled {dice_roll.total} vs AC {target_ac.normalized_score}: {outcome.value}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         if outcome in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]:
             return effect_event.phase_to(
@@ -327,6 +329,8 @@ class RayOfFrost(SpellAction):
             is_threatened=resolution.is_threatened,
             status_message=f"Attack rolled {dice_roll.total} vs AC {target_ac.normalized_score}: {outcome.value}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         if outcome in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]:
             return effect_event.phase_to(
@@ -436,6 +440,8 @@ class SacredFlame(SpellAction):
             target_entity_name=target.name,
             status_message=f"DEX save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         if success:
             return effect_event.phase_to(
@@ -685,6 +691,8 @@ class ScorchingRay(SpellAction):
             is_threatened=resolution.is_threatened,
             status_message=f"Ray attack: {dice_roll.total} vs AC {target_ac.normalized_score}: {outcome.value}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         if outcome in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]:
             return effect_event.phase_to(
@@ -827,6 +835,8 @@ class Fireball(SpellAction):
             target_entity_name=target.name,
             status_message=f"DEX save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         num_dice = self.get_damage_dice_count()
         damage_bonus = caster.get_spell_damage_bonus()
@@ -962,6 +972,8 @@ class BurningHands(SpellAction):
             target_entity_name=target.name,
             status_message=f"DEX save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         num_dice = self.get_damage_dice_count()
         damage_bonus = caster.get_spell_damage_bonus()
@@ -1096,6 +1108,8 @@ class LightningBolt(SpellAction):
             target_entity_name=target.name,
             status_message=f"DEX save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         num_dice = self.get_damage_dice_count()
         damage_bonus = caster.get_spell_damage_bonus()
@@ -1289,6 +1303,8 @@ class Thunderwave(SpellAction):
             target_entity_name=target.name,
             status_message=f"CON save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         num_dice = self.get_damage_dice_count()
         damage_bonus = caster.get_spell_damage_bonus()
@@ -1461,6 +1477,8 @@ class Shatter(SpellAction):
             target_entity_name=target.name,
             status_message=f"CON save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         num_dice = self.get_damage_dice_count()
         damage_bonus = caster.get_spell_damage_bonus()
@@ -1572,6 +1590,8 @@ class CircleOfDeath(SpellAction):
             target_entity_name=target.name,
             status_message=f"CON save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         num_dice = self.get_damage_dice_count()
         damage_bonus = caster.get_spell_damage_bonus()
@@ -1681,6 +1701,8 @@ class ConeOfCold(SpellAction):
             target_entity_name=target.name,
             status_message=f"CON save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         num_dice = self.get_damage_dice_count()
         damage_bonus = caster.get_spell_damage_bonus()
@@ -1916,6 +1938,8 @@ class Sunburst(SpellAction):
             target_entity_name=target.name,
             status_message=f"CON save: {save_roll.total} vs DC {dc}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         damage_bonus = caster.get_spell_damage_bonus()
         radiant_damage = Damage(
@@ -2054,6 +2078,8 @@ class ShockingGrasp(SpellAction):
             is_threatened=resolution.is_threatened,
             status_message=f"Attack rolled {dice_roll.total} vs AC {target_ac.normalized_score}{metal_text}: {outcome.value}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         if outcome in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]:
             return effect_event.phase_to(
@@ -2306,6 +2332,8 @@ class GuidingBolt(SpellAction):
             is_threatened=resolution.is_threatened,
             status_message=f"Attack rolled {dice_roll.total} vs AC {target_ac.normalized_score}: {outcome.value}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         if outcome in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]:
             return effect_event.phase_to(
@@ -2417,6 +2445,8 @@ class EldritchBlast(SpellAction):
             is_threatened=resolution.is_threatened,
             status_message=f"Attack rolled {dice_roll.total} vs AC {target_ac.normalized_score}: {outcome.value}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         if outcome in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]:
             return effect_event.phase_to(
@@ -2725,6 +2755,8 @@ class GustOfWind(SpellAction):
             save_ability="strength", save_dc=dc,
             status_message=f"Gust of Wind hits {target.name}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         _apply_gust_push(target, dc, caster.senses.position, caster.uuid, effect_event)
 
@@ -2847,6 +2879,8 @@ class IceStorm(SpellAction):
             target_entity_name=target.name,
             status_message=f"DEX save: {save_roll.total} vs DC {dc}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         bludg_count = self.base_bludg_dice + upcast_bonus
         damage_bonus = caster.get_spell_damage_bonus()
@@ -2997,6 +3031,8 @@ class SunbeamStrike(BaseAction):
             new_phase=EventPhase.EFFECT,
             status_message=f"CON save: {save_roll.total} vs DC {self.spell_dc}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         damage_bonus = caster.get_spell_damage_bonus()
         radiant_damage = Damage(
@@ -3055,6 +3091,8 @@ class Sunbeam(SpellAction):
             new_phase=EventPhase.EFFECT,
             status_message=f"{caster.name} casts Sunbeam"
         )
+        if effect_event.canceled:
+            return effect_event
 
         strike = SunbeamStrike(
             source_entity_uuid=caster.uuid,
@@ -3081,6 +3119,8 @@ class Sunbeam(SpellAction):
                 costs=[],
             )
             first_strike.apply()
+
+        self._close_concentration(effect_event)
 
         return effect_event.phase_to(
             new_phase=EventPhase.COMPLETION,
@@ -3132,6 +3172,8 @@ class ChainLightning(SpellAction):
             save_ability="dexterity", save_dc=dc,
             status_message=f"{caster.name} casts Chain Lightning"
         )
+        if effect_event.canceled:
+            return effect_event
 
         chain_targets = [target]
         chain_uuids = {target.uuid}
@@ -3394,6 +3436,8 @@ class PrismaticSpray(SpellAction):
             save_dc=dc,
             status_message=f"Prismatic ray strikes {target.name}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         color_roll = random.randint(1, 8)
         if color_roll == 8:
@@ -3595,6 +3639,8 @@ class FlameStrike(SpellAction):
             target_entity_name=target.name,
             status_message=f"DEX save: {save_roll.total} vs DC {dc}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         fire_count = self.base_fire_dice + upcast_bonus
         damage_bonus = caster.get_spell_damage_bonus()
@@ -3747,6 +3793,8 @@ class Light(SpellAction):
             new_phase=EventPhase.EFFECT,
             status_message=f"{caster.name} casts Light on {target.name}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         light_effect = LightEffect(
             source_entity_uuid=caster.uuid,
@@ -3949,6 +3997,8 @@ class ContinualFlame(SpellAction):
             new_phase=EventPhase.EFFECT,
             status_message=f"{caster.name} casts Continual Flame"
         )
+        if effect_event.canceled:
+            return effect_event
 
         flame = materialize_spatial_condition(
             CONTINUAL_FLAME_FIELD_RECIPE,
@@ -4034,6 +4084,8 @@ class CureWounds(SpellAction):
             target_entity_name=target.name,
             status_message=f"Cure Wounds heals {target.name}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         healing_roll = fire_heal_roll_result(caster.uuid, target.uuid, healing, effect_event, "Cure Wounds")
         actual = target.receive_healing(
@@ -4092,6 +4144,8 @@ class HealingWord(SpellAction):
             target_entity_name=target.name,
             status_message=f"Healing Word heals {target.name}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         healing_roll = fire_heal_roll_result(caster.uuid, target.uuid, healing, effect_event, "Healing Word")
         actual = target.receive_healing(
@@ -4153,6 +4207,8 @@ class PrayerOfHealing(SpellAction):
             target_entity_name=target.name,
             status_message=f"Prayer of Healing heals {target.name}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         healing_roll = fire_heal_roll_result(caster.uuid, target.uuid, healing, effect_event, "Prayer of Healing")
         actual = target.receive_healing(
@@ -4221,6 +4277,8 @@ class MassHealingWord(SpellAction):
             target_entity_name=target.name,
             status_message=f"Mass Healing Word heals {target.name}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         healing_roll = fire_heal_roll_result(caster.uuid, target.uuid, healing, effect_event, "Mass Healing Word")
         actual = target.receive_healing(
@@ -4293,6 +4351,8 @@ class MassCureWounds(SpellAction):
             target_entity_name=target.name,
             status_message=f"Mass Cure Wounds heals {target.name}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         healing_roll = fire_heal_roll_result(caster.uuid, target.uuid, healing, effect_event, "Mass Cure Wounds")
         actual = target.receive_healing(
@@ -4347,6 +4407,8 @@ class HealSpell(SpellAction):
             target_entity_name=target.name,
             status_message=f"Heal restores {target.name}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         actual = target.receive_healing(
             heal_amount, caster.uuid,
@@ -4425,6 +4487,8 @@ class MassHeal(SpellAction):
             target_entity_name=target.name,
             status_message=f"Mass Heal heals {target.name}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         actual = target.receive_healing(
             heal_amount, caster.uuid,
@@ -4616,6 +4680,8 @@ class DivineWord(SpellAction):
             target_entity_name=target.name,
             status_message=f"Divine Word targets {target.name} ({current_hp} HP)"
         )
+        if effect_event.canceled:
+            return effect_event
 
         condition = DivineWordEffect(
             source_entity_uuid=caster.uuid,

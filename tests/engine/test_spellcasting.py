@@ -74,7 +74,6 @@ from server.spell_catalog import build_spell_catalog_entry
 def reset_spell_state(width: int = 8, height: int = 4) -> None:
     """Clear global state and create a rectangular spell test grid."""
     reset_combat_state()
-    EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
     BaseValue._registry.clear()

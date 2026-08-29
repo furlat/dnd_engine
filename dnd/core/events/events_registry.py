@@ -1,11 +1,10 @@
-"""Event lifecycle contracts, handler dispatch, storage, and observers.
+"""Event lifecycle contracts, handler dispatch, and causal journal storage.
 
 Concrete event facts live in the sibling event-family modules.  This module
 never imports those families; every family depends one-way on this registry.
 """
 
 from collections import defaultdict
-from contextlib import contextmanager
 from contextvars import ContextVar
 from datetime import UTC, datetime
 from enum import Enum
@@ -13,6 +12,7 @@ import logging
 from typing import (
     Any,
     Callable,
+    ClassVar,
     Dict,
     Iterator,
     List,
@@ -52,13 +52,6 @@ logger = logging.getLogger(__name__)
 EventT = TypeVar("EventT", bound="Event")
 E = TypeVar("E", bound="Event")
 EventProcessor = Callable[[E, UUID], Optional[E]]
-
-class PreCompletionSystem(Protocol):
-    """Dependency-neutral lifecycle system invoked for selected event types."""
-
-    def __call__(self, event: 'Event') -> None: ...
-
-    def reset(self) -> None: ...
 
 @runtime_checkable
 class EntityWithEventHandlers(Protocol):
@@ -275,6 +268,7 @@ class Event(BaseObject):
         ...,
     ] = PrivateAttr(default=())
     _handler_validation_token: Optional[UUID] = PrivateAttr(default=None)
+    inert_terminal_fact: ClassVar[bool] = False
     identified_entity_observer_uuids: Dict[str, Set[str]] = Field(
         default_factory=dict,
         exclude=True,
@@ -352,82 +346,12 @@ class Event(BaseObject):
             for key, observer_uuids in self.located_position_observer_uuids.items()
         }
 
-    def model_post_init(self, __context: Any) -> None:
-        if self.turn_execution_id is None:
-            parent = (
-                EventQueue.get_event_by_uuid(self.parent_event)
-                if self.parent_event is not None
-                else None
-            )
-            self.turn_execution_id = (
-                parent.turn_execution_id
-                if parent is not None
-                else EventQueue.current_turn_execution_id()
-            )
-        super().model_post_init(__context)
-        if self.use_register:
-            EventQueue.register(self)
+    def resolve_sub_events(self) -> None:
+        """Resolve concrete child mechanics before a terminal is stored."""
 
-    def set_target_entity(self, target_entity_uuid: UUID):
-        """Set the target entity for the event.
-
-        Args:
-            target_entity_uuid: Entity UUID to store as the event target.
-        """
-        self.target_entity_uuid = target_entity_uuid
-
-    def phase_to(self, new_phase: Optional[EventPhase] = None, status_message: Optional[str] = None, **updates) -> Self:
-        """Create, post, and return a new event version at another phase.
-
-        Completion resolves stable parent/child lineage metadata, generates
-        combat logs, and invokes the top-level combat-log callback if present.
-
-        Args:
-            new_phase: Phase to transition to. When omitted, the next ordered
-                phase is used.
-            status_message: Optional message explaining the phase change.
-            **updates: Additional model fields to apply to the new event version.
-
-        Returns:
-            The new event version after queue registration and handler dispatch.
-        """
-        if self.phase == EventPhase.COMPLETION:
-            return self
-
-        if new_phase is None:
-            new_phase = ordered_event_phases[ordered_event_phases.index(self.phase) + 1]
-
-        if EventQueue.is_active_handler_proposal(self):
-            handler_updates: Dict[str, Any] = {"phase": new_phase}
-            if status_message is not None:
-                handler_updates["status_message"] = status_message
-            handler_updates.update(updates)
-            return self.post(**handler_updates)
-
-        phase_updates = {}
-        phase_updates['phase'] = new_phase
-        if status_message is not None:
-            phase_updates['status_message'] = status_message
-
-        phase_updates.update(updates)
-
-        if 'is_first' not in phase_updates:
-            phase_updates['is_first'] = True
-        if 'is_last' not in phase_updates:
-            phase_updates['is_last'] = True
-
-        if new_phase == EventPhase.COMPLETION:
-            phase_updates = self._completion_updates(phase_updates)
-        else:
-            phase_updates['lineage_children_events'] = self.lineage_children_events + self.children_events
-            phase_updates['children_events'] = []
-
-        return self.post(**phase_updates)
-
-    def _completion_updates(self, updates: Dict[str, Any]) -> Dict[str, Any]:
-        """Return the existing completion metadata for one terminal version."""
+    def finalize_terminal(self, updates: Dict[str, Any]) -> Dict[str, Any]:
+        """Build terminal evidence from the currently stored causal journal."""
         completion_updates = dict(updates)
-        EventQueue.run_pre_completion_callbacks(self)
         if EventQueue._identified_entity_observer_computer is not None:
             completion_updates["located_entity_observer_uuids"] = {
                 entity_uuid: set(observer_uuids)
@@ -448,25 +372,56 @@ class Event(BaseObject):
             )
         )
 
-        all_children = list(dict.fromkeys(
-            self.lineage_children_events + self.children_events,
-        ))
-        completion_updates["lineage_children_events"] = all_children
-        completion_updates["children_events"] = all_children
+        terminal_lineage_members = EventQueue._events_by_lineage.get(
+            self.lineage_uuid,
+            [],
+        )
+        terminal_lineage_uuids = {
+            event.uuid for event in terminal_lineage_members
+        }
+        terminal_lineage_uuids.add(self.uuid)
+        terminal_start = len(EventQueue._all_events)
+        for index, event in enumerate(EventQueue._all_events):
+            if event.uuid in terminal_lineage_uuids:
+                terminal_start = index
+                break
+
+        direct_child_lineages: List[UUID] = []
+        journal_suffix = EventQueue._all_events[terminal_start:]
+        for candidate in journal_suffix:
+            if candidate.lineage_uuid == self.lineage_uuid:
+                continue
+            current = candidate
+            visited_parent_uuids: Set[UUID] = set()
+            while current.parent_event is not None:
+                parent_uuid = current.parent_event
+                if parent_uuid in visited_parent_uuids:
+                    break
+                visited_parent_uuids.add(parent_uuid)
+                parent = EventQueue._events_by_uuid.get(parent_uuid)
+                if parent is None:
+                    break
+                if parent.uuid in terminal_lineage_uuids:
+                    if current.lineage_uuid not in direct_child_lineages:
+                        direct_child_lineages.append(current.lineage_uuid)
+                    break
+                current = parent
+
+        direct_child_lineage_set = set(direct_child_lineages)
+        direct_children = [
+            event.uuid
+            for event in journal_suffix
+            if event.lineage_uuid in direct_child_lineage_set
+        ]
+        completion_updates["lineage_children_events"] = list(direct_children)
+        completion_updates["children_events"] = list(direct_children)
 
         if self.parent_event:
             parent = EventQueue.get_event_by_uuid(self.parent_event)
             if parent:
                 completion_updates["parent_lineage"] = parent.lineage_uuid
 
-        child_lineages: List[UUID] = []
-        seen_lineages: Set[UUID] = set()
-        for child_uuid in all_children:
-            child = EventQueue.get_event_by_uuid(child_uuid)
-            if child and child.lineage_uuid not in seen_lineages:
-                child_lineages.append(child.lineage_uuid)
-                seen_lineages.add(child.lineage_uuid)
-        completion_updates["children_lineages"] = child_lineages
+        completion_updates["children_lineages"] = list(direct_child_lineages)
 
         try:
             temp_event = self.model_copy(update=completion_updates)
@@ -506,10 +461,6 @@ class Event(BaseObject):
                     )
 
                 completion_updates["combat_log"] = combat_log
-
-                if self.parent_event is None and EventQueue._combat_log_callback:
-                    final_event = self.model_copy(update=completion_updates)
-                    EventQueue._combat_log_callback(final_event)
         except Exception:
             logger.exception(
                 "Combat-log projection failed for %s event %s at phase %s",
@@ -518,6 +469,87 @@ class Event(BaseObject):
                 EventPhase.COMPLETION,
             )
         return completion_updates
+
+    def model_post_init(self, __context: Any) -> None:
+        if self.turn_execution_id is None:
+            parent = (
+                EventQueue.get_event_by_uuid(self.parent_event)
+                if self.parent_event is not None
+                else None
+            )
+            self.turn_execution_id = (
+                parent.turn_execution_id
+                if parent is not None
+                else EventQueue.current_turn_execution_id()
+            )
+        super().model_post_init(__context)
+        if self.use_register:
+            EventQueue.register(self)
+
+    def set_target_entity(self, target_entity_uuid: UUID):
+        """Set the target entity for the event.
+
+        Args:
+            target_entity_uuid: Entity UUID to store as the event target.
+        """
+        self.target_entity_uuid = target_entity_uuid
+
+    def phase_to(self, new_phase: Optional[EventPhase] = None, status_message: Optional[str] = None, **updates) -> Self:
+        """Create, post, and return a new event version at another phase.
+
+        Completion resolves stable parent/child lineage metadata and attaches
+        any generated combat log to the terminal fact.
+
+        Args:
+            new_phase: Phase to transition to. When omitted, the next ordered
+                phase is used.
+            status_message: Optional message explaining the phase change.
+            **updates: Additional model fields to apply to the new event version.
+
+        Returns:
+            The new event version after queue registration and handler dispatch.
+        """
+        if self.phase in (EventPhase.COMPLETION, EventPhase.CANCEL):
+            return self
+
+        if new_phase is None:
+            new_phase = ordered_event_phases[ordered_event_phases.index(self.phase) + 1]
+
+        if new_phase is EventPhase.CANCEL:
+            return self.cancel(status_message=status_message, **updates)
+
+        if EventQueue.is_active_handler_proposal(self):
+            handler_updates: Dict[str, Any] = {"phase": new_phase}
+            if status_message is not None:
+                handler_updates["status_message"] = status_message
+            handler_updates.update(updates)
+            return self.post(**handler_updates)
+
+        phase_updates = {}
+        phase_updates['phase'] = new_phase
+        if status_message is not None:
+            phase_updates['status_message'] = status_message
+
+        phase_updates.update(updates)
+
+        if 'is_first' not in phase_updates:
+            phase_updates['is_first'] = True
+        if 'is_last' not in phase_updates:
+            phase_updates['is_last'] = True
+
+        if new_phase == EventPhase.COMPLETION:
+            existing_terminal = EventQueue._stored_terminal_for_lineage(
+                self.lineage_uuid,
+            )
+            if existing_terminal is not None:
+                return cast(Self, existing_terminal)
+            self.resolve_sub_events()
+            phase_updates = self.finalize_terminal(phase_updates)
+        else:
+            phase_updates['lineage_children_events'] = self.lineage_children_events + self.children_events
+            phase_updates['children_events'] = []
+
+        return self.post(**phase_updates)
 
     def cancel(self, status_message: Optional[str] = None, **updates) -> Self:
         """Mark this event as canceled and post the cancel version.
@@ -529,14 +561,23 @@ class Event(BaseObject):
         Returns:
             The cancel event version after queue registration.
         """
-        cancel_updates = {}
+        existing_terminal = EventQueue._stored_terminal_for_lineage(
+            self.lineage_uuid,
+        )
+        if existing_terminal is not None:
+            return cast(Self, existing_terminal)
+
+        cancel_updates = dict(updates)
         cancel_updates['canceled'] = True
         cancel_updates['phase'] = EventPhase.CANCEL
         cancel_updates['canceled_from_phase'] = self.canceled_from_phase or self.phase
+        cancel_updates['is_first'] = True
+        cancel_updates['is_last'] = True
         if status_message is not None:
             cancel_updates['status_message'] = status_message
 
-        cancel_updates.update(updates)
+        if not EventQueue.is_active_handler_proposal(self):
+            cancel_updates = self.finalize_terminal(cancel_updates)
         return self.post(**cancel_updates)
 
     def add_child_event(self, child_event: 'Event'):
@@ -1134,9 +1175,9 @@ class EventQueue:
     """Global event store and handler dispatcher.
 
     The queue keeps independent indexes for event history, trigger-based
-    handlers, position-indexed spatial handlers, passive callbacks, and
-    completion-time log helpers. It is intentionally class-scoped because the
-    engine currently has one active event stream per process.
+    handlers, and position-indexed spatial handlers. It is intentionally
+    class-scoped because the engine currently has one active event stream per
+    process.
     """
 
     _events_by_lineage: Dict[UUID, List[Event]] = defaultdict(list)
@@ -1163,29 +1204,11 @@ class EventQueue:
     _spatial_handlers_by_source_entity_uuid: Dict[UUID, List['SpatialHandler']] = defaultdict(list)
     _handler_positions: Dict[UUID, Tuple[Tuple[EventType, EventPhase], Set[Tuple[int, int]]]] = {}
 
-    _on_event_callbacks: List[Callable[['Event'], None]] = []
-    _on_event_callback_filters: Dict[
-        Callable[['Event'], None],
-        Tuple[Optional[frozenset[EventType]], Optional[frozenset[EventPhase]]],
-    ] = {}
-    _on_event_sequence_callbacks: List[
-        Callable[[Sequence['Event']], None]
-    ] = []
-    _on_event_sequence_callback_filters: Dict[
-        Callable[[Sequence['Event']], None],
-        Tuple[Optional[frozenset[EventType]], Optional[frozenset[EventPhase]]],
-    ] = {}
-    _on_event_batch_callbacks: List[Callable[[Sequence['Event']], None]] = []
-    _on_handler_dispatch_callbacks: List[Callable[[HandlerDispatchEvidence], None]] = []
+    # A single open root is enough to validate the append-only journal. Tree
+    # boundaries are derived from ``_all_events`` by ``next_committed_tree``.
+    _open_root_lineage: Optional[UUID] = None
+    _open_root_type: Optional[type['Event']] = None
     _handler_dispatch_cursor: int = 0
-    _event_batch_depth: ContextVar[int] = ContextVar(
-        "event_queue_batch_depth",
-        default=0,
-    )
-    _pending_event_batch: ContextVar[Optional[List['Event']]] = ContextVar(
-        "event_queue_pending_batch",
-        default=None,
-    )
     _preflight_depth: ContextVar[int] = ContextVar(
         "event_queue_preflight_depth",
         default=0,
@@ -1208,14 +1231,6 @@ class EventQueue:
         "event_queue_active_handler_storage_result",
         default=None,
     )
-    _pre_completion_callbacks: List[Callable[['Event'], None]] = []
-    _pre_completion_systems: Dict[str, PreCompletionSystem] = {}
-    _pre_completion_systems_by_event_type: Dict[
-        EventType,
-        Dict[str, PreCompletionSystem],
-    ] = defaultdict(dict)
-    _pre_completion_running: Set[UUID] = set()
-    _combat_log_callback: Optional[Callable[['Event'], None]] = None
     _perceiver_computer: Optional[Callable[['Event'], Set[str]]] = None
     _revealed_computer: Optional[Callable[['Event', List['CombatLogEntry']], Set[str]]] = None
     _identified_entity_observer_computer: Optional[Callable[['Event'], Dict[str, Set[str]]]] = None
@@ -1242,15 +1257,6 @@ class EventQueue:
         if active != execution_id:
             raise RuntimeError("Cannot close a different turn execution")
         cls._active_turn_execution_id = None
-
-    @classmethod
-    def set_combat_log_callback(cls, callback: Optional[Callable[['Event'], None]]) -> None:
-        """Register callback for auto-adding events to combat log.
-
-        Called by Encounter when it becomes active. The callback receives
-        top-level events (parent_event=None) when they complete with a combat_log.
-        """
-        cls._combat_log_callback = callback
 
     @classmethod
     def set_perceiver_computer(cls, func: Optional[Callable[['Event'], Set[str]]]) -> None:
@@ -1289,79 +1295,6 @@ class EventQueue:
                 UUIDs that currently identify each participant.
         """
         cls._identified_entity_observer_computer = func
-
-    @classmethod
-    def push_combat_log(cls, entry: 'CombatLogEntry', source_entity_uuid: UUID) -> None:
-        """Push a standalone combat log entry to the encounter.
-
-        Used for informational logs (like "entity spotted") that don't correspond
-        to a normal event lifecycle. Creates a lightweight Event just to carry the
-        combat_log to the callback.
-        """
-        if cls._preflight_depth.get() > 0:
-            raise RuntimeError("Validation-only handlers cannot publish combat logs during preflight")
-        if cls._combat_log_callback is None:
-            return
-        event = Event(
-            source_entity_uuid=source_entity_uuid,
-            event_type=EventType.CONDITION_APPLICATION,
-            phase=EventPhase.COMPLETION,
-            use_register=False,
-            combat_log=entry,
-            context={"combat_log_origin": "standalone"},
-        )
-        cls._combat_log_callback(event)
-
-    @classmethod
-    def add_on_event_callback(
-        cls,
-        callback: Callable[['Event'], None],
-        *,
-        event_types: Optional[Set[EventType]] = None,
-        phases: Optional[Set[EventPhase]] = None,
-    ) -> None:
-        """Add a passive callback that fires after event storage.
-
-        Unlike EventHandlers, these callbacks:
-        - Cannot modify or cancel events
-        - Are for passive monitoring (logging, websocket broadcast, etc.)
-
-        Args:
-            callback: Passive observer invoked after storage.
-            event_types: Optional event-type filter. Omit for every type.
-            phases: Optional phase filter. Omit for every phase.
-        """
-        if callback not in cls._on_event_callbacks:
-            cls._on_event_callbacks.append(callback)
-        cls._on_event_callback_filters[callback] = (
-            frozenset(event_types) if event_types is not None else None,
-            frozenset(phases) if phases is not None else None,
-        )
-
-    @classmethod
-    def add_on_handler_dispatch_callback(
-        cls,
-        callback: Callable[[HandlerDispatchEvidence], None],
-    ) -> None:
-        """Add a passive observer for matched handler invocations.
-
-        Dispatch observers run after the handler and cannot replace or cancel
-        its result. Observer failures are isolated from engine execution.
-
-        Args:
-            callback: Observer receiving immutable dispatch evidence.
-        """
-        if callback not in cls._on_handler_dispatch_callbacks:
-            cls._on_handler_dispatch_callbacks.append(callback)
-
-    @classmethod
-    def remove_on_handler_dispatch_callback(
-        cls,
-        callback: Callable[[HandlerDispatchEvidence], None],
-    ) -> None:
-        """Remove a previously registered handler-dispatch observer."""
-        if callback in cls._on_handler_dispatch_callbacks:
-            cls._on_handler_dispatch_callbacks.remove(callback)
 
     @classmethod
     def _invoke_handler(cls, handler: BaseHandler, event: Event) -> Optional[Event]:
@@ -1531,14 +1464,6 @@ class EventQueue:
                 ),
             )
         cls._handler_dispatch_cursor += 1
-        for callback in tuple(cls._on_handler_dispatch_callbacks):
-            try:
-                callback(evidence)
-            except Exception:
-                logger.exception(
-                    "Passive handler-dispatch observer %s failed",
-                    cls._callback_name(callback),
-                )
         return result
 
     @classmethod
@@ -1580,151 +1505,20 @@ class EventQueue:
         return tampered
 
     @classmethod
-    def remove_on_event_callback(cls, callback: Callable[['Event'], None]) -> None:
-        """Remove an event callback."""
-        if callback in cls._on_event_callbacks:
-            cls._on_event_callbacks.remove(callback)
-        cls._on_event_callback_filters.pop(callback, None)
-
-    @classmethod
-    def add_on_event_sequence_callback(
-        cls,
-        callback: Callable[[Sequence['Event']], None],
-        *,
-        event_types: Optional[Set[EventType]] = None,
-        phases: Optional[Set[EventPhase]] = None,
-    ) -> None:
-        """Add a callback for one atomic sequence of stored event versions.
-
-        Args:
-            callback: Passive observer receiving events in storage order.
-            event_types: Optional event-type filter. Omit for every type.
-            phases: Optional phase filter. Omit for every phase.
-        """
-        if callback not in cls._on_event_sequence_callbacks:
-            cls._on_event_sequence_callbacks.append(callback)
-        cls._on_event_sequence_callback_filters[callback] = (
-            frozenset(event_types) if event_types is not None else None,
-            frozenset(phases) if phases is not None else None,
-        )
-
-    @classmethod
-    def remove_on_event_sequence_callback(
-        cls,
-        callback: Callable[[Sequence['Event']], None],
-    ) -> None:
-        """Remove an event-sequence callback.
-
-        Args:
-            callback: Previously registered sequence observer.
-        """
-        if callback in cls._on_event_sequence_callbacks:
-            cls._on_event_sequence_callbacks.remove(callback)
-        cls._on_event_sequence_callback_filters.pop(callback, None)
-
-    @classmethod
-    def _dispatch_event_sequence(cls, events: Sequence['Event']) -> None:
-        """Notify passive observers of one atomic stored sequence."""
-        for callback in list(cls._on_event_sequence_callbacks):
-            event_types, phases = cls._on_event_sequence_callback_filters.get(
-                callback,
-                (None, None),
-            )
-            if event_types is not None and not any(
-                event.event_type in event_types for event in events
-            ):
-                continue
-            if phases is not None and not any(event.phase in phases for event in events):
-                continue
-            try:
-                callback(events)
-            except Exception:
-                logger.exception(
-                    "Passive event-sequence observer %s failed",
-                    cls._callback_name(callback),
-                )
-
-    @classmethod
-    def add_on_event_batch_callback(
-        cls,
-        callback: Callable[[Sequence['Event']], None],
-    ) -> None:
-        """Add a passive callback that receives one completed causal batch.
-
-        Events registered outside an explicit batch are delivered as a
-        one-event sequence. Nested action applications share the outer action's
-        batch, preserving authoritative storage order across reactions and
-        child actions.
-
-        Args:
-            callback: Passive observer invoked after the batch boundary.
-        """
-        if callback not in cls._on_event_batch_callbacks:
-            cls._on_event_batch_callbacks.append(callback)
-
-    @classmethod
-    def remove_on_event_batch_callback(
-        cls,
-        callback: Callable[[Sequence['Event']], None],
-    ) -> None:
-        """Remove a passive causal-batch callback.
-
-        Args:
-            callback: Previously registered batch observer.
-        """
-        if callback in cls._on_event_batch_callbacks:
-            cls._on_event_batch_callbacks.remove(callback)
-
-    @classmethod
-    def is_event_batch_active(cls) -> bool:
-        """Return whether the current context is inside a causal event batch."""
-        return cls._event_batch_depth.get() > 0
-
-    @classmethod
-    @contextmanager
-    def batch_on_event_callbacks(cls) -> Iterator[None]:
-        """Collect passive batch notifications until the outer action closes.
-
-        Immediate per-event callbacks and event handlers are unaffected. Only
-        observers registered through `add_on_event_batch_callback` are delayed.
-        Nested scopes append to the same ordered batch and only the outermost
-        scope dispatches it.
-
-        Yields:
-            Control while event registrations append to the current batch.
-        """
-        depth = cls._event_batch_depth.get()
-        pending_token = None
-        if depth == 0:
-            pending_token = cls._pending_event_batch.set([])
-        depth_token = cls._event_batch_depth.set(depth + 1)
-        try:
-            yield
-        finally:
-            cls._event_batch_depth.reset(depth_token)
-            if depth == 0:
-                pending = tuple(cls._pending_event_batch.get() or ())
-                if pending_token is not None:
-                    cls._pending_event_batch.reset(pending_token)
-                if pending:
-                    cls._dispatch_event_batch(pending)
-
-    @classmethod
-    def _dispatch_event_batch(cls, events: Sequence['Event']) -> None:
-        """Notify passive batch observers without affecting engine execution."""
-        for callback in list(cls._on_event_batch_callbacks):
-            try:
-                callback(events)
-            except Exception:
-                logger.exception(
-                    "Passive event-batch observer %s failed",
-                    cls._callback_name(callback),
-                )
-
-    @classmethod
     def event_cursor(cls) -> int:
         """Return the raw append cursor for the event stream."""
         return len(cls._all_events)
+
+    @classmethod
+    def _stored_terminal_for_lineage(cls, lineage_uuid: UUID) -> Optional[Event]:
+        """Return the existing terminal journal fact for one event lineage."""
+        for event in reversed(cls._events_by_lineage.get(lineage_uuid, [])):
+            if event.is_last and event.phase in (
+                EventPhase.COMPLETION,
+                EventPhase.CANCEL,
+            ):
+                return event
+        return None
 
     @classmethod
     def generation_id(cls) -> UUID:
@@ -1752,76 +1546,6 @@ class EventQueue:
         return None
 
     @classmethod
-    def add_pre_completion_callback(cls, callback: Callable[['Event'], None]) -> None:
-        """Add a lifecycle callback that runs before event completion.
-
-        Unlike passive on-event callbacks, these callbacks may emit child events.
-        They run before completion metadata is computed, so child lineage fields
-        remain structurally honest for animated clients and event-tree readers.
-        """
-        if callback not in cls._pre_completion_callbacks:
-            cls._pre_completion_callbacks.append(callback)
-
-    @classmethod
-    def add_pre_completion_system(
-        cls,
-        name: str,
-        system: PreCompletionSystem,
-        event_types: Set[EventType],
-    ) -> None:
-        """Register one indexed lifecycle system for selected event types.
-
-        Args:
-            name: Stable registry identity for replacement and removal.
-            system: Callable lifecycle system with explicit reset behavior.
-            event_types: Event categories that can affect the system.
-        """
-        cls.remove_pre_completion_system(name)
-        cls._pre_completion_systems[name] = system
-        for event_type in event_types:
-            cls._pre_completion_systems_by_event_type[event_type][name] = system
-
-    @classmethod
-    def remove_pre_completion_system(cls, name: str) -> None:
-        """Remove an indexed lifecycle system from every event-type registry."""
-        system = cls._pre_completion_systems.pop(name, None)
-        if system is None:
-            return
-        for event_type, systems in tuple(cls._pre_completion_systems_by_event_type.items()):
-            systems.pop(name, None)
-            if not systems:
-                cls._pre_completion_systems_by_event_type.pop(event_type, None)
-
-    @classmethod
-    def run_pre_completion_callbacks(cls, event: Event) -> None:
-        """Run lifecycle systems before an event completes."""
-        if event.event_type == EventType.SENSORY_UPDATE:
-            return
-        if event.uuid in cls._pre_completion_running:
-            return
-        cls._pre_completion_running.add(event.uuid)
-        try:
-            callbacks: List[Callable[[Event], None]] = list(cls._pre_completion_callbacks)
-            callbacks.extend(
-                cls._pre_completion_systems_by_event_type.get(event.event_type, {}).values()
-            )
-            for callback in callbacks:
-                callback(event)
-        finally:
-            cls._pre_completion_running.discard(event.uuid)
-
-    @staticmethod
-    def _callback_name(callback: Callable[..., Any]) -> str:
-        """Return a stable, payload-safe name for callback diagnostics."""
-        owner = getattr(callback, "__self__", None)
-        if owner is not None:
-            raw_name = f"{type(owner).__name__}.{getattr(callback, '__name__', 'call')}"
-        else:
-            raw_name = getattr(callback, "__qualname__", type(callback).__name__)
-        normalized = "".join(character if character.isalnum() else "_" for character in raw_name)
-        return "_".join(part for part in normalized.split("_") if part)
-
-    @classmethod
     def register(cls, event: Event) -> Event:
         """Store an event version and dispatch matching pre-completion handlers.
 
@@ -1842,7 +1566,7 @@ class EventQueue:
         cls._store_event(event)
 
         handlers = cls._get_handlers_for_event(event)
-        if not handlers or event.phase == EventPhase.COMPLETION:
+        if not handlers or event.phase in (EventPhase.COMPLETION, EventPhase.CANCEL):
             return event
 
         current_event = event
@@ -1853,6 +1577,19 @@ class EventQueue:
                 continue
 
             if result.canceled:
+                existing_terminal = cls._stored_terminal_for_lineage(
+                    result.lineage_uuid,
+                )
+                if existing_terminal is not None:
+                    return existing_terminal
+                completion_updates = result.finalize_terminal({
+                    "phase": EventPhase.CANCEL,
+                    "is_first": True,
+                    "is_last": True,
+                    "canceled": True,
+                    "canceled_from_phase": result.canceled_from_phase,
+                })
+                result = result.model_copy(update=completion_updates)
                 return cls._record_handler_result(result)
 
             if result.modified:
@@ -2067,13 +1804,17 @@ class EventQueue:
         return event
 
     @classmethod
-    def publish_completed_fact(cls, event: EventT) -> EventT:
-        """Store one non-cancelable fact after its domain mutation commits."""
+    def publish_inert_terminal_fact(cls, event: EventT) -> EventT:
+        """Store one reviewed terminal fact whose state is already committed."""
         if event.use_register:
-            raise ValueError("Completed facts must be constructed unregistered")
+            raise ValueError("Inert terminal facts must be constructed unregistered")
         if event.phase is not EventPhase.COMPLETION:
-            raise ValueError("Completed facts must already be in completion phase")
-        completion_updates = event._completion_updates({
+            raise ValueError("Inert terminal facts must already be in completion phase")
+        if not type(event).inert_terminal_fact:
+            raise ValueError(
+                f"{type(event).__name__} is not an admitted inert terminal fact",
+            )
+        completion_updates = event.finalize_terminal({
             "phase": EventPhase.COMPLETION,
             "is_first": True,
             "is_last": True,
@@ -2085,52 +1826,6 @@ class EventQueue:
         })
         cls._store_event(committed)
         return cast(EventT, committed)
-
-    @classmethod
-    def register_completion_sequence(
-        cls,
-        events: Sequence[Event],
-    ) -> Tuple[Event, ...]:
-        """Store simultaneous completion events and notify reducers once.
-
-        Immediate per-event callbacks still receive every event. Sequence
-        observers run once after all events are indexed, allowing reducers to
-        process one causative derived-state boundary without losing individual
-        event identities.
-
-        Args:
-            events: Completion events ordered by deterministic observer order.
-
-        Returns:
-            Stored events in the same order.
-
-        Raises:
-            ValueError: If any event is not a completion or reuses a UUID.
-        """
-        results: List[Event] = []
-        stored: List[Event] = []
-        for event in events:
-            if event.phase != EventPhase.COMPLETION:
-                raise ValueError("Completion sequences may only store completion events")
-            detached_proposal = cls._detach_active_handler_storage(event)
-            if detached_proposal is not None:
-                results.append(detached_proposal)
-                continue
-            existing = cls._events_by_uuid.get(event.uuid)
-            if existing is not None:
-                raise ValueError(f"Event UUID collision for {event.uuid}")
-            cls._store_event(
-                event,
-                notify_sequence_callbacks=False,
-                notify_batch_callbacks=False,
-            )
-            stored.append(event)
-            results.append(event)
-        if stored:
-            cls._dispatch_event_sequence(stored)
-            if cls._pending_event_batch.get() is None:
-                cls._dispatch_event_batch(stored)
-        return tuple(results)
 
     @classmethod
     def _record_handler_result(cls, result: Event) -> Event:
@@ -2152,14 +1847,199 @@ class EventQueue:
         return cls._events_by_uuid.get(uuid)
 
     @classmethod
+    def _stored_root_for_event(cls, event: Event) -> Event:
+        """Resolve a stored event's parent chain to its one root."""
+        current = event
+        visited: Set[UUID] = set()
+        while current.parent_event is not None:
+            if current.uuid in visited:
+                raise ValueError("event parent cycle is not admissible")
+            visited.add(current.uuid)
+            parent = cls._events_by_uuid.get(current.parent_event)
+            if parent is None:
+                raise ValueError(
+                    f"event {current.uuid} references missing parent {current.parent_event}"
+                )
+            current = parent
+        return current
+
+    @classmethod
+    def _validate_event_admission(cls, event: Event) -> None:
+        """Validate one event against the currently open append-only tree."""
+        terminal_phases = (EventPhase.COMPLETION, EventPhase.CANCEL)
+        phase_order = {
+            EventPhase.DECLARATION: 0,
+            EventPhase.EXECUTION: 1,
+            EventPhase.EFFECT: 2,
+            EventPhase.COMPLETION: 3,
+        }
+        is_terminal = event.phase in terminal_phases
+        if is_terminal and not event.is_last:
+            raise ValueError("terminal event must be the last event in its lineage")
+        if type(event).inert_terminal_fact and event.phase is not EventPhase.COMPLETION:
+            raise ValueError("an inert terminal fact must be completion-only")
+        if event.phase is EventPhase.CANCEL and (
+            not event.canceled or event.canceled_from_phase is None
+        ):
+            raise ValueError("cancel terminal must carry cancellation evidence")
+        lineage_events = cls._events_by_lineage.get(event.lineage_uuid, [])
+        if lineage_events and type(event) is not type(lineage_events[0]):
+            raise ValueError("an event lineage must preserve its exact concrete class")
+
+        if event.parent_event is None:
+            opening_root = cls._open_root_lineage is None
+            if opening_root:
+                if not type(event).inert_terminal_fact and is_terminal:
+                    raise ValueError(
+                        "a non-inert terminal cannot open a root without a prior phase"
+                    )
+                elif event.phase not in phase_order:
+                    raise ValueError("root must begin at a handler-visible lifecycle phase")
+            elif (
+                event.lineage_uuid != cls._open_root_lineage
+                or type(event) is not cls._open_root_type
+            ):
+                raise ValueError(
+                    "only the active root's exact class and lineage may be parentless"
+                )
+
+            if any(
+                candidate.phase in terminal_phases and candidate.is_last
+                for candidate in lineage_events
+            ):
+                raise ValueError("an event lineage cannot receive facts after its terminal")
+            if lineage_events and not is_terminal:
+                latest_phase = max(
+                    phase_order.get(candidate.phase, -1)
+                    for candidate in lineage_events
+                )
+                if phase_order[event.phase] < latest_phase:
+                    raise ValueError("event phase cannot move backwards")
+            if opening_root and not is_terminal:
+                cls._open_root_lineage = event.lineage_uuid
+                cls._open_root_type = type(event)
+            return
+
+        parent = cls._events_by_uuid.get(event.parent_event)
+        if parent is None:
+            raise ValueError(
+                f"event {event.uuid} references missing parent {event.parent_event}"
+            )
+        if cls._stored_terminal_for_lineage(parent.lineage_uuid) is not None:
+            raise ValueError("a closed lineage cannot receive a child event")
+        if event.lineage_uuid == cls._open_root_lineage:
+            raise ValueError("the active root lineage must remain parentless")
+        root = cls._stored_root_for_event(parent)
+        if (
+            cls._open_root_lineage is None
+            or root.lineage_uuid != cls._open_root_lineage
+        ):
+            raise ValueError("child event does not belong to the active root")
+        if event.lineage_uuid == parent.lineage_uuid:
+            raise ValueError("a parented event must have its own lineage")
+        if any(
+            candidate.phase in terminal_phases and candidate.is_last
+            for candidate in lineage_events
+        ):
+            raise ValueError("an event lineage cannot receive facts after its terminal")
+        if lineage_events and not is_terminal:
+            latest_phase = max(
+                phase_order.get(candidate.phase, -1)
+                for candidate in lineage_events
+            )
+            if phase_order[event.phase] < latest_phase:
+                raise ValueError("event phase cannot move backwards")
+
+    @classmethod
+    def next_committed_tree(
+        cls,
+        source_cursor: int,
+        *,
+        generation_id: Optional[UUID] = None,
+    ) -> Optional[Tuple[Event, ...]]:
+        """Return the next complete tree directly from the event journal.
+
+        The queue stores no range or batch records.  A cursor must point to a
+        parentless root; the terminal boundary is found by following the
+        stored parent facts and the root's exact class/lineage.
+        """
+        if generation_id is not None and generation_id != cls._generation_uuid:
+            raise RuntimeError("event queue generation changed before tree pull")
+        cursor = cls.event_cursor()
+        if not isinstance(source_cursor, int) or not 0 <= source_cursor <= cursor:
+            raise ValueError("tree source cursor must be within the current queue")
+        if source_cursor == cursor:
+            return None
+        first = cls._all_events[source_cursor]
+        if first.parent_event is not None:
+            raise ValueError("tree cursor must point at its parentless root")
+        if type(first).inert_terminal_fact:
+            if first.phase is not EventPhase.COMPLETION:
+                raise ValueError("inert tree root must be a completion fact")
+        elif first.phase in (EventPhase.COMPLETION, EventPhase.CANCEL):
+            raise ValueError("non-inert tree root must begin before its terminal")
+        root_lineage = first.lineage_uuid
+        root_type = type(first)
+        phase_order = {
+            EventPhase.DECLARATION: 0,
+            EventPhase.EXECUTION: 1,
+            EventPhase.EFFECT: 2,
+            EventPhase.COMPLETION: 3,
+        }
+        latest_phases: Dict[UUID, int] = {}
+        lineage_types: Dict[UUID, type[Event]] = {}
+        for index in range(source_cursor, cursor):
+            event = cls._all_events[index]
+            if (
+                type(event).inert_terminal_fact
+                and event.phase is not EventPhase.COMPLETION
+            ):
+                raise ValueError("inert tree member must be a completion fact")
+            lineage_type = lineage_types.setdefault(event.lineage_uuid, type(event))
+            if type(event) is not lineage_type:
+                raise ValueError("tree lineage changes concrete event class")
+            if event.parent_event is None:
+                if event.lineage_uuid != root_lineage or type(event) is not root_type:
+                    raise ValueError("tree contains a second or mismatched root")
+            else:
+                if event.lineage_uuid == root_lineage:
+                    raise ValueError("tree root lineage must remain parentless")
+                parent_index = cls.get_event_index(event.parent_event)
+                if parent_index is None or parent_index >= index:
+                    raise ValueError("tree child parent must be an earlier stored fact")
+                root = cls._stored_root_for_event(event)
+                if root.lineage_uuid != root_lineage:
+                    raise ValueError("tree child ancestry resolves outside its root")
+            if event.phase is EventPhase.CANCEL:
+                if not event.is_last:
+                    raise ValueError("cancel terminal must be last")
+                if not event.canceled or event.canceled_from_phase is None:
+                    raise ValueError("cancel terminal lacks cancellation evidence")
+            else:
+                phase_value = phase_order.get(event.phase)
+                if phase_value is None:
+                    raise ValueError("unknown event phase in source journal")
+                previous = latest_phases.get(event.lineage_uuid, -1)
+                if phase_value < previous:
+                    raise ValueError("tree lineage contains a phase regression")
+                latest_phases[event.lineage_uuid] = phase_value
+            if (
+                event.parent_event is None
+                and event.lineage_uuid == root_lineage
+                and type(event) is root_type
+                and event.phase in (EventPhase.COMPLETION, EventPhase.CANCEL)
+            ):
+                if not event.is_last:
+                    raise ValueError("root terminal must be last")
+                return tuple(cls._all_events[source_cursor:index + 1])
+        return None
+
+    @classmethod
     def _store_event(
         cls,
         event: Event,
-        *,
-        notify_sequence_callbacks: bool = True,
-        notify_batch_callbacks: bool = True,
     ) -> None:
-        """Store an event in all queue indexes and notify passive observers."""
+        """Store one event fact after enforcing the active root admission law."""
         if cls._preflight_depth.get() > 0:
             raise RuntimeError("Validation-only handlers cannot publish events during preflight")
         if cls._detach_active_handler_storage(event) is not None:
@@ -2168,6 +2048,7 @@ class EventQueue:
             )
         if event.uuid in cls._events_by_uuid:
             raise ValueError(f"Event UUID collision for {event.uuid}")
+        cls._validate_event_admission(event)
         identified = {
             entity_uuid: set(observer_uuids)
             for entity_uuid, observer_uuids in event.identified_entity_observer_uuids.items()
@@ -2212,32 +2093,12 @@ class EventQueue:
             cls._events_by_target[event.target_entity_uuid].append(event)
 
         cls._all_events.append(event)
-        pending_batch = cls._pending_event_batch.get()
-        if pending_batch is not None:
-            pending_batch.append(event)
-
-        for callback in list(cls._on_event_callbacks):
-            event_types, phases = cls._on_event_callback_filters.get(
-                callback,
-                (None, None),
-            )
-            if event_types is not None and event.event_type not in event_types:
-                continue
-            if phases is not None and event.phase not in phases:
-                continue
-            try:
-                callback(event)
-            except Exception:
-                logger.exception(
-                    "Passive event observer %s failed for %s event %s",
-                    cls._callback_name(callback),
-                    type(event).__name__,
-                    event.uuid,
-                )
-        if notify_sequence_callbacks:
-            cls._dispatch_event_sequence((event,))
-        if pending_batch is None and notify_batch_callbacks:
-            cls._dispatch_event_batch((event,))
+        if event.parent_event is None and event.phase in (
+            EventPhase.COMPLETION,
+            EventPhase.CANCEL,
+        ):
+            cls._open_root_lineage = None
+            cls._open_root_type = None
 
     @classmethod
     def _get_handlers_for_event(cls, event: Event) -> List['BaseHandler']:
@@ -2581,7 +2442,7 @@ class EventQueue:
 
     @classmethod
     def reset(cls) -> None:
-        """Clear all event, handler, and callback registries."""
+        """Clear all event, handler, and causal-journal runtime state."""
         cls._generation_uuid = uuid4()
         cls._all_events.clear()
         cls._events_by_uuid.clear()
@@ -2599,27 +2460,15 @@ class EventQueue:
         cls._spatial_handlers_by_position.clear()
         cls._spatial_handlers_by_source_entity_uuid.clear()
         cls._handler_positions.clear()
-        cls._on_event_callbacks.clear()
-        cls._on_event_callback_filters.clear()
-        cls._on_event_sequence_callbacks.clear()
-        cls._on_event_sequence_callback_filters.clear()
-        cls._on_event_batch_callbacks.clear()
-        cls._on_handler_dispatch_callbacks.clear()
+        cls._open_root_lineage = None
+        cls._open_root_type = None
         cls._handler_dispatch_cursor = 0
         cls._active_turn_execution_id = None
-        cls._event_batch_depth.set(0)
-        cls._pending_event_batch.set(None)
         cls._preflight_depth.set(0)
         cls._active_handler_input.set(None)
         cls._active_handler_proposal.set(None)
         cls._active_handler_validation_token.set(None)
         cls._active_handler_storage_result.set(None)
-        cls._pre_completion_callbacks.clear()
-        for system in tuple(cls._pre_completion_systems.values()):
-            system.reset()
-        cls._pre_completion_systems.clear()
-        cls._pre_completion_systems_by_event_type.clear()
-        cls._pre_completion_running.clear()
         cls._perceiver_computer = None
         cls._revealed_computer = None
         cls._identified_entity_observer_computer = None

@@ -1510,6 +1510,8 @@ class Move(BaseAction):
             EventPhase.EFFECT,
             status_message=f"Applying movement for {execution_event.name}",
         )
+        if effect_event.canceled:
+            return effect_event
 
         try:
             objective_failure = self._objective_move_failure(
@@ -1756,12 +1758,14 @@ class Move(BaseAction):
                 path_max_distance=remaining_path_distance,
             )
 
-    def _apply_costs(
+    def _commit_costs(
         self,
-        completion_event: MovementEvent,
+        execution_event: MovementEvent,
+        declaration_event: ActionEvent,
     ) -> Optional[MovementEvent]:
-        """Return the already-settled terminal event without double payment."""
-        return completion_event
+        """Movement settles its serialized costs during its own transaction."""
+        del declaration_event
+        return execution_event
     def apply(self, parent_event: Optional[Event] = None) -> Optional[MovementEvent]:
         """Override to provide specific return type."""
         result = super().apply(parent_event)
@@ -2716,6 +2720,8 @@ class Dodge(BaseAction):
             new_phase=EventPhase.EFFECT,
             status_message="Applying Dodging condition"
         )
+        if effect_event.canceled:
+            return effect_event
 
         entity.add_condition(dodging, parent_event=effect_event)
 
@@ -3593,12 +3599,14 @@ class TraverseConnector(BaseAction):
             status_message=f"Connector transfer completed at {destination}",
         )
 
-    def _apply_costs(
+    def _commit_costs(
         self,
-        completion_event: TraverseConnectorEvent,
+        execution_event: TraverseConnectorEvent,
+        declaration_event: ActionEvent,
     ) -> TraverseConnectorEvent:
         """Connector execution already committed its accepted aggregate costs."""
-        return completion_event
+        del declaration_event
+        return execution_event
 
 
 @_core_action_identity(
@@ -4290,9 +4298,14 @@ class Jump(BaseAction):
         finally:
             source_entity.materialize_navigation(max_distance=20)
 
-    def _apply_costs(self, completion_event: JumpEvent) -> JumpEvent:
+    def _commit_costs(
+        self,
+        execution_event: JumpEvent,
+        declaration_event: ActionEvent,
+    ) -> JumpEvent:
         """Return the transaction-settled Jump without paying it twice."""
-        return completion_event
+        del declaration_event
+        return execution_event
 
 
 POUNDS_PER_KILOGRAM = 2.2046226218487757
@@ -5214,6 +5227,26 @@ class SpellAction(BaseAction):
             finally:
                 self._release_spell_execution(execution)
 
+    def _commit_costs(
+        self,
+        execution_event: ActionEvent,
+        declaration_event: ActionEvent,
+    ) -> Optional[ActionEvent]:
+        """Commit spell costs and consume one pending metamagic override."""
+        committed = super()._commit_costs(
+            execution_event,
+            declaration_event,
+        )
+        if committed is None or committed.canceled:
+            return committed
+        caster = Entity.get(self.source_entity_uuid)
+        if caster is not None and "MetamagicActive" in caster.active_conditions:
+            caster.remove_condition(
+                "MetamagicActive",
+                parent_event=declaration_event,
+            )
+        return committed
+
     def _release_spell_execution(
         self,
         execution: SpellExecutionState,
@@ -5553,7 +5586,7 @@ class SpellAction(BaseAction):
         target: Entity,
         ability_name: AbilityName,
         dc: int,
-    ) -> Tuple[SpellEvent, DiceRoll, bool]:
+    ) -> Tuple[SpellEvent, Optional[DiceRoll], bool]:
         """Resolve a child save and synchronize its result onto the spell event."""
         ability_display = ability_name.upper()[:3]
         effect_event = execution_event.phase_to(
@@ -5562,6 +5595,8 @@ class SpellAction(BaseAction):
             save_dc=dc,
             status_message=f"Requesting {ability_display} save DC {dc}",
         )
+        if effect_event.canceled:
+            return effect_event, None, False
         save_request = caster.create_saving_throw_request(
             target_entity_uuid=target.uuid,
             ability_name=ability_name,
@@ -5607,7 +5642,7 @@ class SpellAction(BaseAction):
         assert isinstance(result, Concentrating)
         return result
 
-    def _cleanup_concentration(self, completion_event: ActionEvent) -> None:
+    def _close_concentration(self, effect_event: ActionEvent) -> None:
         """Remove Concentrating if all targets saved (0-children bug fix).
 
         Also clean up empty slots in multi-slot scenarios."""
@@ -5619,7 +5654,7 @@ class SpellAction(BaseAction):
         conc = caster.active_conditions["Concentrating"]
         if not isinstance(conc, Concentrating) or conc.uuid != self.cast_concentrating_uuid:
             return
-        conc.cleanup_if_no_effects(parent_event=completion_event)
+        conc.cleanup_if_no_effects(parent_event=effect_event)
         if "Concentrating" in caster.active_conditions:
             empty_slot_uuids = [slot_uuid for slot_uuid, slot in conc.concentration_slots.items() if not slot.linked_entries]
             for slot_uuid in empty_slot_uuids:
@@ -5834,13 +5869,6 @@ class SpellAction(BaseAction):
         if current_spell_execution() is not None:
             self.bind_spell_execution_lineage(event.lineage_uuid)
         return event
-
-    def _apply_execution_cancellation_costs(
-        self,
-        canceled_event: ActionEvent,
-    ) -> Optional[ActionEvent]:
-        """Spend a committed cast when a reaction interrupts its execution."""
-        return self._consume_costs(canceled_event)
 
     def _get_cantrip_dice_count(self, caster_level: int) -> int:
         """Get number of damage dice for cantrips based on caster level.

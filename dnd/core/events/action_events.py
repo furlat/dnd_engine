@@ -1022,8 +1022,10 @@ class CounterspellReactionEvent(ActionEvent):
             raise ValueError("Counterspell success contradicts its check")
         return self
 
-    def generate_combat_log(self) -> CombatLogEntry:
+    def generate_combat_log(self) -> Optional[CombatLogEntry]:
         """Generate a typed, subjectivity-filterable reaction log."""
+        if self.canceled:
+            return None
         counterspeller_name = self.source_entity_name or "Unknown"
         original_caster_name = self.target_entity_name or "Unknown"
         result_text = "interrupts" if self.succeeded else "fails to interrupt"

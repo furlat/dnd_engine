@@ -953,7 +953,10 @@ class BaseBlock(BaseModel):
                     condition.name is not None
                     and condition.name in self.active_conditions
                 ):
-                    self.remove_condition(condition.name)
+                    self.remove_condition(
+                        condition.name,
+                        parent_event=parent_event,
+                    )
                 self._register_condition_indexes(condition)
             else:
                 self._discard_uncommitted_condition_tree(condition)
@@ -1243,11 +1246,17 @@ class BaseBlock(BaseModel):
         condition.remove_from_register()
         return True
 
-    def advance_duration(self, condition_name: str) -> bool:
+    def advance_duration(
+        self,
+        condition_name: str,
+        *,
+        parent_event: Optional[Event] = None,
+    ) -> bool:
         """Progress a block-owned condition duration without saving throws.
 
         Args:
             condition_name: Name of the condition to progress.
+            parent_event: Causal event that owns any expiration cleanup.
 
         Returns:
             True if the condition expired and was removed.
@@ -1269,13 +1278,18 @@ class BaseBlock(BaseModel):
                         self.remove_condition_by_uuid(
                             lease.uuid,
                             expire=True,
+                            parent_event=parent_event,
                         )
                         or expired_any
                     )
             return expired_any
         expired = condition.progress()
         if expired:
-            return self.remove_condition(condition_name, expire=True)
+            return self.remove_condition(
+                condition_name,
+                expire=True,
+                parent_event=parent_event,
+            )
         return False
 
     def add_condition(self, condition: BaseCondition, context: Optional[Dict[str, Any]] = None, check_save_throw: bool = True, event: Optional[Event] = None)  -> Optional[Event]:

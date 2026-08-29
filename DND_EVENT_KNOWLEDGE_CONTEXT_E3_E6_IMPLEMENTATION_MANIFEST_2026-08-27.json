@@ -1,0 +1,389 @@
+{
+  "manifest_version": "1.0",
+  "status": "READY_FOR_INDEPENDENT_REVIEW",
+  "scope": "active in-process Python only",
+  "governing_plan": {
+    "path": "DND_EVENT_KNOWLEDGE_CONTEXT_E3_E6_IMPLEMENTATION_PLAN_2026-08-27.md",
+    "sha256": "aaf75e26e3b1e13419caf3d0b7e8346ad8a86531bc155b90f6d37767a8328c98"
+  },
+  "authorities": [
+    {
+      "path": "DND_EVENT_KNOWLEDGE_CONTEXT_REDUCTION_PLAN_2026-08-27.md",
+      "sha256": "7856a537f0b75063fe5bcb012fd7d020b2f92a1e018c17d1ccf6b5e830605c21"
+    },
+    {
+      "path": "DND_EVENT_KNOWLEDGE_CONTEXT_IMPLEMENTATION_PLAN_2026-08-27.md",
+      "sha256": "3f98f0b926fce8e9662c5718c01aa863734a563897bebe0b403173d8eba0a9ad"
+    },
+    {
+      "path": "DND_PYGAME_SCRIPTED_ENCOUNTER_MVP_IMPLEMENTATION_PLAN_2026-08-27.md",
+      "sha256": "8e83dde4916ca3a6a4691bd9b25f720d3e381fe49e6458d4c0800007f9b390b9"
+    }
+  ],
+  "membership_algorithm": "Sorted unique governed active production/test paths, each hashed from current raw bytes; governance Markdown, the manifest and ledger, excluded surfaces, caches, and temporary outputs are not members.",
+  "member_count": 7,
+  "member_breakdown": {
+    "production_count": 3,
+    "test_count": 4
+  },
+  "members": [
+    {
+      "path": "dnd/blocks/sensory.py",
+      "sha256": "75d508f52156bd6d1ce73b0d5eafe25eee804cd4b3e1056b943c365435bec8ee",
+      "kind": "production"
+    },
+    {
+      "path": "dnd/core/events/knowledge.py",
+      "sha256": "f9347cdeb21591b051014b06a90d4d5604904abdfe1c0d40d4d55d2c7d433026",
+      "kind": "production"
+    },
+    {
+      "path": "dnd/event_reduction.py",
+      "sha256": "d262b6d1596a560a94094901821c89100ff5746fdbccbbd1d64f9cd25fd5d509",
+      "kind": "production"
+    },
+    {
+      "path": "tests/architecture/test_event_knowledge_context_architecture.py",
+      "sha256": "6b2d84b17578c61a32bcb0f83c60ddd95738c9465ba476406c1ac894189e08db",
+      "kind": "test"
+    },
+    {
+      "path": "tests/engine/test_event_knowledge_async_boundary.py",
+      "sha256": "1d014da295dc4a812725a903cef996207e595439b37d892c9b9c3ffaa73d0f4e",
+      "kind": "test"
+    },
+    {
+      "path": "tests/engine/test_event_knowledge_context.py",
+      "sha256": "d4a3e8d1feec813c5497ff025377986c99997799efddd2101dbf51c87012d273",
+      "kind": "test"
+    },
+    {
+      "path": "tests/engine/test_event_knowledge_scripted_encounter.py",
+      "sha256": "7203b0a8430b74d3d5bb0e59638b1817d4da3407893f3951f0d0038d36fdb4f2",
+      "kind": "test"
+    }
+  ],
+  "source_node_union": {
+    "selector_inputs": [
+      "tests/engine/test_event_knowledge_async_boundary.py",
+      "tests/engine/test_event_knowledge_context.py",
+      "tests/engine/test_event_knowledge_scripted_encounter.py",
+      "tests/engine/test_objective_state.py",
+      "tests/engine/test_direct_scenario_deployment.py",
+      "tests/engine/test_event_wire_visibility_contract.py",
+      "tests/engine/test_move_settlement.py",
+      "tests/engine/test_senses_light_stealth.py",
+      "tests/engine/test_combat_actions.py",
+      "tests/engine/test_action_cost_and_position_commit.py",
+      "tests/architecture"
+    ],
+    "collection_filter": "^tests/.*::",
+    "sort": "LC_ALL=C bytewise",
+    "deduplicate": "unique",
+    "terminal_newline": true,
+    "node_count": 309,
+    "normalized_sha256": "f9a548aac09faf728ba330c1f7a12c2b4142eae851c5919a48aae54347409d80",
+    "execution": "309 passed in 142.63s (0:02:22); NUL-safe xargs execution wall time 152.23s"
+  },
+  "proving_encounter_manifest": {
+    "expected_exact_class_count": 20,
+    "actual_exact_class_count": 20,
+    "missing_classes": [],
+    "extra_classes": [],
+    "base_event_policy": "explicitly intentionally silent; not a speculative concrete row",
+    "rows": [
+      {
+        "class": "dnd.core.events.world_events.WorldInitializedEvent",
+        "observed_phases": ["completion"],
+        "role": "bootstrap",
+        "policy": "_world_initialized_mask",
+        "scalar_paths": [["battlefield_id"], ["battlefield_name"], ["bounds"], ["width"], ["height"]],
+        "collection_paths": [],
+        "provenance_paths": [["battlefield_id"], ["tiles"], ["objects"], ["connectors"]],
+        "provenance_policy": "_world_initialized_provenance",
+        "formatter": "_format_world_initialized"
+      },
+      {
+        "class": "dnd.core.events.entity_events.EntityCreatedEvent",
+        "observed_phases": ["completion"],
+        "role": "entity_creation",
+        "policy": "_entity_created_mask",
+        "scalar_paths": [["entity_uuid"], ["entity_kind_id"], ["entity_name"], ["entity_description"], ["creature_type"], ["size"], ["structural_base_size"], ["life_state"], ["equipment"]],
+        "collection_paths": [["items"], ["inventory_item_uuids"], ["equipment"], ["action_ids"], ["condition_ids"]],
+        "provenance_paths": [["entity_uuid"], ["entity_name"], ["life_state"]],
+        "provenance_policy": "_entity_created_provenance",
+        "formatter": "_format_entity_created"
+      },
+      {
+        "class": "dnd.core.events.world_events.SpatialChangeEvent",
+        "observed_phases": ["declaration", "execution", "effect", "completion"],
+        "role": "scene_state",
+        "policy": "_spatial_change_mask",
+        "scalar_paths": [["position"], ["entity_uuid"], ["object_uuid"], ["old_position"], ["placement"], ["previous_placement"], ["tile_surface"], ["object_name"], ["object_is_open"], ["object_boundary_structure"], ["transition_from"], ["transition_to"]],
+        "collection_paths": [["light_level_map"]],
+        "provenance_paths": [["position"], ["entity_uuid"], ["object_uuid"], ["placement"]],
+        "provenance_policy": "_spatial_change_provenance",
+        "formatter": "_format_spatial_change"
+      },
+      {
+        "class": "dnd.core.events.world_events.SensoryUpdateEvent",
+        "observed_phases": ["completion"],
+        "role": "sensory_projection",
+        "policy": "_sensory_update_mask",
+        "scalar_paths": [["source_entity_uuid"], ["source_entity_name"], ["target_entity_uuid"], ["target_entity_name"], ["observer_uuid"], ["observer_position"], ["observer_position_changed"], ["cause_event_uuid"], ["update_reason"], ["sense_modes_changed"], ["passive_perception_changed"], ["passive_perception"], ["visual_access_changed"], ["visual_access"], ["paths_dirty"]],
+        "collection_paths": [["visible_cells_added"], ["visible_cells_removed"], ["seen_cells_added"], ["entity_contacts_changed"], ["entity_contacts_removed"], ["object_contacts_changed"], ["object_contacts_removed"], ["effective_light_levels_changed"], ["sense_modes"]],
+        "provenance_paths": [["observer_uuid"], ["observer_position"], ["visible_cells_added"], ["entity_contacts_changed"], ["object_contacts_changed"]],
+        "provenance_policy": "_no_provenance",
+        "formatter": "_format_sensory_update"
+      },
+      {
+        "class": "dnd.core.events.encounter_events.EncounterStartEvent",
+        "observed_phases": ["completion"],
+        "role": "encounter_start",
+        "policy": "_encounter_boundary_mask",
+        "scalar_paths": [["encounter_uuid"]],
+        "collection_paths": [["combatant_uuids"], ["initiative_order"]],
+        "provenance_paths": [["encounter_uuid"]],
+        "provenance_policy": "_no_provenance",
+        "formatter": "_format_encounter_start"
+      },
+      {
+        "class": "dnd.core.events.encounter_events.RoundStartEvent",
+        "observed_phases": ["completion"],
+        "role": "round_start",
+        "policy": "_round_boundary_mask",
+        "scalar_paths": [["encounter_uuid"], ["round_number"]],
+        "collection_paths": [],
+        "provenance_paths": [["encounter_uuid"], ["round_number"]],
+        "provenance_policy": "_no_provenance",
+        "formatter": "_format_round_start"
+      },
+      {
+        "class": "dnd.core.events.encounter_events.TurnStartEvent",
+        "observed_phases": ["declaration", "execution", "effect", "completion"],
+        "role": "turn_start",
+        "policy": "_turn_boundary_mask",
+        "scalar_paths": [["encounter_uuid"], ["entity_uuid"], ["round_number"], ["turn_index"]],
+        "collection_paths": [],
+        "provenance_paths": [["encounter_uuid"], ["entity_uuid"]],
+        "provenance_policy": "_no_provenance",
+        "formatter": "_format_turn_start"
+      },
+      {
+        "class": "dnd.actions.standard.MovementEvent",
+        "observed_phases": ["declaration", "execution", "effect", "completion"],
+        "role": "movement",
+        "policy": "_movement_action_mask",
+        "scalar_paths": [["start_position"], ["end_position"], ["requested_end_position"], ["objective_end_position"], ["path"], ["movement_mode"], ["trajectory"], ["termination_reason"], ["controller_revalidation"], ["controller_revalidation_reason"]],
+        "collection_paths": [["costs"]],
+        "provenance_paths": [["source_entity_uuid"], ["end_position"], ["objective_end_position"]],
+        "provenance_policy": "_movement_provenance",
+        "formatter": "_format_movement"
+      },
+      {
+        "class": "dnd.core.events.world_events.StepMovementEvent",
+        "observed_phases": ["effect", "completion"],
+        "role": "movement_step",
+        "policy": "_step_movement_mask",
+        "scalar_paths": [["source_entity_uuid"], ["source_entity_name"], ["target_entity_uuid"], ["target_entity_name"], ["committed"], ["trajectory"], ["from_position"], ["from_elevation_feet"], ["to_position"], ["to_elevation_feet"], ["disclosed_path"]],
+        "collection_paths": [],
+        "provenance_paths": [["source_entity_uuid"], ["from_position"], ["to_position"]],
+        "provenance_policy": "_step_movement_provenance",
+        "formatter": "_format_step"
+      },
+      {
+        "class": "dnd.actions.standard.AttackEvent",
+        "observed_phases": ["declaration", "execution", "effect", "completion"],
+        "role": "attack",
+        "policy": "_attack_mask",
+        "scalar_paths": [["weapon_slot"], ["range"], ["is_long_range"], ["is_threatened"], ["attack_outcome"], ["weapon_name"], ["override_ability"]],
+        "collection_paths": [["damage_types"]],
+        "provenance_paths": [["source_entity_uuid"], ["target_entity_uuid"], ["weapon_name"]],
+        "provenance_policy": "_no_provenance",
+        "formatter": "_format_attack"
+      },
+      {
+        "class": "dnd.core.events.resolution_events.AttackD20RollResultEvent",
+        "observed_phases": ["declaration", "effect", "completion"],
+        "role": "attack_resolution",
+        "policy": "_attack_roll_mask",
+        "scalar_paths": [["roll_type"], ["weapon_slot"], ["result"]],
+        "collection_paths": [],
+        "provenance_paths": [["source_entity_uuid"], ["target_entity_uuid"]],
+        "provenance_policy": "_no_provenance",
+        "formatter": "_format_attack_roll"
+      },
+      {
+        "class": "dnd.core.events.resolution_events.DamageRollResultEvent",
+        "observed_phases": ["declaration", "effect", "completion"],
+        "role": "damage_resolution",
+        "policy": "_damage_roll_mask",
+        "scalar_paths": [["roll_type"], ["weapon_slot"], ["attack_outcome"]],
+        "collection_paths": [["damage_packets"]],
+        "provenance_paths": [["source_entity_uuid"], ["target_entity_uuid"]],
+        "provenance_policy": "_no_provenance",
+        "formatter": "_format_damage_roll"
+      },
+      {
+        "class": "dnd.core.events.resolution_events.TakeDamageEvent",
+        "observed_phases": ["declaration", "execution", "effect", "completion"],
+        "role": "damage_application",
+        "policy": "_take_damage_mask",
+        "scalar_paths": [["total_damage"], ["final_damage"], ["normal_hit_point_damage_cap"], ["resulting_hp"], ["effect_id"]],
+        "collection_paths": [],
+        "provenance_paths": [["source_entity_uuid"], ["target_entity_uuid"], ["effect_id"]],
+        "provenance_policy": "_no_provenance",
+        "formatter": "_format_take_damage"
+      },
+      {
+        "class": "dnd.core.events.resolution_events.DamageAppliedEvent",
+        "observed_phases": ["declaration", "execution", "effect", "completion"],
+        "role": "damage_applied",
+        "policy": "_damage_applied_mask",
+        "scalar_paths": [["applied_damage"], ["normal_hit_point_damage"], ["temporary_hit_point_damage"], ["resulting_normal_hp"], ["resulting_temporary_hp"], ["damage_type"], ["effect_id"]],
+        "collection_paths": [],
+        "provenance_paths": [["source_entity_uuid"], ["target_entity_uuid"], ["effect_id"]],
+        "provenance_policy": "_no_provenance",
+        "formatter": "_format_damage_applied"
+      },
+      {
+        "class": "dnd.core.base_conditions.ConditionApplicationEvent",
+        "observed_phases": ["declaration", "execution", "effect", "completion"],
+        "role": "condition_application",
+        "policy": "_condition_lifecycle_mask",
+        "scalar_paths": [["source_entity_name"], ["target_entity_name"], ["resulting_ac"], ["resulting_max_hp"], ["application_disposition"], ["condition_behavior_id"]],
+        "collection_paths": [],
+        "provenance_paths": [["source_entity_uuid"], ["target_entity_uuid"], ["condition_behavior_id"]],
+        "provenance_policy": "_no_provenance",
+        "formatter": "_format_condition_application"
+      },
+      {
+        "class": "dnd.core.base_conditions.ConditionRemovalEvent",
+        "observed_phases": ["declaration", "execution", "effect", "completion"],
+        "role": "condition_removal",
+        "policy": "_condition_lifecycle_mask",
+        "scalar_paths": [["expired"], ["source_entity_name"], ["target_entity_name"], ["resulting_ac"], ["resulting_max_hp"], ["condition_behavior_id"]],
+        "collection_paths": [],
+        "provenance_paths": [["source_entity_uuid"], ["target_entity_uuid"], ["condition_behavior_id"]],
+        "provenance_policy": "_no_provenance",
+        "formatter": "_format_condition_removal"
+      },
+      {
+        "class": "dnd.actions.standard.SpellEvent",
+        "observed_phases": ["declaration", "execution", "effect", "completion"],
+        "role": "spell",
+        "policy": "_spell_action_mask",
+        "scalar_paths": [["spell_id"], ["spell_level"], ["cast_at_level"], ["spell_school"], ["verbal"], ["source_position"], ["area_geometry"], ["is_threatened"], ["save_ability"], ["save_dc"], ["save_success"], ["save_bonus"], ["aoe_shape_type"], ["aoe_radius_ft"], ["range_type"], ["range_ft"], ["projectile_type"]],
+        "collection_paths": [["damage_types"]],
+        "provenance_paths": [["source_entity_uuid"], ["target_entity_uuid"], ["source_position"]],
+        "provenance_policy": "_no_provenance",
+        "formatter": "_format_spell"
+      },
+      {
+        "class": "dnd.core.events.encounter_events.TurnEndEvent",
+        "observed_phases": ["declaration", "execution", "effect", "completion"],
+        "role": "turn_end",
+        "policy": "_turn_boundary_mask",
+        "scalar_paths": [["encounter_uuid"], ["entity_uuid"], ["round_number"], ["turn_index"], ["actions_used"], ["bonus_actions_used"], ["movement_used"]],
+        "collection_paths": [],
+        "provenance_paths": [["encounter_uuid"], ["entity_uuid"]],
+        "provenance_policy": "_no_provenance",
+        "formatter": "_format_turn_end"
+      },
+      {
+        "class": "dnd.core.events.encounter_events.RoundEndEvent",
+        "observed_phases": ["completion"],
+        "role": "round_end",
+        "policy": "_round_boundary_mask",
+        "scalar_paths": [["encounter_uuid"], ["round_number"]],
+        "collection_paths": [],
+        "provenance_paths": [["encounter_uuid"], ["round_number"]],
+        "provenance_policy": "_no_provenance",
+        "formatter": "_format_round_end"
+      },
+      {
+        "class": "dnd.core.events.encounter_events.EncounterEndEvent",
+        "observed_phases": ["completion"],
+        "role": "encounter_end",
+        "policy": "_encounter_boundary_mask",
+        "scalar_paths": [["encounter_uuid"], ["reason"]],
+        "collection_paths": [["combatant_uuids"]],
+        "provenance_paths": [["encounter_uuid"]],
+        "provenance_policy": "_no_provenance",
+        "formatter": "_format_encounter_end"
+      }
+    ]
+  },
+  "validation": {
+    "cold_reset_runs": [
+      {
+        "source_base": 31,
+        "source_stop": 141,
+        "accepted_ranges": 18,
+        "delivery_count": 105,
+        "maximum_queue_high_water": 6,
+        "maximum_engine_lead": 38,
+        "tree_batch_count": 18
+      },
+      {
+        "source_base": 31,
+        "source_stop": 141,
+        "accepted_ranges": 18,
+        "delivery_count": 105,
+        "maximum_queue_high_water": 6,
+        "maximum_engine_lead": 38,
+        "tree_batch_count": 18
+      }
+    ],
+    "cold_reset_structure_equal": true,
+    "full_detached_replay": {
+      "cold_reset_runs": [
+        {
+          "source_base": 0,
+          "source_stop": 244,
+          "callback_range_count": 45,
+          "coverage_slots": 244,
+          "formatted_delivery_count": 248,
+          "tree_batch_count": 1,
+          "archive_count": 1
+        },
+        {
+          "source_base": 0,
+          "source_stop": 244,
+          "callback_range_count": 45,
+          "coverage_slots": 244,
+          "formatted_delivery_count": 248,
+          "tree_batch_count": 1,
+          "archive_count": 1
+        }
+      ],
+      "cold_reset_structure_equal": true,
+      "fatal_live_accessors_after_capture": "Entity.get, EventQueue.get_event_by_uuid, and gridmap_module.get_map",
+      "exact_public_fixture": "tests/engine/test_event_knowledge_scripted_encounter.py::test_full_public_encounter_replays_and_consumes_detached_batches_deterministically"
+    },
+    "manifest_row_gate": "20/20 live _CONCRETE_EVENT_MANIFEST rows exact; zero missing/extra classes; selector, scalar/collection paths, provenance, and formatter callables match",
+    "focused_async": "1 passed in 4.81s",
+    "focused_event_knowledge_sensory_architecture": "152 passed in 54.48s (historical proportional lane retained)",
+    "context_module": "51 passed in 6.37s",
+    "event_knowledge_modules": "54 passed in 9.93s",
+    "architecture": "57 passed in 38.50s",
+    "pyright": "0 errors, 0 warnings, 0 informations on all seven E3-E6 surfaces",
+    "compileall": "exit 0 on all seven E3-E6 surfaces",
+    "diff_check": "exit 0; pre-existing LF/CRLF normalization warning for dnd/blocks/sensory.py only",
+    "detached_consumer": "pass; fatal live Entity/EventQueue/GridMap stubs active after capture",
+    "async_static_gate": "exactly two asyncio.Queue constructors; no dynamic import, sleep, timeout API, thread, server/pygame, raw snapshot, CombatLogEntry, or extra queue/bus path",
+    "receipt_gate": "duplicate, coverage-gap, overlap, backwards, and wrong-generation receipts rejected",
+    "scope_gate": "7/7 governed active members present and current; no excluded surface member"
+  },
+  "exclusions": [
+    "DND_EVENT_KNOWLEDGE_CONTEXT_E3_E6_IMPLEMENTATION_PLAN_2026-08-27.md",
+    "DND_EVENT_KNOWLEDGE_CONTEXT_REDUCTION_PLAN_2026-08-27.md",
+    "DND_EVENT_KNOWLEDGE_CONTEXT_IMPLEMENTATION_PLAN_2026-08-27.md",
+    "DND_PYGAME_SCRIPTED_ENCOUNTER_MVP_IMPLEMENTATION_PLAN_2026-08-27.md",
+    "DND_EVENT_KNOWLEDGE_CONTEXT_E3_E6_IMPLEMENTATION_LEDGER_2026-08-27.md",
+    "DND_EVENT_KNOWLEDGE_CONTEXT_E3_E6_IMPLEMENTATION_MANIFEST_2026-08-27.json",
+    "server/ and deprecated-server/",
+    "SDK, transport, TypeScript, renderer, pygame, assets, editor, save, persistence, networking, and game/",
+    "content-authoring and unrelated dirty work"
+  ]
+}

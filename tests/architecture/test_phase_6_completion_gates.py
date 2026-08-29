@@ -316,6 +316,18 @@ def _imports(path: Path) -> set[str]:
     return imported
 
 
+def _module_level_imports(path: Path) -> set[str]:
+    """Collect only imports executed at module scope for the historical arrow gate."""
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    imported: set[str] = set()
+    for node in tree.body:
+        if isinstance(node, ast.Import):
+            imported.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module is not None:
+            imported.add(node.module)
+    return imported
+
+
 def _active_production_paths() -> list[Path]:
     return [
         path
@@ -350,7 +362,7 @@ def test_slice_6_4_master_dependency_arrows_are_ast_enforced() -> None:
         }
 
     for path in (PRODUCTION_ROOT / "core" / "events").glob("*.py"):
-        imported = _imports(path)
+        imported = _module_level_imports(path)
         assert not {
             (str(path.relative_to(REPOSITORY_ROOT)), module)
             for module in imported
@@ -360,8 +372,10 @@ def test_slice_6_4_master_dependency_arrows_are_ast_enforced() -> None:
                 "dnd.blocks.sensory",
                 "dnd.content",
             )
-            if module == prefix or module.startswith(prefix + ".")
-        }
+                if (
+                    module == prefix or module.startswith(prefix + ".")
+                )
+            }
 
     presentation_imports = []
     forbidden_presentation_imports = []

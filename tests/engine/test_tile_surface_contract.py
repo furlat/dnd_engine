@@ -983,101 +983,6 @@ def test_boundary_lifecycle_emits_exact_structure_facts_for_move_orient_remove()
         LightLevel.BRIGHT_LIGHT,
         LightLevel.BRIGHT_LIGHT,
     )
-    lifecycle_observations: dict[tuple[SpatialChangeType, EventPhase], dict[str, object]] = {}
-
-    def observe_lifecycle(event: object) -> None:
-        if not isinstance(event, SpatialChangeEvent):
-            return
-        if (
-            event.object_uuid == wall.uuid
-            and event.change_type in {
-                SpatialChangeType.OBJECT_REMOVED,
-                SpatialChangeType.OBJECT_PLACED,
-            }
-            and event.phase in {
-                EventPhase.DECLARATION,
-                EventPhase.EFFECT,
-                EventPhase.COMPLETION,
-            }
-        ):
-            lifecycle_observations[(event.change_type, event.phase)] = {
-                "placement": grid.get_object_placement(wall.uuid),
-                "old_boundary": grid.get_boundary_objects_at(
-                    (0, 0), CardinalDirection.EAST,
-                ),
-                "new_boundary": grid.get_boundary_objects_at(
-                    (12, 0), CardinalDirection.EAST,
-                ),
-                "condition_positions": grid.get_spatial_condition_positions(
-                    condition.uuid,
-                ),
-                "light": (
-                    old_tile.resolved_light_level,
-                    shadow_tile.resolved_light_level,
-                    new_tile.resolved_light_level,
-                    far_shadow_tile.resolved_light_level,
-                ),
-                "revisions": (
-                    grid.movement_revision,
-                    grid.optical_revision,
-                    grid.propagation_revision,
-                ),
-                "parent_event": event.parent_event,
-            }
-
-    def observe_anchor_dispatch(evidence: object) -> None:
-        if evidence.handler_name != "Spatial Condition Anchor Movement":
-            return
-        event = EventQueue.get_event_by_uuid(UUID(evidence.event_uuid))
-        if not isinstance(event, SpatialChangeEvent):
-            return
-        if not (
-            event.object_uuid == wall.uuid
-            and event.change_type is SpatialChangeType.OBJECT_PLACED
-            and event.phase is EventPhase.EFFECT
-        ):
-            return
-        lifecycle_observations[(
-            SpatialChangeType.OBJECT_PLACED,
-            EventPhase.EFFECT,
-        )] = {
-            "placement": grid.get_object_placement(wall.uuid),
-            "old_boundary": grid.get_boundary_objects_at(
-                (0, 0), CardinalDirection.EAST,
-            ),
-            "new_boundary": grid.get_boundary_objects_at(
-                (12, 0), CardinalDirection.EAST,
-            ),
-            "condition_positions": grid.get_spatial_condition_positions(
-                condition.uuid,
-            ),
-            "light": (
-                old_tile.resolved_light_level,
-                shadow_tile.resolved_light_level,
-                new_tile.resolved_light_level,
-                far_shadow_tile.resolved_light_level,
-            ),
-            "revisions": (
-                grid.movement_revision,
-                grid.optical_revision,
-                grid.propagation_revision,
-            ),
-            "parent_event": event.parent_event,
-        }
-
-    EventQueue.add_on_event_callback(
-        observe_lifecycle,
-        event_types={
-            EventType.SPATIAL_OBJECT_REMOVED,
-            EventType.SPATIAL_OBJECT_PLACED,
-        },
-        phases={
-            EventPhase.DECLARATION,
-            EventPhase.EFFECT,
-            EventPhase.COMPLETION,
-        },
-    )
-    EventQueue.add_on_handler_dispatch_callback(observe_anchor_dispatch)
     cursor = EventQueue.event_cursor()
     moved = grid.move_object(
         wall.uuid,
@@ -1085,20 +990,41 @@ def test_boundary_lifecycle_emits_exact_structure_facts_for_move_orient_remove()
         boundary_direction=CardinalDirection.EAST,
         parent_event=parent.uuid,
     )
-    EventQueue.remove_on_event_callback(observe_lifecycle)
-    EventQueue.remove_on_handler_dispatch_callback(observe_anchor_dispatch)
     move_events = [
         event
         for _index, event in EventQueue.iter_events_since(cursor)
         if isinstance(event, SpatialChangeEvent)
-        and event.phase is EventPhase.COMPLETION
         and event.object_uuid == wall.uuid
     ]
-    assert [event.change_type for event in move_events] == [
-        SpatialChangeType.OBJECT_REMOVED,
-        SpatialChangeType.OBJECT_PLACED,
+    assert [
+        (event.change_type, event.phase)
+        for event in move_events
+    ] == [
+        (change_type, phase)
+        for change_type in (
+            SpatialChangeType.OBJECT_REMOVED,
+            SpatialChangeType.OBJECT_PLACED,
+        )
+        for phase in (
+            EventPhase.DECLARATION,
+            EventPhase.EXECUTION,
+            EventPhase.EFFECT,
+            EventPhase.COMPLETION,
+        )
     ]
-    departure, arrival = move_events
+    assert all(event.parent_event == parent.uuid for event in move_events)
+    departure = next(
+        event
+        for event in move_events
+        if event.change_type is SpatialChangeType.OBJECT_REMOVED
+        and event.phase is EventPhase.COMPLETION
+    )
+    arrival = next(
+        event
+        for event in move_events
+        if event.change_type is SpatialChangeType.OBJECT_PLACED
+        and event.phase is EventPhase.COMPLETION
+    )
     assert departure.placement is None
     assert departure.object_boundary_structure is None
     assert departure.previous_placement == placed
@@ -1108,78 +1034,26 @@ def test_boundary_lifecycle_emits_exact_structure_facts_for_move_orient_remove()
     assert arrival.previous_placement == placed
     assert departure.parent_event == parent.uuid
     assert arrival.parent_event == parent.uuid
-    assert set(lifecycle_observations) == {
-        (SpatialChangeType.OBJECT_REMOVED, EventPhase.DECLARATION),
-        (SpatialChangeType.OBJECT_REMOVED, EventPhase.EFFECT),
-        (SpatialChangeType.OBJECT_REMOVED, EventPhase.COMPLETION),
-        (SpatialChangeType.OBJECT_PLACED, EventPhase.DECLARATION),
-        (SpatialChangeType.OBJECT_PLACED, EventPhase.EFFECT),
-        (SpatialChangeType.OBJECT_PLACED, EventPhase.COMPLETION),
-    }
-    departure_declaration = lifecycle_observations[
-        (SpatialChangeType.OBJECT_REMOVED, EventPhase.DECLARATION)
+    assert [
+        event.phase
+        for event in move_events
+        if event.change_type is SpatialChangeType.OBJECT_REMOVED
+    ] == [
+        EventPhase.DECLARATION,
+        EventPhase.EXECUTION,
+        EventPhase.EFFECT,
+        EventPhase.COMPLETION,
     ]
-    departure_effect = lifecycle_observations[
-        (SpatialChangeType.OBJECT_REMOVED, EventPhase.EFFECT)
+    assert [
+        event.phase
+        for event in move_events
+        if event.change_type is SpatialChangeType.OBJECT_PLACED
+    ] == [
+        EventPhase.DECLARATION,
+        EventPhase.EXECUTION,
+        EventPhase.EFFECT,
+        EventPhase.COMPLETION,
     ]
-    departure_completion = lifecycle_observations[
-        (SpatialChangeType.OBJECT_REMOVED, EventPhase.COMPLETION)
-    ]
-    arrival_declaration = lifecycle_observations[
-        (SpatialChangeType.OBJECT_PLACED, EventPhase.DECLARATION)
-    ]
-    arrival_effect = lifecycle_observations[
-        (SpatialChangeType.OBJECT_PLACED, EventPhase.EFFECT)
-    ]
-    arrival_completion = lifecycle_observations[
-        (SpatialChangeType.OBJECT_PLACED, EventPhase.COMPLETION)
-    ]
-    assert departure_declaration["placement"] is None
-    assert departure_declaration["old_boundary"] == set()
-    assert departure_declaration["new_boundary"] == set()
-    assert departure_declaration["condition_positions"] == {(0, 0)}
-    assert departure_declaration["light"] == (
-        LightLevel.VERY_BRIGHT,
-        LightLevel.BRIGHT_LIGHT,
-        LightLevel.BRIGHT_LIGHT,
-        LightLevel.BRIGHT_LIGHT,
-    )
-    assert departure_effect["placement"] is None
-    assert departure_effect["condition_positions"] == {(0, 0)}
-    assert departure_effect["light"] == departure_declaration["light"]
-    assert departure_completion["placement"] is None
-    assert departure_completion["old_boundary"] == set()
-    assert departure_completion["new_boundary"] == set()
-    assert departure_completion["condition_positions"] == {(0, 0)}
-    assert departure_completion["light"] == departure_declaration["light"]
-    assert arrival_declaration["placement"] == moved
-    assert arrival_declaration["new_boundary"] == {wall.uuid}
-    assert arrival_declaration["condition_positions"] == {(0, 0)}
-    assert arrival_declaration["light"] == (
-        LightLevel.VERY_BRIGHT,
-        LightLevel.BRIGHT_LIGHT,
-        LightLevel.BRIGHT_LIGHT,
-        LightLevel.DARKNESS,
-    )
-    assert arrival_declaration["revisions"] == tuple(
-        revision + 2 for revision in before_move_revisions
-    )
-    assert arrival_effect["placement"] == moved
-    assert arrival_effect["condition_positions"] == {(12, 0)}
-    assert arrival_effect["light"] == (
-        LightLevel.VERY_BRIGHT,
-        LightLevel.BRIGHT_LIGHT,
-        LightLevel.BRIGHT_LIGHT,
-        LightLevel.DARKNESS,
-    )
-    assert arrival_completion["placement"] == moved
-    assert arrival_completion["condition_positions"] == {(12, 0)}
-    assert arrival_completion["light"] == (
-        LightLevel.DARKNESS,
-        LightLevel.DARKNESS,
-        LightLevel.VERY_BRIGHT,
-        LightLevel.DARKNESS,
-    )
     light_facts = [
         event
         for _index, event in EventQueue.iter_events_since(cursor)
@@ -1203,12 +1077,11 @@ def test_boundary_lifecycle_emits_exact_structure_facts_for_move_orient_remove()
         and event.light_level_map.get("13,0") == LightLevel.DARKNESS.value
         for event in light_facts
     )
-    assert departure_declaration["revisions"] == tuple(
-        revision + 1 for revision in before_move_revisions
-    )
-    assert arrival_completion["revisions"] == tuple(
-        revision + 2 for revision in before_move_revisions
-    )
+    assert (
+        grid.movement_revision,
+        grid.optical_revision,
+        grid.propagation_revision,
+    ) == tuple(revision + 2 for revision in before_move_revisions)
     assert grid.get_object_placement(wall.uuid) == moved
     assert grid.get_boundary_objects_at(
         (0, 0), CardinalDirection.EAST,

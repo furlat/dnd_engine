@@ -53,6 +53,7 @@ from dnd.core.base_conditions import (
 )
 from dnd.core.content.identities import ContentRef
 from dnd.types.behaviors import RuntimeBehaviorKind
+from dnd.types.conditions import ConditionRemovalTrigger
 from dnd.types.rolls import AttackOutcome, RollType
 from dnd.core.dice import Dice
 from dnd.core.events.resolution_events import (
@@ -69,9 +70,6 @@ from dnd.core.events.events_registry import (
     EventQueue,
     EventType,
     Trigger,
-)
-from dnd.core.events.encounter_events import (
-    LifeStateChangeEvent,
 )
 from dnd.core.events.world_events import (
     SpatialChangeEvent,
@@ -90,7 +88,6 @@ from dnd.core.values import ModifiableValue
 from dnd.entities.entity import Entity
 from dnd.classes.barbarian import RecklessAttack
 from dnd.types.conditions import ConditionAgencyDenial, ConditionCategory, DurationType
-from dnd.types.life import LifeState
 from dnd.types.spatial_effects import SpatialEffectTriggerKind
 from dnd.content.spatial_effect_materialization import (
     materialize_spatial_condition,
@@ -1468,6 +1465,12 @@ class LeadershipAura(AreaCondition):
             "player-visible rules state."
         ),
     )
+    removal_triggers: frozenset[ConditionRemovalTrigger] = Field(
+        default_factory=lambda: frozenset({ConditionRemovalTrigger.SOURCE_LEFT_PLAY}),
+        description=(
+            "Retires when its source transitions from ALIVE to any non-ALIVE state."
+        ),
+    )
     zone_shape: str = Field(default="sphere", description="Aura shape.")
     zone_radius_feet: int = Field(default=30, description="Aura radius.")
     _membership_condition_uuids: Dict[UUID, UUID] = PrivateAttr(
@@ -1648,12 +1651,7 @@ class LeadershipAura(AreaCondition):
                 and event.condition.agency_denial
                 is ConditionAgencyDenial.FULL_TURN
             )
-            source_left_play = (
-                isinstance(event, LifeStateChangeEvent)
-                and event.entity_uuid == leader_uuid
-                and event.new_state is not LifeState.ALIVE
-            )
-            if not source_lost_agency and not source_left_play:
+            if not source_lost_agency:
                 return None
             condition = BaseCondition.get(condition_uuid)
             if isinstance(condition, LeadershipAura):
@@ -1668,11 +1666,6 @@ class LeadershipAura(AreaCondition):
                     event_type=EventType.CONDITION_APPLICATION,
                     event_phase=EventPhase.EFFECT,
                     event_target_entity_uuid=leader_uuid,
-                ),
-                Trigger(
-                    event_type=EventType.LIFE_STATE_CHANGE,
-                    event_phase=EventPhase.EFFECT,
-                    event_source_entity_uuid=leader_uuid,
                 ),
             ],
             event_processor=retire_when_source_loses_agency,

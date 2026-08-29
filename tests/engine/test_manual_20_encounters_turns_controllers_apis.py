@@ -101,7 +101,6 @@ class OneAttackController(Controller):
 def reset_runtime_tutorial_state(width: int = 16, height: int = 10) -> None:
     """Clear global runtime state and create a rectangular tutorial arena."""
     reset_combat_state()
-    EventQueue.set_combat_log_callback(None)
     EventQueue.set_perceiver_computer(None)
     EventQueue.set_revealed_computer(None)
     BaseObject._registry.clear()
@@ -109,7 +108,6 @@ def reset_runtime_tutorial_state(width: int = 16, height: int = 10) -> None:
     BaseBlock._registry.clear()
     Controller.clear_registry()
     Encounter.clear_registry()
-    Encounter._combat_log_listeners.clear()
     event_stream.ensure_attached()
     event_stream._clear_source_journal()
     sim.reset()
@@ -234,8 +232,8 @@ def player_replication_after(
     return current_response.json(), frames_response.json(), logs_response.json()
 
 
-def test_encounter_start_and_end_own_runtime_callbacks() -> None:
-    """Encounter start and end own active state, callbacks, and controller notices."""
+def test_encounter_start_and_end_own_runtime_state() -> None:
+    """Encounter start and end own active state and controller notices."""
     reset_runtime_tutorial_state()
     hero, monster = create_runtime_pair()
     hero_controller = RecordingController(source_entity_uuid=hero.uuid)
@@ -250,7 +248,6 @@ def test_encounter_start_and_end_own_runtime_callbacks() -> None:
     assert encounter.initiative_order == [hero.uuid, monster.uuid]
     assert hero_controller.encounter_start_names == ["Runtime Hero"]
     assert monster_controller.encounter_start_names == ["Runtime Skeleton"]
-    assert EventQueue._combat_log_callback == encounter._on_event_combat_log
     assert EventQueue._perceiver_computer is not None
     assert EventQueue._revealed_computer is not None
 
@@ -261,7 +258,6 @@ def test_encounter_start_and_end_own_runtime_callbacks() -> None:
     assert Encounter.get_active() is None
     assert hero_controller.encounter_end_names == ["Runtime Hero"]
     assert monster_controller.encounter_end_names == ["Runtime Skeleton"]
-    assert EventQueue._combat_log_callback is None
     assert EventQueue._perceiver_computer is None
     assert EventQueue._revealed_computer is None
 
@@ -335,7 +331,7 @@ def test_advance_until_external_boundary_runs_autonomous_turns() -> None:
     assert encounter.combatants[monster.uuid].turn_count == 1
 
 
-def test_controller_run_turn_executes_actions_and_combat_log_listeners() -> None:
+def test_controller_run_turn_projects_combat_log_from_terminal_facts() -> None:
     """Encounter-run controller actions are captured in the combat log."""
     reset_runtime_tutorial_state()
     hero, monster = create_runtime_pair()
@@ -347,27 +343,18 @@ def test_controller_run_turn_executes_actions_and_combat_log_listeners() -> None
         PassController(source_entity_uuid=monster.uuid),
         hero,
     )
-    listener_calls: list[tuple[int, str]] = []
-
-    def listener(active: Encounter, index: int, entry, event) -> None:
-        listener_calls.append((index, entry.entry_type.value))
-
     force_uuid = force_attack_hit(hero)
     starting_hp = get_hp(monster)
-    Encounter.add_combat_log_listener(listener)
     try:
         end_event = encounter.run_turn()
     finally:
         remove_attack_modifier(hero, force_uuid)
-        Encounter.remove_combat_log_listener(listener)
 
     assert end_event is not None
     assert controller.used
     assert get_hp(monster) < starting_hp
     assert encounter.combat_log
-    assert listener_calls
-    assert listener_calls[-1][0] == len(encounter.combat_log) - 1
-    assert encounter.get_combat_log(since=listener_calls[-1][0])[0] is encounter.combat_log[-1]
+    assert encounter.get_combat_log(since=len(encounter.combat_log) - 1)[0] is encounter.combat_log[-1]
 
 
 def test_lethal_damage_commits_death_and_ends_by_faction_survival() -> None:

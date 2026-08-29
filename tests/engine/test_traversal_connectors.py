@@ -1159,19 +1159,6 @@ def test_connector_and_step_noop_effect_handlers_publish_one_version_per_phase()
         faction="heroes",
     )
     Entity.materialize_all_navigation(max_distance=20)
-    immediate = []
-    sequences = []
-    batches = []
-
-    def capture_event(event: Event) -> None:
-        immediate.append(event)
-
-    def capture_sequence(events) -> None:
-        sequences.append(tuple(events))
-
-    def capture_batch(events) -> None:
-        batches.append(tuple(events))
-
     for name, event_type in (
         ("No-op connector root EFFECT", EventType.MOVEMENT),
         ("No-op connector Step EFFECT", EventType.STEP_MOVEMENT),
@@ -1187,16 +1174,14 @@ def test_connector_and_step_noop_effect_handlers_publish_one_version_per_phase()
             event_processor=lambda event, _source: event,
         ))
 
-    EventQueue.add_on_event_callback(capture_event)
-    EventQueue.add_on_event_sequence_callback(capture_sequence)
-    EventQueue.add_on_event_batch_callback(capture_batch)
+    cursor = EventQueue.event_cursor()
     row = _connector_row(actor)
-    try:
-        result = execute_available_action(actor, row, row.valid_targets[0])
-    finally:
-        EventQueue.remove_on_event_callback(capture_event)
-        EventQueue.remove_on_event_sequence_callback(capture_sequence)
-        EventQueue.remove_on_event_batch_callback(capture_batch)
+    result = execute_available_action(actor, row, row.valid_targets[0])
+
+    immediate = [
+        event
+        for _index, event in EventQueue.iter_events_since(cursor)
+    ]
 
     assert type(result) is TraverseConnectorEvent
     expected_phases = [
@@ -1222,23 +1207,18 @@ def test_connector_and_step_noop_effect_handlers_publish_one_version_per_phase()
     step_lineage = step_versions[0].lineage_uuid
     assert [event.phase for event in step_versions] == expected_phases
 
-    for observed in (
-        immediate,
-        [event for sequence in sequences for event in sequence],
-        [event for batch in batches for event in batch],
-    ):
-        assert [
-            event.phase
-            for event in observed
-            if type(event) is TraverseConnectorEvent
-            and event.lineage_uuid == result.lineage_uuid
-        ] == expected_phases
-        assert [
-            event.phase
-            for event in observed
-            if type(event) is StepMovementEvent
-            and event.lineage_uuid == step_lineage
-        ] == expected_phases
+    assert [
+        event.phase
+        for event in immediate
+        if type(event) is TraverseConnectorEvent
+        and event.lineage_uuid == result.lineage_uuid
+    ] == expected_phases
+    assert [
+        event.phase
+        for event in immediate
+        if type(event) is StepMovementEvent
+        and event.lineage_uuid == step_lineage
+    ] == expected_phases
 
 
 def test_connector_and_step_child_emission_preserve_noop_parent_lifecycles() -> None:

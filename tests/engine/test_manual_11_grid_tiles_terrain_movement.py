@@ -41,7 +41,6 @@ from tests.engine.support import create_test_entity, reset_combat_state
 def reset_world_state(width: int = 8, height: int = 8) -> None:
     """Clear global state and create a rectangular floor arena."""
     reset_combat_state()
-    EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
     BaseValue._registry.clear()
     BaseBlock._registry.clear()

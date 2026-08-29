@@ -25,7 +25,6 @@ from tests.engine.support import reset_combat_state
 def reset_condition_state() -> None:
     """Clear global state touched by condition tutorial examples."""
     reset_combat_state()
-    EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
     BaseValue._registry.clear()
     BaseBlock._registry.clear()

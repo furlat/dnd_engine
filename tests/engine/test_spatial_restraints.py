@@ -8,7 +8,7 @@ from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
 from dnd.conditions import Restrained
 from dnd.core.base_conditions import BaseCondition
-from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
+from dnd.core.combat_log import CombatLogEntryType
 from dnd.core.dice import fixed_dice_faces
 from dnd.types.abilities import AbilityName
 from dnd.core.events.check_events import (
@@ -51,7 +51,6 @@ from tests.engine.support import create_test_entity, get_hp
 
 def _reset(width: int = 18, height: int = 18) -> None:
     reset_engine_runtime(grid_size=(width, height))
-    EventQueue.set_combat_log_callback(None)
 
 
 def _actor(
@@ -156,14 +155,6 @@ def test_entangle_uses_raw_strength_escape_and_exact_effect_cleanup() -> None:
     target = _actor("Target", (5, 5), "monsters")
     _penalize_save(target, "strength")
     Entity.materialize_all_navigation(max_distance=90)
-    captured_logs: list[CombatLogEntry] = []
-    EventQueue.set_combat_log_callback(
-        lambda event: (
-            captured_logs.append(event.combat_log)
-            if event.combat_log is not None
-            else None
-        ),
-    )
 
     with fixed_dice_faces(1):
         result = Entangle(
@@ -226,10 +217,11 @@ def test_entangle_uses_raw_strength_escape_and_exact_effect_cleanup() -> None:
     assert len(ability_checks) == 1
     assert ability_checks[0].ability_name == "strength"
     assert ability_checks[0].dc == membership.check_dc
-    assert captured_logs[-1].entry_type == CombatLogEntryType.ACTION
+    assert escape_result.combat_log is not None
+    assert escape_result.combat_log.entry_type == CombatLogEntryType.ACTION
     assert any(
         entry.entry_type == CombatLogEntryType.ABILITY_CHECK
-        for entry in captured_logs[-1].sub_entries
+        for entry in escape_result.combat_log.sub_entries
     )
 
     caster.remove_condition("Concentrating")

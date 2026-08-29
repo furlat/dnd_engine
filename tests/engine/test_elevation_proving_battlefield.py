@@ -125,10 +125,17 @@ def test_elevation_proving_battlefield_cold_layout_matches_runtime() -> None:
     assert set(landing_hazard.affected_positions) == {(11, 9)}
     events = EventQueue.get_events_chronological()
     assert events[0].event_type is EventType.WORLD_INITIALIZED
-    assert sum(
-        event.event_type is EventType.WORLD_INITIALIZED
+    world_versions = [
+        event
         for event in events
-    ) == 1
+        if event.event_type is EventType.WORLD_INITIALIZED
+    ]
+    assert [event.phase for event in world_versions] == [
+        EventPhase.DECLARATION,
+        EventPhase.EXECUTION,
+        EventPhase.EFFECT,
+        EventPhase.COMPLETION,
+    ]
     assert any(
         event.event_type is EventType.CONDITION_APPLICATION
         for event in events[1:]

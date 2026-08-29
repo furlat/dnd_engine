@@ -16,9 +16,9 @@ from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
 from dnd.core.base_block import BaseBlock
+from dnd.core.base_conditions import ConditionRemovalEvent
 from dnd.core.base_object import BaseObject
 from dnd.core.combat_log import (
-    CombatLogEntry,
     CombatLogEntryType,
     SpellInterruptionLogData,
 )
@@ -53,7 +53,6 @@ from tests.engine.support import create_test_entity
 def reset_counterspell_state(*, width: int = 40, height: int = 8) -> None:
     """Reset global registries and create a deterministic Counterspell grid."""
     reset_combat_state()
-    EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
     BaseValue._registry.clear()
@@ -99,22 +98,11 @@ def test_counterspell_spends_both_casters_resources_and_records_one_cancel() -> 
     counterspeller = create_counterspell_caster("Abjurer", (6, 2), "monsters", {3: 1})
     register_counterspell_reaction(counterspeller)
     Entity.materialize_all_navigation()
-    combat_logs: list[CombatLogEntry] = []
-
-    def capture_combat_log(log_event: Event) -> None:
-        if log_event.combat_log is not None:
-            combat_logs.append(log_event.combat_log)
-
-    EventQueue.set_combat_log_callback(capture_combat_log)
-
-    try:
-        event = MagicMissile(
-            source_entity_uuid=caster.uuid,
-            target_entity_uuid=counterspeller.uuid,
-            template=False,
-        ).apply()
-    finally:
-        EventQueue.set_combat_log_callback(None)
+    event = MagicMissile(
+        source_entity_uuid=caster.uuid,
+        target_entity_uuid=counterspeller.uuid,
+        template=False,
+    ).apply()
 
     assert isinstance(event, SpellEvent)
     assert event.canceled
@@ -135,8 +123,11 @@ def test_counterspell_spends_both_casters_resources_and_records_one_cancel() -> 
     ]
     assert [row.uuid for row in cancel_versions] == [event.uuid]
     assert len(EventQueue._all_events) == len({row.uuid for row in EventQueue._all_events})
+    assert event.combat_log is not None
     interruption_logs = [
-        log for log in combat_logs if log.entry_type is CombatLogEntryType.SPELL_INTERRUPTION
+        log
+        for log in event.combat_log.sub_entries
+        if log.entry_type is CombatLogEntryType.SPELL_INTERRUPTION
     ]
     assert len(interruption_logs) == 1
     assert interruption_logs[0].source_uuid == str(counterspeller.uuid)
@@ -282,38 +273,6 @@ def test_counterspell_evidence_mutation_fails_closed_before_resource_commit(
     )
     register_counterspell_reaction(counterspeller)
     Entity.materialize_all_navigation()
-    combat_logs: list[CombatLogEntry] = []
-    observed_reactions: list[
-        tuple[
-            type[CounterspellReactionEvent],
-            EventPhase,
-            bool,
-            EventPhase | None,
-            int,
-            str | None,
-        ]
-    ] = []
-
-    def capture_reaction(event: Event) -> None:
-        if isinstance(event, CounterspellReactionEvent):
-            observed_reactions.append(
-                (
-                    type(event),
-                    event.phase,
-                    event.canceled,
-                    event.canceled_from_phase,
-                    event.counterspell_slot_level,
-                    event.reaction_behavior_id,
-                ),
-            )
-
-    EventQueue.add_on_event_callback(capture_reaction)
-    EventQueue.set_combat_log_callback(
-        lambda event: combat_logs.append(event.combat_log)
-        if event.combat_log is not None
-        else None
-    )
-
     def rewrite_evidence(
         event: Event,
         _handler_source_uuid,
@@ -371,24 +330,25 @@ def test_counterspell_evidence_mutation_fails_closed_before_resource_commit(
         )
     )
 
-    try:
-        event = FireBolt(
-            source_entity_uuid=caster.uuid,
-            target_entity_uuid=counterspeller.uuid,
-            template=False,
-        ).apply()
-    finally:
-        EventQueue.set_combat_log_callback(None)
-        EventQueue.remove_on_event_callback(capture_reaction)
+    cursor = EventQueue.event_cursor()
+    event = FireBolt(
+        source_entity_uuid=caster.uuid,
+        target_entity_uuid=counterspeller.uuid,
+        template=False,
+    ).apply()
 
     assert isinstance(event, SpellEvent)
     assert event.phase is EventPhase.COMPLETION
     assert not event.canceled
     assert counterspeller.action_economy.reactions.normalized_score == 1
     assert counterspeller.action_economy.spell_slot_3.normalized_score == 1
+    emitted_events = [
+        row
+        for _, row in EventQueue.iter_events_since(cursor)
+    ]
     reaction_versions = [
         row
-        for row in EventQueue._all_events
+        for row in emitted_events
         if isinstance(row, CounterspellReactionEvent)
     ]
     declaration = next(
@@ -430,6 +390,17 @@ def test_counterspell_evidence_mutation_fails_closed_before_resource_commit(
                 declaration,
                 field_name,
             )
+    observed_reactions = [
+        (
+            type(row),
+            row.phase,
+            row.canceled,
+            row.canceled_from_phase,
+            row.counterspell_slot_level,
+            row.reaction_behavior_id,
+        )
+        for row in reaction_versions
+    ]
     assert observed_reactions
     assert all(
         row_type is CounterspellReactionEvent
@@ -461,9 +432,13 @@ def test_counterspell_evidence_mutation_fails_closed_before_resource_commit(
             reaction_identity,
         ) in observed_reactions
     )
-    assert not any(
-        log.entry_type is CombatLogEntryType.SPELL_INTERRUPTION
-        for log in combat_logs
+    assert event.combat_log is None or (
+        event.combat_log.entry_type
+        is not CombatLogEntryType.SPELL_INTERRUPTION
+        and not any(
+            entry.entry_type is CombatLogEntryType.SPELL_INTERRUPTION
+            for entry in event.combat_log.sub_entries
+        )
     )
 
 
@@ -593,6 +568,7 @@ def test_counterspell_consumes_quickened_override_after_committed_cast() -> None
     assert isinstance(quickened_template, SpellAction)
     assert quickened_template.effective_costs[0].cost_type == "bonus_actions"
 
+    cursor = EventQueue.event_cursor()
     interrupted = quickened_template.instantiate(
         end_position=counterspeller.position,
     ).apply()
@@ -604,6 +580,31 @@ def test_counterspell_consumes_quickened_override_after_committed_cast() -> None
     assert caster.action_economy.actions.normalized_score == 1
     assert caster.action_economy.bonus_actions.normalized_score == 0
     assert "MetamagicActive" not in caster.active_conditions
+    emitted = [row for _, row in EventQueue.iter_events_since(cursor)]
+    declaration = next(
+        row
+        for row in emitted
+        if isinstance(row, SpellEvent)
+        and row.lineage_uuid == interrupted.lineage_uuid
+        and row.phase is EventPhase.DECLARATION
+    )
+    removals = [
+        row
+        for row in emitted
+        if isinstance(row, ConditionRemovalEvent)
+        and row.condition.name == "MetamagicActive"
+    ]
+    reactions = [
+        row
+        for row in emitted
+        if isinstance(row, CounterspellReactionEvent)
+    ]
+    assert removals
+    assert removals[-1].phase is EventPhase.COMPLETION
+    assert all(row.parent_event == declaration.uuid for row in removals)
+    assert reactions
+    assert emitted.index(removals[-1]) < emitted.index(reactions[0])
+    assert removals[-1].lineage_uuid in interrupted.children_lineages
     restored_template = caster.get_action_template("Fireball")
     assert isinstance(restored_template, SpellAction)
     assert restored_template.alt_cost_type is None
@@ -740,7 +741,6 @@ def test_handler_model_copy_becomes_a_stored_event_version() -> None:
     reset_counterspell_state()
     source_uuid = uuid4()
     downstream_messages: list[str | None] = []
-    callback_messages: list[str | None] = []
 
     def mutate(event: Event, _handler_source_uuid) -> Event:
         return event.model_copy(update={
@@ -767,10 +767,7 @@ def test_handler_model_copy_becomes_a_stored_event_version() -> None:
     EventQueue.add_event_handler(mutator)
     EventQueue.add_event_handler(observer)
 
-    def capture(event: Event) -> None:
-        callback_messages.append(event.status_message)
-
-    EventQueue.add_on_event_callback(capture)
+    cursor = EventQueue.event_cursor()
     try:
         declaration = Event(
             source_entity_uuid=source_uuid,
@@ -781,7 +778,6 @@ def test_handler_model_copy_becomes_a_stored_event_version() -> None:
         )
         result = EventQueue.register(declaration)
     finally:
-        EventQueue.remove_on_event_callback(capture)
         EventQueue.remove_event_handler(mutator)
         EventQueue.remove_event_handler(observer)
 
@@ -790,5 +786,10 @@ def test_handler_model_copy_becomes_a_stored_event_version() -> None:
     assert result.status_message == "handler changed it"
     assert EventQueue.get_event_by_uuid(result.uuid) is result
     assert downstream_messages == ["handler changed it"]
-    assert callback_messages == ["declared", "handler changed it"]
+    emitted_messages = [
+        row.status_message
+        for _, row in EventQueue.iter_events_since(cursor)
+        if row.lineage_uuid == declaration.lineage_uuid
+    ]
+    assert emitted_messages == ["declared", "handler changed it"]
     assert len(EventQueue._all_events) == len({row.uuid for row in EventQueue._all_events})
