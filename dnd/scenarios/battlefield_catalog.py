@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Callable, cast
-from uuid import UUID, uuid4
+from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.item_materialization import materialize_item
@@ -19,6 +19,26 @@ from dnd.core.content.battlefields import (
     LightLevelName,
 )
 from dnd.core.gridmap import GridMap, get_map
+from dnd.core.base_block import BaseBlock, MovementMode
+from dnd.core.base_conditions import BaseCondition
+from dnd.core.base_tiles import Tile
+from dnd.core.events import (
+    EventPhase,
+    EventQueue,
+    WorldConnectorState,
+    WorldInitializedEvent,
+    WorldObjectState,
+    WorldTileState,
+)
+from dnd.core.item_types import ItemLocation
+from dnd.core.traversal_connectors import (
+    ConnectorActionCostType,
+    ConnectorProvocationPolicy,
+    TraversalConnectorDefinition,
+    TraversalConnectorKind,
+)
+from dnd.core.world_edges import ElevationSurfaceKind, SlopeAxis
+from dnd.types.world import CardinalDirection
 from dnd.items.consumables import (
     FIRE_WEAPON_COAT_RECIPE,
     healing_potion_recipe,
@@ -39,7 +59,12 @@ from dnd.items.spell_items import (
 from dnd.items.environment_interactables import (
     StorageChest,
 )
+from dnd.blocks.base_item import BaseItem
+from dnd.blocks.inventory import Inventory
 from dnd.items.torches import WallTorch
+from dnd.spatial.environmental_conditions import (
+    materialize_spike_trap_condition,
+)
 from dnd.maps.arena_layout import (
     DIFFICULT_TERRAIN_POSITIONS,
     DOOR_DIRECTIONS,
@@ -224,6 +249,8 @@ def _preview_for_battlefield(battlefield_id: str) -> BattlefieldPreview:
                 _preview_object((5, 10), "loot_chest", "Control Cache"),
             ),
         })
+    if builder_id == "elevation_proving_ground":
+        return BattlefieldPreview()
     raise ValueError(f"Unknown battlefield preview builder: {builder_id}")
 
 
@@ -293,7 +320,27 @@ BATTLEFIELDS: tuple[BattlefieldDefinition, ...] = (
     ),
 )
 
-BATTLEFIELDS_BY_ID = {spec.battlefield_id: spec for spec in BATTLEFIELDS}
+_ELEVATION_PROVING_BATTLEFIELD = _battlefield(
+    "battlefield.elevation_proving_ground",
+    "Elevation And Vertical Traversal Proving Ground",
+    ("bright", "stairs", "ramp", "connectors"),
+    "bright",
+    (
+        "bright-light",
+        "progressive-stairs",
+        "progressive-ramp",
+        "ladder",
+        "rope",
+        "lift",
+        "vertical-stairs",
+        "passage",
+    ),
+)
+
+BATTLEFIELDS_BY_ID = {
+    spec.battlefield_id: spec
+    for spec in (*BATTLEFIELDS, _ELEVATION_PROVING_BATTLEFIELD)
+}
 
 
 def _empty_runtime(definition: BattlefieldDefinition) -> BuiltBattlefield:
@@ -360,12 +407,11 @@ def _place_directional_barrier(
     door: DirectionalDoor | None = None
     for y in range(3, 12):
         position = (column, y)
-        grid.set_tile(column, y, walkable=True, visible=True, name="Floor")
+        grid.set_tile(column, y, name="Floor")
         if y == door_y:
             door = materialize_item(
                 directional_door_recipe(
                     display_name=f"{label} Door",
-                    blocked_directions=("west",),
                     blocked_channels=STANDARD_BLOCKING_CHANNELS,
                     is_open=False,
                 ),
@@ -373,19 +419,24 @@ def _place_directional_barrier(
                 origin=ItemRuntimeOrigin.ENVIRONMENT,
                 expected_type=DirectionalDoor,
             )
-            door.place_on_grid(position)
+            door.place_on_grid(
+                position,
+                boundary_direction=CardinalDirection.WEST,
+            )
         else:
             wall = materialize_item(
                 directional_wall_recipe(
                     display_name=f"{label} Wall",
-                    blocked_directions=("west",),
                     blocked_channels=STANDARD_BLOCKING_CHANNELS,
                 ),
                 uuid4(),
                 origin=ItemRuntimeOrigin.ENVIRONMENT,
                 expected_type=DirectionalWall,
             )
-            wall.place_on_grid(position)
+            wall.place_on_grid(
+                position,
+                boundary_direction=CardinalDirection.WEST,
+            )
             walls.append(wall)
     if door is None:
         raise ValueError("Directional barrier requires a door within rows 3 through 11.")
@@ -543,7 +594,7 @@ def _build_multi_object_dark(
         origin=ItemRuntimeOrigin.ENVIRONMENT,
         expected_type=WallTorch,
     )
-    wall_torch.mount((4, 10), lit=True)
+    wall_torch.mount((4, 10), lit=False)
     cannon = materialize_item(
         fireball_cannon_recipe(charges=2),
         uuid4(),
@@ -570,6 +621,134 @@ def _build_multi_object_dark(
     )
 
 
+_ELEVATION_PROVING_ROWS = (
+    ((5, 4), 0, ElevationSurfaceKind.STAIRS, SlopeAxis.EAST_WEST),
+    ((6, 4), 1, ElevationSurfaceKind.STAIRS, SlopeAxis.EAST_WEST),
+    ((7, 4), 2, ElevationSurfaceKind.STAIRS, SlopeAxis.EAST_WEST),
+    ((8, 4), 2, ElevationSurfaceKind.ORDINARY, None),
+    ((5, 10), 2, ElevationSurfaceKind.ORDINARY, None),
+    ((6, 10), 2, ElevationSurfaceKind.RAMP, SlopeAxis.EAST_WEST),
+    ((7, 10), 1, ElevationSurfaceKind.RAMP, SlopeAxis.EAST_WEST),
+    ((8, 10), 0, ElevationSurfaceKind.RAMP, SlopeAxis.EAST_WEST),
+    ((2, 12), 1, ElevationSurfaceKind.ORDINARY, None),
+    ((4, 12), 1, ElevationSurfaceKind.ORDINARY, None),
+    ((6, 12), 2, ElevationSurfaceKind.ORDINARY, None),
+    ((8, 12), 1, ElevationSurfaceKind.ORDINARY, None),
+    ((12, 13), 2, ElevationSurfaceKind.ORDINARY, None),
+)
+
+_ELEVATION_PROVING_CONNECTORS = (
+    TraversalConnectorDefinition(
+        authored_id="connector.proving.ladder",
+        kind=TraversalConnectorKind.LADDER,
+        presentation_key="traversal.ladder",
+        endpoint_positions=((1, 12), (2, 12)),
+        movement_cost_feet=10,
+        action_cost_type=None,
+        action_cost_amount=0,
+        bidirectional=True,
+        enabled=True,
+        provocation_policy=(
+            ConnectorProvocationPolicy.PROVOKES_SOURCE_EXIT
+        ),
+    ),
+    TraversalConnectorDefinition(
+        authored_id="connector.proving.rope",
+        kind=TraversalConnectorKind.ROPE,
+        presentation_key="traversal.rope",
+        endpoint_positions=((3, 12), (4, 12)),
+        movement_cost_feet=10,
+        action_cost_type=ConnectorActionCostType.ACTIONS,
+        action_cost_amount=1,
+        bidirectional=True,
+        enabled=True,
+        provocation_policy=(
+            ConnectorProvocationPolicy.PROVOKES_SOURCE_EXIT
+        ),
+    ),
+    TraversalConnectorDefinition(
+        authored_id="connector.proving.lift",
+        kind=TraversalConnectorKind.LIFT,
+        presentation_key="traversal.lift",
+        endpoint_positions=((5, 12), (6, 12)),
+        movement_cost_feet=5,
+        action_cost_type=ConnectorActionCostType.BONUS_ACTIONS,
+        action_cost_amount=1,
+        bidirectional=True,
+        enabled=True,
+        provocation_policy=(
+            ConnectorProvocationPolicy.DOES_NOT_PROVOKE
+        ),
+    ),
+    TraversalConnectorDefinition(
+        authored_id="connector.proving.vertical_stairs",
+        kind=TraversalConnectorKind.VERTICAL_STAIRS,
+        presentation_key="traversal.vertical_stairs",
+        endpoint_positions=((7, 12), (8, 12)),
+        movement_cost_feet=10,
+        action_cost_type=None,
+        action_cost_amount=0,
+        bidirectional=True,
+        enabled=True,
+        provocation_policy=(
+            ConnectorProvocationPolicy.DOES_NOT_PROVOKE
+        ),
+    ),
+    TraversalConnectorDefinition(
+        authored_id="connector.proving.passage",
+        kind=TraversalConnectorKind.PASSAGE,
+        presentation_key="traversal.passage",
+        endpoint_positions=((1, 13), (12, 13)),
+        movement_cost_feet=15,
+        action_cost_type=ConnectorActionCostType.ACTIONS,
+        action_cost_amount=1,
+        bidirectional=False,
+        enabled=True,
+        provocation_policy=(
+            ConnectorProvocationPolicy.DOES_NOT_PROVOKE
+        ),
+    ),
+)
+
+
+def _build_elevation_proving_ground(
+    definition: BattlefieldDefinition,
+    grid: GridMap,
+) -> BuiltBattlefield:
+    """Build the maintained typed elevation and connector proving world."""
+    create_standard_arena_floor(grid)
+    for position, height, surface_kind, slope_axis in _ELEVATION_PROVING_ROWS:
+        if not grid.set_tile_elevation(
+            position,
+            height=height,
+            surface_kind=surface_kind,
+            slope_axis=slope_axis,
+        ):
+            raise RuntimeError(
+                f"battlefield elevation was rejected at {position}",
+            )
+    connector_uuids: dict[str, UUID] = {}
+    for connector_definition in _ELEVATION_PROVING_CONNECTORS:
+        connector = grid.register_connector(connector_definition)
+        if connector is None:
+            raise RuntimeError(
+                "battlefield connector was rejected: "
+                f"{connector_definition.authored_id}",
+            )
+        connector_uuids[connector.authored_id] = connector.uuid
+    return BuiltBattlefield(
+        definition=definition,
+        environment=None,
+        notable_positions={
+            "stairs_start": (5, 4),
+            "stairs_top": (8, 4),
+            "ramp_top": (5, 10),
+            "ramp_end": (8, 10),
+        },
+        object_uuids=connector_uuids,
+    )
+
+
 BattlefieldBuilder = Callable[
     [BattlefieldDefinition, GridMap],
     BuiltBattlefield,
@@ -585,6 +764,7 @@ _BUILDERS: dict[str, BattlefieldBuilder] = {
     "battlefield.field_cache_bright": _build_field_cache_bright,
     "battlefield.multi_object_dark": _build_multi_object_dark,
     "battlefield.open_floor_dark": _build_open_floor_dark,
+    "battlefield.elevation_proving_ground": _build_elevation_proving_ground,
 }
 
 
@@ -597,7 +777,233 @@ def get_battlefield(battlefield_id: str) -> BattlefieldDefinition:
 
 
 def build_battlefield(battlefield_id: str) -> BuiltBattlefield:
-    """Construct one battlefield in the current global map."""
+    """Construct one cold battlefield, publish it, then settle dynamics."""
     definition = get_battlefield(battlefield_id)
     builder = _BUILDERS[battlefield_id]
-    return builder(definition, get_map())
+    grid = get_map()
+    if EventQueue.event_cursor() != 0:
+        raise ValueError("authored battlefield requires an empty EventQueue")
+    if (
+        grid.get_all_tiles()
+        or grid.iter_object_placements()
+        or grid.get_all_connectors()
+        or grid.get_spatial_conditions()
+    ):
+        raise ValueError("authored battlefield requires an empty GridMap")
+    if any(isinstance(block, Tile) for block in BaseBlock._registry.values()):
+        raise ValueError("authored battlefield requires no registered Tile")
+
+    grid.disable_events()
+    try:
+        built = builder(definition, grid)
+        world_event = _world_initialized_event(built, grid)
+        _validate_cold_world(built, grid, world_event)
+    except Exception:
+        grid.enable_events(flush_pending=False)
+        raise
+
+    grid.enable_events(flush_pending=False)
+    published_world = EventQueue.publish_completed_fact(world_event)
+    _materialize_authored_spike_traps(built, published_world)
+    _settle_authored_wall_torches(grid, published_world)
+    return built
+
+
+def _movement_cost(tile: Tile, mode: MovementMode) -> int:
+    """Return one exact integral authored movement multiplier."""
+    cost = tile.get_movement_cost(mode)
+    if int(cost) != cost:
+        raise ValueError("authored Tile movement costs must be integral")
+    return int(cost)
+
+
+def _world_initialized_event(
+    built: BuiltBattlefield,
+    grid: GridMap,
+) -> WorldInitializedEvent:
+    """Snapshot the complete actor-free cold world."""
+    tiles = tuple(
+        WorldTileState(
+            tile_uuid=tile.uuid,
+            position=position,
+            surface=tile.surface,
+            name=tile.name,
+            blocks_optics=tile.blocks_optics,
+            blocks_propagation=tile.blocks_propagation_field,
+            walking_cost=_movement_cost(tile, MovementMode.WALKING),
+            flying_cost=_movement_cost(tile, MovementMode.FLYING),
+            swimming_cost=_movement_cost(tile, MovementMode.SWIMMING),
+            burrowing_cost=_movement_cost(tile, MovementMode.BURROWING),
+            elevation_steps=tile.height,
+            surface_kind=tile.elevation_surface_kind,
+            slope_axis=tile.slope_axis,
+            default_light=tile.default_light,
+            resolved_light=tile.resolved_light_level,
+        )
+        for position, tile in sorted(grid.get_all_tiles().items())
+    )
+    objects: list[WorldObjectState] = []
+    for placement in sorted(
+        grid.iter_object_placements(),
+        key=lambda row: (row.position, str(row.object_uuid)),
+    ):
+        item = BaseBlock.get(placement.object_uuid)
+        if not isinstance(item, BaseItem):
+            raise RuntimeError(
+                f"world object {placement.object_uuid} is not a BaseItem",
+            )
+        storage = item.get_storage_block()
+        contained_items = (
+            tuple(
+                child.to_item_presentation_state()
+                for child in sorted(
+                    storage.items.values(),
+                    key=lambda child: str(child.uuid),
+                )
+            )
+            if isinstance(storage, Inventory)
+            else ()
+        )
+        objects.append(WorldObjectState(
+            placement=placement,
+            item=item.to_item_presentation_state(),
+            contained_items=contained_items,
+        ))
+    connectors = tuple(
+        WorldConnectorState(
+            connector_uuid=connector.uuid,
+            authored_id=connector.authored_id,
+            kind=connector.kind,
+            endpoints=(
+                connector.endpoints[0].position,
+                connector.endpoints[1].position,
+            ),
+            endpoint_elevations_feet=(
+                connector.endpoints[0].elevation_feet,
+                connector.endpoints[1].elevation_feet,
+            ),
+            movement_cost_feet=connector.movement_cost_feet,
+            action_cost_type=connector.action_cost_type,
+            action_cost_amount=connector.action_cost_amount,
+            bidirectional=connector.bidirectional,
+            enabled=connector.enabled,
+            provocation_policy=connector.provocation_policy,
+        )
+        for connector in grid.get_all_connectors()
+    )
+    return WorldInitializedEvent(
+        source_entity_uuid=uuid5(
+            NAMESPACE_URL,
+            f"dnd-engine-world:{built.definition.battlefield_id}",
+        ),
+        source_entity_name="World",
+        phase=EventPhase.COMPLETION,
+        use_register=False,
+        battlefield_id=built.definition.battlefield_id,
+        battlefield_name=built.definition.title,
+        bounds=grid.bounds,
+        width=grid.width,
+        height=grid.height,
+        tiles=tiles,
+        objects=tuple(objects),
+        connectors=connectors,
+    )
+
+
+def _validate_cold_world(
+    built: BuiltBattlefield,
+    grid: GridMap,
+    world_event: WorldInitializedEvent,
+) -> None:
+    """Reject a partial or dynamically contaminated cold world."""
+    if EventQueue.event_cursor() != 0:
+        raise RuntimeError("cold authored build advanced the EventQueue")
+    live_tiles = grid.get_all_tiles()
+    if {row.position: row.tile_uuid for row in world_event.tiles} != {
+        position: tile.uuid for position, tile in live_tiles.items()
+    }:
+        raise RuntimeError("cold world Tile closure does not match GridMap")
+    registered_tiles = {
+        block_uuid: block
+        for block_uuid, block in BaseBlock._registry.items()
+        if isinstance(block, Tile)
+    }
+    if registered_tiles != {tile.uuid: tile for tile in live_tiles.values()}:
+        raise RuntimeError("cold world registered Tile closure is not exact")
+    if any(
+        tile.get_entity_uuids()
+        or tile.active_conditions_by_uuid
+        or tile.get_spatial_condition_uuids()
+        for tile in live_tiles.values()
+    ):
+        raise RuntimeError("cold world contains occupancy or conditions")
+    if grid.get_spatial_conditions():
+        raise RuntimeError("cold world owns a SpatialCondition")
+    if {row.placement for row in world_event.objects} != set(
+        grid.iter_object_placements()
+    ):
+        raise RuntimeError("cold world object closure does not match GridMap")
+    for row in world_event.objects:
+        item = BaseBlock.get(row.item.item_uuid)
+        if isinstance(item, WallTorch) and (
+            item.is_lit or item.get_attached_light_sources()
+        ):
+            raise RuntimeError("cold authored WallTorch is lit")
+    if built.environment is not None:
+        condition_uuid = built.environment.spike_condition_uuid
+        if BaseCondition.get(condition_uuid) is not None:
+            raise RuntimeError("reserved SpikeTrap identity is already live")
+        if (
+            built.environment.trap_lever.to_item_presentation_state()
+            .linked_spatial_condition_uuid
+            != condition_uuid
+        ):
+            raise RuntimeError("TrapLever does not expose its reserved trap identity")
+
+
+def _materialize_authored_spike_traps(
+    built: BuiltBattlefield,
+    parent_event: WorldInitializedEvent,
+) -> None:
+    """Activate each reserved authored trap through its ordinary lifecycle."""
+    if built.environment is None:
+        return
+    condition_uuid = built.environment.spike_condition_uuid
+    condition = materialize_spike_trap_condition(
+        set(SPIKE_ZONE_POSITIONS),
+        condition_uuid=condition_uuid,
+        parent_event=parent_event,
+    )
+    if condition.uuid != condition_uuid:
+        raise RuntimeError("SpikeTrap materialization changed reserved identity")
+
+
+def _settle_authored_wall_torches(
+    grid: GridMap,
+    parent_event: WorldInitializedEvent,
+) -> None:
+    """Light cold-authored torches and publish their complete live facts."""
+    for placement in sorted(
+        grid.iter_object_placements(),
+        key=lambda row: (row.position, str(row.object_uuid)),
+    ):
+        item = BaseBlock.get(placement.object_uuid)
+        if not isinstance(item, WallTorch):
+            continue
+        ignite = item.light(parent_event=parent_event.uuid)
+        attached_light_sources = item.get_attached_light_sources()
+        if (
+            ignite is None
+            or ignite.canceled
+            or ignite.phase is not EventPhase.COMPLETION
+            or not item.is_lit
+            or len(attached_light_sources) != 1
+            or grid.get_light_source_position(next(iter(attached_light_sources)))
+            != placement.position
+        ):
+            raise RuntimeError("authored WallTorch did not publish IGNITE")
+        item.publish_location_state(
+            ItemLocation.FLOOR,
+            world_placement=placement,
+            parent_event=ignite,
+        )

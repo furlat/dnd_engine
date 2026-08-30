@@ -392,8 +392,8 @@ class PrepareIntercept(BaseAction):
             execution_event: Validated execution event.
 
         Returns:
-            Completion event when the condition is installed, otherwise a
-            canceled event.
+            Effect event when the condition is installed, otherwise a canceled
+            event. ``BaseAction`` publishes the root terminal.
         """
         entity = Entity.get(self.source_entity_uuid)
         if not entity or not self.end_position:
@@ -410,20 +410,20 @@ class PrepareIntercept(BaseAction):
         entity.add_condition(intercepting, parent_event=execution_event)
 
         return execution_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+            new_phase=EventPhase.EFFECT,
             status_message=f"Prepared Intercept at {self.end_position}",
         )
 
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
-        """Spend the action cost after successful completion.
+    def _apply_costs(self, execution_event: ActionEvent) -> ActionEvent:
+        """Commit the admitted action cost before published execution.
 
         Args:
-            completion_event: Completed action event.
+            execution_event: Validated execution proposal.
 
         Returns:
-            Completion event after action-economy cost application.
+            Execution proposal after action-economy cost commitment.
         """
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
+        return entity_action_economy_cost_applier(execution_event, self.source_entity_uuid)
 
 
 def dodge_roll_processor(event: Event, source_entity_uuid: UUID) -> Optional[Event]:

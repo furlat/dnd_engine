@@ -90,7 +90,8 @@ class AegisSpark(SpellAction):
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if caster is None or target is None:
             return declaration_event.cancel(status_message="Aegis Spark caster or target not found")
-        if target.uuid != caster.uuid and target.uuid not in caster.senses.entities:
+        contact = caster.senses.entities.get(target.uuid)
+        if target.uuid != caster.uuid and (contact is None or not contact.visual):
             return declaration_event.cancel(status_message="Aegis Spark target is not visible")
         if caster.senses.get_feet_distance(target.position) > self.effective_range:
             return declaration_event.cancel(status_message="Aegis Spark target is out of range")
@@ -126,8 +127,7 @@ class AegisSpark(SpellAction):
             EventPhase.EFFECT,
             status_message=f"{caster.name} wards {target.name}",
         )
-        return effect_event.phase_to(
-            EventPhase.COMPLETION,
+        return effect_event.with_updates(
             status_message=f"{target.name} is protected by Aegis Spark",
         )
 

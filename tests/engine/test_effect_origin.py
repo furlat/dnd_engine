@@ -1,13 +1,42 @@
 """Focused contracts for explicit persistent-effect provenance."""
 
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from dnd.actions import SpellEvent
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.condition_types import ConditionTag
-from dnd.core.effect_types import EffectOriginKind
+from dnd.core.content.identities import ContentDefinitionKind, ContentRef
+from dnd.core.effect_types import EffectOrigin, EffectOriginKind
 from dnd.runtime_reset import reset_engine_runtime
-from dnd.tile_conditions import ZoneControlCondition
+from dnd.spatial.area_conditions import AreaCondition
+from dnd.types.spatial_effects import (
+    SpatialEffectLayer,
+    SpatialEffectOccupancyPolicy,
+)
+
+
+_TEST_AREA_CONTENT_REF = ContentRef(
+    pack_id="test.effect_origin",
+    definition_kind=ContentDefinitionKind.CONDITION,
+    content_id="condition.spatial.effect_origin",
+    content_version=1,
+    definition_contract_hash="0" * 64,
+)
+
+
+def _area(
+    source_uuid: UUID,
+    *,
+    effect_origin: EffectOrigin | None = None,
+) -> AreaCondition:
+    return AreaCondition(
+        source_entity_uuid=source_uuid,
+        content_ref=_TEST_AREA_CONTENT_REF,
+        position=(0, 0),
+        layer=SpatialEffectLayer.FIELD,
+        occupancy_policy=SpatialEffectOccupancyPolicy.OVERLAPPING,
+        effect_origin=effect_origin,
+    )
 
 
 def test_spell_event_exports_frozen_base_and_effective_spell_provenance() -> None:
@@ -43,11 +72,7 @@ def test_zone_protection_uses_explicit_base_level_even_when_upcast() -> None:
         spell_level=2,
         cast_at_level=6,
     )
-    zone = ZoneControlCondition(
-        source_entity_uuid=source_uuid,
-        target_entity_uuid=source_uuid,
-        effect_origin=cast_event.to_effect_origin(),
-    )
+    zone = _area(source_uuid, effect_origin=cast_event.to_effect_origin())
 
     assert zone.effect_origin is not None
     assert zone.effect_origin.base_spell_level == 2
@@ -59,10 +84,7 @@ def test_non_spell_or_missing_provenance_disables_spell_level_filtering() -> Non
     reset_engine_runtime()
     source_uuid = uuid4()
 
-    zone = ZoneControlCondition(
-        source_entity_uuid=source_uuid,
-        target_entity_uuid=source_uuid,
-    )
+    zone = _area(source_uuid)
 
     assert zone._protection_spell_level() is None
 

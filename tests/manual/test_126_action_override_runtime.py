@@ -63,9 +63,11 @@ from dnd.spells.evocation import (
     FireBolt,
     GustOfWind,
     IceStorm,
+    IceStormTerrain,
     MagicMissile,
 )
 from tests.engine.support import (
+    create_test_entity,
     deal_damage_to,
     force_spell_attack_hit,
     remove_spell_attack_modifier,
@@ -114,8 +116,8 @@ def create_caster(
         position=position,
         faction="heroes",
     )
-    caster = Entity.create(
-        source_entity_uuid=uuid4(),
+    caster = create_test_entity(
+        source_id=uuid4(),
         name=name,
         config=config,
     )
@@ -151,8 +153,8 @@ def create_target(
         position=position,
         faction=faction,
     )
-    target = Entity.create(
-        source_entity_uuid=uuid4(),
+    target = create_test_entity(
+        source_id=uuid4(),
         name=name,
         config=config,
     )
@@ -1093,7 +1095,10 @@ def test_ice_storm_finalization_follows_effective_target_type(
     assert_completed(result)
     assert target.get_hp() < hp_before
     assert (
-        "Ice Storm Terrain" in caster.active_conditions
+        any(
+            isinstance(condition, IceStormTerrain)
+            for condition in get_map().get_spatial_conditions()
+        )
     ) is (not override_to_entity)
 
 

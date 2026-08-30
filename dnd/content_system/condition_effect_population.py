@@ -1884,8 +1884,6 @@ INTERNAL_CONDITION_PRODUCER_TYPES: tuple[_Definition, ...] = (
     fighter.ExtraAttacksGranted,
     conditions.ConcentrationActionMarker,
     necromancy.EyebiteCastingState,
-    conjuration.SpiritGuardiansTriggered,
-    conjuration.GuardianWarded,
     abjuration.AntimagicSuppression,
     skeleton_abilities.MarkCooldown,
     monster_traits.SimpleMarkerCondition,

@@ -22,7 +22,7 @@ from dnd.core.base_tiles import water_factory
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
 from dnd.core.dice import AttackOutcome, RollType
 from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import AbilityName, Event, EventPhase, EventQueue, EventType, FireExposureEvent, RangeType, WindExposureEvent
+from dnd.core.events import AbilityName, Event, EventPhase, EventQueue, EventType, RangeType, SpatialEffectInteractionEvent
 from dnd.core.gridmap import get_map
 from dnd.core.life_types import LifeState
 from dnd.core.creature_types import CreatureType, DamageType
@@ -34,6 +34,7 @@ from dnd.core.modifiers import (
     ResistanceStatus,
 )
 from dnd.core.values import BaseValue
+from dnd.types.senses import OpticalObscurement
 from dnd.entity import Entity, EntityConfig
 from dnd.actions_functional import execute_by_index, setup_standard_actions
 from dnd.items.environment_content import WALL_TORCH_RECIPE
@@ -59,32 +60,58 @@ from dnd.spells.abjuration import (
     register_shield_reaction,
 )
 from dnd.spells.conjuration import (
+    BlackTentaclesRestrained,
+    BlackTentaclesZone,
     Cloudkill,
+    CloudkillZone,
     Darkness,
+    DarknessZone,
     Daylight,
+    DaylightZone,
+    Entangle,
+    EntangleRestrained,
+    EntangleZone,
+    EvardsBlackTentacles,
     FogCloud,
+    FogCloudZone,
     Grease,
+    GreaseZone,
     IncendiaryCloud,
+    IncendiaryCloudZone,
     InsectPlague,
+    InsectPlagueZone,
     MistyStep,
     SleetStorm,
     SleetStormZone,
     SpiritGuardiansSlowed,
     SpiritGuardians,
+    SpiritGuardiansZone,
     StinkingCloud,
     StinkingCloudZone,
     Web,
+    WebRestrained,
     WebZone,
+)
+from dnd.spatial.environmental_conditions import BurningWeb
+from dnd.types.spatial_effects import (
+    SpatialEffectInteractionIntensity,
+    SpatialEffectInteractionOperation,
 )
 from dnd.spells.divination import Guidance, SeeInvisibility
 from dnd.spells.evocation import CureWounds, GustOfWind, GustOfWindZone, HealingWord, RayOfFrostEffect
 from dnd.spells.illusion import ColorSpray, Invisibility, MirrorImage
 from dnd.spells.illusion import MirrorImageEffect
 from dnd.spells.necromancy import AbilityCurseEffect, Eyebite, FalseLife
-from dnd.spells.transmutation import Haste, Slow, SlowedEffect, SpikeGrowth
+from dnd.spells.transmutation import (
+    Haste,
+    Slow,
+    SlowedEffect,
+    SpikeGrowth,
+    SpikeGrowthZone,
+)
 from dnd.spells.enchantment import Bane, Bless, HoldMonster, HoldPerson, PowerWordKill, Sleep
-from dnd.tile_conditions import ZoneControlCondition
 from tests.engine.support import (
+    create_test_entity,
     deal_damage_to,
     force_attack_hit,
     force_attack_miss,
@@ -134,7 +161,7 @@ def create_family_caster(
         position=position,
         faction=faction,
     )
-    return Entity.create(source_entity_uuid=uuid4(), name=name, config=config)
+    return create_test_entity(name=name, config=config)
 
 
 def create_family_target(
@@ -161,7 +188,7 @@ def create_family_target(
         faction=faction,
         requires_breathing=requires_breathing,
     )
-    return Entity.create(source_entity_uuid=uuid4(), name=name, config=config)
+    return create_test_entity(name=name, config=config)
 
 
 def penalize_save(entity: Entity, ability_name: AbilityName, value: int = -100) -> None:
@@ -2034,19 +2061,25 @@ def test_eb_15_006_zone_spells_create_spatial_handlers_and_cleanup_links() -> No
     ).apply()
 
     event = assert_completed_spell(event)
-    assert "Spike Growth Zone" in caster.active_conditions
     assert "Concentrating" in caster.active_conditions
 
-    zone = cast(ZoneControlCondition, caster.active_conditions["Spike Growth Zone"])
+    zones = [
+        condition
+        for condition in get_map().get_spatial_conditions()
+        if isinstance(condition, SpikeGrowthZone)
+    ]
+    assert len(zones) == 1
+    zone = zones[0]
     concentration = caster.active_conditions["Concentrating"]
     assert isinstance(concentration, Concentrating)
     assert len(zone.affected_positions) > 0
     assert len(zone.spatial_handler_uuids) > 0
-    assert (caster.uuid, zone.uuid) in concentration.linked_conditions
+    assert (zone.uuid, zone.uuid) in concentration.linked_conditions
 
     caster.remove_condition("Concentrating")
 
-    assert "Spike Growth Zone" not in caster.active_conditions
+    assert zone not in get_map().get_spatial_conditions()
+    assert not zone.applied
     assert "Concentrating" not in caster.active_conditions
 
 
@@ -2067,10 +2100,21 @@ def test_eb_15_021_zone_spell_family_entry_turn_start_and_cleanup_edges() -> Non
         ).apply()
 
     grease_event = assert_completed_spell(grease_event)
-    grease_zone = cast(ZoneControlCondition, caster.active_conditions["Grease Zone"])
+    grease_zones = [
+        condition
+        for condition in get_map().get_spatial_conditions()
+        if isinstance(condition, GreaseZone)
+    ]
+    assert len(grease_zones) == 1
+    grease_zone = grease_zones[0]
     assert grease_zone.adds_difficult_terrain
     assert len(grease_zone.spatial_handler_uuids) == 1
     assert len(grease_zone.event_handlers_uuids) == 1
+    concentration = caster.active_conditions["Concentrating"]
+    assert isinstance(concentration, Concentrating)
+    assert (grease_zone.uuid, grease_zone.uuid) in (
+        concentration.linked_conditions
+    )
 
     with patch("dnd.core.dice.random.randint", side_effect=fixed_zone_randint):
         Entity.update_entity_position(target, (5, 5))
@@ -2078,9 +2122,13 @@ def test_eb_15_021_zone_spell_family_entry_turn_start_and_cleanup_edges() -> Non
 
     target.remove_condition("Prone")
     with patch("dnd.core.dice.random.randint", side_effect=fixed_zone_randint):
-        target.on_turn_start(round_number=1, turn_index=0)
-    assert "Prone" not in target.active_conditions
-    assert target.action_economy.movement.normalized_score == 15
+        target.on_turn_end(round_number=1, turn_index=0)
+    assert "Prone" in target.active_conditions
+    assert target.action_economy.movement.normalized_score == 30
+
+    caster.remove_condition("Concentrating")
+    assert grease_zone not in get_map().get_spatial_conditions()
+    assert not grease_zone.applied
 
     reset_spell_family_state(width=18, height=18)
     caster = create_family_caster(position=(1, 1), spell_slots={2: 1})
@@ -2096,29 +2144,39 @@ def test_eb_15_021_zone_spell_family_entry_turn_start_and_cleanup_edges() -> Non
         ).apply()
 
     web_event = assert_completed_spell(web_event)
-    web_zone = cast(WebZone, caster.active_conditions["Web Zone"])
+    web_zones = [
+        condition
+        for condition in get_map().get_spatial_conditions()
+        if isinstance(condition, WebZone)
+    ]
+    assert len(web_zones) == 1
+    web_zone = web_zones[0]
     assert web_zone.adds_difficult_terrain
-    assert len(web_zone.spatial_handler_uuids) == 1
+    assert len(web_zone.spatial_handler_uuids) == 3
     assert {
         EventQueue._event_handlers[handler_uuid].name
         for handler_uuid in web_zone.event_handlers_uuids
-    } == {
-        "Web Burning Fire",
-        "Web Fire Exposure",
-        "Web Turn Start Save",
-    }
+    } == {"Web Turn Start Save"}
 
     with patch("dnd.core.dice.random.randint", side_effect=fixed_zone_randint):
         Entity.update_entity_position(target, (5, 5))
-    assert "Web Restrained" in target.active_conditions
+    memberships = [
+        condition
+        for condition in target.active_conditions_by_uuid.values()
+        if isinstance(condition, WebRestrained)
+    ]
+    assert len(memberships) == 1
     assert "Restrained" in target.active_conditions
     assert any(action.name == "Escape Web" for action in target.registered_actions)
 
-    target.remove_condition("Web Restrained")
+    target.remove_condition_by_uuid(memberships[0].uuid)
     assert "Restrained" not in target.active_conditions
     with patch("dnd.core.dice.random.randint", side_effect=fixed_zone_randint):
         target.on_turn_start(round_number=1, turn_index=0)
-    assert "Web Restrained" in target.active_conditions
+    assert any(
+        isinstance(condition, WebRestrained)
+        for condition in target.active_conditions_by_uuid.values()
+    )
     assert "Restrained" in target.active_conditions
 
     reset_spell_family_state(width=24, height=24)
@@ -2135,10 +2193,20 @@ def test_eb_15_021_zone_spell_family_entry_turn_start_and_cleanup_edges() -> Non
         ).apply()
 
     cloudkill_event = assert_completed_spell(cloudkill_event)
-    cloudkill_zone = cast(ZoneControlCondition, caster.active_conditions["Cloudkill Zone"])
+    cloudkill_zones = [
+        condition
+        for condition in get_map().get_spatial_conditions()
+        if isinstance(condition, CloudkillZone)
+    ]
+    assert len(cloudkill_zones) == 1
+    cloudkill_zone = cloudkill_zones[0]
     assert not cloudkill_zone.adds_difficult_terrain
-    assert len(cloudkill_zone.spatial_handler_uuids) == 1
+    assert len(cloudkill_zone.spatial_handler_uuids) == 2
     assert len(cloudkill_zone.event_handlers_uuids) == 2
+    assert (
+        OpticalObscurement.HEAVY
+        in get_map().get_optical_obscurements_at((10, 10))
+    )
 
     hp_before_entry = get_hp(target)
     with patch("dnd.core.dice.random.randint", side_effect=fixed_zone_randint):
@@ -2150,10 +2218,10 @@ def test_eb_15_021_zone_spell_family_entry_turn_start_and_cleanup_edges() -> Non
         target.on_turn_start(round_number=1, turn_index=0)
     assert hp_before_start - get_hp(target) == 15
 
-    old_center = cloudkill_zone.zone_center
+    old_center = cloudkill_zone.position
     with patch("dnd.core.dice.random.randint", side_effect=fixed_zone_randint):
         caster.on_turn_start(round_number=1, turn_index=0)
-    assert cloudkill_zone.zone_center != old_center
+    assert cloudkill_zone.position != old_center
 
     reset_spell_family_state(width=18, height=18)
     caster = create_family_caster(position=(5, 5), spell_slots={3: 1}, faction="heroes")
@@ -2179,26 +2247,30 @@ def test_eb_15_021_zone_spell_family_entry_turn_start_and_cleanup_edges() -> Non
         ).apply()
 
     spirit_event = assert_completed_spell(spirit_event)
-    spirit_zone = cast(ZoneControlCondition, caster.active_conditions["Spirit Guardians Zone"])
-    assert spirit_zone.zone_center == caster.position
+    spirit_zone = next(
+        condition
+        for condition in get_map().get_spatial_conditions()
+        if isinstance(condition, SpiritGuardiansZone)
+    )
+    assert spirit_zone.position == caster.position
     assert len(spirit_zone.spatial_handler_uuids) == 2
     assert len(spirit_zone.event_handlers_uuids) == 2
 
     enemy_hp_before = get_hp(enemy)
     ally_hp_before = get_hp(ally)
-    with patch("dnd.core.dice.random.randint", side_effect=fixed_zone_randint):
-        Entity.update_entity_position(enemy, (6, 5))
-        Entity.update_entity_position(ally, (6, 6))
+    movement_turn = EventQueue.begin_turn_execution()
+    try:
+        with patch("dnd.core.dice.random.randint", side_effect=fixed_zone_randint):
+            Entity.update_entity_position(enemy, (6, 5))
+            Entity.update_entity_position(ally, (6, 6))
+            Entity.update_entity_position(enemy, (7, 5))
+    finally:
+        EventQueue.end_turn_execution(movement_turn)
     assert enemy_hp_before - get_hp(enemy) == 9
     assert get_hp(ally) == ally_hp_before
-    assert "Spirit Guardians Triggered" in enemy.active_conditions
     assert "Spirit Guardians Slowed" in enemy.active_conditions
-    assert "Spirit Guardians Triggered" not in ally.active_conditions
+    assert "Spirit Guardians Slowed" not in ally.active_conditions
 
-    hp_after_entry = get_hp(enemy)
-    with patch("dnd.core.dice.random.randint", side_effect=fixed_zone_randint):
-        Entity.update_entity_position(enemy, (7, 5))
-    assert get_hp(enemy) == hp_after_entry
     assert "Spirit Guardians Slowed" in enemy.active_conditions
 
     with patch("dnd.core.dice.random.randint", side_effect=fixed_zone_randint):
@@ -2206,7 +2278,7 @@ def test_eb_15_021_zone_spell_family_entry_turn_start_and_cleanup_edges() -> Non
     assert "Spirit Guardians Slowed" not in enemy.active_conditions
 
     caster.remove_condition("Concentrating")
-    assert "Spirit Guardians Zone" not in caster.active_conditions
+    assert spirit_zone not in get_map().get_spatial_conditions()
     assert all(
         handler_uuid not in EventQueue._handler_positions
         for handler_uuid in spirit_zone.spatial_handler_uuids
@@ -2227,7 +2299,13 @@ def test_eb_15_026_light_zone_spells_apply_obscurement_and_dispel_darkness() -> 
     ).apply()
 
     fog_event = assert_completed_spell(fog_event)
-    fog_zone = cast(ZoneControlCondition, caster.active_conditions["Fog Cloud Zone"])
+    fog_zones = [
+        condition
+        for condition in get_map().get_spatial_conditions()
+        if isinstance(condition, FogCloudZone)
+    ]
+    assert len(fog_zones) == 1
+    fog_zone = fog_zones[0]
     fog_center_tile = get_map().get_tile(16, 16)
     fog_edge_tile = get_map().get_tile(24, 16)
     fog_outside_tile = get_map().get_tile(25, 16)
@@ -2236,14 +2314,21 @@ def test_eb_15_026_light_zone_spells_apply_obscurement_and_dispel_darkness() -> 
     assert fog_outside_tile is not None
     assert fog_zone.zone_radius_feet == 40
     assert (24, 16) in fog_zone.affected_positions
-    assert fog_center_tile.resolved_light_level == LightLevel.DARKNESS
-    assert fog_edge_tile.resolved_light_level == LightLevel.DARKNESS
+    assert fog_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
+    assert fog_edge_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
+    assert get_map().get_optical_obscurements_at((16, 16)) == {
+        OpticalObscurement.HEAVY
+    }
+    assert get_map().get_optical_obscurements_at((24, 16)) == {
+        OpticalObscurement.HEAVY
+    }
     assert fog_outside_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
     assert "Concentrating" in caster.active_conditions
 
     caster.remove_condition("Concentrating")
-    assert "Fog Cloud Zone" not in caster.active_conditions
+    assert fog_zone not in get_map().get_spatial_conditions()
     assert fog_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
+    assert get_map().get_optical_obscurements_at((16, 16)) == set()
 
     reset_spell_family_state(width=24, height=24)
     dark_caster = create_family_caster(
@@ -2275,18 +2360,20 @@ def test_eb_15_026_light_zone_spells_apply_obscurement_and_dispel_darkness() -> 
     ).apply()
 
     darkness_event = assert_completed_spell(darkness_event)
-    darkness_zone = cast(ZoneControlCondition, dark_caster.active_conditions["Darkness Zone"])
+    darkness_zone = next(
+        condition
+        for condition in get_map().get_spatial_conditions()
+        if isinstance(condition, DarknessZone)
+    )
     center_tile = get_map().get_tile(11, 10)
     assert center_tile is not None
-    assert center_tile.resolved_light_level == LightLevel.MAGICAL_DARKNESS
-    assert center_tile.blocks_vision(light_caster.uuid)
-    assert (
-        center_tile.get_effective_light_for(
-            darkvision_observer.uuid,
-            observer_position=darkvision_observer.position,
-        )
-        == LightLevel.MAGICAL_DARKNESS
-    )
+    assert center_tile.resolved_light_level == LightLevel.DARKNESS
+    assert not center_tile.blocks_optics_at_center()
+    assert (11, 10) not in darkvision_observer.senses.visible
+    assert (11, 10) not in darkvision_observer.senses.effective_light_levels
+    assert get_map().get_optical_obscurements_at((11, 10)) == {
+        OpticalObscurement.MAGICAL_DARKNESS
+    }
     assert "Concentrating" in dark_caster.active_conditions
 
     daylight_event = Daylight(
@@ -2296,9 +2383,13 @@ def test_eb_15_026_light_zone_spells_apply_obscurement_and_dispel_darkness() -> 
     ).apply()
 
     daylight_event = assert_completed_spell(daylight_event)
-    daylight_zone = cast(ZoneControlCondition, light_caster.active_conditions["Daylight Zone"])
+    daylight_zone = next(
+        condition
+        for condition in get_map().get_spatial_conditions()
+        if isinstance(condition, DaylightZone)
+    )
     assert darkness_zone.uuid not in dark_caster.active_conditions_by_uuid
-    assert "Darkness Zone" not in dark_caster.active_conditions
+    assert darkness_zone not in get_map().get_spatial_conditions()
     assert "Concentrating" not in dark_caster.active_conditions
     assert center_tile.resolved_light_level == LightLevel.VERY_BRIGHT
     assert (11, 10) in daylight_zone.affected_positions
@@ -2324,21 +2415,26 @@ def test_eb_15_027_damage_zones_cover_upcast_obscurement_and_movement() -> None:
         ).apply()
 
     plague_event = assert_completed_spell(plague_event)
-    plague_zone = cast(ZoneControlCondition, caster.active_conditions["Insect Plague Zone"])
+    plague_zone = next(
+        condition
+        for condition in get_map().get_spatial_conditions()
+        if isinstance(condition, InsectPlagueZone)
+    )
     plague_center_tile = get_map().get_tile(10, 5)
     assert plague_center_tile is not None
     assert plague_zone.adds_difficult_terrain
-    assert plague_zone.sets_light_level == LightLevel.DIM_LIGHT
-    assert plague_zone.light_is_obscurement
+    assert plague_zone.optical_obscurement is None
     assert plague_center_tile.walking_cost.normalized_score == 2
-    assert plague_center_tile.resolved_light_level == LightLevel.DIM_LIGHT
+    assert plague_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
+    assert get_map().get_optical_obscurements_at((10, 5)) == set()
     assert target_hp_before - get_hp(target) == 18
     assert caster.action_economy.spell_slot_7.normalized_score == 0
 
     caster.remove_condition("Concentrating")
-    assert "Insect Plague Zone" not in caster.active_conditions
+    assert plague_zone not in get_map().get_spatial_conditions()
     assert plague_center_tile.walking_cost.normalized_score == 1
     assert plague_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
+    assert get_map().get_optical_obscurements_at((10, 5)) == set()
 
     reset_spell_family_state(width=30, height=30)
     caster = create_family_caster(position=(5, 10), spell_slots={8: 1})
@@ -2356,31 +2452,48 @@ def test_eb_15_027_damage_zones_cover_upcast_obscurement_and_movement() -> None:
         ).apply()
 
     cloud_event = assert_completed_spell(cloud_event)
-    cloud_zone = cast(ZoneControlCondition, caster.active_conditions["Incendiary Cloud Zone"])
-    old_center = cloud_zone.zone_center
+    cloud_zone = next(
+        condition
+        for condition in get_map().get_spatial_conditions()
+        if isinstance(condition, IncendiaryCloudZone)
+    )
+    old_center = cloud_zone.position
     old_center_tile = get_map().get_tile(*old_center)
     old_trailing_tile = get_map().get_tile(6, 10)
     assert old_center_tile is not None
     assert old_trailing_tile is not None
     assert not cloud_zone.adds_difficult_terrain
-    assert cloud_zone.sets_light_level == LightLevel.DARKNESS
-    assert old_center_tile.resolved_light_level == LightLevel.DARKNESS
-    assert old_trailing_tile.resolved_light_level == LightLevel.DARKNESS
+    assert cloud_zone.optical_obscurement == OpticalObscurement.HEAVY
+    assert old_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
+    assert old_trailing_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
+    assert get_map().get_optical_obscurements_at(old_center) == {
+        OpticalObscurement.HEAVY
+    }
+    assert get_map().get_optical_obscurements_at((6, 10)) == {
+        OpticalObscurement.HEAVY
+    }
     assert target_hp_before - get_hp(target) == 30
     assert caster.action_economy.spell_slot_8.normalized_score == 0
 
     with patch("dnd.core.dice.random.randint", side_effect=fixed_zone_randint):
         caster.on_turn_start(round_number=1, turn_index=0)
 
-    new_center = cloud_zone.zone_center
+    new_center = cloud_zone.position
     new_center_tile = get_map().get_tile(*new_center)
     new_leading_tile = get_map().get_tile(16, 10)
     assert new_center != old_center
     assert new_center_tile is not None
     assert new_leading_tile is not None
     assert old_trailing_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
-    assert new_center_tile.resolved_light_level == LightLevel.DARKNESS
-    assert new_leading_tile.resolved_light_level == LightLevel.DARKNESS
+    assert get_map().get_optical_obscurements_at((6, 10)) == set()
+    assert new_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
+    assert new_leading_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
+    assert get_map().get_optical_obscurements_at(new_center) == {
+        OpticalObscurement.HEAVY
+    }
+    assert get_map().get_optical_obscurements_at((16, 10)) == {
+        OpticalObscurement.HEAVY
+    }
 
 
 def test_eb_15_028_gas_and_ice_zones_match_srd_turn_start_edges() -> None:
@@ -2410,13 +2523,19 @@ def test_eb_15_028_gas_and_ice_zones_match_srd_turn_start_edges() -> None:
         ).apply()
 
     cloud_event = assert_completed_spell(cloud_event)
-    cloud_zone = cast(ZoneControlCondition, caster.active_conditions["Stinking Cloud Zone"])
+    cloud_zone = next(
+        condition
+        for condition in get_map().get_spatial_conditions()
+        if isinstance(condition, StinkingCloudZone)
+    )
     cloud_center_tile = get_map().get_tile(10, 5)
     assert cloud_center_tile is not None
     assert not cloud_zone.adds_difficult_terrain
-    assert cloud_zone.sets_light_level == LightLevel.DARKNESS
-    assert cloud_zone.light_is_obscurement
-    assert cloud_center_tile.resolved_light_level == LightLevel.DARKNESS
+    assert cloud_zone.optical_obscurement == OpticalObscurement.HEAVY
+    assert cloud_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
+    assert get_map().get_optical_obscurements_at((10, 5)) == {
+        OpticalObscurement.HEAVY
+    }
     assert "Nauseated" not in retching_target.active_conditions
 
     with patch("dnd.core.dice.random.randint", return_value=10):
@@ -2433,12 +2552,21 @@ def test_eb_15_028_gas_and_ice_zones_match_srd_turn_start_edges() -> None:
 
     assert "Nauseated" not in immune_target.active_conditions
     caster.remove_condition("Concentrating")
-    assert "Stinking Cloud Zone" not in caster.active_conditions
+    assert cloud_zone not in get_map().get_spatial_conditions()
     assert cloud_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
+    assert get_map().get_optical_obscurements_at((10, 5)) == set()
 
     reset_spell_family_state(width=24, height=18)
     grid = get_map()
-    grid.set_tile(11, 10, walkable=False, visible=False, name="Wall")
+    grid.set_tile(
+        11,
+        10,
+        walking_cost=0,
+        flying_cost=0,
+        blocks_optics=True,
+        blocks_propagation=True,
+        name="Wall",
+    )
     caster = create_family_caster(position=(10, 5), spell_slots={3: 1})
     concentrating_target = create_family_target(
         name="Concentrating Target",
@@ -2456,14 +2584,21 @@ def test_eb_15_028_gas_and_ice_zones_match_srd_turn_start_edges() -> None:
         ).apply()
 
     storm_event = assert_completed_spell(storm_event)
-    storm_zone = cast(ZoneControlCondition, caster.active_conditions["Sleet Storm Zone"])
+    storm_zone = next(
+        condition
+        for condition in get_map().get_spatial_conditions()
+        if isinstance(condition, SleetStormZone)
+    )
     storm_center_tile = get_map().get_tile(10, 10)
     assert storm_center_tile is not None
     assert storm_zone.zone_shape == "cylinder"
     assert concentrating_target.position in storm_zone.affected_positions
-    assert "Prone" in concentrating_target.active_conditions
+    assert "Prone" not in concentrating_target.active_conditions
     assert storm_center_tile.walking_cost.normalized_score == 2
-    assert storm_center_tile.resolved_light_level == LightLevel.DARKNESS
+    assert storm_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
+    assert get_map().get_optical_obscurements_at((10, 10)) == {
+        OpticalObscurement.HEAVY
+    }
 
     concentrating_target.add_condition(
         Concentrating(
@@ -2477,11 +2612,13 @@ def test_eb_15_028_gas_and_ice_zones_match_srd_turn_start_edges() -> None:
     with patch("dnd.core.dice.random.randint", return_value=12):
         concentrating_target.on_turn_start(round_number=1, turn_index=0)
 
+    assert "Prone" in concentrating_target.active_conditions
     assert "Concentrating" not in concentrating_target.active_conditions
     caster.remove_condition("Concentrating")
-    assert "Sleet Storm Zone" not in caster.active_conditions
+    assert storm_zone not in get_map().get_spatial_conditions()
     assert storm_center_tile.walking_cost.normalized_score == 1
     assert storm_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
+    assert get_map().get_optical_obscurements_at((10, 10)) == set()
 
 
 def test_eb_15_041_stinking_cloud_skips_breathless_creatures() -> None:
@@ -2511,7 +2648,11 @@ def test_eb_15_041_stinking_cloud_skips_breathless_creatures() -> None:
         ).apply()
 
     cloud_event = assert_completed_spell(cloud_event)
-    cloud_zone = cast(ZoneControlCondition, caster.active_conditions["Stinking Cloud Zone"])
+    cloud_zone = next(
+        condition
+        for condition in get_map().get_spatial_conditions()
+        if isinstance(condition, StinkingCloudZone)
+    )
     assert breathing_target.position in cloud_zone.affected_positions
     assert breathless_target.position in cloud_zone.affected_positions
     assert breathing_target.requires_breathing is True
@@ -2544,30 +2685,38 @@ def test_eb_15_044_stinking_cloud_wind_dispersal_uses_srd_rounds() -> None:
     ).apply()
 
     cloud_event = assert_completed_spell(cloud_event)
-    cloud_zone = cast(StinkingCloudZone, caster.active_conditions["Stinking Cloud Zone"])
+    cloud_zone = next(
+        condition
+        for condition in get_map().get_spatial_conditions()
+        if isinstance(condition, StinkingCloudZone)
+    )
     assert (10, 5) in cloud_zone.affected_positions
-    assert len(cloud_zone.event_handlers_uuids) == 3
+    assert len(cloud_zone.event_handlers_uuids) == 1
+    assert len(cloud_zone.spatial_handler_uuids) == 1
 
-    moderate_wind = WindExposureEvent(
+    moderate_wind = SpatialEffectInteractionEvent(
         source_entity_uuid=caster.uuid,
-        positions={(10, 5)},
-        wind_speed_mph=10,
-        source_description="Book moderate wind",
+        operation=SpatialEffectInteractionOperation.DISPERSE,
+        positions=((10, 5),),
+        intensity=SpatialEffectInteractionIntensity.MODERATE,
         phase=EventPhase.DECLARATION,
     )
+    moderate_wind = moderate_wind.phase_to(EventPhase.EXECUTION)
     moderate_wind = moderate_wind.phase_to(EventPhase.EFFECT)
     moderate_wind = moderate_wind.phase_to(EventPhase.COMPLETION)
 
     assert moderate_wind.phase == EventPhase.COMPLETION
-    assert "Stinking Cloud Zone" in caster.active_conditions
-    for round_number in range(1, 4):
-        caster.on_turn_start(round_number=round_number, turn_index=0)
-        assert "Stinking Cloud Zone" in caster.active_conditions
+    assert cloud_zone.duration.duration == 4
+    assert cloud_zone in get_map().get_spatial_conditions()
+    for _ in range(3):
+        assert not cloud_zone.progress_spatial_duration()
+        assert cloud_zone in get_map().get_spatial_conditions()
 
-    caster.on_turn_start(round_number=4, turn_index=0)
-    assert "Stinking Cloud Zone" not in caster.active_conditions
+    assert cloud_zone.progress_spatial_duration()
+    assert cloud_zone not in get_map().get_spatial_conditions()
     assert "Concentrating" not in caster.active_conditions
     assert cloud_zone.event_handlers_uuids == []
+    assert cloud_zone.spatial_handler_uuids == []
 
     reset_spell_family_state(width=24, height=18)
     cloud_caster = create_family_caster(name="Cloud Caster", position=(1, 1), spell_slots={3: 1})
@@ -2581,25 +2730,31 @@ def test_eb_15_044_stinking_cloud_wind_dispersal_uses_srd_rounds() -> None:
     ).apply()
 
     cloud_event = assert_completed_spell(cloud_event)
-    cloud_zone = cast(StinkingCloudZone, cloud_caster.active_conditions["Stinking Cloud Zone"])
+    cloud_zone = next(
+        condition
+        for condition in get_map().get_spatial_conditions()
+        if isinstance(condition, StinkingCloudZone)
+    )
     gust_zone = GustOfWindZone(
         source_entity_uuid=wind_caster.uuid,
-        target_entity_uuid=wind_caster.uuid,
-        zone_center=wind_caster.position,
+        position=wind_caster.position,
+        anchor_uuid=wind_caster.uuid,
+        faction=wind_caster.faction,
         zone_direction=(1, 0),
-        caster_position=wind_caster.position,
         spell_dc=wind_caster.spell_save_dc(),
     )
-    wind_caster.add_condition(gust_zone)
+    gust_zone.activate(parent_event=cloud_event)
 
     assert (8, 5) in gust_zone.affected_positions
-    assert "Stinking Cloud Zone" in cloud_caster.active_conditions
+    assert cloud_zone in get_map().get_spatial_conditions()
 
-    cloud_caster.on_turn_start(round_number=1, turn_index=0)
+    assert cloud_zone.duration.duration == 1
+    assert cloud_zone.progress_spatial_duration()
 
-    assert "Stinking Cloud Zone" not in cloud_caster.active_conditions
+    assert cloud_zone not in get_map().get_spatial_conditions()
     assert "Concentrating" not in cloud_caster.active_conditions
     assert cloud_zone.event_handlers_uuids == []
+    assert cloud_zone.spatial_handler_uuids == []
 
 
 def test_eb_15_045_gust_terrain_removal_restores_cached_move_targets() -> None:
@@ -2607,8 +2762,24 @@ def test_eb_15_045_gust_terrain_removal_restores_cached_move_targets() -> None:
     reset_spell_family_state(width=25, height=21)
     grid = get_map()
     for x in range(25):
-        grid.set_tile(x, 9, walkable=False, visible=False, name="Wall")
-        grid.set_tile(x, 11, walkable=False, visible=False, name="Wall")
+        grid.set_tile(
+            x,
+            9,
+            walking_cost=0,
+            flying_cost=0,
+            blocks_optics=True,
+            blocks_propagation=True,
+            name="Wall",
+        )
+        grid.set_tile(
+            x,
+            11,
+            walking_cost=0,
+            flying_cost=0,
+            blocks_optics=True,
+            blocks_propagation=True,
+            name="Wall",
+        )
 
     caster = create_family_caster(
         position=(1, 10),
@@ -2706,7 +2877,11 @@ def test_eb_15_043_sleet_storm_douses_exposed_flames() -> None:
         ).apply()
 
     storm_event = assert_completed_spell(storm_event)
-    storm_zone = cast(SleetStormZone, caster.active_conditions["Sleet Storm Zone"])
+    storm_zone = next(
+        condition
+        for condition in get_map().get_spatial_conditions()
+        if isinstance(condition, SleetStormZone)
+    )
     storm_center_tile = get_map().get_tile(10, 5)
     assert storm_center_tile is not None
     assert torchbearer.position in storm_zone.affected_positions
@@ -2721,6 +2896,10 @@ def test_eb_15_043_sleet_storm_douses_exposed_flames() -> None:
     assert outside_torch.is_lit is True
     assert outside_torch._light_source_uuid == outside_light_uuid
     assert outside_light_uuid in grid._light_sources
+    assert "Prone" not in torchbearer.active_conditions
+
+    with patch("dnd.core.dice.random.randint", return_value=10):
+        torchbearer.on_turn_start(round_number=1, turn_index=0)
     assert "Prone" in torchbearer.active_conditions
 
     carried_torch.ignite(torchbearer.uuid)
@@ -2732,7 +2911,7 @@ def test_eb_15_043_sleet_storm_douses_exposed_flames() -> None:
     assert wall_torch._light_source_uuid is None
 
     caster.remove_condition("Concentrating")
-    assert "Sleet Storm Zone" not in caster.active_conditions
+    assert storm_zone not in get_map().get_spatial_conditions()
     assert storm_zone.event_handlers_uuids == []
     assert outside_torch.is_lit is True
     assert outside_torch._light_source_uuid in grid._light_sources
@@ -2764,22 +2943,31 @@ def test_eb_15_029_web_models_obscurement_grounding_and_escape_cleanup() -> None
         ).apply()
 
     web_event = assert_completed_spell(web_event)
-    web_zone = cast(ZoneControlCondition, caster.active_conditions["Web Zone"])
+    web_zones = [
+        condition
+        for condition in get_map().get_spatial_conditions()
+        if isinstance(condition, WebZone)
+    ]
+    assert len(web_zones) == 1
+    web_zone = web_zones[0]
     web_center_tile = get_map().get_tile(5, 5)
     assert web_center_tile is not None
     assert web_zone.zone_shape == "cube"
     assert web_zone.adds_difficult_terrain
-    assert web_zone.sets_light_level == LightLevel.DIM_LIGHT
-    assert web_zone.light_is_obscurement
+    assert web_zone.optical_obscurement is None
     assert web_center_tile.walking_cost.normalized_score == 2
-    assert web_center_tile.resolved_light_level == LightLevel.DIM_LIGHT
-    assert "Web Restrained" in target.active_conditions
+    assert web_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
+    assert get_map().get_optical_obscurements_at((5, 5)) == set()
+    assert any(
+        isinstance(condition, WebRestrained)
+        for condition in target.active_conditions_by_uuid.values()
+    )
     assert "Restrained" in target.active_conditions
 
     with patch("dnd.core.dice.random.randint", side_effect=fixed_zone_randint):
         caster.on_turn_start(round_number=1, turn_index=0)
 
-    assert "Web Zone" in caster.active_conditions
+    assert web_zone in get_map().get_spatial_conditions()
     escape = next(
         action for action in target.registered_actions if action.name == "Escape Web"
     ).instantiate()
@@ -2788,14 +2976,107 @@ def test_eb_15_029_web_models_obscurement_grounding_and_escape_cleanup() -> None
 
     assert escape_event is not None
     assert not escape_event.canceled
-    assert "Web Restrained" not in target.active_conditions
+    assert not any(
+        isinstance(condition, WebRestrained)
+        for condition in target.active_conditions_by_uuid.values()
+    )
     assert "Restrained" not in target.active_conditions
     assert all(action.name != "Escape Web" for action in target.registered_actions)
 
     caster.remove_condition("Concentrating")
-    assert "Web Zone" not in caster.active_conditions
+    assert web_zone not in get_map().get_spatial_conditions()
     assert web_center_tile.walking_cost.normalized_score == 1
     assert web_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
+    assert get_map().get_optical_obscurements_at((5, 5)) == set()
+
+
+def test_entangle_owns_difficult_terrain_restraint_and_concentration_cleanup() -> None:
+    """Entangle installs one exact field, source lease, and escape action."""
+    reset_spell_family_state(width=18, height=18)
+    caster = create_family_caster(position=(1, 1), spell_slots={1: 1})
+    target = create_family_target(name="Entangle Target", position=(5, 5))
+    penalize_save(target, "strength")
+    Entity.update_all_entities_senses(max_distance=90)
+
+    with patch("dnd.core.dice.random.randint", side_effect=fixed_zone_randint):
+        result = Entangle(
+            source_entity_uuid=caster.uuid,
+            end_position=(5, 5),
+            template=False,
+        ).apply()
+
+    assert_completed_spell(result)
+    zone = next(
+        condition
+        for condition in get_map().get_spatial_conditions()
+        if isinstance(condition, EntangleZone)
+    )
+    assert len(zone.affected_positions) == 16
+    assert get_map().get_tile(5, 5).walking_cost.normalized_score == 2
+    membership = next(
+        condition
+        for condition in target.active_conditions_by_uuid.values()
+        if isinstance(condition, EntangleRestrained)
+    )
+    assert (target.uuid, membership.uuid) in zone.linked_conditions
+    assert "Restrained" in target.active_conditions
+    assert any(
+        action.name == "Escape Entangle"
+        for action in target.registered_actions
+    )
+
+    assert caster.remove_condition("Concentrating")
+    assert zone not in get_map().get_spatial_conditions()
+    assert membership.uuid not in target.active_conditions_by_uuid
+    assert "Restrained" not in target.active_conditions
+    assert get_map().get_tile(5, 5).walking_cost.normalized_score == 1
+
+
+def test_black_tentacles_entry_damages_restrains_and_exposes_both_escapes() -> None:
+    """Black Tentacles resolves one entry and owns both escape choices."""
+    reset_spell_family_state(width=18, height=18)
+    caster = create_family_caster(position=(1, 1), spell_slots={4: 1})
+    target = create_family_target(
+        name="Tentacles Target",
+        position=(2, 2),
+        hp_dice=8,
+    )
+    penalize_save(target, "dexterity")
+    Entity.update_all_entities_senses(max_distance=90)
+
+    result = EvardsBlackTentacles(
+        source_entity_uuid=caster.uuid,
+        end_position=(8, 8),
+        template=False,
+    ).apply()
+
+    assert_completed_spell(result)
+    zone = next(
+        condition
+        for condition in get_map().get_spatial_conditions()
+        if isinstance(condition, BlackTentaclesZone)
+    )
+    hp_before = get_hp(target)
+    with patch("dnd.core.dice.random.randint", side_effect=fixed_zone_randint):
+        Entity.update_entity_position(target, (8, 8))
+
+    membership = zone.find_restraint(target)
+    assert isinstance(membership, BlackTentaclesRestrained)
+    assert get_hp(target) < hp_before
+    assert {
+        action.name
+        for action in target.registered_actions
+        if action.name is not None
+        and action.name.startswith("Escape Black Tentacles")
+    } == {
+        "Escape Black Tentacles (Strength)",
+        "Escape Black Tentacles (Dexterity)",
+    }
+
+    assert caster.remove_condition("Concentrating")
+    assert zone not in get_map().get_spatial_conditions()
+    assert membership.uuid not in target.active_conditions_by_uuid
+    assert "Restrained" not in target.active_conditions
 
 
 def test_eb_15_037_web_unanchored_cast_collapses_on_caster_turn_start() -> None:
@@ -2813,31 +3094,87 @@ def test_eb_15_037_web_unanchored_cast_collapses_on_caster_turn_start() -> None:
         ).apply()
 
     web_event = assert_completed_spell(web_event)
-    web_zone = cast(WebZone, caster.active_conditions["Web Zone"])
+    web_zones = [
+        condition
+        for condition in get_map().get_spatial_conditions()
+        if isinstance(condition, WebZone)
+    ]
+    assert len(web_zones) == 1
+    web_zone = web_zones[0]
     web_center_tile = get_map().get_tile(5, 5)
     assert web_center_tile is not None
     assert not web_zone.anchored_or_layered
     assert {
         EventQueue._event_handlers[handler_uuid].name
         for handler_uuid in web_zone.event_handlers_uuids
-    } == {
-        "Web Burning Fire",
-        "Web Fire Exposure",
-        "Web Turn Start Save",
-        "Web Unanchored Collapse",
-    }
+    } == {"Web Turn Start Save", "Web Unanchored Collapse"}
     assert "Concentrating" in caster.active_conditions
     assert web_center_tile.walking_cost.normalized_score == 2
-    assert web_center_tile.resolved_light_level == LightLevel.DIM_LIGHT
+    assert web_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
+    assert get_map().get_optical_obscurements_at((5, 5)) == set()
 
     turn_start = caster.on_turn_start(round_number=2, turn_index=0)
 
     assert turn_start.phase == EventPhase.COMPLETION
-    assert "Web Zone" not in caster.active_conditions
+    assert web_zone not in get_map().get_spatial_conditions()
     assert "Concentrating" not in caster.active_conditions
     assert web_zone.event_handlers_uuids == []
     assert web_center_tile.walking_cost.normalized_score == 1
     assert web_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
+    assert get_map().get_optical_obscurements_at((5, 5)) == set()
+
+
+def test_web_restraint_memberships_release_only_their_exact_source() -> None:
+    """Two Web sources share mechanics while retaining exact escape ownership."""
+    reset_spell_family_state()
+    target = create_family_target(name="Overlapping Web Target", position=(2, 2))
+    cause = Event(
+        name="Overlapping Web Sources",
+        source_entity_uuid=target.uuid,
+        event_type=EventType.BASE_ACTION,
+        phase=EventPhase.EFFECT,
+    )
+    first = WebRestrained(
+        source_entity_uuid=target.uuid,
+        target_entity_uuid=target.uuid,
+        source_spatial_condition_uuid=uuid4(),
+        check_dc=12,
+    )
+    second = WebRestrained(
+        source_entity_uuid=target.uuid,
+        target_entity_uuid=target.uuid,
+        source_spatial_condition_uuid=uuid4(),
+        check_dc=15,
+    )
+
+    first_result = target.add_condition(first, parent_event=cause)
+    second_result = target.add_condition(second, parent_event=cause)
+
+    assert first_result is not None and not first_result.canceled
+    assert second_result is not None and not second_result.canceled
+    assert "Restrained" in target.active_conditions
+    assert len([
+        action
+        for action in target.registered_actions
+        if action.name == "Escape Web"
+    ]) == 2
+
+    assert target.remove_condition_by_uuid(first.uuid, parent_event=cause)
+    assert "Restrained" in target.active_conditions
+    remaining_actions = [
+        action
+        for action in target.registered_actions
+        if action.name == "Escape Web"
+    ]
+    assert len(remaining_actions) == 1
+    assert remaining_actions[0].restraint_source_uuid == second.uuid
+
+    assert target.remove_condition_by_uuid(second.uuid, parent_event=cause)
+    assert "Restrained" not in target.active_conditions
+    assert all(
+        action.name != "Escape Web"
+        for action in target.registered_actions
+    )
 
 
 def test_eb_15_042_web_fire_exposure_burns_one_cube_for_one_round() -> None:
@@ -2856,7 +3193,13 @@ def test_eb_15_042_web_fire_exposure_burns_one_cube_for_one_round() -> None:
         ).apply()
 
     web_event = assert_completed_spell(web_event)
-    web_zone = cast(WebZone, caster.active_conditions["Web Zone"])
+    web_zones = [
+        condition
+        for condition in get_map().get_spatial_conditions()
+        if isinstance(condition, WebZone)
+    ]
+    assert len(web_zones) == 1
+    web_zone = web_zones[0]
     web_center_tile = get_map().get_tile(5, 5)
     adjacent_web_tile = get_map().get_tile(6, 5)
     assert web_center_tile is not None
@@ -2864,16 +3207,18 @@ def test_eb_15_042_web_fire_exposure_burns_one_cube_for_one_round() -> None:
     assert (5, 5) in web_zone.affected_positions
     assert (6, 5) in web_zone.affected_positions
     assert web_center_tile.walking_cost.normalized_score == 2
-    assert web_center_tile.resolved_light_level == LightLevel.DIM_LIGHT
-    assert "Web" in web_center_tile.active_conditions
-    assert "Web Restrained" in target.active_conditions
+    assert web_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
+    assert get_map().get_optical_obscurements_at((5, 5)) == set()
+    assert web_zone in get_map().get_spatial_conditions_at((5, 5))
+    assert any(
+        isinstance(condition, WebRestrained)
+        for condition in target.active_conditions_by_uuid.values()
+    )
     web_handlers = [
         EventQueue._event_handlers[handler_uuid]
         for handler_uuid in web_zone.event_handlers_uuids
     ]
     assert {handler.name for handler in web_handlers} == {
-        "Web Burning Fire",
-        "Web Fire Exposure",
         "Web Turn Start Save",
     }
     assert all(
@@ -2881,24 +3226,42 @@ def test_eb_15_042_web_fire_exposure_burns_one_cube_for_one_round() -> None:
         for handler in web_handlers
     )
 
-    fire_event = FireExposureEvent(
-        source_entity_uuid=caster.uuid,
-        position=(5, 5),
-        phase=EventPhase.DECLARATION,
+    fire_event = EventQueue.publish_declaration(
+        SpatialEffectInteractionEvent(
+            source_entity_uuid=caster.uuid,
+            operation=SpatialEffectInteractionOperation.IGNITE,
+            positions=((5, 5),),
+            intensity=SpatialEffectInteractionIntensity.STRONG,
+            phase=EventPhase.DECLARATION,
+            use_register=False,
+        ),
     )
+    fire_event = fire_event.phase_to(EventPhase.EXECUTION)
     fire_event = fire_event.phase_to(EventPhase.EFFECT)
     fire_event = fire_event.phase_to(EventPhase.COMPLETION)
 
     assert fire_event.phase == EventPhase.COMPLETION
     assert (5, 5) not in web_zone.affected_positions
     assert (6, 5) in web_zone.affected_positions
-    assert len(web_zone.event_handlers_uuids) == 3
+    burning_webs = [
+        condition
+        for condition in get_map().get_spatial_conditions_at((5, 5))
+        if isinstance(condition, BurningWeb)
+    ]
+    assert len(burning_webs) == 1
+    burning_web = burning_webs[0]
+    assert len(web_zone.event_handlers_uuids) == 1
     assert web_center_tile.walking_cost.normalized_score == 1
     assert web_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
-    assert "Web" not in web_center_tile.active_conditions
+    assert get_map().get_optical_obscurements_at((5, 5)) == set()
+    assert web_zone not in get_map().get_spatial_conditions_at((5, 5))
     assert adjacent_web_tile.walking_cost.normalized_score == 2
-    assert adjacent_web_tile.resolved_light_level == LightLevel.DIM_LIGHT
-    assert "Web Restrained" not in target.active_conditions
+    assert adjacent_web_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
+    assert get_map().get_optical_obscurements_at((6, 5)) == set()
+    assert not any(
+        isinstance(condition, WebRestrained)
+        for condition in target.active_conditions_by_uuid.values()
+    )
     assert "Restrained" not in target.active_conditions
     assert all(action.name != "Escape Web" for action in target.registered_actions)
 
@@ -2908,21 +3271,25 @@ def test_eb_15_042_web_fire_exposure_burns_one_cube_for_one_round() -> None:
 
     hp_after_fire = get_hp(target)
     assert hp_before_fire - hp_after_fire == 6
-    assert "Web Restrained" not in target.active_conditions
+    assert not any(
+        isinstance(condition, WebRestrained)
+        for condition in target.active_conditions_by_uuid.values()
+    )
 
+    assert burning_web.progress_spatial_duration(parent_event=fire_event)
     with patch("dnd.core.dice.random.randint", side_effect=fixed_zone_randint):
-        caster.on_turn_start(round_number=1, turn_index=1)
         target.on_turn_start(round_number=2, turn_index=0)
 
     assert get_hp(target) == hp_after_fire
-    assert "Web Zone" in caster.active_conditions
+    assert web_zone in get_map().get_spatial_conditions()
     assert "Concentrating" in caster.active_conditions
 
     caster.remove_condition("Concentrating")
-    assert "Web Zone" not in caster.active_conditions
+    assert web_zone not in get_map().get_spatial_conditions()
     assert web_zone.event_handlers_uuids == []
     assert adjacent_web_tile.walking_cost.normalized_score == 1
     assert adjacent_web_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
+    assert get_map().get_optical_obscurements_at((6, 5)) == set()
 
 
 def test_eb_15_011_haste_modifier_bundle_and_lethargy_cleanup() -> None:

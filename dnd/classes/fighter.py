@@ -459,7 +459,8 @@ def protection_processor(
     if distance > 5:
         return None
 
-    if event.source_entity_uuid not in protector.senses.entities:
+    contact = protector.senses.entities.get(event.source_entity_uuid)
+    if contact is None or not contact.visual:
         return None
 
     off_hand = protector.equipment.weapon_melee_off
@@ -782,13 +783,12 @@ class SecondWind(BaseAction):
             EventPhase.EFFECT,
             status_message=f"Second Wind heals {actual_healing} HP (d10+{self.fighter_level}={total_healing})"
         )
-        return effect_event.phase_to(
-            EventPhase.COMPLETION,
+        return effect_event.with_updates(
             status_message=f"Second Wind complete - healed {actual_healing} HP"
         )
 
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
+    def _apply_costs(self, execution_event: ActionEvent) -> ActionEvent:
+        return entity_action_economy_cost_applier(execution_event, self.source_entity_uuid)
 
 
 class SecondWindFeature(BaseCondition):
@@ -993,13 +993,13 @@ class ActionSurge(BaseAction):
         entity.add_condition(surging, parent_event=execution_event)
 
         return execution_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+            new_phase=EventPhase.EFFECT,
             status_message=f"{entity.name} uses Action Surge!"
         )
 
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
+    def _apply_costs(self, execution_event: ActionEvent) -> ActionEvent:
         """Apply the costs (consume action_surge resource)."""
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
+        return entity_action_economy_cost_applier(execution_event, self.source_entity_uuid)
 
 
 class ActionSurgeFeature(BaseCondition):
@@ -1373,7 +1373,8 @@ class ExtraAttack(BaseAction):
         if not target:
             return declaration_event.cancel(status_message="Target not found")
 
-        if self.target_entity_uuid not in entity.senses.entities:
+        contact = entity.senses.entities.get(self.target_entity_uuid)
+        if contact is None or not contact.visual:
             return declaration_event.cancel(status_message="Target not visible")
 
         attack_event = cast(AttackEvent, declaration_event)
@@ -1395,9 +1396,9 @@ class ExtraAttack(BaseAction):
         attack_event = cast(AttackEvent, execution_event)
         return Attack.attack_consequences(attack_event, self.source_entity_uuid)
 
-    def _apply_costs(self, completion_event) -> Optional[Event]:
+    def _apply_costs(self, execution_event) -> Optional[Event]:
         """Apply the costs (consume extra_attacks resource)."""
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
+        return entity_action_economy_cost_applier(execution_event, self.source_entity_uuid)
 
 
 class ExtraAttackFeature(BaseCondition):

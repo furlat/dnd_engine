@@ -34,20 +34,48 @@ from dnd.core.gridmap import get_map
 from dnd.core.creature_types import DamageType
 from dnd.core.values import BaseValue
 from dnd.entity import Entity, EntityConfig
+from dnd.game import Game
 from dnd.items.consumables import HEALING_POTION_RECIPE
-from dnd.monsters.bestiary import create_goblin, create_skeleton
+from dnd.monsters.bestiary import (
+    create_goblin as _create_goblin,
+    create_skeleton as _create_skeleton,
+)
 from tests.spell_test_exports import Fireball, MagicMissile
-from tests.engine.support import reset_combat_state
+from tests.engine.support import create_test_entity, reset_combat_state
+
+
+_action_game: Game | None = None
+
+
+def _deploy_bestiary_entity(entity: Entity) -> Entity:
+    """Compose and deploy a factory result through this test's Game."""
+    if _action_game is None:
+        raise RuntimeError("reset_action_state must precede entity creation")
+    entity.compose_entity()
+    _action_game.deploy_entity(entity, entity.position)
+    return entity
+
+
+def create_goblin(*args, **kwargs) -> Entity:
+    """Create and explicitly deploy one goblin for action tests."""
+    return _deploy_bestiary_entity(_create_goblin(*args, **kwargs))
+
+
+def create_skeleton(*args, **kwargs) -> Entity:
+    """Create and explicitly deploy one skeleton for action tests."""
+    return _deploy_bestiary_entity(_create_skeleton(*args, **kwargs))
 
 
 def reset_action_state() -> None:
     """Clear global state touched by these action examples."""
+    global _action_game
     reset_combat_state()
     EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
     BaseValue._registry.clear()
     get_map().create_rectangle(0, 0, 20, 20)
+    _action_game = Game()
 
 
 def configured_entity(
@@ -77,7 +105,7 @@ def configured_entity(
         position=position,
         faction=faction,
     )
-    entity = Entity.create(source_entity_uuid=source_uuid, name=name, config=config)
+    entity = create_test_entity(source_id=source_uuid, name=name, config=config)
     setup_standard_actions(entity)
     return entity
 
@@ -373,8 +401,8 @@ def test_eb_09_009_registered_multi_entity_spell_discovers_and_executes() -> Non
         position=(1, 1),
         faction="heroes",
     )
-    caster = Entity.create(
-        source_entity_uuid=uuid4(),
+    caster = create_test_entity(
+        source_id=uuid4(),
         name="Wizard",
         config=caster_config,
     )
@@ -449,8 +477,8 @@ def test_eb_09_010_registered_position_aoe_spell_previews_and_executes() -> None
         position=(1, 1),
         faction="heroes",
     )
-    caster = Entity.create(
-        source_entity_uuid=uuid4(),
+    caster = create_test_entity(
+        source_id=uuid4(),
         name="Wizard",
         config=caster_config,
     )
@@ -469,24 +497,24 @@ def test_eb_09_010_registered_position_aoe_spell_previews_and_executes() -> None
         proficiency_bonus=2,
     )
     affected = [
-        Entity.create(
-            source_entity_uuid=uuid4(),
+        create_test_entity(
+            source_id=uuid4(),
             name="Goblin 1",
             config=creature_config.model_copy(update={"position": (6, 6), "faction": "monsters"}),
         ),
-        Entity.create(
-            source_entity_uuid=uuid4(),
+        create_test_entity(
+            source_id=uuid4(),
             name="Goblin 2",
             config=creature_config.model_copy(update={"position": (7, 6), "faction": "monsters"}),
         ),
-        Entity.create(
-            source_entity_uuid=uuid4(),
+        create_test_entity(
+            source_id=uuid4(),
             name="Ally",
             config=creature_config.model_copy(update={"position": (6, 7), "faction": "heroes"}),
         ),
     ]
-    outsider = Entity.create(
-        source_entity_uuid=uuid4(),
+    outsider = create_test_entity(
+        source_id=uuid4(),
         name="Outsider",
         config=creature_config.model_copy(update={"position": (12, 12), "faction": "monsters"}),
     )

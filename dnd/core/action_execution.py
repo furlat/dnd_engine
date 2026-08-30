@@ -28,6 +28,17 @@ class MovementTerminationReason(str, Enum):
     INCAPACITATED = "incapacitated"
     DEAD = "dead"
     SUBJECTIVE_REVALIDATION = "subjective_revalidation"
+    POSITION_DIVERGED = "position_diverged"
+    INVALID_PATH = "invalid_path"
+    ACTION_DENIED = "action_denied"
+    INVALID_COST = "invalid_cost"
+
+
+class MovementProvocationPolicy(str, Enum):
+    """Objective source-exit reaction policy for one movement leg."""
+
+    ORDINARY_EXIT = "ordinary_exit"
+    DOES_NOT_PROVOKE = "does_not_provoke"
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,6 +51,8 @@ class MovementStepBoundary:
     step_event_uuid: UUID
     from_position: tuple[int, int]
     to_position: tuple[int, int]
+    objective_position: tuple[int, int]
+    step_movement_cost: int
     traversed_path: tuple[tuple[int, int], ...]
     movement_spent: int
     movement_remaining: int

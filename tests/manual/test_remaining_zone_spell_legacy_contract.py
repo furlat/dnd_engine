@@ -19,6 +19,7 @@ from dnd.core.base_tiles import (
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.events import EventPhase, EventQueue, EventType
 from dnd.core.gridmap import get_map
+from dnd.types.senses import OpticalObscurement
 from dnd.entity import Entity
 from dnd.spells.conjuration import (
     Cloudkill,
@@ -240,9 +241,14 @@ def test_grease_preserves_initial_entry_turn_stand_and_cleanup_rules() -> None:
 
     assert isinstance(result, SpellEvent)
     assert not result.canceled
-    assert has_condition(caster, "Grease Zone")
     assert has_condition(caster, "Concentrating")
-    zone = cast(GreaseZone, caster.active_conditions["Grease Zone"])
+    zones = [
+        condition
+        for condition in get_map().get_spatial_conditions()
+        if isinstance(condition, GreaseZone)
+    ]
+    assert len(zones) == 1
+    zone = zones[0]
     center_tile = get_map().get_tile(5, 5)
     assert center_tile is not None
     assert center_tile.walking_cost.normalized_score == 2
@@ -250,9 +256,11 @@ def test_grease_preserves_initial_entry_turn_stand_and_cleanup_rules() -> None:
 
     initial.remove_condition("Prone")
     with fixed_dice_faces(*([10] * 4)):
-        initial.on_turn_start()
-    assert not has_condition(initial, "Prone")
-    assert initial.action_economy.movement.normalized_score == 15
+        initial.on_turn_end()
+    assert has_condition(initial, "Prone")
+    assert initial.action_economy.movement.normalized_score == 30
+
+    initial.remove_condition("Prone")
 
     initial.action_economy.consume(
         "movement",
@@ -276,7 +284,7 @@ def test_grease_preserves_initial_entry_turn_stand_and_cleanup_rules() -> None:
 
     caster.remove_condition("Concentrating")
     assert not has_condition(caster, "Concentrating")
-    assert not has_condition(caster, "Grease Zone")
+    assert zone not in get_map().get_spatial_conditions()
     assert center_tile.walking_cost.normalized_score == 1
     assert zone.spatial_handler_uuids == []
     assert zone.event_handlers_uuids == []
@@ -315,14 +323,23 @@ def test_cloudkill_preserves_initial_entry_turn_move_and_cleanup_rules() -> None
 
     assert isinstance(result, SpellEvent)
     assert not result.canceled
-    assert initial_hp - get_hp(initial) == 20
-    assert has_condition(caster, "Cloudkill Zone")
+    assert get_hp(initial) == initial_hp
     assert has_condition(caster, "Concentrating")
-    zone = cast(CloudkillZone, caster.active_conditions["Cloudkill Zone"])
-    assert zone.zone_center == (10, 7)
+    zones = [
+        condition
+        for condition in get_map().get_spatial_conditions()
+        if isinstance(condition, CloudkillZone)
+    ]
+    assert len(zones) == 1
+    zone = zones[0]
+    assert zone.position == (10, 7)
     center_tile = get_map().get_tile(10, 7)
     assert center_tile is not None
     assert center_tile.walking_cost.normalized_score == 1
+    assert (
+        OpticalObscurement.HEAVY
+        in get_map().get_optical_obscurements_at((10, 7))
+    )
 
     entrant_hp = get_hp(entrant)
     with fixed_dice_faces(10, *([4] * 5)):
@@ -335,17 +352,17 @@ def test_cloudkill_preserves_initial_entry_turn_move_and_cleanup_rules() -> None
     assert hp_before_turn - get_hp(entrant) == 20
 
     caster.on_turn_start()
-    assert zone.zone_center == (12, 7)
+    assert zone.position == (12, 7)
 
     caster.remove_condition("Concentrating")
     assert not has_condition(caster, "Concentrating")
-    assert not has_condition(caster, "Cloudkill Zone")
+    assert zone not in get_map().get_spatial_conditions()
     assert zone.spatial_handler_uuids == []
     assert zone.event_handlers_uuids == []
 
     Entity.update_entity_position(entrant, (22, 7))
     hp_after_cleanup = get_hp(entrant)
-    Entity.update_entity_position(entrant, zone.zone_center)
+    Entity.update_entity_position(entrant, zone.position)
     assert get_hp(entrant) == hp_after_cleanup
 
 
@@ -387,24 +404,31 @@ def test_spirit_guardians_preserves_faction_damage_slow_follow_and_cleanup() -> 
 
     assert isinstance(result, SpellEvent)
     assert not result.canceled
-    assert enemy_hp - get_hp(initial_enemy) == 12
+    assert get_hp(initial_enemy) == enemy_hp
     assert get_hp(initial_ally) == ally_hp
-    assert has_condition(caster, "Spirit Guardians Zone")
     assert has_condition(caster, "Concentrating")
-    zone = cast(
-        SpiritGuardiansZone,
-        caster.active_conditions["Spirit Guardians Zone"],
+    zone = next(
+        condition
+        for condition in get_map().get_spatial_conditions()
+        if isinstance(condition, SpiritGuardiansZone)
     )
-    assert zone.zone_center == (10, 10)
-    assert has_condition(initial_enemy, "Spirit Guardians Triggered")
-    assert has_condition(initial_enemy, "Spirit Guardians Slowed")
-    assert not has_condition(initial_ally, "Spirit Guardians Triggered")
+    assert zone.position == (10, 10)
+    assert not has_condition(initial_enemy, "Spirit Guardians Slowed")
     assert not has_condition(initial_ally, "Spirit Guardians Slowed")
-    assert initial_enemy.action_economy.movement.normalized_score == 15
 
-    hp_after_initial = get_hp(initial_enemy)
-    Entity.update_entity_position(initial_enemy, (12, 10))
-    assert get_hp(initial_enemy) == hp_after_initial
+    initial_turn = EventQueue.begin_turn_execution()
+    try:
+        with fixed_dice_faces(10, *([4] * 3)):
+            initial_enemy.on_turn_start()
+        assert enemy_hp - get_hp(initial_enemy) == 12
+        assert has_condition(initial_enemy, "Spirit Guardians Slowed")
+        assert initial_enemy.action_economy.movement.normalized_score == 15
+
+        hp_after_initial = get_hp(initial_enemy)
+        Entity.update_entity_position(initial_enemy, (12, 10))
+        assert get_hp(initial_enemy) == hp_after_initial
+    finally:
+        EventQueue.end_turn_execution(initial_turn)
 
     entrant_hp = get_hp(entrant)
     with fixed_dice_faces(10, *([4] * 3)):
@@ -418,11 +442,11 @@ def test_spirit_guardians_preserves_faction_damage_slow_follow_and_cleanup() -> 
     assert entrant.action_economy.movement.normalized_score == 30
 
     Entity.update_entity_position(caster, (15, 15))
-    assert zone.zone_center == (15, 15)
+    assert zone.position == (15, 15)
 
     caster.remove_condition("Concentrating")
     assert not has_condition(caster, "Concentrating")
-    assert not has_condition(caster, "Spirit Guardians Zone")
+    assert zone not in get_map().get_spatial_conditions()
     assert zone.spatial_handler_uuids == []
     assert zone.event_handlers_uuids == []
 
@@ -464,18 +488,20 @@ def test_spike_growth_preserves_hidden_hazard_damage_and_source_immunity() -> No
 
     assert isinstance(result, SpellEvent)
     assert not result.canceled
-    assert has_condition(caster, "Spike Growth Zone")
     assert has_condition(caster, "Concentrating")
-    zone = cast(
-        SpikeGrowthZone,
-        caster.active_conditions["Spike Growth Zone"],
-    )
+    zones = [
+        condition
+        for condition in get_map().get_spatial_conditions()
+        if isinstance(condition, SpikeGrowthZone)
+    ]
+    assert len(zones) == 1
+    zone = zones[0]
     center_tile = get_map().get_tile(10, 6)
     assert center_tile is not None
     assert center_tile.walking_cost.normalized_score == 2
-    marker = center_tile.active_conditions["Spike Growth"]
-    assert marker.hazard_filter is HazardFilter.NON_SOURCE
-    assert marker.condition_stealth_dc == caster.spell_save_dc()
+    assert center_tile.get_conditions()[zone.uuid] is zone
+    assert zone.hazard_filter is HazardFilter.NON_SOURCE
+    assert zone.condition_stealth_dc == caster.spell_save_dc()
     assert not get_map().is_position_hazardous_for(10, 6, caster.uuid)
     assert get_map().is_position_hazardous_for(
         10,
@@ -498,8 +524,8 @@ def test_spike_growth_preserves_hidden_hazard_damage_and_source_immunity() -> No
 
     caster.remove_condition("Concentrating")
     assert not has_condition(caster, "Concentrating")
-    assert not has_condition(caster, "Spike Growth Zone")
-    assert "Spike Growth" not in center_tile.active_conditions
+    assert zone not in get_map().get_spatial_conditions()
+    assert zone.uuid not in center_tile.get_conditions()
     assert center_tile.walking_cost.normalized_score == 1
     assert zone.spatial_handler_uuids == []
     assert not get_map().is_position_hazardous_for(
@@ -537,11 +563,11 @@ def test_gust_of_wind_executes_cast_entry_turn_wall_and_cleanup_edges() -> None:
     assert isinstance(result, SpellEvent)
     assert not result.canceled
     assert initial.position == (10, 6)
-    assert has_condition(caster, "Gust of Wind Zone")
     assert has_condition(caster, "Concentrating")
-    zone = cast(
-        GustOfWindZone,
-        caster.active_conditions["Gust of Wind Zone"],
+    zone = next(
+        condition
+        for condition in grid.get_spatial_conditions()
+        if isinstance(condition, GustOfWindZone)
     )
     assert (6, 6) in zone.affected_positions
     zone_tile = grid.get_tile(6, 6)
@@ -605,7 +631,7 @@ def test_gust_of_wind_executes_cast_entry_turn_wall_and_cleanup_edges() -> None:
     former_entry = (6, 6)
     caster.remove_condition("Concentrating")
 
-    assert not has_condition(caster, "Gust of Wind Zone")
+    assert zone not in grid.get_spatial_conditions()
     assert zone_tile.walking_cost.normalized_score == 1
     after_cleanup = create_spell_regression_actor(
         "Post Gust Entrant",
@@ -629,7 +655,15 @@ def test_gust_of_wind_executes_cast_entry_turn_wall_and_cleanup_edges() -> None:
         (7, 5),
         "monsters",
     )
-    grid.set_tile(9, 5, walkable=False, visible=False, name="Wall")
+    grid.set_tile(
+        9,
+        5,
+        walking_cost=0,
+        flying_cost=0,
+        blocks_optics=True,
+        blocks_propagation=True,
+        name="Wall",
+    )
     force_save_result(blocked, "strength", succeeds=False)
     Entity.update_all_entities_senses(max_distance=90)
 
@@ -681,11 +715,11 @@ def test_insect_plague_executes_initial_entry_turn_reentry_and_cleanup() -> None
     assert not result.canceled
     assert failed_hp - get_hp(failed) == 20
     assert passed_hp - get_hp(passed) == 10
-    assert has_condition(caster, "Insect Plague Zone")
     assert has_condition(caster, "Concentrating")
-    zone = cast(
-        InsectPlagueZone,
-        caster.active_conditions["Insect Plague Zone"],
+    zone = next(
+        condition
+        for condition in get_map().get_spatial_conditions()
+        if isinstance(condition, InsectPlagueZone)
     )
     center_tile = get_map().get_tile(10, 6)
     assert center_tile is not None
@@ -704,7 +738,7 @@ def test_insect_plague_executes_initial_entry_turn_reentry_and_cleanup() -> None
 
     hp_before_turn = get_hp(entrant)
     with fixed_dice_faces(*([4] * 10)):
-        entrant.on_turn_start()
+        entrant.on_turn_end()
     assert hp_before_turn - get_hp(entrant) == 20
 
     hp_before_exit = get_hp(entrant)
@@ -717,7 +751,7 @@ def test_insect_plague_executes_initial_entry_turn_reentry_and_cleanup() -> None
 
     caster.remove_condition("Concentrating")
 
-    assert not has_condition(caster, "Insect Plague Zone")
+    assert zone not in get_map().get_spatial_conditions()
     assert center_tile.walking_cost.normalized_score == 1
     Entity.update_entity_position(entrant, (2, 2))
     hp_after_cleanup = get_hp(entrant)
@@ -755,23 +789,25 @@ def test_incendiary_cloud_executes_initial_entry_turn_move_and_cleanup() -> None
     assert isinstance(result, SpellEvent)
     assert not result.canceled
     assert initial_hp - get_hp(initial) == 40
-    assert has_condition(caster, "Incendiary Cloud Zone")
     assert has_condition(caster, "Concentrating")
-    zone = cast(
-        IncendiaryCloudZone,
-        caster.active_conditions["Incendiary Cloud Zone"],
+    zone = next(
+        condition
+        for condition in get_map().get_spatial_conditions()
+        if isinstance(condition, IncendiaryCloudZone)
     )
-    old_center = zone.zone_center
+    old_center = zone.position
     old_only_position = (old_center[0] - 4, old_center[1])
     added_position = (old_center[0] + 6, old_center[1])
     old_only_tile = get_map().get_tile(*old_only_position)
     added_tile = get_map().get_tile(*added_position)
     assert old_only_tile is not None
     assert added_tile is not None
-    assert old_only_tile.resolved_light_level == LightLevel.DARKNESS
-    assert "Incendiary Cloud" in old_only_tile.active_conditions
+    assert old_only_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
+    assert get_map().get_optical_obscurements_at(old_only_position) == {
+        OpticalObscurement.HEAVY
+    }
     assert added_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
-    assert "Incendiary Cloud" not in added_tile.active_conditions
+    assert get_map().get_optical_obscurements_at(added_position) == set()
 
     entrant = create_spell_regression_actor(
         "Incendiary Entrant",
@@ -786,26 +822,28 @@ def test_incendiary_cloud_executes_initial_entry_turn_move_and_cleanup() -> None
 
     hp_before_turn = get_hp(entrant)
     with fixed_dice_faces(*([4] * 20)):
-        entrant.on_turn_start()
+        entrant.on_turn_end()
     assert hp_before_turn - get_hp(entrant) == 40
 
     caster.on_turn_start()
-    assert zone.zone_center != old_center
+    assert zone.position != old_center
     assert old_only_position not in zone.affected_positions
     assert added_position in zone.affected_positions
     assert old_only_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
-    assert "Incendiary Cloud" not in old_only_tile.active_conditions
-    assert added_tile.resolved_light_level == LightLevel.DARKNESS
-    assert "Incendiary Cloud" in added_tile.active_conditions
+    assert get_map().get_optical_obscurements_at(old_only_position) == set()
+    assert added_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
+    assert get_map().get_optical_obscurements_at(added_position) == {
+        OpticalObscurement.HEAVY
+    }
 
     caster.remove_condition("Concentrating")
 
-    assert not has_condition(caster, "Incendiary Cloud Zone")
+    assert zone not in get_map().get_spatial_conditions()
     assert added_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
-    assert "Incendiary Cloud" not in added_tile.active_conditions
+    assert get_map().get_optical_obscurements_at(added_position) == set()
     Entity.update_entity_position(entrant, (2, 2))
     hp_after_cleanup = get_hp(entrant)
-    Entity.update_entity_position(entrant, zone.zone_center)
+    Entity.update_entity_position(entrant, zone.position)
     assert get_hp(entrant) == hp_after_cleanup
     assert zone.spatial_handler_uuids == []
     assert zone.event_handlers_uuids == []

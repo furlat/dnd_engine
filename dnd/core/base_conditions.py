@@ -35,6 +35,7 @@ from dnd.core.saving_throw_types import (
     SavingThrowContext,
     SavingThrowEffectTag,
 )
+from dnd.types.senses import OpticalObscurement
 
 
 class OutcomeProtection(BaseModel):
@@ -317,6 +318,38 @@ class BaseCondition(BaseObject):
         """Return condition-owned compact presentation for application."""
         return f"{{cyan:{target_name}}} gains **{self.name or 'Unknown'}**"
 
+    def is_active_spatial_condition(self) -> bool:
+        """Return whether this condition is an active independent map owner."""
+        return False
+
+    def get_optical_obscurement_at(
+        self,
+        position: Tuple[int, int],
+    ) -> Optional[OpticalObscurement]:
+        """Return no optical contribution for an ordinary condition."""
+        del position
+        return None
+
+    def blocks_physical_optics_at(self, position: Tuple[int, int]) -> bool:
+        """Return no physical optical block for an ordinary condition."""
+        del position
+        return False
+
+    def remove_from_runtime_owner(
+        self,
+        *,
+        expire: bool = False,
+        parent_event: Optional[Event] = None,
+        prepared_removal_effect: Optional[Event] = None,
+    ) -> bool:
+        """Remove an independently owned condition; ordinary conditions opt out."""
+        del expire, parent_event, prepared_removal_effect
+        return False
+
+    def discard_from_runtime_owner(self) -> bool:
+        """Discard an uncommitted independent condition; ordinary conditions opt out."""
+        return False
+
     def get_semantic_key(self) -> str:
         """Return authored identity, explicit legacy key, or an unbound marker."""
         if self.behavior_binding is not None:
@@ -545,7 +578,8 @@ class BaseCondition(BaseObject):
             phase=EventPhase.DECLARATION,
             parent_event=parent_event.uuid if parent_event else None,
             source_entity_name=self.source_entity_name,
-            target_entity_name=self.target_entity_name
+            target_entity_name=self.target_entity_name,
+            use_register=False,
         )
 
     def _declare_removal_event(self, expired: bool = False, parent_event: Optional[Event] = None) -> Event:
@@ -567,10 +601,11 @@ class BaseCondition(BaseObject):
             phase=EventPhase.DECLARATION,
             parent_event=parent_event.uuid if parent_event else None,
             source_entity_name=self.source_entity_name,
-            target_entity_name=self.target_entity_name
+            target_entity_name=self.target_entity_name,
+            use_register=False,
         )
 
-    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+    def _apply(self, execution_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         """Apply subclass state and return owned runtime artifacts.
 
         Subclasses override this to add modifiers, handlers, spatial handlers,
@@ -578,29 +613,54 @@ class BaseCondition(BaseObject):
         creates execution and effect events and returns no owned artifacts.
 
         Args:
-            declaration_event: Declaration event created for this application.
+            execution_event: Accepted execution event for this application.
 
         Returns:
             Tuple of modifier pairs, trigger-handler UUIDs, same-block
             subcondition UUIDs, spatial-handler UUIDs, and the effect event.
         """
-        event = declaration_event.phase_to(EventPhase.EXECUTION, update={"condition": self})
-        event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition": self})
+        event = execution_event.phase_to(
+            EventPhase.EFFECT,
+            update={"condition": self},
+        )
         return [], [], [], [], event
 
     def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
         """Run subclass removal behavior.
 
         Args:
-            event: Removal declaration event to phase through removal work.
+            event: Accepted removal effect for subclass-owned cleanup.
 
         Returns:
             Last removal event after subclass work, or None if no event was given.
         """
-        if event:
-            event = event.phase_to(EventPhase.EXECUTION, update={"condition": self})
-            event = event.phase_to(EventPhase.EFFECT, update={"condition": self})
         return event
+
+    def _release_owned_runtime_state(
+        self,
+        *,
+        parent_event: Optional[Event] = None,
+    ) -> None:
+        """Release subclass-owned state not represented by returned UUIDs.
+
+        Subclasses with direct provisional state may override this idempotent
+        hook.  Ordinary modifier and handler ownership remains data-driven by
+        the UUID collections on this condition.
+        """
+        del parent_event
+
+    def discard_uncommitted_runtime_state(self) -> None:
+        """Release provisional mechanics without publishing removal events."""
+        self._release_owned_runtime_state()
+        self.applied = True
+        try:
+            self.remove_condition_modifiers()
+            self.remove_event_handlers()
+            self.remove_spatial_handlers()
+        finally:
+            self.applied = False
+        self.modifers_uuids.clear()
+        self.remove_from_register()
 
     def _post_removal_stats(self) -> Dict[str, Any]:
         """Return resulting stats to inject into the COMPLETION event after modifiers are removed.
@@ -618,18 +678,15 @@ class BaseCondition(BaseObject):
         """Run subclass expiration behavior.
 
         Args:
-            event: Removal declaration event to phase through expiration work.
+            event: Accepted removal effect for expiration-specific cleanup.
 
         Returns:
             Last expiration event after subclass work, or None if no event was given.
         """
-        if event:
-            event = event.phase_to(EventPhase.EXECUTION, update={"condition": self})
-            event = event.phase_to(EventPhase.EFFECT, update={"condition": self})
         return event
 
     def apply(self, parent_event: Optional[Event] = None, declaration_event: Optional[Event] = None) -> Optional[Event]:
-        """Apply condition state and complete the application event.
+        """Apply condition mechanics through the accepted effect boundary.
 
         Args:
             parent_event: Optional parent event for event-tree nesting.
@@ -637,8 +694,11 @@ class BaseCondition(BaseObject):
                 already performed declaration-time checks.
 
         Returns:
-            Completed application event, cancellation event, or None if the
+            Accepted application effect, cancellation event, or None if the
             condition is already applied, expired, or declaration-canceled.
+
+        The owning ``BaseBlock`` commits authoritative indexes and publishes
+        COMPLETION after this method returns the accepted effect.
         """
         if self.applied or self.duration.is_expired:
             return None
@@ -653,9 +713,20 @@ class BaseCondition(BaseObject):
         )
         if declaration_event is None:
             declaration_event = self.declare_event(parent_event)
+            declaration_event = EventQueue.publish_declaration(
+                declaration_event,
+            )
 
         if declaration_event.canceled:
-            return None
+            return declaration_event
+
+        execution_event = declaration_event.phase_to(
+            EventPhase.EXECUTION,
+            update={"condition": self},
+            status_message=f"Applying {self.name}",
+        )
+        if execution_event.canceled:
+            return execution_event
 
         with runtime_behavior_provider(self):
             (
@@ -664,10 +735,7 @@ class BaseCondition(BaseObject):
                 sub_conditions_uuids,
                 spatial_handler_uuids,
                 effect_event,
-            ) = self._apply(declaration_event)
-
-        if not effect_event:
-            return declaration_event.cancel(status_message=f"Condition {self.name} was not applied - _apply() returned no effect event")
+            ) = self._apply(execution_event)
 
         for block_uuid, modifiers_uuids in modifers_uuids:
             if block_uuid not in self.modifers_uuids:
@@ -685,9 +753,37 @@ class BaseCondition(BaseObject):
                 self.spatial_handler_uuids.append(spatial_handler_uuid)
 
         self.applied = True
-        completed_event = effect_event.phase_to(EventPhase.COMPLETION)
-        self.applied_source_event_cursor = EventQueue.event_cursor()
-        return completed_event
+        if not effect_event:
+            self.discard_uncommitted_runtime_state()
+            return execution_event.cancel(
+                status_message=(
+                    f"Condition {self.name} was not applied - "
+                    "_apply() returned no effect event"
+                ),
+            )
+        if effect_event.canceled:
+            self.discard_uncommitted_runtime_state()
+            if not effect_event.use_register:
+                return EventQueue.publish_handler_cancellation(effect_event)
+            return effect_event
+
+        return effect_event
+
+    def publish_removal_effect(
+        self,
+        declaration_event: Event,
+    ) -> Event:
+        """Publish vetoable removal phases before releasing condition state."""
+        execution_event = declaration_event.phase_to(
+            EventPhase.EXECUTION,
+            update={"condition": self},
+        )
+        if execution_event.canceled:
+            return execution_event
+        return execution_event.phase_to(
+            EventPhase.EFFECT,
+            update={"condition": self},
+        )
 
     def remove_condition_modifiers(self) -> bool:
         """Remove owned modifiers without changing applied state.
@@ -778,8 +874,13 @@ class BaseCondition(BaseObject):
         self.spatial_handler_uuids.clear()
         return True
 
-    def cleanup_own_state(self, expire: bool = False, parent_event: Optional[Event] = None) -> bool:
-        """Clean this condition's own modifiers, handlers, and removal event.
+    def cleanup_own_state(
+        self,
+        expire: bool = False,
+        parent_event: Optional[Event] = None,
+        removal_effect: Optional[Event] = None,
+    ) -> Optional[Event]:
+        """Release this condition's own state after dependent teardown.
 
         Cross-object cleanup for same-block subconditions and linked conditions
         is handled by `BaseBlock._remove_condition_tree()`. Subclass `_expire()`
@@ -788,27 +889,23 @@ class BaseCondition(BaseObject):
         Args:
             expire: Whether this is an expiration removal.
             parent_event: Optional parent event for event-tree nesting.
+            removal_effect: Accepted removal effect supplied by the owning
+                block before it traverses dependent conditions.
 
         Returns:
-            True if cleanup succeeded, False if cleanup was canceled or the
-            condition was not applied.
+            The accepted removal effect after authored cleanup, or ``None``
+            when the condition was not applied.
         """
         if not self.applied:
-            return False
+            return None
+        if removal_effect is None or removal_effect.canceled:
+            return None
 
-        event = self._declare_removal_event(expired=expire, parent_event=parent_event)
-        if event.canceled:
-            return False
-
-        if expire:
-            expired_event = self._expire(event)
-            if expired_event and expired_event.canceled:
-                return False
-
-        removed_event = self._remove(event)
+        removed_event = self._remove(removal_effect)
         if removed_event and removed_event.canceled:
-            return False
+            return removed_event
 
+        self._release_owned_runtime_state(parent_event=parent_event)
         self.remove_condition_modifiers()
         self.remove_event_handlers()
         self.remove_spatial_handlers()
@@ -820,10 +917,7 @@ class BaseCondition(BaseObject):
                     parent.sub_conditions.remove(self.uuid)
 
         self.applied = False
-
-        post_stats = self._post_removal_stats()
-        event.phase_to(EventPhase.COMPLETION, **post_stats)
-        return True
+        return removed_event or removal_effect
 
     def progress(self) -> bool:
         """Progress condition duration without removing the condition.

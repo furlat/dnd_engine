@@ -27,9 +27,7 @@ from dnd.items.consumables import _WeaponCoatCondition
 from dnd.monsters.traits import SimpleMarkerCondition
 from dnd.player_character_body import PLAYER_CHARACTER_BODY_DECLARATION
 from dnd.runtime_reset import reset_engine_runtime
-from dnd.spells.conjuration import GuardianWarded, SpiritGuardiansTriggered
 from dnd.spells.transmutation import SpikeGrowthZone
-from dnd.tile_conditions import ZoneControlCondition
 from server.player_replication.world_projection import (
     SubjectiveSpatialMemory,
     build_subjective_world,
@@ -365,20 +363,14 @@ def test_tile_details_share_name_visibility_and_subjective_memory_policy(
         type(subjective_tile).model_validate(mismatched)
 
 
-def test_zone_tile_marker_inherits_authoritative_parent_identity_and_text(
-    presentation_grid: GridMap,
-) -> None:
-    """Generic tile records retain the concrete zone mechanic's presentation."""
+def test_spatial_condition_keeps_authoritative_identity_and_text() -> None:
+    """The direct spatial owner carries its authored public presentation."""
     source_uuid = uuid4()
-    tile = presentation_grid.get_tile(1, 0)
-    assert tile is not None
-    zone = ZoneControlCondition(
+    zone = SpikeGrowthZone(
         source_entity_uuid=source_uuid,
-        target_entity_uuid=source_uuid,
+        position=(1, 0),
         name="Authored Zone",
         description="Exact authored zone rules text.",
-        marker_name="Authored Zone",
-        affected_positions={(1, 0)},
     )
     zone_declaration = get_content_declaration(SpikeGrowthZone)
     zone.behavior_binding = BehaviorBinding(
@@ -387,10 +379,7 @@ def test_zone_tile_marker_inherits_authoritative_parent_identity_and_text(
         runtime_owner_uuid=source_uuid,
     )
 
-    zone._apply_tile_markers()
-
-    marker = tile.active_conditions["Authored Zone"]
-    detail = project_condition_summary(marker)
+    detail = project_condition_summary(zone)
     assert detail.content_ref == APIContentRefSnapshot.model_validate(
         zone_declaration.ref.model_dump(mode="python"),
     )
@@ -403,8 +392,6 @@ def test_zone_tile_marker_inherits_authoritative_parent_identity_and_text(
     (
         SimpleMarkerCondition,
         ConcentrationActionMarker,
-        SpiritGuardiansTriggered,
-        GuardianWarded,
         _WeaponCoatCondition,
     ),
 )

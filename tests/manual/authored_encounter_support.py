@@ -7,6 +7,7 @@ from uuid import UUID
 
 from dnd.encounter import Encounter
 from dnd.entity import Entity
+from dnd.game import Game
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.encounter_assembler import (
     AssembledEncounter,
@@ -51,6 +52,7 @@ def assemble_authored_encounter(arena_id: str) -> AuthoredEncounterView:
     return AuthoredEncounterView(
         assemble_encounter_recipe(
             encounter_recipe(f"encounter.{arena_id}"),
+            game=Game(),
         ),
     )
 

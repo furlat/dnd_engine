@@ -11,6 +11,8 @@ from dnd.monsters.srd_roster import (
     SRD_CREATURE_DECLARATIONS_BY_ID,
     SRD_CREATURE_RECIPES_BY_ID,
 )
+from dnd.game import Game
+from dnd.runtime_reset import reset_engine_runtime
 from tests.manual.authored_encounter_support import (
     assemble_authored_encounter,
     reset_authored_encounter_state,
@@ -25,7 +27,7 @@ def _materialize_roster_fixture(
     faction: str = "monsters",
 ):
     declaration = SRD_CREATURE_DECLARATIONS_BY_ID[creature_id]
-    return materialize_creature(
+    entity = materialize_creature(
         SRD_CREATURE_RECIPES_BY_ID[creature_id],
         runtime_entity_uuid=uuid4(),
         display_name=name or declaration.descriptor.display_name,
@@ -36,6 +38,9 @@ def _materialize_roster_fixture(
         ),
         possession_mode=CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS,
     )
+    entity.compose_entity()
+    Game().deploy_entity(entity, position)
+    return entity
 
 
 def test_srd_roster_has_at_least_twenty_structured_monsters() -> None:
@@ -66,7 +71,7 @@ def test_srd_roster_has_at_least_twenty_structured_monsters() -> None:
 def test_each_srd_monster_builds_with_legal_actions() -> None:
     """Every SRD roster row should create a live entity with action rows."""
     for monster_id in SRD_CREATURE_RECIPES_BY_ID:
-        reset_authored_encounter_state()
+        reset_engine_runtime(grid_size=(15, 15))
         monster = _materialize_roster_fixture(
             monster_id,
             name=f"Roster {monster_id}",
@@ -93,6 +98,7 @@ def test_authored_srd_encounters_build_through_canonical_recipes() -> None:
         "srd_elite_mercenary_contract",
     ]
     for encounter_id in encounter_ids:
+        reset_authored_encounter_state()
         arena = assemble_authored_encounter(encounter_id)
         recipe = arena.assembled.recipe
         assert recipe.encounter_id == f"encounter.{encounter_id}"

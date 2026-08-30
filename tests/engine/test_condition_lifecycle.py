@@ -5,6 +5,7 @@ import random
 from typing import Iterator
 from uuid import UUID, uuid4
 
+import pytest
 from pydantic import Field
 
 from dnd.blocks.base_item import BaseItem
@@ -29,7 +30,7 @@ from dnd.core.gridmap import get_map
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import BaseValue, ModifiableValue
 from dnd.entity import Entity, EntityConfig
-from tests.engine.support import reset_combat_state
+from tests.engine.support import create_test_entity, reset_combat_state
 
 
 @contextmanager
@@ -79,7 +80,7 @@ def configured_entity(
         position=position,
         faction=faction,
     )
-    return Entity.create(source_entity_uuid=source_uuid, name=name, config=config)
+    return create_test_entity(source_id=source_uuid, name=name, config=config)
 
 
 class EngineBookMarkerCondition(BaseCondition):
@@ -90,8 +91,7 @@ class EngineBookMarkerCondition(BaseCondition):
     def _apply(
         self, declaration_event: Event
     ) -> tuple[list[tuple[UUID, UUID]], list[UUID], list[UUID], list[UUID], Event]:
-        event = declaration_event.phase_to(EventPhase.EXECUTION, condition=self)
-        event = event.phase_to(EventPhase.EFFECT, condition=self)
+        event = declaration_event.phase_to(EventPhase.EFFECT, condition=self)
         return [], [], [], [], event
 
 
@@ -114,8 +114,31 @@ class EngineBookCanceledEffectCondition(BaseCondition):
     def _apply(
         self, declaration_event: Event
     ) -> tuple[list[tuple[UUID, UUID]], list[UUID], list[UUID], list[UUID], Event]:
-        event = declaration_event.phase_to(EventPhase.EXECUTION, condition=self)
+        event = declaration_event.phase_to(EventPhase.EFFECT, condition=self)
         return [], [], [], [], event.cancel("canceled during condition application")
+
+
+class EngineBookExceptionalStateCondition(BaseCondition):
+    """Condition that installs direct state and then fails during apply."""
+
+    name: str = "EngineBookExceptionalState"
+    provisional_state_active: bool = Field(default=False, exclude=True)
+
+    def _apply(
+        self,
+        declaration_event: Event,
+    ) -> tuple[list[tuple[UUID, UUID]], list[UUID], list[UUID], list[UUID], Event]:
+        del declaration_event
+        self.provisional_state_active = True
+        raise RuntimeError("condition apply failed after provisional state")
+
+    def _release_owned_runtime_state(
+        self,
+        *,
+        parent_event: Event | None = None,
+    ) -> None:
+        del parent_event
+        self.provisional_state_active = False
 
 
 class EngineBookModifierCondition(BaseCondition):
@@ -138,8 +161,7 @@ class EngineBookModifierCondition(BaseCondition):
                 value=self.bonus,
             )
         )
-        event = declaration_event.phase_to(EventPhase.EXECUTION, condition=self)
-        event = event.phase_to(EventPhase.EFFECT, condition=self)
+        event = declaration_event.phase_to(EventPhase.EFFECT, condition=self)
         return [(value.uuid, modifier_uuid)], [], [], [], event
 
 
@@ -151,8 +173,7 @@ class EngineBookSubCondition(BaseCondition):
     def _apply(
         self, declaration_event: Event
     ) -> tuple[list[tuple[UUID, UUID]], list[UUID], list[UUID], list[UUID], Event]:
-        event = declaration_event.phase_to(EventPhase.EXECUTION, condition=self)
-        event = event.phase_to(EventPhase.EFFECT, condition=self)
+        event = declaration_event.phase_to(EventPhase.EFFECT, condition=self)
         return [], [], [], [], event
 
 
@@ -173,8 +194,7 @@ class EngineBookParentCondition(BaseCondition):
             parent_condition=self.uuid,
         )
         target.add_condition(child, parent_event=declaration_event)
-        event = declaration_event.phase_to(EventPhase.EXECUTION, condition=self)
-        event = event.phase_to(EventPhase.EFFECT, condition=self)
+        event = declaration_event.phase_to(EventPhase.EFFECT, condition=self)
         return [], [], [child.uuid], [], event
 
 
@@ -205,8 +225,7 @@ class EngineBookHandlerCondition(BaseCondition):
             event_processor=record_call,
         )
         EventQueue.add_event_handler(handler)
-        event = declaration_event.phase_to(EventPhase.EXECUTION, condition=self)
-        event = event.phase_to(EventPhase.EFFECT, condition=self)
+        event = declaration_event.phase_to(EventPhase.EFFECT, condition=self)
         return [], [handler.uuid], [], [], event
 
 
@@ -236,8 +255,7 @@ class EngineBookSpatialCondition(BaseCondition):
             event_processor=record_entry,
         )
         EventQueue.add_spatial_handler(handler)
-        event = declaration_event.phase_to(EventPhase.EXECUTION, condition=self)
-        event = event.phase_to(EventPhase.EFFECT, condition=self)
+        event = declaration_event.phase_to(EventPhase.EFFECT, condition=self)
         return [], [], [], [handler.uuid], event
 
 
@@ -249,6 +267,20 @@ def test_eb_07_001_entity_condition_application_events_and_indexes() -> None:
     condition = EngineBookMarkerCondition(
         source_entity_uuid=source.uuid,
         target_entity_uuid=target.uuid,
+    )
+    completion_snapshots: list[tuple[bool, bool, bool]] = []
+
+    def observe_completion(_event: Event) -> None:
+        completion_snapshots.append((
+            target.active_conditions.get(condition.name) is condition,
+            target.active_conditions_by_uuid.get(condition.uuid) is condition,
+            condition.name in target.active_conditions_by_source[source.uuid],
+        ))
+
+    EventQueue.add_on_event_callback(
+        observe_completion,
+        event_types={EventType.CONDITION_APPLICATION},
+        phases={EventPhase.COMPLETION},
     )
 
     completed = target.add_condition(condition)
@@ -265,17 +297,18 @@ def test_eb_07_001_entity_condition_application_events_and_indexes() -> None:
     assert target.active_conditions_by_uuid[condition.uuid] is condition
     assert "EngineBookMarker" in target.active_conditions_by_source[source.uuid]
 
-    phases = {
+    phases = [
         event.phase
         for event in EventQueue.get_events_by_type(EventType.CONDITION_APPLICATION)
         if event.lineage_uuid == completed.lineage_uuid
-    }
-    assert phases == {
+    ]
+    assert phases == [
         EventPhase.DECLARATION,
         EventPhase.EXECUTION,
         EventPhase.EFFECT,
         EventPhase.COMPLETION,
-    }
+    ]
+    assert completion_snapshots == [(True, True, True)]
 
 
 def test_eb_07_002_apply_without_effect_event_cancels_and_does_not_index() -> None:
@@ -298,8 +331,8 @@ def test_eb_07_002_apply_without_effect_event_cancels_and_does_not_index() -> No
     assert condition.uuid not in target.active_conditions_by_uuid
 
 
-def test_eb_07_003_canceled_apply_event_is_not_indexed_but_marks_object_applied() -> None:
-    """EB-07-003: a canceled returned event is not indexed, but still marks applied."""
+def test_eb_07_003_canceled_apply_event_discards_uncommitted_condition() -> None:
+    """EB-07-003: a canceled application leaves no active condition state."""
     reset_condition_state()
     source = configured_entity("Source")
     target = configured_entity("Target", position=(2, 1))
@@ -308,14 +341,194 @@ def test_eb_07_003_canceled_apply_event_is_not_indexed_but_marks_object_applied(
         target_entity_uuid=target.uuid,
     )
 
-    completed = target.add_condition(condition)
+    canceled = target.add_condition(condition)
 
-    assert completed is not None
-    assert completed.phase == EventPhase.COMPLETION
-    assert completed.canceled is True
-    assert condition.applied is True
+    assert canceled is not None
+    assert canceled.phase == EventPhase.CANCEL
+    assert canceled.canceled is True
+    assert condition.applied is False
     assert "EngineBookCanceledEffect" not in target.active_conditions
     assert condition.uuid not in target.active_conditions_by_uuid
+    assert BaseCondition.get(condition.uuid) is None
+    assert not any(
+        event.lineage_uuid == canceled.lineage_uuid
+        and event.phase is EventPhase.COMPLETION
+        for _, event in EventQueue.iter_events_since(0)
+    )
+
+
+def test_canceled_condition_effect_rolls_back_provisional_modifier() -> None:
+    """An effect veto leaves no modifier or active condition behind."""
+    reset_condition_state()
+    source = configured_entity("Source")
+    target = configured_entity("Target", position=(2, 1))
+    original_bonus = target.proficiency_bonus.normalized_score
+
+    def cancel_condition_effect(event: Event, _source_uuid: UUID) -> Event:
+        return event.cancel("condition effect rejected")
+
+    target.add_event_handler(EventHandler(
+        name="Reject condition effect",
+        source_entity_uuid=target.uuid,
+        trigger_conditions=[
+            Trigger(
+                event_type=EventType.CONDITION_APPLICATION,
+                event_phase=EventPhase.EFFECT,
+                event_target_entity_uuid=target.uuid,
+            ),
+        ],
+        event_processor=cancel_condition_effect,
+    ))
+    condition = EngineBookModifierCondition(
+        source_entity_uuid=source.uuid,
+        target_entity_uuid=target.uuid,
+        target_value_uuid=target.proficiency_bonus.uuid,
+        bonus=5,
+    )
+    cancel_snapshots: list[tuple[bool, int, bool]] = []
+
+    def observe_cancel(_event: Event) -> None:
+        cancel_snapshots.append((
+            condition.applied,
+            target.proficiency_bonus.normalized_score,
+            BaseCondition.get(condition.uuid) is condition,
+        ))
+
+    EventQueue.add_on_event_callback(
+        observe_cancel,
+        event_types={EventType.CONDITION_APPLICATION},
+        phases={EventPhase.CANCEL},
+    )
+
+    canceled = target.add_condition(condition)
+
+    assert canceled is not None
+    assert canceled.phase is EventPhase.CANCEL
+    assert condition.applied is False
+    assert target.proficiency_bonus.normalized_score == original_bonus
+    assert "EngineBookModifier" not in target.active_conditions
+    assert condition.uuid not in target.active_conditions_by_uuid
+    assert BaseCondition.get(condition.uuid) is None
+    assert cancel_snapshots == [(False, original_bonus, False)]
+
+
+def test_exceptional_condition_apply_releases_direct_state_and_identity() -> None:
+    """An application exception leaves no subclass state or live identity."""
+    reset_condition_state()
+    source = configured_entity("Source")
+    target = configured_entity("Target", position=(2, 1))
+    condition = EngineBookExceptionalStateCondition(
+        source_entity_uuid=source.uuid,
+        target_entity_uuid=target.uuid,
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="condition apply failed after provisional state",
+    ):
+        target.add_condition(condition)
+
+    assert condition.provisional_state_active is False
+    assert condition.applied is False
+    assert condition.uuid not in target.active_conditions_by_uuid
+    assert BaseCondition.get(condition.uuid) is None
+
+
+def test_canceled_condition_removal_preserves_active_state() -> None:
+    """A removal veto leaves the condition and its mechanics authoritative."""
+    reset_condition_state()
+    source = configured_entity("Source")
+    target = configured_entity("Target", position=(2, 1))
+    original_bonus = target.proficiency_bonus.normalized_score
+    condition = EngineBookModifierCondition(
+        source_entity_uuid=source.uuid,
+        target_entity_uuid=target.uuid,
+        target_value_uuid=target.proficiency_bonus.uuid,
+        bonus=5,
+    )
+    target.add_condition(condition)
+
+    def cancel_removal(event: Event, _source_uuid: UUID) -> Event:
+        return event.cancel("condition removal rejected")
+
+    target.add_event_handler(EventHandler(
+        name="Reject condition removal",
+        source_entity_uuid=target.uuid,
+        trigger_conditions=[
+            Trigger(
+                event_type=EventType.CONDITION_REMOVAL,
+                event_phase=EventPhase.DECLARATION,
+                event_target_entity_uuid=target.uuid,
+            ),
+        ],
+        event_processor=cancel_removal,
+    ))
+
+    removed = target.remove_condition("EngineBookModifier")
+
+    assert removed is False
+    assert condition.applied is True
+    assert target.proficiency_bonus.normalized_score == original_bonus + 5
+    assert target.active_conditions["EngineBookModifier"] is condition
+    assert target.active_conditions_by_uuid[condition.uuid] is condition
+    assert "EngineBookModifier" in target.active_conditions_by_source[source.uuid]
+
+
+def test_dependent_removal_veto_preserves_the_whole_condition_graph() -> None:
+    """A vetoed linked child prevents every prepared owner-state mutation."""
+    reset_condition_state()
+    source = configured_entity("Source")
+    parent_block = configured_entity("Parent", position=(2, 1))
+    child_block_a = configured_entity("Child A", position=(3, 1))
+    child_block_b = configured_entity("Child B", position=(4, 1))
+    parent = EngineBookMarkerCondition(
+        name="Atomic Parent",
+        source_entity_uuid=source.uuid,
+        target_entity_uuid=parent_block.uuid,
+    )
+    child_a = EngineBookMarkerCondition(
+        name="Atomic Child A",
+        source_entity_uuid=source.uuid,
+        target_entity_uuid=child_block_a.uuid,
+    )
+    child_b = EngineBookMarkerCondition(
+        name="Atomic Child B",
+        source_entity_uuid=source.uuid,
+        target_entity_uuid=child_block_b.uuid,
+    )
+    parent_block.add_condition(parent)
+    child_block_a.add_condition(child_a)
+    child_block_b.add_condition(child_b)
+    parent.add_linked_condition(child_block_a.uuid, child_a.uuid)
+    parent.add_linked_condition(child_block_b.uuid, child_b.uuid)
+
+    def veto_second_child(event: Event, _source_uuid: UUID) -> Event:
+        return event.cancel("second child remains active")
+
+    child_block_b.add_event_handler(EventHandler(
+        name="Keep second atomic child",
+        source_entity_uuid=child_block_b.uuid,
+        trigger_conditions=[Trigger(
+            event_type=EventType.CONDITION_REMOVAL,
+            event_phase=EventPhase.DECLARATION,
+            event_target_entity_uuid=child_block_b.uuid,
+        )],
+        event_processor=veto_second_child,
+    ))
+
+    removed = parent_block.remove_condition("Atomic Parent")
+
+    assert removed is False
+    assert parent.applied is True
+    assert child_a.applied is True
+    assert child_b.applied is True
+    assert parent_block.active_conditions["Atomic Parent"] is parent
+    assert child_block_a.active_conditions["Atomic Child A"] is child_a
+    assert child_block_b.active_conditions["Atomic Child B"] is child_b
+    assert parent.linked_conditions == [
+        (child_block_a.uuid, child_a.uuid),
+        (child_block_b.uuid, child_b.uuid),
+    ]
 
 
 def test_eb_07_004_entity_immunity_and_application_save_cancel_before_apply() -> None:
@@ -410,12 +623,43 @@ def test_eb_07_006_parent_removal_cascades_to_same_block_subconditions() -> None
     assert target.active_conditions["EngineBookParent"] is parent
     assert target.active_conditions["EngineBookSub"] is sub_condition
 
+    removal_cursor = EventQueue.event_cursor()
     target.remove_condition("EngineBookParent")
 
     assert parent.applied is False
     assert sub_condition.applied is False
     assert "EngineBookParent" not in target.active_conditions
     assert "EngineBookSub" not in target.active_conditions
+
+    removals = [
+        event
+        for _, event in EventQueue.iter_events_since(removal_cursor)
+        if event.event_type is EventType.CONDITION_REMOVAL
+    ]
+    parent_effect = next(
+        event
+        for event in removals
+        if event.condition is parent and event.phase is EventPhase.EFFECT
+    )
+    child_declaration = next(
+        event
+        for event in removals
+        if event.condition is sub_condition
+        and event.phase is EventPhase.DECLARATION
+    )
+    child_completion_index = next(
+        index
+        for index, event in enumerate(removals)
+        if event.condition is sub_condition
+        and event.phase is EventPhase.COMPLETION
+    )
+    parent_completion_index = next(
+        index
+        for index, event in enumerate(removals)
+        if event.condition is parent and event.phase is EventPhase.COMPLETION
+    )
+    assert child_declaration.parent_event == parent_effect.uuid
+    assert child_completion_index < parent_completion_index
 
 
 def test_eb_07_007_linked_conditions_clean_forward_and_notify_reverse() -> None:
@@ -668,7 +912,7 @@ def test_eb_07_011_child_removal_policies_any_last_and_none() -> None:
     assert none_parent.applied is True
     assert none_child.applied is False
     assert none_parent_block.active_conditions["EngineBookNoneParent"] is none_parent
-    assert none_parent.linked_conditions == [(none_child_block.uuid, none_child.uuid)]
+    assert none_parent.linked_conditions == []
 
 
 def test_eb_07_012_removal_save_succeeds_before_duration_decrements() -> None:
@@ -772,7 +1016,7 @@ def test_eb_07_013_item_conditions_index_expire_and_destroy_cleanly() -> None:
 if __name__ == "__main__":
     test_eb_07_001_entity_condition_application_events_and_indexes()
     test_eb_07_002_apply_without_effect_event_cancels_and_does_not_index()
-    test_eb_07_003_canceled_apply_event_is_not_indexed_but_marks_object_applied()
+    test_eb_07_003_canceled_apply_event_discards_uncommitted_condition()
     test_eb_07_004_entity_immunity_and_application_save_cancel_before_apply()
     test_eb_07_005_same_name_replacement_cleans_old_condition_state()
     test_eb_07_006_parent_removal_cascades_to_same_block_subconditions()

@@ -2,6 +2,7 @@
 
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import EventHandler, Trigger, EventType, EventPhase, StepMovementEvent
+from dnd.core.action_execution import MovementProvocationPolicy
 from dnd.actions import Attack, entity_action_economy_cost_evaluator
 from dnd.core.base_actions import Cost
 from dnd.core.content.runtime import (
@@ -28,6 +29,9 @@ def opportunity_attack_processor(event: StepMovementEvent, source_entity_uuid: U
     reaction_source_entity = Entity.get(source_entity_uuid)
     event_source_entity = Entity.get(event.source_entity_uuid)
     if reaction_source_entity is None or event_source_entity is None:
+        return event
+
+    if event.provocation_policy is MovementProvocationPolicy.DOES_NOT_PROVOKE:
         return event
 
     if reaction_source_entity.uuid == event_source_entity.uuid:

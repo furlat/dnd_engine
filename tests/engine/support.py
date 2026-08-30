@@ -8,6 +8,8 @@ from typing import Any, Dict, Optional, Tuple
 from uuid import UUID, uuid4
 
 from dnd.entity import Entity
+from dnd.entity import EntityConfig
+from dnd.game import Game
 from dnd.encounter import Encounter
 from dnd.controller import HumanController
 from dnd.core.creature_types import DamageType
@@ -19,6 +21,23 @@ from dnd.core.modifiers import (
     AutoHitStatus,
 )
 from dnd.runtime_reset import reset_engine_runtime
+
+
+def create_test_entity(
+    *,
+    name: str,
+    config: EntityConfig,
+    source_id: Optional[UUID] = None,
+) -> Entity:
+    """Create and explicitly deploy one low-level test Entity."""
+    entity = Entity.create(
+        source_entity_uuid=source_id or uuid4(),
+        name=name,
+        config=config,
+    )
+    entity.compose_entity()
+    Game().deploy_entity(entity, config.position)
+    return entity
 
 
 def reset_combat_state():
@@ -284,7 +303,7 @@ def set_hp(entity: Entity, hp: int):
 
 def get_position(entity: Entity) -> Tuple[int, int]:
     """Get the current position of an entity."""
-    return entity.senses.position
+    return entity.position
 
 
 def move_entity(entity: Entity, new_position: Tuple[int, int]):
@@ -295,17 +314,7 @@ def move_entity(entity: Entity, new_position: Tuple[int, int]):
         entity: Entity to move
         new_position: Target (x, y) position
     """
-    old_pos = entity.senses.position
-    entity.position = new_position
-    entity.senses.position = new_position
-
-    if entity.uuid in Entity._entity_by_position.get(old_pos, []):
-        Entity._entity_by_position[old_pos].remove(entity)
-    if new_position not in Entity._entity_by_position:
-        Entity._entity_by_position[new_position] = []
-    Entity._entity_by_position[new_position].append(entity)
-
-    Entity.update_all_entities_senses()
+    Entity.update_entity_position(entity, new_position)
 
 
 def has_condition(entity: Entity, condition_name: str) -> bool:

@@ -53,8 +53,10 @@ from dnd.core.base_actions import BaseAction
 from dnd.core.content.identities import ContentRef
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.creature_types import DamageType
+from dnd.core.gridmap import get_map
 from dnd.core.modifiers import ResistanceStatus
 from dnd.entity import Entity
+from dnd.game import Game
 from dnd.runtime_reset import reset_engine_runtime
 
 
@@ -460,6 +462,9 @@ def test_dragon_wings_materializes_a_reversible_flying_action(
     )
 
     receipt = _apply(context, entry)
+    context.entity.compose_entity()
+    game = Game()
+    game.deploy_entity(context.entity, context.entity.position)
 
     assert len(receipt.action_uuids) == 2
     toggle = context.entity.get_action_template("Dragon Wings")
@@ -542,7 +547,11 @@ def test_draconic_presence_materializes_a_reversible_aura_action(
         context.entity.action_economy.resources["sorcery_points"].current
         == 13
     )
-    aura = context.entity.active_conditions.get("Draconic Presence")
+    aura = next(
+        condition
+        for condition in get_map().get_spatial_conditions()
+        if isinstance(condition, sorcerer.DraconicPresenceAura)
+    )
     assert isinstance(aura, sorcerer.DraconicPresenceAura)
     assert aura.mode == mode
     assert aura.duration.duration == 10
@@ -553,19 +562,22 @@ def test_draconic_presence_materializes_a_reversible_aura_action(
         name="Failed Target",
     )
     failed_target.faction = "monsters"
-    Entity.update_entity_position(failed_target, (1, 0))
+    failed_target.compose_entity()
+    Game().deploy_entity(failed_target, (1, 0))
     successful_target = Entity.create(
         source_entity_uuid=uuid4(),
         name="Successful Target",
     )
     successful_target.faction = "monsters"
-    Entity.update_entity_position(successful_target, (2, 0))
+    successful_target.compose_entity()
+    Game().deploy_entity(successful_target, (2, 0))
     ally = Entity.create(
         source_entity_uuid=uuid4(),
         name="Ally",
     )
     ally.faction = "heroes"
-    Entity.update_entity_position(ally, (3, 0))
+    ally.compose_entity()
+    Game().deploy_entity(ally, (3, 0))
     with fixed_dice_faces(1):
         failed_target.on_turn_start()
     with fixed_dice_faces(20):
@@ -591,7 +603,7 @@ def test_draconic_presence_materializes_a_reversible_aura_action(
 
     context.entity.remove_condition("Concentrating")
 
-    assert "Draconic Presence" not in context.entity.active_conditions
+    assert aura not in get_map().get_spatial_conditions()
     assert effect_name not in failed_target.active_conditions
     assert immunity_name in successful_target.active_conditions
 
@@ -631,14 +643,19 @@ def test_draconic_presence_expires_with_its_concentration_after_ten_rounds(
     )
     assert isinstance(action, sorcerer.DraconicPresence)
     assert action.instantiate().apply() is not None
+    aura = next(
+        condition
+        for condition in get_map().get_spatial_conditions()
+        if isinstance(condition, sorcerer.DraconicPresenceAura)
+    )
 
     for _ in range(9):
         context.entity.on_turn_start()
-        assert "Draconic Presence" in context.entity.active_conditions
+        assert aura in get_map().get_spatial_conditions()
         assert "Concentrating" in context.entity.active_conditions
     context.entity.on_turn_start()
 
-    assert "Draconic Presence" not in context.entity.active_conditions
+    assert aura not in get_map().get_spatial_conditions()
     assert "Concentrating" not in context.entity.active_conditions
 
     _remove(context, presence_receipt, points_receipt)

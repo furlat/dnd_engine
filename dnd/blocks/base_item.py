@@ -5,20 +5,24 @@ EquippableItem adds equip/unequip lifecycle hooks.
 UsableItem provides actions via get_use_actions() with charge tracking.
 """
 
-from typing import Iterable, Optional, List, Literal, Tuple, cast
+from typing import Optional, List, Literal, Tuple, cast
 from uuid import UUID, uuid4
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from dnd.core.base_block import BaseBlock, MovementMode
 from dnd.core.creature_types import DamageType
 from dnd.core.gridmap import get_map
 from dnd.core.events import (
+    Damage,
     Event,
     EventPhase,
     EventType,
     SpatialChangeEvent,
+    TakeDamageEvent,
 )
 from dnd.core.equipment_types import EquipmentSlot
+from dnd.types.world import CardinalDirection
+from dnd.types.world_placement import WorldObjectPlacement
 from dnd.core.item_types import (
     EquippedVisualPolicy,
     ItemContentRefSnapshot,
@@ -28,7 +32,7 @@ from dnd.core.item_types import (
     ItemRarity,
 )
 from dnd.blocks.health import Health, HealthConfig, HitDiceConfig
-from dnd.core.base_actions import ActionEvent, BaseAction
+from dnd.core.base_actions import BaseAction
 from dnd.core.content.identities import ContentRef
 from dnd.core.content.runtime import (
     RuntimeBehaviorKind,
@@ -61,6 +65,10 @@ class ItemLocationStateEvent(Event):
         default=None,
         description="Floor position after the mutation.",
     )
+    world_placement: Optional[WorldObjectPlacement] = Field(
+        default=None,
+        description="Exact center/boundary floor placement after the mutation.",
+    )
     equipment_slot: Optional[EquipmentSlot] = Field(
         default=None,
         description="Occupied equipment slot when location is equipment.",
@@ -74,6 +82,22 @@ class ItemLocationStateEvent(Event):
         ge=0,
         description="Exact aggregate owner AC after an entity-owned mutation.",
     )
+
+    @model_validator(mode="after")
+    def validate_floor_placement(self) -> "ItemLocationStateEvent":
+        if self.location is ItemLocation.FLOOR:
+            if self.world_placement is None:
+                raise ValueError("floor item facts require world_placement")
+            if self.world_placement.object_uuid != self.item_state.item_uuid:
+                raise ValueError("world placement must identify the item")
+            if (
+                self.tile_uuid != self.world_placement.tile_uuid
+                or self.position != self.world_placement.position
+            ):
+                raise ValueError("floor item coordinates must match world_placement")
+        elif self.world_placement is not None:
+            raise ValueError("non-floor item facts cannot define world_placement")
+        return self
 
 
 class BaseItem(BaseBlock):
@@ -152,23 +176,8 @@ class BaseItem(BaseBlock):
     include_in_adjacent_senses_objects: bool = Field(default=False, description="Whether adjacent entities can sense this floor object without cell visibility")
     include_in_available_object_actions: bool = Field(default=True, description="Whether object/use action discovery should consider this floor object")
     blocks_movement: bool = Field(default=False, description="Blocks entity movement when on grid")
-    blocks_vision_field: bool = Field(default=False, description="Blocks line of sight when on grid")
-    blocks_movement_north: bool = Field(default=False, description="Blocks movement crossing north from this tile")
-    blocks_movement_south: bool = Field(default=False, description="Blocks movement crossing south from this tile")
-    blocks_movement_east: bool = Field(default=False, description="Blocks movement crossing east from this tile")
-    blocks_movement_west: bool = Field(default=False, description="Blocks movement crossing west from this tile")
-    blocks_vision_north: bool = Field(default=False, description="Blocks vision crossing north from this tile")
-    blocks_vision_south: bool = Field(default=False, description="Blocks vision crossing south from this tile")
-    blocks_vision_east: bool = Field(default=False, description="Blocks vision crossing east from this tile")
-    blocks_vision_west: bool = Field(default=False, description="Blocks vision crossing west from this tile")
-    blocks_light_north: bool = Field(default=False, description="Blocks light crossing north from this tile")
-    blocks_light_south: bool = Field(default=False, description="Blocks light crossing south from this tile")
-    blocks_light_east: bool = Field(default=False, description="Blocks light crossing east from this tile")
-    blocks_light_west: bool = Field(default=False, description="Blocks light crossing west from this tile")
-    blocks_propagation_north: bool = Field(default=False, description="Blocks physical propagation crossing north from this tile")
-    blocks_propagation_south: bool = Field(default=False, description="Blocks physical propagation crossing south from this tile")
-    blocks_propagation_east: bool = Field(default=False, description="Blocks physical propagation crossing east from this tile")
-    blocks_propagation_west: bool = Field(default=False, description="Blocks physical propagation crossing west from this tile")
+    blocks_optics_field: bool = Field(default=False, description="Blocks ordinary optics when on grid")
+    blocks_propagation_field: bool = Field(default=False, description="Blocks physical propagation when on grid")
     is_targetable: bool = Field(default=False, description="Can be targeted by attacks")
     health: Optional[Health] = Field(default=None, description="Health block for breakable items")
     is_equipped: bool = Field(default=False, description="Whether this item is currently equipped")
@@ -211,12 +220,38 @@ class BaseItem(BaseBlock):
             item_kind=ItemPresentationKind.ITEM,
             rarity=self.rarity,
             weight=self.weight,
+            value=self.value,
+            tags=tuple(self.tags),
+            is_pickable=self.is_pickable,
+            is_equippable=self.is_equippable,
+            is_usable=self.is_usable,
+            is_targetable=self.is_targetable,
+            stack_id=self.stack_id,
             visual_item_name=self.visual_item_name or self.name,
             visual_variant_id=self.visual_variant_id,
             equipped_visual_policy=self.equipped_visual_policy,
             stack_count=self.stack_count if stack_count is None else stack_count,
             max_stack=self.max_stack,
             is_consumable=self.is_consumable,
+            map_char=self.map_char,
+            include_in_senses_objects=self.include_in_senses_objects,
+            include_in_adjacent_senses_objects=(
+                self.include_in_adjacent_senses_objects
+            ),
+            include_in_available_object_actions=(
+                self.include_in_available_object_actions
+            ),
+            current_hit_points=(
+                max(0, self.get_hp()) if self.health is not None else None
+            ),
+            maximum_hit_points=(
+                self.get_max_hp() if self.health is not None else None
+            ),
+            boundary_structure=self.get_boundary_structure(),
+            is_open=self.get_spatial_open_state(),
+            blocks_movement=self.blocks_walking(),
+            blocks_optics=self.blocks_optics_at_center(),
+            blocks_propagation=self.blocks_propagation(),
         )
 
     def publish_location_state(
@@ -227,6 +262,7 @@ class BaseItem(BaseBlock):
         container_uuid: Optional[UUID] = None,
         tile_uuid: Optional[UUID] = None,
         position: Optional[Tuple[int, int]] = None,
+        world_placement: Optional[WorldObjectPlacement] = None,
         equipment_slot: Optional[EquipmentSlot] = None,
         merged_into_item_uuid: Optional[UUID] = None,
         entity_armor_class_after: Optional[int] = None,
@@ -236,6 +272,11 @@ class BaseItem(BaseBlock):
     ) -> ItemLocationStateEvent:
         """Publish one non-vetoable completion fact after location has committed."""
         source_uuid = source_entity_uuid or owner_uuid or self.source_entity_uuid
+        if location is ItemLocation.FLOOR and world_placement is None:
+            world_placement = get_map().get_object_placement(self.uuid)
+        if world_placement is not None:
+            tile_uuid = world_placement.tile_uuid
+            position = world_placement.position
         declaration = ItemLocationStateEvent(
             source_entity_uuid=source_uuid,
             target_entity_uuid=owner_uuid,
@@ -246,6 +287,7 @@ class BaseItem(BaseBlock):
             container_uuid=container_uuid,
             tile_uuid=tile_uuid,
             position=position,
+            world_placement=world_placement,
             equipment_slot=equipment_slot,
             merged_into_item_uuid=merged_into_item_uuid,
             entity_armor_class_after=entity_armor_class_after,
@@ -260,9 +302,13 @@ class BaseItem(BaseBlock):
         """Whether this item blocks walking through its grid position."""
         return self.blocks_movement
 
-    def blocks_vision(self, requesting_entity_uuid: Optional[UUID] = None) -> bool:
-        """Whether this item blocks line of sight through its grid position."""
-        return self.blocks_vision_field
+    def blocks_optics_at_center(self) -> bool:
+        """Whether this item blocks ordinary optics through its grid position."""
+        return self.blocks_optics_field
+
+    def blocks_propagation(self) -> bool:
+        """Whether this item blocks physical propagation through its grid position."""
+        return self.blocks_propagation_field
 
     def get_map_char(self) -> Optional[str]:
         """Return the glyph used to render this item on text maps."""
@@ -299,190 +345,52 @@ class BaseItem(BaseBlock):
         """
         return False
 
-    def _blocks_direction(self, channel: str, direction: str) -> bool:
-        if channel == "movement":
-            if direction == "north":
-                return self.blocks_movement_north
-            if direction == "south":
-                return self.blocks_movement_south
-            if direction == "east":
-                return self.blocks_movement_east
-            if direction == "west":
-                return self.blocks_movement_west
-        elif channel == "vision":
-            if direction == "north":
-                return self.blocks_vision_north
-            if direction == "south":
-                return self.blocks_vision_south
-            if direction == "east":
-                return self.blocks_vision_east
-            if direction == "west":
-                return self.blocks_vision_west
-        elif channel == "light":
-            if direction == "north":
-                return self.blocks_light_north
-            if direction == "south":
-                return self.blocks_light_south
-            if direction == "east":
-                return self.blocks_light_east
-            if direction == "west":
-                return self.blocks_light_west
-        elif channel == "propagation":
-            if direction == "north":
-                return self.blocks_propagation_north
-            if direction == "south":
-                return self.blocks_propagation_south
-            if direction == "east":
-                return self.blocks_propagation_east
-            if direction == "west":
-                return self.blocks_propagation_west
-        return False
-
-    def _set_directional_blocking_field(self, channel: str, direction: str, blocked: bool) -> bool:
-        old_value = self._blocks_direction(channel, direction)
-        if old_value == blocked:
-            return False
-        if channel == "movement":
-            if direction == "north":
-                self.blocks_movement_north = blocked
-            elif direction == "south":
-                self.blocks_movement_south = blocked
-            elif direction == "east":
-                self.blocks_movement_east = blocked
-            elif direction == "west":
-                self.blocks_movement_west = blocked
-            else:
-                return False
-        elif channel == "vision":
-            if direction == "north":
-                self.blocks_vision_north = blocked
-            elif direction == "south":
-                self.blocks_vision_south = blocked
-            elif direction == "east":
-                self.blocks_vision_east = blocked
-            elif direction == "west":
-                self.blocks_vision_west = blocked
-            else:
-                return False
-        elif channel == "light":
-            if direction == "north":
-                self.blocks_light_north = blocked
-            elif direction == "south":
-                self.blocks_light_south = blocked
-            elif direction == "east":
-                self.blocks_light_east = blocked
-            elif direction == "west":
-                self.blocks_light_west = blocked
-            else:
-                return False
-        elif channel == "propagation":
-            if direction == "north":
-                self.blocks_propagation_north = blocked
-            elif direction == "south":
-                self.blocks_propagation_south = blocked
-            elif direction == "east":
-                self.blocks_propagation_east = blocked
-            elif direction == "west":
-                self.blocks_propagation_west = blocked
-            else:
-                return False
-        else:
-            return False
-        return True
-
-    def blocks_directional_movement(self, direction: str,
-                                    requesting_entity_uuid: Optional[UUID] = None,
-                                    mode: MovementMode = MovementMode.WALKING,
-                                    subjective: bool = False) -> bool:
-        """Whether this item blocks movement crossing a tile-relative direction."""
-        return self._blocks_direction("movement", direction)
-
-    def blocks_directional_vision(self, direction: str,
-                                  observer_uuid: Optional[UUID] = None,
-                                  subjective: bool = False) -> bool:
-        """Whether this item blocks vision crossing a tile-relative direction."""
-        return self._blocks_direction("vision", direction)
-
-    def blocks_directional_light(self, direction: str,
-                                 observer_uuid: Optional[UUID] = None,
-                                 subjective: bool = False) -> bool:
-        """Whether this item blocks light crossing a tile-relative direction."""
-        return self._blocks_direction("light", direction)
-
-    def blocks_directional_propagation(self, direction: str,
-                                       requesting_entity_uuid: Optional[UUID] = None,
-                                       subjective: bool = False) -> bool:
-        """Whether this item blocks physical propagation crossing a tile-relative direction."""
-        return self._blocks_direction("propagation", direction)
-
-    def set_directional_blocking(self, channel: str, direction: str, blocked: bool,
-                                 parent_event: Optional[UUID] = None) -> None:
-        """Update one tile-relative directional blocker and notify the grid if placed."""
-        if channel not in {"movement", "vision", "light", "propagation"}:
-            raise ValueError(f"Unsupported directional blocking channel: {channel}")
-        if direction not in {"north", "south", "east", "west"}:
-            raise ValueError(f"Unsupported direction: {direction}")
-        if self._set_directional_blocking_field(channel, direction, blocked):
-            self._notify_blocking_changed(self.blocks_movement, self.blocks_vision_field, parent_event)
-
-    def set_directional_blocking_bulk(
+    def _notify_blocking_changed(
         self,
-        updates: Iterable[Tuple[str, str, bool]],
+        old_blocks_movement: bool,
+        old_blocks_optics: bool,
+        old_blocks_propagation: bool,
         parent_event: Optional[UUID] = None,
     ) -> None:
-        """Apply multiple directional blocker updates and emit at most one spatial event."""
-        normalized_updates = list(updates)
-        for channel, direction, _blocked in normalized_updates:
-            if channel not in {"movement", "vision", "light", "propagation"}:
-                raise ValueError(f"Unsupported directional blocking channel: {channel}")
-            if direction not in {"north", "south", "east", "west"}:
-                raise ValueError(f"Unsupported direction: {direction}")
-
-        changed = False
-        for channel, direction, blocked in normalized_updates:
-            changed = self._set_directional_blocking_field(channel, direction, blocked) or changed
-
-        if changed:
-            self._notify_blocking_changed(self.blocks_movement, self.blocks_vision_field, parent_event)
-
-    def _notify_blocking_changed(self, old_blocks_movement: bool, old_blocks_vision: bool,
-                                     parent_event: Optional[UUID] = None) -> None:
         """Fire SPATIAL_OBJECT_CHANGED if blocking state changed while on grid.
 
-        Called after modifying blocks_movement or blocks_vision_field on an item
+        Called after modifying center movement, optical, or propagation policy
         that is placed on the grid. Fires an event with hint indicating which
         senses layers are affected, replacing brute-force update_all_entities_senses().
 
-        Light recomputation is handled by GridMap's _on_vision_blocking_changed
-        callback which reacts to any spatial event with requires_fov=True.
+        Light recomputation is handled by GridMap after the committed optical
+        change event.
         """
         grid = get_map()
         position = grid.get_object_position(self.uuid)
         if position is None:
             return
-        vision_changed = self.blocks_vision_field != old_blocks_vision
+        optics_changed = self.blocks_optics_field != old_blocks_optics
+        propagation_changed = (
+            self.blocks_propagation_field != old_blocks_propagation
+        )
         walking_changed = self.blocks_movement != old_blocks_movement
-        directional_metadata = grid.recompute_tile_directional_blocking(position)
-        directional_channels = directional_metadata.get("directional_channels") or []
-        direction_changed = bool(directional_channels)
-        revision_channels = set(directional_channels)
-        if vision_changed:
-            revision_channels.update({"vision", "propagation"})
+        revision_channels = set()
+        if optics_changed:
+            revision_channels.add("optical")
+        if propagation_changed:
+            revision_channels.add("propagation")
         if walking_changed:
             revision_channels.add("movement")
         grid.invalidate_spatial_caches(revision_channels)
-        if vision_changed or walking_changed or direction_changed:
+        if optics_changed or propagation_changed or walking_changed:
             event = SpatialChangeEvent.object_changed(
                 position, self.uuid,
-                blocks_vision_changed=vision_changed or "vision" in directional_channels,
-                blocks_walking_changed=walking_changed or "movement" in directional_channels,
+                blocks_optics_changed=optics_changed,
+                blocks_propagation_changed=propagation_changed,
+                blocks_walking_changed=walking_changed,
                 parent_event=parent_event,
                 object_name=self.name,
                 object_map_char=self.get_map_char(),
                 object_blocks_movement=self.blocks_movement,
-                object_blocks_vision=self.blocks_vision_field,
+                object_blocks_optics=self.blocks_optics_field,
+                object_blocks_propagation=self.blocks_propagation_field,
                 object_is_open=self.get_spatial_open_state(),
-                **directional_metadata,
             )
             grid._fire_spatial_event(event)
 
@@ -499,13 +407,26 @@ class BaseItem(BaseBlock):
             return self.position
         return None
 
-    def place_on_grid(self, position: Tuple[int, int]) -> None:
-        """Place this item on the grid, setting tile_uuid and registering with GridMap."""
+    def place_on_grid(
+        self,
+        position: Tuple[int, int],
+        *,
+        boundary_direction: Optional[CardinalDirection] = None,
+        base_height_steps: Optional[int] = None,
+        orientation: Optional[CardinalDirection] = None,
+    ) -> None:
+        """Place this item through GridMap's exact placement contract."""
         grid = get_map()
         self.position = position
         tile = grid.get_tile(position[0], position[1])
         self.tile_uuid = tile.uuid if tile else None
-        grid.place_object(self.uuid, position)
+        grid.place_object(
+            self.uuid,
+            position,
+            boundary_direction=boundary_direction,
+            base_height_steps=base_height_steps,
+            orientation=orientation,
+        )
 
     def on_grid_object_removed(self, position: Tuple[int, int], clear_location: bool = True) -> None:
         """Synchronize floor-location fields after GridMap removes this item.
@@ -558,7 +479,7 @@ class BaseItem(BaseBlock):
             if previous_owner_uuid is not None
             else None
         )
-        self._on_destroy()
+        self._on_destroy(parent_event)
         gridmap = get_map()
         gridmap.cleanup_block_light_sources(self.uuid)
         for cond_name in list(self.active_conditions.keys()):
@@ -574,7 +495,10 @@ class BaseItem(BaseBlock):
         self.equipped_slot = None
         gridmap = get_map()
         if gridmap.get_object_position(self.uuid) is not None:
-            gridmap.remove_object(self.uuid)
+            gridmap.remove_object(
+                self.uuid,
+                parent_event=(parent_event.uuid if parent_event is not None else None),
+            )
         owner_published = (
             previous_owner.on_owned_item_destroyed(self, parent_event=parent_event)
             if previous_owner is not None
@@ -589,8 +513,8 @@ class BaseItem(BaseBlock):
             )
         BaseBlock._registry.pop(self.uuid, None)
 
-    def _on_destroy(self) -> None:
-        """Subclass override hook for destruction behavior."""
+    def _on_destroy(self, parent_event: Optional[Event]) -> None:
+        """Subclass override hook with the accepted destruction cause."""
         pass
 
     def is_breakable(self) -> bool:
@@ -621,16 +545,64 @@ class BaseItem(BaseBlock):
             return 0
         return self.health.get_max_hit_dices_points(0)
 
-    def receive_damage(self, amount: int, damage_type: DamageType, source_uuid: UUID) -> int:
-        """Apply damage to this item. Health block handles resistances/immunities.
-
-        Returns actual damage dealt. Destroys item if HP reaches 0.
-        """
+    def receive_damage(
+        self,
+        amount: int,
+        damage_type: DamageType,
+        source_uuid: UUID,
+        parent_event: Optional[Event] = None,
+    ) -> int:
+        """Apply item damage through the existing damage-event lifecycle."""
         if self.health is None:
             return 0
-        actual = self.health.take_damage(amount, damage_type, source_uuid)
+
+        source = BaseBlock.get(source_uuid)
+        damage_event = TakeDamageEvent(
+            source_entity_uuid=source_uuid,
+            source_entity_name=source.name if source is not None else None,
+            target_entity_uuid=self.uuid,
+            target_entity_name=self.name,
+            total_damage=amount,
+            damages=[
+                Damage(
+                    damage_type=damage_type,
+                    dice_numbers=1,
+                    damage_dice=4,
+                    source_entity_uuid=source_uuid,
+                    target_entity_uuid=self.uuid,
+                ),
+            ],
+            parent_event=parent_event.uuid if parent_event is not None else None,
+            phase=EventPhase.DECLARATION,
+        )
+        damage_event = damage_event.phase_to(EventPhase.EXECUTION)
+        if damage_event.canceled:
+            return 0
+        damage_event = damage_event.phase_to(EventPhase.EFFECT)
+        if damage_event.canceled:
+            return 0
+
+        resolved_damage_type = (
+            damage_event.damages[0].damage_type
+            if damage_event.damages
+            else damage_type
+        )
+        preview = self.health.preview_damage(
+            damage_event.get_effective_damage(),
+            resolved_damage_type,
+            damage_event.normal_hit_point_damage_cap,
+            declared_damage=damage_event.total_damage,
+            normal_hit_points_available=max(0, self.get_hp()),
+        )
+        actual = self.health.apply_damage_preview(preview, source_uuid)
         if not self.has_hp:
-            self.destroy()
+            self.destroy(parent_event=damage_event)
+        damage_event.phase_to(
+            EventPhase.COMPLETION,
+            final_damage=actual,
+            resulting_hp=max(0, self.get_hp()),
+            resolution=preview,
+        )
         return actual
 
     @staticmethod
@@ -893,7 +865,8 @@ class UsableItem(BaseItem):
         Args:
             amount: Number of charges to consume.
             source_entity_uuid: Entity whose action spends the item resource.
-            parent_event: Action effect that caused the charge consumption.
+            parent_event: Stored action declaration that owns the pre-execution
+                charge commitment.
 
         Returns:
             Completed or canceled item-charge event.
@@ -965,27 +938,3 @@ class ItemChargeConsumptionEvent(Event):
         default=False,
         description="Whether consumption removed the final item from engine registries.",
     )
-
-
-def consume_item_charge_before_action_completion(event: Event) -> None:
-    """Consume one item-bound action resource before its root lineage completes."""
-    if not isinstance(event, ActionEvent):
-        return
-    if (
-        event.source_item_uuid is None
-        or event.item_charge_cost <= 0
-        or event.item_charge_action_lineage_uuid != event.lineage_uuid
-    ):
-        return
-    item = BaseBlock.get(event.source_item_uuid)
-    if not isinstance(item, UsableItem) or item.charges == -1:
-        return
-    result = item.consume_charge_with_event(
-        event.item_charge_cost,
-        event.source_entity_uuid,
-        event,
-    )
-    if result.canceled:
-        raise RuntimeError(
-            f"Item charge consumption was canceled for completed action lineage {event.lineage_uuid}"
-        )

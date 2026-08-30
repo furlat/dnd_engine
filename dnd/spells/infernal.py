@@ -151,9 +151,11 @@ def _rebuke_processor(
         resolved_source_id = source_ids[0]
     if not caster.action_economy.can_afford("reactions", 1):
         return None
-    caster.update_entity_senses(max_distance=60)
+    caster.materialize_navigation(max_distance=60)
+    contact = caster.senses.entities.get(attacker.uuid)
     if (
-        attacker.uuid not in caster.senses.entities
+        contact is None
+        or not contact.visual
         or caster.senses.get_feet_distance(attacker.position) > 60
     ):
         return None

@@ -135,7 +135,7 @@ LEGACY_SPATIAL_MIGRATION_CASES: dict[str, LegacyCoverage] = {
     "test_tile_effect_cleanup_removes_spatial_handler": LegacyCoverage(
         "strengthened",
         SPATIAL_CLEANUP_SELECTOR,
-        "Real ZoneControlCondition removal clears handler indexes, terrain, and tile markers.",
+        "Direct AreaCondition removal clears handler indexes, terrain, and Tile references.",
     ),
     "test_turn_start_damage_still_works": LegacyCoverage(
         "strengthened",

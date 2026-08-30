@@ -15,7 +15,7 @@ from dnd.core.content.origin_features import (
 )
 from dnd.core.language_types import SrdLanguageId
 from dnd.core.creature_types import DamageType, Size
-from dnd.core.senses import SenseMode, SensesType
+from dnd.types.senses import SenseMode, SensesType
 from dnd.core.saving_throw_types import SavingThrowEffectTag
 
 

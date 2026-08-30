@@ -14,9 +14,8 @@ from dnd.core.base_actions import ActionEvent
 from dnd.core.base_block import BaseBlock, LightLevel, SenseMode, SensesType
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.base_object import BaseObject
-from dnd.core.base_tiles import Tile
-from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
 from dnd.core.condition_types import ConditionCategory, HazardFilter
+from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.events import (
     Event,
     EventPhase,
@@ -32,23 +31,62 @@ from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import BaseValue
 from dnd.encounter import Encounter
 from dnd.entity import Entity
-from dnd.monsters.bestiary import create_caster, create_skeleton
+from dnd.game import Game
+from dnd.items.environment import DirectionalDoor, DirectionalWall
+from dnd.monsters.bestiary import (
+    create_caster as _create_caster,
+    create_skeleton as _create_skeleton,
+)
+from dnd.spells.conjuration import DarknessZone, FogCloudZone
 from dnd.spells.divination import SeeInvisibilityEffect
 from dnd.spells.enchantment import Bane, Bless
 from dnd.spells.evocation import Fireball, MagicMissile
 from dnd.spells.necromancy import NecroticBless
-from dnd.tile_conditions import ZoneControlCondition
+from dnd.spatial.area_conditions import AreaCondition
+from dnd.types.spatial_effects import (
+    SpatialEffectLayer,
+    SpatialEffectOccupancyPolicy,
+)
+from dnd.types.world import CardinalDirection, WorldEdgeChannel
+from dnd.types.senses import OpticalObscurement, PerceivedContact
 from tests.engine.support import reset_combat_state
 
 
-class MagicalDarknessCellZone(ZoneControlCondition):
+_MAGICAL_DARKNESS_CELL_CONTENT_REF = ContentRef(
+    pack_id="test.senses",
+    definition_kind=ContentDefinitionKind.CONDITION,
+    content_id="condition.spatial.magical_darkness_cell",
+    content_version=1,
+    definition_contract_hash="0" * 64,
+)
+
+
+class MagicalDarknessCellZone(AreaCondition):
     """Single-cell magical darkness zone for senses reactivity tests."""
 
-    name: str = "Magical Darkness Cell"
-    zone_shape: str = "sphere"
-    zone_radius_feet: int = 0
-    sets_light_level: LightLevel = LightLevel.MAGICAL_DARKNESS
-    light_is_obscurement: bool = True
+    name: str = Field(default="Magical Darkness Cell")
+    content_ref: ContentRef = Field(default=_MAGICAL_DARKNESS_CELL_CONTENT_REF)
+    position: tuple[int, int]
+    layer: SpatialEffectLayer = Field(default=SpatialEffectLayer.FIELD)
+    occupancy_policy: SpatialEffectOccupancyPolicy = Field(
+        default=SpatialEffectOccupancyPolicy.OVERLAPPING,
+    )
+    zone_shape: str = Field(default="sphere")
+    zone_radius_feet: int = Field(default=0)
+    sets_light_level: LightLevel = Field(default=LightLevel.DARKNESS)
+    light_is_cap: bool = Field(default=True)
+    optical_obscurement: OpticalObscurement = Field(
+        default=OpticalObscurement.MAGICAL_DARKNESS,
+    )
+
+
+def _spatial_cause(source_uuid: UUID) -> Event:
+    return Event(
+        name="Test spatial cause",
+        event_type=EventType.BASE_ACTION,
+        phase=EventPhase.EFFECT,
+        source_entity_uuid=source_uuid,
+    )
 
 
 class PerceptionModifierCondition(BaseCondition):
@@ -98,12 +136,34 @@ class PerceptionModifierCondition(BaseCondition):
         return [(perception.skill_bonus.uuid, modifier_uuid)], [], [], [], effect_event
 
 
+_senses_game: Game | None = None
+
+
+def _deploy_bestiary_entity(entity: Entity) -> Entity:
+    if _senses_game is None:
+        raise RuntimeError("reset_senses_state must precede entity creation")
+    entity.compose_entity()
+    _senses_game.deploy_entity(entity, entity.position)
+    return entity
+
+
+def create_skeleton(*args, **kwargs) -> Entity:
+    """Create and explicitly deploy one skeleton in the test-owned Game."""
+    return _deploy_bestiary_entity(_create_skeleton(*args, **kwargs))
+
+
+def create_caster(*args, **kwargs) -> Entity:
+    """Create and explicitly deploy one caster in the test-owned Game."""
+    return _deploy_bestiary_entity(_create_caster(*args, **kwargs))
+
+
 def reset_senses_state(
     width: int = 8,
     height: int = 3,
     default_light: LightLevel = LightLevel.BRIGHT_LIGHT,
 ) -> None:
     """Clear global state and build a rectangular grid with one light level."""
+    global _senses_game
     reset_combat_state()
     EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
@@ -111,9 +171,14 @@ def reset_senses_state(
     BaseValue._registry.clear()
     Encounter.clear_registry()
     grid = get_map()
-    grid.create_rectangle(0, 0, width, height)
-    for tile in grid._tiles.values():
-        tile.default_light = default_light
+    grid.create_rectangle(
+        0,
+        0,
+        width,
+        height,
+        default_light=default_light,
+    )
+    _senses_game = Game()
 
 
 def completed_sensory_updates(observer_uuid: UUID) -> list[SensoryUpdateEvent]:
@@ -138,7 +203,8 @@ def test_eb_12_001_geometric_fov_is_filtered_by_effective_light() -> None:
     subscriptions = get_map().get_entity_subscriptions(observer.uuid)
     assert (3, 0) in subscriptions
     assert (3, 0) not in observer.senses.visible
-    assert (1, 0) in observer.senses.visible
+    assert observer.senses.visible == {}
+    assert observer.senses.effective_light_levels == {}
     assert target.uuid not in observer.senses.entities
     assert (3, 0) not in observer.senses.seen
 
@@ -146,40 +212,54 @@ def test_eb_12_001_geometric_fov_is_filtered_by_effective_light() -> None:
 def test_eb_12_002_sense_modes_subjectively_upgrade_light() -> None:
     """EB-12-002: darkvision, Devil's Sight, and truesight change effective light."""
     reset_senses_state(width=16, height=1, default_light=LightLevel.BRIGHT_LIGHT)
+    grid = get_map()
+    grid.set_tile(15, 0, default_light=LightLevel.DARKNESS)
+    grid.set_tile(10, 0, default_light=LightLevel.DARKNESS)
+    grid.set_tile(5, 0, default_light=LightLevel.DIM_LIGHT)
     observer = create_skeleton(name="Observer", position=(0, 0), darkvision=False)
     observer.senses.sense_modes = [
         SenseMode(sense_type=SensesType.DARKVISION, range_feet=60)
     ]
 
-    far_dark = Tile.create(position=(15, 0), name="Far Darkness", default_light=LightLevel.DARKNESS)
-    near_dark = Tile.create(position=(10, 0), name="Near Darkness", default_light=LightLevel.DARKNESS)
-    dim = Tile.create(position=(5, 0), name="Dim", default_light=LightLevel.DIM_LIGHT)
-    magical = Tile.create(position=(2, 0), name="Magical Darkness", default_light=LightLevel.BRIGHT_LIGHT)
-    magical.add_obscurement(uuid4(), LightLevel.MAGICAL_DARKNESS, fire_event=False)
+    observer.update_entity_senses(max_distance=18)
+    assert (15, 0) not in observer.senses.effective_light_levels
+    assert observer.senses.effective_light_levels[(10, 0)] == LightLevel.DIM_LIGHT
+    assert observer.senses.effective_light_levels[(5, 0)] == LightLevel.BRIGHT_LIGHT
 
-    assert far_dark.get_effective_light_for(observer.uuid, (0, 0)) == LightLevel.DARKNESS
-    assert near_dark.get_effective_light_for(observer.uuid, (0, 0)) == LightLevel.DIM_LIGHT
-    assert dim.get_effective_light_for(observer.uuid, (0, 0)) == LightLevel.BRIGHT_LIGHT
-    assert magical.get_effective_light_for(observer.uuid, (0, 0)) == LightLevel.MAGICAL_DARKNESS
+    zone = MagicalDarknessCellZone(
+        source_entity_uuid=observer.uuid,
+        position=(2, 0),
+    )
+    assert zone.activate(parent_event=_spatial_cause(observer.uuid)) is not None
+    assert (2, 0) not in observer.senses.effective_light_levels
 
     observer.senses.sense_modes = [
         SenseMode(sense_type=SensesType.DEVILS_SIGHT, range_feet=120)
     ]
-    assert magical.get_effective_light_for(observer.uuid, (0, 0)) == LightLevel.BRIGHT_LIGHT
+    observer.update_entity_senses(max_distance=18)
+    assert observer.senses.effective_light_levels[(2, 0)] == LightLevel.BRIGHT_LIGHT
 
     observer.senses.sense_modes = [
         SenseMode(sense_type=SensesType.TRUESIGHT, range_feet=60)
     ]
-    assert magical.get_effective_light_for(observer.uuid, (0, 0)) == LightLevel.BRIGHT_LIGHT
+    observer.update_entity_senses(max_distance=18)
+    assert observer.senses.effective_light_levels[(2, 0)] == LightLevel.BRIGHT_LIGHT
 
 
-def test_eb_12_003_light_sources_use_light_fov_and_respect_light_blockers() -> None:
-    """EB-12-003: light sources apply zones through the light channel."""
+def test_eb_12_003_light_sources_use_shared_optical_topology() -> None:
+    """EB-12-003: light sources apply zones through ordinary optics."""
     reset_senses_state(width=6, height=1, default_light=LightLevel.DARKNESS)
     grid = get_map()
-    grid.set_tile_directional_border((1, 0), "light", "east", False)
+    wall = DirectionalWall(
+        source_entity_uuid=uuid4(),
+        blocked_channels=(WorldEdgeChannel.OPTICAL,),
+    )
+    wall.place_on_grid(
+        (1, 0),
+        boundary_direction=CardinalDirection.EAST,
+    )
 
-    light_uuid = grid.add_light_source(
+    grid.add_light_source(
         (0, 0),
         bright_radius_feet=5,
         dim_radius_feet=15,
@@ -195,8 +275,178 @@ def test_eb_12_003_light_sources_use_light_fov_and_respect_light_blockers() -> N
     assert source_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
     assert lit_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
     assert blocked_tile.resolved_light_level == LightLevel.DARKNESS
-    assert light_uuid in grid._light_sources
-    assert (2, 0) not in grid._light_sources[light_uuid].affected_tiles
+
+
+def test_eb_12_003a_optical_door_recomputes_existing_light_on_commit() -> None:
+    """EB-12-003a: a committed door change immediately updates light reach."""
+    reset_senses_state(width=6, height=1, default_light=LightLevel.DARKNESS)
+    grid = get_map()
+    door = DirectionalDoor(source_entity_uuid=uuid4())
+    door.place_on_grid(
+        (1, 0),
+        boundary_direction=CardinalDirection.EAST,
+    )
+    grid.add_light_source(
+        (0, 0),
+        bright_radius_feet=5,
+        dim_radius_feet=15,
+        very_bright_radius_feet=0,
+    )
+    far_tile = grid.get_tile(2, 0)
+    assert far_tile is not None
+    assert far_tile.resolved_light_level == LightLevel.DARKNESS
+
+    event_cursor = EventQueue.event_cursor()
+    door.open()
+
+    assert far_tile.resolved_light_level == LightLevel.DIM_LIGHT
+    opened_events = [
+        (index, event)
+        for index, event in EventQueue.iter_events_since(event_cursor)
+        if isinstance(event, SpatialChangeEvent)
+        and event.phase == EventPhase.COMPLETION
+    ]
+    topology_index, topology_event = next(
+        (index, event)
+        for index, event in opened_events
+        if event.event_type == EventType.SPATIAL_OBJECT_CHANGED
+    )
+    light_index, light_event = next(
+        (index, event)
+        for index, event in opened_events
+        if event.event_type == EventType.SPATIAL_LIGHT_CHANGED
+    )
+    assert topology_event.directional_channels == ["movement", "optical", "propagation"]
+    assert light_event.parent_event is not None
+    light_parent = EventQueue.get_event_by_uuid(light_event.parent_event)
+    assert light_parent is not None
+    assert light_parent.lineage_uuid == topology_event.lineage_uuid
+    assert light_index < topology_index
+    assert light_event.uuid in topology_event.children_events
+    assert light_event.senses_hint is not None
+    assert (2, 0) in light_event.senses_hint.light_changed_positions
+
+    door.close()
+
+    assert far_tile.resolved_light_level == LightLevel.DARKNESS
+
+
+def test_eb_12_003b_light_modifiers_are_map_owned_public_facts() -> None:
+    """EB-12-003b: objective light mutation is map-owned and event-published."""
+    reset_senses_state(width=3, height=1, default_light=LightLevel.DARKNESS)
+    grid = get_map()
+    tile = grid.get_tile(1, 0)
+    assert tile is not None
+    source_uuid = uuid4()
+    event_cursor = EventQueue.event_cursor()
+
+    changed = grid.apply_light_modifier(
+        source_uuid,
+        {(1, 0)},
+        LightLevel.BRIGHT_LIGHT,
+    )
+
+    assert changed == {(1, 0)}
+    assert tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
+    assert not hasattr(tile, "add_illumination")
+    assert not hasattr(tile, "add_obscurement")
+    assert not hasattr(tile, "remove_light_modifier")
+    completion = next(
+        event
+        for _, event in EventQueue.iter_events_since(event_cursor)
+        if isinstance(event, SpatialChangeEvent)
+        and event.event_type == EventType.SPATIAL_LIGHT_CHANGED
+        and event.phase == EventPhase.COMPLETION
+    )
+    assert completion.light_level_map == {"1,0": LightLevel.BRIGHT_LIGHT.value}
+
+    assert grid.remove_light_modifier(source_uuid, {(1, 0)}) == {(1, 0)}
+    assert tile.resolved_light_level == LightLevel.DARKNESS
+
+
+def test_eb_12_003c_tile_optics_commit_before_light_and_preserve_sources() -> None:
+    """EB-12-003c: replacing Tile optics preserves source ownership and causality."""
+    reset_senses_state(width=4, height=1, default_light=LightLevel.DARKNESS)
+    grid = get_map()
+    grid.add_light_source(
+        (0, 0),
+        bright_radius_feet=5,
+        dim_radius_feet=15,
+        very_bright_radius_feet=0,
+    )
+    far_tile = grid.get_tile(2, 0)
+    assert far_tile is not None
+    assert far_tile.resolved_light_level == LightLevel.DIM_LIGHT
+    cursor = EventQueue.event_cursor()
+
+    wall_tile = grid.set_tile(
+        1,
+        0,
+        blocks_optics=True,
+        blocks_propagation=True,
+        default_light=LightLevel.DARKNESS,
+    )
+
+    assert wall_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
+    assert far_tile.resolved_light_level == LightLevel.DARKNESS
+    completions = [
+        (index, event)
+        for index, event in EventQueue.iter_events_since(cursor)
+        if isinstance(event, SpatialChangeEvent)
+        and event.phase == EventPhase.COMPLETION
+    ]
+    tile_index, tile_event = next(
+        (index, event)
+        for index, event in completions
+        if event.event_type == EventType.SPATIAL_TILE_CHANGED
+    )
+    light_index, light_event = next(
+        (index, event)
+        for index, event in completions
+        if event.event_type == EventType.SPATIAL_LIGHT_CHANGED
+    )
+    assert light_index < tile_index
+    assert light_event.uuid in tile_event.children_events
+    assert tile_event.tile_blocks_optics is True
+    assert tile_event.tile_blocks_propagation is True
+    assert tile_event.new_light_level == LightLevel.BRIGHT_LIGHT.value
+
+    reopened_tile = grid.set_tile(
+        1,
+        0,
+        blocks_optics=False,
+        blocks_propagation=False,
+        default_light=LightLevel.DARKNESS,
+    )
+
+    assert reopened_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
+    assert grid.get_tile(2, 0).resolved_light_level == LightLevel.DIM_LIGHT
+
+
+def test_eb_12_003d_tile_removal_and_recreation_recompute_light_footprints() -> None:
+    """EB-12-003d: missing support cuts light and recreation restores its route."""
+    reset_senses_state(width=4, height=1, default_light=LightLevel.DARKNESS)
+    grid = get_map()
+    grid.add_light_source(
+        (0, 0),
+        bright_radius_feet=5,
+        dim_radius_feet=15,
+        very_bright_radius_feet=0,
+    )
+    far_tile = grid.get_tile(2, 0)
+    assert far_tile is not None
+    assert far_tile.resolved_light_level == LightLevel.DIM_LIGHT
+
+    grid.remove_tile(1, 0)
+
+    assert far_tile.resolved_light_level == LightLevel.DARKNESS
+    restored = grid.set_tile(
+        1,
+        0,
+        default_light=LightLevel.DARKNESS,
+    )
+    assert restored.resolved_light_level == LightLevel.BRIGHT_LIGHT
+    assert far_tile.resolved_light_level == LightLevel.DIM_LIGHT
 
 
 def test_eb_12_004_light_change_reveals_subscribed_dark_cells_reactively() -> None:
@@ -216,7 +466,7 @@ def test_eb_12_004_light_change_reveals_subscribed_dark_cells_reactively() -> No
     light_updates = [event for event in updates if event.update_reason == SensoryUpdateReason.LIGHT]
     assert light_updates
     assert any((3, 0) in event.visible_cells_added for event in light_updates)
-    assert any(target.uuid in event.visible_entities_added for event in light_updates)
+    assert any(target.uuid in event.entity_contacts_changed for event in light_updates)
 
 
 def test_eb_12_005_perceivability_flags_filter_hidden_and_invisible_blocks() -> None:
@@ -229,17 +479,18 @@ def test_eb_12_005_perceivability_flags_filter_hidden_and_invisible_blocks() -> 
         SenseMode(sense_type=SensesType.TRUESIGHT, range_feet=60)
     ]
 
-    assert target.is_perceivable_by(observer.uuid)
+    Entity.update_all_entities_senses(max_distance=5)
+    assert target.uuid in observer.senses.entities
     target.set_stealth_dc(observer.get_passive_perception() + 1)
-    assert not target.is_perceivable_by(observer.uuid)
+    assert target.uuid not in observer.senses.entities
     target.set_stealth_dc(1)
-    assert target.is_perceivable_by(observer.uuid)
+    assert target.uuid in observer.senses.entities
 
     target.set_invisible(True)
-    assert not target.is_perceivable_by(observer.uuid)
-    assert target.is_perceivable_by(truesight.uuid)
+    assert target.uuid not in observer.senses.entities
+    assert target.uuid in truesight.senses.entities
     target.set_invisible(False)
-    assert target.is_perceivable_by(observer.uuid)
+    assert target.uuid in observer.senses.entities
 
 
 def test_eb_12_006_perceivability_events_refilter_visible_entities() -> None:
@@ -256,7 +507,7 @@ def test_eb_12_006_perceivability_events_refilter_visible_entities() -> None:
     removed_updates = [
         event for event in completed_sensory_updates(observer.uuid)
         if event.update_reason == SensoryUpdateReason.PERCEIVABILITY
-        and target.uuid in event.visible_entities_removed
+        and target.uuid in event.entity_contacts_removed
     ]
     assert removed_updates
 
@@ -266,7 +517,7 @@ def test_eb_12_006_perceivability_events_refilter_visible_entities() -> None:
     added_updates = [
         event for event in completed_sensory_updates(observer.uuid)
         if event.update_reason == SensoryUpdateReason.PERCEIVABILITY
-        and target.uuid in event.visible_entities_added
+        and target.uuid in event.entity_contacts_changed
     ]
     assert added_updates
 
@@ -389,24 +640,25 @@ def test_eb_12_011_magical_darkness_zone_removal_recomputes_behind_cells() -> No
 
     zone = MagicalDarknessCellZone(
         source_entity_uuid=observer.uuid,
-        target_entity_uuid=observer.uuid,
-        zone_center=(2, 0),
+        position=(2, 0),
     )
-    observer.add_condition(zone)
+    activation = zone.activate(parent_event=_spatial_cause(observer.uuid))
+    assert activation is not None and not activation.canceled
 
     darkness_tile = get_map().get_tile(2, 0)
     assert darkness_tile is not None
-    assert darkness_tile.resolved_light_level == LightLevel.MAGICAL_DARKNESS
+    assert darkness_tile.resolved_light_level == LightLevel.DARKNESS
     assert target.uuid not in observer.senses.entities
     assert (3, 0) not in observer.senses.visible
     add_updates = [
         event for event in completed_sensory_updates(observer.uuid)
         if (3, 0) in event.visible_cells_removed
-        and target.uuid in event.visible_entities_removed
+        and target.uuid in event.entity_contacts_removed
     ]
     assert add_updates
 
-    observer.remove_condition(zone.name)
+    cursor = EventQueue.event_cursor()
+    assert zone.deactivate(parent_event=activation)
 
     restored_tile = get_map().get_tile(2, 0)
     assert restored_tile is not None
@@ -414,17 +666,15 @@ def test_eb_12_011_magical_darkness_zone_removal_recomputes_behind_cells() -> No
     assert (2, 0) in observer.senses.visible
     assert (3, 0) in observer.senses.visible
     assert target.uuid in observer.senses.entities
-    removal_light_events: list[SpatialChangeEvent] = [
-        event for event in EventQueue._all_events
-        if isinstance(event, SpatialChangeEvent)
-        and event.event_type == EventType.SPATIAL_LIGHT_CHANGED
-        and event.phase == EventPhase.COMPLETION
-        and event.position == (2, 0)
-        and event.senses_hint is not None
+    removal_updates = [
+        event
+        for _, event in EventQueue.iter_events_since(cursor)
+        if isinstance(event, SensoryUpdateEvent)
+        and event.observer_uuid == observer.uuid
+        and target.uuid in event.entity_contacts_changed
     ]
-    removal_hint = removal_light_events[-1].senses_hint
-    assert removal_hint is not None
-    assert removal_hint.requires_fov is True
+    assert removal_updates
+    assert (3, 0) in removal_updates[-1].visible_cells_added
 
 
 def test_eb_12_012_passive_perception_changes_emit_replacement_payloads() -> None:
@@ -459,16 +709,12 @@ def test_eb_12_012_passive_perception_changes_emit_replacement_payloads() -> Non
     payload = updates[-1].model_dump(mode="json")
     assert payload["passive_perception"] == boosted_passive
     assert payload["paths_dirty"] is True
-    assert str(hidden.uuid) in payload["visible_entities_added"]
+    assert str(hidden.uuid) in payload["entity_contacts_changed"]
 
 
 def test_eb_12_019_passive_perception_decrease_removes_hidden_entity_payload() -> None:
     """EB-12-019: passive perception decreases emit removal payloads for hidden entities."""
     reset_senses_state(width=5, height=1)
-    captured_logs: list[CombatLogEntry] = []
-    EventQueue.set_combat_log_callback(
-        lambda event: captured_logs.append(event.combat_log) if event.combat_log else None
-    )
     observer = create_skeleton(name="Observer", position=(0, 0), darkvision=False)
     hidden = create_skeleton(name="Hidden", position=(3, 0), darkvision=False)
     Entity.update_all_entities_senses(max_distance=5)
@@ -476,7 +722,6 @@ def test_eb_12_019_passive_perception_decrease_removes_hidden_entity_payload() -
     base_passive = observer.get_passive_perception()
     hidden.set_stealth_dc(base_passive - 1)
     assert hidden.uuid in observer.senses.entities
-    captured_logs.clear()
 
     observer.add_condition(
         PerceptionModifierCondition(
@@ -494,15 +739,14 @@ def test_eb_12_019_passive_perception_decrease_removes_hidden_entity_payload() -
     updates = [
         event for event in completed_sensory_updates(observer.uuid)
         if event.passive_perception_changed
-        and hidden.uuid in event.visible_entities_removed
+        and hidden.uuid in event.entity_contacts_removed
     ]
     assert updates
     payload = updates[-1].model_dump(mode="json")
     assert payload["passive_perception"] == reduced_passive
     assert payload["paths_dirty"] is True
-    assert str(hidden.uuid) in payload["visible_entities_removed"]
-    assert str(hidden.uuid) not in payload["visible_entities_added"]
-    assert not any(log.entry_type == CombatLogEntryType.ENTITY_SPOTTED for log in captured_logs)
+    assert str(hidden.uuid) in payload["entity_contacts_removed"]
+    assert str(hidden.uuid) not in payload["entity_contacts_changed"]
 
 
 def test_eb_12_013_turn_start_clears_positional_and_directional_collision_memory() -> None:
@@ -511,14 +755,16 @@ def test_eb_12_013_turn_start_clears_positional_and_directional_collision_memory
     grid = get_map()
     mover = create_skeleton(name="Mover", position=(0, 0), faction="heroes")
     other = create_skeleton(name="Other", position=(2, 1), faction="monsters")
-    hidden_shutter = BaseItem(
+    hidden_shutter = DirectionalWall(
         source_entity_uuid=uuid4(),
         name="Hidden Shutter",
-        is_pickable=False,
-        blocks_movement_east=True,
+        blocked_channels=(WorldEdgeChannel.MOVEMENT,),
         stealth_dc=99,
     )
-    grid.place_object(hidden_shutter.uuid, (0, 0))
+    hidden_shutter.place_on_grid(
+        (0, 0),
+        boundary_direction=CardinalDirection.EAST,
+    )
     Entity.update_all_entities_senses(max_distance=5)
 
     assert (1, 0) in mover.senses.paths
@@ -598,7 +844,7 @@ def test_eb_12_014_plain_invisible_and_spell_invisibility_have_different_reveal_
     assert spell_target.uuid in observer.senses.entities
     reveal_updates = [
         event for event in completed_sensory_updates(observer.uuid)
-        if spell_target.uuid in event.visible_entities_added
+        if spell_target.uuid in event.entity_contacts_changed
     ]
     assert reveal_updates
 
@@ -642,7 +888,7 @@ def test_eb_12_015_hidden_cell_blocker_reveals_on_movement_collision() -> None:
     assert collision_events
     reveal_updates = [
         event for event in completed_sensory_updates(mover.uuid)
-        if hidden_blocker.uuid in event.visible_entities_added
+        if hidden_blocker.uuid in event.entity_contacts_changed
     ]
     assert reveal_updates
 
@@ -674,6 +920,7 @@ def test_eb_12_016_hidden_and_invisible_flags_stack_independently() -> None:
     assert target.uuid not in observer.senses.entities
     assert target.uuid not in truesight.senses.entities
 
+    cursor = EventQueue.event_cursor()
     get_map().add_light_source(
         (3, 0),
         bright_radius_feet=0,
@@ -689,15 +936,98 @@ def test_eb_12_016_hidden_and_invisible_flags_stack_independently() -> None:
     assert target.uuid in truesight.senses.entities
 
     observer_updates = [
-        event for event in completed_sensory_updates(observer.uuid)
-        if target.uuid in event.visible_entities_added
+        event
+        for _, event in EventQueue.iter_events_since(cursor)
+        if isinstance(event, SensoryUpdateEvent)
+        and event.observer_uuid == observer.uuid
+        if target.uuid in event.entity_contacts_changed
     ]
     truesight_updates = [
-        event for event in completed_sensory_updates(truesight.uuid)
-        if target.uuid in event.visible_entities_added
+        event
+        for _, event in EventQueue.iter_events_since(cursor)
+        if isinstance(event, SensoryUpdateEvent)
+        and event.observer_uuid == truesight.uuid
+        if target.uuid in event.entity_contacts_changed
     ]
     assert observer_updates == []
     assert truesight_updates
+
+
+def test_eb_12_016a_invisibility_is_derived_from_surviving_sources() -> None:
+    """Removing one invisibility owner preserves every surviving owner."""
+    reset_senses_state(width=6, height=1)
+    observer = create_skeleton(
+        name="Observer",
+        position=(0, 0),
+        darkvision=False,
+    )
+    target = create_skeleton(
+        name="Target",
+        position=(3, 0),
+        darkvision=False,
+    )
+    first = Invisible(
+        source_entity_uuid=target.uuid,
+        target_entity_uuid=target.uuid,
+    )
+    second = InvisibilityEffect(
+        source_entity_uuid=observer.uuid,
+        target_entity_uuid=target.uuid,
+        name="Invisible (second source)",
+    )
+
+    target.add_condition(first)
+    target.add_condition(second)
+    assert target.is_invisible is True
+    assert target.uuid not in observer.senses.entities
+
+    target.remove_condition_by_uuid(first.uuid)
+    assert target.is_invisible is True
+    assert target.uuid not in observer.senses.entities
+
+    target.remove_condition_by_uuid(second.uuid)
+    assert target.is_invisible is False
+    assert observer.senses.entities[target.uuid].visual is True
+
+
+def test_eb_12_016b_stealth_dc_is_derived_from_surviving_sources() -> None:
+    """Removing one Hidden owner restores the strongest surviving DC."""
+    reset_senses_state(width=6, height=1)
+    observer = create_skeleton(
+        name="Observer",
+        position=(0, 0),
+        darkvision=False,
+    )
+    target = create_skeleton(
+        name="Target",
+        position=(3, 0),
+        darkvision=False,
+    )
+    low = Hidden(
+        source_entity_uuid=target.uuid,
+        target_entity_uuid=target.uuid,
+        name="Hidden (low source)",
+        stealth_result=observer.get_passive_perception() + 1,
+    )
+    high = Hidden(
+        source_entity_uuid=observer.uuid,
+        target_entity_uuid=target.uuid,
+        name="Hidden (high source)",
+        stealth_result=observer.get_passive_perception() + 5,
+    )
+
+    target.add_condition(low)
+    target.add_condition(high)
+    assert target.stealth_dc == high.stealth_result
+    assert target.uuid not in observer.senses.entities
+
+    target.remove_condition_by_uuid(high.uuid)
+    assert target.stealth_dc == low.stealth_result
+    assert target.uuid not in observer.senses.entities
+
+    target.remove_condition_by_uuid(low.uuid)
+    assert target.stealth_dc is None
+    assert observer.senses.entities[target.uuid].visual is True
 
 
 def test_eb_12_017_multi_entity_spell_cancels_when_target_becomes_hidden() -> None:
@@ -807,17 +1137,22 @@ def test_eb_12_020_distant_movement_does_not_dirty_unrelated_observer_paths() ->
 
     assert distant_mover.uuid not in observer.senses.entities
     assert observer.senses._paths_dirty is False
-    assert completed_sensory_updates(observer.uuid) == []
+    cursor = EventQueue.event_cursor()
 
     Entity.update_entity_position(distant_mover, (13, 0))
 
     assert observer.senses._paths_dirty is False
     assert distant_mover.uuid not in observer.senses.entities
-    assert completed_sensory_updates(observer.uuid) == []
+    assert [
+        event
+        for _, event in EventQueue.iter_events_since(cursor)
+        if isinstance(event, SensoryUpdateEvent)
+        and event.observer_uuid == observer.uuid
+    ] == []
 
 
-def test_eb_12_021_final_movement_refresh_can_reuse_last_visibility_cache() -> None:
-    """EB-12-021: movement-end senses reuse matches a cold full recompute."""
+def test_eb_12_021_movement_perception_matches_explicit_cold_recompute() -> None:
+    """EB-12-021: movement reduction and a cold perception recompute agree."""
     reset_senses_state(width=8, height=3)
     grid = get_map()
     mover = create_skeleton(name="Mover", position=(0, 1), darkvision=False)
@@ -835,20 +1170,14 @@ def test_eb_12_021_final_movement_refresh_can_reuse_last_visibility_cache() -> N
 
     assert target.uuid in mover.senses.entities
     assert marker.uuid in mover.senses.objects
-    assert mover.senses._visibility_cache is not None
-
-    mover.update_entity_senses(max_distance=5, reuse_visibility_cache=True)
-    cached_snapshot = {
+    assert mover.senses._paths_dirty is True
+    movement_snapshot = {
         "visible": dict(mover.senses.visible),
         "seen": set(mover.senses.seen),
         "entities": dict(mover.senses.entities),
         "objects": dict(mover.senses.objects),
-        "walkable": dict(mover.senses.walkable),
-        "paths": {pos: list(path) for pos, path in mover.senses.paths.items()},
-        "safe_paths": {pos: list(path) for pos, path in mover.senses.safe_paths.items()},
         "subscriptions": set(grid.get_entity_subscriptions(mover.uuid)),
     }
-    assert mover.senses._visibility_cache is None
 
     mover.update_entity_senses(max_distance=5)
     cold_snapshot = {
@@ -856,13 +1185,11 @@ def test_eb_12_021_final_movement_refresh_can_reuse_last_visibility_cache() -> N
         "seen": set(mover.senses.seen),
         "entities": dict(mover.senses.entities),
         "objects": dict(mover.senses.objects),
-        "walkable": dict(mover.senses.walkable),
-        "paths": {pos: list(path) for pos, path in mover.senses.paths.items()},
-        "safe_paths": {pos: list(path) for pos, path in mover.senses.safe_paths.items()},
         "subscriptions": set(grid.get_entity_subscriptions(mover.uuid)),
     }
 
-    assert cached_snapshot == cold_snapshot
+    assert movement_snapshot == cold_snapshot
+    assert mover.senses._paths_dirty is False
 
 
 def test_eb_12_022_paired_movement_emits_one_subjective_transition() -> None:
@@ -895,11 +1222,8 @@ def test_eb_12_022_paired_movement_emits_one_subjective_transition() -> None:
         EventType.SPATIAL_ENTITY_ENTERED,
     }
     assert len(movement_updates) == 1
-    assert movement_updates[0].visible_entities_moved == {
-        mover.uuid: ((2, 0), (3, 0))
-    }
-    assert movement_updates[0].visible_entities_added == {}
-    assert movement_updates[0].visible_entities_removed == {}
+    assert movement_updates[0].entity_contacts_changed[mover.uuid].position == (3, 0)
+    assert movement_updates[0].entity_contacts_removed == set()
 
 
 def test_eb_12_023_sensory_dispatch_indexes_local_spatial_candidates() -> None:
@@ -996,7 +1320,11 @@ def test_eb_12_026_batched_light_positions_reveal_hidden_entities() -> None:
     representative_tile = grid.get_tile(0, 0)
     assert hidden_tile is not None
     assert representative_tile is not None
-    hidden_tile.add_illumination(uuid4(), LightLevel.VERY_BRIGHT, fire_event=False)
+    grid.apply_light_modifier(
+        uuid4(),
+        {hidden_tile.position},
+        LightLevel.VERY_BRIGHT,
+    )
     event = SpatialChangeEvent.light_changed(
         representative_tile.position,
         representative_tile.uuid,
@@ -1011,85 +1339,182 @@ def test_eb_12_026_batched_light_positions_reveal_hidden_entities() -> None:
     assert hidden.stealth_dc is None
 
 
-def test_eb_12_027_equivalent_light_and_vision_channels_share_directional_fov(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """EB-12-027: equivalent directional channels reuse one geometric scan."""
+def test_eb_12_027_light_and_sight_share_one_optical_fov() -> None:
+    """EB-12-027: ordinary light and sight expose the same optical cells."""
     reset_senses_state(width=7, height=1)
     grid = get_map()
     observer = create_skeleton(name="Observer", position=(0, 0), darkvision=False)
-    grid.set_tile_directional_border((3, 0), "vision", "east", False)
-    grid.set_tile_directional_border((3, 0), "light", "east", False)
-    directional_calls: list[str] = []
-    original = grid._compute_directional_fov
+    wall = DirectionalWall(
+        source_entity_uuid=uuid4(),
+        blocked_channels=(WorldEdgeChannel.OPTICAL,),
+    )
+    wall.place_on_grid(
+        (3, 0),
+        boundary_direction=CardinalDirection.EAST,
+    )
+    sight = set(grid.compute_fov(observer.position, 6))
+    light = set(grid.compute_light_fov(observer.position, 6))
 
-    def track_directional_fov(
-        origin: tuple[int, int],
-        max_distance: float | None,
-        channel: str,
-        observer_uuid: UUID | None = None,
-    ) -> list[tuple[int, int]]:
-        directional_calls.append(channel)
-        return original(origin, max_distance, channel, observer_uuid)
-
-    monkeypatch.setattr(grid, "_compute_directional_fov", track_directional_fov)
-
-    vision = grid.compute_fov(observer.position, 6, observer_uuid=observer.uuid)
-    light = grid.compute_light_fov(observer.position, 3)
-
-    expected_light = [
-        position
-        for position in vision
-        if (
-            (position[0] - observer.position[0]) ** 2
-            + (position[1] - observer.position[1]) ** 2
-        ) ** 0.5 <= 3
-    ]
-    assert light == expected_light
-    assert directional_calls == ["vision"]
+    assert sight == light
+    assert (3, 0) in sight
+    assert (4, 0) not in sight
 
 
-def test_eb_12_028_directional_transition_cache_is_revision_scoped(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """EB-12-028: repeated scans reuse edges until vision topology changes."""
+def test_eb_12_028_optical_revision_invalidates_public_fov() -> None:
+    """EB-12-028: changing an optical edge changes subsequent public FOV."""
     reset_senses_state(width=7, height=3)
     grid = get_map()
     observer = create_skeleton(name="Observer", position=(0, 1), darkvision=False)
-    grid.set_tile_directional_border((3, 1), "vision", "east", False)
-    transition_calls = 0
-    original = grid.can_see_transition
+    before_revision = grid.optical_revision
+    before = set(grid.compute_fov(observer.position, 6))
+    assert (6, 1) in before
 
-    def track_transition(
-        from_position: tuple[int, int],
-        to_position: tuple[int, int],
-        observer_uuid: UUID | None = None,
-        subjective: bool = False,
-    ) -> bool:
-        nonlocal transition_calls
-        transition_calls += 1
-        return original(
-            from_position,
-            to_position,
-            observer_uuid,
-            subjective,
-        )
+    wall = DirectionalWall(
+        source_entity_uuid=uuid4(),
+        blocked_channels=(WorldEdgeChannel.OPTICAL,),
+    )
+    wall.place_on_grid(
+        (3, 1),
+        boundary_direction=CardinalDirection.EAST,
+    )
+    first_revision = grid.optical_revision
+    first = set(grid.compute_fov(observer.position, 6))
 
-    monkeypatch.setattr(grid, "can_see_transition", track_transition)
+    assert first_revision > before_revision
+    assert (3, 1) in first
+    assert (4, 1) not in first
 
-    first = grid._compute_directional_fov(observer.position, 6, "vision", observer.uuid)
-    calls_after_first = transition_calls
-    second = grid._compute_directional_fov(observer.position, 6, "vision", observer.uuid)
+    grid.move_object(
+        wall.uuid,
+        (3, 1),
+        boundary_direction=CardinalDirection.WEST,
+    )
+    third = set(grid.compute_fov(observer.position, 6))
 
-    assert first == second
-    assert calls_after_first > 0
-    assert transition_calls == calls_after_first
+    assert grid.optical_revision > first_revision
+    assert (2, 1) in third
+    assert (3, 1) not in third
 
-    grid.set_tile_directional_border((3, 1), "vision", "east", True)
-    third = grid._compute_directional_fov(observer.position, 6, "vision", observer.uuid)
 
-    assert transition_calls > calls_after_first
-    assert third != second
+def test_eb_12_028a_near_side_wall_is_visible_without_far_tile_content() -> None:
+    """A lit near side reveals its wall while the blocked Tile stays hidden."""
+    reset_senses_state(width=4, height=1, default_light=LightLevel.DARKNESS)
+    grid = get_map()
+    wall = DirectionalWall(
+        source_entity_uuid=uuid4(),
+        include_in_senses_objects=True,
+    )
+    wall.place_on_grid(
+        (1, 0),
+        boundary_direction=CardinalDirection.WEST,
+    )
+    grid.add_light_source(
+        (0, 0),
+        bright_radius_feet=5,
+        dim_radius_feet=0,
+        very_bright_radius_feet=0,
+    )
+    far_entity = create_skeleton(
+        name="Far Entity",
+        position=(1, 0),
+        darkvision=False,
+    )
+    observer = create_skeleton(
+        name="Observer",
+        position=(0, 0),
+        darkvision=False,
+    )
+
+    assert observer.senses.objects[wall.uuid] == PerceivedContact(
+        position=(1, 0),
+        visual=True,
+    )
+    assert (1, 0) not in observer.senses.visible
+    assert far_entity.uuid not in observer.senses.entities
+
+
+@pytest.mark.parametrize(
+    "sense_type",
+    [SensesType.BLINDSIGHT, SensesType.TREMORSENSE],
+)
+def test_eb_12_028b_nonvisual_senses_create_contacts_not_visual_cells(
+    sense_type: SensesType,
+) -> None:
+    """Nonvisual senses identify contacts without inventing light or sight."""
+    reset_senses_state(width=6, height=1, default_light=LightLevel.DARKNESS)
+    observer = create_skeleton(
+        name="Observer",
+        position=(0, 0),
+        darkvision=False,
+    )
+    target = create_skeleton(
+        name="Target",
+        position=(3, 0),
+        darkvision=False,
+    )
+    observer.senses.sense_modes = [
+        SenseMode(sense_type=sense_type, range_feet=20)
+    ]
+    observer.update_entity_senses(max_distance=5)
+
+    assert observer.senses.entities[target.uuid] == PerceivedContact(
+        position=(3, 0),
+        visual=False,
+        special_senses=(sense_type,),
+    )
+    assert (3, 0) not in observer.senses.visible
+    assert (3, 0) not in observer.senses.effective_light_levels
+
+
+@pytest.mark.parametrize(
+    ("sense_type", "crosses_magical_darkness"),
+    [
+        (SensesType.DARKVISION, False),
+        (SensesType.DEVILS_SIGHT, True),
+        (SensesType.TRUESIGHT, True),
+    ],
+)
+def test_eb_12_028c_visual_senses_obey_conditional_obscurement(
+    sense_type: SensesType,
+    crosses_magical_darkness: bool,
+) -> None:
+    """Visual special senses cross magical darkness selectively, never fog."""
+    reset_senses_state(width=8, height=1)
+    observer = create_skeleton(
+        name="Observer",
+        position=(0, 0),
+        darkvision=False,
+    )
+    target = create_skeleton(
+        name="Target",
+        position=(6, 0),
+        darkvision=False,
+    )
+    observer.senses.sense_modes = [
+        SenseMode(sense_type=sense_type, range_feet=30)
+    ]
+    observer.update_entity_senses(max_distance=7)
+
+    darkness = DarknessZone(
+        source_entity_uuid=observer.uuid,
+        position=(3, 0),
+        zone_radius_feet=0,
+    )
+    darkness.activate(parent_event=None)
+    assert (target.uuid in observer.senses.entities) is crosses_magical_darkness
+    if crosses_magical_darkness:
+        contact = observer.senses.entities[target.uuid]
+        assert contact.visual is True
+        assert sense_type in contact.special_senses
+
+    darkness.deactivate()
+    fog = FogCloudZone(
+        source_entity_uuid=observer.uuid,
+        position=(3, 0),
+        zone_radius_feet=0,
+    )
+    fog.activate(parent_event=None)
+    assert target.uuid not in observer.senses.entities
 
 
 def test_eb_12_029_invisible_collision_stops_repaths_and_preserves_invisibility() -> None:
@@ -1298,15 +1723,9 @@ def test_eb_12_030_multi_entity_spells_reject_unperceived_explicit_targets(
         )
 
 
-def test_eb_12_031_perception_thresholds_refilter_contacts_hazards_and_logs() -> None:
+def test_eb_12_031_perception_thresholds_refilter_contacts_and_hazards() -> None:
     """EB-12-031: sequential Perception changes cross each subjective threshold."""
     reset_senses_state(width=7, height=3)
-    captured_logs: list[CombatLogEntry] = []
-    EventQueue.set_combat_log_callback(
-        lambda event: captured_logs.append(event.combat_log)
-        if event.combat_log
-        else None
-    )
     observer = create_skeleton(
         name="Observer",
         position=(0, 1),
@@ -1362,7 +1781,6 @@ def test_eb_12_031_perception_thresholds_refilter_contacts_hazards_and_logs() ->
             )
         )
     Entity.update_all_entities_senses(max_distance=10)
-    captured_logs.clear()
 
     assert easy_hidden.uuid in observer.senses.entities
     assert hard_hidden.uuid not in observer.senses.entities
@@ -1371,6 +1789,7 @@ def test_eb_12_031_perception_thresholds_refilter_contacts_hazards_and_logs() ->
     assert grid.is_position_hazardous_for(4, 0, observer.uuid)
     assert not grid.is_position_hazardous_for(4, 2, observer.uuid)
 
+    cursor = EventQueue.event_cursor()
     observer.add_condition(
         PerceptionModifierCondition(
             source_entity_uuid=observer.uuid,
@@ -1386,38 +1805,18 @@ def test_eb_12_031_perception_thresholds_refilter_contacts_hazards_and_logs() ->
     assert grid.is_position_hazardous_for(4, 0, observer.uuid)
     assert grid.is_position_hazardous_for(4, 2, observer.uuid)
     assert observer.senses._paths_dirty is True
-    spotted = [
-        log
-        for log in captured_logs
-        if log.entry_type == CombatLogEntryType.ENTITY_SPOTTED
+    boost_updates = [
+        event
+        for _, event in EventQueue.iter_events_since(cursor)
+        if isinstance(event, SensoryUpdateEvent)
+        and event.observer_uuid == observer.uuid
+        and event.passive_perception_changed
     ]
-    hazards = [
-        log
-        for log in captured_logs
-        if log.entry_type == CombatLogEntryType.HAZARD_DETECTED
-    ]
-    assert len(spotted) == 1
-    assert spotted[0].target_uuid == str(hard_hidden.uuid)
-    assert spotted[0].data == {
-        "observer_name": observer.name,
-        "observer_uuid": str(observer.uuid),
-        "target_name": hard_hidden.name,
-        "target_uuid": str(hard_hidden.uuid),
-        "target_position": hard_hidden.position,
-        "passive_perception": boosted_perception,
-        "stealth_dc": hard_dc,
-    }
-    assert len(hazards) == 1
-    assert hazards[0].data == {
-        "observer_name": observer.name,
-        "observer_uuid": str(observer.uuid),
-        "hazard_name": "Hard Trap",
-        "position": (4, 2),
-        "passive_perception": boosted_perception,
-        "stealth_dc": hard_dc,
-    }
+    assert len(boost_updates) == 1
+    assert boost_updates[0].passive_perception == boosted_perception
+    assert hard_hidden.uuid in boost_updates[0].entity_contacts_changed
 
-    positive_log_count = len(spotted) + len(hazards)
+    cursor = EventQueue.event_cursor()
     observer.remove_condition("Perception Payload Modifier")
 
     assert observer.get_passive_perception() == base_perception
@@ -1425,7 +1824,17 @@ def test_eb_12_031_perception_thresholds_refilter_contacts_hazards_and_logs() ->
     assert hard_hidden.uuid not in observer.senses.entities
     assert grid.is_position_hazardous_for(4, 0, observer.uuid)
     assert not grid.is_position_hazardous_for(4, 2, observer.uuid)
+    removal_updates = [
+        event
+        for _, event in EventQueue.iter_events_since(cursor)
+        if isinstance(event, SensoryUpdateEvent)
+        and event.observer_uuid == observer.uuid
+        and event.passive_perception_changed
+    ]
+    assert len(removal_updates) == 1
+    assert hard_hidden.uuid in removal_updates[0].entity_contacts_removed
 
+    cursor = EventQueue.event_cursor()
     observer.add_condition(
         PerceptionModifierCondition(
             source_entity_uuid=observer.uuid,
@@ -1440,14 +1849,15 @@ def test_eb_12_031_perception_thresholds_refilter_contacts_hazards_and_logs() ->
     assert not grid.is_position_hazardous_for(4, 0, observer.uuid)
     assert not grid.is_position_hazardous_for(4, 2, observer.uuid)
     assert observer.senses._paths_dirty is True
-    assert sum(
-        log.entry_type
-        in {
-            CombatLogEntryType.ENTITY_SPOTTED,
-            CombatLogEntryType.HAZARD_DETECTED,
-        }
-        for log in captured_logs
-    ) == positive_log_count
+    decrease_updates = [
+        event
+        for _, event in EventQueue.iter_events_since(cursor)
+        if isinstance(event, SensoryUpdateEvent)
+        and event.observer_uuid == observer.uuid
+        and event.passive_perception_changed
+    ]
+    assert len(decrease_updates) == 1
+    assert easy_hidden.uuid in decrease_updates[0].entity_contacts_removed
 
 
 def test_eb_12_032_hidden_transition_invalidates_subjective_occupancy_paths() -> None:
@@ -1511,7 +1921,7 @@ if __name__ == "__main__":
         test_eb_12_018_aoe_preview_hides_hidden_entities_but_execution_hits_them,
         test_eb_12_019_passive_perception_decrease_removes_hidden_entity_payload,
         test_eb_12_020_distant_movement_does_not_dirty_unrelated_observer_paths,
-        test_eb_12_021_final_movement_refresh_can_reuse_last_visibility_cache,
+        test_eb_12_021_movement_perception_matches_explicit_cold_recompute,
         test_eb_12_022_paired_movement_emits_one_subjective_transition,
         test_eb_12_023_sensory_dispatch_indexes_local_spatial_candidates,
         test_eb_12_024_sensory_dispatch_targets_own_perception_conditions,

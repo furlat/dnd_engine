@@ -3,6 +3,7 @@
 from uuid import UUID, uuid4
 
 import pytest
+from pydantic import Field
 
 import dnd.core.gridmap as gridmap_module
 from dnd.blocks.base_item import BaseItem
@@ -10,6 +11,7 @@ from dnd.core.aoe import Cone, Cylinder, Line, Sphere
 from dnd.core.base_block import BaseBlock, MovementMode
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.condition_types import ConditionCategory, HazardFilter
+from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.base_object import BaseObject
 from dnd.core.base_tiles import (
     difficult_terrain_factory,
@@ -26,9 +28,30 @@ from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import BaseValue
 from dnd.actions import Jump, Move, Shove
 from dnd.entity import Entity
-from dnd.monsters.bestiary import create_skeleton
-from dnd.tile_conditions import ZoneControlCondition
+from dnd.game import Game
+from dnd.items.environment import DirectionalWall
+from dnd.monsters.bestiary import create_skeleton as _create_skeleton
+from dnd.spatial.area_conditions import AreaCondition
+from dnd.types.spatial_effects import (
+    SpatialEffectLayer,
+    SpatialEffectOccupancyPolicy,
+    SpatialEffectTriggerKind,
+)
+from dnd.types.world import CardinalDirection, WorldEdgeChannel
 from tests.engine.support import reset_combat_state
+
+
+_grid_game: Game | None = None
+
+
+def create_skeleton(*args, **kwargs) -> Entity:
+    """Create and explicitly deploy one skeleton for grid tests."""
+    if _grid_game is None:
+        raise RuntimeError("reset_grid_state must precede entity creation")
+    entity = _create_skeleton(*args, **kwargs)
+    entity.compose_entity()
+    _grid_game.deploy_entity(entity, entity.position)
+    return entity
 
 
 class PerceptionBoost(BaseCondition):
@@ -58,19 +81,32 @@ class PerceptionBoost(BaseCondition):
         return [(skill.skill_bonus.uuid, modifier_uuid)], [], [], [], effect_event
 
 
-class EntryCleanupZone(ZoneControlCondition):
-    """Test zone with terrain, markers, and one position-indexed entry handler."""
+_ENTRY_CLEANUP_CONTENT_REF = ContentRef(
+    pack_id="test.grid_pathfinding",
+    definition_kind=ContentDefinitionKind.CONDITION,
+    content_id="condition.spatial.entry_cleanup",
+    content_version=1,
+    definition_contract_hash="0" * 64,
+)
 
-    name: str = "Entry Cleanup Zone"
-    zone_shape: str = "sphere"
-    zone_radius_feet: int = 5
-    adds_difficult_terrain: bool = True
-    marker_name: str = "Entry Cleanup Marker"
-    marker_hazard_filter: HazardFilter = HazardFilter.ALL
 
-    def _has_entry_effect(self) -> bool:
-        """Return True so the zone registers a spatial entry handler."""
-        return True
+class EntryCleanupZone(AreaCondition):
+    """Test area with terrain, hazard identity, and one entry handler."""
+
+    name: str = Field(default="Entry Cleanup Zone")
+    content_ref: ContentRef = Field(default=_ENTRY_CLEANUP_CONTENT_REF)
+    position: tuple[int, int]
+    layer: SpatialEffectLayer = Field(default=SpatialEffectLayer.FIELD)
+    occupancy_policy: SpatialEffectOccupancyPolicy = Field(
+        default=SpatialEffectOccupancyPolicy.OVERLAPPING,
+    )
+    trigger_kinds: frozenset[SpatialEffectTriggerKind] = Field(
+        default_factory=lambda: frozenset({SpatialEffectTriggerKind.ENTER}),
+    )
+    zone_shape: str = Field(default="sphere")
+    zone_radius_feet: int = Field(default=5)
+    adds_difficult_terrain: bool = Field(default=True)
+    hazard_filter: HazardFilter = Field(default=HazardFilter.ALL)
 
     def _create_zone_entry_handler(self) -> EventHandler:
         """Create a no-op spatial entry handler for cleanup assertions."""
@@ -84,12 +120,14 @@ class EntryCleanupZone(ZoneControlCondition):
 
 def reset_grid_state(width: int = 8, height: int = 8, x: int = 0, y: int = 0) -> None:
     """Clear global state and create a rectangular floor grid."""
+    global _grid_game
     reset_combat_state()
     EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
     BaseValue._registry.clear()
     get_map().create_rectangle(x, y, width, height)
+    _grid_game = Game()
 
 
 def test_eb_11_001_tiles_are_grid_stored_blocks_with_uuid_lookup() -> None:
@@ -97,13 +135,16 @@ def test_eb_11_001_tiles_are_grid_stored_blocks_with_uuid_lookup() -> None:
     reset_grid_state(width=1, height=1)
     grid = get_map()
 
-    tile = grid.set_tile(3, 4, walkable=True, visible=True, name="Marble Floor")
+    tile = grid.set_tile(3, 4, name="Marble Floor")
 
     assert tile.position == (3, 4)
     assert grid.get_tile(3, 4) is tile
     assert grid.get_tile_by_uuid(tile.uuid) is tile
     assert grid.has_tile(3, 4)
     assert grid.bounds == (0, 0, 3, 4)
+    assert "visible" not in tile.model_dump()
+    assert tile.blocks_optics is False
+    assert tile.blocks_propagation_field is False
 
     grid.remove_tile(3, 4)
 
@@ -192,7 +233,14 @@ def test_eb_11_021_diagonal_transitions_need_one_cardinal_bridge_route() -> None
 
     assert grid.can_transition((0, 0), (1, 1))
 
-    grid.set_tile_directional_border((0, 0), "movement", "east", False)
+    east_wall = DirectionalWall(
+        source_entity_uuid=uuid4(),
+        blocked_channels=(WorldEdgeChannel.MOVEMENT,),
+    )
+    east_wall.place_on_grid(
+        (0, 0),
+        boundary_direction=CardinalDirection.EAST,
+    )
     one_bridge_distances, one_bridge_paths = grid.compute_paths(
         (0, 0),
         movement_mode=MovementMode.WALKING,
@@ -204,7 +252,14 @@ def test_eb_11_021_diagonal_transitions_need_one_cardinal_bridge_route() -> None
     assert one_bridge_distances[(1, 1)] == 1
     assert one_bridge_paths[(1, 1)] == [(0, 0), (1, 1)]
 
-    grid.set_tile_directional_border((0, 0), "movement", "north", False)
+    north_wall = DirectionalWall(
+        source_entity_uuid=uuid4(),
+        blocked_channels=(WorldEdgeChannel.MOVEMENT,),
+    )
+    north_wall.place_on_grid(
+        (0, 0),
+        boundary_direction=CardinalDirection.NORTH,
+    )
     no_bridge_distances, no_bridge_paths = grid.compute_paths(
         (0, 0),
         movement_mode=MovementMode.WALKING,
@@ -325,24 +380,30 @@ def test_eb_11_015_dead_entities_become_non_blocking_for_paths() -> None:
     assert mover.senses.paths[(4, 0)] == [(0, 0), (1, 0), (2, 0), (3, 0), (4, 0)]
 
 
-def test_eb_11_006_directional_borders_block_transitions_and_emit_metadata() -> None:
-    """EB-11-006: directional border changes affect crossing, not whole tiles."""
+def test_eb_11_006_boundary_structures_block_edges_and_emit_exact_facts() -> None:
+    """EB-11-006: one placed side blocks its edge, not its owner Tile."""
     reset_grid_state(width=4, height=1)
     grid = get_map()
     cursor = EventQueue.event_cursor()
 
-    changed = grid.set_tile_directional_border((1, 0), "movement", "east", False)
+    wall = DirectionalWall(
+        source_entity_uuid=uuid4(),
+        blocked_channels=(WorldEdgeChannel.MOVEMENT,),
+    )
+    wall.place_on_grid(
+        (1, 0),
+        boundary_direction=CardinalDirection.EAST,
+    )
 
     events = [
         event
         for _, event in EventQueue.iter_events_since(cursor)
         if isinstance(event, SpatialChangeEvent)
-        and event.event_type == EventType.SPATIAL_TILE_CHANGED
+        and event.event_type == EventType.SPATIAL_OBJECT_PLACED
         and event.phase == EventPhase.DECLARATION
     ]
     event = events[-1] if events else None
 
-    assert changed is True
     assert grid.is_walkable(1, 0)
     assert not grid.can_transition((1, 0), (2, 0))
     assert not grid.can_transition((2, 0), (1, 0))
@@ -351,22 +412,27 @@ def test_eb_11_006_directional_borders_block_transitions_and_emit_metadata() -> 
     assert event.directional_position == (1, 0)
     assert event.directional_directions == ["east"]
     assert event.directional_channels == ["movement"]
+    assert event.placement == grid.get_object_placement(wall.uuid)
+    assert event.object_boundary_structure == wall.get_boundary_structure()
     assert {(1, 0), (2, 0)} <= event.get_affected_positions()
 
 
-def test_eb_11_007_directional_channels_are_independent() -> None:
-    """EB-11-007: movement, vision, light, and propagation are separate channels."""
+def test_eb_11_007_optical_topology_is_shared_and_propagation_is_independent() -> None:
+    """EB-11-007: sight/light share optics; movement and propagation do not."""
     reset_grid_state(width=4, height=3)
     grid = get_map()
-    screen = BaseItem(
+    screen = DirectionalWall(
         source_entity_uuid=uuid4(),
         name="Screen",
-        is_pickable=False,
-        blocks_vision_east=True,
-        blocks_light_east=True,
-        blocks_propagation_east=True,
+        blocked_channels=(
+            WorldEdgeChannel.OPTICAL,
+            WorldEdgeChannel.PROPAGATION,
+        ),
     )
-    grid.place_object(screen.uuid, (1, 1))
+    screen.place_on_grid(
+        (1, 1),
+        boundary_direction=CardinalDirection.EAST,
+    )
 
     assert grid.can_transition((1, 1), (2, 1))
     assert (2, 1) not in set(grid.compute_fov((1, 1), max_distance=3))
@@ -375,26 +441,70 @@ def test_eb_11_007_directional_channels_are_independent() -> None:
     assert (0, 1) in set(grid.compute_fov((1, 1), max_distance=3))
 
 
+def test_center_object_channels_are_independent_public_facts() -> None:
+    """Center cover, optical opacity, and propagation can vary independently."""
+    reset_grid_state(width=4, height=2)
+    grid = get_map()
+    actor = create_skeleton(
+        name="Channel Observer",
+        position=(0, 0),
+        faction="heroes",
+    )
+    transparent_cover = BaseItem(
+        source_entity_uuid=uuid4(),
+        name="Transparent Cover",
+        is_pickable=False,
+        blocks_movement=True,
+    )
+    opaque_curtain = BaseItem(
+        source_entity_uuid=uuid4(),
+        name="Opaque Curtain",
+        is_pickable=False,
+        blocks_optics_field=True,
+    )
+    blast_screen = BaseItem(
+        source_entity_uuid=uuid4(),
+        name="Blast Screen",
+        is_pickable=False,
+        blocks_propagation_field=True,
+    )
+    transparent_cover.place_on_grid((1, 0))
+    opaque_curtain.place_on_grid((2, 0))
+    blast_screen.place_on_grid((3, 0))
+
+    assert not grid.is_walkable_for(1, 0, actor.uuid)
+    assert not grid.is_blocking_optics(1, 0)
+    assert not grid.is_blocking_propagation(1, 0)
+
+    assert grid.is_walkable_for(2, 0, actor.uuid)
+    assert grid.is_blocking_optics(2, 0)
+    assert not grid.is_blocking_propagation(2, 0)
+
+    assert grid.is_walkable_for(3, 0, actor.uuid)
+    assert not grid.is_blocking_optics(3, 0)
+    assert grid.is_blocking_propagation(3, 0)
+
+
 def test_eb_11_022_fov_cache_invalidates_when_vision_blockers_change() -> None:
     """EB-11-022: cached FOV cannot survive changed vision topology."""
     reset_grid_state(width=6, height=3)
     grid = get_map()
 
     first_fov = set(grid.compute_fov((0, 1), max_distance=6))
-    first_revision = grid.vision_revision
+    first_revision = grid.optical_revision
     assert (5, 1) in first_fov
 
     wall = BaseItem(
         source_entity_uuid=uuid4(),
         name="Vision Cache Wall",
         is_pickable=False,
-        blocks_vision_field=True,
+        blocks_optics_field=True,
     )
     grid.place_object(wall.uuid, (2, 1))
 
     second_fov = set(grid.compute_fov((0, 1), max_distance=6))
 
-    assert grid.vision_revision > first_revision
+    assert grid.optical_revision > first_revision
     assert (5, 1) not in second_fov
     assert (1, 1) in second_fov
 
@@ -427,7 +537,7 @@ def test_eb_11_023_propagation_cache_reuses_results_and_invalidates_on_blockers(
         source_entity_uuid=uuid4(),
         name="Propagation Cache Wall",
         is_pickable=False,
-        blocks_vision_field=True,
+        blocks_propagation_field=True,
     )
     grid.place_object(wall.uuid, (2, 1))
     third_fov = grid.compute_propagation_fov((0, 1), max_distance=6)
@@ -442,14 +552,18 @@ def test_eb_11_017_forced_movement_and_jump_respect_directional_blockers() -> No
     reset_grid_state(width=4, height=3)
     grid = get_map()
     actor = create_skeleton(name="Actor", position=(1, 1), faction="heroes")
-    wall = BaseItem(
+    wall = DirectionalWall(
         source_entity_uuid=uuid4(),
         name="Directional Force Wall",
-        is_pickable=False,
-        blocks_movement_east=True,
-        blocks_propagation_east=True,
+        blocked_channels=(
+            WorldEdgeChannel.MOVEMENT,
+            WorldEdgeChannel.PROPAGATION,
+        ),
     )
-    grid.place_object(wall.uuid, (1, 1))
+    wall.place_on_grid(
+        (1, 1),
+        boundary_direction=CardinalDirection.EAST,
+    )
     Entity.update_all_entities_senses(max_distance=20)
 
     final_pos, distance, blocked, blocker_name = Shove.calculate_final_position(
@@ -467,7 +581,7 @@ def test_eb_11_017_forced_movement_and_jump_respect_directional_blockers() -> No
 
     jump = Jump(source_entity_uuid=actor.uuid, template=True)
     assert (3, 1) in actor.senses.visible
-    assert not grid.raycast_clear((1, 1), (3, 1), channel="propagation", observer_uuid=actor.uuid)
+    assert not grid.raycast_clear((1, 1), (3, 1), channel="propagation")
     assert (3, 1) not in jump.get_valid_positions()
 
     jump_attempt = Jump(source_entity_uuid=actor.uuid, end_position=(3, 1))
@@ -569,7 +683,15 @@ def test_eb_11_009_geometry_and_aoe_are_grid_aware_where_needed() -> None:
     """EB-11-009: pure geometry feeds AoE shapes, which then consult the grid."""
     reset_grid_state(width=5, height=3)
     grid = get_map()
-    grid.set_tile(2, 1, walkable=False, visible=False, name="Wall")
+    grid.set_tile(
+        2,
+        1,
+        walking_cost=0,
+        flying_cost=0,
+        blocks_optics=True,
+        blocks_propagation=True,
+        name="Wall",
+    )
     caster = create_skeleton(name="Caster", position=(0, 1), faction="heroes")
     target = create_skeleton(name="Behind Wall", position=(3, 1), faction="monsters")
 
@@ -594,8 +716,8 @@ def test_eb_11_009_geometry_and_aoe_are_grid_aware_where_needed() -> None:
     assert (3, 1) in cylinder.affected_positions
 
 
-def test_eb_11_018_zone_control_cone_and_line_use_directional_geometry() -> None:
-    """EB-11-018: generic ZoneControl cone/line setup maps direction into AoE geometry."""
+def test_eb_11_018_area_condition_cone_and_line_use_directional_geometry() -> None:
+    """EB-11-018: direct area conditions map direction into AoE geometry."""
     reset_grid_state(width=10, height=5)
     source_uuid = uuid4()
 
@@ -604,19 +726,23 @@ def test_eb_11_018_zone_control_cone_and_line_use_directional_geometry() -> None
     direct_line = Line(source_entity_uuid=source_uuid, target=(8, 2), length_feet=30, width_feet=5)
     direct_line.compute_objective(caster_pos=(2, 2))
 
-    generic_cone_zone = ZoneControlCondition(
+    generic_cone_zone = AreaCondition(
         source_entity_uuid=source_uuid,
-        target_entity_uuid=source_uuid,
+        content_ref=_ENTRY_CLEANUP_CONTENT_REF,
+        position=(2, 2),
+        layer=SpatialEffectLayer.FIELD,
+        occupancy_policy=SpatialEffectOccupancyPolicy.OVERLAPPING,
         zone_shape="cone",
-        zone_center=(2, 2),
         zone_radius_feet=30,
         zone_direction=(1, 0),
     )
-    generic_line_zone = ZoneControlCondition(
+    generic_line_zone = AreaCondition(
         source_entity_uuid=source_uuid,
-        target_entity_uuid=source_uuid,
+        content_ref=_ENTRY_CLEANUP_CONTENT_REF,
+        position=(2, 2),
+        layer=SpatialEffectLayer.FIELD,
+        occupancy_policy=SpatialEffectOccupancyPolicy.OVERLAPPING,
         zone_shape="line",
-        zone_center=(2, 2),
         zone_radius_feet=30,
         zone_direction=(1, 0),
     )
@@ -636,7 +762,15 @@ def test_eb_11_019_cylinder_subjective_preview_matches_targeting_footprint() -> 
     """EB-11-019: cylinder subjective previews use the same full footprint as targeting."""
     reset_grid_state(width=5, height=3)
     grid = get_map()
-    grid.set_tile(2, 1, walkable=False, visible=False, name="Wall")
+    grid.set_tile(
+        2,
+        1,
+        walking_cost=0,
+        flying_cost=0,
+        blocks_optics=True,
+        blocks_propagation=True,
+        name="Wall",
+    )
     caster = create_skeleton(name="Caster", position=(0, 1), faction="heroes")
     target = create_skeleton(name="Behind Wall", position=(3, 1), faction="monsters")
     Entity.update_all_entities_senses(max_distance=20)
@@ -670,18 +804,24 @@ def test_eb_11_019_cylinder_subjective_preview_matches_targeting_footprint() -> 
     assert target.uuid in objective.affected_entity_uuids
 
 
-def test_eb_11_020_zone_removal_cleans_spatial_handlers_terrain_and_markers() -> None:
-    """EB-11-020: removing a ZoneControlCondition clears spatial, terrain, and marker state."""
+def test_eb_11_020_area_removal_cleans_handlers_terrain_and_tile_references() -> None:
+    """EB-11-020: removing an area clears every world fact it owns."""
     reset_grid_state(width=6, height=3)
     grid = get_map()
     caster = create_skeleton(name="Zone Caster", position=(0, 1), faction="heroes")
     zone = EntryCleanupZone(
         source_entity_uuid=caster.uuid,
-        target_entity_uuid=caster.uuid,
-        zone_center=(2, 1),
+        position=(2, 1),
     )
 
-    caster.add_condition(zone)
+    cause = Event(
+        name="Entry cleanup cause",
+        event_type=EventType.BASE_ACTION,
+        phase=EventPhase.EFFECT,
+        source_entity_uuid=caster.uuid,
+    )
+    completion = zone.activate(parent_event=cause)
+    assert completion is not None and not completion.canceled
 
     affected_positions = set(zone.affected_positions)
     center_tile = grid.get_tile(2, 1)
@@ -693,42 +833,42 @@ def test_eb_11_020_zone_removal_cleans_spatial_handlers_terrain_and_markers() ->
     for pos in affected_positions:
         tile = grid.get_tile(*pos)
         assert tile is not None
-        assert "Entry Cleanup Marker" in tile.active_conditions
+        assert tile.get_conditions()[zone.uuid] is zone
+        assert grid.is_position_hazardous_for(*pos, caster.uuid)
         assert EventQueue.get_spatial_handlers_at(pos)
 
-    assert zone.move_zone((4, 1))
+    assert zone.move_zone((4, 1), parent_event=completion)
     moved_positions = set(zone.affected_positions)
     moved_center = grid.get_tile(4, 1)
     assert moved_center is not None
-    assert zone.zone_center == (4, 1)
+    assert zone.position == (4, 1)
     assert moved_positions != affected_positions
     assert center_tile.get_movement_cost(MovementMode.WALKING) == 1
-    assert "Entry Cleanup Marker" not in center_tile.active_conditions
+    assert zone.uuid not in center_tile.get_conditions()
     assert moved_center.get_movement_cost(MovementMode.WALKING) == 2
-    assert "Entry Cleanup Marker" in moved_center.active_conditions
+    assert moved_center.get_conditions()[zone.uuid] is zone
     assert EventQueue.get_spatial_handlers_at((4, 1))
 
-    caster.remove_condition(zone.name)
+    assert zone.deactivate(parent_event=completion)
 
-    assert zone.name not in caster.active_conditions
+    assert not grid.has_spatial_condition(zone.uuid)
     assert center_tile.get_movement_cost(MovementMode.WALKING) == 1
     assert moved_center.get_movement_cost(MovementMode.WALKING) == 1
     assert zone.spatial_handler_uuids == []
     for pos in affected_positions | moved_positions:
         tile = grid.get_tile(*pos)
         assert tile is not None
-        assert "Entry Cleanup Marker" not in tile.active_conditions
+        assert zone.uuid not in tile.get_conditions()
         assert EventQueue.get_spatial_handlers_at(pos) == []
 
 
-def test_eb_11_010_walkability_is_cost_driven_not_the_legacy_flag() -> None:
-    """EB-11-010: GridMap walkability reads movement cost, not only tile.walkable."""
+def test_eb_11_010_walkability_is_derived_from_the_mode_cost() -> None:
+    """EB-11-010: GridMap walkability is derived from the selected mode cost."""
     reset_grid_state(width=2, height=1)
     grid = get_map()
     tile = grid.get_tile(1, 0)
     assert tile is not None
 
-    tile.walkable = False
     assert tile.get_movement_cost(MovementMode.WALKING) == 1
     assert grid.is_walkable(1, 0)
 
@@ -742,8 +882,8 @@ def test_eb_11_010_walkability_is_cost_driven_not_the_legacy_flag() -> None:
     assert not grid.is_walkable(1, 0)
 
 
-def test_eb_11_011_replacing_object_position_removes_old_grid_membership() -> None:
-    """EB-11-011: placing the same object twice keeps one authoritative position."""
+def test_eb_11_011_explicit_object_move_replaces_old_grid_membership() -> None:
+    """EB-11-011: explicit movement keeps one authoritative placement."""
     reset_grid_state(width=4, height=1)
     grid = get_map()
     crate = BaseItem(
@@ -753,7 +893,7 @@ def test_eb_11_011_replacing_object_position_removes_old_grid_membership() -> No
     )
 
     grid.place_object(crate.uuid, (1, 0))
-    grid.place_object(crate.uuid, (2, 0))
+    grid.move_object(crate.uuid, (2, 0))
 
     assert grid.get_object_position(crate.uuid) == (2, 0)
     assert crate.uuid not in grid.get_objects_at((1, 0))

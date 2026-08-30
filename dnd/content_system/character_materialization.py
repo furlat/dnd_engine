@@ -63,13 +63,28 @@ from dnd.content_system.spell_catalog_composition import (
 )
 from dnd.core.content.durable_characters import (
     AbilityScoreName,
+    AbilityScoreImprovementChoice,
+    BuildChoiceSelection,
+    CantripChoice,
     CharacterDefinitionRevisionV2,
     CharacterHoldingsRevision,
     CharacterItemV1,
     CharacterLoadoutRevisionV1,
     ClassDefinition,
+    ClassSkillChoice,
+    ElementalAncestryChoice,
+    FeatChoice,
+    FightingStyleChoice,
+    MetamagicChoice,
+    OriginTraitChoice,
     ProficiencySubject,
     ProficiencySubjectKind,
+    SpellKnownChoice,
+    SpellReplacementChoice,
+    StartingApparelPackageChoice,
+    StartingEquipmentPackageChoice,
+    StartingProficiencyChoice,
+    SubclassChoice,
 )
 from dnd.core.content.identities import ContentRef
 from dnd.core.content.origin_features import OriginStructuralFeatureDefinition
@@ -95,6 +110,67 @@ _SPELL_RUNTIME_ROW_BY_REF_KEY = {
     row.declaration.ref.identity_key: row
     for row in SPELL_CATALOG_COMPOSITION_ROWS
 }
+
+
+def _choice_semantic_values(
+    choice: BuildChoiceSelection,
+) -> tuple[str, ...]:
+    """Preserve one durable build choice as ordered semantic values."""
+    if isinstance(choice, ClassSkillChoice):
+        return choice.skills
+    if isinstance(choice, StartingProficiencyChoice):
+        return tuple(
+            f"{subject.subject_kind.value}:{subject.identity_key}"
+            for subject in choice.proficiencies
+        )
+    if isinstance(
+        choice,
+        (
+            FightingStyleChoice,
+            SubclassChoice,
+            ElementalAncestryChoice,
+            OriginTraitChoice,
+            FeatChoice,
+            StartingEquipmentPackageChoice,
+            StartingApparelPackageChoice,
+        ),
+    ):
+        return (choice.selected_ref.identity_key,)
+    if isinstance(
+        choice,
+        (CantripChoice, SpellKnownChoice, MetamagicChoice),
+    ):
+        return tuple(ref.identity_key for ref in choice.selected_refs)
+    if isinstance(choice, SpellReplacementChoice):
+        return (
+            choice.replaced_spell_ref.identity_key,
+            choice.learned_spell_ref.identity_key,
+        )
+    if isinstance(choice, AbilityScoreImprovementChoice):
+        return tuple(
+            f"{ability.value}:{amount}"
+            for ability, amount in choice.increases
+        )
+    raise TypeError(f"Unsupported class-level choice: {choice!r}")
+
+
+def _selected_feature_ids(
+    definition: CharacterDefinitionRevisionV2,
+) -> set[str]:
+    """Return feature-like identities selected explicitly by level choices."""
+    selected: set[str] = set()
+    for level in definition.class_levels:
+        for choice in level.choices:
+            if isinstance(
+                choice,
+                (FightingStyleChoice, ElementalAncestryChoice, FeatChoice),
+            ):
+                selected.add(choice.selected_ref.identity_key)
+            elif isinstance(choice, MetamagicChoice):
+                selected.update(
+                    ref.identity_key for ref in choice.selected_refs
+                )
+    return selected
 
 
 @dataclass(frozen=True, slots=True)
@@ -1042,25 +1118,23 @@ def materialize_character(
         entity_content_ref=runtime_content_ref,
         runtime=runtime,
     )
-    apply_player_character_appearance(
-        entity.appearance,
-        body_ref=definition.body_recipe.ref,
-        species_ref=definition.species_ref,
-        selection=definition.appearance,
-    )
-
-    composition_receipt = apply_character_composition(
-        entity=entity,
-        definition=definition,
-        loadout=loadout,
-        preview=validation.preview,
-        runtime=runtime,
-    )
-
     lineage: list[tuple[UUID, UUID]] = []
     starting_torches: list[Torch] = []
     provisional_items: list[BaseItem] = []
     try:
+        apply_player_character_appearance(
+            entity.appearance,
+            body_ref=definition.body_recipe.ref,
+            species_ref=definition.species_ref,
+            selection=definition.appearance,
+        )
+        composition_receipt = apply_character_composition(
+            entity=entity,
+            definition=definition,
+            loadout=loadout,
+            preview=validation.preview,
+            runtime=runtime,
+        )
         for durable_item in holdings.items:
             item = materialize_item_from_installed_runtime(
                 durable_item.recipe,
@@ -1094,6 +1168,71 @@ def materialize_character(
             lineage.append((durable_item.character_item_id, item.uuid))
         for torch in starting_torches:
             torch.ignite(entity.uuid)
+        entity.character_origin_state = (
+            (
+                ("strength", definition.base_ability_scores.strength),
+                ("dexterity", definition.base_ability_scores.dexterity),
+                (
+                    "constitution",
+                    definition.base_ability_scores.constitution,
+                ),
+                (
+                    "intelligence",
+                    definition.base_ability_scores.intelligence,
+                ),
+                ("wisdom", definition.base_ability_scores.wisdom),
+                ("charisma", definition.base_ability_scores.charisma),
+            ),
+            (
+                (definition.flexible_ability_bonuses.plus_two.value, 2),
+                (definition.flexible_ability_bonuses.plus_one.value, 1),
+            ),
+            tuple(
+                (
+                    choice.choice_id,
+                    _choice_semantic_values(choice),
+                )
+                for choice in definition.immutable_origin_choices
+            ),
+        )
+        entity.character_class_levels = tuple(
+            (
+                level.class_level_id.value,
+                level.character_level,
+                level.class_ref.identity_key,
+                level.resulting_class_level,
+                (
+                    level.subclass_ref.identity_key
+                    if level.subclass_ref is not None
+                    else None
+                ),
+                tuple(
+                    (
+                        choice.choice_id,
+                        _choice_semantic_values(choice),
+                    )
+                    for choice in level.choices
+                ),
+            )
+            for level in definition.class_levels
+        )
+        entity.character_feature_ids = tuple(sorted({
+            *(
+                ref.identity_key
+                for ref in validation.preview.automatic_grant_refs
+            ),
+            *_selected_feature_ids(definition),
+        }))
+        entity.character_prepared_spell_ids = tuple(sorted(
+            spell_ref.identity_key
+            for source in loadout.prepared_spells
+            for spell_ref in source.spell_refs
+        ))
+        entity.character_feature_toggle_ids = tuple(
+            toggle.feature_ref.identity_key
+            for toggle in loadout.feature_toggles
+            if toggle.enabled
+        )
     except Exception:
         _discard_character_items(
             provisional_items,
@@ -1101,6 +1240,9 @@ def materialize_character(
         )
         if composition_receipt is not None:
             remove_character_composition(entity, composition_receipt)
+        creature_binding_registry.discard(entity.uuid)
+        if Entity.get(entity.uuid) is entity and not entity.creation_committed:
+            entity.discard_uncommitted()
         raise
 
     return MaterializedCharacter(

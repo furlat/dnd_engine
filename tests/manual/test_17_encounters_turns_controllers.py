@@ -516,9 +516,16 @@ def test_execute_action_captures_combat_log_and_notifies_listener(capsys) -> Non
     assert encounter.combat_log
     assert listener_calls
     assert listener_calls[-1][0] == len(encounter.combat_log) - 1
-    assert encounter.get_combat_log(since=listener_calls[-1][0])[0] is encounter.combat_log[-1]
+    combat_log_generation = EventQueue.generation_id()
+    assert encounter.get_combat_log(
+        requested_generation=combat_log_generation,
+        since=listener_calls[-1][0],
+    )[0] is encounter.combat_log[-1]
     latest = encounter.combat_log[-1]
-    since_entries = encounter.get_combat_log(since=listener_calls[-1][0])
+    since_entries = encounter.get_combat_log(
+        requested_generation=combat_log_generation,
+        since=listener_calls[-1][0],
+    )
     assert event.damage_rolls is not None
     readout_lines = [
         (

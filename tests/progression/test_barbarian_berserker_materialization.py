@@ -76,6 +76,7 @@ from dnd.core.modifiers import (
 from dnd.actions import AttackEvent
 from dnd.blocks.equipment import Weapon
 from dnd.entity import Entity, EntityConfig
+from dnd.game import Game
 from dnd.items.weapons import GREATSWORD_RECIPE
 from dnd.player_character_body import PLAYER_CHARACTER_BODY_RECIPE
 from dnd.runtime_reset import reset_engine_runtime
@@ -432,7 +433,6 @@ def test_level_twenty_berserker_materializes_and_reverses_exactly() -> None:
             faction="monsters",
         ),
     )
-    Entity.update_all_entities_senses(max_distance=30)
     target.equipment.ac_bonus.self_static.add_value_modifier(
         NumericalModifier.create(
             source_entity_uuid=target.uuid,
@@ -441,6 +441,12 @@ def test_level_twenty_berserker_materializes_and_reverses_exactly() -> None:
             value=100,
         ),
     )
+    entity.compose_entity()
+    target.compose_entity()
+    game = Game()
+    game.deploy_entity(entity, (2, 2))
+    game.deploy_entity(target, (3, 2))
+    Entity.update_all_entities_senses(max_distance=30)
     raging = rage.Raging(
         source_entity_uuid=entity.uuid,
         target_entity_uuid=entity.uuid,

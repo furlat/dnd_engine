@@ -26,7 +26,7 @@ from dnd.core.saving_throw_types import (
     SavingThrowContext,
     SavingThrowEffectTag,
 )
-from dnd.core.senses import SenseMode, SensesType
+from dnd.types.senses import SenseMode, SensesType
 from dnd.entity import Entity
 
 

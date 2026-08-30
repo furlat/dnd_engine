@@ -63,10 +63,9 @@ SAFE_LEAF_MODULES = frozenset({
     "dnd.core.content.origin_support",
     "dnd.core.effect_types",
     "dnd.core.equipment_types",
-    "dnd.core.item_types",
     "dnd.core.life_types",
     "dnd.core.presentation_geometry",
-    "dnd.core.senses",
+    "dnd.types.senses",
 })
 
 CANONICAL_NEUTRAL_SYMBOL_OWNERS = {
@@ -116,7 +115,8 @@ CONTENT_CONTRACT_ALLOWED_NEUTRAL_DEPENDENCIES = frozenset({
     "dnd.core.equipment_types",
     "dnd.core.progression",
     "dnd.core.saving_throw_types",
-    "dnd.core.senses",
+    "dnd.types.senses",
+    "dnd.types.spatial_effects",
 })
 CONTENT_PACK_LOADER_MODULE = "dnd.content_system.pack_loader"
 CONTENT_PACK_IMPORT_BOUNDARY_MODULE = "dnd.content_system.import_boundary"
@@ -125,7 +125,7 @@ CONTENT_PACK_IMPORT_FUNCTION = "import_content_pack_module"
 WORLD_CONTRACT_ALLOWED_PROJECT_DEPENDENCIES = frozenset({
     "dnd.core.equipment_types",
     "dnd.core.life_types",
-    "dnd.core.senses",
+    "dnd.types.senses",
 })
 
 MECHANISM_MODULES = frozenset({
@@ -1229,19 +1229,27 @@ def test_world_contracts_are_a_cold_transport_leaf() -> None:
 
 
 def test_persistent_spell_zones_receive_explicit_effect_provenance() -> None:
-    """Every concrete ZoneControlCondition creation carries EffectOrigin."""
+    """Every concrete authored area creation carries explicit provenance."""
+    spatial_bases = {
+        "AreaCondition",
+        "MembershipAreaCondition",
+        "RestrainingAreaCondition",
+        "SpatialCondition",
+    }
     zone_class_names: set[str] = set()
     for source_module in _source_modules().values():
-        if not source_module.name.startswith("dnd."):
+        if not source_module.name.startswith(
+            ("dnd.spells.", "dnd.classes.", "dnd.monsters."),
+        ):
             continue
         for node in ast.walk(source_module.tree):
             if not isinstance(node, ast.ClassDef):
                 continue
             if any(
-                (isinstance(base, ast.Name) and base.id == "ZoneControlCondition")
+                (isinstance(base, ast.Name) and base.id in spatial_bases)
                 or (
                     isinstance(base, ast.Attribute)
-                    and base.attr == "ZoneControlCondition"
+                    and base.attr in spatial_bases
                 )
                 for base in node.bases
             ):
@@ -1266,10 +1274,52 @@ def test_persistent_spell_zones_receive_explicit_effect_provenance() -> None:
                     f"- {source_module.display_path}:{node.lineno}: {called_name}"
                 )
 
-    assert zone_class_names, "No concrete ZoneControlCondition subclasses were found"
+    assert zone_class_names, "No concrete authored spatial conditions were found"
     assert not missing_provenance, (
         "Persistent spell zones must receive explicit EffectOrigin provenance:\n"
         + "\n".join(sorted(missing_provenance))
+    )
+
+
+def test_spatial_wrapper_runtime_is_hard_cut() -> None:
+    """The direct condition owner has no legacy host/controller side path."""
+    retired_symbols = {
+        "SpatialEffect",
+        "GroundEffect",
+        "CloudEffect",
+        "FieldEffect",
+        "SpatialEffectController",
+        "SpatialEffectLifetimePolicy",
+        "ZoneControlCondition",
+    }
+    retired_calls = {
+        "install_controller",
+        "install_default_controller",
+        "materialize_spatial_effect",
+        "get_spatial_effect_uuids_at",
+        "get_spatial_effect_blocks_at",
+    }
+    findings: list[str] = []
+    for source_module in _source_modules().values():
+        if not source_module.name.startswith("dnd."):
+            continue
+        for node in ast.walk(source_module.tree):
+            if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+                if node.name in retired_symbols | retired_calls:
+                    findings.append(
+                        f"- {source_module.display_path}:{node.lineno}: {node.name}"
+                    )
+            elif isinstance(node, ast.Name) and node.id in retired_symbols:
+                findings.append(
+                    f"- {source_module.display_path}:{node.lineno}: {node.id}"
+                )
+            elif isinstance(node, ast.Attribute) and node.attr in retired_calls:
+                findings.append(
+                    f"- {source_module.display_path}:{node.lineno}: {node.attr}"
+                )
+    assert not findings, (
+        "Retired spatial host/controller symbols remain active:\n"
+        + "\n".join(sorted(set(findings)))
     )
 
 
@@ -1370,7 +1420,7 @@ def test_floor_items_use_the_canonical_placement_boundary() -> None:
         (
             "dnd.spells.evocation",
             "ContinualFlameObject",
-            "setup_light",
+            "place_flame",
         ),
     }
     found: set[tuple[str, str | None, str | None]] = set()

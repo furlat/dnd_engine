@@ -1,6 +1,5 @@
 from typing import Dict, Optional, Any, List, Self, Set, ClassVar, Callable, Tuple
 from uuid import UUID, uuid4
-from enum import Enum
 from pydantic import BaseModel, Field, PrivateAttr, model_validator, computed_field, ConfigDict
 from dnd.core.values import ModifiableValue
 from dnd.core.base_conditions import BaseCondition
@@ -9,34 +8,31 @@ from dnd.core.content.runtime import (
     bind_runtime_behavior,
     bind_runtime_handler_before_admission,
 )
-from dnd.core.events import EventHandler, EventQueue, Trigger, Event, SpatialChangeEvent, EventPhase
-from dnd.core.senses import SenseMode as SenseMode, SensesType as SensesType
+from dnd.core.events import (
+    Event,
+    EventHandler,
+    EventPhase,
+    EventQueue,
+    EventType,
+    SpatialChangeEvent,
+    Trigger,
+)
+from dnd.types.senses import (
+    SenseMode as SenseMode,
+    SensesType as SensesType,
+    SensesView,
+)
+from dnd.types.world import LightLevel, MovementMode
+from dnd.types.world_placement import (
+    BoundaryStructure,
+    WorldPlacementKind,
+    WorldPlacementSpec,
+)
 
 from collections import defaultdict
 
 ContextualConditionImmunity = Callable[['BaseBlock', Optional['BaseBlock'], Optional[dict]], bool]
 
-
-class MovementMode(str, Enum):
-    """Movement modes for entities."""
-    WALKING = "walking"
-    FLYING = "flying"
-    SWIMMING = "swimming"
-    BURROWING = "burrowing"
-
-
-class LightLevel(int, Enum):
-    """Tile light levels ordered from most obscuring to brightest.
-
-    The integer values support ordering comparisons. Darkvision uses explicit
-    mapping rules rather than arithmetic over these enum values.
-    """
-
-    MAGICAL_DARKNESS = 0
-    DARKNESS = 1
-    DIM_LIGHT = 2
-    BRIGHT_LIGHT = 3
-    VERY_BRIGHT = 4
 
 class BaseBlock(BaseModel):
     """UUID-addressable container for engine components.
@@ -161,6 +157,10 @@ class BaseBlock(BaseModel):
 
     def should_include_in_senses_objects(self) -> bool:
         """Whether this block should appear in entity senses.objects."""
+        return True
+
+    def appears_in_entity_contacts(self) -> bool:
+        """Whether a GridMap entity occupant belongs in perceived contacts."""
         return True
 
     def should_include_in_adjacent_senses_objects(self) -> bool:
@@ -329,51 +329,33 @@ class BaseBlock(BaseModel):
         Non-spatial blocks (Equipment, Health, etc.) inherit this default."""
         return False
 
-    def blocks_vision(self, requesting_entity_uuid: Optional[UUID] = None) -> bool:
-        """Whether this block prevents vision through its position.
-        Non-spatial blocks inherit this default."""
+    def blocks_optics_at_center(self) -> bool:
+        """Whether this block prevents ordinary optics through its cell center."""
         return False
 
-    def blocks_directional_movement(self, direction: str,
-                                    requesting_entity_uuid: Optional[UUID] = None,
-                                    mode: 'MovementMode' = MovementMode.WALKING,
-                                    subjective: bool = False) -> bool:
-        """Whether this block prevents movement out of its tile in a direction."""
-        return False
-
-    def blocks_directional_vision(self, direction: str,
-                                  observer_uuid: Optional[UUID] = None,
-                                  subjective: bool = False) -> bool:
-        """Whether this block prevents vision crossing out of its tile in a direction."""
-        return False
-
-    def blocks_directional_light(self, direction: str,
-                                 observer_uuid: Optional[UUID] = None,
-                                 subjective: bool = False) -> bool:
-        """Whether this block prevents light crossing out of its tile in a direction."""
-        return False
-
-    def blocks_directional_propagation(self, direction: str,
-                                       requesting_entity_uuid: Optional[UUID] = None,
-                                       subjective: bool = False) -> bool:
-        """Whether this block prevents physical propagation out of its tile in a direction."""
+    def blocks_propagation(self) -> bool:
+        """Whether this block prevents physical propagation through its cell center."""
         return False
 
     def set_stealth_dc(self, value: Optional[int], parent_event: Optional[UUID] = None) -> None:
         """Set stealth DC and notify observers."""
+        if self.stealth_dc == value:
+            return
         self.stealth_dc = value
         self._notify_perceivability_changed(parent_event=parent_event)
 
     def set_invisible(self, value: bool, parent_event: Optional[UUID] = None) -> None:
         """Set invisibility flag and notify observers."""
+        if self.is_invisible is value:
+            return
         self.is_invisible = value
         self._notify_perceivability_changed(parent_event=parent_event)
 
     def _notify_perceivability_changed(self, parent_event: Optional[UUID] = None) -> None:
         """Fire a SPATIAL_PERCEIVABILITY_CHANGED event at this block's position.
 
-        Entities subscribed to this cell via SpatialSensesCallback will
-        re-evaluate their senses. Does not trigger SpatialHandlers (zone effects).
+        Candidate observers subscribed to this cell are re-evaluated by the
+        spatial senses reducer. Does not trigger SpatialHandlers (zone effects).
         """
         event = SpatialChangeEvent.perceivability_changed(self.position, self.uuid, parent_event=parent_event)
         current = EventQueue.register(event)
@@ -394,19 +376,15 @@ class BaseBlock(BaseModel):
         """Return passive perception for this block as an observer."""
         return 0
 
-    def can_bypass_invisibility(self) -> bool:
-        """Return whether this block can perceive invisible things."""
-        return False
-
-    def can_pierce_magical_darkness(self) -> bool:
-        """Return whether this block can see through magical darkness."""
+    def has_ordinary_visual_sight(self) -> bool:
+        """Return whether this block has ordinary visual sight."""
         return False
 
     def get_sense_modes(self) -> List[SenseMode]:
         """Return sense modes for this block as an observer."""
         return []
 
-    def get_senses(self) -> Optional[Self]:
+    def get_senses(self) -> Optional[SensesView]:
         """Override in Entity to return Senses block for subjective perception."""
         return None
 
@@ -450,25 +428,6 @@ class BaseBlock(BaseModel):
     def get_attached_light_sources(self) -> Set[UUID]:
         """Get all light sources attached to this block."""
         return self._attached_light_sources.copy()
-
-    def is_perceivable_by(self, requesting_entity_uuid: Optional[UUID] = None) -> bool:
-        """Return whether this block is perceivable by an optional observer."""
-        if requesting_entity_uuid is None:
-            return True
-
-        observer = BaseBlock.get(requesting_entity_uuid)
-        if observer is None:
-            return True
-
-        if self.is_invisible:
-            if not observer.can_bypass_invisibility():
-                return False
-
-        if self.stealth_dc is not None:
-            if self.stealth_dc >= observer.get_passive_perception():
-                return False
-
-        return True
 
     def is_enemy_of(self, other_uuid: UUID) -> bool:
         """Whether this block considers other_uuid an enemy.
@@ -605,6 +564,22 @@ class BaseBlock(BaseModel):
         this hook to synchronize their own location fields.
         """
         pass
+
+    def get_position(self) -> Tuple[int, int]:
+        """Return this block's current objective position value."""
+        return self.position
+
+    def get_world_placement_spec(self) -> WorldPlacementSpec:
+        """Return the neutral one-band center placement capability."""
+        return WorldPlacementSpec(
+            kind=WorldPlacementKind.CENTER,
+            occupies_bands=False,
+            vertical_extent_steps=1,
+        )
+
+    def get_boundary_structure(self) -> Optional[BoundaryStructure]:
+        """Return current boundary mechanics when this block provides them."""
+        return None
 
     @classmethod
     def create(cls, source_entity_uuid: UUID, source_entity_name: Optional[str] = None,
@@ -816,8 +791,8 @@ class BaseBlock(BaseModel):
             return True
         return False
 
-    def _remove_condition_from_dicts(self, condition: BaseCondition) -> None:
-        """Remove a condition from block-local condition indexes.
+    def _discard_condition_indexes(self, condition: BaseCondition) -> None:
+        """Remove one exact condition from this block's local indexes.
 
         Args:
             condition: Condition to remove from index dictionaries.
@@ -825,30 +800,51 @@ class BaseBlock(BaseModel):
         if not self.allow_events_conditions:
             return None
         condition_name = condition.name
-        assert condition.source_entity_uuid is not None and condition_name is not None
-        self.active_conditions_by_source[condition.source_entity_uuid].remove(condition_name)
-        if condition.uuid in self.active_conditions_by_uuid:
-            del self.active_conditions_by_uuid[condition.uuid]
+        if (
+            condition_name is not None
+            and self.active_conditions.get(condition_name) is condition
+        ):
+            self.active_conditions.pop(condition_name)
+        if self.active_conditions_by_uuid.get(condition.uuid) is condition:
+            self.active_conditions_by_uuid.pop(condition.uuid)
+        if condition_name is not None:
+            source_rows = self.active_conditions_by_source.get(
+                condition.source_entity_uuid,
+            )
+            if source_rows is not None and condition_name in source_rows:
+                source_rows.remove(condition_name)
 
-    def _collect_all_sub_conditions(self, condition: BaseCondition) -> List[BaseCondition]:
-        """Recursively collect same-block descendants for a condition.
+    def _discard_uncommitted_condition_tree(
+        self,
+        condition: BaseCondition,
+    ) -> None:
+        """Discard provisional condition mechanics without removal events."""
+        for sub_uuid in list(condition.sub_conditions):
+            sub_condition = BaseCondition.get(sub_uuid)
+            if isinstance(sub_condition, BaseCondition):
+                self._discard_condition_indexes(sub_condition)
+                self._discard_uncommitted_condition_tree(sub_condition)
 
-        Args:
-            condition: Root condition whose sub-condition tree should be walked.
+        for target_uuid, child_uuid in list(condition.linked_conditions):
+            target_block = BaseBlock.get(target_uuid)
+            child_condition = BaseCondition.get(child_uuid)
+            if (
+                isinstance(target_block, BaseBlock)
+                and isinstance(child_condition, BaseCondition)
+            ):
+                target_block._discard_condition_indexes(child_condition)
+                target_block._discard_uncommitted_condition_tree(
+                    child_condition,
+                )
+            elif isinstance(child_condition, BaseCondition):
+                child_condition.discard_from_runtime_owner()
 
-        Returns:
-            Descendant conditions in traversal order.
-        """
-        all_subs: List[BaseCondition] = []
-        for sub_uuid in condition.sub_conditions:
-            sub = BaseCondition.get(sub_uuid)
-            if sub is not None and isinstance(sub, BaseCondition):
-                all_subs.append(sub)
-                all_subs.extend(self._collect_all_sub_conditions(sub))
-        return all_subs
+        condition.discard_uncommitted_runtime_state()
+        self._discard_condition_indexes(condition)
+        condition.remove_from_register()
 
     def remove_condition(self, condition_name: str, expire: bool = False,
-                         parent_event: Optional[Event] = None) -> None:
+                         parent_event: Optional[Event] = None) -> bool:
         """Remove a condition with full cross-block tree traversal.
 
         Handles sub-conditions (same block), linked_conditions (other blocks),
@@ -860,28 +856,19 @@ class BaseBlock(BaseModel):
             parent_event: Parent event for event-chain tracking.
         """
         if not self.allow_events_conditions:
-            return
+            return False
         if condition_name not in self.active_conditions:
-            return
+            return False
 
-        condition = self.active_conditions.pop(condition_name)
-
-        all_sub_conditions = self._collect_all_sub_conditions(condition)
-        for sub_condition in all_sub_conditions:
-            if sub_condition.name is not None and sub_condition.name in self.active_conditions:
-                self.active_conditions.pop(sub_condition.name)
-            if sub_condition.name in self.active_conditions_by_source.get(
-                    sub_condition.source_entity_uuid, []):
-                self._remove_condition_from_dicts(sub_condition)
-
-        if condition.name in self.active_conditions_by_source.get(
-                condition.source_entity_uuid, []):
-            self._remove_condition_from_dicts(condition)
-
-        self._remove_condition_tree(condition, expire=expire, parent_event=parent_event)
+        condition = self.active_conditions[condition_name]
+        return self._remove_condition_tree(
+            condition,
+            expire=expire,
+            parent_event=parent_event,
+        )
 
     def remove_condition_by_uuid(self, condition_uuid: UUID,
-                                 parent_event: Optional[Event] = None) -> None:
+                                 parent_event: Optional[Event] = None) -> bool:
         """Remove a condition by UUID.
 
         Args:
@@ -889,58 +876,249 @@ class BaseBlock(BaseModel):
             parent_event: Optional parent event for cleanup event lineage.
         """
         if not self.allow_events_conditions:
-            return
+            return False
         condition = self.active_conditions_by_uuid.get(condition_uuid)
         if condition is None:
-            return
+            return False
         if condition.name is not None:
-            self.remove_condition(condition.name, parent_event=parent_event)
+            return self.remove_condition(
+                condition.name,
+                parent_event=parent_event,
+            )
+        return False
 
     def _remove_condition_tree(self, condition: BaseCondition, expire: bool = False,
-                               parent_event: Optional[Event] = None) -> None:
-        """Recursively remove condition and all cross-block dependencies.
+                               parent_event: Optional[Event] = None) -> bool:
+        """Remove one complete owned condition graph atomically.
 
-        Handles sub-conditions (same block), linked_conditions (other blocks),
-        and own state cleanup. Tracking dicts are already cleaned up by
-        remove_condition() before this is called.
+        Every removal phase is accepted before mechanics change. The prepared
+        graph is then committed in reverse order so descendants finish before
+        their owners while indexes remain authoritative until each node's own
+        state has been released.
 
         Args:
             condition: Root condition to remove.
             expire: Whether this removal is an expiration path.
             parent_event: Optional parent event for cleanup event lineage.
         """
-        for sub_uuid in list(condition.sub_conditions):
-            sub = BaseCondition.get(sub_uuid)
-            if sub is not None and isinstance(sub, BaseCondition):
-                self._remove_condition_tree(sub, expire=expire, parent_event=parent_event)
+        prepared: List[
+            Tuple[Optional[BaseBlock], BaseCondition, Event, bool]
+        ] = []
+        canceled = BaseBlock._prepare_condition_removal_tree(
+            condition,
+            condition_owner=self,
+            expire=expire,
+            parent_event=parent_event,
+            prepared=prepared,
+            visited=set(),
+        )
+        if canceled is not None:
+            BaseBlock._cancel_prepared_condition_removals(
+                prepared,
+                canceled,
+            )
+            return False
+        BaseBlock._commit_prepared_condition_removals(prepared)
+        return True
 
-        for target_uuid, cond_uuid in condition.linked_conditions:
-            target_block = BaseBlock.get(target_uuid)
-            if target_block is not None:
-                target_block.remove_condition_by_uuid(cond_uuid, parent_event=parent_event)
+    @staticmethod
+    def _cancel_prepared_condition_removals(
+        prepared: List[
+            Tuple[Optional['BaseBlock'], BaseCondition, Event, bool]
+        ],
+        canceled: Event,
+    ) -> None:
+        """Close accepted removal effects without mutating condition state."""
+        reason = canceled.status_message or "Dependent condition removal was canceled"
+        for _, _, effect, _ in reversed(prepared):
+            if not effect.canceled:
+                effect.cancel(status_message=reason)
+            parent = (
+                EventQueue.get_event_by_uuid(effect.parent_event)
+                if effect.parent_event is not None
+                else None
+            )
+            if (
+                parent is not None
+                and parent.event_type is EventType.CONDITION_REMOVAL
+                and not parent.canceled
+            ):
+                parent.cancel(status_message=reason)
 
-        condition.cleanup_own_state(expire=expire, parent_event=parent_event)
+    @staticmethod
+    def _commit_prepared_condition_removals(
+        prepared: List[
+            Tuple[Optional['BaseBlock'], BaseCondition, Event, bool]
+        ],
+    ) -> None:
+        """Commit a fully accepted condition graph child-first."""
+        for owner, condition, removal_effect, expire in reversed(prepared):
+            if owner is None:
+                if not condition.remove_from_runtime_owner(
+                    expire=expire,
+                    parent_event=removal_effect,
+                    prepared_removal_effect=removal_effect,
+                ):
+                    raise RuntimeError(
+                        "Accepted independent condition removal failed",
+                    )
+                continue
+
+            removed = condition.cleanup_own_state(
+                expire=expire,
+                parent_event=removal_effect,
+                removal_effect=removal_effect,
+            )
+            if removed is None or removed.canceled:
+                raise RuntimeError(
+                    "Accepted condition removal failed during owned-state cleanup"
+                )
+
+            owner._discard_condition_indexes(condition)
+            if condition.parent_link is not None:
+                _, parent_condition_uuid = condition.parent_link
+                parent_condition = BaseCondition.get(parent_condition_uuid)
+                if isinstance(parent_condition, BaseCondition):
+                    parent_condition.linked_conditions = [
+                        link
+                        for link in parent_condition.linked_conditions
+                        if link[1] != condition.uuid
+                    ]
+
+            condition.remove_from_register()
+            removed.phase_to(
+                EventPhase.COMPLETION,
+                **condition._post_removal_stats(),
+            )
+
+    @classmethod
+    def _prepare_condition_removal_tree(
+        cls,
+        condition: BaseCondition,
+        *,
+        condition_owner: Optional['BaseBlock'],
+        expire: bool,
+        parent_event: Optional[Event],
+        prepared: List[
+            Tuple[Optional['BaseBlock'], BaseCondition, Event, bool]
+        ],
+        visited: Set[UUID],
+    ) -> Optional[Event]:
+        """Accept one graph's removal phases without mutating mechanics."""
+        if condition.uuid in visited:
+            return None
+        visited.add(condition.uuid)
+
+        declaration = EventQueue.publish_declaration(
+            condition._declare_removal_event(
+                expired=expire,
+                parent_event=parent_event,
+            ),
+        )
+        if declaration.canceled:
+            return declaration
+
+        effect = condition.publish_removal_effect(declaration)
+        if effect.canceled:
+            return effect
+        prepared.append((condition_owner, condition, effect, expire))
+
+        for child_uuid in list(condition.sub_conditions):
+            child = BaseCondition.get(child_uuid)
+            if isinstance(child, BaseCondition) and child.applied:
+                if child.is_active_spatial_condition():
+                    child_owner = None
+                else:
+                    resolved_owner = BaseBlock.get(child.target_entity_uuid)
+                    child_owner = (
+                        resolved_owner
+                        if isinstance(resolved_owner, BaseBlock)
+                        else condition_owner
+                    )
+                canceled = cls._prepare_condition_removal_tree(
+                    child,
+                    condition_owner=child_owner,
+                    expire=expire,
+                    parent_event=effect,
+                    prepared=prepared,
+                    visited=visited,
+                )
+                if canceled is not None:
+                    return canceled
+
+        for target_uuid, child_uuid in list(condition.linked_conditions):
+            target = BaseBlock.get(target_uuid)
+            child = BaseCondition.get(child_uuid)
+            child_owner: Optional[BaseBlock] = None
+            if isinstance(target, BaseBlock):
+                indexed = target.active_conditions_by_uuid.get(child_uuid)
+                child = indexed if isinstance(indexed, BaseCondition) else None
+                child_owner = target
+            elif not (
+                isinstance(child, BaseCondition)
+                and child.is_active_spatial_condition()
+            ):
+                child = None
+            if isinstance(child, BaseCondition) and child.applied:
+                canceled = cls._prepare_condition_removal_tree(
+                    child,
+                    condition_owner=child_owner,
+                    expire=expire,
+                    parent_event=effect,
+                    prepared=prepared,
+                    visited=visited,
+                )
+                if canceled is not None:
+                    return canceled
 
         if condition.parent_link is not None:
-            parent_block_uuid, parent_cond_uuid = condition.parent_link
-            parent_cond = BaseCondition.get(parent_cond_uuid)
-            if (parent_cond is not None
-                    and isinstance(parent_cond, BaseCondition)
-                    and parent_cond.applied
-                    and parent_cond.name is not None):
-                parent_block = BaseBlock.get(parent_block_uuid)
-                if parent_block is not None and parent_cond.name in parent_block.active_conditions:
-                    policy = parent_cond.child_removal_policy
-                    if policy == "any":
-                        parent_block.remove_condition(parent_cond.name, parent_event=parent_event)
-                    elif policy == "last":
-                        remaining = sum(
-                            1 for _, cid in parent_cond.linked_conditions
-                            if (c := BaseCondition.get(cid)) is not None
-                            and isinstance(c, BaseCondition) and c.applied
-                        )
-                        if remaining == 0:
-                            parent_block.remove_condition(parent_cond.name, parent_event=parent_event)
+            parent_block_uuid, parent_condition_uuid = condition.parent_link
+            parent_block = BaseBlock.get(parent_block_uuid)
+            parent_condition = BaseCondition.get(parent_condition_uuid)
+            parent_is_independent_spatial = (
+                isinstance(parent_condition, BaseCondition)
+                and parent_condition.is_active_spatial_condition()
+                and parent_block_uuid == parent_condition.uuid
+            )
+            if (
+                isinstance(parent_condition, BaseCondition)
+                and (
+                    isinstance(parent_block, BaseBlock)
+                    or parent_is_independent_spatial
+                )
+                and parent_condition.applied
+                and parent_condition.uuid not in visited
+            ):
+                policy = parent_condition.child_removal_policy
+                remaining_children = sum(
+                    1
+                    for _, linked_uuid in parent_condition.linked_conditions
+                    if linked_uuid not in visited
+                    and (
+                        linked := BaseCondition.get(linked_uuid)
+                    ) is not None
+                    and isinstance(linked, BaseCondition)
+                    and linked.applied
+                )
+                if policy == "any" or (
+                    policy == "last" and remaining_children == 0
+                ):
+                    canceled = cls._prepare_condition_removal_tree(
+                        parent_condition,
+                        condition_owner=(
+                            parent_block
+                            if isinstance(parent_block, BaseBlock)
+                            else None
+                        ),
+                        expire=expire,
+                        parent_event=effect,
+                        prepared=prepared,
+                        visited=visited,
+                    )
+                    if canceled is not None:
+                        return canceled
+
+        return None
 
     def advance_duration(self, condition_name: str) -> bool:
         """Progress a block-owned condition duration without saving throws.
@@ -961,7 +1139,7 @@ class BaseBlock(BaseModel):
             self.remove_condition(condition_name, expire=True)
         return expired
 
-    def add_condition(self, condition: BaseCondition, context: Optional[Dict[str, Any]] = None, check_save_throw: bool = True, event: Optional[Event] = None)  -> Optional[Event]:
+    def add_condition(self, condition: BaseCondition, context: Optional[Dict[str, Any]] = None, check_save_throw: bool = True, parent_event: Optional[Event] = None)  -> Optional[Event]:
         """Apply and index a condition when lifecycle is enabled.
 
         Args:
@@ -969,7 +1147,7 @@ class BaseBlock(BaseModel):
             context: Optional context to attach before applying.
             check_save_throw: Accepted for API symmetry; block-level condition
                 application does not perform saving throws.
-            event: Optional pre-built declaration event.
+            parent_event: Optional causal parent for the application.
 
         Returns:
             Completion or cancellation event from condition application, or
@@ -991,13 +1169,43 @@ class BaseBlock(BaseModel):
         if context is not None:
             condition.set_context(context)
 
-        condition_applied = condition.apply(event)
+        declaration_event = EventQueue.publish_declaration(
+            condition.declare_event(parent_event),
+        )
+        if declaration_event.canceled:
+            self._discard_uncommitted_condition_tree(condition)
+            return declaration_event
+
+        try:
+            condition_applied = condition.apply(
+                declaration_event=declaration_event,
+            )
+        except BaseException:
+            self._discard_uncommitted_condition_tree(condition)
+            raise
         if condition_applied and not condition_applied.canceled and condition.applied:
             if condition.name in self.active_conditions:
-                self.remove_condition(condition.name)
+                if not self.remove_condition(
+                    condition.name,
+                    parent_event=condition_applied,
+                ):
+                    self._discard_uncommitted_condition_tree(condition)
+                    return condition_applied.cancel(
+                        status_message=(
+                            f"Condition {condition.name} could not replace "
+                            "the active condition"
+                        ),
+                    )
             self.active_conditions[condition.name] = condition
             self.active_conditions_by_uuid[condition.uuid] = condition
             self.active_conditions_by_source[condition.source_entity_uuid].append(condition.name)
+            completed_event = condition_applied.phase_to(
+                EventPhase.COMPLETION,
+            )
+            condition.applied_source_event_cursor = EventQueue.event_cursor()
+            return completed_event
+        elif condition_applied and condition_applied.canceled:
+            self._discard_uncommitted_condition_tree(condition)
 
         return condition_applied
 

@@ -14,6 +14,7 @@ from dnd.content_system.character_materialization import (
     materialize_character,
     remove_character_composition,
 )
+from dnd.content_system.creature_bindings import CREATURE_RUNTIME_BINDINGS
 from dnd.content_system.item_bindings import ITEM_RUNTIME_BINDINGS
 from dnd.content_system.character_appearance import FIGHTER_HUMAN_APPEARANCE
 from dnd.content_system.extra_attack_character_grant_appliers import (
@@ -410,10 +411,8 @@ def test_failed_holdings_hydration_discards_items_equipment_and_light() -> None:
             runtime=runtime,
         )
 
-    entity = Entity.get(runtime_entity_uuid)
-    assert entity is not None
-    assert entity.inventory.items == {}
-    assert entity.equipment.get_all_equipped_items() == []
+    assert Entity.get(runtime_entity_uuid) is None
+    assert runtime_entity_uuid not in CREATURE_RUNTIME_BINDINGS.bindings
     assert not {
         binding.character_item_id
         for binding in ITEM_RUNTIME_BINDINGS.bindings.values()

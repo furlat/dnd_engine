@@ -39,17 +39,19 @@ from dnd.reactions import add_opportunity_attack_handler
 from dnd.spells.conjuration import (
     GuardianOfFaith,
     GuardianOfFaithObject,
+    GuardianOfFaithZone,
 )
 from dnd.spells.divination import Guidance
 from dnd.spells.enchantment import Command
 from dnd.spells.evocation import (
     ContinualFlame,
+    ContinualFlameCondition,
     ContinualFlameObject,
     FireBolt,
     FlameStrike,
     Light,
 )
-from dnd.spells.illusion import Silence
+from dnd.spells.illusion import Silence, SilenceZone
 from dnd.spells.transmutation import HasteEffect
 from tests.engine.support import (
     force_attack_hit,
@@ -337,6 +339,12 @@ def test_continual_flame_object_owns_light_lifecycle() -> None:
         obj for obj in (BaseBlock.get(object_uuid) for object_uuid in objects)
         if isinstance(obj, ContinualFlameObject)
     )
+    condition = next(
+        spatial_condition
+        for spatial_condition in get_map().get_spatial_conditions()
+        if isinstance(spatial_condition, ContinualFlameCondition)
+    )
+    assert condition.anchor_uuid == flame.uuid
     assert _tile((3, 7)).resolved_light_level is LightLevel.BRIGHT_LIGHT
     assert _tile((5, 7)).resolved_light_level in {
         LightLevel.BRIGHT_LIGHT,
@@ -346,6 +354,8 @@ def test_continual_flame_object_owns_light_lifecycle() -> None:
     flame.destroy()
 
     assert not get_map().get_objects_at((3, 7))
+    assert BaseBlock.get(flame.uuid) is None
+    assert condition not in get_map().get_spatial_conditions()
     assert _tile((3, 7)).resolved_light_level is LightLevel.DARKNESS
 
 
@@ -691,8 +701,14 @@ def test_silence_zone_deafens_blocks_verbal_and_cleans_up() -> None:
     assert isinstance(silence, SpellEvent)
     assert not silence.canceled
     assert has_condition(caster, "Concentrating")
-    assert has_condition(enemy, "Silence Deafened")
     assert has_condition(enemy, "Deafened")
+    zone = next(
+        condition
+        for condition in get_map().get_spatial_conditions()
+        if isinstance(condition, SilenceZone)
+    )
+    assert enemy.position in zone.affected_positions
+    assert any(owner_uuid == enemy.uuid for owner_uuid, _ in zone.linked_conditions)
 
     verbal = FireBolt(
         source_entity_uuid=enemy.uuid,
@@ -712,8 +728,19 @@ def test_silence_zone_deafens_blocks_verbal_and_cleans_up() -> None:
     assert isinstance(nonverbal, SpellEvent)
     assert not nonverbal.canceled
 
+    overlapping_zone = SilenceZone(
+        source_entity_uuid=enemy.uuid,
+        position=enemy.position,
+        faction=enemy.faction,
+    )
+    overlapping_zone.activate(parent_event=None)
+    assert has_condition(enemy, "Deafened")
+
     caster.remove_condition("Concentrating")
-    assert not has_condition(enemy, "Silence Deafened")
+    assert zone not in get_map().get_spatial_conditions()
+    assert has_condition(enemy, "Deafened")
+
+    overlapping_zone.deactivate()
     assert not has_condition(enemy, "Deafened")
 
 
@@ -746,21 +773,32 @@ def test_guardian_placement_ward_and_damage_budget() -> None:
         )
         if isinstance(obj, GuardianOfFaithObject)
     )
-    assert guardian.blocks_movement
+    zone = next(
+        condition
+        for condition in grid.get_spatial_conditions()
+        if isinstance(condition, GuardianOfFaithZone)
+    )
+    assert not guardian.blocks_movement
     assert not grid.is_walkable_for(10, 7, caster.uuid)
-    assert guardian.damage_budget == 60
-    assert guardian.damage_dealt == 0
+    assert zone.anchor_uuid == guardian.uuid
+    assert zone.damage_budget == 60
+    assert zone.damage_dealt == 0
 
     first = create_spell_regression_actor("First Fodder", (18, 7), "monsters")
     force_save_result(first, "dexterity", succeeds=False)
     first_hp = get_hp(first)
-    with fixed_dice_faces(10):
-        Entity.update_entity_position(first, (12, 7))
+    first_turn = EventQueue.begin_turn_execution()
+    try:
+        with fixed_dice_faces(10):
+            Entity.update_entity_position(first, (12, 7))
+        assert get_hp(first) == first_hp - 20
+        hp_after_first = get_hp(first)
+        Entity.update_entity_position(first, (11, 7))
+        assert get_hp(first) == hp_after_first
+    finally:
+        EventQueue.end_turn_execution(first_turn)
     assert get_hp(first) == first_hp - 20
-    assert has_condition(first, "Guardian Warded")
-    hp_after_first = get_hp(first)
-    Entity.update_entity_position(first, (11, 7))
-    assert get_hp(first) == hp_after_first
+    assert not has_condition(first, "Guardian Warded")
 
     for index, destination in enumerate(((10, 5), (10, 9)), start=2):
         fodder = create_spell_regression_actor(
@@ -772,5 +810,6 @@ def test_guardian_placement_ward_and_damage_budget() -> None:
         with fixed_dice_faces(10):
             Entity.update_entity_position(fodder, destination)
 
-    assert guardian.damage_dealt == 60
+    assert zone.damage_dealt == 60
     assert guardian.uuid not in grid.get_objects_at((10, 7))
+    assert zone not in grid.get_spatial_conditions()

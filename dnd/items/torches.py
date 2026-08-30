@@ -41,8 +41,9 @@ from dnd.core.content.registration import (
     item_factory,
 )
 from dnd.core.content.runtime import RuntimeBehaviorKind
-from dnd.core.events import EventPhase, ExposedFlameEvent
+from dnd.core.events import EventPhase, EventQueue, ExposedFlameEvent
 from dnd.core.gridmap import get_map
+from dnd.core.item_types import ItemPresentationState
 from dnd.entity import Entity
 
 
@@ -158,8 +159,7 @@ class IgniteTorchAction(BaseAction):
             EventPhase.EFFECT,
             status_message="Torch ignited",
         )
-        return effect.phase_to(
-            EventPhase.COMPLETION,
+        return effect.with_updates(
             status_message="Torch ignited",
         )
 
@@ -227,8 +227,7 @@ class ExtinguishTorchAction(BaseAction):
             EventPhase.EFFECT,
             status_message="Torch extinguished",
         )
-        return effect.phase_to(
-            EventPhase.COMPLETION,
+        return effect.with_updates(
             status_message="Torch extinguished",
         )
 
@@ -277,6 +276,21 @@ class Torch(UsableItem):
         description="Whether the torch currently has an attached light source.",
     )
     _light_source_uuid: Optional[UUID] = None
+
+    def to_item_presentation_state(
+        self,
+        *,
+        stack_count: Optional[int] = None,
+    ) -> ItemPresentationState:
+        """Add portable-torch light mechanics to the item fact."""
+        return super().to_item_presentation_state(
+            stack_count=stack_count,
+        ).model_copy(update={
+            "is_lit": self.is_lit,
+            "very_bright_radius_feet": self.very_bright_radius_feet,
+            "bright_radius_feet": self.bright_radius_feet,
+            "dim_radius_feet": self.dim_radius_feet,
+        })
 
     def get_use_actions(self, user_entity_uuid: UUID) -> List[BaseAction]:
         """Return the ignite or extinguish action according to lit state."""
@@ -357,9 +371,11 @@ class Torch(UsableItem):
         self.extinguish(parent_event=parent_event)
         return True
 
-    def _on_destroy(self) -> None:
+    def _on_destroy(self, parent_event: Optional[Event]) -> None:
         """Extinguish before destruction."""
-        self.extinguish()
+        self.extinguish(
+            parent_event=parent_event.uuid if parent_event is not None else None,
+        )
 
     def _on_drop(
         self,
@@ -505,8 +521,7 @@ class IgniteWallTorchAction(BaseAction):
             EventPhase.EFFECT,
             status_message="Wall torch lit",
         )
-        return effect.phase_to(
-            EventPhase.COMPLETION,
+        return effect.with_updates(
             status_message="Wall torch lit",
         )
 
@@ -569,8 +584,7 @@ class ExtinguishWallTorchAction(BaseAction):
             EventPhase.EFFECT,
             status_message="Wall torch extinguished",
         )
-        return effect.phase_to(
-            EventPhase.COMPLETION,
+        return effect.with_updates(
             status_message="Wall torch extinguished",
         )
 
@@ -614,6 +628,21 @@ class WallTorch(UsableItem):
     _light_source_uuid: Optional[UUID] = None
     _wall_torch_position: Optional[Tuple[int, int]] = None
 
+    def to_item_presentation_state(
+        self,
+        *,
+        stack_count: Optional[int] = None,
+    ) -> ItemPresentationState:
+        """Add fixed-torch light mechanics to the item fact."""
+        return super().to_item_presentation_state(
+            stack_count=stack_count,
+        ).model_copy(update={
+            "is_lit": self.is_lit,
+            "very_bright_radius_feet": self.very_bright_radius_feet,
+            "bright_radius_feet": self.bright_radius_feet,
+            "dim_radius_feet": self.dim_radius_feet,
+        })
+
     def get_use_actions(self, user_entity_uuid: UUID) -> List[BaseAction]:
         """Return the light or extinguish action according to lit state."""
         if not self.is_lit:
@@ -634,31 +663,43 @@ class WallTorch(UsableItem):
             )
         ]
 
-    def light(self, parent_event: Optional[UUID] = None) -> None:
+    def light(
+        self,
+        parent_event: Optional[UUID] = None,
+    ) -> Optional[ExposedFlameEvent]:
         """Create this fixture's fixed light source."""
         if self.is_lit:
-            return
-        self.is_lit = True
+            return None
         if self._wall_torch_position is None:
-            return
-        self._light_source_uuid = get_map().add_light_source(
-            position=self._wall_torch_position,
-            very_bright_radius_feet=self.very_bright_radius_feet,
-            bright_radius_feet=self.bright_radius_feet,
-            dim_radius_feet=self.dim_radius_feet,
-            parent_event=parent_event,
-        )
-        flame_event = ExposedFlameEvent(
+            return None
+        current = EventQueue.publish_declaration(ExposedFlameEvent(
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.uuid,
             item_uuid=self.uuid,
             position=self._wall_torch_position,
             parent_event=parent_event,
             phase=EventPhase.DECLARATION,
+            use_register=False,
+        ))
+        if current.canceled:
+            return current
+        current = current.phase_to(EventPhase.EXECUTION)
+        if current.canceled:
+            return current
+        current = current.phase_to(EventPhase.EFFECT)
+        if current.canceled:
+            return current
+        light_source_uuid = get_map().add_light_source(
+            position=self._wall_torch_position,
+            very_bright_radius_feet=self.very_bright_radius_feet,
+            bright_radius_feet=self.bright_radius_feet,
+            dim_radius_feet=self.dim_radius_feet,
+            anchor_uuid=self.uuid,
+            parent_event=current.uuid,
         )
-        flame_event.phase_to(EventPhase.EFFECT).phase_to(
-            EventPhase.COMPLETION,
-        )
+        self._light_source_uuid = light_source_uuid
+        self.is_lit = True
+        return current.phase_to(EventPhase.COMPLETION)
 
     def put_out(self, parent_event: Optional[UUID] = None) -> None:
         """Remove this fixture's fixed light source."""

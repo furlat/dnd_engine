@@ -7,7 +7,6 @@ from uuid import uuid4
 
 import pytest
 
-from dnd import tiles as dnd_tiles
 from dnd.actions import (
     Attack,
     AttackEvent,
@@ -32,6 +31,8 @@ from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import (
     DeathSaveEvent,
     DeathEvent,
+    Event,
+    EventHandler,
     EventPhase,
     EventQueue,
     EventType,
@@ -41,6 +42,7 @@ from dnd.core.events import (
     SpatialChangeEvent,
     StepMovementEvent,
     TakeDamageEvent,
+    Trigger,
 )
 from dnd.core.gridmap import get_map
 from dnd.core.life_types import LifeState
@@ -48,10 +50,18 @@ from dnd.core.creature_types import DamageType, Size
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import AdvantageStatus, BaseValue, ModifiableValue
 from dnd.entity import Entity, EntityConfig
-from dnd.monsters.bestiary import create_goblin, create_goblin_archer, create_skeleton
+from dnd.game import Game
+from dnd.monsters.bestiary import (
+    create_goblin as _create_goblin,
+    create_goblin_archer as _create_goblin_archer,
+    create_skeleton as _create_skeleton,
+)
 from dnd.reactions import add_opportunity_attack_handler
-from dnd.tiles import create_spike_zone
+from dnd.spatial.environmental_conditions import (
+    materialize_spike_trap_condition,
+)
 from tests.engine.support import (
+    create_test_entity,
     force_attack_crit,
     force_attack_hit,
     force_attack_miss,
@@ -60,14 +70,43 @@ from tests.engine.support import (
 )
 
 
+_combat_game: Game | None = None
+
+
+def _deploy_bestiary_entity(entity: Entity) -> Entity:
+    """Compose and deploy a factory result through this test's Game."""
+    if _combat_game is None:
+        raise RuntimeError("reset_core_action_state must precede entity creation")
+    entity.compose_entity()
+    _combat_game.deploy_entity(entity, entity.position)
+    return entity
+
+
+def create_goblin(*args, **kwargs) -> Entity:
+    """Create and explicitly deploy one goblin for combat tests."""
+    return _deploy_bestiary_entity(_create_goblin(*args, **kwargs))
+
+
+def create_goblin_archer(*args, **kwargs) -> Entity:
+    """Create and explicitly deploy one goblin archer for combat tests."""
+    return _deploy_bestiary_entity(_create_goblin_archer(*args, **kwargs))
+
+
+def create_skeleton(*args, **kwargs) -> Entity:
+    """Create and explicitly deploy one skeleton for combat tests."""
+    return _deploy_bestiary_entity(_create_skeleton(*args, **kwargs))
+
+
 def reset_core_action_state() -> None:
     """Clear global state touched by these examples."""
+    global _combat_game
     reset_combat_state()
     EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
     BaseValue._registry.clear()
     get_map().create_rectangle(0, 0, 20, 20)
+    _combat_game = Game()
 
 
 @contextmanager
@@ -107,7 +146,7 @@ def fixed_terrain_damage(*values: int) -> Iterator[None]:
     if not values:
         raise ValueError("fixed_terrain_damage requires at least one value")
 
-    original_randint = dnd_tiles.random.randint
+    original_randint = dice_module.random.randint
     remaining = list(values)
 
     def fake_randint(_: int, __: int) -> int:
@@ -115,11 +154,11 @@ def fixed_terrain_damage(*values: int) -> Iterator[None]:
             return remaining.pop(0)
         return remaining[0]
 
-    dnd_tiles.random.randint = fake_randint
+    dice_module.random.randint = fake_randint
     try:
         yield
     finally:
-        dnd_tiles.random.randint = original_randint
+        dice_module.random.randint = original_randint
 
 
 def validate_attack_declaration(attack: Attack) -> AttackEvent | None:
@@ -170,10 +209,122 @@ def strong_entity(
         size=size,
         uses_death_saves=uses_death_saves,
     )
-    entity = Entity.create(source_entity_uuid=uuid4(), name=name, config=config)
+    entity = create_test_entity(name=name, config=config)
     if setup_actions:
         setup_standard_actions(entity)
     return entity
+
+
+def test_action_costs_commit_before_execution_and_effects_close_before_terminal() -> None:
+    """The public Dash transcript exposes committed state at each root phase."""
+    reset_core_action_state()
+    actor = strong_entity("Runner", (2, 2), "heroes")
+    observed: list[tuple[EventPhase, int, bool]] = []
+
+    def observe_root(event: Event) -> None:
+        if (
+            event.source_entity_uuid == actor.uuid
+            and event.event_type is EventType.BASE_ACTION
+        ):
+            observed.append((
+                event.phase,
+                actor.action_economy.actions.normalized_score,
+                "Dashing" in actor.active_conditions,
+            ))
+
+    EventQueue.add_on_event_callback(
+        observe_root,
+        event_types={EventType.BASE_ACTION},
+    )
+    try:
+        result = Dash(source_entity_uuid=actor.uuid).apply()
+    finally:
+        EventQueue.remove_on_event_callback(observe_root)
+
+    assert result is not None and not result.canceled
+    assert observed == [
+        (EventPhase.DECLARATION, 1, False),
+        (EventPhase.EXECUTION, 0, False),
+        (EventPhase.EFFECT, 0, True),
+        (EventPhase.COMPLETION, 0, True),
+    ]
+
+
+def test_execution_cancellation_spends_admitted_cost_without_running_effects() -> None:
+    """An execution veto is terminal only after the admitted cost is committed."""
+    reset_core_action_state()
+    actor = strong_entity("Stopped Runner", (2, 2), "heroes")
+    handler = EventHandler(
+        name="Stop Dash execution",
+        source_entity_uuid=uuid4(),
+        trigger_conditions=[Trigger(
+            event_type=EventType.BASE_ACTION,
+            event_phase=EventPhase.EXECUTION,
+            event_source_entity_uuid=actor.uuid,
+        )],
+        event_processor=lambda event, _source_uuid: event.cancel(
+            status_message="Execution stopped",
+        ),
+    )
+    EventQueue.add_event_handler(handler)
+    try:
+        result = Dash(source_entity_uuid=actor.uuid).apply()
+    finally:
+        EventQueue.remove_event_handler(handler)
+
+    assert result is not None and result.canceled
+    assert result.phase is EventPhase.CANCEL
+    assert result.canceled_from_phase is EventPhase.EXECUTION
+    assert actor.action_economy.actions.normalized_score == 0
+    assert "Dashing" not in actor.active_conditions
+    assert [
+        event.phase
+        for event in EventQueue.get_events_by_type(EventType.BASE_ACTION)
+        if event.lineage_uuid == result.lineage_uuid
+    ] == [
+        EventPhase.DECLARATION,
+        EventPhase.EXECUTION,
+        EventPhase.CANCEL,
+    ]
+
+
+def test_attack_mandatory_children_finish_before_root_completion() -> None:
+    """Damage-roll and damage children close before their action terminal."""
+    reset_core_action_state()
+    attacker = create_goblin(name="Attacker", position=(5, 5), faction="heroes")
+    target = create_skeleton(name="Target", position=(6, 5), faction="monsters")
+    Entity.update_all_entities_senses(max_distance=20)
+    hit_modifier = force_attack_hit(attacker)
+    cursor = EventQueue.event_cursor()
+
+    with fixed_dice(10, 4):
+        result = Attack(
+            source_entity_uuid=attacker.uuid,
+            target_entity_uuid=target.uuid,
+            weapon_slot=WeaponSlot.MELEE_MAIN,
+        ).apply()
+
+    remove_attack_modifier(attacker, hit_modifier)
+    assert result is not None and not result.canceled
+    indexed = list(EventQueue.iter_events_since(cursor))
+    root_terminal_index = next(
+        index
+        for index, event in indexed
+        if event.lineage_uuid == result.lineage_uuid
+        and event.phase is EventPhase.COMPLETION
+    )
+    mandatory_terminals = [
+        index
+        for index, event in indexed
+        if event.phase is EventPhase.COMPLETION
+        and event.event_type in {
+            EventType.DAMAGE_ROLL_RESULT,
+            EventType.TAKE_DAMAGE,
+        }
+    ]
+
+    assert mandatory_terminals
+    assert max(mandatory_terminals) < root_terminal_index
 
 
 def test_eb_10_001_invalid_attack_cancels_before_costs() -> None:
@@ -354,6 +505,13 @@ def test_eb_10_004_move_consumes_movement_per_step_and_records_step_events() -> 
     assert len(completed_steps) == 3
     assert event.trajectory is MovementTrajectory.PATH
     assert all(step.trajectory is MovementTrajectory.PATH for step in completed_steps)
+    assert [step.disclosed_path for step in completed_steps] == [
+        ((5, 5), (5, 6)),
+        ((5, 6), (5, 7)),
+        ((5, 7), (5, 8)),
+    ]
+    assert all(step.from_elevation_feet == 0 for step in completed_steps)
+    assert all(step.to_elevation_feet == 0 for step in completed_steps)
 
 
 def test_eb_10_005_opportunity_attack_uses_reaction_on_step_movement() -> None:
@@ -521,8 +679,8 @@ def test_eb_10_007_shove_forced_movement_does_not_trigger_opportunity_attack() -
     assert len(forced_movement_logs) == 1
     forced_log = forced_movement_logs[0]
     assert forced_log.data["cause"] == "shove"
-    assert forced_log.data["start_position"] == [3, 2]
-    assert forced_log.data["end_position"] == list(target.position)
+    assert forced_log.data["start_position"] == (3, 2)
+    assert forced_log.data["end_position"] == target.position
     assert "(3, 2) →" in forced_log.verbose
     assert f"→ {target.position}" in forced_log.verbose
 
@@ -534,7 +692,7 @@ def test_eb_10_021_forced_movement_traverses_terrain_without_step_costs() -> Non
     target = strong_entity(name="Pushed Ally", position=(6, 5), faction="heroes", strength=10)
     Entity.update_all_entities_senses(max_distance=20)
 
-    create_spike_zone({(7, 5), (8, 5)})
+    materialize_spike_trap_condition({(7, 5), (8, 5)})
     cursor = EventQueue.event_cursor()
     hp_before = target.get_hp()
     target_movement_before = target.action_economy.movement.normalized_score
@@ -550,8 +708,8 @@ def test_eb_10_021_forced_movement_traverses_terrain_without_step_costs() -> Non
         if isinstance(event, ForcedMovementEvent)
         and event.phase == EventPhase.COMPLETION
     ]
-    entered_effect_positions = [
-        event.position
+    entered_effect_events = [
+        event
         for event in new_events
         if isinstance(event, SpatialChangeEvent)
         and event.event_type == EventType.SPATIAL_ENTITY_ENTERED
@@ -579,7 +737,10 @@ def test_eb_10_021_forced_movement_traverses_terrain_without_step_costs() -> Non
     assert forced_event.end_position == (8, 5)
     assert forced_event.actual_distance == 10
     assert not any(event.event_type == EventType.STEP_MOVEMENT for event in new_events)
-    assert entered_effect_positions == [(7, 5), (8, 5)]
+    assert [event.position for event in entered_effect_events] == [
+        (7, 5),
+        (8, 5),
+    ]
 
     assert len(damage_completions) == 2
     forced_completion_index = next(
@@ -593,9 +754,16 @@ def test_eb_10_021_forced_movement_traverses_terrain_without_step_costs() -> Non
 
     assert [damage_event.total_damage for damage_event in damage_completions] == [4, 4]
     assert [damage_event.final_damage for damage_event in damage_completions] == [4, 4]
+    entered_event_uuids = {event.uuid for event in entered_effect_events}
     assert all(
-        damage_event.parent_lineage == forced_event.lineage_uuid
+        damage_event.parent_event in entered_event_uuids
         for damage_event in damage_completions
+    )
+    assert all(
+        event.parent_event is not None
+        and (parent := EventQueue.get_event_by_uuid(event.parent_event)) is not None
+        and parent.lineage_uuid == forced_event.lineage_uuid
+        for event in entered_effect_events
     )
     assert forced_event.combat_log is not None
     assert len(forced_event.combat_log.sub_entries) == 2
@@ -898,7 +1066,7 @@ def test_eb_10_016_mixed_weapon_damage_applies_resistance_per_component() -> Non
         position=(6, 5),
         faction="monsters",
     )
-    target = Entity.create(source_entity_uuid=uuid4(), name="Slash Resistant Target", config=target_config)
+    target = create_test_entity(name="Slash Resistant Target", config=target_config)
     setup_standard_actions(target)
 
     weapon = attacker.equipment._get_weapon_by_slot(WeaponSlot.MELEE_MAIN)
@@ -974,7 +1142,7 @@ def test_eb_10_019_mixed_weapon_damage_applies_vulnerability_and_immunity_per_co
             position=(6, 5),
             faction="monsters",
         )
-        target = Entity.create(source_entity_uuid=uuid4(), name=name, config=target_config)
+        target = create_test_entity(name=name, config=target_config)
         setup_standard_actions(target)
 
         weapon = attacker.equipment._get_weapon_by_slot(WeaponSlot.MELEE_MAIN)
@@ -1370,7 +1538,7 @@ def test_eb_10_018_lethal_jump_opportunity_attack_completes_without_cost_error()
         position=(5, 6),
         faction="heroes",
     )
-    jumper = Entity.create(source_entity_uuid=uuid4(), name="Fragile Jumper", config=jumper_config)
+    jumper = create_test_entity(name="Fragile Jumper", config=jumper_config)
     setup_standard_actions(jumper)
     watcher = create_skeleton(name="Watcher", position=(5, 5), faction="monsters")
     add_opportunity_attack_handler(watcher)

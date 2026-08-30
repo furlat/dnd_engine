@@ -37,6 +37,7 @@ class CombatLogEntryType(str, Enum):
     ENTITY_SPOTTED = "entity_spotted"
     HAZARD_DETECTED = "hazard_detected"
     ROLL_MODIFICATION = "roll_modification"
+    SPATIAL_EFFECT = "spatial_effect"
 
 
 class CombatLogVerbosity(str, Enum):

@@ -22,6 +22,7 @@ from dnd.core.base_conditions import (
     BaseCondition,
     Duration,
 )
+from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.condition_types import (
     ConditionAgencyDenial,
     ConditionRemovalTrigger,
@@ -39,10 +40,17 @@ from dnd.entity import Entity
 from dnd.actions import SpellAction, SpellEvent, AttackEvent
 from dnd.conditions import Frightened, Charmed, Blinded, Deafened, InvisibilityEffect, GreaterInvisibilityEffect
 from dnd.creature_transforms import apply_incapacitated_transform
-from dnd.tile_conditions import ZoneControlCondition
 from dnd.core.gridmap import get_map
-from dnd.core.events import SpatialChangeEvent
 from dnd.spells.content_metadata import srd_spell_identity
+from dnd.spatial.memberships import (
+    MembershipAreaCondition,
+    SpatialConditionMembershipSource,
+)
+from dnd.types.spatial_effects import (
+    SpatialEffectLayer,
+    SpatialEffectOccupancyPolicy,
+    SpatialEffectTriggerKind,
+)
 
 
 class BlurEffect(BaseCondition):
@@ -157,8 +165,7 @@ class Blur(SpellAction):
 
         concentration.add_linked_condition(caster.uuid, blur_effect.uuid)
 
-        return effect_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+        return effect_event.with_updates(
             status_message=f"{caster.name} casts Blur (concentration)"
         )
 
@@ -243,7 +250,8 @@ class FearEffect(BaseCondition):
                 target.remove_condition("Fear", parent_event=event)
                 return None
 
-            if caster_uuid in target.senses.entities:
+            contact = target.senses.entities.get(caster_uuid)
+            if contact is not None and contact.visual:
                 return None
 
             save_request = caster.create_saving_throw_request(
@@ -377,8 +385,7 @@ class Fear(SpellAction):
         )
 
         if success:
-            return effect_event.phase_to(
-                new_phase=EventPhase.COMPLETION,
+            return effect_event.with_updates(
                 status_message=f"{target.name} resists Fear"
             )
 
@@ -395,8 +402,7 @@ class Fear(SpellAction):
         if fear_effect.applied:
             concentration.add_linked_condition(target.uuid, fear_effect.uuid)
 
-        return effect_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+        return effect_event.with_updates(
             status_message=f"{target.name} is Frightened by Fear"
         )
 
@@ -612,8 +618,7 @@ class HypnoticPattern(SpellAction):
         )
 
         if success:
-            return effect_event.phase_to(
-                new_phase=EventPhase.COMPLETION,
+            return effect_event.with_updates(
                 status_message=f"{target.name} resists Hypnotic Pattern"
             )
 
@@ -628,8 +633,7 @@ class HypnoticPattern(SpellAction):
         if hp_effect.applied:
             concentration.add_linked_condition(target.uuid, hp_effect.uuid)
 
-        return effect_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+        return effect_event.with_updates(
             status_message=f"{target.name} is mesmerized by Hypnotic Pattern"
         )
 
@@ -815,8 +819,7 @@ class ColorSpray(SpellAction):
         )
         target.add_condition(color_spray_effect, parent_event=effect_event)
 
-        return effect_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+        return effect_event.with_updates(
             status_message=f"{target.name} is blinded by Color Spray ({target.get_hp()} HP)"
         )
 
@@ -916,8 +919,7 @@ class Invisibility(SpellAction):
         if invis_effect.applied:
             concentration.add_linked_condition(target.uuid, invis_effect.uuid)
 
-        return effect_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+        return effect_event.with_updates(
             status_message=f"{caster.name} casts Invisibility on {target.name} (concentration)"
         )
 
@@ -1007,8 +1009,7 @@ class GreaterInvisibility(SpellAction):
         if invis_effect.applied:
             concentration.add_linked_condition(target.uuid, invis_effect.uuid)
 
-        return effect_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+        return effect_event.with_updates(
             status_message=f"{caster.name} casts Greater Invisibility on {target.name} (concentration)"
         )
 
@@ -1201,13 +1202,24 @@ class MirrorImage(SpellAction):
         )
         caster.add_condition(mirror_effect, parent_event=effect_event)
 
-        return effect_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+        return effect_event.with_updates(
             status_message=f"{caster.name} casts Mirror Image (3 duplicates, +9 AC)"
         )
 
 
-class SilenceZone(ZoneControlCondition):
+SILENCE_ZONE_CONTENT_REF = ContentRef(
+    pack_id="content.srd_5_1_cc",
+    definition_kind=ContentDefinitionKind.CONDITION,
+    content_id="spatial_effect.spell.silence",
+    content_version=1,
+    definition_contract_hash=(
+        "a74aa0ee0fa241101b5c7d3b2551d638"
+        "6e4817a8ae5ad5e5cadbc4a15d5fdeb0"
+    ),
+)
+
+
+class SilenceZone(MembershipAreaCondition):
     """Silence zone that blocks verbal spells and deafens creatures inside.
 
     20ft radius sphere, concentration, 10 rounds.
@@ -1216,83 +1228,34 @@ class SilenceZone(ZoneControlCondition):
     description: str = Field(default="Area of magical silence - no sound, blocks verbal spells", description="Condition description.")
     tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL}, description="Condition tags.")
 
+    content_ref: ContentRef = Field(default=SILENCE_ZONE_CONTENT_REF)
+    position: Tuple[int, int]
+    layer: SpatialEffectLayer = Field(default=SpatialEffectLayer.FIELD)
+    occupancy_policy: SpatialEffectOccupancyPolicy = Field(
+        default=SpatialEffectOccupancyPolicy.OVERLAPPING,
+    )
+    trigger_kinds: frozenset[SpatialEffectTriggerKind] = Field(
+        default_factory=lambda: frozenset({
+            SpatialEffectTriggerKind.APPEAR,
+            SpatialEffectTriggerKind.ENTER,
+            SpatialEffectTriggerKind.LEAVE,
+        }),
+    )
+    membership_trigger_kinds: frozenset[SpatialEffectTriggerKind] = frozenset({
+        SpatialEffectTriggerKind.APPEAR,
+        SpatialEffectTriggerKind.ENTER,
+    })
     zone_shape: str = Field(default="sphere", description="Zone shape key.")
     zone_radius_feet: int = Field(default=20, description="Zone radius in feet.")
 
-    marker_name: Optional[str] = Field(default="Silence", description="Tile marker name.")
-    marker_hazard_filter: Optional[HazardFilter] = Field(default=None, description="Optional hazard visibility filter for the tile marker.")
+    hazard_filter: Optional[HazardFilter] = Field(default=None, description="Silence is not treated as a pathfinding hazard.")
 
     spell_dc: int = Field(default=0, description="Spell save DC placeholder for zone contracts.")
-    _deafened_uuids: List[UUID] = []
-    _spell_block_handler_uuid: Optional[UUID] = None
 
-    def _has_entry_effect(self) -> bool:
-        """Return whether entering the zone has an effect."""
-        return True
-
-    def _has_exit_effect(self) -> bool:
-        """Return whether leaving the zone has an effect."""
-        return True
-
-    def _create_zone_entry_handler(self) -> EventHandler:
-        """Apply Deafened when entity enters the silence zone."""
-        source_uuid = self.source_entity_uuid
-        zone_uuid = self.uuid
-
-        def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
-            if not isinstance(event, SpatialChangeEvent) or not event.entity_uuid:
-                return None
-
-            entity = Entity.get(event.entity_uuid)
-            if not entity:
-                return None
-
-            if "Silence Deafened" not in entity.active_conditions:
-                deafened = _SilenceDeafened(
-                    source_entity_uuid=source_uuid,
-                    target_entity_uuid=entity.uuid,
-                    zone_uuid=zone_uuid
-                )
-                entity.add_condition(deafened, parent_event=event)
-
-            return None
-
-        return EventHandler(
-            name="Silence Zone Entry",
-            source_entity_uuid=source_uuid,
-            trigger_conditions=[Trigger(
-                event_type=EventType.SPATIAL_ENTITY_ENTERED,
-                event_phase=EventPhase.EFFECT
-            )],
-            event_processor=processor
-        )
-
-    def _create_zone_exit_handler(self) -> EventHandler:
-        """Remove Deafened when entity leaves the silence zone."""
-        source_uuid = self.source_entity_uuid
-
-        def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
-            if not isinstance(event, SpatialChangeEvent) or not event.entity_uuid:
-                return None
-
-            entity = Entity.get(event.entity_uuid)
-            if not entity:
-                return None
-
-            if "Silence Deafened" in entity.active_conditions:
-                entity.remove_condition("Silence Deafened", parent_event=event)
-
-            return None
-
-        return EventHandler(
-            name="Silence Zone Exit",
-            source_entity_uuid=source_uuid,
-            trigger_conditions=[Trigger(
-                event_type=EventType.SPATIAL_ENTITY_LEFT,
-                event_phase=EventPhase.EFFECT
-            )],
-            event_processor=processor
-        )
+    def membership_source_class(
+        self,
+    ) -> type[SpatialConditionMembershipSource]:
+        return _SilenceDeafened
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         """Apply zone and register spell-blocking handler."""
@@ -1302,22 +1265,6 @@ class SilenceZone(ZoneControlCondition):
         spell_block_handler = self._create_spell_block_handler()
         EventQueue.add_event_handler(spell_block_handler)
         handler_uuids.append(spell_block_handler.uuid)
-        self._spell_block_handler_uuid = spell_block_handler.uuid
-
-        grid = get_map()
-        for pos in self.affected_positions:
-            entity_uuids = grid.get_entities_at(pos)
-            for ent_uuid in entity_uuids:
-                ent = Entity.get(ent_uuid)
-                if not ent:
-                    continue
-                if "Silence Deafened" not in ent.active_conditions:
-                    deafened = _SilenceDeafened(
-                        source_entity_uuid=self.source_entity_uuid,
-                        target_entity_uuid=ent.uuid,
-                        zone_uuid=self.uuid
-                    )
-                    ent.add_condition(deafened, parent_event=effect_event)
 
         return outs, handler_uuids, sub_cond_uuids, spatial_uuids, effect_event
 
@@ -1349,66 +1296,114 @@ class SilenceZone(ZoneControlCondition):
             event_processor=processor
         )
 
-    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
-        """Remove deafened conditions from all entities in zone."""
-        grid = get_map()
-        for pos in self.affected_positions:
-            entity_uuids = grid.get_entities_at(pos)
-            for ent_uuid in entity_uuids:
-                ent = Entity.get(ent_uuid)
-                if not ent:
-                    continue
-                if "Silence Deafened" in ent.active_conditions:
-                    active = ent.active_conditions.get("Silence Deafened")
-                    if active and isinstance(active, _SilenceDeafened) and active.zone_uuid == self.uuid:
-                        ent.remove_condition("Silence Deafened", parent_event=event)
-        return super()._remove(event)
-
-
-class _SilenceDeafened(BaseCondition):
+class _SilenceDeafened(SpatialConditionMembershipSource):
     """Deafened condition specifically from Silence zone.
 
     Uses a unique name so it doesn't conflict with regular Deafened.
     """
-    name: str = Field(default="Silence Deafened", description="Condition name.")
     description: str = Field(default="Deafened by Silence spell", description="Condition description.")
     tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL}, description="Condition tags.")
-    zone_uuid: Optional[UUID] = Field(default=None, description="Silence zone condition UUID that owns this deafened condition.")
+    deafened_manifestation_uuid: Optional[UUID] = Field(default=None, exclude=True)
+    owns_manifestation: bool = Field(default=False, exclude=True)
 
-    def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
-    ]:
-        """Apply the underlying Deafened sub-condition.
-
-        Args:
-            declaration_event: Condition application declaration event.
-
-        Returns:
-            Sub-condition ownership entry plus the effect event.
-        """
-        if not self.target_entity_uuid:
-            return [], [], [], [], declaration_event.cancel(status_message="No target")
-
-        target = Entity.get(self.target_entity_uuid)
-        if not target:
-            return [], [], [], [], declaration_event.cancel(status_message="Target not found")
-
-        sub_conditions_uuids: List[UUID] = []
-
-        deafened = Deafened(
+    def create_manifestation(self, target: Entity) -> BaseCondition:
+        return Deafened(
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=target.uuid,
-            parent_condition=self.uuid,
             tags={ConditionTag.MAGICAL}
         )
-        target.add_condition(deafened, parent_event=declaration_event)
-        sub_conditions_uuids.append(deafened.uuid)
 
-        effect_event = declaration_event.phase_to(
-            EventPhase.EFFECT,
-            status_message=f"{target.name} is deafened by Silence"
+    def _other_sources(self, target: Entity) -> List["_SilenceDeafened"]:
+        return [
+            condition
+            for condition in target.active_conditions_by_uuid.values()
+            if (
+                isinstance(condition, _SilenceDeafened)
+                and condition.uuid != self.uuid
+            )
+        ]
+
+    def _apply(
+        self,
+        execution_event: Event,
+    ) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Event]:
+        target = (
+            Entity.get(self.target_entity_uuid)
+            if self.target_entity_uuid is not None
+            else None
         )
-        return [], [], sub_conditions_uuids, [], effect_event
+        if not isinstance(target, Entity):
+            return [], [], [], [], execution_event.cancel(
+                status_message="Silence membership target is unavailable",
+            )
+        for source in self._other_sources(target):
+            manifestation_uuid = source.deafened_manifestation_uuid
+            if (
+                manifestation_uuid is not None
+                and isinstance(
+                    target.active_conditions_by_uuid.get(manifestation_uuid),
+                    Deafened,
+                )
+            ):
+                self.deafened_manifestation_uuid = manifestation_uuid
+                return [], [], [], [], execution_event.phase_to(
+                    EventPhase.EFFECT,
+                    update={"condition": self},
+                )
+
+        existing = next(
+            (
+                condition
+                for condition in target.active_conditions_by_uuid.values()
+                if isinstance(condition, Deafened)
+            ),
+            None,
+        )
+        if existing is None:
+            existing = self.create_manifestation(target)
+            applied = target.add_condition(existing, parent_event=execution_event)
+            if applied is None or applied.canceled:
+                return [], [], [], [], execution_event.cancel(
+                    status_message="Silence deafness was rejected",
+                )
+            self.owns_manifestation = True
+        self.deafened_manifestation_uuid = existing.uuid
+        return [], [], [], [], execution_event.phase_to(
+            EventPhase.EFFECT,
+            update={"condition": self},
+        )
+
+    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
+        target = (
+            Entity.get(self.target_entity_uuid)
+            if self.target_entity_uuid is not None
+            else None
+        )
+        if not isinstance(target, Entity):
+            return event
+        others = self._other_sources(target)
+        if others:
+            if self.owns_manifestation:
+                inheritor = min(others, key=lambda condition: str(condition.uuid))
+                inheritor.owns_manifestation = True
+                inheritor.deafened_manifestation_uuid = (
+                    self.deafened_manifestation_uuid
+                )
+            self.owns_manifestation = False
+            return event
+        manifestation_uuid = self.deafened_manifestation_uuid
+        if (
+            self.owns_manifestation
+            and manifestation_uuid is not None
+            and manifestation_uuid in target.active_conditions_by_uuid
+        ):
+            target.remove_condition_by_uuid(
+                manifestation_uuid,
+                parent_event=event,
+            )
+        self.owns_manifestation = False
+        self.deafened_manifestation_uuid = None
+        return event
 
 
 class Silence(SpellAction):
@@ -1472,16 +1467,23 @@ class Silence(SpellAction):
 
         zone = SilenceZone(
             source_entity_uuid=caster.uuid,
-            target_entity_uuid=caster.uuid,
-            zone_center=position,
+            position=position,
+            faction=caster.faction,
             effect_origin=execution_event.to_effect_origin(),
         )
-        caster.add_condition(zone, parent_event=effect_event)
+        zone_completion = zone.activate(parent_event=effect_event)
+        if (
+            zone_completion is None
+            or zone_completion.canceled
+            or not zone.applied
+        ):
+            return effect_event.with_updates(
+                status_message="Silence could not establish its area",
+            )
 
         concentration = self.ensure_concentration(effect_event)
-        concentration.add_linked_condition(caster.uuid, zone.uuid)
+        concentration.add_linked_condition(zone.uuid, zone.uuid)
 
-        return effect_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+        return effect_event.with_updates(
             status_message=f"Silence zone covers a 20ft radius at {position}"
         )

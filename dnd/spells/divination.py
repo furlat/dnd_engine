@@ -140,8 +140,7 @@ class SeeInvisibility(SpellAction):
         see_invis.duration.duration = 10
         caster.add_condition(see_invis, parent_event=effect_event)
 
-        return effect_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+        return effect_event.with_updates(
             status_message=f"{caster.name} can now see invisible creatures"
         )
 
@@ -254,7 +253,8 @@ class TrueSeeing(SpellAction):
         if not caster or not target:
             return declaration_event.cancel(status_message="Caster or target not found")
 
-        if target.uuid not in caster.senses.entities and target.uuid != caster.uuid:
+        contact = caster.senses.entities.get(target.uuid)
+        if target.uuid != caster.uuid and (contact is None or not contact.visual):
             return declaration_event.cancel(status_message="Target not visible")
 
         distance = caster.senses.get_feet_distance(target.position)
@@ -293,8 +293,7 @@ class TrueSeeing(SpellAction):
         true_seeing.duration.duration = 10
         target.add_condition(true_seeing, parent_event=effect_event)
 
-        return effect_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+        return effect_event.with_updates(
             status_message=f"{target.name} gains truesight (120ft)"
         )
 
@@ -437,7 +436,6 @@ class Guidance(SpellAction):
         if guidance_effect.applied:
             concentration.add_linked_condition(target.uuid, guidance_effect.uuid)
 
-        return effect_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+        return effect_event.with_updates(
             status_message=f"{target.name} gains Guidance"
         )
