@@ -1044,6 +1044,7 @@ def test_item_bound_spell_consumes_its_charge_before_action_completion() -> None
         if option.target_uuid == target.uuid
     )
 
+    cursor = EventQueue.event_cursor()
     result = execute_by_index(
         actor,
         row.template_name,
@@ -1063,6 +1064,24 @@ def test_item_bound_spell_consumes_its_charge_before_action_completion() -> None
     completion = charge_events[-1]
     assert isinstance(completion, ItemChargeConsumptionEvent)
     assert completion.parent_lineage == result.lineage_uuid
+    indexed = list(EventQueue.iter_events_since(cursor))
+    charge_terminal_index = next(
+        index
+        for index, event in indexed
+        if event.uuid == completion.uuid
+    )
+    action_execution_index = next(
+        index
+        for index, event in indexed
+        if event.lineage_uuid == result.lineage_uuid
+        and event.phase is EventPhase.EXECUTION
+    )
+    action_terminal_index = next(
+        index
+        for index, event in indexed
+        if event.uuid == result.uuid
+    )
+    assert charge_terminal_index < action_execution_index < action_terminal_index
     assert completion.lineage_uuid in result.children_lineages
 
 

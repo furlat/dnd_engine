@@ -2,6 +2,7 @@
 
 from dnd.actions import SpellEvent
 from dnd.core.dice import fixed_dice_faces
+from dnd.core.base_tiles import wall_factory
 from dnd.core.events import EventPhase, EventQueue, EventType, TakeDamageEvent
 from dnd.core.gridmap import get_map
 from dnd.core.creature_types import DamageType
@@ -10,8 +11,8 @@ from dnd.core.modifiers import (
     ResistanceStatus,
 )
 from dnd.entity import Entity
-from dnd.spells.evocation import IceStorm
-from tests.engine.support import get_hp, has_condition
+from dnd.spells.evocation import IceStorm, IceStormTerrain
+from tests.engine.support import get_hp, has_condition, setup_combat_arena
 from tests.manual.spell_regression_support import (
     create_spell_regression_actor,
     force_save_result,
@@ -95,7 +96,7 @@ def test_ice_storm_executes_upcast_save_cylinder_and_terrain_lifecycle() -> None
         (10, 4),
         "monsters",
     )
-    grid.set_tile(9, 4, walkable=False, visible=False, name="Wall")
+    grid.set_tile(9, 4, tile=wall_factory((9, 4)))
     force_save_result(failed, "dexterity", succeeds=False)
     force_save_result(behind_wall, "dexterity", succeeds=True)
     Entity.update_all_entities_senses(max_distance=100)
@@ -113,13 +114,20 @@ def test_ice_storm_executes_upcast_save_cylinder_and_terrain_lifecycle() -> None
     assert not result.canceled
     assert failed_hp - get_hp(failed) == 32
     assert behind_hp - get_hp(behind_wall) == 16
-    assert has_condition(caster, "Ice Storm Terrain")
     assert not has_condition(caster, "Concentrating")
+    terrains = [
+        condition
+        for condition in grid.get_spatial_conditions()
+        if isinstance(condition, IceStormTerrain)
+    ]
+    assert len(terrains) == 1
+    terrain = terrains[0]
     center_tile = grid.get_tile(*failed.position)
     assert center_tile is not None
     assert center_tile.walking_cost.normalized_score == 2
 
-    assert caster.advance_duration("Ice Storm Terrain")
+    encounter = setup_combat_arena(caster, failed)
+    encounter._environment_step()
 
-    assert not has_condition(caster, "Ice Storm Terrain")
+    assert terrain not in grid.get_spatial_conditions()
     assert center_tile.walking_cost.normalized_score == 1

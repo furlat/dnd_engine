@@ -60,7 +60,7 @@ from dnd.core.content.materialization import CreatureDeploymentRole
 from dnd.core.content.registry import FrozenContentRegistry
 from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import ResistanceStatus
-from dnd.core.senses import SensesType
+from dnd.types.senses import SensesType
 from dnd.entity import Entity
 from dnd.runtime_reset import reset_engine_runtime
 

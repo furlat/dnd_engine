@@ -342,8 +342,7 @@ class DragonbornBreathWeapon(BaseAction):
             damages=[damage],
             parent_event=effect_event.uuid,
         )
-        return effect_event.phase_to(
-            EventPhase.COMPLETION,
+        return effect_event.with_updates(
             damages=[damage],
             damage_rolls=[damage_roll],
             total_damage=final_damage,
@@ -355,10 +354,10 @@ class DragonbornBreathWeapon(BaseAction):
 
     def _apply_costs(
         self,
-        completion_event: DragonbornBreathWeaponEvent,
+        execution_event: DragonbornBreathWeaponEvent,
     ) -> DragonbornBreathWeaponEvent:
         return entity_action_economy_cost_applier(
-            completion_event,
+            execution_event,
             self.source_entity_uuid,
         )
 

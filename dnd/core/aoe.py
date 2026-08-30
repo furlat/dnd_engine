@@ -174,7 +174,8 @@ class AoEShape(BaseObject):
         """Populate perceived occupants for the current subjective footprint."""
         self.affected_entity_uuids = {
             entity_uuid
-            for entity_uuid, pos in senses.entities.items()
+            for entity_uuid, contact in senses.entities.items()
+            for pos in (contact.position,)
             if pos in self.affected_positions
         }
         if (

@@ -26,6 +26,8 @@ from dnd.core.content.encounters import (
     RosterControllerKind,
 )
 from dnd.core.progression import MulticlassSlotRoundingPolicy
+from dnd.game import Game
+from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.encounter_assembler import prepare_encounter_recipe
 from dnd.scenarios.encounter_catalog import AUTHORED_ROSTER_RECIPES_BY_ID
 from dnd.scenarios.encounter_compatibility import (
@@ -202,8 +204,10 @@ def test_two_owned_characters_materialize_and_preview_from_the_same_recipe(
     )
     assert report.admitted
 
+    reset_engine_runtime()
     assembled = prepare_encounter_recipe(
         recipe,
+        game=Game(),
         character_deployments=deployments,
     )
     assert tuple(

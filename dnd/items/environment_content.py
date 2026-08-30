@@ -18,6 +18,7 @@ from dnd.content_system.action_definitions import (
     ACTION_BEHAVIOR_DECLARATIONS_BY_CLASS,
 )
 from dnd.core.base_actions import BaseAction
+from dnd.core.creature_types import DamageType
 from dnd.core.content.dependencies import (
     ContentDependency,
     ContentDependencyPhase,
@@ -49,12 +50,46 @@ from dnd.core.content.registration import (
 )
 from dnd.items.environment import (
     CloseDirectionalDoorAction,
-    DIRECTIONAL_CHANNELS,
-    DIRECTIONS,
     DirectionalDoor,
     DirectionalWall,
     OpenDirectionalDoorAction,
 )
+from dnd.core.events import (
+    Event,
+    EventPhase,
+    SpatialEffectInteractionEvent,
+    TakeDamageEvent,
+)
+from dnd.types.world import WorldEdgeChannel
+
+DIRECTIONS: tuple[str, ...] = ("north", "south", "east", "west")
+DIRECTIONAL_CONTENT_CHANNELS: tuple[str, ...] = (
+    "movement",
+    "vision",
+    "light",
+    "propagation",
+)
+
+
+def _boundary_channels(
+    authored_channels: tuple[str, ...],
+) -> tuple[WorldEdgeChannel, ...]:
+    """Reduce the frozen legacy recipe vocabulary to structural channels."""
+    structural = {
+        "movement": WorldEdgeChannel.MOVEMENT,
+        "vision": WorldEdgeChannel.OPTICAL,
+        "light": WorldEdgeChannel.OPTICAL,
+        "propagation": WorldEdgeChannel.PROPAGATION,
+    }
+    try:
+        requested = {structural[channel] for channel in authored_channels}
+    except KeyError as error:
+        raise ValueError(
+            f"Unsupported boundary channel: {error.args[0]}"
+        ) from error
+    return tuple(
+        channel for channel in WorldEdgeChannel if channel in requested
+    )
 from dnd.items.spell_items import SpellGrantingItem
 from dnd.items.environment_interactables import (
     ActivateDeviceAction,
@@ -73,6 +108,11 @@ from dnd.items.torches import (
     ExtinguishWallTorchAction,
     IgniteWallTorchAction,
     WallTorch,
+)
+from dnd.spatial.environmental_conditions import OilSurface
+from dnd.types.spatial_effects import (
+    SpatialEffectInteractionIntensity,
+    SpatialEffectInteractionOperation,
 )
 from dnd.spells.catalog_content import SPELL_CONTENT_DECLARATIONS_BY_NAME
 from dnd.spells.evocation import Fireball, MagicMissile
@@ -103,7 +143,7 @@ class DirectionalWallParameters(BaseModel):
         default_factory=lambda: DIRECTIONS,
     )
     blocked_channels: tuple[str, ...] = Field(
-        default_factory=lambda: DIRECTIONAL_CHANNELS,
+        default_factory=lambda: DIRECTIONAL_CONTENT_CHANNELS,
     )
 
 
@@ -247,8 +287,7 @@ def _build_directional_wall(
         source_entity_uuid=context.source_entity_uuid,
         content_ref=context.requested_ref,
         name=parameters.display_name,
-        blocked_directions=parameters.blocked_directions,
-        blocked_channels=parameters.blocked_channels,
+        blocked_channels=_boundary_channels(parameters.blocked_channels),
     )
 
 
@@ -282,8 +321,7 @@ def _build_directional_door(
         source_entity_uuid=context.source_entity_uuid,
         content_ref=context.requested_ref,
         name=parameters.display_name,
-        blocked_directions=parameters.blocked_directions,
-        blocked_channels=parameters.blocked_channels,
+        blocked_channels=_boundary_channels(parameters.blocked_channels),
         is_open=parameters.is_open,
     )
 
@@ -319,7 +357,8 @@ def _build_door(
         content_ref=context.requested_ref,
         is_open=parameters.is_open,
         blocks_movement=not parameters.is_open,
-        blocks_vision_field=not parameters.is_open,
+        blocks_optics_field=not parameters.is_open,
+        blocks_propagation_field=not parameters.is_open,
     )
 
 
@@ -441,7 +480,8 @@ def _build_blocker(
     hit_points: int,
     map_char: str,
     blocks_movement: bool,
-    blocks_vision: bool,
+    blocks_optics: bool,
+    blocks_propagation: bool,
 ) -> BaseItem:
     context = ItemBuildContext.model_validate(raw_context)
     return BaseItem(
@@ -456,8 +496,60 @@ def _build_blocker(
         ),
         map_char=map_char,
         blocks_movement=blocks_movement,
-        blocks_vision_field=blocks_vision,
+        blocks_optics_field=blocks_optics,
+        blocks_propagation_field=blocks_propagation,
     )
+
+
+class OilBarrel(BaseItem):
+    """Destructible authored container that spills oil material."""
+
+    def _on_destroy(self, parent_event: Event | None) -> None:
+        """Spill oil and let fire damage ignite it through the live event."""
+        spill_position = self.get_position()
+        if spill_position is None:
+            return
+        if parent_event is None:
+            raise ValueError("Oil Barrel destruction requires a causal event")
+
+        oil = OilSurface(
+            source_entity_uuid=parent_event.source_entity_uuid,
+            position=spill_position,
+            affected_positions={spill_position},
+        )
+        activation = oil.activate(parent_event=parent_event)
+        if activation is None or activation.canceled or not oil.applied:
+            return
+
+        if (
+            not isinstance(parent_event, TakeDamageEvent)
+            or not any(
+                damage.damage_type is DamageType.FIRE
+                for damage in parent_event.damages
+            )
+        ):
+            return
+
+        interaction = SpatialEffectInteractionEvent(
+            source_entity_uuid=parent_event.source_entity_uuid,
+            source_entity_name=parent_event.source_entity_name,
+            target_entity_uuid=oil.uuid,
+            operation=SpatialEffectInteractionOperation.IGNITE,
+            positions=(spill_position,),
+            intensity=SpatialEffectInteractionIntensity.STRONG,
+            damage_type=DamageType.FIRE,
+            source_object_uuid=self.uuid,
+            source_content_ref=self.content_ref,
+            parent_event=parent_event.uuid,
+            phase=EventPhase.DECLARATION,
+        )
+        interaction = interaction.phase_to(EventPhase.EXECUTION)
+        if interaction.canceled:
+            return
+        interaction = interaction.phase_to(EventPhase.EFFECT)
+        if interaction.canceled:
+            return
+        interaction.phase_to(EventPhase.COMPLETION)
 
 
 @environment_object_factory(
@@ -488,7 +580,8 @@ def _build_crate(
         hit_points=20,
         map_char="C",
         blocks_movement=False,
-        blocks_vision=False,
+        blocks_optics=False,
+        blocks_propagation=False,
     )
 
 
@@ -520,7 +613,8 @@ def _build_boulder(
         hit_points=30,
         map_char="B",
         blocks_movement=True,
-        blocks_vision=False,
+        blocks_optics=False,
+        blocks_propagation=False,
     )
 
 
@@ -552,7 +646,8 @@ def _build_barricade(
         hit_points=20,
         map_char="X",
         blocks_movement=True,
-        blocks_vision=True,
+        blocks_optics=True,
+        blocks_propagation=True,
     )
 
 
@@ -576,15 +671,23 @@ def _build_barricade(
 def _build_oil_barrel(
     raw_context: object,
     parameters: EmptyEnvironmentParameters,
-) -> BaseItem:
+) -> OilBarrel:
     _ = parameters
-    return _build_blocker(
-        raw_context,
+    context = ItemBuildContext.model_validate(raw_context)
+    return OilBarrel(
+        source_entity_uuid=context.source_entity_uuid,
+        content_ref=context.requested_ref,
         name="Oil Barrel",
-        hit_points=12,
+        is_pickable=False,
+        is_targetable=True,
+        health=BaseItem.create_item_health(
+            context.source_entity_uuid,
+            12,
+        ),
         map_char="O",
         blocks_movement=True,
-        blocks_vision=False,
+        blocks_optics_field=False,
+        blocks_propagation_field=False,
     )
 
 
@@ -787,7 +890,7 @@ def directional_wall_recipe(
     *,
     display_name: str = "Directional Wall",
     blocked_directions: tuple[str, ...] = DIRECTIONS,
-    blocked_channels: tuple[str, ...] = DIRECTIONAL_CHANNELS,
+    blocked_channels: tuple[str, ...] = DIRECTIONAL_CONTENT_CHANNELS,
 ) -> ContentRecipe:
     parameters = DirectionalWallParameters(
         display_name=display_name,
@@ -804,7 +907,7 @@ def directional_door_recipe(
     *,
     display_name: str = "Directional Door",
     blocked_directions: tuple[str, ...] = DIRECTIONS,
-    blocked_channels: tuple[str, ...] = DIRECTIONAL_CHANNELS,
+    blocked_channels: tuple[str, ...] = DIRECTIONAL_CONTENT_CHANNELS,
     is_open: bool = False,
 ) -> ContentRecipe:
     parameters = DirectionalDoorParameters(

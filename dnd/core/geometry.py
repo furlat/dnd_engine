@@ -324,11 +324,12 @@ def rectangle_positions(
 @lru_cache(maxsize=64)
 def _centered_rectangle_offsets(size: int) -> Tuple[Tuple[int, int], ...]:
     """Return relative offsets for one centered square size."""
-    half = size // 2
+    lower = -(size // 2)
+    upper = lower + size
     return tuple(
         (dx, dy)
-        for dx in range(-half, half + 1)
-        for dy in range(-half, half + 1)
+        for dx in range(lower, upper)
+        for dy in range(lower, upper)
     )
 
 

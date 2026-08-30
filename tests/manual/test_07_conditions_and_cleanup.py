@@ -168,17 +168,13 @@ class StunnedTutorialCondition(BaseCondition):
         block = TutorialActor.get(self.target_entity_uuid)
         assert isinstance(block, TutorialActor)
 
-        execution_event = declaration_event.phase_to(
-            EventPhase.EXECUTION,
-            status_message=f"{block.name} begins Tutorial Stunned",
-            condition=self,
-        )
+        execution_event = declaration_event
         child = FocusBlockedCondition(
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.target_entity_uuid,
             parent_condition=self.uuid,
         )
-        child_event = block.add_condition(child, event=execution_event)
+        child_event = block.add_condition(child, parent_event=execution_event)
         child_uuids = [child.uuid] if child_event and child_event.phase == EventPhase.COMPLETION else []
 
         effect_event = execution_event.phase_to(
@@ -214,16 +210,12 @@ class LinkedAuraCondition(BaseCondition):
         assert isinstance(owner, TutorialActor)
         assert isinstance(marked, TutorialActor)
 
-        execution_event = declaration_event.phase_to(
-            EventPhase.EXECUTION,
-            status_message=f"{owner.name} projects a linked aura",
-            condition=self,
-        )
+        execution_event = declaration_event
         child = LinkedMarkCondition(
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=marked.uuid,
         )
-        child_event = marked.add_condition(child, event=execution_event)
+        child_event = marked.add_condition(child, parent_event=execution_event)
         if child_event and child_event.phase == EventPhase.COMPLETION:
             self.add_linked_condition(marked.uuid, child.uuid)
 

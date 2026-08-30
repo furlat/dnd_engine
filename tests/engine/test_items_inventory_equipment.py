@@ -20,6 +20,7 @@ from dnd.core.modifiers import (
 )
 from dnd.core.values import BaseValue
 from dnd.entity import Entity
+from dnd.game import Game
 from dnd.items.armors import CHAIN_MAIL_RECIPE, SHIELD_RECIPE
 from dnd.items.consumables import (
     HEALING_POTION_RECIPE,
@@ -37,8 +38,21 @@ from dnd.items.weapons import (
     SHORTSWORD_RECIPE,
     WARHAMMER_RECIPE,
 )
-from dnd.monsters.bestiary import create_skeleton
+from dnd.monsters.bestiary import create_skeleton as _create_skeleton
 from tests.engine.support import get_hp, reset_combat_state, set_hp
+
+
+_item_game: Game | None = None
+
+
+def create_skeleton(*args, **kwargs) -> Entity:
+    """Create and explicitly deploy one skeleton for item tests."""
+    if _item_game is None:
+        raise RuntimeError("reset_item_state must precede entity creation")
+    entity = _create_skeleton(*args, **kwargs)
+    entity.compose_entity()
+    _item_game.deploy_entity(entity, entity.position)
+    return entity
 
 
 def reset_item_state(
@@ -47,15 +61,21 @@ def reset_item_state(
     default_light: LightLevel = LightLevel.BRIGHT_LIGHT,
 ) -> None:
     """Clear global state and create a rectangular item test grid."""
+    global _item_game
     reset_combat_state()
     EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
     BaseValue._registry.clear()
     grid = get_map()
-    grid.create_rectangle(0, 0, width, height)
-    for tile in grid._tiles.values():
-        tile.default_light = default_light
+    grid.create_rectangle(
+        0,
+        0,
+        width,
+        height,
+        default_light=default_light,
+    )
+    _item_game = Game()
 
 
 def put_in_inventory(entity: Entity, item: BaseItem) -> None:

@@ -406,40 +406,7 @@ def _topology_cardinal_transition_allows(
         != 1
     ):
         return False
-    return (
-        _topology_side_allows(grid, from_position, to_position)
-        and _topology_side_allows(grid, to_position, from_position)
-    )
-
-
-def _topology_side_allows(
-    grid: GridMap,
-    position: tuple[int, int],
-    other_position: tuple[int, int],
-) -> bool:
-    tile = grid.get_tile(*position)
-    if tile is None:
-        return False
-    directions = tile.directions_toward(other_position)
-    if not all(
-        tile.allows_direction(
-            direction,
-            "movement",
-            include_derived=False,
-        )
-        for direction in directions
-    ):
-        return False
-    for object_uuid in grid.get_objects_at(position):
-        block = BaseBlock.get(object_uuid)
-        if block is None or block.get_spatial_open_state() is False:
-            continue
-        if any(
-            block.blocks_directional_movement(direction)
-            for direction in directions
-        ):
-            return False
-    return True
+    return grid.can_transition(from_position, to_position)
 
 
 __all__ = [

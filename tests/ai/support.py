@@ -17,6 +17,8 @@ from dnd.ai.instrumentation import (
 from dnd.ai.policies.basic import BASIC_POLICY_ID
 from dnd.ai.runtime.controller import NativeAIController
 from dnd.encounter import EncounterState
+from dnd.game import Game
+from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.encounter_assembler import (
     AssembledEncounter,
     assemble_encounter_recipe,
@@ -48,8 +50,10 @@ def build_native_ai_test_game(
     maximum_decisions_per_turn: int = 32,
 ) -> NativeAITestGame:
     """Assemble one authored recipe and assign native AI per roster."""
+    reset_engine_runtime()
     assembled = assemble_encounter_recipe(
         encounter_recipe(encounter_id),
+        game=Game(),
         start_encounter=False,
     )
     controllers: list[NativeAIController] = []

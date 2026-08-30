@@ -21,6 +21,7 @@ from dnd.content_system.item_materialization import materialize_item
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import EventPhase, EventQueue, EventType
+from dnd.core.gridmap import get_map
 from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import (
     AutoHitModifier,
@@ -302,8 +303,8 @@ def test_telekinesis_move_updates_spatial_indexes_and_cleans_followups() -> None
     assert result is not None
     assert not result.canceled
     assert target.position == (7, 5)
-    assert target in Entity._entity_by_position[(7, 5)]
-    assert target not in Entity._entity_by_position[original_position]
+    assert target.uuid in get_map().get_entities_at((7, 5))
+    assert target.uuid not in get_map().get_entities_at(original_position)
     assert {"Telekinesis: Restrain", "Telekinesis: Move"}.isdisjoint(
         {action.name for action in caster.registered_actions}
     )
@@ -419,7 +420,10 @@ def test_globe_direction_level_and_concentration_contract() -> None:
     _remove_attack_outcome(inside_caster, inside_modifier)
 
     globe_caster.remove_condition("Concentrating")
-    assert not has_condition(globe_caster, "Globe of Invulnerability Zone")
+    assert not any(
+        isinstance(condition, GlobeZone)
+        for condition in get_map().get_spatial_conditions()
+    )
     outside_caster.action_economy.reset_all_costs()
     post_cleanup_hp = get_hp(inside)
     with fixed_dice_faces(10, 4):
@@ -458,19 +462,25 @@ def test_globe_partially_filters_aoe_and_uses_base_spell_level() -> None:
     assert not result.canceled
     assert get_hp(inside) == inside_hp
     assert get_hp(outside_target) == outside_hp - 44
-    assert has_condition(globe_caster, "Globe of Invulnerability Zone")
+    assert any(
+        isinstance(condition, GlobeZone)
+        for condition in get_map().get_spatial_conditions()
+    )
 
 
 def test_globe_is_immobile() -> None:
     """Old case 17: the protected geometry remains anchored at cast time."""
     globe_caster, inside, outside_caster = _globe_scene()
-    zone = globe_caster.active_conditions["Globe of Invulnerability Zone"]
-    assert isinstance(zone, GlobeZone)
+    zone = next(
+        condition
+        for condition in get_map().get_spatial_conditions()
+        if isinstance(condition, GlobeZone)
+    )
     original_positions = set(zone.affected_positions)
 
     Entity.update_entity_position(globe_caster, (20, 12))
 
-    assert zone.zone_center == (10, 7)
+    assert zone.position == (10, 7)
     assert set(zone.affected_positions) == original_positions
     inside_hp = get_hp(inside)
     modifier_uuid = _force_attack_outcome(outside_caster, AutoHitStatus.AUTOHIT)
@@ -500,7 +510,10 @@ def test_globe_excludes_low_level_zone_effects() -> None:
     assert isinstance(result, SpellEvent)
     assert not result.canceled
     assert not has_condition(inside, "Restrained")
-    assert has_condition(globe_caster, "Globe of Invulnerability Zone")
+    assert any(
+        isinstance(condition, GlobeZone)
+        for condition in get_map().get_spatial_conditions()
+    )
 
 
 def _banishment_scene(*, save_succeeds: bool) -> tuple[Entity, Entity, Entity]:
@@ -543,7 +556,7 @@ def test_banishment_removes_and_restores_spatial_perception() -> None:
     assert not result.canceled
     assert has_condition(target, "Banished")
     assert target.action_economy.action_permission.normalized_score == 0
-    assert target not in Entity._entity_by_position[original_position]
+    assert target.uuid not in get_map().get_entities_at(original_position)
     assert target.uuid not in observer.senses.entities
     assert has_condition(caster, "Concentrating")
 
@@ -551,7 +564,7 @@ def test_banishment_removes_and_restores_spatial_perception() -> None:
 
     assert not has_condition(target, "Banished")
     assert target.action_economy.action_permission.normalized_score == 1
-    assert target in Entity._entity_by_position[original_position]
+    assert target.uuid in get_map().get_entities_at(original_position)
     assert target.uuid in observer.senses.entities
 
 
@@ -598,5 +611,5 @@ def test_banishment_successful_save_preserves_spatial_state() -> None:
     assert not result.canceled
     assert not has_condition(target, "Banished")
     assert not has_condition(caster, "Concentrating")
-    assert target in Entity._entity_by_position[original_position]
+    assert target.uuid in get_map().get_entities_at(original_position)
     assert target.uuid in observer.senses.entities

@@ -14,10 +14,11 @@ from dnd.core.base_conditions import (
 from dnd.core.condition_types import DurationType
 from dnd.core.base_object import BaseObject
 from dnd.core.events import Event, EventPhase, EventQueue, EventType
+from dnd.core.gridmap import get_map
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import BaseValue, ModifiableValue
 from dnd.entity import Entity, EntityConfig
-from tests.engine.support import reset_combat_state
+from tests.engine.support import create_test_entity, reset_combat_state
 
 
 def reset_condition_state() -> None:
@@ -28,7 +29,7 @@ def reset_condition_state() -> None:
     BaseValue._registry.clear()
     BaseBlock._registry.clear()
     Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
+    get_map().create_rectangle(0, 0, 20, 20)
 
 
 def create_tutorial_entity(
@@ -38,8 +39,8 @@ def create_tutorial_entity(
 ) -> Entity:
     """Create a minimal actor for condition examples."""
     entity_id = uuid4()
-    return Entity.create(
-        source_entity_uuid=entity_id,
+    return create_test_entity(
+        source_id=entity_id,
         name=name,
         config=EntityConfig(
             position=position,

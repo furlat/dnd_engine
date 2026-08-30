@@ -25,6 +25,7 @@ from dnd.core.modifiers import (
     ResistanceStatus,
 )
 from dnd.core.values import BaseValue
+from dnd.types.senses import SenseMode, SensesType
 from dnd.entity import Entity, EntityConfig
 from dnd.conditions import (
     Blinded,
@@ -46,7 +47,7 @@ from dnd.conditions import (
     Stunned,
     Unconscious,
 )
-from tests.engine.support import get_max_hp, reset_combat_state
+from tests.engine.support import create_test_entity, get_max_hp, reset_combat_state
 
 
 @contextmanager
@@ -106,7 +107,7 @@ def configured_entity(
         position=position,
         faction=faction,
     )
-    return Entity.create(source_entity_uuid=source_uuid, name=name, config=config)
+    return create_test_entity(source_id=source_uuid, name=name, config=config)
 
 
 def apply_to_target(condition_type, source: Entity, target: Entity):
@@ -185,9 +186,9 @@ def test_eb_08_003_poisoned_and_frightened_penalize_attacks_and_checks() -> None
     frightened = apply_to_target(Frightened, source, target)
     assert frightened.modifers_uuids
 
-    target.senses.entities.clear()
+    source.set_invisible(True)
     assert target.equipment.attack_bonus.advantage == AdvantageStatus.NONE
-    target.senses.entities[source.uuid] = source.position
+    source.set_invisible(False)
     assert target.equipment.attack_bonus.advantage == AdvantageStatus.DISADVANTAGE
     assert target.skill_set.athletics.skill_bonus.advantage == AdvantageStatus.DISADVANTAGE
     assert target.action_economy.movement.normalized_score == 0
@@ -373,7 +374,10 @@ def test_eb_08_007_invisible_sets_perceivability_and_unseen_combat_modifiers() -
     target.equipment.ac_bonus.set_target_entity(attacker.uuid)
     assert target.equipment.ac_bonus.outgoing_advantage == AdvantageStatus.DISADVANTAGE
 
-    attacker.senses.entities[target.uuid] = target.position
+    attacker.senses.sense_modes = [
+        SenseMode(sense_type=SensesType.SEE_INVISIBLE, range_feet=20)
+    ]
+    attacker.update_entity_senses()
     assert target.equipment.attack_bonus.advantage == AdvantageStatus.NONE
     assert target.equipment.ac_bonus.outgoing_advantage == AdvantageStatus.NONE
 
@@ -398,10 +402,17 @@ def test_eb_08_009_prone_immediate_stand_on_own_turn_cancels_indexing() -> None:
     result = target.add_condition(condition)
 
     assert result is not None
-    assert result.phase == EventPhase.COMPLETION
+    assert result.phase == EventPhase.CANCEL
     assert result.canceled is True
-    assert condition.applied is True
+    assert not any(
+        event.lineage_uuid == result.lineage_uuid
+        and event.phase is EventPhase.COMPLETION
+        for _, event in EventQueue.iter_events_since(0)
+    )
+    assert condition.applied is False
     assert "Prone" not in target.active_conditions
+    assert condition.uuid not in target.active_conditions_by_uuid
+    assert BaseCondition.get(condition.uuid) is None
     assert target.action_economy.movement.normalized_score == 15
 
 
@@ -522,7 +533,7 @@ def test_eb_08_012_standard_condition_removal_cleans_owned_state() -> None:
         target = configured_entity("Target", (2, 1), "monsters")
         adjacent_attacker = configured_entity("Adjacent", (2, 2), "heroes")
 
-        target.senses.entities[source.uuid] = source.position
+        target.update_entity_senses()
         condition = apply_to_target(condition_type, source, target)
         if condition_type in severe_conditions:
             assert condition.sub_conditions == []

@@ -93,22 +93,22 @@ class Marked(BaseCondition):
 
         return outs, [], [], [], effect_event
 
-    def cleanup_own_state(self, expire: bool = False, parent_event: Optional[Event] = None) -> bool:
-        """Remove marker immunities before standard condition cleanup.
+    def _release_owned_runtime_state(
+        self,
+        *,
+        parent_event: Optional[Event] = None,
+    ) -> None:
+        """Release the marker immunities owned by this condition.
 
         Args:
-            expire: Whether cleanup is caused by duration expiry.
             parent_event: Optional parent event for cleanup events.
-
-        Returns:
-            True when cleanup completes.
         """
+        del parent_event
         if self.target_entity_uuid:
             target = Entity.get(self.target_entity_uuid)
             if target and isinstance(target, Entity):
                 target._remove_static_condition_immunity("Invisible", "Marked")
                 target._remove_static_condition_immunity("Hidden", "Marked")
-        return super().cleanup_own_state(expire=expire, parent_event=parent_event)
 
 
 class MarkCooldown(BaseCondition):
@@ -219,7 +219,8 @@ class MarkTargetAction(BaseAction):
                 status_message="Mark Target is unavailable until the cooldown ends"
             )
 
-        if target.uuid not in source.senses.entities:
+        contact = source.senses.entities.get(target.uuid)
+        if contact is None or not contact.visual:
             return declaration_event.cancel(status_message="Target not in line of sight")
 
         distance = source.senses.get_feet_distance(target.position)
@@ -276,18 +277,17 @@ class MarkTargetAction(BaseAction):
             status_message=f"{caster.name} marks {target.name}",
         )
 
-        return effect_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+        return effect_event.with_updates(
             status_message=f"{caster.name} marks {target.name} (concentration)",
         )
 
-    def _apply_costs(self, completion_event: ActionEvent) -> Optional[ActionEvent]:
+    def _apply_costs(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
         """Apply Mark Target's bonus-action cost.
 
         Args:
-            completion_event: Completed action event.
+            execution_event: Validated execution proposal.
 
         Returns:
-            Completion event after action-economy cost application.
+            Execution proposal after action-economy cost commitment.
         """
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
+        return entity_action_economy_cost_applier(execution_event, self.source_entity_uuid)

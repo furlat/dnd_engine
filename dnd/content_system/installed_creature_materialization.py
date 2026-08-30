@@ -109,41 +109,52 @@ def materialize_installed_creature(
         possession_mode=possession_mode,
     )
     result = runtime.materialize(recipe, context)
-    if not isinstance(result, Entity):
-        raise TypeError(
-            f"Creature factory {recipe.ref.identity_key} returned "
-            f"{type(result).__module__}.{type(result).__name__}",
+    try:
+        if not isinstance(result, Entity):
+            raise TypeError(
+                f"Creature factory {recipe.ref.identity_key} returned "
+                f"{type(result).__module__}.{type(result).__name__}",
+            )
+        if (
+            result.uuid != context.runtime_entity_uuid
+            or result.source_entity_uuid != context.runtime_entity_uuid
+        ):
+            raise ValueError(
+                f"Creature factory {recipe.ref.identity_key} did not preserve its "
+                "exact runtime entity/source UUID",
+            )
+        expected_content_ref = entity_content_ref or recipe.ref
+        if result.content_ref != expected_content_ref:
+            raise ValueError(
+                f"Creature factory {recipe.ref.identity_key} did not bind its exact "
+                f"runtime content reference {expected_content_ref.identity_key}",
+            )
+        if expected_type is not None and not isinstance(result, expected_type):
+            raise TypeError(
+                f"Creature factory {recipe.ref.identity_key} returned "
+                f"{type(result).__module__}.{type(result).__name__}; expected "
+                f"{expected_type.__module__}.{expected_type.__name__}",
+            )
+        if result.creation_committed:
+            raise RuntimeError(
+                "creature factory committed creation before its owning root",
+            )
+        binding_registry.bind(
+            CreatureRuntimeBinding(
+                runtime_entity_uuid=result.uuid,
+                recipe=recipe,
+                content_set_digest=runtime.require().content_set_digest,
+                deployment_role=deployment_role,
+                possession_mode=possession_mode,
+            ),
         )
-    if (
-        result.uuid != context.runtime_entity_uuid
-        or result.source_entity_uuid != context.runtime_entity_uuid
-    ):
-        raise ValueError(
-            f"Creature factory {recipe.ref.identity_key} did not preserve its "
-            "exact runtime entity/source UUID",
-        )
-    expected_content_ref = entity_content_ref or recipe.ref
-    if result.content_ref != expected_content_ref:
-        raise ValueError(
-            f"Creature factory {recipe.ref.identity_key} did not bind its exact "
-            f"runtime content reference {expected_content_ref.identity_key}",
-        )
-    if expected_type is not None and not isinstance(result, expected_type):
-        raise TypeError(
-            f"Creature factory {recipe.ref.identity_key} returned "
-            f"{type(result).__module__}.{type(result).__name__}; expected "
-            f"{expected_type.__module__}.{expected_type.__name__}",
-        )
-    binding_registry.bind(
-        CreatureRuntimeBinding(
-            runtime_entity_uuid=result.uuid,
-            recipe=recipe,
-            content_set_digest=runtime.require().content_set_digest,
-            deployment_role=deployment_role,
-            possession_mode=possession_mode,
-        ),
-    )
-    return result
+        return result
+    except BaseException:
+        if isinstance(result, Entity):
+            binding_registry.discard(result.uuid)
+            if Entity.get(result.uuid) is result and not result.creation_committed:
+                result.discard_uncommitted()
+        raise
 
 
 __all__ = [

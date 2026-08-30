@@ -11,8 +11,12 @@ from dnd.actions_functional import register_spell
 from dnd.blocks.base_item import EquippableItem
 from dnd.conditions import Blinded, Poisoned
 from dnd.content_system.character_materialization import materialize_character
+from dnd.content_system.creature_bindings import CREATURE_RUNTIME_BINDINGS
 from dnd.content_system.creature_materialization import materialize_creature
-from dnd.content_system.item_bindings import ItemRuntimeOrigin
+from dnd.content_system.item_bindings import (
+    ITEM_RUNTIME_BINDINGS,
+    ItemRuntimeOrigin,
+)
 from dnd.content_system.item_materialization import materialize_item
 from dnd.content_system.spell_catalog_composition import (
     SPELL_CATALOG_COMPOSITION_ROWS,
@@ -42,9 +46,9 @@ from dnd.core.gridmap import get_map
 from dnd.core.modifiers import ResistanceModifier, ResistanceStatus
 from dnd.encounter import Encounter
 from dnd.entity import Entity
+from dnd.game import Game
 from dnd.items.torches import Torch
 from dnd.reactions import add_opportunity_attack_handler
-from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.encounter_compatibility import (
     check_built_encounter_compatibility,
     check_encounter_compatibility,
@@ -210,31 +214,37 @@ def _apply_item_grant(entity: Entity, effect: RosterItemGrant) -> None:
             entity.uuid,
             origin=ItemRuntimeOrigin.STARTER,
         )
-        if effect.placement is RosterItemPlacement.INVENTORY:
-            if not entity.loot_item(item):
-                raise ValueError(
-                    f"Inventory rejected {effect.recipe.ref.identity_key!r} "
-                    f"for {entity.name!r}",
-                )
-        else:
-            if not isinstance(item, EquippableItem):
-                raise TypeError(
-                    f"Equipped setup recipe "
-                    f"{effect.recipe.ref.identity_key!r} is not equippable",
-                )
-            slot = effect.equipment_slot
-            if effect.replace_existing and slot is not None:
-                entity.equipment.unequip(slot)
-            if not entity.equipment.equip(item, slot):
-                raise ValueError(
-                    f"Equipment rejected "
-                    f"{effect.recipe.ref.identity_key!r} for "
-                    f"{entity.name!r}",
-                )
-        if effect.on_grant == "ignite":
-            if not isinstance(item, Torch):
-                raise TypeError("ignite setup effect requires a Torch")
-            item.ignite(entity.uuid)
+        try:
+            if effect.placement is RosterItemPlacement.INVENTORY:
+                if not entity.loot_item(item):
+                    raise ValueError(
+                        f"Inventory rejected "
+                        f"{effect.recipe.ref.identity_key!r} "
+                        f"for {entity.name!r}",
+                    )
+            else:
+                if not isinstance(item, EquippableItem):
+                    raise TypeError(
+                        f"Equipped setup recipe "
+                        f"{effect.recipe.ref.identity_key!r} is not "
+                        "equippable",
+                    )
+                slot = effect.equipment_slot
+                if effect.replace_existing and slot is not None:
+                    entity.equipment.unequip(slot)
+                if not entity.equipment.equip(item, slot):
+                    raise ValueError(
+                        f"Equipment rejected "
+                        f"{effect.recipe.ref.identity_key!r} for "
+                        f"{entity.name!r}",
+                    )
+            if effect.on_grant == "ignite":
+                if not isinstance(item, Torch):
+                    raise TypeError("ignite setup effect requires a Torch")
+                item.ignite(entity.uuid)
+        except BaseException:
+            ITEM_RUNTIME_BINDINGS.discard(item.uuid)
+            raise
 
 
 def _apply_spell_grant(entity: Entity, effect: RosterSpellGrant) -> None:
@@ -322,6 +332,25 @@ def _apply_immediate_setup_effect(
     if isinstance(effect, (RosterStartingDamage, RosterStartingCondition)):
         return
     raise TypeError(f"Unsupported immediate encounter setup effect: {effect!r}")
+
+
+def _discard_provisional_entities(entities: tuple[Entity, ...]) -> None:
+    """Release scenario-owned provisional aggregates and runtime bindings."""
+    for entity in reversed(entities):
+        if entity.creation_committed:
+            continue
+        item_uuids = {
+            *entity.inventory.items,
+            *(
+                item.uuid
+                for item in entity.equipment.get_all_equipped_items()
+            ),
+        }
+        for item_uuid in item_uuids:
+            ITEM_RUNTIME_BINDINGS.discard(item_uuid)
+        CREATURE_RUNTIME_BINDINGS.discard(entity.uuid)
+        if Entity.get(entity.uuid) is entity:
+            entity.discard_uncommitted()
 
 
 def _apply_deferred_setup_effect(
@@ -415,12 +444,17 @@ def _build_runtime_encounter(
 def assemble_encounter_recipe(
     recipe: EncounterRecipe,
     *,
+    game: Game,
     character_deployments: (
         Mapping[UUID, CharacterDeploymentSnapshot] | None
     ) = None,
     start_encounter: bool = True,
 ) -> AssembledEncounter:
-    """Validate, reset, materialize, configure, and optionally start a recipe."""
+    """Validate and assemble one recipe into the caller-owned empty Game."""
+    if game.entities:
+        raise ValueError("scenario assembly requires an empty Game")
+    if Entity.get_all_entities():
+        raise ValueError("scenario assembly requires no registered Entities")
     deployments = character_deployments or {}
     battlefield_spec = get_battlefield(recipe.battlefield_id)
     static_report = check_encounter_compatibility(
@@ -439,9 +473,6 @@ def assemble_encounter_recipe(
             ),
         )
 
-    reset_engine_runtime(
-        grid_size=(battlefield_spec.width, battlefield_spec.height),
-    )
     battlefield = build_battlefield(recipe.battlefield_id)
     built_report = check_built_encounter_compatibility(
         static_report,
@@ -464,31 +495,55 @@ def assemble_encounter_recipe(
     deferred: list[
         tuple[Entity, RosterStartingDamage | RosterStartingCondition]
     ] = []
-    for recipe_slot in recipe.roster_slots:
-        entities: list[Entity] = []
-        for member in recipe_slot.roster.members:
-            entity = _materialize_member(
-                recipe_slot=recipe_slot,
-                member=member,
-                position=positions[
-                    recipe_slot.roster_slot_id
-                ][member.member_id],
-                character_deployments=deployments,
-            )
-            entities.append(entity)
-            by_address[
-                (recipe_slot.roster_slot_id, member.member_id)
-            ] = entity
-            by_role[member.deployment_role] = entity
-            for effect in member.scenario_setup_effects:
-                if isinstance(
-                    effect,
-                    (RosterStartingDamage, RosterStartingCondition),
-                ):
-                    deferred.append((entity, effect))
-                else:
-                    _apply_immediate_setup_effect(entity, effect)
-        by_roster[recipe_slot.roster_slot_id] = tuple(entities)
+    immediate: list[
+        tuple[
+            Entity,
+            RosterBehaviorGrant
+            | RosterDamageAffinity
+            | RosterItemGrant
+            | RosterSpellGrant,
+        ]
+    ] = []
+    try:
+        for recipe_slot in recipe.roster_slots:
+            entities: list[Entity] = []
+            for member in recipe_slot.roster.members:
+                entity = _materialize_member(
+                    recipe_slot=recipe_slot,
+                    member=member,
+                    position=positions[
+                        recipe_slot.roster_slot_id
+                    ][member.member_id],
+                    character_deployments=deployments,
+                )
+                entities.append(entity)
+                by_address[
+                    (recipe_slot.roster_slot_id, member.member_id)
+                ] = entity
+                by_role[member.deployment_role] = entity
+                for effect in member.scenario_setup_effects:
+                    if isinstance(
+                        effect,
+                        (RosterStartingDamage, RosterStartingCondition),
+                    ):
+                        deferred.append((entity, effect))
+                    else:
+                        immediate.append((entity, effect))
+            by_roster[recipe_slot.roster_slot_id] = tuple(entities)
+        for target, effect in immediate:
+            _apply_immediate_setup_effect(target, effect)
+        for entity in by_address.values():
+            entity.validate_initial_composition()
+        for entity in by_address.values():
+            entity.compose_entity()
+    except BaseException:
+        _discard_provisional_entities(tuple(by_address.values()))
+        raise
+    for (roster_slot_id, member_id), entity in by_address.items():
+        game.deploy_entity(
+            entity,
+            positions[roster_slot_id][member_id],
+        )
     for target, effect in deferred:
         _apply_deferred_setup_effect(
             target,
@@ -523,6 +578,7 @@ def assemble_encounter_recipe(
 def prepare_encounter_recipe(
     recipe: EncounterRecipe,
     *,
+    game: Game,
     character_deployments: (
         Mapping[UUID, CharacterDeploymentSnapshot] | None
     ) = None,
@@ -530,6 +586,7 @@ def prepare_encounter_recipe(
     """Build a validated encounter without crossing its start boundary."""
     return assemble_encounter_recipe(
         recipe,
+        game=game,
         character_deployments=character_deployments,
         start_encounter=False,
     )

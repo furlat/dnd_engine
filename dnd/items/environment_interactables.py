@@ -12,11 +12,14 @@ from dnd.core.base_actions import (
     Cost,
 )
 from dnd.core.base_block import BaseBlock
-from dnd.core.events import EventPhase, EventQueue, SkillName
+from dnd.core.base_conditions import BaseCondition
+from dnd.core.events import Event, EventPhase, SkillName
 from dnd.core.gridmap import get_map
+from dnd.core.item_types import ItemPresentationState
 from dnd.blocks.base_item import UsableItem
 from dnd.blocks.inventory import Inventory
 from dnd.entity import Entity
+from dnd.spatial.environmental_conditions import SpikeTrap
 
 
 class OpenDoorAction(BaseAction):
@@ -53,13 +56,20 @@ class OpenDoorAction(BaseAction):
         if not isinstance(door, DoorObject):
             return execution_event.cancel(status_message="Door not found")
         old_blocks_movement = door.blocks_movement
-        old_blocks_vision = door.blocks_vision_field
+        old_blocks_optics = door.blocks_optics_field
+        old_blocks_propagation = door.blocks_propagation_field
         door.is_open = True
         door.blocks_movement = False
-        door.blocks_vision_field = False
-        door._notify_blocking_changed(old_blocks_movement, old_blocks_vision, parent_event=execution_event.uuid)
+        door.blocks_optics_field = False
+        door.blocks_propagation_field = False
+        door._notify_blocking_changed(
+            old_blocks_movement,
+            old_blocks_optics,
+            old_blocks_propagation,
+            parent_event=execution_event.uuid,
+        )
         effect = execution_event.phase_to(EventPhase.EFFECT, status_message="Door opened")
-        return effect.phase_to(EventPhase.COMPLETION, status_message="Door opened")
+        return effect.with_updates(status_message="Door opened")
 
 
 class CloseDoorAction(BaseAction):
@@ -100,13 +110,20 @@ class CloseDoorAction(BaseAction):
         if not isinstance(door, DoorObject):
             return execution_event.cancel(status_message="Door not found")
         old_blocks_movement = door.blocks_movement
-        old_blocks_vision = door.blocks_vision_field
+        old_blocks_optics = door.blocks_optics_field
+        old_blocks_propagation = door.blocks_propagation_field
         door.is_open = False
         door.blocks_movement = True
-        door.blocks_vision_field = True
-        door._notify_blocking_changed(old_blocks_movement, old_blocks_vision, parent_event=execution_event.uuid)
+        door.blocks_optics_field = True
+        door.blocks_propagation_field = True
+        door._notify_blocking_changed(
+            old_blocks_movement,
+            old_blocks_optics,
+            old_blocks_propagation,
+            parent_event=execution_event.uuid,
+        )
         effect = execution_event.phase_to(EventPhase.EFFECT, status_message="Door closed")
-        return effect.phase_to(EventPhase.COMPLETION, status_message="Door closed")
+        return effect.with_updates(status_message="Door closed")
 
 
 class DoorObject(UsableItem):
@@ -116,7 +133,8 @@ class DoorObject(UsableItem):
     is_pickable: bool = Field(default=False, description="Doors are fixed environment objects.")
     map_char: str = Field(default="\u03c0", description="Map glyph for the test door.")
     blocks_movement: bool = Field(default=True, description="Closed doors block movement.")
-    blocks_vision_field: bool = Field(default=True, description="Closed doors block line of sight.")
+    blocks_optics_field: bool = Field(default=True, description="Closed doors block ordinary optics.")
+    blocks_propagation_field: bool = Field(default=True, description="Closed doors block physical propagation.")
     is_open: bool = Field(default=False, description="Whether the door is currently open.")
 
     def get_spatial_open_state(self) -> Optional[bool]:
@@ -149,7 +167,7 @@ class DoorObject(UsableItem):
             )
         ]
 class PullLeverAction(BaseAction):
-    """Deactivate a linked trap and remove trap marker conditions from tiles."""
+    """Deactivate one exact independently owned spike-trap condition."""
 
     name: str = Field(default="Pull Lever", description="Action name for pulling a trap lever.")
     description: str = Field(default="Deactivates a trap", description="Action description shown for trap levers.")
@@ -165,29 +183,34 @@ class PullLeverAction(BaseAction):
         default=None,
         description="UUID of the lever item this action pulls.",
     )
-    trap_handler_uuid: Optional[UUID] = Field(
+    trap_condition_uuid: Optional[UUID] = Field(
         default=None,
-        description="Spatial handler UUID removed when this lever is pulled.",
-    )
-    trap_tile_uuids: List[UUID] = Field(
-        default_factory=list,
-        description="Tile UUIDs that should lose Spike Trap markers when deactivated.",
+        description="Exact SpikeTrap condition UUID deactivated by this lever.",
     )
 
     def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
-        if not self.trap_handler_uuid:
+        if self.trap_condition_uuid is None:
             return declaration_event.cancel(status_message="No trap linked")
+        condition = BaseCondition.get(self.trap_condition_uuid)
+        if not isinstance(condition, SpikeTrap) or not condition.applied:
+            return declaration_event.cancel(status_message="Linked trap is unavailable")
         return declaration_event.phase_to(EventPhase.EXECUTION, status_message="Validated")
 
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
-        if self.trap_handler_uuid:
-            EventQueue.remove_spatial_handler(self.trap_handler_uuid)
-        for tile_uuid in self.trap_tile_uuids:
-            tile = BaseBlock.get(tile_uuid)
-            if tile is not None and "Spike Trap" in tile.active_conditions:
-                tile.remove_condition("Spike Trap", parent_event=execution_event)
-        effect = execution_event.phase_to(EventPhase.EFFECT, status_message="Trap deactivated")
-        return effect.phase_to(EventPhase.COMPLETION, status_message="Lever pulled")
+        if self.trap_condition_uuid is None:
+            return execution_event.cancel(status_message="No trap linked")
+        condition = BaseCondition.get(self.trap_condition_uuid)
+        if not isinstance(condition, SpikeTrap) or not condition.applied:
+            return execution_event.cancel(status_message="Linked trap is unavailable")
+        effect = execution_event.phase_to(
+            EventPhase.EFFECT,
+            status_message="Pulling trap lever",
+        )
+        if effect.canceled:
+            return effect
+        if not condition.deactivate(parent_event=effect):
+            return effect.cancel(status_message="Trap deactivation was rejected")
+        return effect.with_updates(status_message="Lever pulled")
 
 
 class TrapLever(UsableItem):
@@ -196,6 +219,26 @@ class TrapLever(UsableItem):
     name: str = Field(default="Trap Lever", description="Display name for the trap lever.")
     is_pickable: bool = Field(default=False, description="Trap levers are fixed environment objects.")
     map_char: str = Field(default="\u03bb", description="Map glyph for the trap lever.")
+
+    def to_item_presentation_state(
+        self,
+        *,
+        stack_count: Optional[int] = None,
+    ) -> ItemPresentationState:
+        """Expose the one exact authored SpikeTrap identity."""
+        targets = {
+            action.trap_condition_uuid
+            for action in self.use_action_templates
+            if isinstance(action, PullLeverAction)
+            and action.trap_condition_uuid is not None
+        }
+        if len(targets) > 1:
+            raise ValueError("Trap Lever has multiple distinct condition targets")
+        return super().to_item_presentation_state(
+            stack_count=stack_count,
+        ).model_copy(update={
+            "linked_spatial_condition_uuid": next(iter(targets), None),
+        })
 
 
 class LootAllAction(BaseAction):
@@ -241,8 +284,8 @@ class LootAllAction(BaseAction):
                 looted += 1
         effect = execution_event.phase_to(
             EventPhase.EFFECT, status_message=f"Looted {looted} items")
-        return effect.phase_to(
-            EventPhase.COMPLETION, status_message=f"Looted {looted} items from chest")
+        return effect.with_updates(
+            status_message=f"Looted {looted} items from chest")
 
 
 class StorageChest(UsableItem):
@@ -261,8 +304,9 @@ class StorageChest(UsableItem):
         """Expose contained items through the canonical item-storage capability."""
         return self.chest_inventory
 
-    def _on_destroy(self) -> None:
+    def _on_destroy(self, parent_event: Optional[Event]) -> None:
         """Spill all contents onto the ground at chest's position."""
+        _ = parent_event
         pos = self.position
         if pos is None:
             return
@@ -300,8 +344,8 @@ class RestAction(BaseAction):
         )
         effect = execution_event.phase_to(
             EventPhase.EFFECT, status_message=f"Healed {heal_amount}")
-        return effect.phase_to(
-            EventPhase.COMPLETION, status_message="Rested at campfire")
+        return effect.with_updates(
+            status_message="Rested at campfire")
 
 
 class CookAction(BaseAction):
@@ -325,8 +369,8 @@ class CookAction(BaseAction):
         entity.health.add_temporary_hit_points(3, self.source_entity_uuid)
         effect = execution_event.phase_to(
             EventPhase.EFFECT, status_message="Gained 3 temp HP")
-        return effect.phase_to(
-            EventPhase.COMPLETION, status_message="Cooked at campfire")
+        return effect.with_updates(
+            status_message="Cooked at campfire")
 
 
 class ActivateDeviceAction(BaseAction):
@@ -366,8 +410,7 @@ class ActivateDeviceAction(BaseAction):
         )
         effect = execution_event.phase_to(EventPhase.EFFECT,
             status_message=f"Healed {self.heal_amount} HP")
-        return effect.phase_to(EventPhase.COMPLETION,
-            status_message="Arcane device activated")
+        return effect.with_updates(status_message="Arcane device activated")
 
 
 class ArcaneDevice(UsableItem):

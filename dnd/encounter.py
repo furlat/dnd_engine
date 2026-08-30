@@ -26,13 +26,13 @@ from dnd.core.events import (
     RoundStartEvent, RoundEndEvent,
     TurnStartEvent, TurnEndEvent,
     DeathEvent,
-    SensoryUpdateReason,
 )
-from dnd.blocks.sensory import capture_senses_snapshot, emit_sensory_update_delta
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
 from dnd.core.gridmap import get_map
 from dnd.core.life_types import LifeState, LifeStateChangeReason
+from dnd.subjective_combat_log import project_combat_log
 from dnd.entity import Entity
+from dnd.spatial.area_conditions import SpatialCondition
 from dnd.controller import (
     Controller,
     ControllerExecutionMode,
@@ -235,6 +235,7 @@ class Encounter(BaseObject):
         started_at: Wall-clock timestamp when the encounter started.
         ended_at: Wall-clock timestamp when the encounter ended.
         combat_log: Unified combat-log entries captured for the encounter.
+        combat_log_generation_uuid: EventQueue generation owning every log index.
         current_turn_started_source_event_cursor: Objective cursor of turn start.
         current_turn_execution_id: Opaque causal identity of the active turn.
     """
@@ -273,6 +274,10 @@ class Encounter(BaseObject):
     combat_log: List[CombatLogEntry] = Field(
         default_factory=list,
         description="Unified combat-log entries captured for the encounter.",
+    )
+    combat_log_generation_uuid: Optional[UUID] = Field(
+        default=None,
+        description="EventQueue generation owning every combat-log index.",
     )
     current_turn_started_source_event_cursor: Optional[int] = Field(
         default=None,
@@ -528,8 +533,11 @@ class Encounter(BaseObject):
         return event
 
     def _environment_step(self) -> None:
-        """Advance tile and floor-item condition durations. Called at end of each round."""
+        """Advance each world-owned condition once at the round boundary."""
         grid = get_map()
+        for condition in list(grid.get_spatial_conditions()):
+            if isinstance(condition, SpatialCondition):
+                condition.progress_spatial_duration()
         for tile in grid.get_tiles_with_conditions():
             for cond_name in list(tile.active_conditions.keys()):
                 tile.advance_duration(cond_name)
@@ -579,7 +587,7 @@ class Encounter(BaseObject):
                 turn_index=self.current_turn_index,
             )
             self.current_turn_started_source_event_cursor = EventQueue.event_cursor()
-            self._refresh_turn_start_senses(entity, event)
+            self._refresh_turn_start_senses(entity)
 
             if controller:
                 controller.on_turn_start(entity, self._build_turn_context(entity))
@@ -658,7 +666,7 @@ class Encounter(BaseObject):
             )
             self.current_turn_started_source_event_cursor = EventQueue.event_cursor()
 
-            self._refresh_turn_start_senses(entity, event)
+            self._refresh_turn_start_senses(entity)
 
             if controller:
                 context = self._build_turn_context(entity)
@@ -673,27 +681,15 @@ class Encounter(BaseObject):
     def _refresh_turn_start_senses(
         self,
         entity: Entity,
-        turn_start_event: TurnStartEvent,
     ) -> None:
-        """Recompute one actor's senses and emit the complete subjective delta.
+        """Materialize turn-start navigation from the pre-completion projection.
 
         Args:
             entity: Actor whose turn is starting.
-            turn_start_event: Completed turn event that caused the refresh.
         """
-        before = capture_senses_snapshot(entity.senses)
         entity.senses.collision_blocked.clear()
         entity.senses.directional_collision_blocked.clear()
-        entity.update_entity_senses(max_distance=20)
-        after = capture_senses_snapshot(entity.senses)
-        emit_sensory_update_delta(
-            entity.senses,
-            entity.uuid,
-            turn_start_event,
-            before,
-            after,
-            SensoryUpdateReason.TURN_START,
-        )
+        entity.materialize_navigation(max_distance=20)
 
     def end_turn(self) -> Optional[TurnEndEvent]:
         """
@@ -835,6 +831,17 @@ class Encounter(BaseObject):
         if event is None or event.combat_log is None:
             return None
 
+        generation_uuid = EventQueue.generation_id()
+        if self.combat_log_generation_uuid is None:
+            if self.combat_log:
+                raise RuntimeError(
+                    "nonempty combat log has no owning EventQueue generation"
+                )
+            self.combat_log_generation_uuid = generation_uuid
+        elif self.combat_log_generation_uuid != generation_uuid:
+            raise RuntimeError(
+                "encounter combat log belongs to a stale EventQueue generation"
+            )
         self.combat_log.append(event.combat_log)
         index = len(self.combat_log) - 1
         for listener in list(self.__class__._combat_log_listeners):
@@ -849,21 +856,96 @@ class Encounter(BaseObject):
                 )
         return index
 
-    def get_combat_log(self, since: int = 0) -> List[CombatLogEntry]:
+    def get_combat_log(
+        self,
+        *,
+        requested_generation: UUID,
+        since: int = 0,
+    ) -> List[CombatLogEntry]:
         """
         Get combat log entries since given index.
 
         Args:
-            since: Return entries with index >= since (for polling)
+            requested_generation: EventQueue generation owning the indexes.
+            since: Return entries with index >= since (for polling).
 
         Returns:
             List of CombatLogEntry
         """
-        return self.combat_log[since:]
+        if type(since) is not int or since < 0:
+            raise ValueError("combat-log start index must be nonnegative")
+        generation_uuid = EventQueue.generation_id()
+        owned_generation = self.combat_log_generation_uuid
+        if owned_generation is None:
+            if self.combat_log or requested_generation != generation_uuid:
+                raise RuntimeError("combat-log generation does not match")
+            return []
+        if (
+            requested_generation != owned_generation
+            or generation_uuid != owned_generation
+        ):
+            raise RuntimeError("combat-log generation does not match")
+        selected = self.combat_log[since:]
+        if (
+            EventQueue.generation_id() != requested_generation
+            or self.combat_log_generation_uuid != owned_generation
+        ):
+            raise RuntimeError("EventQueue reset during combat-log read")
+        return selected
 
-    def clear_combat_log(self) -> None:
-        """Clear the combat log (call when starting new game)."""
-        self.combat_log = []
+    def project_combat_log_range(
+        self,
+        *,
+        requested_generation: UUID,
+        since: int,
+        through: Optional[int] = None,
+        controlled_entity_uuids: frozenset[str],
+        observer_entity_uuids: frozenset[str],
+    ) -> Tuple[UUID, Tuple[Tuple[int, Optional[CombatLogEntry]], ...]]:
+        """Project one immutable, generation-qualified objective log range."""
+        if type(since) is not int or since < 0:
+            raise ValueError("combat-log start index must be nonnegative")
+        generation_uuid = EventQueue.generation_id()
+        owned_generation = self.combat_log_generation_uuid
+        if owned_generation is None:
+            if self.combat_log or requested_generation != generation_uuid:
+                raise RuntimeError("combat-log generation does not match")
+        elif (
+            requested_generation != owned_generation
+            or generation_uuid != owned_generation
+        ):
+            raise RuntimeError("combat-log generation does not match")
+
+        if through is None:
+            through = len(self.combat_log)
+        if (
+            type(through) is not int
+            or through < since
+            or through > len(self.combat_log)
+        ):
+            raise ValueError("combat-log end index is outside the stored range")
+
+        selected = tuple(enumerate(
+            self.combat_log[since:through],
+            start=since,
+        ))
+        projected = tuple(
+            (
+                index,
+                project_combat_log(
+                    log,
+                    controlled_entity_uuids=controlled_entity_uuids,
+                    observer_entity_uuids=observer_entity_uuids,
+                ),
+            )
+            for index, log in selected
+        )
+        if (
+            EventQueue.generation_id() != requested_generation
+            or self.combat_log_generation_uuid != owned_generation
+        ):
+            raise RuntimeError("EventQueue reset during combat-log projection")
+        return requested_generation, projected
 
     def check_deaths(self) -> List[DeathEvent]:
         """

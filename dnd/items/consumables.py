@@ -307,11 +307,11 @@ class _PotionDrinkAction(BaseAction):
 
     def _apply_costs(
         self,
-        completion_event: ActionEvent,
+        execution_event: ActionEvent,
     ) -> Optional[ActionEvent]:
-        """Consume the potion's bonus-action cost after successful resolution."""
+        """Commit the potion's bonus-action cost before execution."""
         return entity_action_economy_cost_applier(
-            completion_event,
+            execution_event,
             self.source_entity_uuid,
         )
 
@@ -381,8 +381,7 @@ class _DrinkHealingPotionAction(_PotionDrinkAction):
             EventPhase.EFFECT,
             status_message=f"Healed {self.heal_amount} HP",
         )
-        return effect.phase_to(
-            EventPhase.COMPLETION,
+        return effect.with_updates(
             status_message="Drank healing potion",
         )
 
@@ -798,8 +797,7 @@ class _ApplyWeaponCoatAction(BaseAction):
             EventPhase.EFFECT,
             status_message=f"Applied {coat.name.lower()}",
         )
-        return effect.phase_to(
-            EventPhase.COMPLETION,
+        return effect.with_updates(
             status_message=(
                 f"Weapon coated with {self.coat_damage_type.value}"
             ),
@@ -1126,8 +1124,7 @@ class _DrinkGreaterInvisibilityPotionAction(_PotionDrinkAction):
             EventPhase.EFFECT,
             status_message=f"{entity.name} becomes invisible",
         )
-        return effect.phase_to(
-            EventPhase.COMPLETION,
+        return effect.with_updates(
             status_message="Drank Potion of Greater Invisibility",
         )
 
@@ -1289,8 +1286,7 @@ class _DrinkHastePotionAction(_PotionDrinkAction):
             EventPhase.EFFECT,
             status_message=f"{entity.name} gains Haste",
         )
-        return effect.phase_to(
-            EventPhase.COMPLETION,
+        return effect.with_updates(
             status_message="Drank Potion of Haste",
         )
 

@@ -8,6 +8,8 @@ from dnd.core.content.encounters import (
 )
 from dnd.core.events import EventPhase, EventQueue, EventType
 from dnd.items.torches import Torch
+from dnd.game import Game
+from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.encounter_assembler import assemble_encounter_recipe
 from dnd.scenarios.encounter_catalog import (
     AUTHORED_ENCOUNTER_RECIPES,
@@ -18,6 +20,12 @@ from dnd.scenarios.encounter_catalog import (
 ENCOUNTER_IDS = tuple(
     recipe.encounter_id for recipe in AUTHORED_ENCOUNTER_RECIPES
 )
+
+
+def _assemble(recipe: EncounterRecipe):
+    """Assemble one test case into a fresh caller-owned runtime."""
+    reset_engine_runtime()
+    return assemble_encounter_recipe(recipe, game=Game())
 
 
 def _with_opening_roster(
@@ -53,7 +61,7 @@ def test_every_active_recipe_constructs_one_complete_encounter(
     encounter_id: str,
 ) -> None:
     recipe = encounter_recipe(encounter_id)
-    assembled = assemble_encounter_recipe(recipe)
+    assembled = _assemble(recipe)
 
     assert assembled.recipe.encounter_id == encounter_id
     assert [
@@ -74,7 +82,7 @@ def test_fixed_opening_preserves_rolled_initiative_and_forces_roster(
 ) -> None:
     base = encounter_recipe("encounter.standard_skeleton_doors")
     recipe = _with_opening_roster(base, roster_slot_id)
-    assembled = assemble_encounter_recipe(recipe)
+    assembled = _assemble(recipe)
     current = assembled.encounter.get_current_entity()
 
     assert current is not None
@@ -86,7 +94,7 @@ def test_fixed_opening_preserves_rolled_initiative_and_forces_roster(
 
 
 def test_starting_damage_and_conditions_flow_through_events() -> None:
-    assembled = assemble_encounter_recipe(
+    assembled = _assemble(
         encounter_recipe("encounter.cleanse_support_triage"),
     )
     poisoned_guard, blinded_archer, _ = (
@@ -104,7 +112,7 @@ def test_starting_damage_and_conditions_flow_through_events() -> None:
 
 
 def test_typed_post_grant_behavior_ignites_the_authored_portable_torch() -> None:
-    assembled = assemble_encounter_recipe(
+    assembled = _assemble(
         encounter_recipe("encounter.standard_skeleton_doors"),
     )
     hero = assembled.entities_by_roster_slot["roster_1"][0]

@@ -76,6 +76,10 @@ class CreatureRuntimeBindingRegistry:
         """Return an immutable snapshot of this generation's bindings."""
         return MappingProxyType(dict(self._bindings))
 
+    def discard(self, runtime_entity_uuid: UUID) -> None:
+        """Discard one provisional binding during failed materialization."""
+        self._bindings.pop(runtime_entity_uuid, None)
+
     def reset(self) -> None:
         """Retire every creature binding owned by the current generation."""
         self._bindings.clear()

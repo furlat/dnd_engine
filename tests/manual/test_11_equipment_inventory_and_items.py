@@ -32,6 +32,7 @@ from dnd.core.gridmap import GridMap, get_map
 from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import AdvantageStatus
 from dnd.core.values import BaseValue, ModifiableValue
+from dnd.types.world import CardinalDirection
 from dnd.entity import Entity, EntityConfig
 from dnd.items.consumables import (
     GREATER_INVISIBILITY_POTION_RECIPE,
@@ -819,11 +820,14 @@ def test_usable_items_and_environment_objects_expose_item_bound_actions(capsys) 
         origin=ItemRuntimeOrigin.ENVIRONMENT,
         expected_type=TutorialDoor,
     )
-    door.place_on_grid((1, 0))
+    door.place_on_grid(
+        (1, 0),
+        boundary_direction=CardinalDirection.WEST,
+    )
     patient.update_entity_senses(max_distance=5)
 
     assert door.uuid in patient.senses.objects
-    assert door.blocks_movement_east
+    assert not get_map().can_transition((0, 0), (1, 0))
     assert [action.name for action in door.get_use_actions(patient.uuid)] == ["Open Door"]
     door_actions_before = [action.name for action in door.get_use_actions(patient.uuid)]
 
@@ -831,7 +835,7 @@ def test_usable_items_and_environment_objects_expose_item_bound_actions(capsys) 
 
     assert open_event is not None and not open_event.canceled
     assert door.is_open
-    assert not door.blocks_movement_east
+    assert get_map().can_transition((0, 0), (1, 0))
     assert [action.name for action in door.get_use_actions(patient.uuid)] == ["Close Door"]
     door_actions_after = [action.name for action in door.get_use_actions(patient.uuid)]
 
@@ -866,7 +870,7 @@ def test_usable_items_and_environment_objects_expose_item_bound_actions(capsys) 
             f"before={door_actions_before}, "
             f"after={door_actions_after}, "
             f"is_open={door.is_open}, "
-            f"blocks_east={door.blocks_movement_east}"
+            f"blocks_crossing={not get_map().can_transition((0, 0), (1, 0))}"
         ),
     ]
 
@@ -880,7 +884,7 @@ def test_usable_items_and_environment_objects_expose_item_bound_actions(capsys) 
         "second drink in same turn: blocked=True, stack=1",
         "after second drink: canceled=False, hp=18, still_carried=False, block_exists=False",
         "door visible: True",
-        "door actions: before=['Open Door'], after=['Close Door'], is_open=True, blocks_east=False",
+        "door actions: before=['Open Door'], after=['Close Door'], is_open=True, blocks_crossing=False",
     ]
     assert use_lines == expected_use_lines
     assert capsys.readouterr().out.splitlines() == expected_use_lines

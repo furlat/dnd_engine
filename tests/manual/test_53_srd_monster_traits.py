@@ -27,14 +27,19 @@ from dnd.core.content.materialization import (
 )
 from dnd.core.values import BaseValue
 from dnd.entity import Entity
+from dnd.game import Game
 from dnd.monsters.srd_roster import (
     SRD_CREATURE_DECLARATIONS_BY_ID,
     SRD_CREATURE_RECIPES_BY_ID,
 )
 
 
+_srd_game: Game | None = None
+
+
 def reset_srd_trait_state(width: int = 12, height: int = 12) -> None:
     """Clear global engine registries for isolated SRD trait tests."""
+    global _srd_game
     EventQueue.reset()
     EventQueue.set_combat_log_callback(None)
     BaseObject._registry.clear()
@@ -42,9 +47,9 @@ def reset_srd_trait_state(width: int = 12, height: int = 12) -> None:
     BaseCondition._registry.clear()
     BaseValue._registry.clear()
     Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
     GridMap.reset()
     get_map().create_rectangle(0, 0, width, height)
+    _srd_game = Game()
 
 
 def registered_action_names(entity: Entity) -> set[str]:
@@ -80,7 +85,7 @@ def _materialize_srd_fixture(
 ) -> Entity:
     declaration = SRD_CREATURE_DECLARATIONS_BY_ID[creature_id]
     role_suffix = f"{creature_id}_{position[0]}_{position[1]}"
-    return materialize_creature(
+    entity = materialize_creature(
         SRD_CREATURE_RECIPES_BY_ID[creature_id],
         runtime_entity_uuid=uuid4(),
         display_name=declaration.descriptor.display_name,
@@ -91,6 +96,11 @@ def _materialize_srd_fixture(
         ),
         possession_mode=CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS,
     )
+    if _srd_game is None:
+        raise RuntimeError("reset_srd_trait_state must precede materialization")
+    entity.compose_entity()
+    _srd_game.deploy_entity(entity, position)
+    return entity
 
 
 def test_factory_trait_packages_are_installed() -> None:
@@ -487,5 +497,8 @@ def test_active_monster_actions_apply_their_marker_conditions() -> None:
     event = leadership.instantiate().apply()
 
     assert event is not None
-    assert "Leadership Aura" in knight.active_conditions
+    assert any(
+        condition.name == "Leadership Aura"
+        for condition in get_map().get_spatial_conditions()
+    )
     assert "Leadership Used" in knight.active_conditions

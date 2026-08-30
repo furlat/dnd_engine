@@ -114,8 +114,7 @@ class FalseLife(SpellAction):
 
         caster.health.add_temporary_hit_points(temp_hp_roll.total, caster.uuid)
 
-        return effect_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+        return effect_event.with_updates(
             temp_hp_gained=temp_hp_roll.total,
             status_message=f"{caster.name} gains {temp_hp_roll.total} temporary hit points"
         )
@@ -332,8 +331,7 @@ class ChillTouch(SpellAction):
         )
 
         if outcome in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]:
-            return effect_event.phase_to(
-                new_phase=EventPhase.COMPLETION,
+            return effect_event.with_updates(
                 status_message=f"{self.name} missed"
             )
 
@@ -387,8 +385,7 @@ class ChillTouch(SpellAction):
         effect_condition.add_linked_condition(target.uuid, no_healing.uuid)
 
         undead_text = " (undead: disadvantage vs caster)" if is_undead else ""
-        return effect_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+        return effect_event.with_updates(
             damages=[necrotic_damage],
             damage_rolls=[damage_roll],
             status_message=f"{self.name} hit for {damage_roll.total} necrotic damage, target can't heal{undead_text}"
@@ -544,8 +541,7 @@ class Blight(SpellAction):
 
         save_text = " (saved for half)" if success and not is_plant else ""
         plant_text = " (maximum damage)" if is_plant else ""
-        return effect_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+        return effect_event.with_updates(
             total_damage=final_damage,
             status_message=f"Blight deals {final_damage} necrotic damage to {target.name}{save_text}{plant_text}"
         )
@@ -739,7 +735,8 @@ class BlindnessDeafness(SpellAction):
             if not target:
                 return declaration_event.cancel(status_message="Target not found")
 
-            if target_uuid not in source.senses.entities.keys():
+            contact = source.senses.entities.get(target_uuid)
+            if contact is None or not contact.visual:
                 return declaration_event.cancel(status_message=f"{target.name} not in line of sight")
 
             distance = source.senses.get_feet_distance(target.position)
@@ -783,8 +780,7 @@ class BlindnessDeafness(SpellAction):
         )
 
         if success:
-            return effect_event.phase_to(
-                new_phase=EventPhase.COMPLETION,
+            return effect_event.with_updates(
                 status_message=f"{target.name} resists Blindness/Deafness"
             )
 
@@ -797,8 +793,7 @@ class BlindnessDeafness(SpellAction):
         )
         target.add_condition(bd_effect, parent_event=effect_event)
 
-        return effect_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+        return effect_event.with_updates(
             status_message=f"{target.name} is {self.effect_type.capitalize()} by Blindness/Deafness"
         )
 
@@ -907,8 +902,7 @@ class NecroticBless(SpellAction):
                 target_entity_name=target.name,
                 status_message=f"Necrotic Bless - {target.name} (undead) is blessed",
             )
-            return effect_event.phase_to(
-                new_phase=EventPhase.COMPLETION,
+            return effect_event.with_updates(
                 status_message=f"Necrotic Bless - {target.name} (undead) is blessed",
             )
         else:
@@ -931,8 +925,7 @@ class NecroticBless(SpellAction):
             )
 
             if success:
-                return effect_event.phase_to(
-                    new_phase=EventPhase.COMPLETION,
+                return effect_event.with_updates(
                     status_message=f"Necrotic Bless - {target.name} resists",
                 )
 
@@ -945,8 +938,7 @@ class NecroticBless(SpellAction):
             if bane_effect.applied:
                 concentration.add_linked_condition(target.uuid, bane_effect.uuid)
 
-            return effect_event.phase_to(
-                new_phase=EventPhase.COMPLETION,
+            return effect_event.with_updates(
                 status_message=f"Necrotic Bless - {target.name} is baned",
             )
 
@@ -1206,13 +1198,14 @@ class EyebitePanickedEffect(BaseCondition):
 
     def _should_end(self, target: Entity, caster: Entity) -> bool:
         """Return whether Panicked ends by distance and loss of sight."""
-        target.update_entity_senses(max_distance=80)
+        target.materialize_navigation(max_distance=80)
         distance = self._distance_feet(target.position, caster.position)
-        return distance >= 60 and caster.uuid not in target.senses.entities
+        contact = target.senses.entities.get(caster.uuid)
+        return distance >= 60 and (contact is None or not contact.visual)
 
     def _choose_flee_path(self, target: Entity, caster: Entity, movement_budget: int) -> List[Tuple[int, int]]:
         """Choose the safest farthest path away from the caster within budget."""
-        target.update_entity_senses(max_distance=80)
+        target.materialize_navigation(max_distance=80)
         start_distance = self._distance_feet(target.position, caster.position)
         best_path: List[Tuple[int, int]] = []
         best_score: Optional[Tuple[int, int, int]] = None
@@ -1468,7 +1461,8 @@ class EyebiteStrike(BaseAction):
         if distance > 60:
             return declaration_event.cancel(status_message=f"Target out of range ({distance}ft)")
 
-        if target.uuid not in caster.senses.entities:
+        contact = caster.senses.entities.get(target.uuid)
+        if contact is None or not contact.visual:
             return declaration_event.cancel(status_message="Target not visible")
 
         casting_state = self._get_casting_state(caster)
@@ -1504,8 +1498,7 @@ class EyebiteStrike(BaseAction):
             casting_state = self._get_casting_state(caster)
             if casting_state:
                 casting_state.successful_save_target_uuids.add(target.uuid)
-            return effect_event.phase_to(
-                new_phase=EventPhase.COMPLETION,
+            return effect_event.with_updates(
                 status_message=f"{target.name} resists Eyebite ({self.effect_choice})"
             )
 
@@ -1545,14 +1538,13 @@ class EyebiteStrike(BaseAction):
                 conc.add_linked_condition(target.uuid, effect_s.uuid)
             result_text = "Sickened"
 
-        return effect_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+        return effect_event.with_updates(
             status_message=f"Eyebite: {target.name} is {result_text}"
         )
 
-    def _apply_costs(self, completion_event: ActionEvent) -> Optional[ActionEvent]:
+    def _apply_costs(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
         """Apply the action cost for the repeat strike."""
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
+        return entity_action_economy_cost_applier(execution_event, self.source_entity_uuid)
 
 
 class Eyebite(SpellAction):
@@ -1621,8 +1613,7 @@ class Eyebite(SpellAction):
             )
             first_strike.apply()
 
-        return effect_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+        return effect_event.with_updates(
             status_message=f"{caster.name} channels Eyebite - can target a creature each turn"
         )
 
@@ -1743,8 +1734,7 @@ class FingerOfDeath(SpellAction):
             )
 
         save_text = " (saved for half)" if success else ""
-        return effect_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+        return effect_event.with_updates(
             damages=[necrotic_damage],
             damage_rolls=[damage_roll],
             total_damage=final_damage,
@@ -1828,8 +1818,7 @@ class InflictWounds(SpellAction):
         )
 
         if outcome in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]:
-            return effect_event.phase_to(
-                new_phase=EventPhase.COMPLETION,
+            return effect_event.with_updates(
                 status_message=f"{self.name} missed"
             )
 
@@ -1856,8 +1845,7 @@ class InflictWounds(SpellAction):
             parent_event=effect_event.uuid,
         )
 
-        return effect_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+        return effect_event.with_updates(
             damages=[necrotic_damage],
             damage_rolls=[damage_roll],
             total_damage=damage_roll.total,
@@ -1948,8 +1936,7 @@ class Harm(SpellAction):
             )
 
         save_text = " (saved for half)" if success else ""
-        return effect_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+        return effect_event.with_updates(
             damages=[necrotic_damage],
             damage_rolls=[damage_roll],
             total_damage=final_damage,
@@ -2393,7 +2380,8 @@ class BestowCurse(SpellAction):
         if not caster or not target:
             return declaration_event.cancel(status_message="Caster or target not found")
 
-        if target.uuid not in caster.senses.entities and target.uuid != caster.uuid:
+        contact = caster.senses.entities.get(target.uuid)
+        if target.uuid != caster.uuid and (contact is None or not contact.visual):
             return declaration_event.cancel(status_message="Target not in line of sight")
 
         distance = caster.senses.get_feet_distance(target.position)
@@ -2440,8 +2428,7 @@ class BestowCurse(SpellAction):
         )
 
         if success:
-            return effect_event.phase_to(
-                new_phase=EventPhase.COMPLETION,
+            return effect_event.with_updates(
                 status_message=f"Bestow Curse — {target.name} saved"
             )
 
@@ -2483,7 +2470,6 @@ class BestowCurse(SpellAction):
             3: "WIS save or lose action each turn",
             4: "+1d8 necrotic on caster's attacks"
         }
-        return effect_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+        return effect_event.with_updates(
             status_message=f"Bestow Curse on {target.name}: {option_desc[self.curse_option]}"
         )

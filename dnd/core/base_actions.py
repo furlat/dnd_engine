@@ -22,7 +22,11 @@ from dnd.core.content.runtime import (
     runtime_behavior_provider,
 )
 from dnd.core.aoe import AoEShape
-from dnd.core.item_types import ItemPresentationProvider, ItemPresentationState
+from dnd.core.item_types import (
+    FiniteChargeProvider,
+    ItemPresentationProvider,
+    ItemPresentationState,
+)
 from dnd.core.modifiers import AdvantageStatus
 from dnd.blocks.sensory import Senses
 from typing import Any, Optional, Callable, ClassVar, OrderedDict, List, Dict, Literal, Sequence, Set, Tuple, cast
@@ -1012,7 +1016,7 @@ class BaseAction(BaseObject):
     )
     requires_concentration: bool = Field(
         default=False,
-        description="Whether action completion invokes the concentration cleanup hook.",
+        description="Whether preterminal action settlement invokes concentration cleanup.",
     )
     alt_cost_type: Optional[str] = Field(default=None, description="Temporary replacement for primary action cost type.")
     alt_extra_costs: List[Cost] = Field(default_factory=list, description="Temporary additional costs.")
@@ -1634,15 +1638,11 @@ class BaseAction(BaseObject):
             execution_event: Execution-phase event for this action.
 
         Returns:
-            Completion event, canceled event, or `None`.
+            Accepted effect event, canceled event, or `None`.
         """
-        effect_event = execution_event.phase_to(
+        return execution_event.phase_to(
             EventPhase.EFFECT,
             status_message=f"Applying effect for {self.name}"
-        )
-        return effect_event.phase_to(
-            EventPhase.COMPLETION,
-            status_message=f"Succesfully applied action {self.name} for {execution_event.source_entity_uuid}"
         )
 
     def _finalize_aoe(self, effect_event: ActionEvent) -> None:
@@ -1653,37 +1653,79 @@ class BaseAction(BaseObject):
         """
         pass
 
-    def _cleanup_concentration(self, completion_event: ActionEvent) -> None:
-        """Post-completion concentration cleanup hook. Override in SpellAction."""
+    def _cleanup_concentration(self, effect_event: ActionEvent) -> None:
+        """Close action-owned concentration work before the root terminal."""
         pass
 
-    def _apply_costs(self, completion_event: ActionEvent) -> Optional[ActionEvent]:
-        """Apply action costs after successful completion.
+    def _apply_costs(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
+        """Commit action costs before execution is published.
 
         Subclasses that consume action economy override this method.
         """
-        return completion_event.phase_to(
-            EventPhase.COMPLETION,
-            status_message=f"Succesfully applied costs for {self.name} for {completion_event.source_entity_uuid}"
-        )
+        return execution_event
 
-    def _apply_execution_cancellation_costs(
+    def _commit_item_charge(
         self,
-        canceled_event: ActionEvent,
+        execution_event: ActionEvent,
+        declaration_event: ActionEvent,
     ) -> Optional[ActionEvent]:
-        """Apply costs committed before an execution-phase interruption.
+        """Commit an item-backed finite cost through the item's child event."""
+        if execution_event.item_charge_cost <= 0:
+            return execution_event
+        if execution_event.source_item_uuid is None:
+            return execution_event.cancel(
+                status_message="Finite item charge has no source item"
+            )
+        if (
+            execution_event.item_charge_action_lineage_uuid
+            != declaration_event.lineage_uuid
+        ):
+            return execution_event.cancel(
+                status_message="Finite item charge is not authorized for this action"
+            )
+        item = BaseBlock.get(execution_event.source_item_uuid)
+        if item is None:
+            return execution_event.cancel(
+                status_message="Finite item charge source is no longer available"
+            )
+        if not isinstance(item, FiniteChargeProvider):
+            return execution_event.cancel(
+                status_message="Action source item cannot provide finite charges"
+            )
+        if item.charges == -1:
+            return execution_event
+        try:
+            result = item.consume_charge_with_event(
+                execution_event.item_charge_cost,
+                execution_event.source_entity_uuid,
+                declaration_event,
+            )
+        except RuntimeError:
+            return execution_event.cancel(
+                status_message="Finite item charge could not be consumed"
+            )
+        if result.canceled:
+            return execution_event.cancel(
+                status_message=(
+                    "Item charge consumption was canceled before action execution"
+                )
+            )
+        return execution_event
 
-        The dependency-neutral base action has no owner-specific resource
-        consumer. Action families whose execution can be interrupted override
-        this hook and preserve the canceled event as the terminal result.
-
-        Args:
-            canceled_event: Execution event canceled by a handler.
-
-        Returns:
-            The terminal canceled event after committed costs are applied.
-        """
-        return canceled_event
+    @staticmethod
+    def _publish_detached_cancellation(event: ActionEvent) -> ActionEvent:
+        """Publish one cancellation produced by detached owner work."""
+        if event.use_register or not event.canceled:
+            raise ValueError("Expected an unregistered action cancellation")
+        published = EventQueue.register(
+            event.model_copy(update={"use_register": True})
+        )
+        if not isinstance(published, ActionEvent):
+            raise TypeError(
+                "Action cancellation dispatch returned "
+                f"{type(published).__name__}, expected ActionEvent"
+            )
+        return published
 
     def apply(self, parent_event: Optional[Event] = None) -> Optional[Event]:
         """Apply this action inside one passive causal-event batch.
@@ -1756,21 +1798,73 @@ class BaseAction(BaseObject):
 
         if declaration_event.phase != EventPhase.DECLARATION:
             raise ValueError(f"Action {self.name} can only be validated in the declaration phase")
+        detached_declaration = declaration_event.model_copy(
+            deep=True,
+            update={"use_register": False},
+        )
         started = start_phase()
-        execution_event = self._validate(declaration_event)
+        execution_event = self._validate(detached_declaration)
         record_phase("validate", started)
         if execution_event is None:
             record_total()
             return execution_event
+        if type(execution_event) is not type(declaration_event):
+            raise TypeError(
+                f"Action validation returned {type(execution_event).__name__}; "
+                f"expected {type(declaration_event).__name__}"
+            )
+        if execution_event.lineage_uuid != declaration_event.lineage_uuid:
+            raise ValueError("Action validation cannot replace its declaration lineage")
         if execution_event.canceled:
-            if execution_event.canceled_from_phase is EventPhase.EXECUTION:
-                started = start_phase()
-                execution_event = self._apply_execution_cancellation_costs(execution_event)
-                record_phase("apply_execution_cancellation_costs", started)
             record_total()
-            return execution_event
+            return self._publish_detached_cancellation(execution_event)
         if execution_event.phase not in [EventPhase.EXECUTION]:
             raise ValueError(f"Action {self.name} can only be applied in the execution phase")
+
+        execution_event = execution_event.model_copy(
+            update={"use_register": False}
+        )
+        started = start_phase()
+        execution_event = self._apply_costs(execution_event)
+        record_phase("apply_costs", started)
+        if execution_event is None:
+            record_total()
+            return None
+        if execution_event.canceled:
+            record_total()
+            return self._publish_detached_cancellation(execution_event)
+        if execution_event.phase is not EventPhase.EXECUTION:
+            raise ValueError("Action cost commitment must preserve execution phase")
+
+        started = start_phase()
+        execution_event = self._commit_item_charge(
+            execution_event,
+            declaration_event,
+        )
+        record_phase("commit_item_charge", started)
+        if execution_event is None:
+            record_total()
+            return None
+        if execution_event.canceled:
+            record_total()
+            return self._publish_detached_cancellation(execution_event)
+        execution_event = execution_event.model_copy(update={
+            "use_register": True,
+            "lineage_children_events": list(
+                declaration_event.lineage_children_events
+            ),
+            "children_events": [],
+        })
+        published_execution = EventQueue.register(execution_event)
+        if not isinstance(published_execution, ActionEvent):
+            raise TypeError(
+                "Action execution dispatch returned "
+                f"{type(published_execution).__name__}, expected ActionEvent"
+            )
+        execution_event = published_execution
+        if execution_event.canceled:
+            record_total()
+            return execution_event
 
         if self.effective_target_type in (TargetType.MULTI_ENTITY, TargetType.POSITION_AOE):
             started = start_phase()
@@ -1779,88 +1873,115 @@ class BaseAction(BaseObject):
             original_target = self.target_entity_uuid
             total_damage = 0
 
-            targets_started = start_phase()
-            for application_index, target_uuid in enumerate(all_target_uuids):
-                target_started = start_phase()
-                self.target_entity_uuid = target_uuid
-
-                target_block = BaseBlock.get(target_uuid)
-                target_entity_name = target_block.name if target_block else None
-
-                per_target_event = execution_event.model_copy(update={
-                    'uuid': uuid4(),
-                    'lineage_uuid': uuid4(),
-                    'parent_event': execution_event.uuid,
-                    'target_entity_uuid': target_uuid,
-                    'target_entity_name': target_entity_name,
-                    'children_events': [],
-                    'lineage_children_events': [],
-                    'application_index': application_index,
-                    'application_id': uuid5(
-                        execution_event.lineage_uuid,
-                        f"target-application:{application_index}",
-                    ),
-                })
-                per_target_event = cast(ActionEvent, EventQueue.register(per_target_event))
-
-                if per_target_event.canceled:
-                    record_phase("convolution_target_canceled", target_started)
-                    continue
-
-                result_event = self._apply(per_target_event)
-                if result_event:
-                    damage = result_event.total_damage or 0
-                    total_damage += damage
-                record_phase("convolution_target_apply", target_started)
-            record_phase("convolution_apply_targets", targets_started)
-
-            self.target_entity_uuid = original_target
-
             started = start_phase()
             effect_event = execution_event.phase_to(
                 EventPhase.EFFECT,
                 total_targets=len(all_target_uuids),
-                total_damage=total_damage,
+                total_damage=0,
                 aoe_position=self.end_position,
-                status_message=f"{self.name} affected {len(all_target_uuids)} targets for {total_damage} total damage"
+                status_message=(
+                    f"Applying {self.name} to {len(all_target_uuids)} targets"
+                ),
             )
             record_phase("convolution_effect_event", started)
+            if effect_event.canceled:
+                record_total()
+                return effect_event
+
+            targets_started = start_phase()
+            try:
+                for application_index, target_uuid in enumerate(all_target_uuids):
+                    target_started = start_phase()
+                    self.target_entity_uuid = target_uuid
+
+                    target_block = BaseBlock.get(target_uuid)
+                    target_entity_name = target_block.name if target_block else None
+
+                    per_target_event = execution_event.model_copy(update={
+                        'uuid': uuid4(),
+                        'lineage_uuid': uuid4(),
+                        'parent_event': effect_event.uuid,
+                        'target_entity_uuid': target_uuid,
+                        'target_entity_name': target_entity_name,
+                        'children_events': [],
+                        'lineage_children_events': [],
+                        'application_index': application_index,
+                        'application_id': uuid5(
+                            execution_event.lineage_uuid,
+                            f"target-application:{application_index}",
+                        ),
+                    })
+                    per_target_event = cast(
+                        ActionEvent,
+                        EventQueue.register(per_target_event),
+                    )
+
+                    if per_target_event.canceled:
+                        record_phase("convolution_target_canceled", target_started)
+                        continue
+
+                    result_event = self._apply(per_target_event)
+                    if result_event is None or result_event.canceled:
+                        record_phase("convolution_target_apply", target_started)
+                        continue
+                    if result_event.phase is not EventPhase.EFFECT:
+                        raise ValueError(
+                            f"Action {self.name} target application must end "
+                            "at effect phase"
+                        )
+                    total_damage += result_event.total_damage or 0
+                    result_event.phase_to(
+                        EventPhase.COMPLETION,
+                        status_message=(
+                            result_event.status_message
+                            or f"{self.name} target application completed"
+                        ),
+                    )
+                    record_phase("convolution_target_apply", target_started)
+            finally:
+                self.target_entity_uuid = original_target
+            record_phase("convolution_apply_targets", targets_started)
+
+            effect_event = effect_event.with_updates(
+                total_targets=len(all_target_uuids),
+                total_damage=total_damage,
+                aoe_position=self.end_position,
+                status_message=(
+                    f"{self.name} affected {len(all_target_uuids)} targets "
+                    f"for {total_damage} total damage"
+                ),
+            )
 
             if self.effective_target_type == TargetType.POSITION_AOE:
                 started = start_phase()
                 self._finalize_aoe(effect_event)
                 record_phase("finalize_aoe", started)
-
-            started = start_phase()
-            completion_event = effect_event.phase_to(
-                EventPhase.COMPLETION,
-                status_message=f"{self.name} completed"
-            )
-            record_phase("convolution_completion_event", started)
         else:
             started = start_phase()
-            completion_event = self._apply(execution_event)
+            effect_event = self._apply(execution_event)
             record_phase("apply_effect", started)
 
-        if completion_event is None or completion_event.canceled:
+        if effect_event is None or effect_event.canceled:
             record_total()
-            return completion_event
-        if completion_event.phase not in [EventPhase.COMPLETION]:
-            raise ValueError(f"Action {self.name} can only be completed in the completion phase")
+            return effect_event
+        if effect_event.phase is not EventPhase.EFFECT:
+            raise ValueError(
+                f"Action {self.name} must finish authored mechanics at effect phase"
+            )
         if self.requires_concentration:
             started = start_phase()
-            self._cleanup_concentration(completion_event)
+            self._cleanup_concentration(effect_event)
             record_phase("cleanup_concentration", started)
         started = start_phase()
-        cost_event = self._apply_costs(completion_event)
-        record_phase("apply_costs", started)
-        if cost_event is None or cost_event.canceled:
-            record_total()
-            return cost_event
-        if cost_event.phase not in [EventPhase.COMPLETION]:
-            raise ValueError(f"Action {self.name} can only be completed in the completion phase")
+        completion_event = effect_event.phase_to(
+            EventPhase.COMPLETION,
+            status_message=(
+                effect_event.status_message or f"{self.name} completed"
+            ),
+        )
+        record_phase("completion_event", started)
         record_total()
-        return cost_event
+        return completion_event
 
 
 class StructuredAction(BaseAction):
@@ -1948,16 +2069,31 @@ class StructuredAction(BaseAction):
             else:
                 current_event = consequence_event
 
-        return current_event.phase_to(
-            EventPhase.COMPLETION,
-            status_message=f"Successfully completed structured action {self.name} for {current_event.source_entity_uuid}"
+        if current_event.phase is EventPhase.EXECUTION:
+            return current_event.phase_to(
+                EventPhase.EFFECT,
+                status_message=(
+                    f"Applied structured action {self.name} for "
+                    f"{current_event.source_entity_uuid}"
+                ),
+            )
+        if current_event.phase is not EventPhase.EFFECT:
+            raise ValueError(
+                f"Structured action {self.name} ended in invalid phase "
+                f"{current_event.phase}"
+            )
+        return current_event.with_updates(
+            status_message=(
+                f"Applied structured action {self.name} for "
+                f"{current_event.source_entity_uuid}"
+            ),
         )
 
-    def _apply_costs(self, completion_event: ActionEvent) -> Optional[ActionEvent]:
+    def _apply_costs(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
         """Apply costs through the configured processor when present."""
         if self.cost_applier is not None:
-            return self.cost_applier(completion_event, self.source_entity_uuid)
-        return completion_event
+            return self.cost_applier(execution_event, self.source_entity_uuid)
+        return execution_event
 
 
 class OpportunityAttackExposure(BaseModel):

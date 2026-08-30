@@ -37,6 +37,7 @@ from dnd.items.spell_items import FIREBALL_SCROLL_RECIPE, SpellGrantingItem
 from dnd.runtime_reset import reset_engine_runtime
 from tests.spell_test_exports import Fireball, MagicMissile
 from dnd.core.gridmap import get_map
+from tests.engine.support import create_test_entity
 
 
 def _create_actor(
@@ -47,8 +48,8 @@ def _create_actor(
     spell_slots: dict[int, int] | None = None,
 ) -> Entity:
     """Create one durable spell-capable actor for event integration checks."""
-    return Entity.create(
-        source_entity_uuid=uuid4(),
+    return create_test_entity(
+        source_id=uuid4(),
         name=name,
         config=EntityConfig(
             ability_scores=AbilityScoresConfig(

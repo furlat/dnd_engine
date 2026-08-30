@@ -8,11 +8,12 @@ from dnd.core.base_block import BaseBlock, LightLevel
 from dnd.core.base_actions import ActionAvailabilityStatus, TargetType
 from dnd.core.base_tiles import MovementMode
 from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import EventPhase, EventQueue, EventType
+from dnd.core.events import EventPhase
 from dnd.core.creature_types import DamageType
 from dnd.core.gridmap import get_map
 from dnd.encounter import EncounterState
 from dnd.entity import Entity
+from dnd.game import Game
 from dnd.items.environment import DirectionalDoor
 from dnd.items.environment_interactables import StorageChest, TrapLever
 from dnd.actions_functional import execute_by_index
@@ -24,6 +25,7 @@ from dnd.maps.arena_layout import (
     WATER_POSITIONS,
 )
 from dnd.monsters.skeleton_abilities import MarkTargetAction
+from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.encounter_assembler import (
     AssembledEncounter,
     assemble_encounter_recipe,
@@ -67,9 +69,11 @@ class CanonicalScenario:
 
 def create_authored_encounter(encounter_id: str) -> CanonicalScenario:
     """Assemble one authored encounter through the sole product path."""
+    reset_engine_runtime()
     return CanonicalScenario(
         assemble_encounter_recipe(
             encounter_recipe(f"encounter.{encounter_id}"),
+            game=Game(),
         ),
     )
 
@@ -168,7 +172,10 @@ def test_authored_encounter_catalog_has_complete_stable_inventory() -> None:
 def test_each_authored_encounter_builds_started_with_unique_positions() -> None:
     """Every authored encounter assembles through the product runtime."""
     for recipe in AUTHORED_ENCOUNTER_RECIPES:
-        arena = CanonicalScenario(assemble_encounter_recipe(recipe))
+        reset_engine_runtime()
+        arena = CanonicalScenario(
+            assemble_encounter_recipe(recipe, game=Game())
+        )
         actors = (arena.hero, *arena.monsters)
         positions = [actor.position for actor in actors]
 
@@ -205,7 +212,7 @@ def test_standard_skeleton_door_arena_uses_current_baseline_content() -> None:
     assert grid.get_object_position(arena.environment.barrier.door.uuid) == DOOR_POSITION
     assert water_tile is not None
     assert water_tile.name == "Water"
-    assert water_tile.walkable is False
+    assert water_tile.blocks_walking()
     assert difficult_tile is not None
     assert difficult_tile.name == "Difficult Terrain"
     assert difficult_tile.get_movement_cost(MovementMode.WALKING) > 1
@@ -227,7 +234,7 @@ def test_goblin_water_skirmish_samples_goblins_caster_and_route_blockers() -> No
     assert arena.environment is not None
     assert water_tile is not None
     assert water_tile.name == "Water"
-    assert water_tile.walkable is False
+    assert water_tile.blocks_walking()
     assert equipped_item_name(arena.hero, WeaponSlot.RANGED_MAIN) == "Longbow"
     assert "Nimble Escape: Hide" in monster_actions["Validation Goblin Skirmisher"]
     assert "Nimble Escape: Disengage" in monster_actions["Validation Goblin Archer"]
@@ -372,9 +379,12 @@ def test_forced_movement_hazard_bridge_places_thunderwave_near_hazards() -> None
     assert "Thunderwave" in action_template_names(warlock)
     assert "Thunderwave" in action_template_names(mage)
     assert water_tile is not None
-    assert water_tile.walkable is False
+    assert water_tile.blocks_walking()
     assert spike_tile is not None
-    assert "Spike Growth" in spike_tile.active_conditions or "Spike Trap" in spike_tile.active_conditions
+    assert {"Spike Growth", "Spike Trap"} & {
+        condition.name
+        for condition in spike_tile.get_conditions().values()
+    }
 
 
 def test_line_aoe_corridor_aligns_multiple_targets_on_spell_lane() -> None:
@@ -404,7 +414,7 @@ def test_zone_control_web_gauntlet_adds_control_spells_and_route_pressure() -> N
     assert {"Web", "Grease", "Spike Growth", "Fog Cloud"} <= action_template_names(control_mage)
     assert {"Nimble Escape: Hide", "Nimble Escape: Disengage"} <= action_template_names(goblin_archer)
     assert water_tile is not None
-    assert water_tile.walkable is False
+    assert water_tile.blocks_walking()
 
 
 def test_support_attrition_cache_includes_wounded_ally_and_support_actions() -> None:
@@ -491,7 +501,7 @@ def test_ranged_loadout_kiting_ring_keeps_ranged_gear_and_terrain_pressure() -> 
     assert {"Nimble Escape: Hide", "Nimble Escape: Disengage"} <= action_template_names(goblin_archer)
     assert {"Eldritch Blast", "Thunderwave", "Necrotic Bless"} <= action_template_names(warlock)
     assert water_tile is not None
-    assert water_tile.walkable is False
+    assert water_tile.blocks_walking()
     assert difficult_tile is not None
     assert difficult_tile.get_movement_cost(MovementMode.WALKING) > 1
 
@@ -525,7 +535,7 @@ def test_teleport_escape_skirmish_samples_mobility_and_ranged_pressure() -> None
     assert {"Misty Step", "Dimension Door", "Blur", "Mirror Image", "Ray of Frost"} <= action_template_names(escape_mage)
     assert {"Nimble Escape: Hide", "Nimble Escape: Disengage"} <= action_template_names(goblin_archer)
     assert water_tile is not None
-    assert water_tile.walkable is False
+    assert water_tile.blocks_walking()
     assert difficult_tile is not None
     assert difficult_tile.get_movement_cost(MovementMode.WALKING) > 1
 
@@ -581,7 +591,7 @@ def test_trap_lever_killzone_makes_hazard_object_use_available() -> None:
     assert any(isinstance(obj, TrapLever) for obj in lever_objects)
     assert any(name.startswith("Pull Lever") for name in available_action_display_names(lever_guard))
     assert spike_tile is not None
-    assert "Spike Growth" in spike_tile.active_conditions or "Spike Trap" in spike_tile.active_conditions
+    assert arena.environment.spike_condition_uuid in spike_tile.get_conditions()
 
 
 def test_trap_lever_killzone_deactivates_handler_markers_and_hazard_routing() -> None:
@@ -611,17 +621,14 @@ def test_trap_lever_killzone_deactivates_handler_markers_and_hazard_routing() ->
     assert event.phase is EventPhase.COMPLETION
     assert lever.charges == 0
     assert arena.environment is not None
+    assert not get_map().has_spatial_condition(
+        arena.environment.spike_condition_uuid,
+    )
     for position in SPIKE_ZONE_POSITIONS:
         tile = get_map().get_tile(*position)
         assert tile is not None
-        assert "Spike Trap" not in tile.active_conditions
+        assert arena.environment.spike_condition_uuid not in tile.get_conditions()
         assert tile.is_hazardous_for(lever_guard.uuid) is False
-        handlers = EventQueue.get_spatial_handlers_at(
-            position,
-            EventType.SPATIAL_ENTITY_ENTERED,
-            EventPhase.EFFECT,
-        )
-        assert all(handler.uuid != arena.environment.spike_handler_uuid for handler in handlers)
 
 
 def test_condition_lock_sanctum_uses_disabling_and_support_spell_surface() -> None:

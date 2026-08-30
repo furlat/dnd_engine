@@ -366,8 +366,7 @@ class _AcidFlaskSpell(SpellAction):
             )
 
         save_text = " (saved for half)" if success else ""
-        return effect_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+        return effect_event.with_updates(
             damages=[acid_damage],
             damage_rolls=[damage_roll],
             total_damage=final_damage,

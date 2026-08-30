@@ -35,6 +35,7 @@ from dnd.core.creature_types import DamageType
 from dnd.core.gridmap import get_map
 from dnd.core.life_types import LifeState
 from dnd.core.modifiers import ResistanceStatus
+from dnd.types.world import MovementMode
 from dnd.entity import Entity
 
 
@@ -398,7 +399,8 @@ def project_known_objects(
     object_observers: dict[UUID, set[str]] = {}
     object_positions: dict[UUID, tuple[int, int]] = {}
     for observer in observers:
-        for object_uuid, position in observer.senses.objects.items():
+        for object_uuid, contact in observer.senses.objects.items():
+            position = contact.position
             object_observers.setdefault(object_uuid, set()).add(str(observer.uuid))
             object_positions[object_uuid] = position
     facts = {
@@ -533,21 +535,29 @@ def project_visible_tile_fact(
         if (grid.has_any_hazards() if hazards_present is None else hazards_present)
         else False
     )
+    directional = (
+        grid.get_subjective_directional_block_map(
+            position,
+            UUID(first_observer),
+        )
+        if first_observer
+        else grid.get_directional_block_map(position)
+    )
     return ObservationTileFact(
         key=subjective_tile_key(position),
         position=position,
         knowledge_state=KnowledgeState.VISIBLE,
         observer_uuids=observer_ids,
         name=tile.name,
-        walkable=tile.walkable,
+        walkable=tile.get_movement_cost(MovementMode.WALKING) > 0,
         walking_cost=int(tile.walking_cost.normalized_score),
         is_hazardous=is_hazardous,
         conditions=list(tile.active_conditions),
         light_level=tile.resolved_light_level.value,
-        directional_blocks_movement=directional_blocks(tile, "movement"),
-        directional_blocks_vision=directional_blocks(tile, "vision"),
-        directional_blocks_light=directional_blocks(tile, "light"),
-        directional_blocks_propagation=directional_blocks(tile, "propagation"),
+        directional_blocks_movement=directional["movement"],
+        directional_blocks_vision=directional["optical"],
+        directional_blocks_light=directional["optical"],
+        directional_blocks_propagation=directional["propagation"],
         adjacent_domain=adjacent_domain_knowledge(position),
     )
 
@@ -581,14 +591,6 @@ def adjacent_domain_knowledge(
     return dict(result)
 
 
-def directional_blocks(tile: Any, channel: str) -> dict[str, bool]:
-    """Return visible directional blockers for one tile channel."""
-    return {
-        direction: not tile.allows_direction(direction, channel)
-        for direction in ("north", "south", "east", "west")
-    }
-
-
 def project_object_state(obj: BaseBlock) -> dict[str, Any]:
     """Return stable public object state fields when present."""
     state: dict[str, Any] = {}
@@ -597,8 +599,8 @@ def project_object_state(obj: BaseBlock) -> dict[str, Any]:
         "blocked_directions",
         "blocked_channels",
         "blocks_movement",
-        "blocks_vision",
-        "blocks_vision_field",
+        "blocks_optics_field",
+        "blocks_propagation_field",
         "is_pickable",
         "is_usable",
         "charges",
