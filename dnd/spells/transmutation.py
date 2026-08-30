@@ -41,6 +41,7 @@ from dnd.core.content.dependencies import (
     ContentDependencyRelation,
 )
 from dnd.core.content.registration import get_content_declaration
+from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.action_types import (
     ActionEconomyCostType,
     HasteActionPolicy,
@@ -65,18 +66,34 @@ from dnd.entity import Entity
 from dnd.conditions import Dashing, Restrained, Concentrating, ConcentrationActionMarker
 from dnd.creature_transforms import apply_incapacitated_transform
 from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator, entity_action_economy_cost_applier
-from dnd.tile_conditions import ZoneControlCondition, parse_dice_string
+from dnd.spatial.area_conditions import AreaCondition
+from dnd.types.spatial_effects import (
+    SpatialEffectLayer,
+    SpatialEffectOccupancyPolicy,
+    SpatialEffectTriggerKind,
+)
 from dnd.spells.content_metadata import srd_action_identity, srd_spell_identity
 from dnd.spells.spell_utils import fire_heal_roll_result
 from dnd.spells.spell_utils import validate_line_of_sight
 
 
-class SpikeGrowthZone(ZoneControlCondition):
+SPIKE_GROWTH_ZONE_CONTENT_REF = ContentRef(
+    pack_id="content.srd_5_1_cc",
+    definition_kind=ContentDefinitionKind.CONDITION,
+    content_id="spatial_effect.spell.spike_growth",
+    content_version=1,
+    definition_contract_hash=(
+        "a74aa0ee0fa241101b5c7d3b2551d638"
+        "6e4817a8ae5ad5e5cadbc4a15d5fdeb0"
+    ),
+)
+
+
+class SpikeGrowthZone(AreaCondition):
     """Manage the hidden damaging terrain created by Spike Growth.
 
-    The condition lives on the caster, owns the zone-control tile markers, and
-    registers position-indexed entry handlers. Entering creatures other than the
-    caster take the configured piercing damage.
+    The condition independently owns its footprint, difficult terrain, hidden
+    hazard identity, and position-indexed entry damage.
     """
     name: str = Field(default="Spike Growth Zone", description="Condition name.")
     description: str = Field(
@@ -87,25 +104,29 @@ class SpikeGrowthZone(ZoneControlCondition):
         default_factory=lambda: {ConditionTag.MAGICAL},
         description="Condition tags used by cleanup, suppression, and rules filters.",
     )
+    content_ref: ContentRef = Field(default=SPIKE_GROWTH_ZONE_CONTENT_REF)
+    position: Tuple[int, int]
+    layer: SpatialEffectLayer = Field(default=SpatialEffectLayer.GROUND_SURFACE)
+    occupancy_policy: SpatialEffectOccupancyPolicy = Field(
+        default=SpatialEffectOccupancyPolicy.EXCLUSIVE_TRANSFORMING,
+    )
+    trigger_kinds: frozenset[SpatialEffectTriggerKind] = Field(
+        default_factory=lambda: frozenset({SpatialEffectTriggerKind.ENTER}),
+    )
     zone_shape: str = Field(default="sphere", description="Zone shape key.")
     zone_radius_feet: int = Field(default=20, description="Zone radius in feet.")
     adds_difficult_terrain: bool = Field(default=True, description="Whether the zone marks terrain as difficult.")
-    marker_name: Optional[str] = Field(default="Spike Growth", description="Tile marker name.")
-    marker_hazard_filter: Optional[HazardFilter] = Field(
+    hazard_filter: Optional[HazardFilter] = Field(
         default=HazardFilter.NON_SOURCE,
-        description="Hazard visibility filter used by tile markers.",
+        description="Hazard visibility filter owned by this spatial condition.",
     )
     spell_dc: int = Field(default=10, description="Spell DC for perception to notice")
     damage_dice: str = Field(default="2d4", description="Damage dice applied on each entered tile.")
 
     def model_post_init(self, __context: Any) -> None:
-        """Synchronize the marker stealth DC with the caster's spell save DC."""
+        """Synchronize hazard concealment with the caster's spell save DC."""
         super().model_post_init(__context)
-        self.marker_stealth_dc = self.spell_dc
-
-    def _has_entry_effect(self) -> bool:
-        """Spike Growth damages entities when they enter."""
-        return True
+        self.condition_stealth_dc = self.spell_dc
 
     def _create_zone_entry_handler(self) -> EventHandler:
         """Create handler for entry damage (2d4 piercing per tile entered)."""
@@ -123,7 +144,14 @@ class SpikeGrowthZone(ZoneControlCondition):
             if entity.uuid == source_uuid:
                 return None
 
-            count, value = parse_dice_string(damage_dice)
+            count_text, separator, value_text = damage_dice.lower().partition("d")
+            if (
+                separator != "d"
+                or not count_text.isdigit()
+                or not value_text.isdigit()
+            ):
+                raise ValueError(f"Invalid damage dice: {damage_dice!r}")
+            count, value = int(count_text), int(value_text)
             caster = Entity.get(source_uuid)
             dmg_bonus = caster.get_spell_damage_bonus() if caster else ModifiableValue.create(
                 source_entity_uuid=source_uuid, base_value=0, value_name="Spell Damage"
@@ -161,8 +189,8 @@ class SpikeGrowthZone(ZoneControlCondition):
 class SpikeGrowth(SpellAction):
     """Create a concentration zone of difficult, damaging terrain.
 
-    The spell creates a caster-owned `SpikeGrowthZone`, links it to
-    concentration, and lets the zone condition handle terrain, markers, and
+    The spell creates an independent `SpikeGrowthZone`, links it to
+    concentration, and lets that one condition own terrain, concealment, and
     spatial-entry damage.
     """
     name: str = Field(default="Spike Growth", description="Spell name.")
@@ -230,18 +258,24 @@ class SpikeGrowth(SpellAction):
 
         zone = SpikeGrowthZone(
             source_entity_uuid=caster.uuid,
-            target_entity_uuid=caster.uuid,
-            zone_center=target_pos,
+            position=target_pos,
             spell_dc=dc,
             effect_origin=execution_event.to_effect_origin(),
         )
-        caster.add_condition(zone, parent_event=effect_event)
+        zone_completion = zone.activate(parent_event=effect_event)
+        if (
+            zone_completion is None
+            or zone_completion.canceled
+            or not zone.applied
+        ):
+            return effect_event.with_updates(
+                status_message="Spike Growth could not establish its area",
+            )
 
         concentration = self.ensure_concentration(effect_event)
-        concentration.add_linked_condition(caster.uuid, zone.uuid)
+        concentration.add_linked_condition(zone.uuid, zone.uuid)
 
-        return effect_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+        return effect_event.with_updates(
             status_message=f"Spike Growth active: 20ft radius at {target_pos}, difficult terrain + 2d4 damage per 5ft"
         )
 
@@ -352,15 +386,19 @@ class SlowedEffect(BaseCondition):
             return {"resulting_ac": target.ac_bonus().normalized_score}
         return {}
 
-    def cleanup_own_state(self, expire: bool = False, parent_event: Optional[Event] = None) -> bool:
-        """Remove the runtime action/bonus lockout before standard cleanup."""
+    def _release_owned_runtime_state(
+        self,
+        *,
+        parent_event: Optional[Event] = None,
+    ) -> None:
+        """Release the runtime action/bonus lockout owned by Slow."""
+        del parent_event
         if self._lockout_modifier_uuid is not None and self._lockout_target_mv_uuid is not None:
             mv = ModifiableValue.get(self._lockout_target_mv_uuid)
             if mv:
                 mv.self_static.remove_max_constraint(self._lockout_modifier_uuid)
             self._lockout_modifier_uuid = None
             self._lockout_target_mv_uuid = None
-        return super().cleanup_own_state(expire=expire, parent_event=parent_event)
 
     def _create_action_bonus_lockout_handler(self) -> EventHandler:
         """Lock bonus actions after an action is used, and actions after a bonus action."""
@@ -660,8 +698,7 @@ class Slow(SpellAction):
         )
 
         if success:
-            return effect_event.phase_to(
-                new_phase=EventPhase.COMPLETION,
+            return effect_event.with_updates(
                 status_message=f"{target.name} resists Slow"
             )
 
@@ -678,8 +715,7 @@ class Slow(SpellAction):
         if slowed.applied:
             concentration.add_linked_condition(target.uuid, slowed.uuid)
 
-        return effect_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+        return effect_event.with_updates(
             status_message=f"{target.name} is Slowed"
         )
 
@@ -877,7 +913,8 @@ class Haste(SpellAction):
         if not target:
             return declaration_event.cancel(status_message="No target")
 
-        if target.uuid not in caster.senses.entities:
+        contact = caster.senses.entities.get(target.uuid)
+        if contact is None or not contact.visual:
             return declaration_event.cancel(status_message=f"{target.name} not visible")
 
         distance = caster.senses.get_feet_distance(target.senses.position)
@@ -915,8 +952,7 @@ class Haste(SpellAction):
         if haste_effect.applied:
             concentration.add_linked_condition(target.uuid, haste_effect.uuid)
 
-        return effect_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+        return effect_event.with_updates(
             status_message=f"{target.name} is Hasted"
         )
 
@@ -1012,7 +1048,8 @@ class DarkvisionSpell(SpellAction):
         if not caster or not target:
             return declaration_event.cancel(status_message="Caster or target not found")
 
-        if target.uuid not in caster.senses.entities and target.uuid != caster.uuid:
+        contact = caster.senses.entities.get(target.uuid)
+        if target.uuid != caster.uuid and (contact is None or not contact.visual):
             return declaration_event.cancel(status_message="Target not visible")
 
         distance = caster.senses.get_feet_distance(target.position)
@@ -1045,8 +1082,7 @@ class DarkvisionSpell(SpellAction):
         if darkvision_effect.applied:
             concentration.add_linked_condition(target.uuid, darkvision_effect.uuid)
 
-        return effect_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+        return effect_event.with_updates(
             status_message=f"{target.name} gains darkvision (60ft)"
         )
 
@@ -1132,8 +1168,7 @@ class Disintegrate(SpellAction):
         )
 
         if success:
-            return effect_event.phase_to(
-                new_phase=EventPhase.COMPLETION,
+            return effect_event.with_updates(
                 status_message=f"{target.name} dodges the ray"
             )
 
@@ -1157,8 +1192,7 @@ class Disintegrate(SpellAction):
             parent_event=effect_event.uuid
         )
 
-        return effect_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+        return effect_event.with_updates(
             damages=[force_damage],
             damage_rolls=[damage_roll],
             total_damage=final_damage,
@@ -1220,7 +1254,8 @@ class JumpSpell(SpellAction):
         if not caster or not target:
             return declaration_event.cancel(status_message="Caster or target not found")
 
-        if target.uuid not in caster.senses.entities and target.uuid != caster.uuid:
+        contact = caster.senses.entities.get(target.uuid)
+        if target.uuid != caster.uuid and (contact is None or not contact.visual):
             return declaration_event.cancel(status_message="Target not visible")
 
         distance = caster.senses.get_feet_distance(target.position)
@@ -1253,8 +1288,7 @@ class JumpSpell(SpellAction):
         if jump_effect.applied:
             concentration.add_linked_condition(target.uuid, jump_effect.uuid)
 
-        return effect_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+        return effect_event.with_updates(
             status_message=f"{target.name}'s jump distance tripled"
         )
 
@@ -1298,12 +1332,12 @@ class BonusDash(BaseAction):
         entity.add_condition(dashing, parent_event=execution_event)
 
         return execution_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+            new_phase=EventPhase.EFFECT,
             status_message=f"{entity.name} dashes as a bonus action"
         )
 
-    def _apply_costs(self, completion_event: ActionEvent) -> Optional[ActionEvent]:
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
+    def _apply_costs(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
+        return entity_action_economy_cost_applier(execution_event, self.source_entity_uuid)
 
 
 class ExpeditiousRetreatEffect(BaseCondition):
@@ -1370,8 +1404,7 @@ class ExpeditiousRetreat(SpellAction):
         concentration = self.ensure_concentration(effect_event)
         concentration.add_linked_condition(caster.uuid, retreat_effect.uuid)
 
-        return effect_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+        return effect_event.with_updates(
             status_message=f"{caster.name} can now Dash as a bonus action"
         )
 
@@ -1485,8 +1518,7 @@ class EnhanceAbility(SpellAction):
         if effect.applied:
             concentration.add_linked_condition(target.uuid, effect.uuid)
 
-        return effect_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+        return effect_event.with_updates(
             status_message=f"Enhanced {self.enhance_ability_type.title()} on {target.name}"
         )
 
@@ -1627,7 +1659,7 @@ class EnlargeReduce(SpellAction):
             _, _, success = target.saving_throw(save_request)
             if success:
                 return execution_event.phase_to(
-                    new_phase=EventPhase.COMPLETION,
+                    new_phase=EventPhase.EFFECT,
                     status_message=f"{target.name} resists {self.name} (CON save)"
                 )
 
@@ -1648,8 +1680,7 @@ class EnlargeReduce(SpellAction):
         if effect.applied:
             concentration.add_linked_condition(target.uuid, effect.uuid)
 
-        return effect_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+        return effect_event.with_updates(
             status_message=f"{target.name} {'enlarged' if self.enlarge_mode == 'enlarge' else 'reduced'} to {target.size.value}"
         )
 
@@ -1712,8 +1743,7 @@ class TelekinesisRestrain(BaseAction):
         caster.unregister_action("Telekinesis: Restrain")
         caster.unregister_action("Telekinesis: Move")
 
-        return effect_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+        return effect_event.with_updates(
             status_message=f"{grabbed.name} restrained by Telekinesis"
         )
 
@@ -1832,8 +1862,7 @@ class TelekinesisMove(BaseAction):
         caster.unregister_action("Telekinesis: Restrain")
         caster.unregister_action("Telekinesis: Move")
 
-        return effect_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+        return effect_event.with_updates(
             status_message=f"{grabbed.name} moved to {target_pos} by Telekinesis"
         )
 
@@ -1886,7 +1915,8 @@ class TelekinesisGrab(BaseAction):
         if distance > 60:
             return declaration_event.cancel(status_message=f"Target out of range ({distance}ft > 60ft)")
 
-        if target.uuid not in source.senses.entities:
+        contact = source.senses.entities.get(target.uuid)
+        if contact is None or not contact.visual:
             return declaration_event.cancel(status_message="Target not in line of sight")
 
         return declaration_event.phase_to(
@@ -1914,8 +1944,7 @@ class TelekinesisGrab(BaseAction):
         )
 
         if success:
-            return effect_event.phase_to(
-                new_phase=EventPhase.COMPLETION,
+            return effect_event.with_updates(
                 status_message=f"{target.name} resists Telekinesis (STR save)"
             )
 
@@ -1932,13 +1961,12 @@ class TelekinesisGrab(BaseAction):
         caster.register_action(restrain)
         caster.register_action(move)
 
-        return effect_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+        return effect_event.with_updates(
             status_message=f"{target.name} grabbed by Telekinesis — choose Restrain or Move"
         )
 
-    def _apply_costs(self, completion_event: ActionEvent) -> Optional[ActionEvent]:
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
+    def _apply_costs(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
+        return entity_action_economy_cost_applier(execution_event, self.source_entity_uuid)
 
 
 class Telekinesis(SpellAction):
@@ -2019,8 +2047,7 @@ class Telekinesis(SpellAction):
             )
             first_grab.apply()
 
-        return effect_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+        return effect_event.with_updates(
             status_message=f"{caster.name} channels Telekinesis"
         )
 
@@ -2112,7 +2139,8 @@ class Regenerate(SpellAction):
         if not caster or not target:
             return declaration_event.cancel(status_message="Caster or target not found")
 
-        if target.uuid not in caster.senses.entities and target.uuid != caster.uuid:
+        contact = caster.senses.entities.get(target.uuid)
+        if target.uuid != caster.uuid and (contact is None or not contact.visual):
             return declaration_event.cancel(status_message="Target not in line of sight")
 
         distance = caster.senses.get_feet_distance(target.position)
@@ -2161,8 +2189,7 @@ class Regenerate(SpellAction):
         )
         target.add_condition(regen, parent_event=effect_event)
 
-        return effect_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+        return effect_event.with_updates(
             total_damage=0,
             status_message=f"Regenerate heals {target.name} for {actual} HP + 1 HP/round"
         )

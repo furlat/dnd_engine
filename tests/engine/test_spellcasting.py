@@ -48,7 +48,7 @@ from tests.spell_test_exports import (
     MagicMissile,
     SPELL_CATALOG_METADATA_BY_NAME,
 )
-from tests.engine.support import get_hp, reset_combat_state, set_hp
+from tests.engine.support import create_test_entity, get_hp, reset_combat_state, set_hp
 from server.spell_catalog import build_spell_catalog_entry
 
 
@@ -88,7 +88,7 @@ def create_spellcaster(
         position=position,
         faction="casters",
     )
-    return Entity.create(source_entity_uuid=uuid4(), name=name, config=config)
+    return create_test_entity(name=name, config=config)
 
 
 def create_spell_target(
@@ -110,7 +110,7 @@ def create_spell_target(
         position=position,
         faction=faction,
     )
-    return Entity.create(source_entity_uuid=uuid4(), name=name, config=config)
+    return create_test_entity(name=name, config=config)
 
 
 class BookLinkedConcentrationSpell(SpellAction):
@@ -143,8 +143,7 @@ class BookLinkedConcentrationSpell(SpellAction):
         caster.add_condition(linked, parent_event=effect_event)
         concentration.add_linked_condition(caster.uuid, linked.uuid)
 
-        return effect_event.phase_to(
-            EventPhase.COMPLETION,
+        return effect_event.with_updates(
             status_message="Linked concentration example complete",
         )
 
@@ -168,8 +167,7 @@ class BookEmptyConcentrationSpell(SpellAction):
             status_message="Applying empty concentration example",
         )
         self.ensure_concentration(effect_event)
-        return effect_event.phase_to(
-            EventPhase.COMPLETION,
+        return effect_event.with_updates(
             status_message="Empty concentration example complete",
         )
 
@@ -206,8 +204,7 @@ class BookNamedConcentrationSpell(SpellAction):
         caster.add_condition(linked, parent_event=effect_event)
         concentration.add_linked_condition(caster.uuid, linked.uuid)
 
-        return effect_event.phase_to(
-            EventPhase.COMPLETION,
+        return effect_event.with_updates(
             status_message="Named concentration example complete",
         )
 
@@ -246,8 +243,7 @@ class BookMultiTargetConcentrationSpell(SpellAction):
         target.add_condition(linked, parent_event=effect_event)
         concentration.add_linked_condition(target.uuid, linked.uuid)
 
-        return effect_event.phase_to(
-            EventPhase.COMPLETION,
+        return effect_event.with_updates(
             status_message=f"Multi-target concentration applied to {target.name}",
         )
 

@@ -497,6 +497,31 @@ def create_goblin_archer(
     return entity
 
 
+def _add_caster_default_possessions(entity: Entity) -> None:
+    """Attach the generic caster's authored starting possessions."""
+    dagger = materialize_item_from_installed_runtime(
+        DAGGER_RECIPE,
+        entity.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+        expected_type=Weapon,
+    )
+    entity.equipment.equip(dagger, WeaponSlot.MELEE_MAIN)
+
+    potion = materialize_item_from_installed_runtime(
+        GREATER_INVISIBILITY_POTION_RECIPE,
+        entity.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+    )
+    entity.loot_item(potion)
+
+    haste_potion = materialize_item_from_installed_runtime(
+        HASTE_POTION_RECIPE,
+        entity.uuid,
+        origin=ItemRuntimeOrigin.STARTER,
+    )
+    entity.loot_item(haste_potion)
+
+
 def create_caster(
     source_id: Optional[UUID] = None,
     name: str = "Caster",
@@ -596,27 +621,7 @@ def create_caster(
     ):
         return entity
 
-    dagger = materialize_item_from_installed_runtime(
-        DAGGER_RECIPE,
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
-    )
-    entity.equipment.equip(dagger, WeaponSlot.MELEE_MAIN)
-
-    potion = materialize_item_from_installed_runtime(
-        GREATER_INVISIBILITY_POTION_RECIPE,
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-    )
-    entity.loot_item(potion)
-
-    haste_potion = materialize_item_from_installed_runtime(
-        HASTE_POTION_RECIPE,
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-    )
-    entity.loot_item(haste_potion)
+    _add_caster_default_possessions(entity)
 
     return entity
 
@@ -641,7 +646,7 @@ def create_goblin_caster(
         position=position,
         faction=faction,
         level=level,
-        possession_mode=possession_mode,
+        possession_mode=CreaturePossessionMode.STRUCTURE_AND_INTRINSICS_ONLY,
         content_ref=content_ref,
     )
     entity.description = (
@@ -656,6 +661,14 @@ def create_goblin_caster(
         SenseMode(sense_type=SensesType.DARKVISION, range_feet=60),
     )
     register_goblin_nimble_escape(entity)
+
+    if (
+        possession_mode
+        == CreaturePossessionMode.STRUCTURE_AND_INTRINSICS_ONLY
+    ):
+        return entity
+
+    _add_caster_default_possessions(entity)
     return entity
 
 

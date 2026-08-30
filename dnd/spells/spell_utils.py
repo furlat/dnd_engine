@@ -27,7 +27,8 @@ def validate_line_of_sight(declaration_event: SpellEvent, source_entity_uuid: UU
     if not isinstance(target_entity, Entity):
         return declaration_event.cancel(status_message=f"Target entity not found for {declaration_event.name}")
 
-    if target_entity.uuid not in source_entity.senses.entities.keys():
+    contact = source_entity.senses.entities.get(target_entity.uuid)
+    if contact is None or not contact.visual:
         return declaration_event.cancel(status_message=f"Target entity not in line of sight for {declaration_event.name}")
     return declaration_event.phase_to(
         new_phase=EventPhase.EXECUTION,

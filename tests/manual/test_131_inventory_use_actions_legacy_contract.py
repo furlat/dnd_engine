@@ -62,7 +62,9 @@ from dnd.items.spell_items import (
 from dnd.items.environment_interactables import ArcaneDevice
 from dnd.items.weapons import SHORTSWORD_RECIPE
 from dnd.spells.evocation import Fireball
+from dnd.spells.transmutation import SpikeGrowthZone
 from tests.engine.support import (
+    create_test_entity,
     force_attack_hit,
     force_spell_attack_hit,
     get_hp,
@@ -196,8 +198,8 @@ def create_caster(
 ) -> Entity:
     """Create a durable legal caster with explicit slots and item actions."""
     actor_uuid = uuid4()
-    actor = Entity.create(
-        source_entity_uuid=actor_uuid,
+    actor = create_test_entity(
+        source_id=actor_uuid,
         name=name,
         config=EntityConfig(
             ability_scores=AbilityScoresConfig(
@@ -243,8 +245,8 @@ def create_target(
 ) -> Entity:
     """Create a durable target with explicit save blocks."""
     target_uuid = uuid4()
-    target = Entity.create(
-        source_entity_uuid=target_uuid,
+    target = create_test_entity(
+        source_id=target_uuid,
         name=name,
         config=EntityConfig(
             ability_scores=AbilityScoresConfig(
@@ -1086,7 +1088,13 @@ def test_spike_growth_scroll_owns_entry_damage_and_terrain_cleanup() -> None:
 
     assert result is not None and not result.canceled
     assert "Concentrating" in caster.active_conditions
-    assert "Spike Growth Zone" in caster.active_conditions
+    zones = [
+        condition
+        for condition in grid.get_spatial_conditions()
+        if isinstance(condition, SpikeGrowthZone)
+    ]
+    assert len(zones) == 1
+    zone = zones[0]
     tile = grid.get_tile(*preview.position)
     assert tile is not None
     assert tile.walking_cost.normalized_score >= 2
@@ -1100,7 +1108,7 @@ def test_spike_growth_scroll_owns_entry_damage_and_terrain_cleanup() -> None:
     caster.remove_condition("Concentrating")
 
     assert "Concentrating" not in caster.active_conditions
-    assert "Spike Growth Zone" not in caster.active_conditions
+    assert zone not in grid.get_spatial_conditions()
     assert tile.walking_cost.normalized_score == 1
 
 

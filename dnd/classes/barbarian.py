@@ -266,12 +266,12 @@ class RecklessAttack(BaseAction):
         entity.add_condition(reckless, parent_event=execution_event)
 
         return execution_event.phase_to(
-            EventPhase.COMPLETION,
+            EventPhase.EFFECT,
             status_message=f"{entity.name} attacks recklessly!"
         )
 
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
-        return completion_event
+    def _apply_costs(self, execution_event: ActionEvent) -> ActionEvent:
+        return execution_event
 
 
 class RecklessAttackFeature(BaseCondition):
@@ -353,8 +353,10 @@ def danger_sense_check(
     if not entity.can_take_actions():
         return None
 
-    if target_entity_uuid and target_entity_uuid not in entity.senses.entities:
-        return None
+    if target_entity_uuid:
+        contact = entity.senses.entities.get(target_entity_uuid)
+        if contact is None or not contact.visual:
+            return None
 
     return AdvantageModifier(
         name="Danger Sense",
@@ -1168,8 +1170,10 @@ def intimidating_presence_end_check_processor(
     distance = creature.senses.get_feet_distance(barbarian.senses.position)
     should_end = distance > 60
 
-    if not should_end and barbarian_uuid not in creature.senses.entities:
-        should_end = True
+    if not should_end:
+        contact = creature.senses.entities.get(barbarian_uuid)
+        if contact is None or not contact.visual:
+            should_end = True
 
     if should_end:
         creature.remove_condition("Frightened", parent_event=event)
@@ -1290,7 +1294,8 @@ class IntimidatingPresence(BaseAction):
         if distance > 30:
             return declaration_event.cancel(status_message="Target beyond 30ft")
 
-        if self.target_entity_uuid not in entity.senses.entities:
+        contact = entity.senses.entities.get(self.target_entity_uuid)
+        if contact is None or not contact.visual:
             return declaration_event.cancel(status_message="Target not visible")
 
         if self._is_target_immune(target):
@@ -1324,7 +1329,7 @@ class IntimidatingPresence(BaseAction):
             target.add_condition(immunity, parent_event=execution_event)
 
             return execution_event.phase_to(
-                EventPhase.COMPLETION,
+                EventPhase.EFFECT,
                 status_message=f"{target.name} resists Intimidating Presence (WIS save {dice_roll.total} vs DC {dc})"
             )
         else:
@@ -1345,12 +1350,12 @@ class IntimidatingPresence(BaseAction):
             frightened.event_handlers_uuids.append(end_handler.uuid)
 
             return execution_event.phase_to(
-                EventPhase.COMPLETION,
+                EventPhase.EFFECT,
                 status_message=f"{target.name} is frightened by {entity.name}! (WIS save {dice_roll.total} vs DC {dc})"
             )
 
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
+    def _apply_costs(self, execution_event: ActionEvent) -> ActionEvent:
+        return entity_action_economy_cost_applier(execution_event, self.source_entity_uuid)
 
 
 class ExtendIntimidatingPresence(BaseAction):
@@ -1432,7 +1437,8 @@ class ExtendIntimidatingPresence(BaseAction):
         if distance > 30:
             return declaration_event.cancel(status_message="Target beyond 30ft")
 
-        if self.target_entity_uuid not in entity.senses.entities:
+        contact = entity.senses.entities.get(self.target_entity_uuid)
+        if contact is None or not contact.visual:
             return declaration_event.cancel(status_message="Target not visible")
 
         if not self._is_frightened_by_me(target):
@@ -1452,12 +1458,12 @@ class ExtendIntimidatingPresence(BaseAction):
             frightened.duration.duration = 1
 
         return execution_event.phase_to(
-            EventPhase.COMPLETION,
+            EventPhase.EFFECT,
             status_message=f"{entity.name} extends Intimidating Presence on {target.name}"
         )
 
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
+    def _apply_costs(self, execution_event: ActionEvent) -> ActionEvent:
+        return entity_action_economy_cost_applier(execution_event, self.source_entity_uuid)
 
 
 class IntimidatingPresenceFeature(BaseCondition):

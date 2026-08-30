@@ -23,6 +23,7 @@ from dnd.core.condition_types import DurationType
 from dnd.core.gridmap import get_map
 from dnd.core.item_types import ItemRarity
 from dnd.core.creature_types import DamageType
+from dnd.core.events import Event
 from dnd.core.modifiers import NumericalModifier
 from dnd.entity import Entity, EntityConfig
 from tests.engine.support import get_hp, get_max_hp, reset_combat_state, set_hp
@@ -230,7 +231,8 @@ class LifecycleProbeItem(BaseItem):
             ("drop", entity_uuid, self.stored_in_uuid, self.tile_uuid, self.get_position())
         )
 
-    def _on_destroy(self) -> None:
+    def _on_destroy(self, parent_event: Event | None) -> None:
+        _ = parent_event
         self.hook_calls.append(
             ("destroy", self.owner_uuid, self.stored_in_uuid, self.tile_uuid, self.get_position())
         )
@@ -239,7 +241,8 @@ class LifecycleProbeItem(BaseItem):
 class TileSpillProbeItem(BaseItem):
     """Destruction extension that marks its tile and orthogonal neighbours."""
 
-    def _on_destroy(self) -> None:
+    def _on_destroy(self, parent_event: Event | None) -> None:
+        _ = parent_event
         position = self.get_position()
         if position is None:
             return

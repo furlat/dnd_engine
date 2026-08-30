@@ -195,21 +195,20 @@ class DeployFieldFocus(BaseAction):
             EventPhase.EFFECT,
             status_message=f"{actor.name} deploys Field Focus",
         )
-        return effect_event.phase_to(
-            EventPhase.COMPLETION,
+        return effect_event.with_updates(
             status_message=f"{actor.name} is field-focused",
         )
 
-    def _apply_costs(self, completion_event: ActionEvent) -> Optional[ActionEvent]:
+    def _apply_costs(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
         """Spend the action's bonus-action cost.
 
         Args:
-            completion_event: Completed action event.
+            execution_event: Validated execution proposal.
 
         Returns:
             Event returned by the action economy cost applier.
         """
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
+        return entity_action_economy_cost_applier(execution_event, self.source_entity_uuid)
 class FieldKitParameters(BaseModel):
     """Durable authored parameters for a finite-use Field Kit."""
 

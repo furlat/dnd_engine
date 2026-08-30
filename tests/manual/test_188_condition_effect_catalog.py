@@ -303,11 +303,8 @@ _AUDITED_NON_DECLARATION_MUTATION_OWNERS = frozenset({
     "dnd.spells.abjuration:AntimagicSuppression",
     "dnd.spells.conjuration:<module>",
     "dnd.spells.conjuration:GuardianOfFaithObject",
-    "dnd.spells.conjuration:GuardianWarded",
-    "dnd.spells.conjuration:SpiritGuardiansTriggered",
     "dnd.spells.divination:<module>",
     "dnd.spells.enchantment:CommandNextTurnEffect",
-    "dnd.tile_conditions:ZoneControlCondition",
 })
 
 

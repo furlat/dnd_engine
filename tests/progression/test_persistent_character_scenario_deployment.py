@@ -22,6 +22,8 @@ from dnd.core.content.encounters import (
 )
 from dnd.core.progression import MulticlassSlotRoundingPolicy
 from dnd.entity import Entity
+from dnd.game import Game
+from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.encounter_assembler import prepare_encounter_recipe
 from server import event_server
 from server.api_models import (
@@ -113,8 +115,10 @@ def test_composed_scenario_materializes_the_pinned_character_not_the_catalog_her
         character_deployments={character_id: deployment},
     )
     assert compatibility.admitted
+    reset_engine_runtime()
     assembled = prepare_encounter_recipe(
         recipe,
+        game=Game(),
         character_deployments={character_id: deployment},
     )
 

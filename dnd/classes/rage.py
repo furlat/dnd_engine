@@ -473,13 +473,13 @@ class Rage(BaseAction):
         entity.add_condition(raging, parent_event=execution_event)
 
         return execution_event.phase_to(
-            EventPhase.COMPLETION,
+            EventPhase.EFFECT,
             status_message=f"{entity.name} enters a rage!"
         )
 
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
+    def _apply_costs(self, execution_event: ActionEvent) -> ActionEvent:
         """Apply the costs (consume bonus action and rage resource)."""
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
+        return entity_action_economy_cost_applier(execution_event, self.source_entity_uuid)
 
 
 class EndRage(BaseAction):
@@ -556,13 +556,13 @@ class EndRage(BaseAction):
             entity.remove_condition("Raging", parent_event=execution_event)
 
         return execution_event.phase_to(
-            EventPhase.COMPLETION,
+            EventPhase.EFFECT,
             status_message=f"{entity.name}'s rage ends voluntarily"
         )
 
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
+    def _apply_costs(self, execution_event: ActionEvent) -> ActionEvent:
         """Apply the costs (consume bonus action)."""
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
+        return entity_action_economy_cost_applier(execution_event, self.source_entity_uuid)
 
 
 class RageFeature(BaseCondition):
@@ -801,7 +801,8 @@ class FrenziedStrike(BaseAction):
         if not target:
             return declaration_event.cancel(status_message="Target not found")
 
-        if self.target_entity_uuid not in entity.senses.entities:
+        contact = entity.senses.entities.get(self.target_entity_uuid)
+        if contact is None or not contact.visual:
             return declaration_event.cancel(status_message="Target not visible")
 
         attack_event = cast(AttackEvent, declaration_event)
@@ -819,9 +820,9 @@ class FrenziedStrike(BaseAction):
         attack_event = cast(AttackEvent, execution_event)
         return Attack.attack_consequences(attack_event, self.source_entity_uuid)
 
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
+    def _apply_costs(self, execution_event: ActionEvent) -> ActionEvent:
         """Apply bonus action cost."""
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
+        return entity_action_economy_cost_applier(execution_event, self.source_entity_uuid)
 
 
 class Frenzy(BaseAction):
@@ -931,12 +932,12 @@ class Frenzy(BaseAction):
         raging.sub_conditions.append(frenzied.uuid)
 
         return execution_event.phase_to(
-            EventPhase.COMPLETION,
+            EventPhase.EFFECT,
             status_message=f"{entity.name} enters a frenzy!"
         )
 
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
+    def _apply_costs(self, execution_event: ActionEvent) -> ActionEvent:
+        return entity_action_economy_cost_applier(execution_event, self.source_entity_uuid)
 
 
 class FrenzyFeature(BaseCondition):

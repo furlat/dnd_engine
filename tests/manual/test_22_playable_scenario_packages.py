@@ -3,6 +3,7 @@
 from uuid import uuid4
 
 from dnd.core.dice import fixed_dice_faces
+from dnd.core.events import EventQueue
 from dnd.core.life_types import LifeState
 from dnd.core.creature_types import DamageType
 from dnd.encounter import Encounter, EncounterState, TurnState
@@ -173,9 +174,17 @@ def test_human_action_execution_uses_indexed_discovery_and_captures_combat_log(c
     assert not event.canceled
     assert scenario.monster.get_hp() < hp_before
     assert scenario.encounter.combat_log
-    assert scenario.encounter.get_combat_log(since=0)[-1] is scenario.encounter.combat_log[-1]
+    combat_log_generation = EventQueue.generation_id()
+    assert scenario.encounter.get_combat_log(
+        requested_generation=combat_log_generation,
+        since=0,
+    )[-1] is scenario.encounter.combat_log[-1]
     assert scenario.encounter.combat_log[-1].source_uuid == str(scenario.hero.uuid)
     latest_log = scenario.encounter.combat_log[-1]
+    since_latest = scenario.encounter.get_combat_log(
+        requested_generation=combat_log_generation,
+        since=0,
+    )[-1] is latest_log
 
     readout_lines = [
         (
@@ -193,7 +202,7 @@ def test_human_action_execution_uses_indexed_discovery_and_captures_combat_log(c
         (
             "combat log: "
             f"source_matches={'yes' if latest_log.source_uuid == str(scenario.hero.uuid) else 'no'}, "
-            f"since_latest={'yes' if scenario.encounter.get_combat_log(since=0)[-1] is latest_log else 'no'}"
+            f"since_latest={'yes' if since_latest else 'no'}"
         ),
     ]
     expected_lines = [

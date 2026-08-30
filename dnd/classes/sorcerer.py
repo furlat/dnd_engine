@@ -14,6 +14,7 @@ from uuid import UUID
 from pydantic import Field
 
 from dnd.core.base_conditions import BaseCondition, Duration
+from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.condition_types import ConditionCategory, DurationType
 from dnd.core.base_actions import (
     BaseAction, ActionCategory, TargetType, Cost, CostType,
@@ -42,6 +43,13 @@ from dnd.actions_functional import apply_action_overrides, clear_action_override
 from dnd.blocks.action_economy import RechargeType
 from dnd.core.base_block import MovementMode
 from dnd.conditions import Charmed, Concentrating, Frightened
+from dnd.spatial.area_conditions import AreaCondition
+from dnd.types.spatial_effects import (
+    SpatialEffectAnchorKind,
+    SpatialEffectLayer,
+    SpatialEffectOccupancyPolicy,
+    SpatialEffectTriggerKind,
+)
 
 
 class DraconicResilience(BaseCondition):
@@ -257,16 +265,16 @@ class ElementalAffinityResistanceAction(BaseAction):
                 status_message="Elemental Affinity resistance failed",
             )
         return execution_event.phase_to(
-            EventPhase.COMPLETION,
+            EventPhase.EFFECT,
             status_message=(
                 f"Elemental Affinity grants {self.damage_type.value} "
                 "resistance for 1 hour"
             ),
         )
 
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
+    def _apply_costs(self, execution_event: ActionEvent) -> ActionEvent:
         return entity_action_economy_cost_applier(
-            completion_event,
+            execution_event,
             self.source_entity_uuid,
         )
 
@@ -391,13 +399,13 @@ class DragonWings(BaseAction):
             )
             status = "Dragon wings manifested"
         return execution_event.phase_to(
-            EventPhase.COMPLETION,
+            EventPhase.EFFECT,
             status_message=status,
         )
 
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
+    def _apply_costs(self, execution_event: ActionEvent) -> ActionEvent:
         return entity_action_economy_cost_applier(
-            completion_event,
+            execution_event,
             self.source_entity_uuid,
         )
 
@@ -444,7 +452,19 @@ class DraconicPresenceImmunity(BaseCondition):
         )
 
 
-class DraconicPresenceAura(BaseCondition):
+DRACONIC_PRESENCE_AURA_CONTENT_REF = ContentRef(
+    pack_id="content.srd_5_1_cc",
+    definition_kind=ContentDefinitionKind.CONDITION,
+    content_id="spatial_effect.class_feature.draconic_presence",
+    content_version=1,
+    definition_contract_hash=(
+        "a74aa0ee0fa241101b5c7d3b2551d638"
+        "6e4817a8ae5ad5e5cadbc4a15d5fdeb0"
+    ),
+)
+
+
+class DraconicPresenceAura(AreaCondition):
     """Concentration-owned 60-foot aura of awe or fear."""
 
     name: str = Field(
@@ -466,6 +486,21 @@ class DraconicPresenceAura(BaseCondition):
         default="awe",
         description="Whether the aura charms through awe or frightens.",
     )
+    content_ref: ContentRef = Field(default=DRACONIC_PRESENCE_AURA_CONTENT_REF)
+    position: Tuple[int, int]
+    anchor_kind: SpatialEffectAnchorKind = Field(
+        default=SpatialEffectAnchorKind.ENTITY,
+    )
+    anchor_uuid: UUID
+    layer: SpatialEffectLayer = Field(default=SpatialEffectLayer.FIELD)
+    occupancy_policy: SpatialEffectOccupancyPolicy = Field(
+        default=SpatialEffectOccupancyPolicy.OVERLAPPING,
+    )
+    trigger_kinds: frozenset[SpatialEffectTriggerKind] = Field(
+        default_factory=lambda: frozenset({SpatialEffectTriggerKind.TURN_START}),
+    )
+    zone_shape: str = Field(default="sphere")
+    zone_radius_feet: int = Field(default=60)
 
     @staticmethod
     def _immunity_name(source_entity_uuid: UUID) -> str:
@@ -488,11 +523,14 @@ class DraconicPresenceAura(BaseCondition):
             if event.source_entity_uuid is not None
             else None
         )
+        if caster is not None and target is not None and target.uuid == caster.uuid:
+            self.progress_spatial_duration(parent_event=event)
+            return None
         if (
             caster is None
             or target is None
             or not caster.is_enemy(target)
-            or caster.senses.get_feet_distance(target.position) > 60
+            or target.position not in self.affected_positions
             or self._immunity_name(caster.uuid)
             in target.active_conditions
         ):
@@ -540,6 +578,20 @@ class DraconicPresenceAura(BaseCondition):
             self.add_linked_condition(target.uuid, effect.uuid)
         return None
 
+    def _create_zone_turn_start_handler(self) -> EventHandler:
+        return EventHandler(
+            name=f"Draconic Presence ({self.mode})",
+            source_entity_uuid=self.source_entity_uuid,
+            trigger_conditions=[
+                Trigger(
+                    name="Turn starts in Draconic Presence",
+                    event_type=EventType.TURN_START,
+                    event_phase=EventPhase.EFFECT,
+                ),
+            ],
+            event_processor=self._on_hostile_turn_start,
+        )
+
     def _apply(self, declaration_event: Event) -> Tuple[
         List[Tuple[UUID, UUID]],
         List[UUID],
@@ -547,36 +599,12 @@ class DraconicPresenceAura(BaseCondition):
         List[UUID],
         Optional[Event],
     ]:
-        if self.target_entity_uuid is None:
-            return [], [], [], [], declaration_event.cancel(
-                status_message="Draconic Presence target is missing",
-            )
-        caster = Entity.get(self.target_entity_uuid)
+        caster = Entity.get(self.source_entity_uuid)
         if caster is None:
             return [], [], [], [], declaration_event.cancel(
                 status_message="Draconic Presence caster does not exist",
             )
-        handler = EventHandler(
-            name=f"Draconic Presence ({self.mode})",
-            source_entity_uuid=caster.uuid,
-            trigger_conditions=[
-                Trigger(
-                    name="Hostile turn starts in Draconic Presence",
-                    event_type=EventType.TURN_START,
-                    event_phase=EventPhase.EFFECT,
-                ),
-            ],
-            event_processor=self._on_hostile_turn_start,
-        )
-        caster.add_event_handler(handler)
-        return [], [handler.uuid], [], [], declaration_event.phase_to(
-            EventPhase.EFFECT,
-            update={"condition": self},
-            status_message=(
-                f"{caster.name} projects a Draconic Presence aura of "
-                f"{self.mode}"
-            ),
-        )
+        return super()._apply(declaration_event)
 
 
 class DraconicPresence(BaseAction):
@@ -651,32 +679,34 @@ class DraconicPresence(BaseAction):
 
         aura = DraconicPresenceAura(
             source_entity_uuid=caster.uuid,
-            target_entity_uuid=caster.uuid,
+            position=caster.position,
+            anchor_uuid=caster.uuid,
+            faction=caster.faction,
             mode=self.mode,
             duration=Duration(
                 duration=10,
                 duration_type=DurationType.ROUNDS,
                 source_entity_uuid=caster.uuid,
-                target_entity_uuid=caster.uuid,
             ),
+            effect_origin=execution_event.get_effect_origin(),
         )
-        caster.add_condition(aura, parent_event=execution_event)
-        if not aura.applied:
+        aura_result = aura.activate(parent_event=execution_event)
+        if aura_result is None or aura_result.canceled or not aura.applied:
             installed.cleanup_if_no_effects(parent_event=execution_event)
             return execution_event.cancel(
                 status_message="Draconic Presence aura failed",
             )
-        installed.add_linked_condition(caster.uuid, aura.uuid)
+        installed.add_linked_condition(aura.uuid, aura.uuid)
         return execution_event.phase_to(
-            EventPhase.COMPLETION,
+            EventPhase.EFFECT,
             status_message=(
                 f"Draconic Presence ({self.mode}) is active"
             ),
         )
 
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
+    def _apply_costs(self, execution_event: ActionEvent) -> ActionEvent:
         return entity_action_economy_cost_applier(
-            completion_event,
+            execution_event,
             self.source_entity_uuid,
         )
 
@@ -795,14 +825,18 @@ class MetamagicActive(BaseCondition):
             target.remove_condition(self.name, parent_event=event)
         return event
 
-    def cleanup_own_state(self, expire: bool = False, parent_event: Optional[Event] = None) -> bool:
-        """Clear alt fields from modified templates."""
+    def _release_owned_runtime_state(
+        self,
+        *,
+        parent_event: Optional[Event] = None,
+    ) -> None:
+        """Release the action-template overrides owned by this condition."""
+        del parent_event
         if self.target_entity_uuid:
             target = Entity.get(self.target_entity_uuid)
             if target:
                 clear_action_overrides(target, self._modified_uuids)
         self._modified_uuids = []
-        return super().cleanup_own_state(expire=expire, parent_event=parent_event)
 
 
 class QuickenedSpell(BaseAction):
@@ -849,12 +883,12 @@ class QuickenedSpell(BaseAction):
         ), parent_event=execution_event)
 
         return execution_event.phase_to(
-            EventPhase.COMPLETION,
+            EventPhase.EFFECT,
             status_message="Quickened Spell activated",
         )
 
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
+    def _apply_costs(self, execution_event: ActionEvent) -> ActionEvent:
+        return entity_action_economy_cost_applier(execution_event, self.source_entity_uuid)
 
 
 class TwinnedSpell(BaseAction):
@@ -901,12 +935,12 @@ class TwinnedSpell(BaseAction):
         ), parent_event=execution_event)
 
         return execution_event.phase_to(
-            EventPhase.COMPLETION,
+            EventPhase.EFFECT,
             status_message="Twinned Spell activated",
         )
 
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
+    def _apply_costs(self, execution_event: ActionEvent) -> ActionEvent:
+        return entity_action_economy_cost_applier(execution_event, self.source_entity_uuid)
 
 
 class DistantSpell(BaseAction):
@@ -953,12 +987,12 @@ class DistantSpell(BaseAction):
         ), parent_event=execution_event)
 
         return execution_event.phase_to(
-            EventPhase.COMPLETION,
+            EventPhase.EFFECT,
             status_message="Distant Spell activated",
         )
 
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
+    def _apply_costs(self, execution_event: ActionEvent) -> ActionEvent:
+        return entity_action_economy_cost_applier(execution_event, self.source_entity_uuid)
 
 METAMAGIC_ACTIONS: Dict[str, type] = {
     "quickened": QuickenedSpell,
@@ -1019,12 +1053,12 @@ class ConvertSlotToSP(BaseAction):
             resource.current = min(resource.current + self.slot_level, resource.maximum)
 
         return execution_event.phase_to(
-            EventPhase.COMPLETION,
+            EventPhase.EFFECT,
             status_message=f"Slot\u2192SP L{self.slot_level}: gained {self.slot_level} SP",
         )
 
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
+    def _apply_costs(self, execution_event: ActionEvent) -> ActionEvent:
+        return entity_action_economy_cost_applier(execution_event, self.source_entity_uuid)
 
 
 class ConvertSPToSlot(BaseAction):
@@ -1086,12 +1120,12 @@ class ConvertSPToSlot(BaseAction):
             slot_value.self_static.remove_value_modifier(cost_modifiers[-1].uuid)
 
         return execution_event.phase_to(
-            EventPhase.COMPLETION,
+            EventPhase.EFFECT,
             status_message=f"{SP_TO_SLOT_COST.get(self.slot_level, 2)}SP\u2192Slot L{self.slot_level}: created slot",
         )
 
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
+    def _apply_costs(self, execution_event: ActionEvent) -> ActionEvent:
+        return entity_action_economy_cost_applier(execution_event, self.source_entity_uuid)
 
 
 class SorceryPointsFeature(BaseCondition):

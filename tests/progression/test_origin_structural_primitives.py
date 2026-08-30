@@ -23,7 +23,7 @@ from dnd.core.modifiers import (
     ResistanceModifier,
     ResistanceStatus,
 )
-from dnd.core.senses import SenseMode, SensesType
+from dnd.types.senses import SenseMode, SensesType
 from dnd.entity import Entity
 from server.world_projection import project_entity_summary
 

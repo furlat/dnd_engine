@@ -7,6 +7,8 @@ from typing import ClassVar
 from dnd.controller import PassController
 from dnd.encounter import EncounterState
 from dnd.entity import Entity
+from dnd.game import Game
+from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.encounter_assembler import prepare_encounter_recipe
 from dnd.scenarios.encounter_catalog import (
     encounter_recipe,
@@ -24,8 +26,10 @@ class _RecordingController(PassController):
 
 def test_prepared_scenario_does_not_start_before_final_controllers_are_installed() -> None:
     _RecordingController.started_entities.clear()
+    reset_engine_runtime()
     assembled = prepare_encounter_recipe(
         encounter_recipe("encounter.standard_skeleton_doors"),
+        game=Game(),
     )
     encounter = assembled.encounter
 

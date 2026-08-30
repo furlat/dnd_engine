@@ -858,7 +858,6 @@ def _engine_runtime_attribute_specs(
         (DiceRoll, "_registry"),
         (Dice, "_registry"),
         (Entity, "_entity_registry"),
-        (Entity, "_entity_by_position"),
         (SpellProtectionRegistry, "_protections"),
         *(
             (EventQueue, attribute)

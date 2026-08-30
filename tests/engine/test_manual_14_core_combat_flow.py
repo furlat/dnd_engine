@@ -32,7 +32,7 @@ from dnd.core.creature_types import DamageType
 from dnd.core.values import BaseValue
 from dnd.entity import Entity, EntityConfig
 from dnd.items.weapons import SCIMITAR_RECIPE, SHORTBOW_RECIPE
-from tests.engine.support import reset_combat_state
+from tests.engine.support import create_test_entity, reset_combat_state
 
 
 def reset_combat_tutorial_state(width: int = 8, height: int = 8) -> None:
@@ -77,8 +77,8 @@ def create_combatant(
 ) -> Entity:
     """Create a combat-ready actor with a melee and ranged weapon."""
     actor_id = uuid4()
-    actor = Entity.create(
-        source_entity_uuid=actor_id,
+    actor = create_test_entity(
+        source_id=actor_id,
         name=name,
         config=EntityConfig(
             ability_scores=AbilityScoresConfig(

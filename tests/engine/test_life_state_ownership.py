@@ -100,7 +100,8 @@ def test_initial_stable_and_dead_states_are_reconciled_during_creation() -> None
     assert dead.action_economy.action_permission.normalized_score == 0
     assert dead.senses.visual_access.normalized_score == 0
     assert dead.blocks_walking() is False
-    assert dead.is_perceivable_by(stable.uuid) is False
+    stable.update_entity_senses()
+    assert dead.uuid not in stable.senses.entities
 
 
 def test_dead_rejects_ordinary_healing_and_revive_restores_normal_hp_only() -> None:

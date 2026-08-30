@@ -20,6 +20,7 @@ from dnd.core.content.materialization import (
     CreaturePossessionMode,
 )
 from dnd.core.gridmap import get_map
+from dnd.game import Game
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import BATTLEFIELDS, build_battlefield
 from dnd.scenarios.encounter_assembler import prepare_encounter_recipe
@@ -109,7 +110,8 @@ def test_every_reusable_slot_is_walkable_on_its_battlefield() -> None:
 
 def test_every_authored_encounter_prepares_through_canonical_assembler() -> None:
     for recipe in AUTHORED_ENCOUNTER_RECIPES:
-        assembled = prepare_encounter_recipe(recipe)
+        reset_engine_runtime()
+        assembled = prepare_encounter_recipe(recipe, game=Game())
         addresses = {
             address
             for address in assembled.entities_by_member_address

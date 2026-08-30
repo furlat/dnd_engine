@@ -11,7 +11,7 @@ from dnd.core.content.durable_characters import (
 )
 from dnd.core.creature_types import DamageType, Size
 from dnd.core.saving_throw_types import SavingThrowEffectTag
-from dnd.core.senses import SenseMode
+from dnd.types.senses import SenseMode
 
 
 class OriginCapability(str, Enum):

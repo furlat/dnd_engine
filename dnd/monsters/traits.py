@@ -27,8 +27,8 @@ from dnd.core.base_actions import (
     TargetType,
     spell_slot_cost_type,
 )
-from dnd.core.base_conditions import BaseCondition
-from dnd.core.content.identities import ContentRef
+from dnd.core.base_conditions import BaseCondition, Duration
+from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.core.dice import AttackOutcome, Dice, RollType
 from dnd.core.events import (
@@ -37,6 +37,7 @@ from dnd.core.events import (
     Event,
     EventHandler,
     EventPhase,
+    EventQueue,
     EventType,
     Range,
     RangeType,
@@ -44,6 +45,7 @@ from dnd.core.events import (
     Trigger,
 )
 from dnd.core.equipment_types import WeaponSlot
+from dnd.core.gridmap import get_map
 from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import (
     AdvantageModifier,
@@ -55,6 +57,12 @@ from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
 from dnd.classes.barbarian import RecklessAttack
 from dnd.core.condition_types import ConditionCategory, DurationType
+from dnd.spatial.area_conditions import AreaCondition
+from dnd.types.spatial_effects import (
+    SpatialEffectAnchorKind,
+    SpatialEffectLayer,
+    SpatialEffectOccupancyPolicy,
+)
 
 
 DamageDieValue = Literal[4, 6, 8, 10, 12, 20]
@@ -299,15 +307,8 @@ def pack_tactics_advantage(source_entity_uuid: UUID, target_entity_uuid: Optiona
     target = Entity.get(target_entity_uuid)
     if not source or not target:
         return None
-    for candidate in Entity.get_all_entities():
-        if candidate.uuid in {source.uuid, target.uuid}:
-            continue
-        if not source.is_ally(candidate):
-            continue
-        if not candidate.can_take_actions():
-            continue
-        if candidate.senses.get_feet_distance(target.position) <= 5:
-            return AdvantageModifier(name="Pack Tactics", value=AdvantageStatus.ADVANTAGE, source_entity_uuid=source.uuid, target_entity_uuid=target.uuid)
+    if _has_adjacent_ally(source, target):
+        return AdvantageModifier(name="Pack Tactics", value=AdvantageStatus.ADVANTAGE, source_entity_uuid=source.uuid, target_entity_uuid=target.uuid)
     return None
 
 
@@ -498,7 +499,8 @@ class AggressiveMoveAction(Move):
             return declaration_event.cancel(status_message="Aggressive requires actor and destination")
         enemies = [
             entity
-            for entity_uuid in actor.senses.entities
+            for entity_uuid, contact in actor.senses.entities.items()
+            if contact.visual
             if (entity := Entity.get(entity_uuid)) is not None and actor.is_enemy(entity)
         ]
         if not enemies:
@@ -572,10 +574,10 @@ class MultiattackAction(BaseAction):
                 )
                 if attack.pre_validate():
                     attack.apply(parent_event=effect_event)
-        return effect_event.phase_to(EventPhase.COMPLETION, status_message=f"{self.name} completed")
+        return effect_event.with_updates(status_message=f"{self.name} completed")
 
-    def _apply_costs(self, completion_event: ActionEvent) -> Optional[ActionEvent]:
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
+    def _apply_costs(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
+        return entity_action_economy_cost_applier(execution_event, self.source_entity_uuid)
 
 
 class NaturalAttack(Attack):
@@ -1204,10 +1206,10 @@ class DivineEminenceAction(BaseAction):
         slot = int(slot_cost.cost_type.rsplit("_", maxsplit=1)[-1])
         effect_event = execution_event.phase_to(EventPhase.EFFECT, status_message=f"{actor.name} invokes Divine Eminence")
         actor.add_condition(DivineEminenceActive(source_entity_uuid=actor.uuid, target_entity_uuid=actor.uuid, slot_level=slot), parent_event=effect_event)
-        return effect_event.phase_to(EventPhase.COMPLETION, status_message="Divine Eminence active")
+        return effect_event.with_updates(status_message="Divine Eminence active")
 
-    def _apply_costs(self, completion_event: ActionEvent) -> Optional[ActionEvent]:
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
+    def _apply_costs(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
+        return entity_action_economy_cost_applier(execution_event, self.source_entity_uuid)
 
 
 class DivineEminenceActive(BonusDamageFeature):
@@ -1267,27 +1269,68 @@ class LeadershipAction(BaseAction):
         if actor is None:
             return execution_event.cancel(status_message="Actor not found")
         effect_event = execution_event.phase_to(EventPhase.EFFECT, status_message=f"{actor.name} uses Leadership")
-        actor.add_condition(LeadershipAura(source_entity_uuid=actor.uuid, target_entity_uuid=actor.uuid), parent_event=effect_event)
+        aura = LeadershipAura(
+            source_entity_uuid=actor.uuid,
+            position=actor.position,
+            anchor_uuid=actor.uuid,
+            faction=actor.faction,
+            duration=Duration(
+                duration=10,
+                duration_type=DurationType.ROUNDS,
+                source_entity_uuid=actor.uuid,
+            ),
+            effect_origin=effect_event.get_effect_origin(),
+        )
+        aura_result = aura.activate(parent_event=effect_event)
+        if aura_result is None or aura_result.canceled or not aura.applied:
+            return execution_event.cancel(
+                status_message="Leadership aura could not be installed",
+            )
         actor.add_condition(SimpleMarkerCondition(name="Leadership Used", source_entity_uuid=actor.uuid, target_entity_uuid=actor.uuid), parent_event=effect_event)
-        return effect_event.phase_to(EventPhase.COMPLETION, status_message="Leadership active")
+        return effect_event.with_updates(status_message="Leadership active")
 
-    def _apply_costs(self, completion_event: ActionEvent) -> Optional[ActionEvent]:
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
+    def _apply_costs(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
+        return entity_action_economy_cost_applier(execution_event, self.source_entity_uuid)
 
 
-class LeadershipAura(BaseCondition):
-    """Aura handler that adds 1d4 to nearby allies' attacks and saves."""
+LEADERSHIP_AURA_CONTENT_REF = ContentRef(
+    pack_id="content.srd_5_1_cc",
+    definition_kind=ContentDefinitionKind.CONDITION,
+    content_id="spatial_effect.trait.leadership",
+    content_version=1,
+    definition_contract_hash=(
+        "a74aa0ee0fa241101b5c7d3b2551d638"
+        "6e4817a8ae5ad5e5cadbc4a15d5fdeb0"
+    ),
+)
+
+
+class LeadershipAura(AreaCondition):
+    """Entity-anchored Leadership aura owning its roll and lifetime handlers."""
 
     name: str = Field(default="Leadership Aura", description="Condition name.")
     description: str = Field(default="Nearby allies add 1d4 to attacks and saves.", description="Rules summary.")
+    content_ref: ContentRef = Field(default=LEADERSHIP_AURA_CONTENT_REF)
+    position: Tuple[int, int]
+    anchor_kind: SpatialEffectAnchorKind = Field(
+        default=SpatialEffectAnchorKind.ENTITY,
+    )
+    anchor_uuid: UUID
+    layer: SpatialEffectLayer = Field(default=SpatialEffectLayer.FIELD)
+    occupancy_policy: SpatialEffectOccupancyPolicy = Field(
+        default=SpatialEffectOccupancyPolicy.OVERLAPPING,
+    )
+    zone_shape: str = Field(default="sphere")
+    zone_radius_feet: int = Field(default=30)
 
-    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
-        leader = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+    def _apply(self, execution_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Event]:
+        leader = Entity.get(self.source_entity_uuid)
         if not leader:
-            return [], [], [], [], declaration_event.cancel(status_message="Leadership owner not found")
-        self.duration.duration_type = DurationType.ROUNDS
-        self.duration.duration = 10
-        handler = EventHandler(
+            return [], [], [], [], execution_event.cancel(status_message="Leadership owner not found")
+        modifiers, handlers, children, spatial_handlers, effect = super()._apply(
+            execution_event,
+        )
+        roll_handler = EventHandler(
             name="Leadership",
             source_entity_uuid=leader.uuid,
             trigger_conditions=[
@@ -1296,9 +1339,33 @@ class LeadershipAura(BaseCondition):
             ],
             event_processor=self._processor,
         )
-        leader.add_event_handler(handler)
-        effect_event = declaration_event.phase_to(EventPhase.EFFECT, status_message=f"{leader.name} begins Leadership")
-        return [], [handler.uuid], [], [], effect_event
+        aura_uuid = self.uuid
+
+        def progress_duration(
+            event: Event,
+            _source_entity_uuid: UUID,
+        ) -> Optional[Event]:
+            aura = BaseCondition.get(aura_uuid)
+            if isinstance(aura, LeadershipAura):
+                aura.progress_spatial_duration(parent_event=event)
+            return None
+
+        duration_handler = EventHandler(
+            name="Leadership Duration",
+            source_entity_uuid=leader.uuid,
+            trigger_conditions=[
+                Trigger(
+                    event_type=EventType.TURN_START,
+                    event_phase=EventPhase.EFFECT,
+                    event_source_entity_uuid=leader.uuid,
+                ),
+            ],
+            event_processor=progress_duration,
+        )
+        EventQueue.add_event_handler(roll_handler)
+        EventQueue.add_event_handler(duration_handler)
+        handlers.extend((roll_handler.uuid, duration_handler.uuid))
+        return modifiers, handlers, children, spatial_handlers, effect
 
     def _processor(self, event: Event, source_entity_uuid: UUID) -> Optional[Event]:
         if not isinstance(event, D20RollResultEvent):
@@ -1307,7 +1374,7 @@ class LeadershipAura(BaseCondition):
         roller = Entity.get(event.source_entity_uuid)
         if leader is None or roller is None or leader.uuid == roller.uuid or not leader.is_ally(roller):
             return None
-        if leader.senses.get_feet_distance(roller.position) > 30:
+        if roller.position not in self.affected_positions:
             return None
         roll = event.get_effective_roll()
         d4 = Dice(count=1, value=4, bonus=ModifiableValue.create(source_entity_uuid=leader.uuid, base_value=0, value_name="Leadership"), roll_type=roll.roll_type).roll
@@ -1400,15 +1467,23 @@ class RampageAvailable(BaseCondition):
 
 def _has_adjacent_ally(source: Entity, target: Entity) -> bool:
     """Return whether source has an active ally adjacent to target."""
-    for candidate in Entity.get_all_entities():
-        if candidate.uuid in {source.uuid, target.uuid}:
-            continue
-        if not source.is_ally(candidate):
-            continue
-        if not candidate.can_take_actions():
-            continue
-        if candidate.senses.get_feet_distance(target.position) <= 5:
-            return True
+    grid = get_map()
+    tx, ty = target.position
+    for dx in (-1, 0, 1):
+        for dy in (-1, 0, 1):
+            for candidate_uuid in sorted(
+                grid.get_entities_at((tx + dx, ty + dy)),
+                key=str,
+            ):
+                if candidate_uuid in {source.uuid, target.uuid}:
+                    continue
+                candidate = Entity.get(candidate_uuid)
+                if candidate is None or not source.is_ally(candidate):
+                    continue
+                if not candidate.can_take_actions():
+                    continue
+                if candidate.senses.get_feet_distance(target.position) <= 5:
+                    return True
     return False
 
 
@@ -1425,7 +1500,8 @@ def _has_sneak_attack_condition(source: Entity, target: Entity, event: DamageRol
 
 def _is_unseen_attacker(source: Entity, target: Entity) -> bool:
     """Return whether target currently lacks sight of the source."""
-    return source.uuid not in target.senses.entities
+    contact = target.senses.entities.get(source.uuid)
+    return contact is None or not contact.visual
 
 
 def _attack_weapon_name(actor: Entity, action: Attack) -> Optional[str]:

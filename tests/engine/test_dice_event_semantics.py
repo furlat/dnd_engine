@@ -56,6 +56,7 @@ from dnd.items.weapons import (
     SHORTSWORD_RECIPE,
 )
 from dnd.spells.spell_utils import fire_heal_roll_result
+from tests.engine.support import create_test_entity
 
 
 @contextmanager
@@ -88,7 +89,6 @@ def reset_dice_state() -> None:
     Dice._registry.clear()
     DiceRoll._registry.clear()
     Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
 
 
 def make_bonus(
@@ -1220,13 +1220,13 @@ def test_eb_03_014_real_attack_pipeline_applies_modified_damage_rolls() -> None:
     """EB-03-014: attack damage consumes DamageRollResultEvent final rolls."""
     reset_dice_state()
     get_map().create_rectangle(0, 0, 6, 6)
-    attacker = Entity.create(
-        source_entity_uuid=uuid4(),
+    attacker = create_test_entity(
+        source_id=uuid4(),
         name="Pipeline Fighter",
         config=EntityConfig(position=(1, 1)),
     )
-    target = Entity.create(
-        source_entity_uuid=uuid4(),
+    target = create_test_entity(
+        source_id=uuid4(),
         name="Pipeline Target",
         config=EntityConfig(position=(2, 1)),
     )
@@ -1445,13 +1445,13 @@ def test_eb_03_016_attack_d20_slot_and_gwf_extra_packet_boundaries() -> None:
     """EB-03-016: real attacks preserve d20 slot and GWF packet boundaries."""
     reset_dice_state()
     get_map().create_rectangle(0, 0, 6, 6)
-    attacker = Entity.create(
-        source_entity_uuid=uuid4(),
+    attacker = create_test_entity(
+        source_id=uuid4(),
         name="Boundary Fighter",
         config=EntityConfig(position=(1, 1)),
     )
-    target = Entity.create(
-        source_entity_uuid=uuid4(),
+    target = create_test_entity(
+        source_id=uuid4(),
         name="Boundary Target",
         config=EntityConfig(position=(2, 1)),
     )

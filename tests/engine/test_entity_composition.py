@@ -37,11 +37,12 @@ from dnd.core.life_types import LifeState
 from dnd.core.creature_types import CreatureType, DamageType, Size
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import AdvantageStatus, BaseValue, ModifiableValue
+from dnd.types.senses import PerceivedContact
 from dnd.conditions import Exhaustion
 from dnd.entity import Entity, EntityConfig
 from dnd.items.weapons import SHORTSWORD_RECIPE
 from dnd.spells.evocation import FireBolt
-from tests.engine.support import get_max_hp, reset_combat_state
+from tests.engine.support import create_test_entity, get_max_hp, reset_combat_state
 
 
 def reset_entity_state() -> None:
@@ -51,6 +52,7 @@ def reset_entity_state() -> None:
     BaseObject._registry.clear()
     BaseBlock._registry.clear()
     BaseValue._registry.clear()
+    get_map().create_rectangle(0, 0, 20, 20)
 
 
 @contextmanager
@@ -122,7 +124,11 @@ def configured_entity(
         creature_type=CreatureType.HUMANOID,
         size=Size.MEDIUM,
     )
-    return Entity.create(source_entity_uuid=source_uuid, name=name, config=config)
+    return create_test_entity(
+        source_id=source_uuid,
+        name=name,
+        config=config,
+    )
 
 
 def entity_action_target_uuids(entity: Entity, template_name: str, target_filter: str) -> set:
@@ -142,7 +148,7 @@ def test_eb_06_001_entity_create_wires_identity_registries_and_blocks() -> None:
     assert entity.uuid == entity.source_entity_uuid
     assert Entity.get(entity.uuid) is entity
     assert BaseBlock.get(entity.uuid) is entity
-    assert entity in Entity.get_all_entities_at_position((2, 3))
+    assert entity.uuid in get_map().get_entities_at((2, 3))
     assert get_map().get_entity_position(entity.uuid) == (2, 3)
 
     top_level_blocks = [
@@ -358,7 +364,9 @@ def test_eb_06_009_bare_entity_creation_registers_and_normalizes_defaults() -> N
     assert entity.uuid == source_uuid
     assert entity.source_entity_uuid == source_uuid
     assert Entity.get(source_uuid) is entity
-    assert get_map().get_entity_position(source_uuid) == (0, 0)
+    assert entity.is_deployed is False
+    assert get_map().get_entity_position(source_uuid) is None
+    assert entity.senses.position == (0, 0)
     assert entity.appearance.source_entity_uuid == source_uuid
     assert entity.ability_scores.source_entity_uuid == source_uuid
     assert entity.health.source_entity_uuid == source_uuid
@@ -410,9 +418,9 @@ def test_eb_06_011_visible_entities_filter_into_allies_and_enemies() -> None:
     setup_standard_actions(hero)
 
     assert hero.senses.entities == {
-        enemy.uuid: (3, 2),
-        neutral.uuid: (3, 3),
-        ally.uuid: (2, 3),
+        enemy.uuid: PerceivedContact(position=(3, 2), visual=True),
+        neutral.uuid: PerceivedContact(position=(3, 3), visual=True),
+        ally.uuid: PerceivedContact(position=(2, 3), visual=True),
     }
     assert hero.get_visible_allies() == {ally.uuid: (2, 3)}
     assert hero.get_visible_enemies() == {

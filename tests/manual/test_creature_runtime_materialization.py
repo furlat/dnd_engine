@@ -41,6 +41,7 @@ from dnd.core.content.registration import (
     get_content_declaration,
 )
 from dnd.core.content.registry import ContentRegistryBuilder
+from dnd.core.events import EventQueue, EventType
 from dnd.entity import Entity, EntityConfig
 from dnd.runtime_reset import reset_engine_runtime
 
@@ -362,6 +363,8 @@ def test_wrong_factory_content_ref_is_rejected_without_a_binding() -> None:
         _materialize(recipe, runtime=runtime, bindings=bindings)
 
     assert bindings.bindings == {}
+    assert Entity.get_all_entities() == []
+    assert EventQueue.get_events_by_type(EventType.ENTITY_CREATED) == []
 
 
 def test_wrong_factory_runtime_uuid_is_rejected_without_a_binding() -> None:
@@ -378,6 +381,8 @@ def test_wrong_factory_runtime_uuid_is_rejected_without_a_binding() -> None:
         _materialize(recipe, runtime=runtime, bindings=bindings)
 
     assert bindings.bindings == {}
+    assert Entity.get_all_entities() == []
+    assert EventQueue.get_events_by_type(EventType.ENTITY_CREATED) == []
 
 
 def test_binding_registry_never_infers_identity_from_entity_class_or_name() -> None:

@@ -14,6 +14,8 @@ from dnd.core.content.encounters import (
     RosterControllerKind,
 )
 from dnd.entity import Entity
+from dnd.game import Game
+from dnd.runtime_reset import reset_engine_runtime
 from dnd.items.apparel_presets import (
     DARK_CLOTH_SHOES_PRESET,
     HEDGE_WIZARD_ROBE_PRESET,
@@ -46,6 +48,7 @@ def _assemble_duel(
         if opening_roster_slot_id is not None
         else InitiativeOpeningPolicy()
     )
+    reset_engine_runtime()
     return assemble_encounter_recipe(
         EncounterRecipe.create(
             encounter_id="encounter.test.generic_roster_duel",
@@ -79,6 +82,7 @@ def _assemble_duel(
             opening_policy=opening,
             tags=("test",),
         ),
+        game=Game(),
     )
 
 

@@ -11,19 +11,30 @@ from dnd.core.events import EventQueue
 from dnd.core.gridmap import get_map
 from dnd.core.values import BaseValue
 from dnd.encounter import Encounter
-from dnd.entity import Entity
+from dnd.entity import Entity, EntityConfig
+from dnd.game import Game
 from dnd.runtime_reset import reset_engine_runtime
 
 
 def test_reset_engine_runtime_clears_every_engine_registry_and_rebuilds_grid() -> None:
     """One authoritative operation resets all shared engine state."""
+    reset_engine_runtime()
+    old_grid = get_map()
+    old_grid.create_rectangle(0, 0, 8, 8)
+    occupant = Entity.create(
+        source_entity_uuid=uuid4(),
+        name="Reset occupant",
+        config=EntityConfig(position=(7, 7)),
+    )
+    occupant.compose_entity()
+    Game().deploy_entity(occupant, (7, 7))
+    assert old_grid.get_entities_at((7, 7)) == {occupant.uuid}
+
     marker_uuid = uuid4()
     marker = cast(Any, object())
     BaseObject._registry[marker_uuid] = marker
     BaseBlock._registry[marker_uuid] = marker
     BaseValue._registry[marker_uuid] = marker
-    Entity._entity_registry[marker_uuid] = marker
-    Entity._entity_by_position[(7, 7)].append(marker)
     Controller._controller_registry[marker_uuid] = marker
     Encounter._encounter_registry[marker_uuid] = marker
     Encounter._active_encounter = marker
@@ -31,9 +42,6 @@ def test_reset_engine_runtime_clears_every_engine_registry_and_rebuilds_grid() -
     SpellProtectionRegistry._protections.append(marker)
     EventQueue._combat_log_callback = marker
     EventQueue._all_events.append(marker)
-
-    old_grid = get_map()
-    old_grid.create_rectangle(0, 0, 2, 2)
 
     new_grid = reset_engine_runtime(grid_size=(4, 3))
 
@@ -46,7 +54,7 @@ def test_reset_engine_runtime_clears_every_engine_registry_and_rebuilds_grid() -
     assert marker_uuid not in BaseBlock._registry
     assert marker_uuid not in BaseValue._registry
     assert Entity._entity_registry == {}
-    assert dict(Entity._entity_by_position) == {}
+    assert new_grid.get_entities_at((3, 2)) == set()
     assert Controller._controller_registry == {}
     assert Encounter._encounter_registry == {}
     assert Encounter._active_encounter is None

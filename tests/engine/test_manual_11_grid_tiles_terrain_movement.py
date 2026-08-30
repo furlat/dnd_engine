@@ -24,7 +24,9 @@ from dnd.core.gridmap import get_map
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import BaseValue
 from dnd.entity import Entity, EntityConfig
-from tests.engine.support import reset_combat_state
+from dnd.items.environment import DirectionalWall
+from dnd.types.world import CardinalDirection, WorldEdgeChannel
+from tests.engine.support import create_test_entity, reset_combat_state
 
 
 def reset_world_state(width: int = 8, height: int = 8) -> None:
@@ -45,8 +47,8 @@ def create_world_actor(
 ) -> Entity:
     """Create an actor with stable movement and Strength for world examples."""
     actor_id = uuid4()
-    return Entity.create(
-        source_entity_uuid=actor_id,
+    return create_test_entity(
+        source_id=actor_id,
         name=name,
         config=EntityConfig(
             ability_scores=AbilityScoresConfig(
@@ -110,7 +112,14 @@ def test_paths_price_destination_tiles_and_directional_borders() -> None:
     assert distances[(4, 0)] == 5
     assert paths[(4, 0)] == [(0, 0), (1, 0), (2, 0), (3, 0), (4, 0)]
 
-    grid.set_tile_directional_border((1, 0), "movement", "east", False)
+    wall = DirectionalWall(
+        source_entity_uuid=uuid4(),
+        blocked_channels=(WorldEdgeChannel.MOVEMENT,),
+    )
+    wall.place_on_grid(
+        (1, 0),
+        boundary_direction=CardinalDirection.EAST,
+    )
     blocked_distances, blocked_paths = grid.compute_paths(
         (0, 0),
         movement_mode=MovementMode.WALKING,
@@ -142,8 +151,8 @@ def test_entity_position_updates_class_registry_grid_registry_and_spatial_events
 
     assert hero.position == (2, 2)
     assert hero.senses.position == (2, 2)
-    assert hero not in Entity.get_all_entities_at_position((1, 1))
-    assert hero in Entity.get_all_entities_at_position((2, 2))
+    assert hero.uuid not in grid.get_entities_at((1, 1))
+    assert hero.uuid in grid.get_entities_at((2, 2))
     assert hero.uuid not in grid.get_entities_at((1, 1))
     assert hero.uuid in grid.get_entities_at((2, 2))
     assert entered_positions == [(2, 2)]

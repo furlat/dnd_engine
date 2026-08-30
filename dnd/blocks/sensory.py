@@ -1,6 +1,6 @@
-"""Observer-local senses cache and reactive sensory update callbacks."""
+"""Authoritative observer-local perception and navigation state."""
 
-from typing import Callable, DefaultDict, Dict, List, Optional, Self, Set, Tuple, TypeVar
+from typing import DefaultDict, Dict, List, Optional, Self, Set, Tuple, TypeVar, cast
 from uuid import UUID
 from pydantic import Field, PrivateAttr
 
@@ -11,39 +11,19 @@ import time
 
 from dnd.action_timing import action_timing_enabled, record_action_timing
 from dnd.core.base_block import BaseBlock
-from dnd.core.base_tiles import Tile
 from dnd.core.gridmap import get_map
 from dnd.core.values import ModifiableValue
 from dnd.core.events import (
     Event, EventType, EventPhase, SensesUpdateHint, SpatialChangeEvent,
-    DeathEvent, EventQueue, SensoryUpdateEvent, SensoryUpdateReason
+    SpatialEffectChangeEvent, DeathEvent, EventQueue, SensoryUpdateEvent,
+    SensoryUpdateReason,
 )
-from dnd.core.base_block import SensesType, SenseMode, LightLevel
-from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType, EntitySpottedLogData, HazardDetectedLogData
+from dnd.core.base_block import LightLevel
+from dnd.types.senses import OpticalObscurement, PerceivedContact, SenseMode, SensesType
+from dnd.types.world import CardinalDirection, WorldEdgeChannel
 
 
 K = TypeVar("K")
-
-
-@dataclass(frozen=True)
-class VisibilityComputationCache:
-    """One-shot visibility result that can seed an immediate full senses refresh.
-
-    Attributes:
-        position: Observer position used for the computation.
-        max_distance: Maximum FOV distance used for the computation.
-        visible: Light-filtered visible cells keyed by position.
-        fov_positions: Geometric FOV positions before light filtering.
-        entities: Visible entities keyed by UUID and position.
-        objects: Visible objects keyed by UUID and position.
-    """
-
-    position: Tuple[int, int]
-    max_distance: int
-    visible: Dict[Tuple[int, int], bool]
-    fov_positions: List[Tuple[int, int]]
-    entities: Dict[UUID, Tuple[int, int]]
-    objects: Dict[UUID, Tuple[int, int]]
 
 
 class Senses(BaseBlock):
@@ -57,9 +37,13 @@ class Senses(BaseBlock):
         ),
         description="Neutral 1/0 gate for whether visual perception is available.",
     )
-    entities: Dict[UUID, Tuple[int, int]] = Field(default_factory=dict, description="Visible entities by UUID and position.")
-    objects: Dict[UUID, Tuple[int, int]] = Field(default_factory=dict, description="Visible objects by UUID and position.")
+    entities: Dict[UUID, PerceivedContact] = Field(default_factory=dict, description="Perceived entity contacts by UUID.")
+    objects: Dict[UUID, PerceivedContact] = Field(default_factory=dict, description="Perceived object contacts by UUID.")
     visible: Dict[Tuple[int, int], bool] = Field(default_factory=dict, description="Cells visible after light and sense-mode filtering.")
+    effective_light_levels: Dict[Tuple[int, int], LightLevel] = Field(
+        default_factory=dict,
+        description="Observer-effective light after-values for visible cells.",
+    )
     walkable: Dict[Tuple[int, int], bool] = Field(default_factory=dict, description="Walkability for cells in geometric FOV.")
     paths: DefaultDict[Tuple[int, int], List[Tuple[int, int]]] = Field(
         default_factory=lambda: defaultdict(list),
@@ -95,7 +79,7 @@ class Senses(BaseBlock):
     _last_passive_perception: int = PrivateAttr(default=0)
     _last_sense_modes_hash: int = PrivateAttr(default=0)
     _last_visual_access: int = PrivateAttr(default=1)
-    _visibility_cache: Optional[VisibilityComputationCache] = PrivateAttr(default=None)
+    _perception_max_distance: int = PrivateAttr(default=20)
     _path_revision: int = PrivateAttr(default=0)
     _path_max_distance: Optional[int] = PrivateAttr(default=None)
 
@@ -130,10 +114,6 @@ class Senses(BaseBlock):
         self._last_sense_modes_hash = self.compute_sense_modes_hash()
         self._last_visual_access = self.visual_access.normalized_score
 
-    def clear_visibility_cache(self) -> None:
-        """Discard the one-shot visibility result used by movement refreshes."""
-        self._visibility_cache = None
-
     def has_sense(self, sense_type: SensesType) -> bool:
         """Check if entity has a sense type (any range)."""
         return any(
@@ -156,19 +136,11 @@ class Senses(BaseBlock):
         Returns:
             Mapping keyed as ``"x,y"`` with integer ``LightLevel`` values.
         """
-        grid = get_map()
-        levels: Dict[str, int] = {}
-        for position, is_visible in sorted(self.visible.items()):
-            if not is_visible:
-                continue
-            tile = grid.get_tile(*position)
-            if tile is None:
-                continue
-            levels[f"{position[0]},{position[1]}"] = tile.get_effective_light_for(
-                observer_uuid,
-                self.position,
-            ).value
-        return levels
+        del observer_uuid
+        return {
+            f"{position[0]},{position[1]}": level.value
+            for position, level in sorted(self.effective_light_levels.items())
+        }
 
     def get_sense_range(self, sense_type: SensesType) -> int:
         """Returns range in feet. -1 = not present, 0 = unlimited."""
@@ -213,10 +185,6 @@ class Senses(BaseBlock):
         """Remove exactly one source-owned special sense contribution."""
         return self.sense_mode_sources.pop(source_id, None) is not None
 
-    def add_entity(self, entity_uuid: UUID, position: Tuple[int, int]) -> None:
-        """Add a visible entity to the cache."""
-        self.entities[entity_uuid] = position
-
     def get_distance(self, position: Tuple[int, int]) -> int:
         """Return Euclidean tile distance from this senses position."""
         return int(math.sqrt((self.position[0] - position[0])**2 + (self.position[1] - position[1])**2))
@@ -229,7 +197,7 @@ class Senses(BaseBlock):
         """Return a cached path to a visible entity, optionally bounded by length."""
         if entity_uuid not in self.entities:
             return []
-        path = self.paths.get(self.entities[entity_uuid], [])
+        path = self.paths.get(self.entities[entity_uuid].position, [])
         if max_path_length is None or len(path) <= max_path_length:
             return path
         else:
@@ -240,28 +208,18 @@ class Senses(BaseBlock):
         visible_positions = {key for key, value in visible.items() if value}
         self.seen.update(visible_positions)
 
-    def update_senses(
+    def replace_navigation(
         self,
-        entities: Dict[UUID, Tuple[int, int]],
-        visible: Dict[Tuple[int, int], bool],
         walkable: Dict[Tuple[int, int], bool],
         paths: DefaultDict[Tuple[int, int], List[Tuple[int, int]]],
-        objects: Optional[Dict[UUID, Tuple[int, int]]] = None,
         path_costs: Optional[Dict[Tuple[int, int], int]] = None,
         safe_paths: Optional[Dict[Tuple[int, int], List[Tuple[int, int]]]] = None,
         safe_path_costs: Optional[Dict[Tuple[int, int], int]] = None,
         path_max_distance: Optional[int] = None,
     ) -> None:
-        """Replace visible entities, cells, objects, walkability, and paths."""
-        self.entities = {}
-        self.objects = {}
-        self.visible = {}
+        """Replace navigation facts without mutating perception-owned state."""
         self.walkable = {}
         self.paths = defaultdict(list)
-        self.entities = entities
-        self.objects = objects if objects is not None else {}
-        self.visible = visible
-        self.update_seen(visible)
         self.walkable = walkable
         self.paths = paths
         self.path_costs = path_costs if path_costs is not None else {}
@@ -269,8 +227,100 @@ class Senses(BaseBlock):
         self.safe_path_costs = safe_path_costs if safe_path_costs is not None else {}
         self._path_max_distance = path_max_distance
         self._paths_dirty = False
-        self._visibility_cache = None
         self._path_revision += 1
+
+    def replace_perception(
+        self,
+        *,
+        position: Tuple[int, int],
+        visible: Dict[Tuple[int, int], bool],
+        seen: Set[Tuple[int, int]],
+        entities: Dict[UUID, PerceivedContact],
+        objects: Dict[UUID, PerceivedContact],
+        effective_light_levels: Dict[Tuple[int, int], LightLevel],
+        passive_perception: int,
+        sense_modes_hash: int,
+        visual_access: int,
+    ) -> None:
+        """Replace exactly the fields owned by subjective perception reduction."""
+        self.position = position
+        self.visible = visible
+        self.seen = seen
+        self.entities = entities
+        self.objects = objects
+        self.effective_light_levels = effective_light_levels
+        self._last_passive_perception = passive_perception
+        self._last_sense_modes_hash = sense_modes_hash
+        self._last_visual_access = visual_access
+
+    def apply_sensory_update(self, event: SensoryUpdateEvent) -> None:
+        """Apply one recorded observer delta without reading live world state."""
+        event.validate_replay_payload()
+        if event.observer_uuid != self.source_entity_uuid:
+            raise ValueError("sensory update belongs to a different observer")
+
+        visible = dict(self.visible)
+        for position in event.visible_cells_removed:
+            visible.pop(position, None)
+        for position in event.visible_cells_added:
+            visible[position] = True
+
+        entities = dict(self.entities)
+        for entity_uuid in event.entity_contacts_removed:
+            entities.pop(entity_uuid, None)
+        entities.update(event.entity_contacts_changed)
+
+        objects = dict(self.objects)
+        for object_uuid in event.object_contacts_removed:
+            objects.pop(object_uuid, None)
+        objects.update(event.object_contacts_changed)
+
+        light_levels = dict(self.effective_light_levels)
+        for position in event.visible_cells_removed:
+            light_levels.pop(position, None)
+        for key, level in event.effective_light_levels_changed.items():
+            x_text, y_text = key.split(",", maxsplit=1)
+            light_levels[(int(x_text), int(y_text))] = LightLevel(level)
+
+        if event.sense_modes_changed and event.sense_modes is not None:
+            event_modes = [
+                mode.model_copy(deep=True) for mode in event.sense_modes
+            ]
+            if self.get_sense_modes() != event_modes:
+                self.sense_modes = event_modes
+                self.sense_mode_sources.clear()
+
+        self.replace_perception(
+            position=(
+                event.observer_position
+                if event.observer_position_changed
+                else self.position
+            ),
+            visible=visible,
+            seen=set(self.seen) | set(event.seen_cells_added),
+            entities=entities,
+            objects=objects,
+            effective_light_levels=light_levels,
+            passive_perception=(
+                event.passive_perception
+                if event.passive_perception_changed
+                and event.passive_perception is not None
+                else self._last_passive_perception
+            ),
+            sense_modes_hash=(
+                self.compute_sense_modes_hash()
+                if event.sense_modes_changed
+                else self._last_sense_modes_hash
+            ),
+            visual_access=(
+                event.visual_access
+                if event.visual_access_changed
+                and event.visual_access is not None
+                else self._last_visual_access
+            ),
+        )
+        if event.paths_dirty:
+            self._paths_dirty = True
 
     def get_threathened_positions(self) -> List[Tuple[int, int]]:
         """Return neighboring positions threatened by this observer.
@@ -317,43 +367,6 @@ class Senses(BaseBlock):
         """Create a senses block for one owning entity."""
         return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name, target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name, position=position)
 
-    def create_spatial_callback(
-        self,
-        owner_uuid: UUID,
-        update_senses_func: Optional[Callable[[], None]] = None,
-        update_visibility_func: Optional[Callable[[], None]] = None
-    ) -> "SpatialSensesCallback":
-        """Create the observer-local sensory lifecycle system.
-
-        Uses closure to access the senses instance without importing Entity.
-        The system runs before relevant events complete and triggers
-        appropriate updates:
-        - Self-movement: visibility-only update per step + mark paths dirty
-        - Other changes: apply incremental hint (no Dijkstra)
-        - Dijkstra runs only at turn start and movement end (explicit calls)
-
-        This uses EventQueue's pre-completion lifecycle hook instead of normal
-        EventHandlers because event handlers do not fire at COMPLETION, and
-        sensory children must be created before the causative event finalizes
-        its stable child-lineage metadata.
-
-        Args:
-            owner_uuid: UUID of the entity that owns this Senses block
-            update_senses_func: Optional callable to trigger full senses update
-                (visibility + paths). Not called from callbacks; only stored
-                for potential explicit use.
-            update_visibility_func: Optional callable to trigger visibility-only
-                update (FOV + entity filter, no Dijkstra).
-
-        Returns:
-            SpatialSensesCallback that should be registered with EventQueue as
-            a pre-completion callback.
-        """
-        return SpatialSensesCallback(
-            self, owner_uuid, update_senses_func, update_visibility_func
-        )
-
-
 @dataclass(frozen=True)
 class SensesSnapshot:
     """Immutable observer cache snapshot used to build sensory deltas."""
@@ -361,11 +374,13 @@ class SensesSnapshot:
     position: Tuple[int, int]
     visible: Set[Tuple[int, int]]
     seen: Set[Tuple[int, int]]
-    entities: Dict[UUID, Tuple[int, int]]
-    objects: Dict[UUID, Tuple[int, int]]
+    entities: Dict[UUID, PerceivedContact]
+    objects: Dict[UUID, PerceivedContact]
+    effective_light_levels: Dict[Tuple[int, int], LightLevel]
     paths_dirty: bool
     passive_perception: int
     sense_modes_hash: int
+    sense_modes: Tuple[SenseMode, ...]
     visual_access: int
 
 
@@ -374,21 +389,11 @@ def _sorted_positions(positions: Set[Tuple[int, int]]) -> List[Tuple[int, int]]:
     return sorted(positions, key=lambda pos: (pos[0], pos[1]))
 
 
-def _sorted_uuid_position_dict(values: Dict[UUID, Tuple[int, int]]) -> Dict[UUID, Tuple[int, int]]:
-    """Return UUID-position mapping sorted by UUID string."""
-    return {uuid: values[uuid] for uuid in sorted(values.keys(), key=str)}
-
-
-def _sorted_uuid_move_dict(
-    values: Dict[UUID, Tuple[Tuple[int, int], Tuple[int, int]]]
-) -> Dict[UUID, Tuple[Tuple[int, int], Tuple[int, int]]]:
-    """Return UUID movement mapping sorted by UUID string."""
-    return {uuid: values[uuid] for uuid in sorted(values.keys(), key=str)}
-
-
-def _serialize_sense_modes(senses: Senses) -> List[SenseMode]:
-    """Copy current sense modes into an immutable event payload list."""
-    return [sense_mode.model_copy(deep=True) for sense_mode in senses.get_sense_modes()]
+def _sorted_contacts(
+    values: Dict[UUID, PerceivedContact],
+) -> Dict[UUID, PerceivedContact]:
+    """Return contacts in deterministic UUID order."""
+    return {uuid: values[uuid] for uuid in sorted(values, key=str)}
 
 
 def capture_senses_snapshot(senses: Senses) -> SensesSnapshot:
@@ -406,15 +411,18 @@ def capture_senses_snapshot(senses: Senses) -> SensesSnapshot:
         seen=set(senses.seen),
         entities=dict(senses.entities),
         objects=dict(senses.objects),
+        effective_light_levels=dict(senses.effective_light_levels),
         paths_dirty=senses._paths_dirty,
         passive_perception=senses._last_passive_perception,
         sense_modes_hash=senses._last_sense_modes_hash,
+        sense_modes=tuple(
+            mode.model_copy(deep=True) for mode in senses.get_sense_modes()
+        ),
         visual_access=senses._last_visual_access,
     )
 
 
 def emit_sensory_update_delta(
-    senses: Senses,
     owner_uuid: UUID,
     cause_event: Event,
     before: SensesSnapshot,
@@ -426,7 +434,6 @@ def emit_sensory_update_delta(
     """Emit a completed sensory event for one observer-cache transition.
 
     Args:
-        senses: Observer-local senses component after the transition.
         owner_uuid: Entity UUID that owns the senses component.
         cause_event: Causal engine event under which to parent the delta.
         before: Sensory state before the transition.
@@ -444,27 +451,28 @@ def emit_sensory_update_delta(
     visible_removed = before.visible - after.visible
     seen_added = after.seen - before.seen
 
-    entity_added_keys = set(after.entities) - set(before.entities)
-    entity_removed_keys = set(before.entities) - set(after.entities)
-    entity_moved = {
-        uuid: (before.entities[uuid], after.entities[uuid])
-        for uuid in set(before.entities) & set(after.entities)
-        if before.entities[uuid] != after.entities[uuid]
+    entity_changed = {
+        uuid: contact
+        for uuid, contact in after.entities.items()
+        if before.entities.get(uuid) != contact
     }
-
-    object_added_keys = set(after.objects) - set(before.objects)
-    object_removed_keys = set(before.objects) - set(after.objects)
-    object_moved = {
-        uuid: (before.objects[uuid], after.objects[uuid])
-        for uuid in set(before.objects) & set(after.objects)
-        if before.objects[uuid] != after.objects[uuid]
+    entity_removed = set(before.entities) - set(after.entities)
+    object_changed = {
+        uuid: contact
+        for uuid, contact in after.objects.items()
+        if before.objects.get(uuid) != contact
+    }
+    object_removed = set(before.objects) - set(after.objects)
+    light_changed = {
+        f"{position[0]},{position[1]}": level.value
+        for position, level in sorted(after.effective_light_levels.items())
+        if before.effective_light_levels.get(position) != level
     }
 
     passive_changed = before.passive_perception != after.passive_perception
     sense_modes_changed = before.sense_modes_hash != after.sense_modes_hash
     visual_access_changed = before.visual_access != after.visual_access
     position_changed = before.position != after.position
-    light_changed = reason == SensoryUpdateReason.LIGHT
     perception_capability_changed = (
         reason in {SensoryUpdateReason.CONDITION, SensoryUpdateReason.LIFE_STATE}
         and (passive_changed or sense_modes_changed or visual_access_changed)
@@ -478,12 +486,10 @@ def emit_sensory_update_delta(
         visible_added,
         visible_removed,
         seen_added,
-        entity_added_keys,
-        entity_removed_keys,
-        entity_moved,
-        object_added_keys,
-        object_removed_keys,
-        object_moved,
+        entity_changed,
+        entity_removed,
+        object_changed,
+        object_removed,
         paths_refresh_needed,
         passive_changed,
         sense_modes_changed,
@@ -493,12 +499,12 @@ def emit_sensory_update_delta(
     ))
     if not has_delta:
         if timing:
-            record_action_timing("sensory_callback.emit.delta_ms", started)
-            record_action_timing("sensory_callback.emit.total_ms", total_started)
+            record_action_timing("sensory_reducer.emit.delta_ms", started)
+            record_action_timing("sensory_reducer.emit.total_ms", total_started)
         return None
 
     if timing:
-        record_action_timing("sensory_callback.emit.delta_ms", started)
+        record_action_timing("sensory_reducer.emit.delta_ms", started)
     started = time.perf_counter() if timing else 0.0
     sensory_event = SensoryUpdateEvent(
         source_entity_uuid=owner_uuid,
@@ -506,7 +512,7 @@ def emit_sensory_update_delta(
         observer_uuid=owner_uuid,
         observer_position=after.position,
         observer_position_changed=position_changed,
-        effective_light_levels=senses.get_effective_light_levels(owner_uuid),
+        effective_light_levels_changed=light_changed,
         cause_event_uuid=cause_event.uuid,
         update_reason=reason,
         parent_event=cause_event.uuid,
@@ -516,58 +522,49 @@ def emit_sensory_update_delta(
         visible_cells_added=_sorted_positions(visible_added),
         visible_cells_removed=_sorted_positions(visible_removed),
         seen_cells_added=_sorted_positions(seen_added),
-        visible_entities_added=_sorted_uuid_position_dict({
-            uuid: after.entities[uuid] for uuid in entity_added_keys
-        }),
-        visible_entities_removed=_sorted_uuid_position_dict({
-            uuid: before.entities[uuid] for uuid in entity_removed_keys
-        }),
-        visible_entities_moved=_sorted_uuid_move_dict(entity_moved),
-        visible_objects_added=_sorted_uuid_position_dict({
-            uuid: after.objects[uuid] for uuid in object_added_keys
-        }),
-        visible_objects_removed=_sorted_uuid_position_dict({
-            uuid: before.objects[uuid] for uuid in object_removed_keys
-        }),
-        visible_objects_moved=_sorted_uuid_move_dict(object_moved),
+        entity_contacts_changed=_sorted_contacts(entity_changed),
+        entity_contacts_removed=entity_removed,
+        object_contacts_changed=_sorted_contacts(object_changed),
+        object_contacts_removed=object_removed,
         paths_dirty=paths_refresh_needed,
         passive_perception_changed=passive_changed,
         passive_perception=after.passive_perception if passive_changed else None,
         sense_modes_changed=sense_modes_changed,
-        sense_modes=_serialize_sense_modes(senses) if sense_modes_changed else None,
+        sense_modes=(
+            [mode.model_copy(deep=True) for mode in after.sense_modes]
+            if sense_modes_changed
+            else None
+        ),
+        visual_access_changed=visual_access_changed,
+        visual_access=after.visual_access if visual_access_changed else None,
     )
     if timing:
-        record_action_timing("sensory_callback.emit.construct_event_ms", started)
+        record_action_timing("sensory_reducer.emit.construct_event_ms", started)
 
     started = time.perf_counter() if timing else 0.0
     if register_event:
         EventQueue.register(sensory_event)
     if timing:
-        record_action_timing("sensory_callback.emit.completion_ms", started)
-        record_action_timing("sensory_callback.emit.total_ms", total_started)
+        record_action_timing("sensory_reducer.emit.completion_ms", started)
+        record_action_timing("sensory_reducer.emit.total_ms", total_started)
     return sensory_event
 
 
-class SpatialSensesCallback:
-    """Pre-completion lifecycle system that updates one observer's senses.
+@dataclass(frozen=True)
+class ObserverFootprint:
+    """Indexed facts used only to select candidate observers."""
 
-    This is registered with EventQueue.add_pre_completion_callback() and runs
-    before causative events complete. It mutates backend senses exactly where
-    the previous reactive callback did, then emits one observer-specific
-    completed SensoryUpdateEvent carrying the immutable delta.
+    known_path_positions: frozenset[Tuple[int, int]]
+    entity_uuids: frozenset[UUID]
+    object_uuids: frozenset[UUID]
 
-    Key design principle: Callbacks NEVER run Dijkstra (update_senses_func).
-    All paths go through update_visibility_func (FOV only, no paths) plus
-    _paths_dirty flag. Full Dijkstra only happens at:
-    - Turn start (Encounter.start_turn -> update_entity_senses)
-    - Movement end (Move._apply finally -> update_entity_senses)
 
-    The class name is kept for compatibility with existing construction sites,
-    but it now acts as a first-class sensory update system rather than a passive
-    post-storage callback.
-    """
+class SpatialSensesSystem:
+    """Single reducer for observer-local visual cells and typed contacts."""
 
-    SPATIAL_EVENTS = (
+    SYSTEM_NAME = "spatial_senses"
+    DEFAULT_VISUAL_RADIUS_CELLS = 20
+    SPATIAL_EVENTS = {
         EventType.SPATIAL_ENTITY_ENTERED,
         EventType.SPATIAL_ENTITY_LEFT,
         EventType.SPATIAL_TILE_CHANGED,
@@ -576,771 +573,28 @@ class SpatialSensesCallback:
         EventType.SPATIAL_OBJECT_CHANGED,
         EventType.SPATIAL_PERCEIVABILITY_CHANGED,
         EventType.SPATIAL_LIGHT_CHANGED,
-    )
-
-    def __init__(
-        self,
-        senses: Senses,
-        owner_uuid: UUID,
-        update_senses_func: Optional[Callable[[], None]] = None,
-        update_visibility_func: Optional[Callable[[], None]] = None
-    ) -> None:
-        """Create a callback bound to one observer.
-
-        Args:
-            senses: Senses block to mutate.
-            owner_uuid: Owning entity UUID.
-            update_senses_func: Stored full recompute callback.
-            update_visibility_func: Visibility-only recompute callback.
-        """
-        self.senses = senses
-        self.owner_uuid = owner_uuid
-        self.update_senses_func = update_senses_func
-        self.update_visibility_func = update_visibility_func
-
-    def __call__(
-        self,
-        event: Event,
-        *,
-        register_event: bool = True,
-    ) -> Optional[SensoryUpdateEvent]:
-        """Process an event and return its observer-specific sensory delta.
-
-        Args:
-            event: Causal engine event being processed before completion.
-            register_event: Whether to register the sensory event immediately.
-
-        Returns:
-            The completed sensory event when the observer state changed.
-        """
-        timing = action_timing_enabled()
-        total_started = time.perf_counter() if timing else 0.0
-        try:
-            if event.event_type == EventType.SENSORY_UPDATE:
-                return
-            reason: Optional[SensoryUpdateReason] = None
-
-            if event.event_type == EventType.DEATH:
-                started = time.perf_counter() if timing else 0.0
-                before = self._snapshot()
-                if timing:
-                    record_action_timing("sensory_callback.snapshot_before_ms", started)
-                started = time.perf_counter() if timing else 0.0
-                self._handle_death_event(event)
-                if timing:
-                    record_action_timing("sensory_callback.handle_death_ms", started)
-                reason = SensoryUpdateReason.DEATH
-
-            elif event.event_type in (
-                EventType.CONDITION_APPLICATION,
-                EventType.CONDITION_REMOVAL,
-                EventType.LIFE_STATE_CHANGE,
-            ):
-                if event.target_entity_uuid != self.owner_uuid:
-                    return
-                started = time.perf_counter() if timing else 0.0
-                before = self._snapshot()
-                if timing:
-                    record_action_timing("sensory_callback.snapshot_before_ms", started)
-                started = time.perf_counter() if timing else 0.0
-                self._handle_own_perception_change()
-                if timing:
-                    record_action_timing("sensory_callback.handle_perception_change_ms", started)
-                reason = (
-                    SensoryUpdateReason.LIFE_STATE
-                    if event.event_type == EventType.LIFE_STATE_CHANGE
-                    else SensoryUpdateReason.CONDITION
-                )
-
-            elif event.event_type in self.SPATIAL_EVENTS:
-                started = time.perf_counter() if timing else 0.0
-                might_affect = self._spatial_event_might_affect_self(event)
-                if timing:
-                    record_action_timing("sensory_callback.spatial_filter_ms", started)
-                if not might_affect:
-                    return
-                started = time.perf_counter() if timing else 0.0
-                before = self._snapshot()
-                if timing:
-                    record_action_timing("sensory_callback.snapshot_before_ms", started)
-                started = time.perf_counter() if timing else 0.0
-                reason = self._handle_spatial_event(event)
-                if timing:
-                    record_action_timing("sensory_callback.handle_spatial_event_ms", started)
-                if reason is None:
-                    return
-
-            else:
-                return
-
-            started = time.perf_counter() if timing else 0.0
-            after = self._snapshot()
-            if timing:
-                record_action_timing("sensory_callback.snapshot_after_ms", started)
-            started = time.perf_counter() if timing else 0.0
-            sensory_event = self._emit_sensory_update(
-                event,
-                before,
-                after,
-                reason,
-                register_event=register_event,
-            )
-            if timing:
-                record_action_timing("sensory_callback.emit_update_ms", started)
-            return sensory_event
-        finally:
-            if timing:
-                record_action_timing("sensory_callback.total_ms", total_started)
-
-    def _spatial_event_might_affect_self(self, event: Event) -> bool:
-        """Return whether a spatial event can change this observer's senses."""
-        if not isinstance(event, SpatialChangeEvent):
-            return False
-
-        position = event.position
-        entity_uuid = event.entity_uuid
-
-        if entity_uuid == self.owner_uuid and event.event_type == EventType.SPATIAL_PERCEIVABILITY_CHANGED:
-            return False
-        if entity_uuid == self.owner_uuid and event.event_type == EventType.SPATIAL_ENTITY_LEFT:
-            return False
-        if entity_uuid == self.owner_uuid and event.event_type == EventType.SPATIAL_ENTITY_ENTERED:
-            return True
-        if event.event_type == EventType.SPATIAL_ENTITY_LEFT and event.old_position is not None:
-            return False
-
-        hint = event.senses_hint
-        if hint is None:
-            return self.owner_uuid in get_map().get_subscribers_at(position)
-
-        subscriptions: Optional[Set[Tuple[int, int]]] = None
-
-        def subscribed_to(pos: Optional[Tuple[int, int]]) -> bool:
-            nonlocal subscriptions
-            if pos is None:
-                return False
-            if subscriptions is None:
-                subscriptions = get_map().get_entity_subscriptions(self.owner_uuid)
-            return pos in subscriptions
-
-        if hint.light_changed_positions:
-            if subscriptions is None:
-                subscriptions = get_map().get_entity_subscriptions(self.owner_uuid)
-            if hint.light_changed_positions & subscriptions:
-                return True
-
-        if hint.entity_entered:
-            uuid, pos = hint.entity_entered
-            if uuid != self.owner_uuid and subscribed_to(pos):
-                return True
-
-        if hint.entity_left:
-            uuid, pos = hint.entity_left
-            if uuid in self.senses.entities or subscribed_to(pos):
-                return True
-
-        if hint.entity_died:
-            uuid, _ = hint.entity_died
-            if uuid in self.senses.entities:
-                return True
-
-        if hint.perceivability_entity:
-            if hint.perceivability_entity != self.owner_uuid:
-                if hint.perceivability_entity in self.senses.entities:
-                    return True
-                if subscribed_to(get_map().get_entity_position(hint.perceivability_entity)):
-                    return True
-
-        if hint.object_placed:
-            _, pos = hint.object_placed
-            if subscribed_to(pos):
-                return True
-
-        if hint.object_removed:
-            uuid, pos = hint.object_removed
-            if uuid in self.senses.objects or subscribed_to(pos):
-                return True
-
-        if hint.directional_positions:
-            if any(subscribed_to(pos) for pos in hint.directional_positions):
-                return True
-
-        if hint.directional_neighbors:
-            if any(subscribed_to(pos) for pos in hint.directional_neighbors):
-                return True
-
-        return bool(
-            hint.requires_paths
-            and not self.senses._paths_dirty
-            and self._path_hint_touches_known_space(hint, event)
-        )
-
-    def _path_hint_touches_known_space(self, hint: SensesUpdateHint, event: SpatialChangeEvent) -> bool:
-        """Return whether a path invalidation hint touches known path space."""
-        for position in self._path_hint_positions(hint, event):
-            if self._position_touches_known_path_space(position):
-                return True
-        return False
-
-    def _path_hint_positions(
-        self,
-        hint: SensesUpdateHint,
-        event: SpatialChangeEvent,
-    ) -> Set[Tuple[int, int]]:
-        """Return positions whose movement topology may have changed."""
-        positions: Set[Tuple[int, int]] = {event.position}
-        if hint.entity_entered:
-            positions.add(hint.entity_entered[1])
-        if hint.entity_left:
-            positions.add(hint.entity_left[1])
-        if hint.entity_died:
-            positions.add(hint.entity_died[1])
-        if hint.object_placed:
-            positions.add(hint.object_placed[1])
-        if hint.object_removed:
-            positions.add(hint.object_removed[1])
-        if hint.directional_positions:
-            positions.update(hint.directional_positions)
-        if hint.directional_neighbors:
-            positions.update(hint.directional_neighbors)
-        return positions
-
-    def _position_touches_known_path_space(self, position: Tuple[int, int]) -> bool:
-        """Return whether a position belongs to this observer's path domain."""
-        return (
-            position in self.senses.visible
-            or position in self.senses.seen
-            or position in self.senses.paths
-            or position in self.senses.safe_paths
-        )
-
-    def _handle_spatial_event(self, event: Event) -> Optional[SensoryUpdateReason]:
-        """Apply a spatial event or hint to this observer's cache."""
-        if not isinstance(event, SpatialChangeEvent):
-            return None
-
-        position = event.position
-        entity_uuid = event.entity_uuid
-
-        if entity_uuid == self.owner_uuid and event.event_type == EventType.SPATIAL_PERCEIVABILITY_CHANGED:
-            return None
-
-        if entity_uuid == self.owner_uuid and event.event_type in (
-            EventType.SPATIAL_ENTITY_ENTERED, EventType.SPATIAL_ENTITY_LEFT
-        ):
-            if event.event_type == EventType.SPATIAL_ENTITY_LEFT:
-                return None
-            if self.update_visibility_func:
-                self.update_visibility_func()
-            self.senses._paths_dirty = True
-            return SensoryUpdateReason.SELF_MOVEMENT
-
-        hint = event.senses_hint
-        if hint is not None:
-            self._apply_hint(hint, event)
-            return self._reason_for_spatial_event(event)
-        else:
-            grid = get_map()
-            subscribers = grid.get_subscribers_at(position)
-            if self.owner_uuid not in subscribers:
-                return None
-            if self.update_visibility_func:
-                self.update_visibility_func()
-            self.senses._paths_dirty = True
-            return self._reason_for_spatial_event(event)
-
-    def _reason_for_spatial_event(self, event: SpatialChangeEvent) -> SensoryUpdateReason:
-        """Map a spatial event type to a sensory update reason."""
-        if event.event_type == EventType.SPATIAL_LIGHT_CHANGED:
-            return SensoryUpdateReason.LIGHT
-        if event.event_type == EventType.SPATIAL_PERCEIVABILITY_CHANGED:
-            return SensoryUpdateReason.PERCEIVABILITY
-        return SensoryUpdateReason.SPATIAL
-
-    def _snapshot(self) -> SensesSnapshot:
-        """Capture current cache state before or after a reactive update."""
-        return capture_senses_snapshot(self.senses)
-
-    def _emit_sensory_update(
-        self,
-        cause_event: Event,
-        before: SensesSnapshot,
-        after: SensesSnapshot,
-        reason: SensoryUpdateReason,
-        *,
-        register_event: bool = True,
-    ) -> Optional[SensoryUpdateEvent]:
-        """Emit a completed `SensoryUpdateEvent` if the snapshots differ."""
-        return emit_sensory_update_delta(
-            self.senses,
-            self.owner_uuid,
-            cause_event,
-            before,
-            after,
-            reason,
-            register_event=register_event,
-        )
-
-    def _apply_hint(self, hint: SensesUpdateHint, _event: Event) -> None:
-        """Apply targeted update based on event hint.
-
-        NEVER calls update_senses_func, so no Dijkstra runs here.
-        All path changes set _paths_dirty for deferred recomputation at turn start.
-        """
-        grid = get_map()
-
-        if hint.requires_fov:
-            if self.update_visibility_func:
-                self.update_visibility_func()
-            if hint.requires_paths:
-                self.senses._paths_dirty = True
-            return
-
-        self.senses.clear_visibility_cache()
-
-        if hint.light_changed_positions:
-            my_subs = grid.get_entity_subscriptions(self.owner_uuid)
-            overlap = hint.light_changed_positions & my_subs
-            if not overlap:
-                return
-            refresh_positions = self._light_positions_requiring_visibility_refresh(overlap)
-            if refresh_positions:
-                self._update_visibility_for_light_positions(refresh_positions)
-                self.senses._paths_dirty = True
-            return
-
-        if hint.entity_left:
-            uuid, _ = hint.entity_left
-            self.senses.entities.pop(uuid, None)
-
-        if hint.entity_entered:
-            uuid, pos = hint.entity_entered
-            if uuid != self.owner_uuid:
-                subs = grid.get_entity_subscriptions(self.owner_uuid)
-                if pos in subs:
-                    self._try_add_visible_entity(uuid, pos)
-
-        if hint.entity_died:
-            uuid, _ = hint.entity_died
-            self.senses.entities.pop(uuid, None)
-
-        if hint.perceivability_entity:
-            if hint.perceivability_entity != self.owner_uuid:
-                self._recheck_entity_perceivability(hint.perceivability_entity)
-
-        if hint.object_placed:
-            uuid, pos = hint.object_placed
-            subs = grid.get_entity_subscriptions(self.owner_uuid)
-            if pos in subs:
-                self._try_add_visible_object(uuid, pos)
-        if hint.object_removed:
-            uuid, _ = hint.object_removed
-            self.senses.objects.pop(uuid, None)
-
-        if hint.requires_paths:
-            self.senses._paths_dirty = True
-
-    def _handle_death_event(self, event: Event) -> None:
-        """Handle entity death by removing visibility and dirtying paths."""
-        if not isinstance(event, DeathEvent):
-            return
-        dead_uuid = event.entity_uuid
-
-        if dead_uuid == self.owner_uuid:
-            return
-
-        if dead_uuid in self.senses.entities:
-            self.senses.entities.pop(dead_uuid, None)
-            self.senses._paths_dirty = True
-
-    def _try_add_visible_entity(self, entity_uuid: UUID, position: Tuple[int, int]) -> None:
-        """Check light + perceivability, add to senses.entities if visible."""
-        grid = get_map()
-        tile = grid.get_tile(*position)
-        if not self._is_tile_lit_for_observer(tile):
-            return
-        block = BaseBlock.get(entity_uuid)
-        if block and block.is_perceivable_by(self.owner_uuid):
-            self.senses.entities[entity_uuid] = position
-
-    def _is_tile_lit_for_observer(self, tile: Optional[Tile]) -> bool:
-        """Return whether a tile is lit in this observer's subjective light model."""
-        if tile is None:
-            return True
-        if tile.resolved_light_level.value >= LightLevel.BRIGHT_LIGHT.value:
-            return True
-        return (
-            tile.get_effective_light_for(
-                self.owner_uuid,
-                self.senses.position,
-            ).value
-            > LightLevel.DARKNESS.value
-        )
-
-    def _refilter_entities_at(self, position: Tuple[int, int]) -> None:
-        """Re-check all entities at position. Add/remove from senses.entities.
-
-        Generates ENTITY_SPOTTED combat logs for newly visible hidden enemies
-        (e.g., light change illuminates a hidden entity).
-        """
-        grid = get_map()
-        old_at_pos = {uuid for uuid, pos in self.senses.entities.items() if pos == position}
-        for uuid in old_at_pos:
-            del self.senses.entities[uuid]
-        for ent_uuid in grid.get_entities_at(position):
-            if ent_uuid != self.owner_uuid:
-                self._try_add_visible_entity(ent_uuid, position)
-
-        new_at_pos = {uuid for uuid, pos in self.senses.entities.items() if pos == position}
-        self._log_newly_spotted_entities(new_at_pos - old_at_pos)
-
-    def _log_newly_spotted_entities(self, entity_uuids: Set[UUID]) -> None:
-        """Publish observer-scoped logs for newly perceivable hidden entities.
-
-        Args:
-            entity_uuids: Entities newly added to this observer's visible set.
-        """
-        if not entity_uuids:
-            return
-        owner = BaseBlock.get(self.owner_uuid)
-        if owner is None:
-            return
-        passive_perception = owner.get_passive_perception()
-        for spotted_uuid in sorted(entity_uuids, key=str):
-            spotted = BaseBlock.get(spotted_uuid)
-            if spotted is None or spotted.stealth_dc is None:
-                continue
-            log_entry = CombatLogEntry(
-                entry_type=CombatLogEntryType.ENTITY_SPOTTED,
-                source_name=owner.name,
-                source_uuid=str(self.owner_uuid),
-                target_name=spotted.name,
-                target_uuid=str(spotted_uuid),
-                compact=f"{{cyan:{owner.name}}} spots {{yellow:{spotted.name}}} (Perception {passive_perception} vs Stealth DC {spotted.stealth_dc})",
-                verbose=f"{{cyan:{owner.name}}} sees through {{yellow:{spotted.name}}}'s hiding (Passive Perception {passive_perception} vs Stealth DC {spotted.stealth_dc})",
-                detailed=f"{{cyan:{owner.name}}} sees through {{yellow:{spotted.name}}}'s hiding (Passive Perception {passive_perception} vs Stealth DC {spotted.stealth_dc})",
-                perceiver_uuids={str(self.owner_uuid)},
-                identified_entity_observer_uuids={
-                    str(spotted_uuid): {str(self.owner_uuid)},
-                },
-                data=EntitySpottedLogData(
-                    observer_name=owner.name,
-                    observer_uuid=str(self.owner_uuid),
-                    target_name=spotted.name,
-                    target_uuid=str(spotted_uuid),
-                    target_position=spotted.position,
-                    passive_perception=passive_perception,
-                    stealth_dc=spotted.stealth_dc,
-                ).model_dump(),
-            )
-            EventQueue.push_combat_log(log_entry, self.owner_uuid)
-
-    def _recheck_entity_perceivability(self, entity_uuid: UUID) -> None:
-        """Re-check if a specific entity should be in visible set."""
-        block = BaseBlock.get(entity_uuid)
-        if block is None:
-            self.senses.entities.pop(entity_uuid, None)
-            return
-        position = block.position
-        if position is None:
-            self.senses.entities.pop(entity_uuid, None)
-            return
-        grid = get_map()
-        if position not in grid.get_entity_subscriptions(self.owner_uuid):
-            self.senses.entities.pop(entity_uuid, None)
-            return
-        if block.is_perceivable_by(self.owner_uuid):
-            tile = grid.get_tile(*position)
-            if self._is_tile_lit_for_observer(tile):
-                self.senses.entities[entity_uuid] = position
-                return
-        self.senses.entities.pop(entity_uuid, None)
-
-    def _update_visibility_at(self, position: Tuple[int, int]) -> None:
-        """Update senses.visible, entities, and objects at one position after light change.
-
-        Positions are confirmed in the geometric FOV. Only effective light is
-        checked here; shadowcast already happened when subscriptions were built.
-        """
-        self._update_visibility_for_light_positions({position})
-
-    def _light_positions_requiring_visibility_refresh(
-        self,
-        positions: Set[Tuple[int, int]],
-    ) -> Set[Tuple[int, int]]:
-        """Return light-change positions that alter visible occupancy facts."""
-        if not positions:
-            return set()
-
-        grid = get_map()
-        occupied_positions = {
-            position for position in self.senses.entities.values()
-        } | {
-            position for position in self.senses.objects.values()
-        }
-        refresh: Set[Tuple[int, int]] = set()
-        for position in positions:
-            tile = grid.get_tile(*position)
-            is_lit = self._is_tile_lit_for_observer(tile)
-            currently_visible = bool(self.senses.visible.get(position))
-            if is_lit != currently_visible:
-                refresh.add(position)
-            elif not is_lit and position in occupied_positions:
-                refresh.add(position)
-        return refresh
-
-    def _update_visibility_for_light_positions(
-        self,
-        positions: Set[Tuple[int, int]],
-    ) -> None:
-        """Apply one light-field delta to this observer's visible facts.
-
-        Args:
-            positions: Geometric-FOV positions whose effective light changed.
-        """
-        if not positions:
-            return
-        grid = get_map()
-        old_entity_uuids = {
-            entity_uuid
-            for entity_uuid, position in self.senses.entities.items()
-            if position in positions
-        }
-        self.senses.entities = {
-            entity_uuid: position
-            for entity_uuid, position in self.senses.entities.items()
-            if position not in positions
-        }
-        self.senses.objects = {
-            object_uuid: position
-            for object_uuid, position in self.senses.objects.items()
-            if position not in positions
-        }
-
-        lit_positions: Set[Tuple[int, int]] = set()
-        for position in positions:
-            tile = grid.get_tile(*position)
-            is_lit = self._is_tile_lit_for_observer(tile)
-            if is_lit:
-                lit_positions.add(position)
-                self.senses.visible[position] = True
-                self.senses.seen.add(position)
-            else:
-                self.senses.visible.pop(position, None)
-
-        for position in sorted(lit_positions):
-            for entity_uuid in sorted(grid.get_entities_at(position), key=str):
-                if entity_uuid != self.owner_uuid:
-                    self._try_add_visible_entity(entity_uuid, position)
-            for object_uuid in sorted(grid.get_objects_at(position), key=str):
-                self._try_add_visible_object(object_uuid, position)
-
-        new_entity_uuids = {
-            entity_uuid
-            for entity_uuid, position in self.senses.entities.items()
-            if position in positions
-        }
-        self._log_newly_spotted_entities(new_entity_uuids - old_entity_uuids)
-
-    def _refilter_objects_at(self, position: Tuple[int, int]) -> None:
-        """Re-check all objects at position. Add/remove from senses.objects."""
-        grid = get_map()
-        to_remove = [uuid for uuid, pos in self.senses.objects.items() if pos == position]
-        for uuid in to_remove:
-            del self.senses.objects[uuid]
-        for obj_uuid in grid.get_objects_at(position):
-            self._try_add_visible_object(obj_uuid, position)
-
-    def _try_add_visible_object(self, object_uuid: UUID, position: Tuple[int, int]) -> None:
-        """Add object to senses.objects if in visible area."""
-        grid = get_map()
-        block = BaseBlock.get(object_uuid)
-        if block is None:
-            return
-        if not block.should_include_in_senses_objects():
-            return
-        if not block.is_perceivable_by(self.owner_uuid):
-            return
-        adjacent = (
-            position != self.senses.position
-            and max(
-                abs(position[0] - self.senses.position[0]),
-                abs(position[1] - self.senses.position[1]),
-            ) <= 1
-        )
-        if adjacent and block.should_include_in_adjacent_senses_objects():
-            self.senses.objects[object_uuid] = position
-            return
-        if position not in self.senses.visible:
-            return
-        tile = grid.get_tile(*position)
-        if not self._is_tile_lit_for_observer(tile):
-            return
-        self.senses.objects[object_uuid] = position
-
-    def _handle_own_perception_change(self) -> None:
-        """Check if a condition change on self affected our perception capabilities.
-
-        Compares current perception state against snapshot. If changed:
-        - Sense modes changed -> full visibility recompute (light filtering changes)
-        - Only passive perception changed -> refilter entities + mark paths dirty
-        """
-        owner = BaseBlock.get(self.owner_uuid)
-        if owner is None:
-            return
-
-        current_perception = owner.get_passive_perception()
-        current_modes_hash = self.senses.compute_sense_modes_hash()
-        current_visual_access = self.senses.visual_access.normalized_score
-
-        perception_changed = current_perception != self.senses._last_passive_perception
-        modes_changed = current_modes_hash != self.senses._last_sense_modes_hash
-        visual_access_changed = current_visual_access != self.senses._last_visual_access
-
-        if not perception_changed and not modes_changed and not visual_access_changed:
-            return
-
-        old_perception = self.senses._last_passive_perception
-
-        self.senses._last_passive_perception = current_perception
-        self.senses._last_sense_modes_hash = current_modes_hash
-        self.senses._last_visual_access = current_visual_access
-
-        if modes_changed or visual_access_changed:
-            if self.update_visibility_func:
-                self.update_visibility_func()
-            self.senses._paths_dirty = True
-        else:
-            self._refilter_all_visible_entities(old_perception, current_perception)
-            self.senses._paths_dirty = True
-
-    def _refilter_all_visible_entities(self, old_perception: int, new_perception: int) -> None:
-        """Re-check all entities in visible area for perceivability changes.
-
-        Also logs ENTITY_SPOTTED for newly visible hidden enemies and
-        HAZARD_DETECTED for newly detectable hidden hazards.
-        """
-        grid = get_map()
-        old_entities = set(self.senses.entities.keys())
-
-        new_entities: Dict[UUID, Tuple[int, int]] = {}
-        for pos in self.senses.visible:
-            for ent_uuid in grid.get_entities_at(pos):
-                if ent_uuid != self.owner_uuid:
-                    block = BaseBlock.get(ent_uuid)
-                    if block and block.is_perceivable_by(self.owner_uuid):
-                        tile = grid.get_tile(*pos)
-                        if self._is_tile_lit_for_observer(tile):
-                            new_entities[ent_uuid] = pos
-
-        self.senses.entities = new_entities
-
-        newly_spotted = set(new_entities.keys()) - old_entities
-        owner = BaseBlock.get(self.owner_uuid)
-        if owner and newly_spotted:
-            for spotted_uuid in newly_spotted:
-                spotted = BaseBlock.get(spotted_uuid)
-                if spotted and spotted.stealth_dc is not None:
-                    log_entry = CombatLogEntry(
-                        entry_type=CombatLogEntryType.ENTITY_SPOTTED,
-                        source_name=owner.name,
-                        source_uuid=str(self.owner_uuid),
-                        target_name=spotted.name,
-                        target_uuid=str(spotted_uuid),
-                        compact=f"{{cyan:{owner.name}}} spots {{yellow:{spotted.name}}} (Perception {new_perception} vs Stealth DC {spotted.stealth_dc})",
-                        verbose=f"{{cyan:{owner.name}}} sees through {{yellow:{spotted.name}}}'s hiding (Passive Perception {new_perception} vs Stealth DC {spotted.stealth_dc})",
-                        detailed=f"{{cyan:{owner.name}}} sees through {{yellow:{spotted.name}}}'s hiding (Passive Perception {new_perception} vs Stealth DC {spotted.stealth_dc})",
-                        perceiver_uuids={str(self.owner_uuid)},
-                        identified_entity_observer_uuids={
-                            str(spotted_uuid): {str(self.owner_uuid)},
-                        },
-                        data=EntitySpottedLogData(
-                            observer_name=owner.name,
-                            observer_uuid=str(self.owner_uuid),
-                            target_name=spotted.name,
-                            target_uuid=str(spotted_uuid),
-                            target_position=spotted.position,
-                            passive_perception=new_perception,
-                            stealth_dc=spotted.stealth_dc
-                        ).model_dump()
-                    )
-                    EventQueue.push_combat_log(log_entry, self.owner_uuid)
-
-        if new_perception > old_perception and owner:
-            self._log_newly_detected_hazards(old_perception, new_perception)
-
-    def _log_newly_detected_hazards(self, old_pp: int, new_pp: int) -> None:
-        """Log hazards that became detectable due to perception increase."""
-        grid = get_map()
-        owner = BaseBlock.get(self.owner_uuid)
-        if not owner:
-            return
-        for pos in self.senses.visible:
-            tile = grid.get_tile(*pos)
-            if tile is None:
-                continue
-            for cond in tile.active_conditions.values():
-                if cond.condition_stealth_dc is not None and cond.hazard_filter is not None:
-                    if cond.condition_stealth_dc >= old_pp and cond.condition_stealth_dc < new_pp:
-                        log_entry = CombatLogEntry(
-                            entry_type=CombatLogEntryType.HAZARD_DETECTED,
-                            source_name=owner.name,
-                            source_uuid=str(self.owner_uuid),
-                            compact=f"{{cyan:{owner.name}}} detects {{red:{cond.name}}} at ({pos[0]},{pos[1]})",
-                            verbose=f"{{cyan:{owner.name}}} spots hidden {{red:{cond.name}}} at ({pos[0]},{pos[1]}) (Perception {new_pp} vs DC {cond.condition_stealth_dc})",
-                            detailed=f"{{cyan:{owner.name}}} spots hidden {{red:{cond.name}}} at ({pos[0]},{pos[1]}) (Perception {new_pp} vs DC {cond.condition_stealth_dc})",
-                            perceiver_uuids={str(self.owner_uuid)},
-                            data=HazardDetectedLogData(
-                                observer_name=owner.name,
-                                observer_uuid=str(self.owner_uuid),
-                                hazard_name=cond.name if cond.name else "Unknown",
-                                position=pos,
-                                passive_perception=new_pp,
-                                stealth_dc=cond.condition_stealth_dc
-                            ).model_dump()
-                        )
-                        EventQueue.push_combat_log(log_entry, self.owner_uuid)
-
-
-@dataclass(frozen=True)
-class ObserverFootprint:
-    """Indexed subjective footprint used to select sensory update candidates."""
-
-    subscribed_positions: frozenset[Tuple[int, int]]
-    known_path_positions: frozenset[Tuple[int, int]]
-    visible_entity_uuids: frozenset[UUID]
-    visible_object_uuids: frozenset[UUID]
-
-
-class SpatialSensesSystem:
-    """Indexed dispatcher for observer-local pre-completion sensory callbacks.
-
-    Candidate indexes only avoid asking definitely unrelated observers to
-    recompute. `SpatialSensesCallback` remains the final rules authority for
-    every selected observer.
-    """
-
-    SYSTEM_NAME = "spatial_senses"
+        EventType.SPATIAL_EFFECT_CHANGED,
+    }
     EVENT_TYPES = {
         EventType.DEATH,
         EventType.CONDITION_APPLICATION,
         EventType.CONDITION_REMOVAL,
         EventType.LIFE_STATE_CHANGE,
-        *SpatialSensesCallback.SPATIAL_EVENTS,
+        EventType.TURN_START,
+        *SPATIAL_EVENTS,
     }
 
     def __init__(self) -> None:
-        self.callbacks_by_observer: Dict[UUID, SpatialSensesCallback] = {}
+        self.senses_by_observer: Dict[UUID, Senses] = {}
         self.footprints_by_observer: Dict[UUID, ObserverFootprint] = {}
         self.observers_by_known_position: DefaultDict[
-            Tuple[int, int],
-            Set[UUID],
+            Tuple[int, int], Set[UUID]
         ] = defaultdict(set)
-        self.observers_by_visible_entity: DefaultDict[UUID, Set[UUID]] = defaultdict(set)
-        self.observers_by_visible_object: DefaultDict[UUID, Set[UUID]] = defaultdict(set)
+        self.observers_by_entity: DefaultDict[UUID, Set[UUID]] = defaultdict(set)
+        self.observers_by_object: DefaultDict[UUID, Set[UUID]] = defaultdict(set)
 
     def attach(self) -> None:
-        """Attach this system to the dependency-neutral event lifecycle."""
+        """Attach the reducer to the existing pre-completion event boundary."""
         EventQueue.add_pre_completion_system(
             self.SYSTEM_NAME,
             self,
@@ -1348,36 +602,346 @@ class SpatialSensesSystem:
         )
 
     def reset(self) -> None:
-        """Clear observer callbacks and every reverse candidate index."""
-        self.callbacks_by_observer.clear()
+        """Clear observers and candidate indexes."""
+        self.senses_by_observer.clear()
         self.footprints_by_observer.clear()
         self.observers_by_known_position.clear()
-        self.observers_by_visible_entity.clear()
-        self.observers_by_visible_object.clear()
+        self.observers_by_entity.clear()
+        self.observers_by_object.clear()
 
-    def register_observer(self, callback: SpatialSensesCallback) -> None:
-        """Register or replace one observer callback and index its current facts."""
-        self.callbacks_by_observer[callback.owner_uuid] = callback
-        self.refresh_observer(callback.owner_uuid)
+    def register_observer(self, observer_uuid: UUID, senses: Senses) -> None:
+        """Register an observer without independently materializing its world view."""
+        self.senses_by_observer[observer_uuid] = senses
+
+    def unregister_observer(self, observer_uuid: UUID) -> None:
+        """Remove an observer and all of its candidate memberships."""
+        self.senses_by_observer.pop(observer_uuid, None)
+        footprint = self.footprints_by_observer.pop(observer_uuid, None)
+        if footprint is not None:
+            self._remove_footprint(observer_uuid, footprint)
+        get_map().unsubscribe_entity(observer_uuid)
+
+    def recompute_observer(
+        self,
+        observer_uuid: UUID,
+        *,
+        max_distance: Optional[int] = None,
+    ) -> None:
+        """Replace one observer's exact visual cells and perceived contacts."""
+        senses = self.senses_by_observer.get(observer_uuid)
+        owner = BaseBlock.get(observer_uuid)
+        if senses is None or owner is None:
+            return
+        if max_distance is not None:
+            senses._perception_max_distance = max_distance
+        max_distance = senses._perception_max_distance
+        origin = cast(Tuple[int, int], owner.get_position())
+        grid = get_map()
+        modes = {
+            mode.sense_type: mode.range_feet
+            for mode in senses.get_sense_modes()
+        }
+        visual_access = senses.visual_access.normalized_score > 0
+        ordinary_sight = owner.has_ordinary_visual_sight()
+        optical_radius = max_distance if ordinary_sight else 0
+        for sense_type in (
+            SensesType.DARKVISION,
+            SensesType.DEVILS_SIGHT,
+            SensesType.TRUESIGHT,
+        ):
+            sense_range = modes.get(sense_type)
+            if sense_range is not None:
+                optical_radius = max(
+                    optical_radius,
+                    max_distance if sense_range == 0 else (sense_range + 4) // 5,
+                )
+
+        optical_candidates = (
+            set(grid.compute_fov(origin, optical_radius))
+            if visual_access and optical_radius > 0
+            else set()
+        )
+        visible: Dict[Tuple[int, int], bool] = {}
+        effective_light: Dict[Tuple[int, int], LightLevel] = {}
+        visual_modes_by_position: Dict[Tuple[int, int], Set[SensesType]] = {}
+        for position in optical_candidates:
+            tile = grid.get_tile(*position)
+            if tile is None:
+                continue
+            distance = senses.get_feet_distance(position)
+            obscurements = grid.get_optical_obscurements_on_route(
+                origin,
+                position,
+            )
+            establishing_modes: Set[SensesType] = set()
+            ordinary_establishes = (
+                ordinary_sight
+                and OpticalObscurement.HEAVY not in obscurements
+                and OpticalObscurement.MAGICAL_DARKNESS not in obscurements
+                and tile.resolved_light_level.value > LightLevel.DARKNESS.value
+            )
+            if self._sense_in_range(modes, SensesType.DARKVISION, distance) and (
+                OpticalObscurement.HEAVY not in obscurements
+                and OpticalObscurement.MAGICAL_DARKNESS not in obscurements
+            ):
+                establishing_modes.add(SensesType.DARKVISION)
+            if self._sense_in_range(modes, SensesType.DEVILS_SIGHT, distance) and (
+                OpticalObscurement.HEAVY not in obscurements
+            ):
+                establishing_modes.add(SensesType.DEVILS_SIGHT)
+            if self._sense_in_range(modes, SensesType.TRUESIGHT, distance) and (
+                OpticalObscurement.HEAVY not in obscurements
+            ):
+                establishing_modes.add(SensesType.TRUESIGHT)
+            if not ordinary_establishes and not establishing_modes:
+                continue
+            visible[position] = True
+            visual_modes_by_position[position] = establishing_modes
+            resolved = tile.resolved_light_level
+            if (
+                resolved.value <= LightLevel.DARKNESS.value
+                and establishing_modes
+                & {SensesType.DEVILS_SIGHT, SensesType.TRUESIGHT}
+            ):
+                resolved = LightLevel.BRIGHT_LIGHT
+            elif (
+                resolved is LightLevel.DARKNESS
+                and SensesType.DARKVISION in establishing_modes
+            ):
+                resolved = LightLevel.DIM_LIGHT
+            elif (
+                resolved is LightLevel.DIM_LIGHT
+                and SensesType.DARKVISION in establishing_modes
+            ):
+                resolved = LightLevel.BRIGHT_LIGHT
+            effective_light[position] = resolved
+
+        nonvisual_positions: Dict[SensesType, Set[Tuple[int, int]]] = {}
+        for sense_type in (SensesType.BLINDSIGHT, SensesType.TREMORSENSE):
+            sense_range = modes.get(sense_type)
+            if sense_range is None:
+                continue
+            radius = max_distance if sense_range == 0 else (sense_range + 4) // 5
+            nonvisual_positions[sense_type] = set(
+                grid.compute_propagation_fov(origin, radius)
+            )
+
+        boundary_evidence: Dict[
+            UUID,
+            Set[Tuple[Tuple[int, int], bool, Tuple[SensesType, ...]]],
+        ] = defaultdict(set)
+        self._collect_boundary_evidence(
+            boundary_evidence,
+            set(visible),
+            WorldEdgeChannel.OPTICAL,
+            visual=True,
+            senses_by_position=visual_modes_by_position,
+        )
+        for sense_type, positions in nonvisual_positions.items():
+            self._collect_boundary_evidence(
+                boundary_evidence,
+                positions,
+                WorldEdgeChannel.PROPAGATION,
+                visual=False,
+                fixed_senses=(sense_type,),
+            )
+
+        entity_contacts: Dict[UUID, PerceivedContact] = {}
+        object_contacts: Dict[UUID, PerceivedContact] = {}
+        candidate_positions = set(visible)
+        for positions in nonvisual_positions.values():
+            candidate_positions.update(positions)
+        for position in candidate_positions:
+            for entity_uuid in sorted(grid.get_entities_at(position), key=str):
+                if entity_uuid == observer_uuid:
+                    continue
+                subject = BaseBlock.get(entity_uuid)
+                if subject is None or not subject.appears_in_entity_contacts():
+                    continue
+                contact = self._resolve_contact(
+                    owner,
+                    senses,
+                    subject,
+                    position,
+                    position in visible,
+                    visual_modes_by_position.get(position, set()),
+                    nonvisual_positions,
+                    modes,
+                )
+                if contact is not None:
+                    entity_contacts[entity_uuid] = contact
+            for object_uuid in sorted(grid.get_center_objects_at(position), key=str):
+                subject = BaseBlock.get(object_uuid)
+                if subject is None or not subject.should_include_in_senses_objects():
+                    continue
+                contact = self._resolve_contact(
+                    owner,
+                    senses,
+                    subject,
+                    position,
+                    position in visible,
+                    visual_modes_by_position.get(position, set()),
+                    nonvisual_positions,
+                    modes,
+                )
+                if contact is not None:
+                    object_contacts[object_uuid] = contact
+
+        for object_uuid in sorted(boundary_evidence, key=str):
+            subject = BaseBlock.get(object_uuid)
+            placement = grid.get_object_placement(object_uuid)
+            if (
+                subject is None
+                or placement is None
+                or placement.boundary_direction is None
+                or not subject.should_include_in_senses_objects()
+            ):
+                continue
+            evidence = tuple(sorted(
+                boundary_evidence[object_uuid],
+                key=lambda row: (
+                    row[0],
+                    not row[1],
+                    tuple(sense.value for sense in row[2]),
+                ),
+            ))
+            contact = self._resolve_contact(
+                owner,
+                senses,
+                subject,
+                placement.position,
+                False,
+                set(),
+                nonvisual_positions,
+                modes,
+                route_evidence=evidence,
+                contact_position=placement.position,
+            )
+            if contact is not None:
+                object_contacts[object_uuid] = contact
+
+        senses.replace_perception(
+            position=origin,
+            visible=visible,
+            seen=set(senses.seen) | set(visible),
+            entities=entity_contacts,
+            objects=object_contacts,
+            effective_light_levels=effective_light,
+            passive_perception=owner.get_passive_perception(),
+            sense_modes_hash=senses.compute_sense_modes_hash(),
+            visual_access=senses.visual_access.normalized_score,
+        )
+        subscribed = set(optical_candidates)
+        for positions in nonvisual_positions.values():
+            subscribed.update(positions)
+        grid.subscribe_to_cells(observer_uuid, subscribed)
+        self.refresh_observer(observer_uuid)
+
+    @staticmethod
+    def _sense_in_range(
+        modes: Dict[SensesType, int],
+        sense_type: SensesType,
+        distance_feet: int,
+    ) -> bool:
+        sense_range = modes.get(sense_type)
+        return sense_range is not None and (
+            sense_range == 0 or distance_feet <= sense_range
+        )
+
+    def _collect_boundary_evidence(
+        self,
+        result: DefaultDict[
+            UUID,
+            Set[Tuple[Tuple[int, int], bool, Tuple[SensesType, ...]]],
+        ],
+        positions: Set[Tuple[int, int]],
+        channel: WorldEdgeChannel,
+        *,
+        visual: bool,
+        senses_by_position: Optional[Dict[Tuple[int, int], Set[SensesType]]] = None,
+        fixed_senses: Tuple[SensesType, ...] = (),
+    ) -> None:
+        grid = get_map()
+        for position in sorted(positions):
+            evidence_senses = (
+                tuple(sorted(senses_by_position.get(position, set()), key=lambda value: value.value))
+                if senses_by_position is not None
+                else fixed_senses
+            )
+            for direction in CardinalDirection:
+                exit_layer, entry_layer = grid.get_boundary_route_layers(
+                    position,
+                    direction,
+                    channel,
+                )
+                for object_uuid in (*exit_layer, *entry_layer):
+                    result[object_uuid].add(
+                        (position, visual, evidence_senses)
+                    )
+
+    def _resolve_contact(
+        self,
+        owner: BaseBlock,
+        senses: Senses,
+        subject: BaseBlock,
+        position: Tuple[int, int],
+        cell_visual: bool,
+        visual_modes: Set[SensesType],
+        nonvisual_positions: Dict[SensesType, Set[Tuple[int, int]]],
+        modes: Dict[SensesType, int],
+        *,
+        route_evidence: Optional[
+            Tuple[Tuple[Tuple[int, int], bool, Tuple[SensesType, ...]], ...]
+        ] = None,
+        contact_position: Optional[Tuple[int, int]] = None,
+    ) -> Optional[PerceivedContact]:
+        if (
+            subject.stealth_dc is not None
+            and subject.stealth_dc >= owner.get_passive_perception()
+        ):
+            return None
+        evidence = route_evidence or ((
+            position,
+            cell_visual,
+            tuple(sorted(visual_modes, key=lambda value: value.value)),
+        ),)
+        visual = False
+        special: Set[SensesType] = set()
+        for evidence_position, evidence_visual, evidence_modes in evidence:
+            distance = senses.get_feet_distance(evidence_position)
+            invisibility_bypassed = not subject.is_invisible or any((
+                self._sense_in_range(modes, SensesType.TRUESIGHT, distance),
+                self._sense_in_range(modes, SensesType.SEE_INVISIBLE, distance),
+            ))
+            if evidence_visual and invisibility_bypassed:
+                visual = True
+                special.update(evidence_modes)
+            special.update(
+                sense_type
+                for sense_type, positions in nonvisual_positions.items()
+                if evidence_position in positions
+            )
+        if not visual and not special:
+            return None
+        return PerceivedContact(
+            position=contact_position or position,
+            visual=visual,
+            special_senses=tuple(sorted(special, key=lambda value: value.value)),
+        )
 
     def refresh_observer(self, observer_uuid: UUID) -> None:
-        """Synchronize one observer's reverse indexes with its senses cache."""
-        callback = self.callbacks_by_observer.get(observer_uuid)
-        if callback is None:
+        """Synchronize one observer's candidate reverse indexes."""
+        senses = self.senses_by_observer.get(observer_uuid)
+        if senses is None:
             return
-        senses = callback.senses
         new = ObserverFootprint(
-            subscribed_positions=frozenset(
-                get_map().get_entity_subscriptions(observer_uuid)
-            ),
             known_path_positions=frozenset(
                 set(senses.visible)
-                | senses.seen
                 | set(senses.paths)
                 | set(senses.safe_paths)
             ),
-            visible_entity_uuids=frozenset(senses.entities),
-            visible_object_uuids=frozenset(senses.objects),
+            entity_uuids=frozenset(senses.entities),
+            object_uuids=frozenset(senses.objects),
         )
         old = self.footprints_by_observer.get(observer_uuid)
         if old == new:
@@ -1388,118 +952,155 @@ class SpatialSensesSystem:
         self.footprints_by_observer[observer_uuid] = new
 
     def candidate_observer_uuids(self, event: Event) -> Set[UUID]:
-        """Return a conservative observer set for one relevant completion."""
-        registered = set(self.callbacks_by_observer)
-        if event.event_type in (
+        """Return a conservative indexed observer set for one completion."""
+        registered = set(self.senses_by_observer)
+        if event.event_type is EventType.TURN_START:
+            return (
+                {event.source_entity_uuid}
+                if event.source_entity_uuid in registered
+                else set()
+            )
+        if event.event_type in {
             EventType.CONDITION_APPLICATION,
             EventType.CONDITION_REMOVAL,
             EventType.LIFE_STATE_CHANGE,
-        ):
+        }:
             target = event.target_entity_uuid
             return {target} if target is not None and target in registered else set()
-        if event.event_type == EventType.DEATH:
-            if not isinstance(event, DeathEvent):
-                return registered
-            return set(self.observers_by_visible_entity.get(event.entity_uuid, set()))
+        if isinstance(event, DeathEvent):
+            return set(self.observers_by_entity.get(event.entity_uuid, set()))
+        if isinstance(event, SpatialEffectChangeEvent):
+            grid = get_map()
+            candidates: Set[UUID] = set()
+            for position in event.get_affected_positions():
+                candidates.update(grid.get_subscribers_at(position))
+            return candidates & registered
         if not isinstance(event, SpatialChangeEvent):
-            return registered
+            return set()
         if (
-            event.event_type == EventType.SPATIAL_ENTITY_LEFT
+            event.event_type is EventType.SPATIAL_ENTITY_LEFT
             and event.old_position is not None
         ):
             return set()
 
-        candidates: Set[UUID] = set()
-        grid = get_map()
-        hint = event.senses_hint
-        if (
-            event.event_type == EventType.SPATIAL_LIGHT_CHANGED
-            and hint is not None
-            and hint.light_changed_positions
-        ):
-            candidates.update(
-                grid.get_subscribers_for_cells(hint.light_changed_positions)
-            )
-            return candidates & registered
-
         positions = self._candidate_positions(event)
+        grid = get_map()
+        candidates: Set[UUID] = set()
         for position in positions:
             candidates.update(grid.get_subscribers_at(position))
-
         if (
             event.entity_uuid is not None
             and event.entity_uuid in registered
-            and event.event_type == EventType.SPATIAL_ENTITY_ENTERED
+            and event.event_type is EventType.SPATIAL_ENTITY_ENTERED
         ):
             candidates.add(event.entity_uuid)
+        hint = event.senses_hint
         if hint is not None:
-            if hint.entity_left:
-                candidates.update(
-                    self.observers_by_visible_entity.get(hint.entity_left[0], set())
-                )
-            if hint.entity_died:
-                candidates.update(
-                    self.observers_by_visible_entity.get(hint.entity_died[0], set())
-                )
-            if hint.perceivability_entity:
-                entity_uuid = hint.perceivability_entity
-                candidates.update(self.observers_by_visible_entity.get(entity_uuid, set()))
-                entity_position = grid.get_entity_position(entity_uuid)
-                if entity_position is not None:
-                    candidates.update(grid.get_subscribers_at(entity_position))
-            if hint.object_removed:
-                candidates.update(
-                    self.observers_by_visible_object.get(hint.object_removed[0], set())
-                )
+            if hint.entity_left is not None:
+                candidates.update(self.observers_by_entity.get(hint.entity_left[0], set()))
+            if hint.entity_died is not None:
+                candidates.update(self.observers_by_entity.get(hint.entity_died[0], set()))
+            if hint.object_removed is not None:
+                candidates.update(self.observers_by_object.get(hint.object_removed[0], set()))
+            if hint.perceivability_entity is not None:
+                changed_uuid = hint.perceivability_entity
+                candidates.update(self.observers_by_entity.get(changed_uuid, set()))
+                candidates.update(self.observers_by_object.get(changed_uuid, set()))
             if hint.requires_paths:
                 for position in positions:
-                    candidates.update(
-                        self.observers_by_known_position.get(position, set())
-                    )
-
+                    candidates.update(self.observers_by_known_position.get(position, set()))
         return candidates & registered
 
     def __call__(self, event: Event) -> None:
-        """Dispatch an event to indexed candidates in replay-stable order."""
+        """Reduce indexed observers before the causal event completes."""
         sensory_events: List[SensoryUpdateEvent] = []
         for observer_uuid in sorted(self.candidate_observer_uuids(event), key=str):
-            callback = self.callbacks_by_observer.get(observer_uuid)
-            if callback is None:
+            senses = self.senses_by_observer.get(observer_uuid)
+            if senses is None:
                 continue
-            try:
-                sensory_event = callback(event, register_event=False)
-                if sensory_event is not None:
-                    sensory_events.append(sensory_event)
-            finally:
-                self.refresh_observer(observer_uuid)
-        if sensory_events:
-            timing = action_timing_enabled()
-            started = time.perf_counter() if timing else 0.0
-            EventQueue.register_completion_sequence(sensory_events)
-            if timing:
-                record_action_timing(
-                    "sensory_system.register_completion_sequence_ms",
-                    started,
+            before = capture_senses_snapshot(senses)
+            self.recompute_observer(observer_uuid)
+            after = capture_senses_snapshot(senses)
+            projection_changed = any((
+                before.position != after.position,
+                before.visible != after.visible,
+                before.seen != after.seen,
+                before.entities != after.entities,
+                before.objects != after.objects,
+                before.passive_perception != after.passive_perception,
+            ))
+            visible_topology_changed = False
+            if isinstance(event, SpatialChangeEvent):
+                hint = event.senses_hint
+                visible_topology_changed = bool(
+                    hint is not None
+                    and hint.requires_paths
+                    and self._candidate_positions(event) & after.visible
                 )
+                visible_topology_changed = visible_topology_changed or bool(
+                    event.object_uuid is not None
+                    and event.object_uuid in after.objects
+                    and hint is not None
+                    and hint.requires_paths
+                )
+            elif isinstance(event, SpatialEffectChangeEvent):
+                visible_topology_changed = bool(
+                    event.get_affected_positions() & after.visible
+                )
+            if projection_changed or visible_topology_changed:
+                senses._paths_dirty = True
+                after = capture_senses_snapshot(senses)
+            sensory_event = emit_sensory_update_delta(
+                observer_uuid,
+                event,
+                before,
+                after,
+                self._reason_for(event, observer_uuid),
+                register_event=False,
+            )
+            if sensory_event is not None:
+                sensory_events.append(sensory_event)
+        if sensory_events:
+            EventQueue.register_completion_sequence(sensory_events)
 
-    def _candidate_positions(self, event: SpatialChangeEvent) -> Set[Tuple[int, int]]:
-        """Collect all positions represented by a spatial event and its hint."""
+    @staticmethod
+    def _reason_for(event: Event, observer_uuid: UUID) -> SensoryUpdateReason:
+        if event.event_type is EventType.TURN_START:
+            return SensoryUpdateReason.TURN_START
+        if event.event_type is EventType.SPATIAL_LIGHT_CHANGED:
+            return SensoryUpdateReason.LIGHT
+        if event.event_type is EventType.SPATIAL_PERCEIVABILITY_CHANGED:
+            return SensoryUpdateReason.PERCEIVABILITY
+        if event.event_type is EventType.DEATH:
+            return SensoryUpdateReason.DEATH
+        if event.event_type is EventType.LIFE_STATE_CHANGE:
+            return SensoryUpdateReason.LIFE_STATE
+        if event.event_type in {
+            EventType.CONDITION_APPLICATION,
+            EventType.CONDITION_REMOVAL,
+        }:
+            return SensoryUpdateReason.CONDITION
+        if isinstance(event, SpatialChangeEvent) and event.entity_uuid == observer_uuid:
+            return SensoryUpdateReason.SELF_MOVEMENT
+        return SensoryUpdateReason.SPATIAL
+
+    @staticmethod
+    def _candidate_positions(event: SpatialChangeEvent) -> Set[Tuple[int, int]]:
         positions = {event.position}
         if event.old_position is not None:
             positions.add(event.old_position)
         hint = event.senses_hint
         if hint is None:
             return positions
-        if hint.entity_entered:
-            positions.add(hint.entity_entered[1])
-        if hint.entity_left:
-            positions.add(hint.entity_left[1])
-        if hint.entity_died:
-            positions.add(hint.entity_died[1])
-        if hint.object_placed:
-            positions.add(hint.object_placed[1])
-        if hint.object_removed:
-            positions.add(hint.object_removed[1])
+        for fact in (
+            hint.entity_entered,
+            hint.entity_left,
+            hint.entity_died,
+            hint.object_placed,
+            hint.object_removed,
+        ):
+            if fact is not None:
+                positions.add(fact[1])
         if hint.light_changed_positions:
             positions.update(hint.light_changed_positions)
         if hint.directional_positions:
@@ -1515,16 +1116,15 @@ class SpatialSensesSystem:
         *,
         retained: Optional[ObserverFootprint] = None,
     ) -> None:
-        """Remove reverse-index memberships absent from a retained footprint."""
         retained_positions = retained.known_path_positions if retained else frozenset()
-        retained_entities = retained.visible_entity_uuids if retained else frozenset()
-        retained_objects = retained.visible_object_uuids if retained else frozenset()
+        retained_entities = retained.entity_uuids if retained else frozenset()
+        retained_objects = retained.object_uuids if retained else frozenset()
         for position in footprint.known_path_positions - retained_positions:
             self._discard_reverse(self.observers_by_known_position, position, observer_uuid)
-        for entity_uuid in footprint.visible_entity_uuids - retained_entities:
-            self._discard_reverse(self.observers_by_visible_entity, entity_uuid, observer_uuid)
-        for object_uuid in footprint.visible_object_uuids - retained_objects:
-            self._discard_reverse(self.observers_by_visible_object, object_uuid, observer_uuid)
+        for entity_uuid in footprint.entity_uuids - retained_entities:
+            self._discard_reverse(self.observers_by_entity, entity_uuid, observer_uuid)
+        for object_uuid in footprint.object_uuids - retained_objects:
+            self._discard_reverse(self.observers_by_object, object_uuid, observer_uuid)
 
     def _add_footprint(
         self,
@@ -1533,16 +1133,15 @@ class SpatialSensesSystem:
         *,
         previous: Optional[ObserverFootprint],
     ) -> None:
-        """Add reverse-index memberships introduced by a new footprint."""
         previous_positions = previous.known_path_positions if previous else frozenset()
-        previous_entities = previous.visible_entity_uuids if previous else frozenset()
-        previous_objects = previous.visible_object_uuids if previous else frozenset()
+        previous_entities = previous.entity_uuids if previous else frozenset()
+        previous_objects = previous.object_uuids if previous else frozenset()
         for position in footprint.known_path_positions - previous_positions:
             self.observers_by_known_position[position].add(observer_uuid)
-        for entity_uuid in footprint.visible_entity_uuids - previous_entities:
-            self.observers_by_visible_entity[entity_uuid].add(observer_uuid)
-        for object_uuid in footprint.visible_object_uuids - previous_objects:
-            self.observers_by_visible_object[object_uuid].add(observer_uuid)
+        for entity_uuid in footprint.entity_uuids - previous_entities:
+            self.observers_by_entity[entity_uuid].add(observer_uuid)
+        for object_uuid in footprint.object_uuids - previous_objects:
+            self.observers_by_object[object_uuid].add(observer_uuid)
 
     @staticmethod
     def _discard_reverse(
@@ -1550,7 +1149,6 @@ class SpatialSensesSystem:
         key: K,
         observer_uuid: UUID,
     ) -> None:
-        """Discard one reverse membership and remove empty keys."""
         observers = index.get(key)
         if observers is None:
             return

@@ -49,22 +49,14 @@ from dnd.spells.evocation import CureWounds, HealingWord
 from dnd.spells.effect_ids import MAGIC_MISSILE_DAMAGE_EFFECT_ID
 from dnd.spells.illusion import HypnoticPatternEffect, MirrorImage, MirrorImageEffect
 from dnd.spells.necromancy import FalseLife
-from dnd.spells.transmutation import SpikeGrowth
-from dnd.tile_conditions import ZoneControlCondition
+from dnd.spells.transmutation import SpikeGrowth, SpikeGrowthZone
+from tests.engine.support import create_test_entity, reset_combat_state
 
 
 def reset_spell_family_state(width: int = 12, height: int = 8) -> None:
     """Clear global state and create a small spell-family arena."""
-    EventQueue.reset()
+    reset_combat_state()
     EventQueue.set_combat_log_callback(None)
-    SpellProtectionRegistry.reset()
-    BaseObject._registry.clear()
-    BaseBlock._registry.clear()
-    BaseCondition._registry.clear()
-    BaseValue._registry.clear()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
-    GridMap.reset()
     get_map().create_rectangle(0, 0, width, height)
 
 
@@ -79,8 +71,8 @@ def create_spell_family_actor(
 ) -> Entity:
     """Create a durable actor for spell family checks."""
     actor_id = uuid4()
-    return Entity.create(
-        source_entity_uuid=actor_id,
+    return create_test_entity(
+        source_id=actor_id,
         name=name,
         config=EntityConfig(
             ability_scores=AbilityScoresConfig(
@@ -663,21 +655,26 @@ def test_zone_spell_family_owns_spatial_handlers_and_concentration_cleanup(
     ).apply()
 
     event = assert_completed_spell(event)
-    assert "Spike Growth Zone" in caster.active_conditions
     assert "Concentrating" in caster.active_conditions
 
-    zone = cast(ZoneControlCondition, caster.active_conditions["Spike Growth Zone"])
+    zones = [
+        condition
+        for condition in get_map().get_spatial_conditions()
+        if isinstance(condition, SpikeGrowthZone)
+    ]
+    assert len(zones) == 1
+    zone = zones[0]
     concentration = cast(Concentrating, caster.active_conditions["Concentrating"])
     assert len(zone.affected_positions) > 0
     assert len(zone.spatial_handler_uuids) > 0
-    assert (caster.uuid, zone.uuid) in concentration.linked_conditions
+    assert (zone.uuid, zone.uuid) in concentration.linked_conditions
     readout_lines = [
         (
-            f"spike growth: zone={'Spike Growth Zone' in caster.active_conditions}, "
+            f"spike growth: zone={zone in get_map().get_spatial_conditions()}, "
             f"concentrating={'Concentrating' in caster.active_conditions}, "
             f"positions={len(zone.affected_positions)}, "
             f"handlers={len(zone.spatial_handler_uuids)}, "
-            f"linked={(caster.uuid, zone.uuid) in concentration.linked_conditions}"
+            f"linked={(zone.uuid, zone.uuid) in concentration.linked_conditions}"
         )
     ]
 
@@ -695,11 +692,11 @@ def test_zone_spell_family_owns_spatial_handlers_and_concentration_cleanup(
 
     caster.remove_condition("Concentrating")
 
-    assert "Spike Growth Zone" not in caster.active_conditions
+    assert zone not in get_map().get_spatial_conditions()
     assert "Concentrating" not in caster.active_conditions
     readout_lines.append(
         (
-            f"cleanup: zone={'Spike Growth Zone' in caster.active_conditions}, "
+            f"cleanup: zone={zone in get_map().get_spatial_conditions()}, "
             f"concentrating={'Concentrating' in caster.active_conditions}"
         )
     )
@@ -707,10 +704,10 @@ def test_zone_spell_family_owns_spatial_handlers_and_concentration_cleanup(
     print("\n".join(readout_lines))
 
     expected_lines = [
-        (
-            "spike growth: zone=True, concentrating=True, "
-            "positions=49, handlers=1, linked=True"
-        ),
+            (
+                "spike growth: zone=True, concentrating=True, "
+                "positions=48, handlers=1, linked=True"
+            ),
         "zone entry: position=(5, 3), damage=7, hp=40->33",
         "cleanup: zone=False, concentrating=False",
     ]

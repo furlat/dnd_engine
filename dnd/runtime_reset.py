@@ -48,7 +48,6 @@ def reset_engine_runtime(
     BaseBlock._registry.clear()
     BaseValue._registry.clear()
     Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
     Controller.clear_registry()
     Encounter.clear_registry()
     Encounter._combat_log_listeners.clear()

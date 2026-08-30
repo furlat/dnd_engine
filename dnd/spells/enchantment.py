@@ -185,8 +185,7 @@ class CharmPerson(SpellAction):
         )
 
         if success:
-            return effect_event.phase_to(
-                new_phase=EventPhase.COMPLETION,
+            return effect_event.with_updates(
                 status_message=f"{self.name} - {target.name} resists the charm"
             )
 
@@ -197,8 +196,7 @@ class CharmPerson(SpellAction):
         )
         target.add_condition(charmed, parent_event=effect_event)
 
-        return effect_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+        return effect_event.with_updates(
             status_message=f"{self.name} - {target.name} is charmed"
         )
 
@@ -229,11 +227,7 @@ class HoldPersonEffect(BaseCondition):
         sub_condition_uuids: List[UUID] = []
         handler_uuids: List[UUID] = []
 
-        execution_event = declaration_event.phase_to(
-            EventPhase.EXECUTION,
-            update={"condition": self},
-            status_message=f"Applying Paralyzed sub-condition to {target.name}"
-        )
+        execution_event = declaration_event
 
         paralyzed = Paralyzed(
             source_entity_uuid=self.source_entity_uuid,
@@ -411,8 +405,7 @@ class HoldPerson(SpellAction):
         )
 
         if success:
-            return effect_event.phase_to(
-                new_phase=EventPhase.COMPLETION,
+            return effect_event.with_updates(
                 status_message=f"{self.name} - {target.name} saved"
             )
 
@@ -427,8 +420,7 @@ class HoldPerson(SpellAction):
         if hold_effect.applied:
             concentration.add_linked_condition(target.uuid, hold_effect.uuid)
 
-        return effect_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+        return effect_event.with_updates(
             status_message=f"{self.name} - {target.name} is held (concentration)"
         )
 
@@ -456,11 +448,7 @@ class HoldMonsterEffect(BaseCondition):
         sub_condition_uuids: List[UUID] = []
         handler_uuids: List[UUID] = []
 
-        execution_event = declaration_event.phase_to(
-            EventPhase.EXECUTION,
-            update={"condition": self},
-            status_message=f"Applying Paralyzed sub-condition to {target.name}"
-        )
+        execution_event = declaration_event
 
         paralyzed = Paralyzed(
             source_entity_uuid=self.source_entity_uuid,
@@ -639,8 +627,7 @@ class HoldMonster(SpellAction):
         )
 
         if success:
-            return effect_event.phase_to(
-                new_phase=EventPhase.COMPLETION,
+            return effect_event.with_updates(
                 status_message=f"{self.name} - {target.name} saved"
             )
 
@@ -655,8 +642,7 @@ class HoldMonster(SpellAction):
         if hold_effect.applied:
             concentration_condition.add_linked_condition(target.uuid, hold_effect.uuid)
 
-        return effect_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+        return effect_event.with_updates(
             status_message=f"{self.name} - {target.name} is held"
         )
 
@@ -726,17 +712,14 @@ class PowerWordKill(SpellAction):
                 parent_event=effect_event.uuid
             )
             if instant_death_event.canceled:
-                return effect_event.phase_to(
-                    new_phase=EventPhase.COMPLETION,
+                return effect_event.with_updates(
                     status_message=f"{target.name} is protected from {self.name}"
                 )
-            return effect_event.phase_to(
-                new_phase=EventPhase.COMPLETION,
+            return effect_event.with_updates(
                 status_message=f"{target.name} is slain by Power Word Kill!"
             )
         else:
-            return effect_event.phase_to(
-                new_phase=EventPhase.COMPLETION,
+            return effect_event.with_updates(
                 status_message=f"Power Word Kill has no effect - {target.name} has {current_hp} HP (threshold: {self.hp_threshold})"
             )
 
@@ -789,7 +772,8 @@ class TestBless(SpellAction):
             if not target_entity:
                 return declaration_event.cancel(status_message=f"Target entity not found")
 
-            if target_uuid not in source_entity.senses.entities.keys():
+            contact = source_entity.senses.entities.get(target_uuid)
+            if contact is None or not contact.visual:
                 return declaration_event.cancel(
                     status_message=f"{target_entity.name} not in line of sight"
                 )
@@ -811,7 +795,7 @@ class TestBless(SpellAction):
             return execution_event.cancel(status_message="Target not found")
 
         return execution_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+            new_phase=EventPhase.EFFECT,
             status_message=f"{target.name} is blessed"
         )
 
@@ -1061,8 +1045,7 @@ class Sleep(SpellAction):
         )
         target.add_condition(sleep_effect, parent_event=effect_event)
 
-        return effect_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+        return effect_event.with_updates(
             status_message=f"{target.name} falls asleep ({target.get_hp()} HP)"
         )
 
@@ -1226,13 +1209,11 @@ class PowerWordStun(SpellAction):
             )
             target.add_condition(stun_effect, parent_event=effect_event)
 
-            return effect_event.phase_to(
-                new_phase=EventPhase.COMPLETION,
+            return effect_event.with_updates(
                 status_message=f"{target.name} is stunned by Power Word Stun!"
             )
         else:
-            return effect_event.phase_to(
-                new_phase=EventPhase.COMPLETION,
+            return effect_event.with_updates(
                 status_message=f"Power Word Stun has no effect - {target.name} has {current_hp} HP (threshold: {self.hp_threshold})"
             )
 
@@ -1456,8 +1437,7 @@ class Bane(SpellAction):
         )
 
         if success:
-            return effect_event.phase_to(
-                new_phase=EventPhase.COMPLETION,
+            return effect_event.with_updates(
                 status_message=f"Bane - {target.name} resists",
             )
 
@@ -1469,8 +1449,7 @@ class Bane(SpellAction):
         if bane_effect.applied:
             concentration.add_linked_condition(target.uuid, bane_effect.uuid)
 
-        return effect_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+        return effect_event.with_updates(
             status_message=f"Bane - {target.name} is baned",
         )
 
@@ -1548,8 +1527,7 @@ class Bless(SpellAction):
             status_message=f"Bless - {target.name} is blessed",
         )
 
-        return effect_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+        return effect_event.with_updates(
             status_message=f"Bless - {target.name} is blessed",
         )
 
@@ -1780,7 +1758,7 @@ class CommandFleeEffect(CommandNextTurnEffect):
                 0,
                 (target.action_economy.movement.normalized_score + 4) // 5,
             )
-            target.update_entity_senses(
+            target.materialize_navigation(
                 max_distance=20,
                 path_max_distance=path_distance,
             )
@@ -1905,7 +1883,7 @@ class Command(SpellAction):
 
         if target.creature_type == CreatureType.UNDEAD:
             return execution_event.phase_to(
-                new_phase=EventPhase.COMPLETION,
+                new_phase=EventPhase.EFFECT,
                 status_message=f"Command has no effect on undead {target.name}"
             )
 
@@ -1928,8 +1906,7 @@ class Command(SpellAction):
         )
 
         if success:
-            return effect_event.phase_to(
-                new_phase=EventPhase.COMPLETION,
+            return effect_event.with_updates(
                 status_message=f"{target.name} resists Command"
             )
 
@@ -1954,7 +1931,6 @@ class Command(SpellAction):
             )
             target.add_condition(flee_effect, parent_event=effect_event)
 
-        return effect_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+        return effect_event.with_updates(
             status_message=f"{target.name} is commanded to {self.command_word}"
         )

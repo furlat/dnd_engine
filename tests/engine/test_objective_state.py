@@ -153,9 +153,10 @@ def test_objective_visibility_preserves_every_observer_cache_field(
 def test_objective_game_state_ignores_unresolved_floor_registry_entries(
     objective_scene: tuple[GridMap, Entity, Entity, Torch],
 ) -> None:
-    """A stale grid index cannot manufacture a misleading object DTO."""
+    """An unregistered object cannot manufacture a floor placement or DTO."""
     grid, observer, target, _ = objective_scene
-    grid._object_positions[uuid4()] = (2, 1)
+    with pytest.raises(ValueError, match="missing object"):
+        grid.place_object(uuid4(), (2, 1))
 
     state = build_objective_game_state(
         grid=grid,

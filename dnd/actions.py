@@ -14,7 +14,8 @@ from dnd.core.condition_types import ConditionRemovalTrigger, DurationType
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus
 
 from dnd.core.dice import  DiceRoll, AttackOutcome, RollType
-from dnd.core.events import RangeType, Event, EventQueue, EventType, Range, Damage, EventPhase, DamageRollPacket, DamageRollResultEvent, StepMovementEvent, ForcedMovementEvent, SkillCheckEvent, SpatialChangeEvent, AbilityName, SensoryUpdateReason, MovementTrajectory
+from dnd.core.events import RangeType, Event, EventQueue, EventType, Range, Damage, EventPhase, DamageRollPacket, DamageRollResultEvent, StepMovementEvent, ForcedMovementEvent, SkillCheckEvent, SpatialChangeEvent, AbilityName, MovementTrajectory
+from dnd.core.elevation import support_distance_feet
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.effect_types import EffectOrigin
 from dnd.core.action_types import RestrictedActionKind
@@ -46,9 +47,20 @@ from dnd.core.spell_execution import (
 from dnd.core.saving_throw_types import SavingThrowEffectTag
 from dnd.core.action_execution import (
     MovementContinuationDecision,
+    MovementProvocationPolicy,
     MovementStepBoundary,
     MovementTerminationReason,
     revalidate_after_committed_movement_step,
+)
+from dnd.core.traversal_connectors import (
+    ConnectorActionCostType,
+    ConnectorDestinationStatus,
+    ConnectorProvocationPolicy,
+    ConnectorTraversalDiscovery,
+    TraversalConnector,
+    TraversalConnectorCommand,
+    TraversalConnectorEndpoint,
+    TraversalConnectorKind,
 )
 from dnd.core.creature_types import DamageType
 from dnd.core.gridmap import get_map
@@ -72,12 +84,16 @@ from dnd.core.combat_log import (
     format_attack_compact, format_attack_verbose, format_attack_detailed,
     md_color
 )
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, StrictBool, StrictInt, model_validator
 from typing import AbstractSet, Any, Callable, ClassVar, Dict, Iterable, Optional, List, Set, TypeVar, Tuple, Self, cast
 from uuid import UUID, uuid4
 from dnd.entity import Entity, determine_attack_outcome
+from dnd.blocks.action_economy import (
+    ActionEconomyChannelCost,
+    FixedCostCommitError,
+    NamedResourceCost,
+)
 from dnd.blocks.base_item import BaseItem
-from dnd.blocks.sensory import capture_senses_snapshot, emit_sensory_update_delta
 from dnd.conditions import Dashing, Dodging, Disengaging, Prone, Hidden, Concentrating
 
 
@@ -224,57 +240,73 @@ def validate_line_of_sight(declaration_event: PolymorphicActionEvent, source_ent
     if not isinstance(target_entity, Entity):
         return declaration_event.cancel(status_message=f"Target entity not found for {declaration_event.name}")
 
-    if target_entity.uuid not in source_entity.senses.entities.keys():
+    contact = source_entity.senses.entities.get(target_entity.uuid)
+    if contact is None or not contact.visual:
         return declaration_event.cancel(status_message=f"Target entity not in line of sight for {declaration_event.name}")
     return declaration_event.with_updates(
         status_message=f"Validated line of sight for {declaration_event.name}"
     )
 
 def _consume_entity_action_economy_costs(
-    completion_event: PolymorphicActionEvent,
+    action_event: PolymorphicActionEvent,
     source_entity_uuid: UUID,
     *,
     excluded_cost_types: AbstractSet[CostType] = frozenset(),
 ) -> PolymorphicActionEvent:
-    """Consume serialized costs without advancing the event lifecycle."""
+    """Atomically commit serialized costs without advancing the lifecycle."""
     entity = Entity.get(source_entity_uuid)
     if entity is None or not isinstance(entity, Entity):
-        return completion_event.cancel(status_message=f"Entity not found for {completion_event.name}")
-    for cost in completion_event.costs:
-        if cost.cost_type not in excluded_cost_types and cost.cost > 0:
-            entity.action_economy.consume_prevalidated(
-                cost.cost_type,
-                cost.cost,
-                cost.name,
-            )
-        if cost.resource_cost > 0 and cost.resource_name:
-            if not entity.action_economy.consume_resource(cost.resource_name, cost.resource_cost):
-                return completion_event.cancel(
-                    status_message=f"Failed to consume resource {cost.resource_name} for {completion_event.name}"
-                )
-    return completion_event
+        return action_event.cancel(
+            status_message=f"Entity not found for {action_event.name}"
+        )
+    channel_costs = tuple(
+        ActionEconomyChannelCost(
+            cost_type=cost.cost_type,
+            amount=cost.cost,
+            name=cost.name,
+        )
+        for cost in action_event.costs
+        if cost.cost_type not in excluded_cost_types and cost.cost > 0
+    )
+    resource_costs = tuple(
+        NamedResourceCost(
+            name=cost.resource_name,
+            amount=cost.resource_cost,
+        )
+        for cost in action_event.costs
+        if cost.resource_name and cost.resource_cost > 0
+    )
+    if not channel_costs and not resource_costs:
+        return action_event
+    try:
+        entity.action_economy.commit_fixed_costs_without_dispatch(
+            channel_costs=channel_costs,
+            resource_costs=resource_costs,
+        )
+    except FixedCostCommitError:
+        return action_event.cancel(
+            status_message=f"Failed to commit costs for {action_event.name}"
+        )
+    return action_event
 
 
-def entity_action_economy_cost_applier(completion_event: PolymorphicActionEvent, source_entity_uuid: UUID) -> PolymorphicActionEvent:
-    """Consume turn-based and named-resource costs after action completion.
+def entity_action_economy_cost_applier(
+    action_event: PolymorphicActionEvent,
+    source_entity_uuid: UUID,
+) -> PolymorphicActionEvent:
+    """Commit turn-based and named-resource costs before execution.
 
     Args:
-        completion_event: Completion event carrying serialized costs.
+        action_event: Detached execution proposal carrying serialized costs.
         source_entity_uuid: Entity that pays the costs.
 
     Returns:
-        Completion event advanced after costs, or canceled on failed resource
-        consumption.
+        The unchanged proposal after an atomic commit, or a detached
+        cancellation if the commit fails.
     """
-    cost_event = _consume_entity_action_economy_costs(
-        completion_event,
+    return _consume_entity_action_economy_costs(
+        action_event,
         source_entity_uuid,
-    )
-    if cost_event.canceled:
-        return cost_event
-    return completion_event.phase_to(
-        new_phase=EventPhase.COMPLETION,
-        status_message=f"Successfully applied costs for {completion_event.name} for {completion_event.source_entity_uuid}"
     )
 
 
@@ -410,9 +442,15 @@ class Move(BaseAction):
             source_entity = Entity.get(self.source_entity_uuid)
             ign_terrain = source_entity.ignore_difficult_terrain if source_entity else False
 
-            for i in range(1, len(self.path)):
-                tile = grid.get_tile(*self.path[i])
-                total_cost += self._get_step_cost_units(tile, source_entity, ign_terrain)
+            for from_position, to_position in zip(self.path, self.path[1:]):
+                total_cost += self._get_step_cost_units(
+                    grid,
+                    from_position,
+                    to_position,
+                    source_entity,
+                    ign_terrain,
+                    self.movement_mode,
+                )
 
             feet_cost = int(total_cost * 5)
             self.costs.append(
@@ -424,27 +462,36 @@ class Move(BaseAction):
                 )
             )
 
-    def _get_step_cost_units(self, tile: Optional[Tile], source_entity: Optional[Entity], ignore_difficult_terrain: bool = False) -> float:
+    @staticmethod
+    def _get_step_cost_units(
+        grid,
+        from_position: Tuple[int, int],
+        to_position: Tuple[int, int],
+        source_entity: Optional[Entity],
+        ignore_difficult_terrain: bool,
+        movement_mode: MovementMode,
+    ) -> float:
         """Return movement-cost units for one step in this action's mode.
 
         Args:
-            tile: Destination tile or block-like terrain object.
+            grid: Objective Tile and movement-edge owner.
+            from_position: Current support position.
+            to_position: Destination support position.
             source_entity: Entity paying the movement cost.
             ignore_difficult_terrain: Whether difficult-terrain costs are capped.
 
         Returns:
             Movement cost in grid cost units before conversion to feet.
         """
-        if tile:
-            cost = tile.get_movement_cost(self.movement_mode)
-        else:
-            cost = 1.0
-
-        if self.movement_mode == MovementMode.WALKING and ignore_difficult_terrain:
-            cost = min(cost, 1.0)
+        cost = grid.movement_edge_cost_units(
+            from_position,
+            to_position,
+            movement_mode,
+            ignore_difficult_terrain=ignore_difficult_terrain,
+        )
 
         if (
-            self.movement_mode == MovementMode.SWIMMING
+            movement_mode == MovementMode.SWIMMING
             and source_entity is not None
             and source_entity.swimming_speed <= 0
             and not source_entity.ignore_underwater_penalties
@@ -596,9 +643,15 @@ class Move(BaseAction):
                 grid = get_map()
                 total_cost = 0
 
-                for i in range(1, len(path)):
-                    tile = grid.get_tile(*path[i])
-                    total_cost += self._get_step_cost_units(tile, source_entity, source_entity.ignore_difficult_terrain)
+                for from_position, to_position in zip(path, path[1:]):
+                    total_cost += self._get_step_cost_units(
+                        grid,
+                        from_position,
+                        to_position,
+                        source_entity,
+                        source_entity.ignore_difficult_terrain,
+                        self.movement_mode,
+                    )
 
                 feet_cost = int(total_cost * 5)
                 costs.append(Cost(name="Movement Cost", cost_type="movement", cost=feet_cost, evaluator=entity_action_economy_cost_evaluator))
@@ -678,7 +731,6 @@ class Move(BaseAction):
         consume_movement_seconds = 0.0
         step_cost_seconds = 0.0
 
-        source_entity.senses.clear_visibility_cache()
         try:
             for i in range(1, total_path_length):
                 from_pos = path[i - 1]
@@ -713,9 +765,15 @@ class Move(BaseAction):
                     break
                 transition_check_seconds += time.perf_counter() - phase_started
 
-                tile = grid.get_tile(*to_pos)
                 phase_started = time.perf_counter()
-                step_cost_units = self._get_step_cost_units(tile, source_entity, source_entity.ignore_difficult_terrain)
+                step_cost_units = self._get_step_cost_units(
+                    grid,
+                    from_pos,
+                    to_pos,
+                    source_entity,
+                    source_entity.ignore_difficult_terrain,
+                    self.movement_mode,
+                )
                 step_cost_feet = int(step_cost_units * 5)
                 step_cost_seconds += time.perf_counter() - phase_started
 
@@ -733,6 +791,10 @@ class Move(BaseAction):
                     total_path_length=total_path_length,
                     movement_cost=step_cost_feet,
                     trajectory=execution_event.trajectory,
+                    disclosed_path=(from_pos, to_pos),
+                    from_elevation_feet=grid.get_support_elevation_feet(from_pos),
+                    to_elevation_feet=grid.get_support_elevation_feet(to_pos),
+                    provocation_policy=MovementProvocationPolicy.ORDINARY_EXIT,
                     phase=EventPhase.EFFECT,
                     parent_event=effect_event.uuid,
                     use_register=False
@@ -802,6 +864,8 @@ class Move(BaseAction):
                         step_event_uuid=processed_step.uuid,
                         from_position=from_pos,
                         to_position=to_pos,
+                        objective_position=source_entity.position,
+                        step_movement_cost=step_cost_feet,
                         traversed_path=tuple(traversed_path),
                         movement_spent=traversed_movement_cost,
                         movement_remaining=(
@@ -827,26 +891,15 @@ class Move(BaseAction):
             record_action_elapsed("movement.step_completion_ms", step_completion_seconds)
             record_action_elapsed("movement.consume_movement_ms", consume_movement_seconds)
             started = time.perf_counter()
-            senses_before_refresh = capture_senses_snapshot(source_entity.senses)
             remaining_path_distance = max(
                 0,
                 (source_entity.action_economy.movement.normalized_score + 4) // 5,
             )
-            source_entity.update_entity_senses(
+            source_entity.materialize_navigation(
                 max_distance=20,
-                reuse_visibility_cache=True,
                 path_max_distance=remaining_path_distance,
             )
-            senses_after_refresh = capture_senses_snapshot(source_entity.senses)
             record_action_timing("movement.final_update_senses_ms", started)
-            emit_sensory_update_delta(
-                source_entity.senses,
-                source_entity.uuid,
-                effect_event,
-                senses_before_refresh,
-                senses_after_refresh,
-                SensoryUpdateReason.SELF_MOVEMENT,
-            )
 
         completion_costs = [
             cost for cost in effect_event.costs
@@ -876,8 +929,7 @@ class Move(BaseAction):
         if source_entity.position == execution_event.start_position:
             if interrupted_by_condition:
                 started = time.perf_counter()
-                result = effect_event.phase_to(
-                    new_phase=EventPhase.COMPLETION,
+                result = effect_event.with_updates(
                     status_message=f"Partial movement for {execution_event.name}, stopped at {source_entity.position}",
                     **completion_updates,
                 )
@@ -889,8 +941,7 @@ class Move(BaseAction):
             return result
         elif source_entity.position != execution_event.end_position:
             started = time.perf_counter()
-            result = effect_event.phase_to(
-                new_phase=EventPhase.COMPLETION,
+            result = effect_event.with_updates(
                 status_message=f"Partial movement for {execution_event.name}, stopped at {source_entity.position}",
                 **completion_updates,
             )
@@ -898,32 +949,27 @@ class Move(BaseAction):
             return result
 
         started = time.perf_counter()
-        result = effect_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+        result = effect_event.with_updates(
             status_message=f"Applied movement for {execution_event.name}",
             **completion_updates,
         )
         record_action_timing("movement.phase_to_completion_ms", started)
         return result
 
-    def _apply_costs(self, completion_event: MovementEvent) -> Optional[MovementEvent]:
+    def _apply_costs(self, execution_event: MovementEvent) -> Optional[MovementEvent]:
         """Apply costs - movement is already consumed per-step in _apply().
 
         Skip movement cost here since cell-by-cell movement already deducts
         movement per step. Only apply non-movement costs (if any).
         """
         cost_event = _consume_entity_action_economy_costs(
-            completion_event,
+            execution_event,
             self.source_entity_uuid,
             excluded_cost_types=frozenset({"movement"}),
         )
         if cost_event.canceled:
             return cost_event
-
-        return completion_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
-            status_message=f"Successfully applied costs for {completion_event.name}"
-        )
+        return cost_event
 
     def apply(self, parent_event: Optional[Event] = None) -> Optional[MovementEvent]:
         """Override to provide specific return type."""
@@ -944,6 +990,451 @@ class Swim(Move):
     name: str = Field(default="Swim", description="Human-readable swimming action name.")
     description: str = Field(default="Swim to a water position", description="Swimming action description.")
     movement_mode: MovementMode = Field(default=MovementMode.SWIMMING, description="Movement mode used for terrain costs and transitions.")
+
+
+class TraverseConnectorEvent(ActionEvent):
+    """Typed transaction facts for one oriented connector transfer."""
+
+    name: str = Field(default="Traverse Connector")
+    event_type: EventType = Field(default=EventType.MOVEMENT)
+    costs: List[BaseCost] = Field(default_factory=list)
+    connector_uuid: UUID
+    connector_authored_id: str
+    connector_kind: TraversalConnectorKind
+    connector_presentation_key: str
+    connector_revision: StrictInt = Field(ge=1)
+    connector_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    connector_provocation_policy: ConnectorProvocationPolicy
+    connector_bidirectional: StrictBool
+    start_position: Tuple[StrictInt, StrictInt]
+    requested_end_position: Tuple[StrictInt, StrictInt]
+    end_position: Tuple[StrictInt, StrictInt]
+    objective_end_position: Tuple[StrictInt, StrictInt]
+    start_elevation_feet: StrictInt
+    requested_end_elevation_feet: StrictInt
+    end_elevation_feet: StrictInt
+    movement_cost_feet: StrictInt = Field(ge=0)
+    action_cost_type: Optional[ConnectorActionCostType] = None
+    action_cost_amount: StrictInt = Field(default=0, ge=0)
+    termination_reason: MovementTerminationReason = Field(
+        default=MovementTerminationReason.COMPLETED,
+    )
+
+    def get_affected_positions(self) -> Set[Tuple[int, int]]:
+        return {self.start_position, self.requested_end_position}
+
+    def generate_combat_log(self) -> CombatLogEntry:
+        """Generate the committed connector transfer from carried facts."""
+        source_name = self.source_entity_name or "Unknown"
+        path = [self.start_position, self.end_position]
+        distance_feet = support_distance_feet(
+            self.start_position,
+            self.start_elevation_feet,
+            self.end_position,
+            self.end_elevation_feet,
+        )
+        compact = (
+            f"{md_color(source_name, 'cyan')} traverses "
+            f"{md_color(self.connector_presentation_key, 'yellow')} to "
+            f"{md_color(str(self.end_position), 'green')}"
+        )
+        verbose = (
+            f"{compact} ({self.start_elevation_feet}ft → "
+            f"{self.end_elevation_feet}ft)"
+        )
+        return CombatLogEntry(
+            entry_type=CombatLogEntryType.MOVEMENT,
+            source_name=source_name,
+            source_uuid=str(self.source_entity_uuid),
+            compact=compact,
+            verbose=verbose,
+            detailed=verbose,
+            data={
+                "movement_type": "connector",
+                "entity_name": source_name,
+                "entity_uuid": str(self.source_entity_uuid),
+                "start_position": self.start_position,
+                "requested_end_position": self.requested_end_position,
+                "objective_end_position": self.objective_end_position,
+                "end_position": self.end_position,
+                "path": path,
+                "start_elevation_feet": self.start_elevation_feet,
+                "requested_end_elevation_feet": (
+                    self.requested_end_elevation_feet
+                ),
+                "end_elevation_feet": self.end_elevation_feet,
+                "distance_feet": distance_feet,
+                "movement_cost": self.movement_cost_feet,
+                "connector_uuid": str(self.connector_uuid),
+                "connector_authored_id": self.connector_authored_id,
+                "connector_kind": self.connector_kind.value,
+                "connector_presentation_key": self.connector_presentation_key,
+                "connector_provocation_policy": (
+                    self.connector_provocation_policy.value
+                ),
+                "termination_reason": self.termination_reason.value,
+            },
+            success=(
+                self.termination_reason is MovementTerminationReason.COMPLETED
+                and self.end_position == self.objective_end_position
+            ),
+        )
+
+
+class TraverseConnector(BaseAction):
+    """One endpoint-indexed SELF action shared by every connector kind."""
+
+    name: str = Field(default="Traverse Connector")
+    description: str = Field(default="Traverse the selected connector")
+    target_type: TargetType = Field(default=TargetType.SELF)
+    action_category: ActionCategory = Field(default=ActionCategory.MOVEMENT)
+    costs: List[Cost] = Field(default_factory=list)
+    connector_traversal: Optional[ConnectorTraversalDiscovery] = None
+
+    @staticmethod
+    def _oriented_connector(
+        connector: TraversalConnector,
+        source_position: Tuple[int, int],
+    ) -> Optional[Tuple[TraversalConnectorEndpoint, TraversalConnectorEndpoint]]:
+        first, second = connector.endpoints
+        if source_position == first.position:
+            return first, second
+        if source_position == second.position and connector.bidirectional:
+            return second, first
+        return None
+
+    @staticmethod
+    def _variant_costs(connector: TraversalConnector) -> List[Cost]:
+        costs: List[Cost] = []
+        if connector.action_cost_type is not None:
+            costs.append(Cost(
+                name="Connector Action Cost",
+                cost_type=connector.action_cost_type.value,
+                cost=connector.action_cost_amount,
+                evaluator=entity_action_economy_cost_evaluator,
+            ))
+        if connector.movement_cost_feet > 0:
+            costs.append(Cost(
+                name="Connector Movement Cost",
+                cost_type="movement",
+                cost=connector.movement_cost_feet,
+                evaluator=entity_action_economy_cost_evaluator,
+            ))
+        return costs
+
+    @staticmethod
+    def _destination_status(
+        entity: Entity,
+        destination: Tuple[int, int],
+    ) -> ConnectorDestinationStatus:
+        if not entity.senses.visible.get(destination, False):
+            return ConnectorDestinationStatus.UNKNOWN
+        if get_map().is_walkable_for(
+            destination[0],
+            destination[1],
+            entity.uuid,
+            subjective=True,
+        ):
+            return ConnectorDestinationStatus.KNOWN_CLEAR
+        return ConnectorDestinationStatus.KNOWN_BLOCKED
+
+    def get_discovery_variants(self, entity: Any) -> List[BaseAction]:
+        if not isinstance(entity, Entity):
+            return []
+        variants: List[BaseAction] = []
+        for connector in get_map().get_connectors_at(entity.position):
+            if not connector.enabled:
+                continue
+            oriented = self._oriented_connector(connector, entity.position)
+            if oriented is None:
+                continue
+            source_endpoint, destination_endpoint = oriented
+            discovery = ConnectorTraversalDiscovery(
+                command=TraversalConnectorCommand(
+                    connector_uuid=connector.uuid,
+                    connector_revision=connector.revision,
+                    connector_digest=connector.objective_digest,
+                    source_position=source_endpoint.position,
+                    destination_position=destination_endpoint.position,
+                ),
+                authored_id=connector.authored_id,
+                kind=connector.kind,
+                presentation_key=connector.presentation_key,
+                source_elevation_feet=source_endpoint.elevation_feet,
+                destination_elevation_feet=destination_endpoint.elevation_feet,
+                movement_cost_feet=connector.movement_cost_feet,
+                action_cost_type=connector.action_cost_type,
+                action_cost_amount=connector.action_cost_amount,
+                bidirectional=connector.bidirectional,
+                provocation_policy=connector.provocation_policy,
+                destination_status=self._destination_status(
+                    entity,
+                    destination_endpoint.position,
+                ),
+            )
+            variants.append(self.model_copy(deep=True, update={
+                "uuid": uuid4(),
+                "template": False,
+                "use_register": False,
+                "connector_traversal": discovery,
+                "costs": self._variant_costs(connector),
+            }))
+        return variants
+
+    def get_discovery_template_name(self) -> str:
+        discovery = self.connector_traversal
+        if discovery is None:
+            return self.name
+        command = discovery.command
+        return (
+            f"Traverse Connector__connector_{command.connector_uuid}_"
+            f"{command.connector_revision}_{command.connector_digest}_"
+            f"{command.source_position[0]}_{command.source_position[1]}_"
+            f"{command.destination_position[0]}_{command.destination_position[1]}"
+        )
+
+    def get_discovery_display_name(self) -> str:
+        discovery = self.connector_traversal
+        return (
+            f"Traverse {discovery.presentation_key}"
+            if discovery is not None
+            else self.name
+        )
+
+    def get_connector_traversal_discovery(
+        self,
+    ) -> Optional[ConnectorTraversalDiscovery]:
+        return self.connector_traversal
+
+    def _current_connector(
+        self,
+        event: TraverseConnectorEvent,
+        source: Entity,
+    ) -> Optional[TraversalConnector]:
+        grid = get_map()
+        connector = grid.get_connector(event.connector_uuid)
+        if (
+            connector is None
+            or not grid.connector_supports_are_current(connector)
+            or not connector.enabled
+            or connector.authored_id != event.connector_authored_id
+            or connector.kind is not event.connector_kind
+            or connector.presentation_key != event.connector_presentation_key
+            or connector.revision != event.connector_revision
+            or connector.objective_digest != event.connector_digest
+            or connector.movement_cost_feet != event.movement_cost_feet
+            or connector.action_cost_type is not event.action_cost_type
+            or connector.action_cost_amount != event.action_cost_amount
+            or connector.provocation_policy is not event.connector_provocation_policy
+            or connector.bidirectional is not event.connector_bidirectional
+            or source.position != event.start_position
+        ):
+            return None
+        oriented = self._oriented_connector(connector, event.start_position)
+        if oriented is None:
+            return None
+        source_endpoint, destination_endpoint = oriented
+        if (
+            destination_endpoint.position != event.requested_end_position
+            or source_endpoint.elevation_feet != event.start_elevation_feet
+            or destination_endpoint.elevation_feet
+            != event.requested_end_elevation_feet
+        ):
+            return None
+        return connector
+
+    def _create_declaration_event(
+        self,
+        parent_event: Optional[Event] = None,
+        use_register: bool = True,
+    ) -> Optional[TraverseConnectorEvent]:
+        source = Entity.get(self.source_entity_uuid)
+        discovery = self.connector_traversal
+        if source is None or discovery is None:
+            return None
+        command = discovery.command
+        return TraverseConnectorEvent(
+            source_entity_uuid=source.uuid,
+            target_entity_uuid=source.uuid,
+            source_entity_name=source.name,
+            parent_event=parent_event.uuid if parent_event is not None else None,
+            costs=[BaseCost.model_validate(cost) for cost in self.effective_costs],
+            connector_uuid=command.connector_uuid,
+            connector_authored_id=discovery.authored_id,
+            connector_kind=discovery.kind,
+            connector_presentation_key=discovery.presentation_key,
+            connector_revision=command.connector_revision,
+            connector_digest=command.connector_digest,
+            connector_provocation_policy=discovery.provocation_policy,
+            connector_bidirectional=discovery.bidirectional,
+            start_position=command.source_position,
+            requested_end_position=command.destination_position,
+            end_position=command.source_position,
+            objective_end_position=command.source_position,
+            start_elevation_feet=discovery.source_elevation_feet,
+            requested_end_elevation_feet=discovery.destination_elevation_feet,
+            end_elevation_feet=discovery.source_elevation_feet,
+            movement_cost_feet=discovery.movement_cost_feet,
+            action_cost_type=discovery.action_cost_type,
+            action_cost_amount=discovery.action_cost_amount,
+            phase=EventPhase.DECLARATION,
+            use_register=use_register,
+        )
+
+    def _validate(
+        self,
+        declaration_event: TraverseConnectorEvent,
+    ) -> TraverseConnectorEvent:
+        source = Entity.get(self.source_entity_uuid)
+        if (
+            source is None
+            or source.health.life_state is not LifeState.ALIVE
+            or not source.can_take_actions()
+            or self._current_connector(declaration_event, source) is None
+        ):
+            return declaration_event.cancel(
+                status_message="Connector traversal is no longer valid"
+            )
+        return declaration_event.phase_to(
+            EventPhase.EXECUTION,
+            status_message="Connector traversal validated",
+        )
+
+    def _apply_costs(
+        self,
+        execution_event: TraverseConnectorEvent,
+    ) -> TraverseConnectorEvent:
+        """Commit connector costs only after the provoking Step is accepted."""
+        return execution_event
+
+    @staticmethod
+    def _stop_effect(
+        effect: TraverseConnectorEvent,
+        source: Entity,
+        reason: MovementTerminationReason,
+    ) -> TraverseConnectorEvent:
+        return cast(TraverseConnectorEvent, effect.with_updates(
+            end_position=effect.start_position,
+            objective_end_position=source.position,
+            end_elevation_feet=effect.start_elevation_feet,
+            termination_reason=reason,
+            outcome_code=f"movement.{reason.value}",
+            status_message=f"Connector transfer stopped: {reason.value}",
+        ))
+
+    def _apply(
+        self,
+        execution_event: TraverseConnectorEvent,
+    ) -> TraverseConnectorEvent:
+        source = Entity.get(self.source_entity_uuid)
+        if source is None:
+            return execution_event.cancel(status_message="Entity not found")
+        effect = execution_event.phase_to(
+            EventPhase.EFFECT,
+            status_message="Applying connector transfer",
+        )
+        if effect.canceled:
+            return effect
+        connector = self._current_connector(effect, source)
+        destination = effect.requested_end_position
+        grid = get_map()
+        if connector is None:
+            return self._stop_effect(
+                effect, source, MovementTerminationReason.INVALID_PATH
+            )
+
+        channel_costs: List[ActionEconomyChannelCost] = []
+        if effect.action_cost_type is not None:
+            channel_costs.append(ActionEconomyChannelCost(
+                cost_type=effect.action_cost_type.value,
+                amount=effect.action_cost_amount,
+                name="Connector Action Cost",
+            ))
+        if effect.movement_cost_feet > 0:
+            channel_costs.append(ActionEconomyChannelCost(
+                cost_type="movement",
+                amount=effect.movement_cost_feet,
+                name="Connector Movement Cost",
+            ))
+
+        if not grid.is_walkable_for(destination[0], destination[1], source.uuid):
+            return self._stop_effect(
+                effect, source, MovementTerminationReason.COLLISION
+            )
+        if not all(
+            source.action_economy.can_afford(cost.cost_type, cost.amount)
+            for cost in channel_costs
+        ):
+            return self._stop_effect(
+                effect, source, MovementTerminationReason.INSUFFICIENT_MOVEMENT
+            )
+
+        step = StepMovementEvent(
+            source_entity_uuid=source.uuid,
+            source_entity_name=source.name,
+            from_position=effect.start_position,
+            to_position=destination,
+            path_index=1,
+            total_path_length=2,
+            movement_cost=effect.movement_cost_feet,
+            trajectory=MovementTrajectory.CONNECTOR_TRANSFER,
+            disclosed_path=(effect.start_position, destination),
+            from_elevation_feet=effect.start_elevation_feet,
+            to_elevation_feet=effect.requested_end_elevation_feet,
+            provocation_policy=(
+                MovementProvocationPolicy.ORDINARY_EXIT
+                if effect.connector_provocation_policy
+                is ConnectorProvocationPolicy.PROVOKES_SOURCE_EXIT
+                else MovementProvocationPolicy.DOES_NOT_PROVOKE
+            ),
+            committed=False,
+            phase=EventPhase.EFFECT,
+            parent_event=effect.uuid,
+            use_register=False,
+        )
+        processed_step = cast(StepMovementEvent, step.post(use_register=True))
+        if processed_step.canceled or not source.can_take_actions():
+            if not processed_step.canceled:
+                processed_step.phase_to(EventPhase.COMPLETION, committed=False)
+            return self._stop_effect(
+                effect, source, MovementTerminationReason.STEP_CANCELED
+            )
+        if (
+            self._current_connector(effect, source) is None
+            or not grid.is_walkable_for(
+                destination[0], destination[1], source.uuid
+            )
+        ):
+            processed_step.phase_to(EventPhase.COMPLETION, committed=False)
+            return self._stop_effect(
+                effect, source, MovementTerminationReason.INVALID_PATH
+            )
+
+        receipt = source.action_economy.consume_aggregate_with_receipt(
+            tuple(channel_costs)
+        )
+        try:
+            Entity.update_entity_position(
+                source,
+                destination,
+                parent_event=processed_step.uuid,
+            )
+        except Exception:
+            source.action_economy.undo_prevalidated_debit(receipt)
+            raise
+        processed_step.phase_to(
+            EventPhase.COMPLETION,
+            committed=True,
+            status_message=f"Connector transfer arrived at {destination}",
+        )
+        return cast(TraverseConnectorEvent, effect.with_updates(
+            end_position=destination,
+            objective_end_position=source.position,
+            end_elevation_feet=effect.requested_end_elevation_feet,
+            termination_reason=MovementTerminationReason.COMPLETED,
+            outcome_code="movement.completed",
+            status_message=f"Connector transfer completed at {destination}",
+        ))
 
 
 class AttackEvent(ActionEvent):
@@ -1570,8 +2061,7 @@ class Attack(BaseAction):
                 )
                 if not attack_event.canceled:
                     source_entity.equipment.activate_weapon_slot(weapon_slot)
-                completion_event = attack_event.phase_to(
-                    new_phase=EventPhase.COMPLETION,
+                completion_event = attack_event.with_updates(
                     status_message=f"Attack missed"
                 )
                 record_action_timing("attack.miss_completion_ms", started)
@@ -1671,8 +2161,7 @@ class Attack(BaseAction):
                 damage_rolls = None
 
             started = time.perf_counter()
-            completion_event = attack_event.phase_to(
-                new_phase=EventPhase.COMPLETION,
+            completion_event = attack_event.with_updates(
                 status_message="Attack completed",
                 damage_rolls=damage_rolls,
             )
@@ -1721,9 +2210,9 @@ class Attack(BaseAction):
         """Apply the attack action."""
         return Attack.attack_consequences(execution_event, self.source_entity_uuid)
 
-    def _apply_costs(self, completion_event: AttackEvent) -> Optional[AttackEvent]:
-        """Apply attack costs after completion."""
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
+    def _apply_costs(self, execution_event: AttackEvent) -> Optional[AttackEvent]:
+        """Commit attack costs before execution is published."""
+        return entity_action_economy_cost_applier(execution_event, self.source_entity_uuid)
 
     def apply(self, parent_event: Optional[Event] = None) -> Optional[AttackEvent]:
         """Override to provide specific return type."""
@@ -1800,13 +2289,13 @@ class Dash(BaseAction):
 
         current_speed = entity.action_economy.current_speed()
         return execution_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+            new_phase=EventPhase.EFFECT,
             status_message=f"Applied Dashing - gained {current_speed}ft extra movement"
         )
 
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
+    def _apply_costs(self, execution_event: ActionEvent) -> ActionEvent:
         """Apply Dash action costs."""
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
+        return entity_action_economy_cost_applier(execution_event, self.source_entity_uuid)
 
 
 @_core_action_identity(
@@ -1881,14 +2370,13 @@ class Dodge(BaseAction):
 
         entity.add_condition(dodging, parent_event=effect_event)
 
-        return effect_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+        return effect_event.with_updates(
             status_message="Applied Dodging - attackers have disadvantage"
         )
 
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
+    def _apply_costs(self, execution_event: ActionEvent) -> ActionEvent:
         """Apply Dodge action costs."""
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
+        return entity_action_economy_cost_applier(execution_event, self.source_entity_uuid)
 
 
 @_core_action_identity(
@@ -1959,13 +2447,13 @@ class Disengage(BaseAction):
         entity.add_condition(disengaging, parent_event=execution_event)
 
         return execution_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+            new_phase=EventPhase.EFFECT,
             status_message="Applied Disengaging - movement won't provoke OAs"
         )
 
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
+    def _apply_costs(self, execution_event: ActionEvent) -> ActionEvent:
         """Apply Disengage action costs."""
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
+        return entity_action_economy_cost_applier(execution_event, self.source_entity_uuid)
 
 
 @_core_action_identity(
@@ -2043,18 +2531,30 @@ class DropConcentration(BaseAction):
             if conc and isinstance(conc, Concentrating):
                 slot_uuid = conc.get_slot_by_spell_name(self.target_spell)
                 if slot_uuid is not None:
-                    conc.drop_slot(slot_uuid, parent_event=execution_event)
+                    if not conc.drop_slot(
+                        slot_uuid,
+                        parent_event=execution_event,
+                    ):
+                        return execution_event.cancel(
+                            status_message="Concentration resisted removal",
+                        )
         else:
-            entity.remove_condition("Concentrating", parent_event=execution_event)
+            if not entity.remove_condition(
+                "Concentrating",
+                parent_event=execution_event,
+            ):
+                return execution_event.cancel(
+                    status_message="Concentration resisted removal",
+                )
 
         return execution_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+            new_phase=EventPhase.EFFECT,
             status_message=f"Dropped concentration{' on ' + self.target_spell if self.target_spell else ''}"
         )
 
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
-        """Return completion unchanged because dropping concentration is free."""
-        return completion_event
+    def _apply_costs(self, execution_event: ActionEvent) -> ActionEvent:
+        """Return the execution proposal unchanged; this action is free."""
+        return execution_event
 
 
 @_core_action_identity(
@@ -2132,13 +2632,13 @@ class ShakeAwake(BaseAction):
                     parent_event=execution_event,
                 )
         return execution_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+            new_phase=EventPhase.EFFECT,
             status_message=f"{target.name} wakes up"
         )
 
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
+    def _apply_costs(self, execution_event: ActionEvent) -> ActionEvent:
         """Apply the action cost for waking the sleeper."""
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
+        return entity_action_economy_cost_applier(execution_event, self.source_entity_uuid)
 
 
 @_core_action_identity(
@@ -2210,7 +2710,8 @@ class Hide(BaseAction):
             sub = Entity.get(sub_uuid)
             if sub and isinstance(sub, Entity) and entity.is_enemy(sub):
                 if (
-                    entity.uuid in sub.senses.entities
+                    (contact := sub.senses.entities.get(entity.uuid)) is not None
+                    and contact.visual
                     and not entity.is_obscured_by_larger_creature_from(sub)
                 ):
                     return declaration_event.cancel(
@@ -2255,12 +2756,12 @@ class Hide(BaseAction):
         entity.add_condition(hidden, parent_event=execution_event)
 
         return execution_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+            new_phase=EventPhase.EFFECT,
             status_message=f"Applied Hidden (Stealth DC {stealth_result})"
         )
 
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
+    def _apply_costs(self, execution_event: ActionEvent) -> ActionEvent:
+        return entity_action_economy_cost_applier(execution_event, self.source_entity_uuid)
 
 class StandUp(BaseAction):
     """
@@ -2332,12 +2833,12 @@ class StandUp(BaseAction):
         entity.remove_condition("Prone", parent_event=execution_event)
 
         return execution_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+            new_phase=EventPhase.EFFECT,
             status_message="Stood up from prone"
         )
 
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
+    def _apply_costs(self, execution_event: ActionEvent) -> ActionEvent:
+        return entity_action_economy_cost_applier(execution_event, self.source_entity_uuid)
 
 
 class DropProne(BaseAction):
@@ -2393,16 +2894,13 @@ class DropProne(BaseAction):
         entity.add_condition(prone, parent_event=execution_event)
 
         return execution_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+            new_phase=EventPhase.EFFECT,
             status_message="Dropped prone"
         )
 
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
-        """Return a completed no-cost action event."""
-        return completion_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
-            status_message="No costs for Drop Prone"
-        )
+    def _apply_costs(self, execution_event: ActionEvent) -> ActionEvent:
+        """Return the execution proposal unchanged; this action is free."""
+        return execution_event
 
 
 class JumpEvent(ActionEvent):
@@ -2413,6 +2911,17 @@ class JumpEvent(ActionEvent):
     costs: List[BaseCost] = Field(default_factory=list, description="Serialized jump costs.")
     start_position: Tuple[int, int] = Field(description="Position occupied before the jump starts.")
     end_position: Tuple[int, int] = Field(description="Intended or actual landing position.")
+    requested_end_position: Optional[Tuple[int, int]] = Field(
+        default=None,
+        description="Landing position requested before any partial jump.",
+    )
+    objective_end_position: Optional[Tuple[int, int]] = Field(
+        default=None,
+        description="Position occupied after the last committed jump step.",
+    )
+    start_elevation_feet: StrictInt = Field(default=0)
+    requested_end_elevation_feet: StrictInt = Field(default=0)
+    end_elevation_feet: StrictInt = Field(default=0)
     jump_distance: int = Field(default=0, description="Jump distance in feet.")
     path: Optional[List[Tuple[int, int]]] = Field(default=None, description="Straight-line airborne cell path.")
     trajectory: MovementTrajectory = Field(
@@ -2450,7 +2959,21 @@ class JumpEvent(ActionEvent):
             path=self.path or [self.start_position, self.end_position],
             distance_feet=self.jump_distance,
             movement_cost=self.jump_distance
-        )
+        ).model_dump()
+        data.update({
+            "movement_type": "jump",
+            "requested_end_position": (
+                self.requested_end_position or self.end_position
+            ),
+            "objective_end_position": (
+                self.objective_end_position or self.end_position
+            ),
+            "start_elevation_feet": self.start_elevation_feet,
+            "requested_end_elevation_feet": (
+                self.requested_end_elevation_feet
+            ),
+            "end_elevation_feet": self.end_elevation_feet,
+        })
 
         return CombatLogEntry(
             entry_type=CombatLogEntryType.MOVEMENT,
@@ -2459,7 +2982,7 @@ class JumpEvent(ActionEvent):
             compact=compact_text,
             verbose=verbose_text,
             detailed=detailed_text,
-            data=data.model_dump(),
+            data=data,
             success=True
         )
 
@@ -2581,7 +3104,7 @@ class Jump(BaseAction):
             if not grid.is_walkable_for(pos[0], pos[1], entity.uuid):
                 continue
 
-            if not grid.raycast_clear(entity.position, pos, channel="propagation", observer_uuid=entity.uuid):
+            if not grid.raycast_clear(entity.position, pos, channel="propagation"):
                 continue
 
             valid.append(pos)
@@ -2639,6 +3162,7 @@ class Jump(BaseAction):
         if line_path is None:
             return None
 
+        grid = get_map()
         return JumpEvent(
             name=self.name,
             parent_event=parent_event.uuid if parent_event else None,
@@ -2646,6 +3170,17 @@ class Jump(BaseAction):
             source_entity_uuid=self.source_entity_uuid,
             start_position=source_entity.position,
             end_position=end_position,
+            requested_end_position=end_position,
+            objective_end_position=source_entity.position,
+            start_elevation_feet=grid.get_support_elevation_feet(
+                source_entity.position
+            ),
+            requested_end_elevation_feet=grid.get_support_elevation_feet(
+                end_position
+            ),
+            end_elevation_feet=grid.get_support_elevation_feet(
+                source_entity.position
+            ),
             jump_distance=int(distance),
             path=line_path,
             costs=[BaseCost.model_validate(cost) for cost in self.effective_costs],
@@ -2674,7 +3209,7 @@ class Jump(BaseAction):
         if not grid.is_walkable_for(end_pos[0], end_pos[1], source_entity.uuid):
             return declaration_event.cancel(status_message=f"Position {end_pos} not walkable or occupied")
 
-        if not grid.raycast_clear(source_entity.position, end_pos, channel="propagation", observer_uuid=source_entity.uuid):
+        if not grid.raycast_clear(source_entity.position, end_pos, channel="propagation"):
             return declaration_event.cancel(status_message=f"Path to {end_pos} is blocked")
 
         return declaration_event.phase_to(
@@ -2693,13 +3228,13 @@ class Jump(BaseAction):
         if not source_entity:
             return execution_event.cancel(status_message="Entity not found")
 
+        grid = get_map()
         path = execution_event.path or []
         total_path_length = len(path)
         actual_end_position = source_entity.position
         traversed_path = [source_entity.position]
         interrupted_by_condition = False
 
-        source_entity.senses.clear_visibility_cache()
         try:
             effect_event = execution_event.phase_to(
                 new_phase=EventPhase.EFFECT,
@@ -2726,6 +3261,12 @@ class Jump(BaseAction):
                     total_path_length=total_path_length,
                     movement_cost=step_cost_feet,
                     trajectory=execution_event.trajectory,
+                    disclosed_path=(from_pos, to_pos),
+                    from_elevation_feet=grid.get_support_elevation_feet(
+                        from_pos
+                    ),
+                    to_elevation_feet=grid.get_support_elevation_feet(to_pos),
+                    provocation_policy=MovementProvocationPolicy.ORDINARY_EXIT,
                     phase=EventPhase.EFFECT,
                     parent_event=effect_event.uuid,
                     use_register=False
@@ -2757,36 +3298,45 @@ class Jump(BaseAction):
 
             if source_entity.position == execution_event.start_position:
                 if interrupted_by_condition:
-                    return execution_event.phase_to(
-                        new_phase=EventPhase.COMPLETION,
+                    return effect_event.with_updates(
                         status_message=f"Partial jump, stopped at {source_entity.position}",
                         end_position=actual_end_position,
+                        objective_end_position=actual_end_position,
+                        end_elevation_feet=grid.get_support_elevation_feet(
+                            actual_end_position
+                        ),
                         path=traversed_path,
                         jump_distance=(len(traversed_path) - 1) * 5,
                     )
                 return effect_event.cancel(status_message=f"Failed to jump")
             elif source_entity.position != execution_event.end_position:
-                return execution_event.phase_to(
-                    new_phase=EventPhase.COMPLETION,
+                return effect_event.with_updates(
                     status_message=f"Partial jump, stopped at {source_entity.position}",
                     end_position=actual_end_position,
+                    objective_end_position=actual_end_position,
+                    end_elevation_feet=grid.get_support_elevation_feet(
+                        actual_end_position
+                    ),
                     path=traversed_path,
                     jump_distance=(len(traversed_path) - 1) * 5,
                 )
 
-            return effect_event.phase_to(
-                new_phase=EventPhase.COMPLETION,
+            return effect_event.with_updates(
                 status_message=f"Jumped to {execution_event.end_position}",
+                objective_end_position=actual_end_position,
+                end_elevation_feet=grid.get_support_elevation_feet(
+                    actual_end_position
+                ),
                 path=traversed_path,
                 jump_distance=(len(traversed_path) - 1) * 5,
             )
         finally:
-            source_entity.update_entity_senses(max_distance=20, reuse_visibility_cache=True)
+            source_entity.materialize_navigation(max_distance=20)
 
-    def _apply_costs(self, completion_event: JumpEvent) -> JumpEvent:
+    def _apply_costs(self, execution_event: JumpEvent) -> JumpEvent:
         """Apply the costs of the jump (bonus action). Movement consumed per-step in _apply()."""
         return _consume_entity_action_economy_costs(
-            completion_event,
+            execution_event,
             self.source_entity_uuid,
             excluded_cost_types=frozenset({"movement"}),
         )
@@ -2885,7 +3435,7 @@ class ShoveEvent(ActionEvent):
                 "contest_success": self.contest_success,
                 "push_distance": self.push_distance,
                 "push_direction": list(self.push_direction),
-                "end_position": list(self.end_position) if self.end_position else None,
+                "end_position": self.end_position,
                 "knocked_prone": self.knocked_prone,
                 "blocked_by": self.blocked_by,
                 "is_ally": self.is_ally
@@ -3105,7 +3655,8 @@ class Shove(BaseAction):
                 status_message=f"Target too heavy ({target.weight}lbs > {declaration_event.max_shove_weight}lbs)"
             )
 
-        if target.uuid not in source.senses.entities:
+        contact = source.senses.entities.get(target.uuid)
+        if contact is None or not contact.visual:
             return declaration_event.cancel(status_message="Target not visible")
 
         return declaration_event.phase_to(
@@ -3161,8 +3712,7 @@ class Shove(BaseAction):
             return execution_event
 
         if not contest_success:
-            return execution_event.phase_to(
-                new_phase=EventPhase.COMPLETION,
+            return execution_event.with_updates(
                 status_message="Shove failed - target resisted"
             )
 
@@ -3173,8 +3723,7 @@ class Shove(BaseAction):
             )
             target.add_condition(prone_condition, parent_event=execution_event)
 
-            return execution_event.phase_to(
-                new_phase=EventPhase.COMPLETION,
+            return execution_event.with_updates(
                 knocked_prone=True,
                 status_message=f"{target.name} knocked prone"
             )
@@ -3242,8 +3791,7 @@ class Shove(BaseAction):
                 )
             )
 
-        return execution_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+        return execution_event.with_updates(
             push_distance=push_distance,
             push_direction=push_direction,
             end_position=final_pos,
@@ -3251,9 +3799,9 @@ class Shove(BaseAction):
             status_message=f"Shoved {target.name} {push_distance}ft" + (f" (blocked by {blocked_by})" if blocked and blocked_by else " (blocked)" if blocked else "")
         )
 
-    def _apply_costs(self, completion_event: ShoveEvent) -> ShoveEvent:
+    def _apply_costs(self, execution_event: ShoveEvent) -> ShoveEvent:
         """Apply shove costs (bonus action)."""
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
+        return entity_action_economy_cost_applier(execution_event, self.source_entity_uuid)
 
 class SpellEvent(ActionEvent):
     """Event payload for spell casting and spell effect logs."""
@@ -4035,8 +4583,8 @@ class SpellAction(BaseAction):
         assert isinstance(result, Concentrating)
         return result
 
-    def _cleanup_concentration(self, completion_event: ActionEvent) -> None:
-        """Remove Concentrating if all targets saved (0-children bug fix).
+    def _cleanup_concentration(self, effect_event: ActionEvent) -> None:
+        """Close empty concentration state before the action terminal.
 
         Also clean up empty slots in multi-slot scenarios."""
         if not self.cast_concentrating_uuid:
@@ -4047,7 +4595,7 @@ class SpellAction(BaseAction):
         conc = caster.active_conditions["Concentrating"]
         if not isinstance(conc, Concentrating) or conc.uuid != self.cast_concentrating_uuid:
             return
-        conc.cleanup_if_no_effects(parent_event=completion_event)
+        conc.cleanup_if_no_effects(parent_event=effect_event)
         if "Concentrating" in caster.active_conditions:
             empty_slot_uuids = [slot_uuid for slot_uuid, slot in conc.concentration_slots.items() if not slot.linked_entries]
             for slot_uuid in empty_slot_uuids:
@@ -4263,16 +4811,9 @@ class SpellAction(BaseAction):
             self.bind_spell_execution_lineage(event.lineage_uuid)
         return event
 
-    def _apply_costs(self, completion_event: ActionEvent) -> Optional[ActionEvent]:
+    def _apply_costs(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
         """Apply the costs of the spell."""
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
-
-    def _apply_execution_cancellation_costs(
-        self,
-        canceled_event: ActionEvent,
-    ) -> Optional[ActionEvent]:
-        """Spend a committed cast when a reaction interrupts its execution."""
-        return entity_action_economy_cost_applier(canceled_event, self.source_entity_uuid)
+        return entity_action_economy_cost_applier(execution_event, self.source_entity_uuid)
 
     def _get_cantrip_dice_count(self, caster_level: int) -> int:
         """Get number of damage dice for cantrips based on caster level.
@@ -4347,7 +4888,7 @@ class PickUp(BaseAction):
 
         entity.loot_item(item, parent_event=execution_event)
         return execution_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+            new_phase=EventPhase.EFFECT,
             status_message=f"Picked up {item.name}"
         )
 
@@ -4416,15 +4957,20 @@ class AttackObject(BaseAction):
             total_damage += dice.roll.total
         main_type = entity.equipment.get_main_damage_type(weapon_slot)
 
-        actual = item.receive_damage(total_damage, main_type, entity.uuid)
+        actual = item.receive_damage(
+            total_damage,
+            main_type,
+            entity.uuid,
+            parent_event=execution_event,
+        )
         return execution_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+            new_phase=EventPhase.EFFECT,
             status_message=f"Dealt {actual} {main_type.value} damage to {item.name}"
         )
 
-    def _apply_costs(self, completion_event: ActionEvent) -> ActionEvent:
-        """Apply Attack Object action costs after successful object damage."""
-        return entity_action_economy_cost_applier(completion_event, self.source_entity_uuid)
+    def _apply_costs(self, execution_event: ActionEvent) -> ActionEvent:
+        """Commit Attack Object costs before execution is published."""
+        return entity_action_economy_cost_applier(execution_event, self.source_entity_uuid)
 
 
 class Drop(BaseAction):
@@ -4505,7 +5051,7 @@ class Drop(BaseAction):
             return execution_event.cancel(status_message="Failed to drop item")
 
         return execution_event.phase_to(
-            new_phase=EventPhase.COMPLETION,
+            new_phase=EventPhase.EFFECT,
             status_message=f"Dropped {dropped.name}"
         )
 
