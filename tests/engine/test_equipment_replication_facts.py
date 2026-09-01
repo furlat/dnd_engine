@@ -10,13 +10,10 @@ from dnd.blocks.base_item import (
 )
 from dnd.blocks.equipment import (
     EquipmentEvent,
-    Shield,
     ShieldUnequipEvent,
-    Weapon,
     WeaponEquipEvent,
 )
-from dnd.content_system.item_bindings import ItemRuntimeOrigin
-from dnd.content_system.item_materialization import materialize_item
+from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.core.base_block import BaseBlock
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import Event, EventHandler, EventPhase, EventQueue, EventType, Trigger
@@ -24,12 +21,7 @@ from dnd.core.gridmap import get_map
 from dnd.core.item_types import ItemLocation, ItemPresentationKind
 from dnd.core.creature_types import DamageType
 from dnd.entity import Entity
-from dnd.items.armors import SHIELD_RECIPE
-from dnd.items.consumables import (
-    HEALING_POTION_RECIPE,
-    healing_potion_recipe,
-)
-from dnd.items.weapons import GREATSWORD_RECIPE
+from dnd.items.consumables import build_healing_potion
 from tests.engine.support import reset_combat_state, set_hp
 
 
@@ -52,18 +44,8 @@ def _completion_facts_since(cursor: int) -> list[Event]:
 def test_equipment_displacement_publishes_slot_then_inventory_and_ac_facts() -> None:
     """A two-handed equip is replayable without fetching a new equipment snapshot."""
     entity = _fresh_entity()
-    shield = materialize_item(
-        SHIELD_RECIPE,
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Shield,
-    )
-    greatsword = materialize_item(
-        GREATSWORD_RECIPE,
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
-    )
+    shield = build_authored_item("shield.shield", entity.uuid)
+    greatsword = build_authored_item("weapon.greatsword", entity.uuid)
     assert entity.loot_item(shield)
     assert entity.loot_item(greatsword)
     base_ac = entity.ac_bonus().normalized_score
@@ -104,7 +86,11 @@ def test_equipment_displacement_publishes_slot_then_inventory_and_ac_facts() -> 
 def test_pickup_drop_and_stack_merge_publish_exact_inventory_state() -> None:
     """Pickup/drop facts include membership and both sides of a stack merge."""
     entity = _fresh_entity()
-    item = BaseItem(source_entity_uuid=uuid4(), name="Silver Key")
+    item = BaseItem(
+        source_entity_uuid=uuid4(),
+        item_id="test.item.silver_key",
+        name="Silver Key",
+    )
     item.place_on_grid((1, 0))
 
     cursor = EventQueue.event_cursor()
@@ -135,16 +121,8 @@ def test_pickup_drop_and_stack_merge_publish_exact_inventory_state() -> None:
     assert drop_facts[0].position == (0, 1)
     assert drop_facts[0].tile_uuid == item.tile_uuid
 
-    existing = materialize_item(
-        HEALING_POTION_RECIPE,
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-    )
-    incoming = materialize_item(
-        HEALING_POTION_RECIPE,
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-    )
+    existing = build_healing_potion(entity.uuid)
+    incoming = build_healing_potion(entity.uuid)
     existing.stack_count = 8
     incoming.stack_count = 2
     assert entity.loot_item(existing)
@@ -173,12 +151,7 @@ def test_pickup_drop_and_stack_merge_publish_exact_inventory_state() -> None:
 def test_destroyed_equipment_and_consumables_publish_ordered_removal_facts() -> None:
     """Destruction removes slot/membership before exposing the final aggregate AC."""
     entity = _fresh_entity()
-    shield = materialize_item(
-        SHIELD_RECIPE,
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Shield,
-    )
+    shield = build_authored_item("shield.shield", entity.uuid)
     shield.is_targetable = True
     shield.health = BaseItem.create_item_health(entity.uuid, hp=4)
     base_ac = entity.ac_bonus().normalized_score
@@ -207,11 +180,7 @@ def test_destroyed_equipment_and_consumables_publish_ordered_removal_facts() -> 
     assert destroyed_fact.item_state.shield_ac_bonus == 2
     assert destroyed_fact.entity_armor_class_after == base_ac
 
-    potion = materialize_item(
-        healing_potion_recipe(heal_amount=4),
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-    )
+    potion = build_healing_potion(entity.uuid, heal_amount=4)
     assert entity.loot_item(potion)
     set_hp(entity, 1)
     cursor = EventQueue.event_cursor()
@@ -243,12 +212,7 @@ def test_destroyed_equipment_and_consumables_publish_ordered_removal_facts() -> 
 def test_canceled_equip_publishes_no_item_location_fact() -> None:
     """A rejected equipment proposal cannot produce a false completion fact."""
     entity = _fresh_entity()
-    shield = materialize_item(
-        SHIELD_RECIPE,
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Shield,
-    )
+    shield = build_authored_item("shield.shield", entity.uuid)
     assert entity.loot_item(shield)
 
     def cancel_equip(event: Event, _source_entity_uuid) -> Event:

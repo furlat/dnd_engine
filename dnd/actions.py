@@ -1,6 +1,7 @@
 """Concrete action implementations for combat, movement, spells, and objects."""
 
 import time
+from types import MappingProxyType
 
 from dnd.core.base_actions import (
     ActionCategory, ActionEvent, ActionOutcomeProfile, BaseAction, BaseCost,
@@ -4293,16 +4294,16 @@ class SpellAction(BaseAction):
         """Open the cast-local context used by low-level damage contributors."""
 
         binding = self.behavior_binding
-        cause_ref = binding.definition_ref if binding is not None else None
+        cause_id = binding.behavior_id if binding is not None else None
         saving_throw_effect_id = self.saving_throw_effect_id
-        if saving_throw_effect_id is None and cause_ref is not None:
+        if saving_throw_effect_id is None and cause_id is not None:
             saving_throw_effect_id = (
-                f"{cause_ref.content_id}.saving_throw"
+                f"{cause_id}.saving_throw"
             )
         return spell_execution_scope(
             source_entity_uuid=self.source_entity_uuid,
             damage_type=self.spell_damage_type,
-            cause_ref=cause_ref,
+            cause_id=cause_id,
             saving_throw_effect_id=saving_throw_effect_id,
             saving_throw_effect_tags=self.saving_throw_effect_tags,
         )
@@ -5056,9 +5057,7 @@ class Drop(BaseAction):
         )
 
 
-CORE_STANDARD_ACTION_DECLARATIONS = tuple(
-    get_content_declaration(action_type)
-    for action_type in (
+_CORE_STANDARD_ACTION_TYPES = (
         Move,
         Swim,
         Attack,
@@ -5072,5 +5071,12 @@ CORE_STANDARD_ACTION_DECLARATIONS = tuple(
         Shove,
         PickUp,
         AttackObject,
-    )
+)
+CORE_STANDARD_ACTION_DECLARATIONS_BY_CLASS = MappingProxyType({
+    action_type: get_content_declaration(action_type)
+    for action_type in _CORE_STANDARD_ACTION_TYPES
+})
+CORE_STANDARD_ACTION_DECLARATIONS = tuple(
+    CORE_STANDARD_ACTION_DECLARATIONS_BY_CLASS[action_type]
+    for action_type in _CORE_STANDARD_ACTION_TYPES
 )

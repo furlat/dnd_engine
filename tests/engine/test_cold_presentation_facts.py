@@ -10,8 +10,7 @@ from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
-from dnd.content_system.item_bindings import ItemRuntimeOrigin
-from dnd.content_system.item_materialization import materialize_item
+from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.core.action_types import ActionPresentationKind
 from dnd.core.aoe import (
     Cone,
@@ -32,8 +31,7 @@ from dnd.core.presentation_geometry import (
     SpherePresentationGeometry,
 )
 from dnd.entity import Entity, EntityConfig
-from dnd.items.consumables import HEALING_POTION_RECIPE
-from dnd.items.spell_items import FIREBALL_SCROLL_RECIPE, SpellGrantingItem
+from dnd.items.spell_items import SpellGrantingItem
 from dnd.runtime_reset import reset_engine_runtime
 from tests.spell_test_exports import Fireball, MagicMissile
 from dnd.core.gridmap import get_map
@@ -255,11 +253,7 @@ def test_drink_event_carries_immutable_declaration_time_item_state() -> None:
     """Item-use presentation survives consumption without a registry lookup."""
     _reset_grid()
     user_uuid = uuid4()
-    potion = materialize_item(
-        HEALING_POTION_RECIPE,
-        user_uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-    )
+    potion = build_authored_item("consumable.healing_potion", user_uuid)
     action = potion.get_use_actions(user_uuid)[0]
 
     declaration = action._create_declaration_event(use_register=False)
@@ -299,11 +293,7 @@ def test_drink_event_rejects_missing_or_mismatched_item_snapshot() -> None:
             use_register=False,
         )
 
-    potion = materialize_item(
-        HEALING_POTION_RECIPE,
-        uuid4(),
-        origin=ItemRuntimeOrigin.STARTER,
-    )
+    potion = build_authored_item("consumable.healing_potion", uuid4())
     with pytest.raises(ValidationError, match="must match source_item_uuid"):
         ActionEvent(
             source_entity_uuid=uuid4(),
@@ -317,12 +307,8 @@ def test_item_backed_spell_variant_carries_its_scroll_snapshot() -> None:
     """Model-copy spell variants retain the same cold item-use guarantee."""
     _reset_grid()
     user = _create_actor("Scroll Reader", (1, 1), "heroes")
-    scroll = materialize_item(
-        FIREBALL_SCROLL_RECIPE,
-        user.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=SpellGrantingItem,
-    )
+    scroll = build_authored_item("spell_item.scroll_fireball", user.uuid)
+    assert isinstance(scroll, SpellGrantingItem)
     action = scroll.get_use_actions(user.uuid)[0]
     action.end_position = (4, 2)
 

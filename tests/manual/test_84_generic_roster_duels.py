@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import random
 
-from dnd.content_system.item_bindings import ITEM_RUNTIME_BINDINGS
 from dnd.core.content.encounters import (
     EncounterRecipe,
     EncounterRosterSlot,
@@ -16,10 +15,6 @@ from dnd.core.content.encounters import (
 from dnd.entity import Entity
 from dnd.game import Game
 from dnd.runtime_reset import reset_engine_runtime
-from dnd.items.apparel_presets import (
-    DARK_CLOTH_SHOES_PRESET,
-    HEDGE_WIZARD_ROBE_PRESET,
-)
 from dnd.scenarios.encounter_assembler import (
     AssembledEncounter,
     assemble_encounter_recipe,
@@ -120,13 +115,9 @@ def test_generic_duel_assembles_two_multi_actor_creature_rosters() -> None:
     )
     goblin_caster = second[2]
     assert goblin_caster.equipment.body_armor is not None
-    assert ITEM_RUNTIME_BINDINGS.require(
-        goblin_caster.equipment.body_armor.uuid,
-    ).recipe == HEDGE_WIZARD_ROBE_PRESET.recipe
+    assert goblin_caster.equipment.body_armor.item_id == "apparel.robes.hedge_wizard"
     assert goblin_caster.equipment.boots is not None
-    assert ITEM_RUNTIME_BINDINGS.require(
-        goblin_caster.equipment.boots.uuid,
-    ).recipe == DARK_CLOTH_SHOES_PRESET.recipe
+    assert goblin_caster.equipment.boots.item_id == "apparel.cloth_shoes.dark"
 
 
 def test_mirrored_roster_keeps_runtime_identity_isolated_by_faction() -> None:

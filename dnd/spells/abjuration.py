@@ -8,6 +8,7 @@ Contains: Shield, MageArmor, ProtectionFromEnergy, Stoneskin, Counterspell,
 """
 import random
 from functools import partial
+from types import MappingProxyType
 from typing import Any, Dict, Optional, List, Set, Tuple, cast as type_cast
 from uuid import UUID
 
@@ -1036,6 +1037,10 @@ class CounterspellReactionHandler(EventHandler):
 COUNTERSPELL_REACTION_DECLARATION = get_content_declaration(
     CounterspellReactionHandler,
 )
+ABJURATION_REACTION_DECLARATIONS_BY_CLASS = MappingProxyType({
+    ShieldReactionHandler: SHIELD_REACTION_DECLARATION,
+    CounterspellReactionHandler: COUNTERSPELL_REACTION_DECLARATION,
+})
 
 
 def create_counterspell_reaction_handler(

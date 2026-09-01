@@ -35,7 +35,6 @@ from dnd.core.modifiers import ResistanceStatus
 from dnd.core.values import BaseValue
 from dnd.types.world import MovementMode
 from dnd.content_system.creature_bindings import CREATURE_RUNTIME_BINDINGS
-from dnd.content_system.item_bindings import ITEM_RUNTIME_BINDINGS
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
 from dnd.runtime_reset import reset_engine_runtime
@@ -66,7 +65,7 @@ def _expected_entity_created_fields(entity: Entity) -> dict[str, object]:
         if proficiencies.is_weapon_proficient((category,))
     ]
     weapon_proficiencies.extend(sorted(
-        set(proficiencies.base_weapon_ref_keys)
+        set(proficiencies.base_weapon_ids)
         | {
             key
             for key, sources in proficiencies.specific_weapon_sources.items()
@@ -896,18 +895,6 @@ def _assert_provisional_scenario_was_discarded(
         event.event_type is EventType.ENTITY_CREATED
         for event in _events()
     )
-    item_uuids = {
-        *(
-            item_uuid
-            for entity in entities
-            for item_uuid in entity.inventory.items
-        ),
-        *(
-            item.uuid
-            for entity in entities
-            for item in entity.equipment.get_all_equipped_items()
-        ),
-    }
     for entity in entities:
         entity_uuid = entity.uuid
         assert Entity.get(entity_uuid) is None
@@ -920,7 +907,6 @@ def _assert_provisional_scenario_was_discarded(
             value.source_entity_uuid == entity_uuid
             for value in BaseValue._registry.values()
         )
-    assert not item_uuids.intersection(ITEM_RUNTIME_BINDINGS.bindings)
 
 
 def test_scenario_immediate_grant_failure_discards_every_provisional_owner(

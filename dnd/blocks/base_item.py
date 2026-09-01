@@ -22,10 +22,9 @@ from dnd.core.events import (
 )
 from dnd.core.equipment_types import EquipmentSlot
 from dnd.types.world import CardinalDirection
-from dnd.types.world_placement import WorldObjectPlacement
+from dnd.types.world_placement import WorldObjectPlacement, WorldPlacementSpec
 from dnd.core.item_types import (
     EquippedVisualPolicy,
-    ItemContentRefSnapshot,
     ItemLocation,
     ItemPresentationKind,
     ItemPresentationState,
@@ -33,7 +32,7 @@ from dnd.core.item_types import (
 )
 from dnd.blocks.health import Health, HealthConfig, HitDiceConfig
 from dnd.core.base_actions import BaseAction
-from dnd.core.content.identities import ContentRef
+from dnd.core.content.identities import validate_namespaced_id
 from dnd.core.content.runtime import (
     RuntimeBehaviorKind,
     bind_runtime_behavior_child,
@@ -113,15 +112,9 @@ class BaseItem(BaseBlock):
         description="Whether this item can own event handlers and active conditions.",
     )
     name: str = Field(default="Item", description="Display name for this item.")
-    semantic_key: Optional[str] = Field(
-        default=None,
-        description="Stable rules-content identity; defaults to the item class identity.",
-    )
-    content_ref: Optional[ContentRef] = Field(
-        default=None,
+    item_id: str = Field(
         frozen=True,
-        exclude=True,
-        description="Exact authored definition used to construct this runtime item.",
+        description="Direct authored item species identity.",
     )
     content_kind: RuntimeBehaviorKind = Field(
         default=RuntimeBehaviorKind.ITEM,
@@ -186,13 +179,10 @@ class BaseItem(BaseBlock):
     stored_in_uuid: Optional[UUID] = Field(default=None, description="UUID of the container block (Inventory, Equipment) holding this item")
     tile_uuid: Optional[UUID] = Field(default=None, description="UUID of tile at this item's grid position (set when on floor)")
 
-    def get_semantic_key(self) -> str:
-        """Return an explicit key or the stable item class identity."""
-        if self.content_ref is not None:
-            return self.content_ref.identity_key
-        if self.semantic_key:
-            return self.semantic_key
-        return f"{type(self).__module__}.{type(self).__name__}"
+    @model_validator(mode="after")
+    def validate_item_id(self) -> "BaseItem":
+        validate_namespaced_id(self.item_id, "item_id")
+        return self
 
     def to_item_presentation_state(
         self,
@@ -207,14 +197,7 @@ class BaseItem(BaseBlock):
         """
         return ItemPresentationState(
             item_uuid=self.uuid,
-            content_ref=(
-                ItemContentRefSnapshot.model_validate(
-                    self.content_ref.model_dump(mode="python")
-                )
-                if self.content_ref is not None
-                else None
-            ),
-            semantic_key=self.get_semantic_key(),
+            item_id=self.item_id,
             name=self.name,
             description=self.description,
             item_kind=ItemPresentationKind.ITEM,
@@ -644,6 +627,15 @@ class BaseItem(BaseBlock):
         return Health.create(source_entity_uuid=source_uuid, config=config)
 
 
+class WorldItem(BaseItem):
+    """Item with an explicitly authored world-placement capability."""
+
+    world_placement_spec: WorldPlacementSpec = Field(frozen=True)
+
+    def get_world_placement_spec(self) -> WorldPlacementSpec:
+        return self.world_placement_spec
+
+
 class EquippableItem(BaseItem):
     """Base class for equippable items.
 
@@ -761,7 +753,8 @@ class UsableItem(BaseItem):
         """
         bind_runtime_behavior_child(
             action,
-            provider=self,
+            provided_by_id=self.item_id,
+            origin_root_id=self.item_id,
             runtime_owner_uuid=self.uuid,
         )
         return action
@@ -827,6 +820,8 @@ class UsableItem(BaseItem):
                 'source_item_uuid': self.uuid,
                 'source_item_presentation': source_item_presentation,
             })
+            if action.behavior_binding is None:
+                self.bind_dynamic_use_action(action)
             result.append(action)
         return result
 
@@ -880,7 +875,7 @@ class UsableItem(BaseItem):
             target_entity_uuid=self.uuid,
             parent_event=parent_event.uuid,
             item_uuid=self.uuid,
-            item_semantic_key=self.get_semantic_key(),
+            item_id=self.item_id,
             item_name=self.name,
             amount=amount,
             charges_before=self.charges,
@@ -924,9 +919,8 @@ class ItemChargeConsumptionEvent(Event):
         description="Event category for finite item-resource consumption.",
     )
     item_uuid: UUID = Field(description="Usable item whose finite resource changes.")
-    item_semantic_key: str = Field(
-        default="item.unclassified",
-        description="Stable semantic identity of the consumed item.",
+    item_id: str = Field(
+        description="Direct authored identity of the consumed item.",
     )
     item_name: str = Field(default="Item", description="Human-readable consumed item name.")
     amount: int = Field(default=1, ge=1, description="Number of charges consumed.")

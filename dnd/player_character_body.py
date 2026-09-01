@@ -121,7 +121,7 @@ def _build_player_character_body(
             creature_proficiencies=CreatureProficienciesConfig(
                 base_simple_weapons=False,
                 base_martial_weapons=False,
-                base_weapon_refs=(),
+                base_weapon_ids=(),
                 base_armor_types=(),
                 base_shields=False,
             ),

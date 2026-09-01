@@ -64,20 +64,20 @@ def test_rosters_do_not_repair_ordinary_apparel_as_setup_effects() -> None:
         (
             roster.roster_id,
             member.member_id,
-            effect.recipe.ref.content_id,
+            effect.item_id,
         )
         for roster in AUTHORED_ROSTER_RECIPES
         for member in roster.members
         for effect in member.scenario_setup_effects
         if isinstance(effect, RosterItemGrant)
-        and effect.recipe.ref.content_id.startswith(forbidden_prefixes)
+        and effect.item_id.startswith(forbidden_prefixes)
     ]
     assert repairs == []
 
 
 def test_scenario_item_grants_are_real_tactical_setup_not_wardrobes() -> None:
     granted_ids = {
-        effect.recipe.ref.content_id
+        effect.item_id
         for roster in AUTHORED_ROSTER_RECIPES
         for member in roster.members
         for effect in member.scenario_setup_effects

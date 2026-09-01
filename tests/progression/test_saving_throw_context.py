@@ -25,6 +25,7 @@ from dnd.runtime_reset import reset_engine_runtime
 from dnd.spells.conjuration import Cloudkill, PoisonSpray, StinkingCloud
 from dnd.spells.enchantment import CharmPerson, Sleep
 from dnd.spells.illusion import Fear, HypnoticPattern
+from tests.engine.support import create_test_entity
 
 
 @pytest.fixture(autouse=True)
@@ -61,21 +62,32 @@ def test_saving_throw_context_owns_exact_cause_effect_and_rules_facts() -> None:
     )
 
     context = SavingThrowContext(
-        cause_ref=cause_ref,
+        cause_id=cause_ref.content_id,
         effect_id="control.fixture.poisoned",
-        condition_ref=condition_ref,
+        condition_id=condition_ref.content_id,
         is_magical=True,
         effect_tags=(SavingThrowEffectTag.POISON,),
     )
 
-    assert context.cause_ref == cause_ref
+    assert context.cause_id == cause_ref.content_id
     assert context.effect_id == "control.fixture.poisoned"
-    assert context.condition_ref == condition_ref
+    assert context.condition_id == condition_ref.content_id
     assert context.is_magical is True
     assert context.effect_tags == (SavingThrowEffectTag.POISON,)
     assert SavingThrowContext.model_validate_json(
         context.model_dump_json(),
     ) == context
+
+
+def test_spell_execution_scope_rejects_malformed_primitive_cause_id() -> None:
+    """Spell-local provenance obeys the same namespaced-ID boundary."""
+    with pytest.raises(ValueError, match="lowercase dotted identifier"):
+        with spell_execution_scope(
+            source_entity_uuid=uuid4(),
+            damage_type=None,
+            cause_id="not-namespaced",
+        ):
+            pass
 
 
 @pytest.mark.parametrize(
@@ -87,13 +99,9 @@ def test_saving_throw_context_owns_exact_cause_effect_and_rules_facts() -> None:
         ),
         (
             {
-                "condition_ref": _ref(
-                    ContentDefinitionKind.SPELL,
-                    "spell.not_a_condition",
-                    "c",
-                ),
+                "condition_id": "NotNamespaced",
             },
-            "condition_ref must identify a condition",
+            "lowercase dotted identifier",
         ),
         (
             {
@@ -120,11 +128,7 @@ def test_saving_throw_context_rejects_inexact_or_ambiguous_facts(
     message: str,
 ) -> None:
     payload: dict[str, object] = {
-        "cause_ref": _ref(
-            ContentDefinitionKind.ACTION,
-            "action.fixture",
-            "d",
-        ),
+        "cause_id": "action.fixture",
         "effect_id": "control.fixture.effect",
         "is_magical": False,
     }
@@ -144,17 +148,9 @@ def test_saving_throw_request_propagates_exact_context_to_save_modifiers() -> No
         name="Exact Saver",
     )
     magical_context = SavingThrowContext(
-        cause_ref=_ref(
-            ContentDefinitionKind.SPELL,
-            "spell.fixture_charm",
-            "e",
-        ),
+        cause_id="spell.fixture_charm",
         effect_id="control.fixture.charm",
-        condition_ref=_ref(
-            ContentDefinitionKind.CONDITION,
-            "condition.charmed",
-            "f",
-        ),
+        condition_id="condition.charmed",
         is_magical=True,
         effect_tags=(SavingThrowEffectTag.CHARM,),
     )
@@ -237,7 +233,7 @@ def test_spell_execution_supplies_exact_magical_save_context_by_default() -> Non
     with spell_execution_scope(
         source_entity_uuid=caster.uuid,
         damage_type=None,
-        cause_ref=spell_ref,
+        cause_id=spell_ref.content_id,
         saving_throw_effect_id="spell.fixture_charm.saving_throw",
         saving_throw_effect_tags=(SavingThrowEffectTag.CHARM,),
     ):
@@ -248,7 +244,7 @@ def test_spell_execution_supplies_exact_magical_save_context_by_default() -> Non
         )
 
     assert request.saving_throw_context == SavingThrowContext(
-        cause_ref=spell_ref,
+        cause_id=spell_ref.content_id,
         effect_id="spell.fixture_charm.saving_throw",
         is_magical=True,
         effect_tags=(SavingThrowEffectTag.CHARM,),
@@ -266,8 +262,8 @@ def test_bound_condition_builds_exact_repeat_save_context() -> None:
         source_entity_uuid=owner_uuid,
         target_entity_uuid=owner_uuid,
         behavior_binding=BehaviorBinding(
-            definition_ref=condition_ref,
-            provided_by_ref=condition_ref,
+            behavior_id=condition_ref.content_id,
+            provided_by_id=condition_ref.content_id,
             runtime_owner_uuid=owner_uuid,
         ),
     )
@@ -277,9 +273,9 @@ def test_bound_condition_builds_exact_repeat_save_context() -> None:
         effect_tags=(SavingThrowEffectTag.FEAR,),
         is_magical=True,
     ) == SavingThrowContext(
-        cause_ref=condition_ref,
+        cause_id=condition_ref.content_id,
         effect_id="condition.fixture_fear.repeat_save",
-        condition_ref=condition_ref,
+        condition_id=condition_ref.content_id,
         is_magical=True,
         effect_tags=(SavingThrowEffectTag.FEAR,),
     )
@@ -301,8 +297,9 @@ def test_unbound_condition_cannot_invent_repeat_save_identity() -> None:
 
 def test_magical_sleep_immunity_excludes_target_without_charm_proxy() -> None:
     def actor(position: tuple[int, int], faction: str) -> Entity:
-        return Entity.create(
-            source_entity_uuid=uuid4(),
+        return create_test_entity(
+            source_id=uuid4(),
+            name=f"{faction} actor at {position}",
             config=EntityConfig(
                 position=position,
                 faction=faction,

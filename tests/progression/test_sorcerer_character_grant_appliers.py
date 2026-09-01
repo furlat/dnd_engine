@@ -194,7 +194,7 @@ def test_sorcery_point_levels_share_one_font_family_and_max_capacity(
     }
     assert all(
         action.behavior_binding is not None
-        and action.behavior_binding.provided_by_ref == SORCERY_POINTS_REF
+        and action.behavior_binding.provided_by_id == SORCERY_POINTS_REF.content_id
         for action in context.entity.registered_actions
     )
     assert not context.entity.active_conditions
@@ -235,7 +235,7 @@ def test_implemented_metamagic_choices_own_one_reversible_action(
     action = context.entity.registered_actions[0]
     assert isinstance(action, action_type)
     assert action.behavior_binding is not None
-    assert action.behavior_binding.provided_by_ref == declaration.ref
+    assert action.behavior_binding.provided_by_id == declaration.ref.content_id
     assert receipt.transient_condition_refs_to_remove == (
         METAMAGIC_ACTIVE_REF,
     )
@@ -246,7 +246,7 @@ def test_implemented_metamagic_choices_own_one_reversible_action(
     )
     context.runtime.bind_granted_behavior(
         transient,
-        provider_ref=METAMAGIC_ACTIVE_REF,
+        provider_id=METAMAGIC_ACTIVE_REF.content_id,
         runtime_owner_uuid=context.entity.uuid,
     )
     context.entity.add_condition(transient)
@@ -336,7 +336,7 @@ def test_ancestry_drives_exact_reversible_elemental_affinity(
         sorcerer.ElementalAffinityResistanceAction,
     )
     assert action.behavior_binding is not None
-    assert action.behavior_binding.provided_by_ref == ELEMENTAL_AFFINITY_REF
+    assert action.behavior_binding.provided_by_id == ELEMENTAL_AFFINITY_REF.content_id
     assert not context.entity.active_conditions
 
     resource = context.entity.action_economy.resources["sorcery_points"]
@@ -351,8 +351,8 @@ def test_ancestry_drives_exact_reversible_elemental_affinity(
     assert resistance.duration.duration == 600
     assert resistance.behavior_binding is not None
     assert (
-        resistance.behavior_binding.definition_ref
-        == ELEMENTAL_AFFINITY_RESISTANCE_REF
+        resistance.behavior_binding.behavior_id
+        == ELEMENTAL_AFFINITY_RESISTANCE_REF.content_id
     )
     assert (
         context.entity.health.get_resistance(DamageType.FIRE)

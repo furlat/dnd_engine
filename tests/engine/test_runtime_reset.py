@@ -7,6 +7,11 @@ from dnd.controller import Controller
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import SpellProtectionRegistry
 from dnd.core.base_object import BaseObject
+from dnd.core.content.runtime import (
+    BehaviorBinding,
+    active_runtime_behavior_binding,
+    runtime_behavior_provider,
+)
 from dnd.core.events import EventQueue
 from dnd.core.gridmap import get_map
 from dnd.core.values import BaseValue
@@ -73,3 +78,41 @@ def test_reset_engine_runtime_can_leave_the_new_grid_empty() -> None:
     assert BaseObject._registry == {}
     assert BaseBlock._registry == {}
     assert BaseValue._registry == {}
+
+
+def test_reset_engine_runtime_clears_active_behavior_provider_fact() -> None:
+    """A new encounter cannot inherit an active behavior's primitive facts."""
+    binding = BehaviorBinding(
+        behavior_id="action.fixture.reset",
+        provided_by_id="feature.fixture.reset",
+        runtime_owner_uuid=uuid4(),
+    )
+
+    with runtime_behavior_provider(binding):
+        assert active_runtime_behavior_binding() == binding
+        reset_engine_runtime()
+        assert active_runtime_behavior_binding() is None
+
+    assert active_runtime_behavior_binding() is None
+
+
+def test_reset_engine_runtime_invalidates_nested_behavior_provider_scopes() -> None:
+    """Exiting pre-reset scopes cannot resurrect their primitive facts."""
+    outer = BehaviorBinding(
+        behavior_id="action.fixture.outer_reset",
+        provided_by_id="feature.fixture.outer_reset",
+        runtime_owner_uuid=uuid4(),
+    )
+    inner = BehaviorBinding(
+        behavior_id="action.fixture.inner_reset",
+        provided_by_id="feature.fixture.inner_reset",
+        runtime_owner_uuid=uuid4(),
+    )
+
+    with runtime_behavior_provider(outer):
+        with runtime_behavior_provider(inner):
+            reset_engine_runtime()
+            assert active_runtime_behavior_binding() is None
+        assert active_runtime_behavior_binding() is None
+
+    assert active_runtime_behavior_binding() is None

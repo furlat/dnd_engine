@@ -447,7 +447,7 @@ def _apply_indomitable(
         try:
             context.runtime.bind_granted_behavior(
                 handler,
-                provider_ref=INDOMITABLE_REF,
+                provider_id=INDOMITABLE_REF.content_id,
                 runtime_owner_uuid=entity.uuid,
             )
             entity.add_event_handler(handler)
@@ -513,7 +513,7 @@ def _apply_lucky(
     try:
         context.runtime.bind_granted_behavior(
             handler,
-            provider_ref=LUCKY_FEAT_REF,
+            provider_id=LUCKY_FEAT_REF.content_id,
             runtime_owner_uuid=entity.uuid,
         )
         entity.add_event_handler(handler)

@@ -8,11 +8,6 @@ from dnd.classes.starting_equipment_refs import (
     STARTING_EQUIPMENT_PACKAGE_REFS_BY_CLASS,
     STARTING_EQUIPMENT_PACKAGE_REFS_BY_PRESET,
 )
-from dnd.core.content.dependencies import (
-    ContentDependency,
-    ContentDependencyPhase,
-    ContentDependencyRelation,
-)
 from dnd.core.content.descriptors import (
     ContentDescriptor,
     ContentDescriptorSpec,
@@ -35,30 +30,13 @@ from dnd.core.content.starting_equipment import (
     StartingEquipmentPackageEntry,
 )
 from dnd.core.equipment_types import BodyPart, WeaponSlot
-from dnd.items.armors import (
-    CHAIN_MAIL_RECIPE,
-    SHIELD_RECIPE,
-    STUDDED_LEATHER_RECIPE,
-)
-from dnd.items.weapons import (
-    DAGGER_RECIPE,
-    GREATAXE_RECIPE,
-    GREATSWORD_RECIPE,
-    HANDAXE_RECIPE,
-    LONGBOW_RECIPE,
-    LONGSWORD_RECIPE,
-    QUARTERSTAFF_RECIPE,
-    SHORTSWORD_RECIPE,
-)
-
-
 def _entry(
-    recipe,
+    item_id: str,
     *,
     equipped_slot=None,
 ) -> StartingEquipmentPackageEntry:
     return StartingEquipmentPackageEntry(
-        recipe=recipe,
+        item_id=item_id,
         equipped_slot=equipped_slot,
     )
 
@@ -79,9 +57,9 @@ _PACKAGE_ROWS: tuple[
         "Fighter: Sword and Shield",
         10,
         StartingEquipmentPackageDefinition(entries=(
-            _entry(CHAIN_MAIL_RECIPE, equipped_slot=BodyPart.BODY),
-            _entry(LONGSWORD_RECIPE, equipped_slot=WeaponSlot.MELEE_MAIN),
-            _entry(SHIELD_RECIPE, equipped_slot=WeaponSlot.MELEE_OFF),
+            _entry("armor.chain_mail", equipped_slot=BodyPart.BODY),
+            _entry("weapon.longsword", equipped_slot=WeaponSlot.MELEE_MAIN),
+            _entry("shield.shield", equipped_slot=WeaponSlot.MELEE_OFF),
         )),
     ),
     (
@@ -90,8 +68,8 @@ _PACKAGE_ROWS: tuple[
         "Fighter: Greatsword",
         20,
         StartingEquipmentPackageDefinition(entries=(
-            _entry(CHAIN_MAIL_RECIPE, equipped_slot=BodyPart.BODY),
-            _entry(GREATSWORD_RECIPE, equipped_slot=WeaponSlot.MELEE_MAIN),
+            _entry("armor.chain_mail", equipped_slot=BodyPart.BODY),
+            _entry("weapon.greatsword", equipped_slot=WeaponSlot.MELEE_MAIN),
         )),
     ),
     (
@@ -100,9 +78,9 @@ _PACKAGE_ROWS: tuple[
         "Fighter: Dual Wield",
         30,
         StartingEquipmentPackageDefinition(entries=(
-            _entry(CHAIN_MAIL_RECIPE, equipped_slot=BodyPart.BODY),
-            _entry(SHORTSWORD_RECIPE, equipped_slot=WeaponSlot.MELEE_MAIN),
-            _entry(SHORTSWORD_RECIPE, equipped_slot=WeaponSlot.MELEE_OFF),
+            _entry("armor.chain_mail", equipped_slot=BodyPart.BODY),
+            _entry("weapon.shortsword", equipped_slot=WeaponSlot.MELEE_MAIN),
+            _entry("weapon.shortsword", equipped_slot=WeaponSlot.MELEE_OFF),
         )),
     ),
     (
@@ -111,9 +89,9 @@ _PACKAGE_ROWS: tuple[
         "Fighter: Archery",
         40,
         StartingEquipmentPackageDefinition(entries=(
-            _entry(STUDDED_LEATHER_RECIPE, equipped_slot=BodyPart.BODY),
-            _entry(SHORTSWORD_RECIPE, equipped_slot=WeaponSlot.MELEE_MAIN),
-            _entry(LONGBOW_RECIPE, equipped_slot=WeaponSlot.RANGED_MAIN),
+            _entry("armor.studded_leather", equipped_slot=BodyPart.BODY),
+            _entry("weapon.shortsword", equipped_slot=WeaponSlot.MELEE_MAIN),
+            _entry("weapon.longbow", equipped_slot=WeaponSlot.RANGED_MAIN),
         )),
     ),
     (
@@ -122,7 +100,7 @@ _PACKAGE_ROWS: tuple[
         "Barbarian: Greataxe",
         10,
         StartingEquipmentPackageDefinition(entries=(
-            _entry(GREATAXE_RECIPE, equipped_slot=WeaponSlot.MELEE_MAIN),
+            _entry("weapon.greataxe", equipped_slot=WeaponSlot.MELEE_MAIN),
         )),
     ),
     (
@@ -131,8 +109,8 @@ _PACKAGE_ROWS: tuple[
         "Barbarian: Dual Axes",
         20,
         StartingEquipmentPackageDefinition(entries=(
-            _entry(HANDAXE_RECIPE, equipped_slot=WeaponSlot.MELEE_MAIN),
-            _entry(HANDAXE_RECIPE, equipped_slot=WeaponSlot.MELEE_OFF),
+            _entry("weapon.handaxe", equipped_slot=WeaponSlot.MELEE_MAIN),
+            _entry("weapon.handaxe", equipped_slot=WeaponSlot.MELEE_OFF),
         )),
     ),
     (
@@ -141,8 +119,8 @@ _PACKAGE_ROWS: tuple[
         "Barbarian: Sword and Shield",
         30,
         StartingEquipmentPackageDefinition(entries=(
-            _entry(LONGSWORD_RECIPE, equipped_slot=WeaponSlot.MELEE_MAIN),
-            _entry(SHIELD_RECIPE, equipped_slot=WeaponSlot.MELEE_OFF),
+            _entry("weapon.longsword", equipped_slot=WeaponSlot.MELEE_MAIN),
+            _entry("shield.shield", equipped_slot=WeaponSlot.MELEE_OFF),
         )),
     ),
     (
@@ -151,7 +129,7 @@ _PACKAGE_ROWS: tuple[
         "Sorcerer: Dagger",
         10,
         StartingEquipmentPackageDefinition(entries=(
-            _entry(DAGGER_RECIPE, equipped_slot=WeaponSlot.MELEE_MAIN),
+            _entry("weapon.dagger", equipped_slot=WeaponSlot.MELEE_MAIN),
         )),
     ),
     (
@@ -160,25 +138,10 @@ _PACKAGE_ROWS: tuple[
         "Sorcerer: Quarterstaff",
         20,
         StartingEquipmentPackageDefinition(entries=(
-            _entry(QUARTERSTAFF_RECIPE, equipped_slot=WeaponSlot.MELEE_MAIN),
+            _entry("weapon.quarterstaff", equipped_slot=WeaponSlot.MELEE_MAIN),
         )),
     ),
 )
-
-
-def _dependencies(
-    definition: StartingEquipmentPackageDefinition,
-) -> tuple[ContentDependency, ...]:
-    rows = {
-        entry.recipe.ref.identity_key: ContentDependency(
-            relation=ContentDependencyRelation.EQUIPS_ITEM,
-            target_ref=entry.recipe.ref,
-            phase=ContentDependencyPhase.CONSTRUCTION,
-            notes="Starting package equips this exact SRD item recipe.",
-        )
-        for entry in definition.entries
-    }
-    return tuple(rows[key] for key in sorted(rows))
 
 
 def _declaration(
@@ -198,7 +161,7 @@ def _declaration(
             ContentDescriptorSpec(
                 display_name=display_name,
                 description=(
-                    "Exact SRD item recipes and initial equipped slots for "
+                    "Exact SRD items and initial equipped slots for "
                     "this implemented class equipment preset."
                 ),
                 tags=(
@@ -217,13 +180,6 @@ def _declaration(
                     sort_group=f"starting_equipment.{class_id}",
                     sort_order=sort_order,
                 ),
-                related_content_refs=tuple(sorted(
-                    {
-                        entry.recipe.ref.identity_key: entry.recipe.ref
-                        for entry in definition.entries
-                    }.values(),
-                    key=lambda item_ref: item_ref.identity_key,
-                )),
             ),
         ),
         provenance=ContentProvenance(
@@ -236,13 +192,13 @@ def _declaration(
             fidelity=ContentFidelity.COMPLETE,
             review_status=ContentReviewStatus.REVIEWED,
             notes=(
-                "Contains only SRD-owned item recipes so the SRD class layer "
+                "Contains only direct SRD item identities so the class layer "
                 "does not depend on deployment-specific content. Neurodragon "
                 "premades add their own curated inventory separately."
             ),
         ),
         definition_payload=definition,
-        dependencies=_dependencies(definition),
+        dependencies=(),
     )
 
 

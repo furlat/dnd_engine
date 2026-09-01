@@ -79,24 +79,3 @@ class CreatureBuildContext(BaseModel):
                 "CreatureBuildContext requires a creature content reference",
             )
         return self
-
-
-class ItemBuildContext(BaseModel):
-    """Runtime ownership and exact identity supplied to an item factory."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    source_entity_uuid: UUID
-    requested_ref: ContentRef
-
-    @model_validator(mode="after")
-    def _validate_item_definition(self) -> Self:
-        if self.requested_ref.definition_kind not in {
-            ContentDefinitionKind.ITEM,
-            ContentDefinitionKind.ENVIRONMENT_OBJECT,
-        }:
-            raise ValueError(
-                "ItemBuildContext requires an item or environment_object "
-                "content reference",
-            )
-        return self

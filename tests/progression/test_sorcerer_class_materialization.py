@@ -62,14 +62,6 @@ from dnd.core.content.registration import (
 )
 from dnd.core.content.registry import FrozenContentRegistry
 from dnd.core.equipment_types import WeaponProperty
-from dnd.items.weapons import (
-    CLUB_REF,
-    DAGGER_REF,
-    DART_REF,
-    LIGHT_CROSSBOW_REF,
-    QUARTERSTAFF_REF,
-    SLING_REF,
-)
 from dnd.player_character_body import PLAYER_CHARACTER_BODY_RECIPE
 from dnd.runtime_reset import reset_engine_runtime
 
@@ -83,12 +75,12 @@ _NEUTRAL_ORIGIN_PROVENANCE = ContentProvenance(
     review_status=ContentReviewStatus.REVIEWED,
     notes="Complete by definition: this fixture origin grants no mechanics.",
 )
-_EXACT_WEAPON_REFS = (
-    DAGGER_REF,
-    DART_REF,
-    LIGHT_CROSSBOW_REF,
-    QUARTERSTAFF_REF,
-    SLING_REF,
+_EXACT_WEAPON_IDS = (
+    "weapon.dagger",
+    "weapon.dart",
+    "weapon.light_crossbow",
+    "weapon.quarterstaff",
+    "weapon.sling",
 )
 
 
@@ -171,6 +163,10 @@ def _runtime_with_neutral_origins() -> tuple[
             packs=loaded.packs,
             built_in_artifact_digest=loaded.built_in_artifact_digest,
             content_set_digest=loaded.content_set_digest,
+            behavior_declarations_by_class=(
+                loaded.behavior_declarations_by_class
+            ),
+            provider_only_behavior_ids=loaded.provider_only_behavior_ids,
         ),
     )
     return runtime, loaded.content_set_digest, species.ref, background.ref
@@ -302,17 +298,15 @@ def test_level_one_sorcerer_installs_and_removes_all_exact_weapon_refs() -> None
     assert receipt is not None
 
     exact_sources = entity.creature_proficiencies.specific_weapon_sources
-    assert frozenset(exact_sources) == frozenset(
-        ref.identity_key for ref in _EXACT_WEAPON_REFS
-    )
+    assert frozenset(exact_sources) == frozenset(_EXACT_WEAPON_IDS)
     assert all(
-        entity.creature_proficiencies.is_weapon_proficient((), ref)
-        for ref in _EXACT_WEAPON_REFS
+        entity.creature_proficiencies.is_weapon_proficient((), weapon_id)
+        for weapon_id in _EXACT_WEAPON_IDS
     )
     assert all(source.sources for source in exact_sources.values())
     assert not entity.creature_proficiencies.is_weapon_proficient(
         (WeaponProperty.SIMPLE,),
-        CLUB_REF,
+        "weapon.club",
     )
 
     runtime_entity_uuid = entity.uuid
@@ -321,6 +315,6 @@ def test_level_one_sorcerer_installs_and_removes_all_exact_weapon_refs() -> None
     assert entity.uuid == runtime_entity_uuid
     assert entity.creature_proficiencies.specific_weapon_sources == {}
     assert all(
-        not entity.creature_proficiencies.is_weapon_proficient((), ref)
-        for ref in _EXACT_WEAPON_REFS
+        not entity.creature_proficiencies.is_weapon_proficient((), weapon_id)
+        for weapon_id in _EXACT_WEAPON_IDS
     )

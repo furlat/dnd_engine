@@ -1423,6 +1423,77 @@ class Equipment(BaseBlock):
                 value.self_contextual.source_entity_uuid = self.source_entity_uuid
                 value.to_target_contextual.source_entity_uuid = self.source_entity_uuid
 
+    def validate_initial_items(
+        self,
+        items: Iterable[Tuple[EquippableItem, Optional[EquipmentSlot]]],
+    ) -> Tuple[Tuple[EquippableItem, EquipmentSlot], ...]:
+        """Resolve and validate a complete unpublished equipment loadout."""
+        occupied: dict[EquipmentSlot, UUID] = {}
+        seen_existing: set[UUID] = set()
+        for slot in _SLOT_ATTRIBUTE_BY_SLOT:
+            current = self.get_item_by_slot(slot)
+            if current is None or current.uuid in seen_existing:
+                continue
+            seen_existing.add(current.uuid)
+            for footprint_slot in current.occupied_equipment_slots(slot):
+                occupied[footprint_slot] = current.uuid
+
+        resolved: list[Tuple[EquippableItem, EquipmentSlot]] = []
+        seen_new: set[UUID] = set()
+        for item, requested_slot in items:
+            if item.uuid in seen_new or item.uuid in seen_existing:
+                raise ValueError(f"duplicate initial equipment UUID {item.uuid}")
+            seen_new.add(item.uuid)
+            if item.source_entity_uuid != self.source_entity_uuid:
+                raise ValueError(
+                    f"initial equipment {item.item_id} belongs to another entity",
+                )
+            if (
+                item.owner_uuid is not None
+                or item.stored_in_uuid is not None
+                or item.tile_uuid is not None
+                or item.is_equipped
+                or item.equipped_slot is not None
+            ):
+                raise ValueError(
+                    f"initial equipment {item.item_id} is already placed",
+                )
+            selected_slot = self.resolve_equipment_slot(item, requested_slot)
+            footprint = item.occupied_equipment_slots(selected_slot)
+            conflicts = footprint & occupied.keys()
+            if conflicts:
+                conflict = min(conflicts, key=lambda candidate: candidate.value)
+                raise ValueError(
+                    f"initial equipment collision in {conflict.value}",
+                )
+            for footprint_slot in footprint:
+                occupied[footprint_slot] = item.uuid
+            resolved.append((item, selected_slot))
+        return tuple(resolved)
+
+    def _commit_equipped_item(
+        self,
+        item: EquippableItem,
+        selected_slot: EquipmentSlot,
+    ) -> None:
+        """Commit one already-validated item through equipment-owned hooks."""
+        self._reparent_equippable_item(item)
+        setattr(self, _SLOT_ATTRIBUTE_BY_SLOT[selected_slot], item)
+        item.owner_uuid = self.source_entity_uuid
+        item.stored_in_uuid = self.uuid
+        item.equip(selected_slot, self.source_entity_uuid)
+        if isinstance(selected_slot, WeaponSlot):
+            self._reconcile_active_weapon_set(preferred_slot=selected_slot)
+
+    def install_initial_items(
+        self,
+        items: Iterable[Tuple[EquippableItem, Optional[EquipmentSlot]]],
+    ) -> None:
+        """Install initial equipment through ordinary hooks without Events."""
+        resolved = self.validate_initial_items(items)
+        for item, selected_slot in resolved:
+            self._commit_equipped_item(item, selected_slot)
+
     def _create_equipment_event(
         self,
         item: EquippableItem,
@@ -1550,13 +1621,7 @@ class Equipment(BaseBlock):
             if transition.item.uuid != item.uuid:
                 displaced_items.append(transition.item)
 
-        self._reparent_equippable_item(item)
-        setattr(self, _SLOT_ATTRIBUTE_BY_SLOT[selected_slot], item)
-        item.owner_uuid = self.source_entity_uuid
-        item.stored_in_uuid = self.uuid
-        item.equip(selected_slot, self.source_entity_uuid)
-        if isinstance(selected_slot, WeaponSlot):
-            self._reconcile_active_weapon_set(preferred_slot=selected_slot)
+        self._commit_equipped_item(item, selected_slot)
 
         for transition in published_unequips:
             transition.execution.phase_to(EventPhase.EFFECT).phase_to(EventPhase.COMPLETION)

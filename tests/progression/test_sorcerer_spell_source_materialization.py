@@ -81,6 +81,7 @@ from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.core.events import EventPhase, EventType
 from dnd.core.progression import CasterProgression
 from dnd.entity import Entity, EntityConfig
+from dnd.game import Game
 from dnd.player_character_body import PLAYER_CHARACTER_BODY_RECIPE
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.spells.evocation import FireBolt, MagicMissile
@@ -267,6 +268,10 @@ def _loaded_with_classes(
             packs=(),
             built_in_artifact_digest="7" * 64,
             content_set_digest=_CONTENT_SET_DIGEST,
+            behavior_declarations_by_class=(
+                built_in.behavior_declarations_by_class
+            ),
+            provider_only_behavior_ids=built_in.provider_only_behavior_ids,
         ),
         species.ref,
         background.ref,
@@ -469,10 +474,10 @@ def test_same_spell_is_owned_and_materialized_once_per_exact_source() -> None:
     assert len(spells) == 2
     assert len({spell.spellcasting_source_id for spell in spells}) == 2
     assert {
-        spell.behavior_binding.provided_by_ref.identity_key
+        spell.behavior_binding.provided_by_id
         for spell in spells
         if spell.behavior_binding is not None
-    } == {row.ref.identity_key for row in class_rows}
+    } == {row.ref.content_id for row in class_rows}
     assert all(
         source.maximum_spell_rank == 1
         and source.ritual_policy is RitualPreparationPolicy.KNOWN
@@ -796,10 +801,10 @@ def test_learned_shield_installs_one_shared_exact_handler() -> None:
     assert len(handlers) == 1
     handler = handlers[0]
     assert handler.behavior_binding is not None
-    assert handler.behavior_binding.definition_ref == (
-        SHIELD_REACTION_DECLARATION.ref
+    assert handler.behavior_binding.behavior_id == (
+        SHIELD_REACTION_DECLARATION.ref.content_id
     )
-    assert handler.behavior_binding.provided_by_ref == shield_ref
+    assert handler.behavior_binding.provided_by_id == shield_ref.content_id
     assert len(
         result.entity.spellcasting.learned_reaction_spell_source_ids(
             shield_ref,
@@ -807,7 +812,7 @@ def test_learned_shield_installs_one_shared_exact_handler() -> None:
     ) == 2
     assert not any(
         action.behavior_binding is not None
-        and action.behavior_binding.definition_ref == shield_ref
+        and action.behavior_binding.behavior_id == shield_ref.content_id
         for action in result.entity.registered_actions
     )
 
@@ -853,6 +858,7 @@ def test_learned_shield_installs_one_shared_exact_handler() -> None:
 
 
 def test_counterspell_uses_strongest_exact_learned_source_ability() -> None:
+    game = Game()
     caster = Entity.create(
         source_entity_uuid=uuid4(),
         name="Caster",
@@ -880,6 +886,10 @@ def test_counterspell_uses_strongest_exact_learned_source_ability() -> None:
             faction="monsters",
         ),
     )
+    caster.compose_entity()
+    counterspeller.compose_entity()
+    game.deploy_entity(caster, caster.position)
+    game.deploy_entity(counterspeller, counterspeller.position)
     intelligence_source = uuid4()
     wisdom_source = uuid4()
     counterspeller.spellcasting.add_source(

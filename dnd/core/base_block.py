@@ -697,7 +697,11 @@ class BaseBlock(BaseModel):
         """
         if not self.allow_events_conditions:
             return None
-        bind_runtime_handler_before_admission(event_handler)
+        bind_runtime_handler_before_admission(
+            event_handler,
+            current_binding=event_handler.behavior_binding,
+            runtime_owner_uuid=event_handler.source_entity_uuid,
+        )
         event_handler.owner_block = self
         self.event_handlers[event_handler.uuid] = event_handler
         for trigger in event_handler.trigger_conditions:
@@ -1164,6 +1168,7 @@ class BaseBlock(BaseModel):
             condition.target_entity_uuid = self.uuid
         bind_runtime_behavior(
             condition,
+            current_binding=condition.behavior_binding,
             runtime_owner_uuid=self.uuid,
         )
         if context is not None:

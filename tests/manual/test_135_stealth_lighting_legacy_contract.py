@@ -27,30 +27,31 @@ from dnd.conditions import (
 from dnd.core.base_block import BaseBlock, LightLevel, SenseMode, SensesType
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.base_object import BaseObject
-from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.equipment_types import BodyPart, WeaponSlot
 from dnd.core.events import (
     DamageRollResultEvent,
-    EventHandler,
     EventPhase,
     EventQueue,
     EventType,
+    SensoryUpdateEvent,
     SkillCheckEvent,
 )
 from dnd.core.gridmap import get_map
 from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import AdvantageStatus
 from dnd.core.values import BaseValue
-from dnd.content_system.item_bindings import ItemRuntimeOrigin
-from dnd.content_system.item_materialization import materialize_item
+from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.encounter import Encounter
 from dnd.entity import Entity
-from dnd.items.armors import CHAIN_MAIL_RECIPE, LEATHER_ARMOR_RECIPE
-from dnd.items.consumables import GREATER_INVISIBILITY_POTION_RECIPE
-from dnd.items.torches import TORCH_RECIPE, Torch
-from dnd.items.weapons import ASSASSIN_DAGGER_RECIPE
-from dnd.monsters.bestiary import create_caster, create_skeleton
+from dnd.game import Game
+from dnd.items.consumables import build_greater_invisibility_potion
+from dnd.items.torches import Torch, build_torch
+from dnd.monsters.bestiary import (
+    create_caster as _create_caster,
+    create_skeleton as _create_skeleton,
+)
+from dnd.spells.conjuration import DarknessZone
 from dnd.spells.evocation import FireBolt
 from dnd.spells.illusion import GreaterInvisibility
 from tests.engine.support import get_max_hp, reset_combat_state, set_hp
@@ -63,6 +64,22 @@ PERCEPTION_FILE = "tests/manual/test_12_perception_light_stealth_and_invisibilit
 ITEMS_FILE = "tests/engine/test_items_inventory_equipment.py"
 SPELLS_FILE = "tests/engine/test_manual_17_spell_families.py"
 SPELL_FAMILIES_FILE = "tests/engine/test_spell_families.py"
+
+
+def create_skeleton(*args, **kwargs) -> Entity:
+    """Create and deploy one skeleton in the prepared test world."""
+    entity = _create_skeleton(*args, **kwargs)
+    entity.compose_entity()
+    Game().deploy_entity(entity, entity.position)
+    return entity
+
+
+def create_caster(*args, **kwargs) -> Entity:
+    """Create and deploy one caster in the prepared test world."""
+    entity = _create_caster(*args, **kwargs)
+    entity.compose_entity()
+    Game().deploy_entity(entity, entity.position)
+    return entity
 
 
 class CoverageStatus(StrEnum):
@@ -442,18 +459,6 @@ def reset_stealth_world(
         tile.default_light = default_light
 
 
-def captured_combat_logs() -> list[CombatLogEntry]:
-    """Install a standalone-log callback and return its mutable capture list."""
-    captured: list[CombatLogEntry] = []
-
-    def capture(event) -> None:
-        if event.combat_log is not None:
-            captured.append(event.combat_log)
-
-    EventQueue.set_combat_log_callback(capture)
-    return captured
-
-
 def target_is_discoverable(actor: Entity, target_uuid: UUID) -> bool:
     """Return whether any discovered entity action exposes one target UUID."""
     actions = actor.get_available_actions(target_filter="enemies")
@@ -489,12 +494,17 @@ def add_hidden(entity: Entity, stealth_result: int = 30) -> Hidden:
     return hidden
 
 
-def spotted_logs(entries: list[CombatLogEntry]) -> list[CombatLogEntry]:
-    """Filter captured entries to observer-scoped entity-spotted facts."""
+def completed_sensory_updates_since(
+    cursor: int,
+    observer_uuid: UUID,
+) -> list[SensoryUpdateEvent]:
+    """Return the typed subjective deltas emitted for one observer."""
     return [
-        entry
-        for entry in entries
-        if entry.entry_type == CombatLogEntryType.ENTITY_SPOTTED
+        event
+        for _, event in EventQueue.iter_events_since(cursor)
+        if isinstance(event, SensoryUpdateEvent)
+        and event.phase == EventPhase.COMPLETION
+        and event.observer_uuid == observer_uuid
     ]
 
 
@@ -562,30 +572,31 @@ def test_perceivability_boundaries_special_senses_and_objects() -> None:
     tremorsense.senses.sense_modes = [
         SenseMode(sense_type=SensesType.TREMORSENSE, range_feet=60)
     ]
-    item = BaseItem(source_entity_uuid=uuid4(), name="Hidden Cache")
+    item = BaseItem(
+        source_entity_uuid=uuid4(),
+        item_id="test.hidden_cache",
+        name="Hidden Cache",
+    )
     item.place_on_grid((2, 1))
     Entity.update_all_entities_senses(max_distance=8)
 
     assert target.stealth_dc is None
     assert target.is_invisible is False
-    assert target.is_perceivable_by(None)
-    assert target.is_perceivable_by(uuid4())
+    assert target.uuid in observer.senses.entities
     assert item.uuid in observer.senses.objects
 
     passive = observer.get_passive_perception()
     target.set_stealth_dc(passive)
-    assert not target.is_perceivable_by(observer.uuid)
     assert target.uuid not in observer.senses.entities
     target.set_stealth_dc(passive - 1)
-    assert target.is_perceivable_by(observer.uuid)
     assert target.uuid in observer.senses.entities
     target.set_stealth_dc(None)
 
     target.set_invisible(True)
-    assert not target.is_perceivable_by(observer.uuid)
-    assert target.is_perceivable_by(truesight.uuid)
-    assert target.is_perceivable_by(blindsight.uuid)
-    assert target.is_perceivable_by(tremorsense.uuid)
+    assert target.uuid not in observer.senses.entities
+    assert target.uuid in truesight.senses.entities
+    assert target.uuid in blindsight.senses.entities
+    assert target.uuid in tremorsense.senses.entities
     target.set_invisible(False)
     assert target.uuid in observer.senses.entities
 
@@ -601,18 +612,10 @@ def test_armor_stealth_traits_are_item_specific() -> None:
     """Leather remains neutral while chain mail owns reversible disadvantage."""
     reset_stealth_world()
     actor = create_skeleton(name="Scout", position=(1, 1), darkvision=False)
-    leather = materialize_item(
-        LEATHER_ARMOR_RECIPE,
-        actor.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=BodyArmor,
-    )
-    chain_mail = materialize_item(
-        CHAIN_MAIL_RECIPE,
-        actor.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=BodyArmor,
-    )
+    leather = build_authored_item("armor.leather", actor.uuid)
+    chain_mail = build_authored_item("armor.chain_mail", actor.uuid)
+    assert isinstance(leather, BodyArmor)
+    assert isinstance(chain_mail, BodyArmor)
     assert actor.loot_item(leather)
     assert actor.loot_item(chain_mail)
 
@@ -943,16 +946,8 @@ def test_greater_invisibility_potion_stack_consumes_one_legal_use_at_a_time() ->
     """A stacked potion spends one item and one bonus action per legal use."""
     reset_stealth_world()
     actor = create_skeleton(name="Drinker", position=(1, 1), darkvision=False)
-    first = materialize_item(
-        GREATER_INVISIBILITY_POTION_RECIPE,
-        actor.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-    )
-    second = materialize_item(
-        GREATER_INVISIBILITY_POTION_RECIPE,
-        actor.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-    )
+    first = build_greater_invisibility_potion(actor.uuid)
+    second = build_greater_invisibility_potion(actor.uuid)
     assert actor.loot_item(first)
     assert actor.loot_item(second)
     assert actor.inventory.item_count == 1
@@ -1019,18 +1014,11 @@ def test_assassin_dagger_mutates_only_unseen_damage_and_cleans_handler() -> None
         faction="monsters",
         darkvision=False,
     )
-    dagger = materialize_item(
-        ASSASSIN_DAGGER_RECIPE,
-        attacker.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
-    )
+    dagger = build_authored_item("weapon.assassin_dagger", attacker.uuid)
+    assert isinstance(dagger, Weapon)
     assert attacker.loot_item(dagger)
     assert attacker.equip_item(dagger.uuid, WeaponSlot.MELEE_MAIN)
-    handler_uuid = getattr(dagger, "_handler_uuid")
-    assert handler_uuid is not None
     assert attacker.get_event_handler_by_name("Unseen Strike") is not None
-    assert EventHandler.get(handler_uuid) is not None
     Entity.update_all_entities_senses(max_distance=10)
     assert attacker.uuid in target.senses.entities
 
@@ -1079,9 +1067,7 @@ def test_assassin_dagger_mutates_only_unseen_damage_and_cleans_handler() -> None
     assert target_hp - target.get_hp() == 9
 
     assert attacker.unequip_item(WeaponSlot.MELEE_MAIN) is dagger
-    assert getattr(dagger, "_handler_uuid") is None
     assert attacker.get_event_handler_by_name("Unseen Strike") is None
-    assert handler_uuid not in EventQueue._event_handlers
 
 
 def test_magical_darkness_controls_attack_discovery_by_sense_mode() -> None:
@@ -1105,7 +1091,12 @@ def test_magical_darkness_controls_attack_discovery_by_sense_mode() -> None:
 
     target_tile = get_map().get_tile(2, 1)
     assert target_tile is not None
-    target_tile.add_obscurement(uuid4(), LightLevel.MAGICAL_DARKNESS)
+    darkness = DarknessZone(
+        source_entity_uuid=attacker.uuid,
+        position=target.position,
+        zone_radius_feet=0,
+    )
+    assert darkness.activate(parent_event=None) is not None
 
     assert target.uuid not in attacker.senses.entities
     assert not target_is_discoverable(attacker, target.uuid)
@@ -1117,7 +1108,7 @@ def test_magical_darkness_controls_attack_discovery_by_sense_mode() -> None:
     assert target.uuid in attacker.senses.entities
     assert target_is_discoverable(attacker, target.uuid)
     assert (
-        target_tile.get_effective_light_for(attacker.uuid, attacker.position)
+        attacker.senses.effective_light_levels[target.position]
         == LightLevel.BRIGHT_LIGHT
     )
 
@@ -1145,12 +1136,7 @@ def test_torch_zones_preserve_bright_hidden_and_reveal_very_bright_hidden() -> N
     )
     add_hidden(near_hidden, 99)
     add_hidden(bright_hidden, 99)
-    torch = materialize_item(
-        TORCH_RECIPE,
-        carrier.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Torch,
-    )
+    torch = build_torch(carrier.uuid)
     assert carrier.loot_item(torch)
 
     torch.ignite(carrier.uuid)
@@ -1174,7 +1160,7 @@ def test_torch_zones_preserve_bright_hidden_and_reveal_very_bright_hidden() -> N
 
 
 def test_light_add_spots_only_the_hidden_enemy() -> None:
-    """Lighting a subscribed dark cell logs the hidden enemy, not plain darkness."""
+    """Lighting subscribed cells publishes their new subjective contacts."""
     reset_stealth_world(width=8, default_light=LightLevel.DARKNESS)
     observer = create_skeleton(
         name="Observer",
@@ -1198,7 +1184,7 @@ def test_light_add_spots_only_the_hidden_enemy() -> None:
     add_hidden(hidden_enemy, observer.get_passive_perception() - 1)
     assert hidden_enemy.uuid not in observer.senses.entities
     assert plain_enemy.uuid not in observer.senses.entities
-    logs = captured_combat_logs()
+    cursor = EventQueue.event_cursor()
 
     get_map().add_light_source(
         (2, 1),
@@ -1208,13 +1194,12 @@ def test_light_add_spots_only_the_hidden_enemy() -> None:
 
     assert hidden_enemy.uuid in observer.senses.entities
     assert plain_enemy.uuid in observer.senses.entities
-    spotted = spotted_logs(logs)
-    assert len(spotted) == 1
-    assert spotted[0].target_uuid == str(hidden_enemy.uuid)
-    assert spotted[0].perceiver_uuids == {str(observer.uuid)}
-    assert spotted[0].data["observer_uuid"] == str(observer.uuid)
-    assert spotted[0].data["target_uuid"] == str(hidden_enemy.uuid)
-    assert spotted[0].data["target_position"] == hidden_enemy.position
+    changed_contacts = {
+        contact_uuid
+        for update in completed_sensory_updates_since(cursor, observer.uuid)
+        for contact_uuid in update.entity_contacts_changed
+    }
+    assert changed_contacts == {hidden_enemy.uuid, plain_enemy.uuid}
 
 
 def test_torch_light_change_refreshes_move_targets() -> None:
@@ -1242,12 +1227,7 @@ def test_torch_light_change_refreshes_move_targets() -> None:
     assert (3, 1) not in before_positions
     assert not carrier.senses._paths_dirty
 
-    torch = materialize_item(
-        TORCH_RECIPE,
-        carrier.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Torch,
-    )
+    torch = build_torch(carrier.uuid)
     assert carrier.loot_item(torch)
     torch.ignite(carrier.uuid)
 
@@ -1268,7 +1248,7 @@ def test_torch_light_change_refreshes_move_targets() -> None:
 
 
 def test_anchored_torch_movement_spots_hidden_enemy_reactively() -> None:
-    """Moving an anchored torch produces one observation and one spotted fact."""
+    """Moving an anchored torch publishes the newly perceived contact."""
     reset_stealth_world(width=16, default_light=LightLevel.DARKNESS)
     carrier = create_skeleton(
         name="Torchbearer",
@@ -1284,16 +1264,10 @@ def test_anchored_torch_movement_spots_hidden_enemy_reactively() -> None:
     )
     Entity.update_all_entities_senses(max_distance=16)
     add_hidden(hidden_enemy, carrier.get_passive_perception() - 1)
-    torch = materialize_item(
-        TORCH_RECIPE,
-        carrier.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Torch,
-    )
+    torch = build_torch(carrier.uuid)
     assert carrier.loot_item(torch)
     torch.ignite(carrier.uuid)
     assert hidden_enemy.uuid not in carrier.senses.entities
-    logs = captured_combat_logs()
     cursor = EventQueue.event_cursor()
 
     Entity.update_entity_position(carrier, (6, 1))
@@ -1303,9 +1277,10 @@ def test_anchored_torch_movement_spots_hidden_enemy_reactively() -> None:
     assert enemy_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
     assert "Hidden" in hidden_enemy.active_conditions
     assert hidden_enemy.uuid in carrier.senses.entities
-    assert [entry.target_uuid for entry in spotted_logs(logs)] == [
-        str(hidden_enemy.uuid)
-    ]
+    assert any(
+        hidden_enemy.uuid in update.entity_contacts_changed
+        for update in completed_sensory_updates_since(cursor, carrier.uuid)
+    )
     light_completions = [
         event
         for _, event in EventQueue.iter_events_since(cursor)
@@ -1316,7 +1291,7 @@ def test_anchored_torch_movement_spots_hidden_enemy_reactively() -> None:
 
 
 def test_light_toggle_spots_hidden_enemy_reactively() -> None:
-    """Turning an existing light back on logs exactly the new hidden contact."""
+    """Turning an existing light back on publishes the restored contact."""
     reset_stealth_world(width=8, default_light=LightLevel.DARKNESS)
     observer = create_skeleton(
         name="Watcher",
@@ -1340,11 +1315,13 @@ def test_light_toggle_spots_hidden_enemy_reactively() -> None:
     assert hidden_enemy.uuid in observer.senses.entities
     get_map().toggle_light_source(light_uuid, False)
     assert hidden_enemy.uuid not in observer.senses.entities
-    logs = captured_combat_logs()
+    cursor = EventQueue.event_cursor()
 
     get_map().toggle_light_source(light_uuid, True)
 
     assert hidden_enemy.uuid in observer.senses.entities
-    assert [entry.target_uuid for entry in spotted_logs(logs)] == [
-        str(hidden_enemy.uuid)
-    ]
+    updates = completed_sensory_updates_since(cursor, observer.uuid)
+    assert any(
+        hidden_enemy.uuid in update.entity_contacts_changed
+        for update in updates
+    )

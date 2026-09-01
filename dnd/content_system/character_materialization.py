@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import cast
 from uuid import UUID, uuid4, uuid5
 
+from dnd.actions_functional import update_weapon_templates
 from dnd.blocks.base_item import BaseItem, EquippableItem, UsableItem
 from dnd.blocks.health import HitDice, HitDiceConfig
 from dnd.content_system.character_build_validation import (
@@ -40,14 +41,7 @@ from dnd.content_system.creature_bindings import (
 from dnd.content_system.extra_attack_character_grant_appliers import (
     install_extra_attack_family,
 )
-from dnd.content_system.item_bindings import (
-    ITEM_RUNTIME_BINDINGS,
-    ItemRuntimeBindingRegistry,
-    ItemRuntimeOrigin,
-)
-from dnd.content_system.item_runtime_materialization import (
-    materialize_item_from_installed_runtime,
-)
+from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.content_system.origin_character_grant_appliers import (
     install_origin_structural_feature,
 )
@@ -68,7 +62,7 @@ from dnd.core.content.durable_characters import (
     CantripChoice,
     CharacterDefinitionRevisionV2,
     CharacterHoldingsRevision,
-    CharacterItemV1,
+    CharacterItemV2,
     CharacterLoadoutRevisionV1,
     ClassDefinition,
     ClassSkillChoice,
@@ -283,10 +277,13 @@ def _install_proficiency(
             cast(AbilityName, ability_name),
         ).add_proficiency_source(resolved_source_id, ProficiencyMode.FULL)
     elif subject.subject_kind == ProficiencySubjectKind.WEAPON:
-        if subject.content_ref is not None:
+        if subject_id.startswith("weapon.") and subject_id not in {
+            "weapon.simple",
+            "weapon.martial",
+        }:
             entity.creature_proficiencies.add_specific_weapon_source(
                 resolved_source_id,
-                subject.content_ref,
+                subject_id,
             )
         elif subject_id == "weapon.simple":
             entity.creature_proficiencies.add_weapon_source(
@@ -409,11 +406,11 @@ def remove_character_composition(
             "entity",
         )
     for grant in reversed(receipt.grants):
-        cleanup_ref_keys = {
-            ref.identity_key
+        cleanup_condition_ids = {
+            ref.content_id
             for ref in grant.transient_condition_refs_to_remove
         }
-        if cleanup_ref_keys:
+        if cleanup_condition_ids:
             for condition_owner in Entity.get_all_entities():
                 for condition in tuple(
                     condition_owner.active_conditions_by_uuid.values()
@@ -421,8 +418,7 @@ def remove_character_composition(
                     binding = condition.behavior_binding
                     if (
                         binding is not None
-                        and binding.definition_ref.identity_key
-                        in cleanup_ref_keys
+                        and binding.behavior_id in cleanup_condition_ids
                         and condition.source_entity_uuid == entity.uuid
                     ):
                         condition_owner.remove_condition_by_uuid(
@@ -846,7 +842,7 @@ def apply_character_composition(
                 )
                 runtime.bind_granted_behavior(
                     spell,
-                    provider_ref=known_spell.provider_ref,
+                    provider_id=known_spell.provider_ref.content_id,
                     runtime_owner_uuid=entity.uuid,
                 )
                 entity.register_action(spell)
@@ -879,7 +875,7 @@ def apply_character_composition(
                 created_handler = handler_factory(entity.uuid)
                 runtime.bind_granted_behavior(
                     created_handler,
-                    provider_ref=known_spell.spell_ref,
+                    provider_id=known_spell.spell_ref.content_id,
                     runtime_owner_uuid=entity.uuid,
                 )
                 entity.add_event_handler(created_handler)
@@ -952,14 +948,9 @@ def apply_character_composition(
     )
 
 
-def _restore_item_state(item: BaseItem, durable_item: CharacterItemV1) -> None:
+def _restore_item_state(item: BaseItem, durable_item: CharacterItemV2) -> None:
     """Restore authored durable state before the item enters owner containers."""
 
-    if durable_item.durable_augmentations:
-        raise ValueError(
-            "Durable item augmentations require an installed augmentation "
-            "materializer",
-        )
     if item.stack_id is None and durable_item.quantity != 1:
         raise ValueError("Non-stackable durable items must have quantity one")
     if durable_item.quantity > item.max_stack:
@@ -993,52 +984,6 @@ def _restore_item_state(item: BaseItem, durable_item: CharacterItemV1) -> None:
         health.damage_taken = durable_item.durability_damage
 
 
-def _validate_character_item_placement(
-    entity: Entity,
-    item: BaseItem,
-    durable_item: CharacterItemV1,
-) -> None:
-    """Reject lossy stack merges and equipment displacement before mutation."""
-    if entity.inventory.would_merge(item):
-        raise ValueError(
-            "Durable character items cannot merge across character_item_id "
-            f"boundaries: {durable_item.recipe.ref.identity_key}",
-        )
-    if not entity.inventory.can_add(item):
-        raise ValueError(
-            f"Character inventory rejected "
-            f"{durable_item.recipe.ref.identity_key}",
-        )
-    slot = durable_item.equipped_slot
-    if slot is None:
-        return
-    if not isinstance(item, EquippableItem):
-        raise TypeError("equipped_slot requires an equippable item definition")
-    if slot not in item.compatible_equipment_slots():
-        raise ValueError(
-            f"Character equipment rejected "
-            f"{durable_item.recipe.ref.identity_key} in {slot.value}",
-        )
-    for occupied_slot in item.occupied_equipment_slots(slot):
-        occupied = entity.equipment.get_item_by_slot(occupied_slot)
-        if occupied is not None and occupied is not item:
-            raise ValueError(
-                f"Character equipment would displace {occupied.name!r} from "
-                f"{occupied_slot.value}",
-            )
-
-
-def _discard_character_items(
-    items: list[BaseItem],
-    *,
-    binding_registry: ItemRuntimeBindingRegistry,
-) -> None:
-    """Destroy every provisional holding and its exact runtime binding."""
-    for item in reversed(items):
-        binding_registry.discard(item.uuid)
-        item.destroy()
-
-
 def materialize_character(
     *,
     definition: CharacterDefinitionRevisionV2,
@@ -1058,7 +1003,6 @@ def materialize_character(
     creature_binding_registry: CreatureRuntimeBindingRegistry = (
         CREATURE_RUNTIME_BINDINGS
     ),
-    item_binding_registry: ItemRuntimeBindingRegistry = ITEM_RUNTIME_BINDINGS,
     runtime_content_ref: ContentRef | None = None,
 ) -> MaterializedCharacter:
     """Build structural creature state, then hydrate exact persisted possessions."""
@@ -1120,7 +1064,6 @@ def materialize_character(
     )
     lineage: list[tuple[UUID, UUID]] = []
     starting_torches: list[Torch] = []
-    provisional_items: list[BaseItem] = []
     try:
         apply_player_character_appearance(
             entity.appearance,
@@ -1135,37 +1078,16 @@ def materialize_character(
             preview=validation.preview,
             runtime=runtime,
         )
+        placements = []
         for durable_item in holdings.items:
-            item = materialize_item_from_installed_runtime(
-                durable_item.recipe,
-                entity.uuid,
-                origin=ItemRuntimeOrigin.PERSISTED,
-                character_item_id=durable_item.character_item_id,
-                binding_registry=item_binding_registry,
-                runtime=runtime,
-            )
-            provisional_items.append(item)
+            item = build_authored_item(durable_item.item_id, entity.uuid)
             _restore_item_state(item, durable_item)
-            _validate_character_item_placement(entity, item, durable_item)
-            if not entity.loot_item(item):
-                raise ValueError(
-                    f"Character inventory rejected "
-                    f"{durable_item.recipe.ref.identity_key}",
-                )
-            if durable_item.equipped_slot is not None:
-                if not isinstance(item, EquippableItem):
-                    raise TypeError(
-                        "equipped_slot requires an equippable item definition",
-                    )
-                if not entity.equip_item(item.uuid, durable_item.equipped_slot):
-                    raise ValueError(
-                        f"Character equipment rejected "
-                        f"{durable_item.recipe.ref.identity_key} in "
-                        f"{durable_item.equipped_slot.value}",
-                    )
+            placements.append((item, durable_item.equipped_slot))
             if isinstance(item, Torch):
                 starting_torches.append(item)
             lineage.append((durable_item.character_item_id, item.uuid))
+        entity.install_initial_items(tuple(placements))
+        update_weapon_templates(entity)
         for torch in starting_torches:
             torch.ignite(entity.uuid)
         entity.character_origin_state = (
@@ -1234,11 +1156,10 @@ def materialize_character(
             if toggle.enabled
         )
     except Exception:
-        _discard_character_items(
-            provisional_items,
-            binding_registry=item_binding_registry,
-        )
-        if composition_receipt is not None:
+        if (
+            composition_receipt is not None
+            and Entity.get(entity.uuid) is entity
+        ):
             remove_character_composition(entity, composition_receipt)
         creature_binding_registry.discard(entity.uuid)
         if Entity.get(entity.uuid) is entity and not entity.creation_committed:

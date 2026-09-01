@@ -8,14 +8,16 @@ from dnd.actions_functional import setup_standard_actions
 from dnd.blocks.equipment import Shield
 from dnd.classes.fighter import FightingStyleProtection
 from dnd.conditions import InvisibilityEffect
-from dnd.content_system.item_bindings import ItemRuntimeOrigin
-from dnd.content_system.item_materialization import materialize_item
+from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import EventQueue
 from dnd.core.modifiers import AdvantageStatus
 from dnd.entity import Entity
-from dnd.items.armors import SHIELD_RECIPE
-from dnd.monsters.bestiary import create_goblin, create_skeleton
+from dnd.game import Game
+from dnd.monsters.bestiary import (
+    create_goblin as _create_goblin,
+    create_skeleton as _create_skeleton,
+)
 from dnd.reactions import add_opportunity_attack_handler
 from tests.engine.support import force_attack_miss, get_hp, remove_attack_modifier
 from tests.engine.test_combat_actions import (
@@ -24,6 +26,22 @@ from tests.engine.test_combat_actions import (
 
 
 CoverageStatus = Literal["active", "strengthened"]
+
+
+def create_goblin(*args, **kwargs) -> Entity:
+    """Create and deploy one goblin in the prepared test world."""
+    entity = _create_goblin(*args, **kwargs)
+    entity.compose_entity()
+    Game().deploy_entity(entity, entity.position)
+    return entity
+
+
+def create_skeleton(*args, **kwargs) -> Entity:
+    """Create and deploy one skeleton in the prepared test world."""
+    entity = _create_skeleton(*args, **kwargs)
+    entity.compose_entity()
+    Game().deploy_entity(entity, entity.position)
+    return entity
 
 
 @dataclass(frozen=True)
@@ -148,7 +166,7 @@ def test_opportunity_attack_toggle_preserves_registration_and_invisibility() -> 
     assert attacker.set_handler_enabled("Opportunity Attack Handler", False)
     assert handler.enabled is False
     assert handler.uuid in attacker.event_handlers
-    assert handler.uuid in EventQueue._event_handlers
+    assert handler in EventQueue.get_handlers_by_source_entity(attacker.uuid)
 
     hp_before = get_hp(mover)
     move_event = Move(
@@ -177,12 +195,7 @@ def test_protection_reaction_respects_disable_and_reenable() -> None:
         faction="heroes",
     )
     protector.equipment.equip(
-        materialize_item(
-            SHIELD_RECIPE,
-            protector.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Shield,
-        ),
+        build_authored_item("shield.shield", protector.uuid),
         WeaponSlot.MELEE_OFF,
     )
     protection = FightingStyleProtection(

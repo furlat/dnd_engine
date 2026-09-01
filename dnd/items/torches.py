@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import List, Optional, Tuple
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field
 
 from dnd.blocks.base_item import UsableItem
 from dnd.core.base_actions import ActionEvent, BaseAction, Cost, TargetType
@@ -16,29 +16,15 @@ from dnd.core.content.descriptors import (
     ContentPresentation,
     ContentVisibility,
 )
-from dnd.core.content.dependencies import (
-    ContentDependency,
-    ContentDependencyPhase,
-    ContentDependencyRelation,
-)
 from dnd.core.content.identities import ContentDefinitionKind
-from dnd.core.content.item_definitions import (
-    ItemDefinition,
-    ItemPersistencePolicy,
-)
-from dnd.core.content.materialization import ItemBuildContext
 from dnd.core.content.provenance import (
     ContentFidelity,
     ContentProvenance,
     ContentProvenanceRelation,
     ContentReviewStatus,
 )
-from dnd.core.content.recipes import ContentRecipe
 from dnd.core.content.registration import (
-    ContentDeclaration,
     behavior_identity,
-    get_content_declaration,
-    item_factory,
 )
 from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.core.events import EventPhase, EventQueue, ExposedFlameEvent
@@ -387,84 +373,12 @@ class Torch(UsableItem):
         super()._on_drop(entity_uuid, position)
 
 
-class TorchParameters(BaseModel):
-    """Portable torches have no authored construction variants."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-
-def _grants_torch_action(action_type: type[BaseAction]) -> ContentDependency:
-    """Build one exact portable-torch provider-to-action dependency."""
-    return ContentDependency(
-        relation=ContentDependencyRelation.GRANTS_ACTION,
-        target_ref=get_content_declaration(action_type).ref,
-        phase=ContentDependencyPhase.RUNTIME_REFERENCE,
-        notes="Provided through the portable torch's state-dependent actions.",
-    )
-
-
-@item_factory(
-    pack_id="content.neurodragon",
-    content_id="equipment.portable_torch",
-    version=1,
-    parameters=TorchParameters,
-    descriptor=ContentDescriptorSpec(
-        display_name="Torch",
-        description=(
-            "A portable light source that can be ignited or extinguished."
-        ),
-        tags=("equipment", "light", "neurodragon", "utility"),
-        visibility=ContentVisibility.PUBLIC,
-        presentation=ContentPresentation(
-            icon_key="item.torch",
-            visual_variant_key="portable_torch",
-            ui_group="equipment.utility",
-        ),
-        ordering=ContentOrdering(
-            sort_group="equipment.utility",
-            sort_order=10,
-        ),
-    ),
-    provenance=ContentProvenance(
-        primary_source_id="neurodragon.original_b2b3930",
-        source_anchor=(
-            "Neurodragon original content baseline: portable torch"
-        ),
-        relation=ContentProvenanceRelation.ORIGINAL_CONTENT,
-        fidelity=ContentFidelity.COMPLETE,
-        review_status=ContentReviewStatus.REVIEWED,
-        notes=(
-            "Portable torch item and temporary light behavior preserved "
-            "exactly."
-        ),
-    ),
-    item_definition=ItemDefinition(
-        persistence_policy=ItemPersistencePolicy.POSSESSION,
-    ),
-    dependencies=(
-        _grants_torch_action(IgniteTorchAction),
-        _grants_torch_action(ExtinguishTorchAction),
-    ),
-)
-def _build_torch(
-    raw_context: object,
-    parameters: TorchParameters,
-) -> Torch:
-    """Build one unlit portable torch; light state is encounter-only."""
-    _ = parameters
-    context = ItemBuildContext.model_validate(raw_context)
+def build_torch(source_entity_uuid: UUID) -> Torch:
+    """Construct one unlit portable torch directly."""
     return Torch(
-        source_entity_uuid=context.source_entity_uuid,
-        content_ref=context.requested_ref,
+        source_entity_uuid=source_entity_uuid,
+        item_id="equipment.portable_torch",
     )
-
-
-TORCH_DECLARATION = get_content_declaration(_build_torch)
-TORCH_REF = TORCH_DECLARATION.ref
-TORCH_RECIPE = ContentRecipe.create(ref=TORCH_REF, parameters={})
-NEURODRAGON_TORCH_DECLARATIONS: tuple[ContentDeclaration, ...] = (
-    TORCH_DECLARATION,
-)
 
 
 class IgniteWallTorchAction(BaseAction):
@@ -686,9 +600,6 @@ class WallTorch(UsableItem):
         current = current.phase_to(EventPhase.EXECUTION)
         if current.canceled:
             return current
-        current = current.phase_to(EventPhase.EFFECT)
-        if current.canceled:
-            return current
         light_source_uuid = get_map().add_light_source(
             position=self._wall_torch_position,
             very_bright_radius_feet=self.very_bright_radius_feet,
@@ -699,6 +610,10 @@ class WallTorch(UsableItem):
         )
         self._light_source_uuid = light_source_uuid
         self.is_lit = True
+        current = current.phase_to(EventPhase.EFFECT)
+        if current.canceled:
+            self.put_out(parent_event=current.uuid)
+            return current
         return current.phase_to(EventPhase.COMPLETION)
 
     def put_out(self, parent_event: Optional[UUID] = None) -> None:
@@ -745,11 +660,7 @@ __all__ = [
     "ExtinguishWallTorchAction",
     "IgniteTorchAction",
     "IgniteWallTorchAction",
-    "NEURODRAGON_TORCH_DECLARATIONS",
-    "TORCH_DECLARATION",
-    "TORCH_RECIPE",
-    "TORCH_REF",
     "Torch",
-    "TorchParameters",
+    "build_torch",
     "WallTorch",
 ]

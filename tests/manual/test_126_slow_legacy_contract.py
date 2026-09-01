@@ -23,8 +23,7 @@ from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.equipment import Weapon
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
-from dnd.content_system.item_bindings import ItemRuntimeOrigin
-from dnd.content_system.item_materialization import materialize_item
+from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.classes.fighter import (
     ActionSurge,
     ActionSurgeFeature,
@@ -39,10 +38,10 @@ from dnd.core.gridmap import get_map
 from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import NumericalModifier
 from dnd.entity import Entity, EntityConfig
-from dnd.items.weapons import GREATSWORD_RECIPE
 from tests.spell_test_exports import FireBolt
 from dnd.spells.transmutation import Slow
 from tests.engine.support import (
+    create_test_entity,
     deal_damage_to,
     force_attack_miss,
     reset_combat_state,
@@ -75,8 +74,8 @@ def _create_caster() -> Entity:
         position=(1, 1),
         faction="heroes",
     )
-    return Entity.create(
-        source_entity_uuid=uuid4(),
+    return create_test_entity(
+        source_id=uuid4(),
         name="Slow Caster",
         config=config,
     )
@@ -110,8 +109,8 @@ def _create_target(
         position=position,
         faction=faction,
     )
-    target = Entity.create(
-        source_entity_uuid=uuid4(),
+    target = create_test_entity(
+        source_id=uuid4(),
         name=name,
         config=config,
     )
@@ -126,12 +125,7 @@ def _create_fighter(
 ) -> Entity:
     fighter = _create_target("Slowed Fighter", position)
     fighter.equipment.equip(
-        materialize_item(
-            GREATSWORD_RECIPE,
-            fighter.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
-        ),
+        build_authored_item("weapon.greatsword", fighter.uuid),
         WeaponSlot.MELEE_MAIN,
     )
     fighter.add_condition(

@@ -59,7 +59,7 @@ from dnd.core.content.durable_characters import (
     CharacterAppearanceSelection,
     CharacterDefinitionRevisionV2,
     CharacterHoldingsRevision,
-    CharacterItemV1,
+    CharacterItemV2,
     CharacterLoadoutRevisionV1,
     ClassDefinition,
     ClassLevelEntry,
@@ -94,33 +94,6 @@ from dnd.core.language_types import SrdLanguageId
 from dnd.core.progression import (
     MulticlassSlotRoundingPolicy,
     character_ruleset_digest,
-)
-from dnd.items.armors import (
-    CLOTH_SHOES_RECIPE,
-    LEATHER_ARMOR_RECIPE,
-    LEATHER_BOOTS_RECIPE,
-    SHIELD_RECIPE,
-    SPELLBLADE_CROWN_RECIPE,
-)
-from dnd.items.apparel_presets import (
-    BLUE_CLOTH_SHOES_PRESET,
-    BROWN_BOOTS_PRESET,
-    PIT_FIGHTER_WRAP_PRESET,
-    RED_CLOTH_SHOES_PRESET,
-    RED_MAGE_ROBE_PRESET,
-    RED_WIZARD_HAT_PRESET,
-    STEEL_HELMET_PRESET,
-    WIZARD_ROBE_PRESET,
-)
-from dnd.items.consumables import HASTE_POTION_RECIPE, HEALING_POTION_RECIPE
-from dnd.items.torches import TORCH_RECIPE
-from dnd.items.weapons import (
-    DAGGER_RECIPE,
-    HANDAXE_RECIPE,
-    JAVELIN_RECIPE,
-    LONGBOW_RECIPE,
-    LONGSWORD_RECIPE,
-    QUARTERSTAFF_RECIPE,
 )
 from dnd.player_character_body import PLAYER_CHARACTER_BODY_RECIPE
 
@@ -736,7 +709,7 @@ def _package_holdings(
         )
     return tuple(
         StarterHoldingTemplate(
-            recipe=entry.recipe,
+            item_id=entry.item_id,
             quantity=entry.quantity,
             equipped_slot=entry.equipped_slot,
         )
@@ -745,32 +718,32 @@ def _package_holdings(
 
 
 _COMMON_CURATED_SUPPLEMENT = (
-    StarterHoldingTemplate(recipe=HASTE_POTION_RECIPE),
-    StarterHoldingTemplate(recipe=HEALING_POTION_RECIPE, quantity=2),
+    StarterHoldingTemplate(item_id="consumable.potion_haste"),
+    StarterHoldingTemplate(item_id="consumable.healing_potion", quantity=2),
 )
 _FIGHTER_CURATED_SUPPLEMENT = (
     StarterHoldingTemplate(
-        recipe=BROWN_BOOTS_PRESET.recipe,
+        item_id="apparel.leather_boots.brown",
         equipped_slot=BodyPart.FEET,
     ),
     *_COMMON_CURATED_SUPPLEMENT,
-    StarterHoldingTemplate(recipe=CLOTH_SHOES_RECIPE),
+    StarterHoldingTemplate(item_id="apparel.cloth_shoes"),
     StarterHoldingTemplate(
-        recipe=STEEL_HELMET_PRESET.recipe,
+        item_id="apparel.iron_helmet.steel",
         equipped_slot=BodyPart.HEAD,
     ),
-    StarterHoldingTemplate(recipe=HANDAXE_RECIPE),
-    StarterHoldingTemplate(recipe=JAVELIN_RECIPE),
-    StarterHoldingTemplate(recipe=DAGGER_RECIPE),
-    StarterHoldingTemplate(recipe=LEATHER_ARMOR_RECIPE),
+    StarterHoldingTemplate(item_id="weapon.handaxe"),
+    StarterHoldingTemplate(item_id="weapon.javelin"),
+    StarterHoldingTemplate(item_id="weapon.dagger"),
+    StarterHoldingTemplate(item_id="armor.leather"),
 )
 _BARBARIAN_CURATED_SUPPLEMENT = (
     *_COMMON_CURATED_SUPPLEMENT,
-    StarterHoldingTemplate(recipe=HANDAXE_RECIPE),
-    StarterHoldingTemplate(recipe=JAVELIN_RECIPE),
-    StarterHoldingTemplate(recipe=DAGGER_RECIPE),
-    StarterHoldingTemplate(recipe=LONGSWORD_RECIPE),
-    StarterHoldingTemplate(recipe=SHIELD_RECIPE),
+    StarterHoldingTemplate(item_id="weapon.handaxe"),
+    StarterHoldingTemplate(item_id="weapon.javelin"),
+    StarterHoldingTemplate(item_id="weapon.dagger"),
+    StarterHoldingTemplate(item_id="weapon.longsword"),
+    StarterHoldingTemplate(item_id="shield.shield"),
     )
 
 
@@ -789,28 +762,28 @@ def _curated_supplement_for_build(
         return _FIGHTER_CURATED_SUPPLEMENT
     if build.class_id == "barbarian":
         return _BARBARIAN_CURATED_SUPPLEMENT
-    spare_recipe = (
-        QUARTERSTAFF_RECIPE
+    spare_item_id = (
+        "weapon.quarterstaff"
         if build.equipment_preset == "dagger"
-        else DAGGER_RECIPE
+        else "weapon.dagger"
     )
     return (
         StarterHoldingTemplate(
-            recipe=RED_MAGE_ROBE_PRESET.recipe,
+            item_id="apparel.robes.red_mage",
             equipped_slot=BodyPart.BODY,
         ),
         StarterHoldingTemplate(
-            recipe=RED_CLOTH_SHOES_PRESET.recipe,
+            item_id="apparel.cloth_shoes.red",
             equipped_slot=BodyPart.FEET,
         ),
         *_COMMON_CURATED_SUPPLEMENT,
-        StarterHoldingTemplate(recipe=WIZARD_ROBE_PRESET.recipe),
-        StarterHoldingTemplate(recipe=BLUE_CLOTH_SHOES_PRESET.recipe),
+        StarterHoldingTemplate(item_id="apparel.robes.wizard"),
+        StarterHoldingTemplate(item_id="apparel.cloth_shoes.blue"),
         StarterHoldingTemplate(
-            recipe=RED_WIZARD_HAT_PRESET.recipe,
+            item_id="apparel.wizard_hat.red",
             equipped_slot=BodyPart.HEAD,
         ),
-        StarterHoldingTemplate(recipe=spare_recipe),
+        StarterHoldingTemplate(item_id=spare_item_id),
     )
 
 
@@ -904,7 +877,7 @@ def compose_character_creation_plans() -> tuple[
             loadout=blank_loadout,
             character_level_entitlement=1,
             supplemental_holdings=(
-                StarterHoldingTemplate(recipe=TORCH_RECIPE),
+                StarterHoldingTemplate(item_id="equipment.portable_torch"),
             ),
         ),
     ]
@@ -957,16 +930,16 @@ def compose_builtin_character_revisions(
         items=tuple(
             sorted(
                 (
-                    CharacterItemV1.create(
+                    CharacterItemV2.create(
                         character_item_id=uuid5(
                             character_id,
                             (
                                 "dnd-engine:builtin-character-holding:v2:"
-                                f"{index}:{holding.recipe.recipe_digest}:"
+                                f"{index}:{holding.item_id}:"
                                 f"{holding.equipped_slot}"
                             ),
                         ),
-                        recipe=holding.recipe,
+                        item_id=holding.item_id,
                         quantity=holding.quantity,
                         equipped_slot=holding.equipped_slot,
                     )
@@ -1040,14 +1013,14 @@ BUILTIN_PREMADE_BUILDS = MappingProxyType({
         display_name="Berserker",
         additional_holdings=(
             StarterHoldingTemplate(
-                recipe=PIT_FIGHTER_WRAP_PRESET.recipe,
+                item_id="apparel.costume.pit_fighter_wrap",
                 equipped_slot=BodyPart.BODY,
             ),
             StarterHoldingTemplate(
-                recipe=LEATHER_BOOTS_RECIPE,
+                item_id="apparel.leather_boots",
                 equipped_slot=BodyPart.FEET,
             ),
-            StarterHoldingTemplate(recipe=TORCH_RECIPE),
+            StarterHoldingTemplate(item_id="equipment.portable_torch"),
         ),
     ),
     "hero.fighter_l5_shield_torch": BuiltinSingleClassBuild(
@@ -1061,10 +1034,10 @@ BUILTIN_PREMADE_BUILDS = MappingProxyType({
         display_name="Shield Fighter",
         additional_holdings=(
             StarterHoldingTemplate(
-                recipe=LONGBOW_RECIPE,
+                item_id="weapon.longbow",
                 equipped_slot=WeaponSlot.RANGED_MAIN,
             ),
-            StarterHoldingTemplate(recipe=TORCH_RECIPE),
+            StarterHoldingTemplate(item_id="equipment.portable_torch"),
         ),
     ),
     "hero.sorcerer_l5_standard_torch": BuiltinSingleClassBuild(
@@ -1087,7 +1060,7 @@ BUILTIN_PREMADE_BUILDS = MappingProxyType({
         premade_id="hero.sorcerer_l5_standard_torch",
         display_name="Draconic Sorcerer",
         additional_holdings=(
-            StarterHoldingTemplate(recipe=TORCH_RECIPE),
+            StarterHoldingTemplate(item_id="equipment.portable_torch"),
         ),
     ),
     "hero.fighter_2_sorcerer_3_spellblade": BuiltinMulticlassBuild(
@@ -1132,10 +1105,10 @@ BUILTIN_PREMADE_BUILDS = MappingProxyType({
         display_name="Draconic Spellblade",
         additional_holdings=(
             StarterHoldingTemplate(
-                recipe=SPELLBLADE_CROWN_RECIPE,
+                item_id="apparel.spellblade_crown",
                 equipped_slot=BodyPart.HEAD,
             ),
-            StarterHoldingTemplate(recipe=TORCH_RECIPE),
+            StarterHoldingTemplate(item_id="equipment.portable_torch"),
         ),
     ),
 })

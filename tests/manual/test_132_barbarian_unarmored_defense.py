@@ -11,16 +11,9 @@ from uuid import uuid4
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.equipment import BodyArmor, EquipmentConfig, Shield
 from dnd.blocks.health import HealthConfig, HitDiceConfig
-from dnd.content_system.item_bindings import ItemRuntimeOrigin
-from dnd.content_system.item_materialization import materialize_item
+from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.core.equipment_types import BodyPart, UnarmoredAc, WeaponSlot
 from dnd.entity import Entity, EntityConfig
-from dnd.items.armors import (
-    CHAIN_SHIRT_RECIPE,
-    CLOTH_ARMOR_RECIPE,
-    LEATHER_ARMOR_RECIPE,
-    SHIELD_RECIPE,
-)
 from tests.engine.support import reset_combat_state
 
 
@@ -77,12 +70,8 @@ def test_unarmored_defense_disabled_by_armor() -> None:
     barbarian = _create_test_barbarian(dexterity=14, constitution=16)
     assert barbarian.ac_bonus().normalized_score == 15
 
-    leather = materialize_item(
-        LEATHER_ARMOR_RECIPE,
-        barbarian.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=BodyArmor,
-    )
+    leather = build_authored_item("armor.leather", barbarian.uuid)
+    assert isinstance(leather, BodyArmor)
     barbarian.equipment.equip(leather)
 
     assert not barbarian.equipment.is_unarmored()
@@ -94,12 +83,8 @@ def test_unarmored_defense_with_shield() -> None:
     """Old group 3: a shield's +2 stacks with Barbarian UD."""
     reset_combat_state()
     barbarian = _create_test_barbarian(dexterity=14, constitution=16)
-    shield = materialize_item(
-        SHIELD_RECIPE,
-        barbarian.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Shield,
-    )
+    shield = build_authored_item("shield.shield", barbarian.uuid)
+    assert isinstance(shield, Shield)
 
     barbarian.equipment.equip(shield, WeaponSlot.MELEE_OFF)
 
@@ -113,12 +98,8 @@ def test_removing_armor_restores_unarmored() -> None:
     reset_combat_state()
     barbarian = _create_test_barbarian(dexterity=14, constitution=16)
     initial_ac = barbarian.ac_bonus().normalized_score
-    chain_shirt = materialize_item(
-        CHAIN_SHIRT_RECIPE,
-        barbarian.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=BodyArmor,
-    )
+    chain_shirt = build_authored_item("armor.chain_shirt", barbarian.uuid)
+    assert isinstance(chain_shirt, BodyArmor)
     barbarian.equipment.equip(chain_shirt)
 
     assert barbarian.ac_bonus().normalized_score == 15
@@ -151,12 +132,8 @@ def test_unarmored_defense_with_cloth_armor() -> None:
     """Old group 7: cloth retains unarmored status and the Constitution bonus."""
     reset_combat_state()
     barbarian = _create_test_barbarian(dexterity=14, constitution=16)
-    cloth = materialize_item(
-        CLOTH_ARMOR_RECIPE,
-        barbarian.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=BodyArmor,
-    )
+    cloth = build_authored_item("armor.cloth", barbarian.uuid)
+    assert isinstance(cloth, BodyArmor)
 
     barbarian.equipment.equip(cloth)
 

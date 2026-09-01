@@ -353,11 +353,6 @@ class CharacterBuildValidator:
         automatic_grants: list[ContentRef] = []
         origin_requirements: list[BuildChoiceRequirement] = []
         if species is not None:
-            self._validate_requirement_proficiency_refs(
-                species.choice_requirements,
-                ("species_ref", "choice_requirements"),
-                issues,
-            )
             self._append_origin_grants(
                 species,
                 definition.earned_character_level,
@@ -372,11 +367,6 @@ class CharacterBuildValidator:
             )
             origin_requirements.extend(species.choice_requirements)
         if variant is not None:
-            self._validate_requirement_proficiency_refs(
-                variant.choice_requirements,
-                ("species_variant_ref", "choice_requirements"),
-                issues,
-            )
             self._append_origin_grants(
                 variant,
                 definition.earned_character_level,
@@ -391,11 +381,6 @@ class CharacterBuildValidator:
             )
             origin_requirements.extend(variant.choice_requirements)
         if background is not None:
-            self._validate_requirement_proficiency_refs(
-                background.choice_requirements,
-                ("background_ref", "choice_requirements"),
-                issues,
-            )
             self._append_resolved_grants(
                 background.automatic_grant_refs,
                 ("background_ref", "automatic_grant_refs"),
@@ -1412,37 +1397,6 @@ class CharacterBuildValidator:
         path: tuple[str, ...],
         issues: list[CharacterBuildValidationIssue],
     ) -> None:
-        for package_name, package in (
-            (
-                "first_class_proficiencies",
-                definition.first_class_proficiencies,
-            ),
-            (
-                "multiclass_proficiencies",
-                definition.multiclass_proficiencies,
-            ),
-        ):
-            self._validate_proficiency_subject_refs(
-                package.automatic,
-                (*path, package_name, "automatic"),
-                issues,
-            )
-            self._validate_requirement_proficiency_refs(
-                package.choices,
-                (*path, package_name, "choices"),
-                issues,
-            )
-        for level_index, level in enumerate(definition.level_definitions):
-            self._validate_requirement_proficiency_refs(
-                level.choice_requirements,
-                (
-                    *path,
-                    "level_definitions",
-                    str(level_index),
-                    "choice_requirements",
-                ),
-                issues,
-            )
         for index, entitlement in enumerate(definition.spell_entitlements):
             self._resolve_declaration(
                 entitlement.spell_ref,
@@ -1464,34 +1418,6 @@ class CharacterBuildValidator:
                 CharacterBuildIssueCode.PREPARED_SPELL_SOURCE_UNKNOWN,
                 (*path, "spellcasting_source_id"),
                 (class_ref,),
-            )
-
-    def _validate_requirement_proficiency_refs(
-        self,
-        requirements: tuple[BuildChoiceRequirement, ...],
-        path: tuple[str, ...],
-        issues: list[CharacterBuildValidationIssue],
-    ) -> None:
-        for requirement_index, requirement in enumerate(requirements):
-            self._validate_proficiency_subject_refs(
-                requirement.allowed_proficiency_subjects,
-                (*path, str(requirement_index), "allowed_proficiency_subjects"),
-                issues,
-            )
-
-    def _validate_proficiency_subject_refs(
-        self,
-        subjects: tuple[ProficiencySubject, ...],
-        path: tuple[str, ...],
-        issues: list[CharacterBuildValidationIssue],
-    ) -> None:
-        for subject_index, subject in enumerate(subjects):
-            if subject.content_ref is None:
-                continue
-            self._resolve_declaration(
-                subject.content_ref,
-                (*path, str(subject_index), "content_ref"),
-                issues,
             )
 
     def _validate_prerequisite_refs(
@@ -1957,11 +1883,6 @@ class CharacterBuildValidator:
             selection.proficiencies
             if isinstance(selection, StartingProficiencyChoice)
             else ()
-        )
-        self._validate_proficiency_subject_refs(
-            selected_subjects,
-            (*path, "proficiencies"),
-            issues,
         )
         allowed = requirement.allowed_proficiency_subjects
         if not allowed:

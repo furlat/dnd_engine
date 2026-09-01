@@ -11,7 +11,9 @@ from dnd.content_system.builtin_character_builds import (
     compose_character_creation_plans,
 )
 from dnd.content_system.builtin_inventory import (
+    BUILT_IN_BEHAVIOR_DECLARATIONS_BY_CLASS,
     BUILT_IN_DECLARATION_INVENTORY,
+    BUILT_IN_PROVIDER_ONLY_BEHAVIOR_IDS,
     BUILT_IN_RECIPE_PRESET_INVENTORY,
 )
 from dnd.content_system.character_build_validation import (
@@ -106,6 +108,10 @@ def _loaded_builtin() -> LoadedContentSystem:
         packs=(),
         built_in_artifact_digest="c" * 64,
         content_set_digest="d" * 64,
+        behavior_declarations_by_class=(
+            BUILT_IN_BEHAVIOR_DECLARATIONS_BY_CLASS
+        ),
+        provider_only_behavior_ids=BUILT_IN_PROVIDER_ONLY_BEHAVIOR_IDS,
     )
 
 

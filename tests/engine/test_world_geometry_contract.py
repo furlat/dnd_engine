@@ -35,7 +35,7 @@ from dnd.types.world_placement import (
     WorldPlacementSpec,
 )
 from dnd.types.world import WorldEdgeChannel
-from dnd.items.environment import DirectionalDoor
+from dnd.content.items.environment_item_builders import build_directional_door
 from tests.engine.support import reset_combat_state
 
 
@@ -449,8 +449,7 @@ def test_world_edge_is_ordered_and_keeps_both_incident_side_layers() -> None:
 
 def test_directional_door_changes_structure_without_replacing_placement() -> None:
     grid = _two_tile_grid()
-    door = DirectionalDoor(
-        source_entity_uuid=uuid4(),
+    door = build_directional_door(
         blocked_channels=(
             WorldEdgeChannel.MOVEMENT,
             WorldEdgeChannel.OPTICAL,

@@ -10,8 +10,7 @@ import pytest
 
 from dnd.blocks.equipment import BodyArmor, Ring, Shield, Weapon
 from dnd.blocks.base_item import BaseItem
-from dnd.content_system.item_bindings import ItemRuntimeOrigin
-from dnd.content_system.item_materialization import materialize_item
+from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.classes.rage import Raging
 from dnd.core.equipment_types import (
     ArmorType,
@@ -23,12 +22,6 @@ from dnd.core.events import Event, EventHandler, EventPhase, EventQueue, EventTy
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity
 from dnd.game import Game
-from dnd.items.armors import CHAIN_MAIL_RECIPE, SHIELD_RECIPE
-from dnd.items.weapons import (
-    GREATSWORD_RECIPE,
-    SHORTBOW_RECIPE,
-    SHORTSWORD_RECIPE,
-)
 from dnd.monsters.bestiary import create_skeleton as _create_skeleton
 from dnd.spells.abjuration import MageArmorCondition
 from tests.engine.support import reset_combat_state
@@ -45,37 +38,16 @@ def create_skeleton(*args, **kwargs) -> Entity:
 def test_equippable_items_declare_compatible_and_default_slots() -> None:
     """Concrete gear owns its slot policy; rings intentionally have no default."""
     owner_uuid = uuid4()
-    sword = materialize_item(
-        SHORTSWORD_RECIPE,
-        owner_uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
+    sword = build_authored_item("weapon.shortsword", owner_uuid)
+    bow = build_authored_item("weapon.shortbow", owner_uuid)
+    greatsword = build_authored_item("weapon.greatsword", owner_uuid)
+    shield = build_authored_item("shield.shield", owner_uuid)
+    armor = build_authored_item("armor.chain_mail", owner_uuid)
+    ring = Ring(
+        source_entity_uuid=owner_uuid,
+        item_id="test.item.ring",
+        type=ArmorType.CLOTH,
     )
-    bow = materialize_item(
-        SHORTBOW_RECIPE,
-        owner_uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
-    )
-    greatsword = materialize_item(
-        GREATSWORD_RECIPE,
-        owner_uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
-    )
-    shield = materialize_item(
-        SHIELD_RECIPE,
-        owner_uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Shield,
-    )
-    armor = materialize_item(
-        CHAIN_MAIL_RECIPE,
-        owner_uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=BodyArmor,
-    )
-    ring = Ring(source_entity_uuid=owner_uuid, type=ArmorType.CLOTH)
 
     assert sword.compatible_equipment_slots() == (
         WeaponSlot.MELEE_MAIN,
@@ -108,14 +80,17 @@ def test_equipment_resolves_defaults_but_requires_an_explicit_ring_slot() -> Non
     reset_combat_state()
     get_map().create_rectangle(0, 0, 1, 1)
     entity = create_skeleton(name="Equipment Owner", position=(0, 0), darkvision=False)
-    sword = materialize_item(
-        SHORTSWORD_RECIPE,
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
+    sword = build_authored_item("weapon.shortsword", entity.uuid)
+    ring = Ring(
+        source_entity_uuid=entity.uuid,
+        item_id="test.item.ring",
+        type=ArmorType.CLOTH,
     )
-    ring = Ring(source_entity_uuid=entity.uuid, type=ArmorType.CLOTH)
-    ordinary_item = BaseItem(source_entity_uuid=entity.uuid, name="Keepsake")
+    ordinary_item = BaseItem(
+        source_entity_uuid=entity.uuid,
+        item_id="test.item.keepsake",
+        name="Keepsake",
+    )
     assert entity.inventory.add_item(sword)
     assert entity.inventory.add_item(ring)
     assert entity.inventory.add_item(ordinary_item)
@@ -141,18 +116,8 @@ def test_conflict_cancellation_keeps_the_equipment_transaction_atomic() -> None:
     get_map().create_rectangle(0, 0, 1, 1)
     entity = create_skeleton(name="Atomic Loadout", position=(0, 0), darkvision=False)
     original_weapon = entity.equipment.weapon_melee_main
-    shield = materialize_item(
-        SHIELD_RECIPE,
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Shield,
-    )
-    greatsword = materialize_item(
-        GREATSWORD_RECIPE,
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
-    )
+    shield = build_authored_item("shield.shield", entity.uuid)
+    greatsword = build_authored_item("weapon.greatsword", entity.uuid)
     assert original_weapon is not None
     assert entity.inventory.add_item(shield)
     assert entity.inventory.add_item(greatsword)
@@ -188,19 +153,9 @@ def test_canceled_multislot_equip_has_no_public_events_or_location_mutation() ->
     get_map().create_rectangle(0, 0, 1, 1)
     entity = create_skeleton(name="Atomic Observer", position=(0, 0), darkvision=False)
     original_weapon = entity.equipment.weapon_melee_main
-    shield = materialize_item(
-        SHIELD_RECIPE,
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Shield,
-    )
+    shield = build_authored_item("shield.shield", entity.uuid)
     foreign_owner_uuid = uuid4()
-    greatsword = materialize_item(
-        GREATSWORD_RECIPE,
-        foreign_owner_uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
-    )
+    greatsword = build_authored_item("weapon.greatsword", foreign_owner_uuid)
     assert original_weapon is not None
     assert entity.inventory.add_item(shield)
     assert entity.equip_item(shield.uuid)
@@ -293,18 +248,8 @@ def test_successful_multislot_equip_publishes_one_complete_lifecycle_per_step() 
     get_map().create_rectangle(0, 0, 1, 1)
     entity = create_skeleton(name="Atomic Commit", position=(0, 0), darkvision=False)
     original_weapon = entity.equipment.weapon_melee_main
-    shield = materialize_item(
-        SHIELD_RECIPE,
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Shield,
-    )
-    greatsword = materialize_item(
-        GREATSWORD_RECIPE,
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
-    )
+    shield = build_authored_item("shield.shield", entity.uuid)
+    greatsword = build_authored_item("weapon.greatsword", entity.uuid)
     assert original_weapon is not None
     assert entity.inventory.add_item(shield)
     assert entity.equip_item(shield.uuid)
@@ -373,12 +318,7 @@ def test_transaction_rejects_impure_execution_handlers_before_publication() -> N
     get_map().create_rectangle(0, 0, 1, 1)
     entity = create_skeleton(name="Guard Contract", position=(0, 0), darkvision=False)
     original_weapon = entity.equipment.weapon_melee_main
-    replacement = materialize_item(
-        SHORTSWORD_RECIPE,
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
-    )
+    replacement = build_authored_item("weapon.shortsword", entity.uuid)
     assert original_weapon is not None
 
     def undeclared_execution_handler(event: Event, _source_entity_uuid) -> Event:
@@ -411,12 +351,7 @@ def test_validation_only_handler_cannot_emit_a_child_event() -> None:
     get_map().create_rectangle(0, 0, 1, 1)
     entity = create_skeleton(name="Guard Isolation", position=(0, 0), darkvision=False)
     original_weapon = entity.equipment.weapon_melee_main
-    replacement = materialize_item(
-        SHORTSWORD_RECIPE,
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
-    )
+    replacement = build_authored_item("weapon.shortsword", entity.uuid)
     assert original_weapon is not None
 
     def emitting_validator(event: Event, _source_entity_uuid) -> Event:
@@ -454,12 +389,7 @@ def test_committed_armor_effect_handlers_observe_the_final_loadout() -> None:
     reset_combat_state()
     get_map().create_rectangle(0, 0, 1, 1)
     entity = create_skeleton(name="Armor Effect Owner", position=(0, 0), darkvision=False)
-    chain_mail = materialize_item(
-        CHAIN_MAIL_RECIPE,
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=BodyArmor,
-    )
+    chain_mail = build_authored_item("armor.chain_mail", entity.uuid)
     entity.equipment.unequip(BodyPart.BODY)
     assert entity.equipment.body_armor is None
 
@@ -504,25 +434,15 @@ def test_equipment_groups_inventory_projection_from_declared_slot_policy() -> No
     reset_combat_state()
     get_map().create_rectangle(0, 0, 1, 1)
     entity = create_skeleton(name="Loadout Owner", position=(0, 0), darkvision=False)
-    sword = materialize_item(
-        SHORTSWORD_RECIPE,
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
+    sword = build_authored_item("weapon.shortsword", entity.uuid)
+    shield = build_authored_item("shield.shield", entity.uuid)
+    armor = build_authored_item("armor.chain_mail", entity.uuid)
+    ring = Ring(
+        source_entity_uuid=entity.uuid,
+        item_id="test.item.copper_ring",
+        type=ArmorType.CLOTH,
+        name="Copper Ring",
     )
-    shield = materialize_item(
-        SHIELD_RECIPE,
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Shield,
-    )
-    armor = materialize_item(
-        CHAIN_MAIL_RECIPE,
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=BodyArmor,
-    )
-    ring = Ring(source_entity_uuid=entity.uuid, type=ArmorType.CLOTH, name="Copper Ring")
     for item in (sword, shield, armor, ring):
         assert entity.inventory.add_item(item)
 
@@ -546,18 +466,8 @@ def test_equipment_projection_reports_every_authoritative_footprint_conflict() -
     get_map().create_rectangle(0, 0, 1, 1)
     entity = create_skeleton(name="Footprint Projection", position=(0, 0), darkvision=False)
     original_weapon = entity.equipment.weapon_melee_main
-    shield = materialize_item(
-        SHIELD_RECIPE,
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Shield,
-    )
-    greatsword = materialize_item(
-        GREATSWORD_RECIPE,
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
-    )
+    shield = build_authored_item("shield.shield", entity.uuid)
+    greatsword = build_authored_item("weapon.greatsword", entity.uuid)
     assert original_weapon is not None
     assert entity.inventory.add_item(shield)
     assert entity.inventory.add_item(greatsword)

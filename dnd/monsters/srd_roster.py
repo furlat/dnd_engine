@@ -12,17 +12,20 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from types import MappingProxyType
-from typing import Literal, Optional, TypeVar
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
-from dnd.actions_functional import register_spell, setup_standard_actions
+from dnd.actions_functional import (
+    register_spell,
+    setup_standard_actions,
+    update_weapon_templates,
+)
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.appearance import AppearanceConfig
 from dnd.blocks.base_item import BaseItem
-from dnd.blocks.equipment import BodyArmor, Shield, Weapon
 from dnd.core.equipment_types import BodyPart, EquipmentSlot, WeaponSlot
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.skills import SkillConfig, SkillSetConfig
@@ -58,7 +61,6 @@ from dnd.core.content.registration import (
 )
 from dnd.core.events import AbilityName
 from dnd.core.creature_types import CreatureType, DamageType, Size
-from dnd.content_system.item_bindings import ItemRuntimeOrigin
 from dnd.content_system.action_definitions import (
     ACTION_BEHAVIOR_DECLARATIONS_BY_CLASS,
 )
@@ -66,39 +68,9 @@ from dnd.content_system.creature_possessions import (
     CreaturePossessionDisposition,
     CreaturePossessionGrant,
     apply_creature_possessions,
-    creature_possession_dependencies,
 )
-from dnd.content_system.item_runtime_materialization import (
-    materialize_item_from_installed_runtime,
-)
+from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.entity import Entity, EntityConfig
-from dnd.items.armors import (
-    CHAIN_MAIL_RECIPE,
-    CHAIN_SHIRT_RECIPE,
-    HIDE_ARMOR_RECIPE,
-    LEATHER_ARMOR_RECIPE,
-    PLATE_ARMOR_RECIPE,
-    SHIELD_RECIPE,
-    SPLINT_ARMOR_RECIPE,
-    STUDDED_LEATHER_RECIPE,
-)
-from dnd.items.weapons import (
-    CLUB_RECIPE,
-    DAGGER_RECIPE,
-    GREATAXE_RECIPE,
-    GREATSWORD_RECIPE,
-    HEAVY_CROSSBOW_RECIPE,
-    LIGHT_CROSSBOW_RECIPE,
-    LONGBOW_RECIPE,
-    LONGSWORD_RECIPE,
-    MACE_RECIPE,
-    SCIMITAR_RECIPE,
-    SHORTSWORD_RECIPE,
-    SPEAR_RECIPE,
-)
-from dnd.monsters.srd_roster_items import (
-    SRD_CREATURE_POSSESSION_RECIPES,
-)
 from dnd.monsters.multiattack_definitions import (
     MultiattackConfigurationDefinition,
     SRD_MULTIATTACK_CONFIGURATIONS_BY_CONTENT_ID,
@@ -159,9 +131,6 @@ from dnd.spells.necromancy import InflictWounds
 
 HitDieValue = Literal[4, 6, 8, 10, 12]
 WeaponDieValue = Literal[4, 6, 8, 10, 12, 20]
-_ItemT = TypeVar("_ItemT", bound=BaseItem)
-
-
 _VISUAL_SCALE_BY_SIZE: dict[Size, float] = {
     Size.TINY: 0.68,
     Size.SMALL: 0.82,
@@ -227,10 +196,8 @@ def _configure_commoner(context: CreatureBuildContext) -> Entity:
         entity,
         melee=_default_possession(
             context,
-            CLUB_RECIPE,
+            "weapon.club",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
         ),
     )
     return entity
@@ -250,24 +217,18 @@ def _configure_bandit(context: CreatureBuildContext) -> Entity:
         entity,
         armor=_default_possession(
             context,
-            LEATHER_ARMOR_RECIPE,
+            "armor.leather",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=BodyArmor,
         ),
         melee=_default_possession(
             context,
-            SCIMITAR_RECIPE,
+            "weapon.scimitar",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
         ),
         ranged=_default_possession(
             context,
-            LIGHT_CROSSBOW_RECIPE,
+            "weapon.light_crossbow",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
         ),
     )
     return entity
@@ -288,17 +249,13 @@ def _configure_cultist(context: CreatureBuildContext) -> Entity:
         entity,
         armor=_default_possession(
             context,
-            LEATHER_ARMOR_RECIPE,
+            "armor.leather",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=BodyArmor,
         ),
         melee=_default_possession(
             context,
-            SCIMITAR_RECIPE,
+            "weapon.scimitar",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
         ),
     )
     register_dark_devotion(entity)
@@ -320,17 +277,13 @@ def _configure_guard(context: CreatureBuildContext) -> Entity:
         entity,
         armor=_default_possession(
             context,
-            CHAIN_SHIRT_RECIPE,
+            "armor.chain_shirt",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=BodyArmor,
         ),
         melee=_default_possession(
             context,
-            SPEAR_RECIPE,
+            "weapon.spear",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
         ),
         shield=(
             context.possession_mode
@@ -354,17 +307,13 @@ def _configure_tribal_warrior(context: CreatureBuildContext) -> Entity:
         entity,
         armor=_default_possession(
             context,
-            HIDE_ARMOR_RECIPE,
+            "armor.hide",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=BodyArmor,
         ),
         melee=_default_possession(
             context,
-            SPEAR_RECIPE,
+            "weapon.spear",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
         ),
     )
     register_pack_tactics(entity)
@@ -388,17 +337,13 @@ def _configure_kobold(context: CreatureBuildContext) -> Entity:
         entity,
         melee=_default_possession(
             context,
-            DAGGER_RECIPE,
+            "weapon.dagger",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
         ),
         ranged=_default_possession(
             context,
-            SRD_CREATURE_POSSESSION_RECIPES["kobold_sling"],
+            "weapon.creature.kobold_sling",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
         ),
     )
     register_pack_tactics(entity)
@@ -425,10 +370,8 @@ def _configure_acolyte(context: CreatureBuildContext) -> Entity:
         entity,
         melee=_default_possession(
             context,
-            CLUB_RECIPE,
+            "weapon.club",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
         ),
     )
     return entity
@@ -449,24 +392,18 @@ def _configure_scout(context: CreatureBuildContext) -> Entity:
         entity,
         armor=_default_possession(
             context,
-            LEATHER_ARMOR_RECIPE,
+            "armor.leather",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=BodyArmor,
         ),
         melee=_default_possession(
             context,
-            SHORTSWORD_RECIPE,
+            "weapon.shortsword",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
         ),
         ranged=_default_possession(
             context,
-            LONGBOW_RECIPE,
+            "weapon.longbow",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
         ),
     )
     register_keen_hearing_and_sight(entity)
@@ -496,24 +433,18 @@ def _configure_thug(context: CreatureBuildContext) -> Entity:
         entity,
         armor=_default_possession(
             context,
-            LEATHER_ARMOR_RECIPE,
+            "armor.leather",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=BodyArmor,
         ),
         melee=_default_possession(
             context,
-            MACE_RECIPE,
+            "weapon.mace",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
         ),
         ranged=_default_possession(
             context,
-            HEAVY_CROSSBOW_RECIPE,
+            "weapon.heavy_crossbow",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
         ),
     )
     register_pack_tactics(entity)
@@ -539,17 +470,13 @@ def _configure_spy(context: CreatureBuildContext) -> Entity:
         entity,
         melee=_default_possession(
             context,
-            SHORTSWORD_RECIPE,
+            "weapon.shortsword",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
         ),
         ranged=_default_possession(
             context,
-            SRD_CREATURE_POSSESSION_RECIPES["spy_hand_crossbow"],
+            "weapon.creature.spy_hand_crossbow",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
         ),
     )
     register_cunning_action(entity)
@@ -575,17 +502,13 @@ def _configure_berserker(context: CreatureBuildContext) -> Entity:
         entity,
         armor=_default_possession(
             context,
-            HIDE_ARMOR_RECIPE,
+            "armor.hide",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=BodyArmor,
         ),
         melee=_default_possession(
             context,
-            GREATAXE_RECIPE,
+            "weapon.greataxe",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
         ),
     )
     register_reckless(entity)
@@ -607,33 +530,23 @@ def _configure_bandit_captain(context: CreatureBuildContext) -> Entity:
         entity,
         armor=_default_possession(
             context,
-            STUDDED_LEATHER_RECIPE,
+            "armor.studded_leather",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=BodyArmor,
         ),
         melee=_default_possession(
             context,
-            SCIMITAR_RECIPE,
+            "weapon.scimitar",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
         ),
         offhand=_default_possession(
             context,
-            DAGGER_RECIPE,
+            "weapon.dagger",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
         ),
         ranged=_default_possession(
             context,
-            SRD_CREATURE_POSSESSION_RECIPES[
-                "bandit_captain_thrown_dagger"
-            ],
+            "weapon.creature.bandit_captain_thrown_dagger",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
         ),
     )
     _register_configured_multiattack(
@@ -674,17 +587,13 @@ def _configure_priest(context: CreatureBuildContext) -> Entity:
         entity,
         armor=_default_possession(
             context,
-            CHAIN_SHIRT_RECIPE,
+            "armor.chain_shirt",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=BodyArmor,
         ),
         melee=_default_possession(
             context,
-            MACE_RECIPE,
+            "weapon.mace",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
         ),
     )
     register_divine_eminence(entity)
@@ -716,17 +625,13 @@ def _configure_cult_fanatic(context: CreatureBuildContext) -> Entity:
         entity,
         armor=_default_possession(
             context,
-            LEATHER_ARMOR_RECIPE,
+            "armor.leather",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=BodyArmor,
         ),
         melee=_default_possession(
             context,
-            DAGGER_RECIPE,
+            "weapon.dagger",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
         ),
     )
     register_dark_devotion(entity)
@@ -751,24 +656,18 @@ def _configure_knight(context: CreatureBuildContext) -> Entity:
         entity,
         armor=_default_possession(
             context,
-            PLATE_ARMOR_RECIPE,
+            "armor.plate",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=BodyArmor,
         ),
         melee=_default_possession(
             context,
-            GREATSWORD_RECIPE,
+            "weapon.greatsword",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
         ),
         ranged=_default_possession(
             context,
-            HEAVY_CROSSBOW_RECIPE,
+            "weapon.heavy_crossbow",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
         ),
     )
     register_brave(entity)
@@ -796,31 +695,23 @@ def _configure_veteran(context: CreatureBuildContext) -> Entity:
         entity,
         armor=_default_possession(
             context,
-            SPLINT_ARMOR_RECIPE,
+            "armor.splint",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=BodyArmor,
         ),
         melee=_default_possession(
             context,
-            LONGSWORD_RECIPE,
+            "weapon.longsword",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
         ),
         offhand=_default_possession(
             context,
-            SHORTSWORD_RECIPE,
+            "weapon.shortsword",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
         ),
         ranged=_default_possession(
             context,
-            HEAVY_CROSSBOW_RECIPE,
+            "weapon.heavy_crossbow",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
         ),
     )
     _register_configured_multiattack(
@@ -864,10 +755,8 @@ def _configure_mage(context: CreatureBuildContext) -> Entity:
         entity,
         melee=_default_possession(
             context,
-            DAGGER_RECIPE,
+            "weapon.dagger",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
         ),
     )
     return entity
@@ -889,24 +778,18 @@ def _configure_orc(context: CreatureBuildContext) -> Entity:
         entity,
         armor=_default_possession(
             context,
-            HIDE_ARMOR_RECIPE,
+            "armor.hide",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=BodyArmor,
         ),
         melee=_default_possession(
             context,
-            GREATAXE_RECIPE,
+            "weapon.greataxe",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
         ),
         ranged=_default_possession(
             context,
-            SRD_CREATURE_POSSESSION_RECIPES["thrown_javelin"],
+            "weapon.creature.thrown_javelin",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
         ),
     )
     register_aggressive(entity)
@@ -928,24 +811,18 @@ def _configure_hobgoblin(context: CreatureBuildContext) -> Entity:
         entity,
         armor=_default_possession(
             context,
-            CHAIN_MAIL_RECIPE,
+            "armor.chain_mail",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=BodyArmor,
         ),
         melee=_default_possession(
             context,
-            LONGSWORD_RECIPE,
+            "weapon.longsword",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
         ),
         ranged=_default_possession(
             context,
-            LONGBOW_RECIPE,
+            "weapon.longbow",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
         ),
         shield=(
             context.possession_mode
@@ -972,24 +849,18 @@ def _configure_bugbear(context: CreatureBuildContext) -> Entity:
         entity,
         armor=_default_possession(
             context,
-            HIDE_ARMOR_RECIPE,
+            "armor.hide",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=BodyArmor,
         ),
         melee=_default_possession(
             context,
-            SRD_CREATURE_POSSESSION_RECIPES["bugbear_morningstar"],
+            "weapon.creature.bugbear_morningstar",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
         ),
         ranged=_default_possession(
             context,
-            SRD_CREATURE_POSSESSION_RECIPES["thrown_javelin"],
+            "weapon.creature.thrown_javelin",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
         ),
         shield=(
             context.possession_mode
@@ -1016,24 +887,18 @@ def _configure_gnoll(context: CreatureBuildContext) -> Entity:
         entity,
         armor=_default_possession(
             context,
-            HIDE_ARMOR_RECIPE,
+            "armor.hide",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=BodyArmor,
         ),
         melee=_default_possession(
             context,
-            SPEAR_RECIPE,
+            "weapon.spear",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
         ),
         ranged=_default_possession(
             context,
-            LONGBOW_RECIPE,
+            "weapon.longbow",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
         ),
         shield=(
             context.possession_mode
@@ -1064,24 +929,18 @@ def _configure_ogre(context: CreatureBuildContext) -> Entity:
         entity,
         armor=_default_possession(
             context,
-            HIDE_ARMOR_RECIPE,
+            "armor.hide",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=BodyArmor,
         ),
         melee=_default_possession(
             context,
-            SRD_CREATURE_POSSESSION_RECIPES["ogre_greatclub"],
+            "weapon.creature.ogre_greatclub",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
         ),
         ranged=_default_possession(
             context,
-            SRD_CREATURE_POSSESSION_RECIPES["ogre_thrown_javelin"],
+            "weapon.creature.ogre_thrown_javelin",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
         ),
     )
     return entity
@@ -1166,12 +1025,8 @@ def _configure_ogre_zombie(context: CreatureBuildContext) -> Entity:
         entity,
         melee=_default_possession(
             context,
-            SRD_CREATURE_POSSESSION_RECIPES[
-                "ogre_zombie_morningstar"
-            ],
+            "weapon.creature.ogre_zombie_morningstar",
             entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
         ),
     )
     register_undead_fortitude(entity)
@@ -1260,24 +1115,24 @@ _CONFIGURE_SRD_CREATURE_BY_ID = MappingProxyType({
 
 
 def _equipped(
-    recipe: ContentRecipe,
+    item_id: str,
     slot: EquipmentSlot,
 ) -> CreaturePossessionGrant:
     """Author one starter item equipped by an SRD creature root."""
     return CreaturePossessionGrant(
-        recipe=recipe,
+        item_id=item_id,
         disposition=CreaturePossessionDisposition.EQUIPPED,
         equipment_slot=slot,
     )
 
 
 def _intrinsic(
-    recipe: ContentRecipe,
+    item_id: str,
     slot: EquipmentSlot,
 ) -> CreaturePossessionGrant:
     """Author one body-owned intrinsic equipped in every deployment mode."""
     return CreaturePossessionGrant(
-        recipe=recipe,
+        item_id=item_id,
         disposition=CreaturePossessionDisposition.INTRINSIC,
         equipment_slot=slot,
     )
@@ -1285,174 +1140,170 @@ def _intrinsic(
 
 SRD_CREATURE_POSSESSION_GRANTS_BY_ID = MappingProxyType({
     "commoner": (
-        _equipped(CLUB_RECIPE, WeaponSlot.MELEE_MAIN),
+        _equipped("weapon.club", WeaponSlot.MELEE_MAIN),
     ),
     "bandit": (
-        _equipped(LEATHER_ARMOR_RECIPE, BodyPart.BODY),
-        _equipped(SCIMITAR_RECIPE, WeaponSlot.MELEE_MAIN),
-        _equipped(LIGHT_CROSSBOW_RECIPE, WeaponSlot.RANGED_MAIN),
+        _equipped("armor.leather", BodyPart.BODY),
+        _equipped("weapon.scimitar", WeaponSlot.MELEE_MAIN),
+        _equipped("weapon.light_crossbow", WeaponSlot.RANGED_MAIN),
     ),
     "cultist": (
-        _equipped(LEATHER_ARMOR_RECIPE, BodyPart.BODY),
-        _equipped(SCIMITAR_RECIPE, WeaponSlot.MELEE_MAIN),
+        _equipped("armor.leather", BodyPart.BODY),
+        _equipped("weapon.scimitar", WeaponSlot.MELEE_MAIN),
     ),
     "guard": (
-        _equipped(CHAIN_SHIRT_RECIPE, BodyPart.BODY),
-        _equipped(SPEAR_RECIPE, WeaponSlot.MELEE_MAIN),
-        _equipped(SHIELD_RECIPE, WeaponSlot.MELEE_OFF),
+        _equipped("armor.chain_shirt", BodyPart.BODY),
+        _equipped("weapon.spear", WeaponSlot.MELEE_MAIN),
+        _equipped("shield.shield", WeaponSlot.MELEE_OFF),
     ),
     "tribal_warrior": (
-        _equipped(HIDE_ARMOR_RECIPE, BodyPart.BODY),
-        _equipped(SPEAR_RECIPE, WeaponSlot.MELEE_MAIN),
+        _equipped("armor.hide", BodyPart.BODY),
+        _equipped("weapon.spear", WeaponSlot.MELEE_MAIN),
     ),
     "kobold": (
-        _equipped(DAGGER_RECIPE, WeaponSlot.MELEE_MAIN),
+        _equipped("weapon.dagger", WeaponSlot.MELEE_MAIN),
         _equipped(
-            SRD_CREATURE_POSSESSION_RECIPES["kobold_sling"],
+            "weapon.creature.kobold_sling",
             WeaponSlot.RANGED_MAIN,
         ),
     ),
     "acolyte": (
-        _equipped(CLUB_RECIPE, WeaponSlot.MELEE_MAIN),
+        _equipped("weapon.club", WeaponSlot.MELEE_MAIN),
     ),
     "scout": (
-        _equipped(LEATHER_ARMOR_RECIPE, BodyPart.BODY),
-        _equipped(SHORTSWORD_RECIPE, WeaponSlot.MELEE_MAIN),
-        _equipped(LONGBOW_RECIPE, WeaponSlot.RANGED_MAIN),
+        _equipped("armor.leather", BodyPart.BODY),
+        _equipped("weapon.shortsword", WeaponSlot.MELEE_MAIN),
+        _equipped("weapon.longbow", WeaponSlot.RANGED_MAIN),
     ),
     "thug": (
-        _equipped(LEATHER_ARMOR_RECIPE, BodyPart.BODY),
-        _equipped(MACE_RECIPE, WeaponSlot.MELEE_MAIN),
-        _equipped(HEAVY_CROSSBOW_RECIPE, WeaponSlot.RANGED_MAIN),
+        _equipped("armor.leather", BodyPart.BODY),
+        _equipped("weapon.mace", WeaponSlot.MELEE_MAIN),
+        _equipped("weapon.heavy_crossbow", WeaponSlot.RANGED_MAIN),
     ),
     "spy": (
-        _equipped(SHORTSWORD_RECIPE, WeaponSlot.MELEE_MAIN),
+        _equipped("weapon.shortsword", WeaponSlot.MELEE_MAIN),
         _equipped(
-            SRD_CREATURE_POSSESSION_RECIPES["spy_hand_crossbow"],
+            "weapon.creature.spy_hand_crossbow",
             WeaponSlot.RANGED_MAIN,
         ),
     ),
     "berserker": (
-        _equipped(HIDE_ARMOR_RECIPE, BodyPart.BODY),
-        _equipped(GREATAXE_RECIPE, WeaponSlot.MELEE_MAIN),
+        _equipped("armor.hide", BodyPart.BODY),
+        _equipped("weapon.greataxe", WeaponSlot.MELEE_MAIN),
     ),
     "bandit_captain": (
-        _equipped(STUDDED_LEATHER_RECIPE, BodyPart.BODY),
-        _equipped(SCIMITAR_RECIPE, WeaponSlot.MELEE_MAIN),
-        _equipped(DAGGER_RECIPE, WeaponSlot.MELEE_OFF),
+        _equipped("armor.studded_leather", BodyPart.BODY),
+        _equipped("weapon.scimitar", WeaponSlot.MELEE_MAIN),
+        _equipped("weapon.dagger", WeaponSlot.MELEE_OFF),
         _equipped(
-            SRD_CREATURE_POSSESSION_RECIPES[
-                "bandit_captain_thrown_dagger"
-            ],
+            "weapon.creature.bandit_captain_thrown_dagger",
             WeaponSlot.RANGED_MAIN,
         ),
     ),
     "priest": (
-        _equipped(CHAIN_SHIRT_RECIPE, BodyPart.BODY),
-        _equipped(MACE_RECIPE, WeaponSlot.MELEE_MAIN),
+        _equipped("armor.chain_shirt", BodyPart.BODY),
+        _equipped("weapon.mace", WeaponSlot.MELEE_MAIN),
     ),
     "cult_fanatic": (
-        _equipped(LEATHER_ARMOR_RECIPE, BodyPart.BODY),
-        _equipped(DAGGER_RECIPE, WeaponSlot.MELEE_MAIN),
+        _equipped("armor.leather", BodyPart.BODY),
+        _equipped("weapon.dagger", WeaponSlot.MELEE_MAIN),
     ),
     "knight": (
-        _equipped(PLATE_ARMOR_RECIPE, BodyPart.BODY),
-        _equipped(GREATSWORD_RECIPE, WeaponSlot.MELEE_MAIN),
-        _equipped(HEAVY_CROSSBOW_RECIPE, WeaponSlot.RANGED_MAIN),
+        _equipped("armor.plate", BodyPart.BODY),
+        _equipped("weapon.greatsword", WeaponSlot.MELEE_MAIN),
+        _equipped("weapon.heavy_crossbow", WeaponSlot.RANGED_MAIN),
     ),
     "veteran": (
-        _equipped(SPLINT_ARMOR_RECIPE, BodyPart.BODY),
-        _equipped(LONGSWORD_RECIPE, WeaponSlot.MELEE_MAIN),
-        _equipped(SHORTSWORD_RECIPE, WeaponSlot.MELEE_OFF),
-        _equipped(HEAVY_CROSSBOW_RECIPE, WeaponSlot.RANGED_MAIN),
+        _equipped("armor.splint", BodyPart.BODY),
+        _equipped("weapon.longsword", WeaponSlot.MELEE_MAIN),
+        _equipped("weapon.shortsword", WeaponSlot.MELEE_OFF),
+        _equipped("weapon.heavy_crossbow", WeaponSlot.RANGED_MAIN),
     ),
     "mage": (
-        _equipped(DAGGER_RECIPE, WeaponSlot.MELEE_MAIN),
+        _equipped("weapon.dagger", WeaponSlot.MELEE_MAIN),
     ),
     "orc": (
-        _equipped(HIDE_ARMOR_RECIPE, BodyPart.BODY),
-        _equipped(GREATAXE_RECIPE, WeaponSlot.MELEE_MAIN),
+        _equipped("armor.hide", BodyPart.BODY),
+        _equipped("weapon.greataxe", WeaponSlot.MELEE_MAIN),
         _equipped(
-            SRD_CREATURE_POSSESSION_RECIPES["thrown_javelin"],
+            "weapon.creature.thrown_javelin",
             WeaponSlot.RANGED_MAIN,
         ),
     ),
     "hobgoblin": (
-        _equipped(CHAIN_MAIL_RECIPE, BodyPart.BODY),
-        _equipped(LONGSWORD_RECIPE, WeaponSlot.MELEE_MAIN),
-        _equipped(SHIELD_RECIPE, WeaponSlot.MELEE_OFF),
-        _equipped(LONGBOW_RECIPE, WeaponSlot.RANGED_MAIN),
+        _equipped("armor.chain_mail", BodyPart.BODY),
+        _equipped("weapon.longsword", WeaponSlot.MELEE_MAIN),
+        _equipped("shield.shield", WeaponSlot.MELEE_OFF),
+        _equipped("weapon.longbow", WeaponSlot.RANGED_MAIN),
     ),
     "bugbear": (
-        _equipped(HIDE_ARMOR_RECIPE, BodyPart.BODY),
+        _equipped("armor.hide", BodyPart.BODY),
         _equipped(
-            SRD_CREATURE_POSSESSION_RECIPES["bugbear_morningstar"],
+            "weapon.creature.bugbear_morningstar",
             WeaponSlot.MELEE_MAIN,
         ),
-        _equipped(SHIELD_RECIPE, WeaponSlot.MELEE_OFF),
+        _equipped("shield.shield", WeaponSlot.MELEE_OFF),
         _equipped(
-            SRD_CREATURE_POSSESSION_RECIPES["thrown_javelin"],
+            "weapon.creature.thrown_javelin",
             WeaponSlot.RANGED_MAIN,
         ),
     ),
     "gnoll": (
-        _equipped(HIDE_ARMOR_RECIPE, BodyPart.BODY),
-        _equipped(SPEAR_RECIPE, WeaponSlot.MELEE_MAIN),
-        _equipped(SHIELD_RECIPE, WeaponSlot.MELEE_OFF),
-        _equipped(LONGBOW_RECIPE, WeaponSlot.RANGED_MAIN),
+        _equipped("armor.hide", BodyPart.BODY),
+        _equipped("weapon.spear", WeaponSlot.MELEE_MAIN),
+        _equipped("shield.shield", WeaponSlot.MELEE_OFF),
+        _equipped("weapon.longbow", WeaponSlot.RANGED_MAIN),
     ),
     "ogre": (
-        _equipped(HIDE_ARMOR_RECIPE, BodyPart.BODY),
+        _equipped("armor.hide", BodyPart.BODY),
         _equipped(
-            SRD_CREATURE_POSSESSION_RECIPES["ogre_greatclub"],
+            "weapon.creature.ogre_greatclub",
             WeaponSlot.MELEE_MAIN,
         ),
         _equipped(
-            SRD_CREATURE_POSSESSION_RECIPES["ogre_thrown_javelin"],
+            "weapon.creature.ogre_thrown_javelin",
             WeaponSlot.RANGED_MAIN,
         ),
     ),
     "wolf": (
         _intrinsic(
-            SRD_CREATURE_POSSESSION_RECIPES["wolf_natural_armor"],
+            "armor.creature.wolf_natural",
             BodyPart.BODY,
         ),
         _intrinsic(
-            SRD_CREATURE_POSSESSION_RECIPES["wolf_bite"],
+            "weapon.creature.wolf_bite",
             WeaponSlot.MELEE_MAIN,
         ),
     ),
     "dire_wolf": (
         _intrinsic(
-            SRD_CREATURE_POSSESSION_RECIPES["dire_wolf_natural_armor"],
+            "armor.creature.dire_wolf_natural",
             BodyPart.BODY,
         ),
         _intrinsic(
-            SRD_CREATURE_POSSESSION_RECIPES["dire_wolf_bite"],
+            "weapon.creature.dire_wolf_bite",
             WeaponSlot.MELEE_MAIN,
         ),
     ),
     "zombie": (
         _intrinsic(
-            SRD_CREATURE_POSSESSION_RECIPES["zombie_slam"],
+            "weapon.creature.zombie_slam",
             WeaponSlot.MELEE_MAIN,
         ),
     ),
     "ogre_zombie": (
         _equipped(
-            SRD_CREATURE_POSSESSION_RECIPES[
-                "ogre_zombie_morningstar"
-            ],
+            "weapon.creature.ogre_zombie_morningstar",
             WeaponSlot.MELEE_MAIN,
         ),
     ),
     "ghoul": (
         _intrinsic(
-            SRD_CREATURE_POSSESSION_RECIPES["ghoul_claws"],
+            "weapon.creature.ghoul_claws",
             WeaponSlot.MELEE_MAIN,
         ),
         _intrinsic(
-            SRD_CREATURE_POSSESSION_RECIPES["ghoul_bite"],
+            "weapon.creature.ghoul_bite",
             WeaponSlot.MELEE_OFF,
         ),
     ),
@@ -1615,9 +1466,6 @@ def _declare_srd_creature(
         provenance=provenance,
         dependencies=(
             *_root_owned_action_dependencies(facts.creature_id),
-            *creature_possession_dependencies(
-                SRD_CREATURE_POSSESSION_GRANTS_BY_ID[facts.creature_id],
-            ),
         ),
     )(factory)
     return get_content_declaration(declared_factory)
@@ -1735,54 +1583,44 @@ def _create_srd_entity(
 
 def _default_possession(
     context: CreatureBuildContext,
-    recipe: ContentRecipe,
+    item_id: str,
     source_entity_uuid: UUID,
-    *,
-    origin: ItemRuntimeOrigin,
-    expected_type: type[_ItemT],
-) -> _ItemT | None:
+) -> BaseItem | None:
     """Materialize an authored loadout item only when deployment permits it."""
     if (
         context.possession_mode
         == CreaturePossessionMode.STRUCTURE_AND_INTRINSICS_ONLY
     ):
         return None
-    return materialize_item_from_installed_runtime(
-        recipe,
-        source_entity_uuid,
-        origin=origin,
-        expected_type=expected_type,
-    )
+    return build_authored_item(item_id, source_entity_uuid)
 
 
 def _equip(
     entity: Entity,
     *,
-    armor: Optional[BodyArmor] = None,
-    melee: Optional[Weapon] = None,
-    offhand: Optional[Weapon] = None,
-    ranged: Optional[Weapon] = None,
+    armor: BaseItem | None = None,
+    melee: BaseItem | None = None,
+    offhand: BaseItem | None = None,
+    ranged: BaseItem | None = None,
     shield: bool = False,
 ) -> None:
     """Equip common SRD loadout pieces on an entity."""
+    placements: list[tuple[BaseItem, EquipmentSlot | None]] = []
     if armor is not None:
-        entity.equipment.equip(armor)
+        placements.append((armor, BodyPart.BODY))
     if melee is not None:
-        entity.equipment.equip(melee, WeaponSlot.MELEE_MAIN)
+        placements.append((melee, WeaponSlot.MELEE_MAIN))
     if offhand is not None:
-        entity.equipment.equip(offhand, WeaponSlot.MELEE_OFF)
+        placements.append((offhand, WeaponSlot.MELEE_OFF))
     if shield:
-        entity.equipment.equip(
-            materialize_item_from_installed_runtime(
-                SHIELD_RECIPE,
-                entity.uuid,
-                origin=ItemRuntimeOrigin.STARTER,
-                expected_type=Shield,
-            ),
-            WeaponSlot.MELEE_OFF,
+        placements.append(
+            (build_authored_item("shield.shield", entity.uuid), WeaponSlot.MELEE_OFF)
         )
     if ranged is not None:
-        entity.equipment.equip(ranged, WeaponSlot.RANGED_MAIN)
+        placements.append((ranged, WeaponSlot.RANGED_MAIN))
+    if placements:
+        entity.install_initial_items(tuple(placements))
+        update_weapon_templates(entity)
 
 
 def _default_srd_appearance(creature_type: CreatureType, size: Size) -> AppearanceConfig:
