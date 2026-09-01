@@ -1,43 +1,30 @@
 """Field Focus item, action, and condition content."""
 
 from typing import Optional
+from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field
 
 from dnd.actions import entity_action_economy_cost_applier, entity_action_economy_cost_evaluator
 from dnd.blocks.base_item import UsableItem
 from dnd.core.base_actions import ActionEvent, BaseAction, Cost, TargetType
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.condition_types import ConditionCategory
-from dnd.core.content.dependencies import (
-    ContentDependency,
-    ContentDependencyPhase,
-    ContentDependencyRelation,
-)
 from dnd.core.content.descriptors import (
     ContentDescriptorSpec,
     ContentOrdering,
     ContentPresentation,
     ContentVisibility,
 )
-from dnd.core.content.item_definitions import (
-    ItemDefinition,
-    ItemPersistencePolicy,
-)
 from dnd.core.content.identities import ContentDefinitionKind
-from dnd.core.content.materialization import ItemBuildContext
 from dnd.core.content.provenance import (
     ContentFidelity,
     ContentProvenance,
     ContentProvenanceRelation,
     ContentReviewStatus,
 )
-from dnd.core.content.recipes import ContentRecipe
 from dnd.core.content.registration import (
-    ContentDeclaration,
     behavior_identity,
-    get_content_declaration,
-    item_factory,
 )
 from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.core.events import Event, EventPhase
@@ -209,92 +196,26 @@ class DeployFieldFocus(BaseAction):
             Event returned by the action economy cost applier.
         """
         return entity_action_economy_cost_applier(execution_event, self.source_entity_uuid)
-class FieldKitParameters(BaseModel):
-    """Durable authored parameters for a finite-use Field Kit."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    charges: int = 1
 
 
-@item_factory(
-    pack_id="content.neurodragon",
-    content_id="gear.field_kit",
-    version=1,
-    parameters=FieldKitParameters,
-    descriptor=ContentDescriptorSpec(
-        display_name="Field Kit",
-        description="A compact kit that deploys tactical focus gear.",
-        tags=("gear", "neurodragon", "support", "usable"),
-        visibility=ContentVisibility.PUBLIC,
-        presentation=ContentPresentation(
-            icon_key="gear.field_kit",
-            visual_variant_key="field_kit",
-            ui_group="gear.support",
-        ),
-        ordering=ContentOrdering(
-            sort_group="gear.support",
-            sort_order=10,
-        ),
-    ),
-    provenance=ContentProvenance(
-        primary_source_id="neurodragon.original_b2b3930",
-        source_anchor="Neurodragon original content baseline: Field Kit",
-        relation=ContentProvenanceRelation.ORIGINAL_CONTENT,
-        fidelity=ContentFidelity.COMPLETE,
-        review_status=ContentReviewStatus.REVIEWED,
-        notes=(
-            "Exact finite-charge Field Kit and Deploy Field Focus action "
-            "template from the extension content."
-        ),
-    ),
-    item_definition=ItemDefinition(
-        persistence_policy=ItemPersistencePolicy.POSSESSION,
-    ),
-    dependencies=(
-        ContentDependency(
-            relation=ContentDependencyRelation.GRANTS_ACTION,
-            target_ref=get_content_declaration(DeployFieldFocus).ref,
-            phase=ContentDependencyPhase.RUNTIME_REFERENCE,
-        ),
-    ),
-)
-def _build_field_kit(
-    raw_context: object,
-    parameters: FieldKitParameters,
+def build_field_kit(
+    source_entity_uuid: UUID,
+    *,
+    charges: int = 1,
 ) -> UsableItem:
-    """Construct a Field Kit through the canonical item factory."""
-    context = ItemBuildContext.model_validate(raw_context)
+    """Construct one finite-use Field Kit directly."""
+    if charges < 0:
+        raise ValueError("field kit charges cannot be negative")
     return UsableItem(
-        source_entity_uuid=context.source_entity_uuid,
-        content_ref=context.requested_ref,
+        source_entity_uuid=source_entity_uuid,
+        item_id="gear.field_kit",
         name="Field Kit",
         description="A compact kit that deploys tactical focus gear.",
         map_char="kit",
-        charges=parameters.charges,
-        max_charges=parameters.charges,
-        use_action_templates=[
-            DeployFieldFocus(
-                source_entity_uuid=context.source_entity_uuid,
-                template=True,
-            ),
-        ],
+        charges=charges,
+        max_charges=charges,
+        use_action_templates=[DeployFieldFocus(
+            source_entity_uuid=source_entity_uuid,
+            template=True,
+        )],
     )
-
-
-FIELD_KIT_DECLARATION = get_content_declaration(_build_field_kit)
-FIELD_KIT_REF = FIELD_KIT_DECLARATION.ref
-
-
-def field_kit_recipe(*, charges: int = 1) -> ContentRecipe:
-    """Return an authenticated Field Kit recipe."""
-    return ContentRecipe.create(
-        ref=FIELD_KIT_REF,
-        parameters={"charges": charges},
-    )
-
-
-FIELD_KIT_RECIPE = field_kit_recipe()
-NEURODRAGON_FIELD_FOCUS_ITEM_DECLARATIONS: tuple[ContentDeclaration, ...] = (
-    FIELD_KIT_DECLARATION,
-)

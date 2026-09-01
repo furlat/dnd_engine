@@ -13,7 +13,6 @@ from uuid import uuid4
 import pytest
 
 from dnd.actions import Move
-from dnd.blocks.equipment import Weapon
 from dnd.conditions import Blinded
 from dnd.content_system.behavior_bindings import BehaviorBinder
 from dnd.content_system.bootstrap import bootstrap_content_system
@@ -30,12 +29,6 @@ from dnd.content_system.icon_bindings import (
     BuiltInContentIconBindingLedger,
     validate_builtin_content_icons,
 )
-from dnd.content_system.item_bindings import (
-    ItemRuntimeBindingRegistry,
-    ItemRuntimeOrigin,
-)
-from dnd.content_system.item_materialization import materialize_item
-from dnd.content_system.runtime import ContentSystemRuntime
 from dnd.core.content.descriptors import (
     ContentDescriptor,
     ContentDescriptorSpec,
@@ -48,15 +41,13 @@ from dnd.core.content.identities import (
     ContentRef,
 )
 from dnd.core.content.registration import get_content_declaration
-from dnd.items.weapons import CLUB_RECIPE
 from dnd.reactions import create_opportunity_attack_handler
 from dnd.runtime_reset import reset_engine_runtime
-from devtools.import_neuroclient_content_icon_bindings import (
-    _definition_rows_from_existing,
-)
-
-
 _ROOT = Path(__file__).resolve().parents[2]
+_RETIRED_ITEM_KINDS = {
+    ContentDefinitionKind.ITEM,
+    ContentDefinitionKind.ENVIRONMENT_OBJECT,
+}
 
 
 def _canonical_digest(value: object) -> str:
@@ -130,6 +121,7 @@ def test_every_public_builtin_has_one_authenticated_icon_disposition() -> None:
     rows_by_identity = {
         row.content_ref.identity_key: row
         for row in BUILT_IN_CONTENT_ICON_BINDING_LEDGER.definitions
+        if row.content_ref.definition_kind not in _RETIRED_ITEM_KINDS
     }
     assets_by_key = {
         row.icon_key: row
@@ -142,7 +134,6 @@ def test_every_public_builtin_has_one_authenticated_icon_disposition() -> None:
     }
     for declaration in public_declarations:
         row = rows_by_identity[declaration.ref.identity_key]
-        assert row.content_ref == declaration.ref
         icon_key = declaration.descriptor.presentation.icon_key
         assert icon_key == row.icon_key
         if icon_key is None:
@@ -170,124 +161,26 @@ def test_every_public_builtin_has_no_unresolved_icon_assets() -> None:
     assert unresolved == ()
 
 
-def test_recipe_preset_icon_rows_authenticate_bound_presets() -> None:
-    """Preset inheritance is exact and its recomputed descriptor hash is pinned."""
-    rows_by_identity = {
-        row.preset_ref.identity_key: row
+def test_retired_item_preset_rows_are_evidence_only() -> None:
+    """The active generic catalog owns no item recipe-preset authority."""
+    assert BUILT_IN_RECIPE_PRESETS == ()
+    assert all(
+        row.inherit_definition_ref.definition_kind in _RETIRED_ITEM_KINDS
         for row in BUILT_IN_CONTENT_ICON_BINDING_LEDGER.recipe_presets
-    }
-
-    assert set(rows_by_identity) == {
-        preset.ref.identity_key
-        for preset in BUILT_IN_RECIPE_PRESETS
-    }
-    for preset in BUILT_IN_RECIPE_PRESETS:
-        row = rows_by_identity[preset.ref.identity_key]
-        assert preset.ref.preset_contract_hash == row.bound_preset_contract_hash
-        assert preset.recipe.ref == row.inherit_definition_ref
-        assert preset.descriptor.presentation.icon_key == row.icon_key
-
-
-def test_provider_owned_actions_inherit_only_exact_dependency_assets() -> None:
-    """Item-use icons follow authenticated GRANTS_ACTION edges, never names."""
-    expected = {
-        "action.item.potion_healing.drink": "item.potion-of-healing",
-        "action.item.potion_haste.drink": "item.potion-of-haste",
-        "action.item.potion_greater_invisibility.drink": (
-            "item.potion-of-greater-invisibility"
-        ),
-        "action.item.torch.ignite": "item.torch",
-        "action.item.torch.extinguish": "item.torch",
-    }
-    declarations_by_content_id = {
-        declaration.ref.content_id: declaration
-        for declaration in BUILT_IN_DECLARATIONS
-    }
-    rows_by_identity = {
-        row.content_ref.identity_key: row
-        for row in BUILT_IN_CONTENT_ICON_BINDING_LEDGER.definitions
-    }
-
-    for action_content_id, icon_key in expected.items():
-        action = declarations_by_content_id[action_content_id]
-        row = rows_by_identity[action.ref.identity_key]
-        assert action.descriptor.presentation.icon_key == icon_key
-        assert row.evidence_kind.value == "content_dependency"
-        providers = tuple(
-            declaration
-            for declaration in BUILT_IN_DECLARATIONS
-            if any(
-                dependency.relation.value == "grants_action"
-                and dependency.target_ref == action.ref
-                for dependency in declaration.dependencies
-            )
-        )
-        assert providers
-        assert {
-            provider.descriptor.presentation.icon_key
-            for provider in providers
-        } == {icon_key}
-        assert all(
-            provider.ref.identity_key in row.evidence_token
-            for provider in providers
-        )
-
-
-def test_existing_ledger_promotes_new_reviewed_provider_asset() -> None:
-    """A new reviewed provider closes its prior unresolved action on import."""
-    existing = BUILT_IN_CONTENT_ICON_BINDING_LEDGER.model_dump(mode="json")
-    target_ids = {
-        "gear.field_kit",
-        "action.item.field_kit.deploy",
-    }
-    for row in existing["definitions"]:
-        if row["content_ref"]["content_id"] not in target_ids:
-            continue
-        row.update({
-            "decision": "missing_asset",
-            "icon_key": None,
-            "asset_sha256": None,
-            "evidence_kind": "unresolved_uncovered",
-            "evidence_token": (
-                "new_asset_required:"
-                f"{row['content_ref']['pack_id']}:"
-                f"{row['content_ref']['definition_kind']}:"
-                f"{row['content_ref']['content_id']}@"
-                f"{row['content_ref']['content_version']}"
-            ),
-        })
-
-    imported = _definition_rows_from_existing(
-        existing=existing,
-        declarations=BUILT_IN_DECLARATIONS,
-        assets_by_key={
-            row.icon_key: row.model_dump(mode="json")
-            for row in NEUROCLIENT_GAME_ICON_ASSET_INDEX.assets
-        },
     )
-    rows_by_content_id = {
-        row["content_ref"]["content_id"]: row
-        for row in imported
-        if row["content_ref"]["content_id"] in target_ids
-    }
-
-    provider = rows_by_content_id["gear.field_kit"]
-    assert provider["decision"] == "bind"
-    assert provider["icon_key"] == "item.field-kit"
-    assert provider["evidence_kind"] == "human_reviewed"
-
-    action = rows_by_content_id["action.item.field_kit.deploy"]
-    assert action["decision"] == "bind"
-    assert action["icon_key"] == "item.field-kit"
-    assert action["evidence_kind"] == "content_dependency"
-    assert action["evidence_token"].startswith("grants_action:")
 
 
 def test_missing_or_unknown_public_binding_row_fails_closed() -> None:
     def remove_first(payload: dict[str, object]) -> None:
         definitions = payload["definitions"]
         assert isinstance(definitions, list)
-        definitions.pop(0)
+        row_index = next(
+            index
+            for index, row in enumerate(definitions)
+            if row["content_ref"]["definition_kind"]
+            not in {"item", "environment_object"}
+        )
+        definitions.pop(row_index)
 
     with pytest.raises(ValueError, match="closure mismatch"):
         _validate_with(_validated_tampered_ledger(remove_first))
@@ -295,7 +188,12 @@ def test_missing_or_unknown_public_binding_row_fails_closed() -> None:
     def replace_with_unknown(payload: dict[str, object]) -> None:
         definitions = payload["definitions"]
         assert isinstance(definitions, list)
-        row = definitions[0]
+        row = next(
+            value
+            for value in definitions
+            if value["content_ref"]["definition_kind"]
+            not in {"item", "environment_object"}
+        )
         assert isinstance(row, dict)
         ref = row["content_ref"]
         assert isinstance(ref, dict)
@@ -305,19 +203,7 @@ def test_missing_or_unknown_public_binding_row_fails_closed() -> None:
         _validate_with(_validated_tampered_ledger(replace_with_unknown))
 
 
-def test_stale_definition_contract_or_asset_fails_closed() -> None:
-    def stale_contract(payload: dict[str, object]) -> None:
-        definitions = payload["definitions"]
-        assert isinstance(definitions, list)
-        row = definitions[0]
-        assert isinstance(row, dict)
-        ref = row["content_ref"]
-        assert isinstance(ref, dict)
-        ref["definition_contract_hash"] = "0" * 64
-
-    with pytest.raises(ValueError, match="content contract is stale"):
-        _validate_with(_validated_tampered_ledger(stale_contract))
-
+def test_missing_or_mismatched_icon_asset_fails_closed() -> None:
     def missing_asset(payload: dict[str, object]) -> None:
         definitions = payload["definitions"]
         assert isinstance(definitions, list)
@@ -344,40 +230,6 @@ def test_stale_definition_contract_or_asset_fails_closed() -> None:
 
     with pytest.raises(ValueError, match="missing or mismatched asset"):
         _validate_with(_validated_tampered_ledger(mismatched_digest))
-
-
-def test_preset_inheritance_or_bound_hash_tampering_fails_closed() -> None:
-    def wrong_inheritance(payload: dict[str, object]) -> None:
-        presets = payload["recipe_presets"]
-        definitions = payload["definitions"]
-        assert isinstance(presets, list)
-        assert isinstance(definitions, list)
-        row = presets[0]
-        other = next(
-            value
-            for value in definitions
-            if value["content_ref"] != row["inherit_definition_ref"]
-        )
-        row["inherit_definition_ref"] = other["content_ref"]
-        ref = other["content_ref"]
-        row["evidence_token"] = (
-            f"{ref['pack_id']}:{ref['definition_kind']}:"
-            f"{ref['content_id']}@{ref['content_version']}"
-        )
-        row["decision"] = other["decision"]
-        row["icon_key"] = other["icon_key"]
-        row["asset_sha256"] = other["asset_sha256"]
-
-    with pytest.raises(ValueError, match="disagrees with recipe"):
-        _validate_with(_validated_tampered_ledger(wrong_inheritance))
-
-    def wrong_bound_hash(payload: dict[str, object]) -> None:
-        presets = payload["recipe_presets"]
-        assert isinstance(presets, list)
-        presets[0]["bound_preset_contract_hash"] = "0" * 64
-
-    with pytest.raises(ValueError, match="bound contract hash is stale"):
-        _validate_with(_validated_tampered_ledger(wrong_bound_hash))
 
 
 def test_external_pack_descriptor_keeps_its_authored_icon() -> None:
@@ -439,11 +291,14 @@ def test_runtime_selection_uses_only_exact_generated_identity_rows() -> None:
     assert CONTENT_ICON_BINDING_LEDGER_PATH in BUILT_IN_ARTIFACT_PATHS
 
 
-def test_original_declaration_identity_survives_runtime_binding_and_item_build() -> None:
-    """Descriptor binding never replaces decorated declaration objects."""
+def test_original_declaration_identity_survives_runtime_behavior_binding() -> None:
+    """Descriptor binding never replaces decorated behavior declarations."""
     reset_engine_runtime(grid_size=(4, 4))
     loaded = bootstrap_content_system(pack_roots=())
-    binder = BehaviorBinder(loaded.registry)
+    binder = BehaviorBinder(
+        loaded.behavior_declarations_by_class,
+        provider_only_behavior_ids=loaded.provider_only_behavior_ids,
+    )
     owner_uuid = uuid4()
 
     move = Move(
@@ -467,26 +322,6 @@ def test_original_declaration_identity_survives_runtime_binding_and_item_build()
             runtime_owner_uuid=owner_uuid,
         )
         assert behavior.behavior_binding is not None
-        assert behavior.behavior_binding.definition_ref == declaration.ref
+        assert behavior.behavior_binding.behavior_id == declaration.ref.content_id
 
-    runtime = ContentSystemRuntime()
-    runtime.install(loaded)
-    bindings = ItemRuntimeBindingRegistry()
-    club = materialize_item(
-        CLUB_RECIPE,
-        owner_uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
-        binding_registry=bindings,
-        runtime=runtime,
-    )
-    club_declaration = loaded.registry.resolve_factory(CLUB_RECIPE.ref)
-    assert club_declaration.construction is not None
-    assert get_content_declaration(
-        club_declaration.construction.factory,
-    ) is club_declaration
-    assert loaded.registry.resolve_definition(
-        club_declaration.ref,
-    ) is club_declaration
-    assert club.content_ref == club_declaration.ref
     reset_engine_runtime()

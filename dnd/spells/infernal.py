@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from functools import partial
+from types import MappingProxyType
 from uuid import UUID
 
 from pydantic import Field
@@ -116,6 +117,11 @@ HELLISH_REBUKE_SPELL_DECLARATION = get_content_declaration(
     HellishRebukeLearnedSpell,
 )
 THAUMATURGY_SPELL_DECLARATION = get_content_declaration(Thaumaturgy)
+INFERNAL_BEHAVIOR_DECLARATIONS_BY_CLASS = MappingProxyType({
+    HellishRebukeReactionHandler: HELLISH_REBUKE_REACTION_DECLARATION,
+    HellishRebukeLearnedSpell: HELLISH_REBUKE_SPELL_DECLARATION,
+    Thaumaturgy: THAUMATURGY_SPELL_DECLARATION,
+})
 
 
 def _rebuke_processor(
@@ -197,7 +203,7 @@ def _rebuke_processor(
         ),
         parent_event=effect.uuid,
         saving_throw_context=SavingThrowContext(
-            cause_ref=spell_ref,
+            cause_id=spell_ref.content_id,
             effect_id="spell.hellish_rebuke.damage",
             is_magical=True,
         ),
@@ -310,6 +316,7 @@ __all__ = [
     "HELLISH_REBUKE_METADATA",
     "HELLISH_REBUKE_REACTION_DECLARATION",
     "HELLISH_REBUKE_SPELL_DECLARATION",
+    "INFERNAL_BEHAVIOR_DECLARATIONS_BY_CLASS",
     "HellishRebukeReactionHandler",
     "THAUMATURGY_METADATA",
     "THAUMATURGY_SPELL_DECLARATION",

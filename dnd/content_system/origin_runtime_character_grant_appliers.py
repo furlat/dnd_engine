@@ -61,7 +61,7 @@ def _apply_halfling_lucky(
     try:
         context.runtime.bind_granted_behavior(
             handler,
-            provider_ref=HALFLING_LUCKY_REF,
+            provider_id=HALFLING_LUCKY_REF.content_id,
             runtime_owner_uuid=entity.uuid,
         )
         entity.add_event_handler(handler)
@@ -114,7 +114,7 @@ def _apply_half_orc_relentless_endurance(
         resource_installed = True
         context.runtime.bind_granted_behavior(
             handler,
-            provider_ref=HALF_ORC_RELENTLESS_ENDURANCE_REF,
+            provider_id=HALF_ORC_RELENTLESS_ENDURANCE_REF.content_id,
             runtime_owner_uuid=entity.uuid,
         )
         entity.add_event_handler(handler)

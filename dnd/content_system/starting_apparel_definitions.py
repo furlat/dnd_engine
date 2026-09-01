@@ -4,11 +4,6 @@ from __future__ import annotations
 
 from types import MappingProxyType
 
-from dnd.core.content.dependencies import (
-    ContentDependency,
-    ContentDependencyPhase,
-    ContentDependencyRelation,
-)
 from dnd.core.content.descriptors import (
     ContentDescriptor,
     ContentDescriptorSpec,
@@ -33,17 +28,6 @@ from dnd.core.content.starting_equipment import (
     StartingEquipmentPackageEntry,
 )
 from dnd.core.equipment_types import BodyPart
-from dnd.items.apparel_presets import (
-    BLUE_CLOTH_SHOES_PRESET,
-    BROWN_LEATHER_SHOES_PRESET,
-    DARK_BOOTS_PRESET,
-    FARMHAND_TUNIC_PRESET,
-    HEDGE_WIZARD_ROBE_PRESET,
-    THIEF_GARB_PRESET,
-)
-from dnd.items.authored_variant_presets import (
-    AUTHORED_ITEM_RECIPE_PRESETS_BY_PRESET_ID,
-)
 
 
 STARTING_APPAREL_CHOICE_ID = "character.creation.starting_apparel"
@@ -66,16 +50,13 @@ def _ref(apparel_id: str) -> ContentRef:
     )
 
 
-def _entry(preset, slot: BodyPart) -> StartingEquipmentPackageEntry:
+def _entry(item_id: str, slot: BodyPart) -> StartingEquipmentPackageEntry:
     return StartingEquipmentPackageEntry(
-        recipe=preset.recipe,
+        item_id=item_id,
         equipped_slot=slot,
     )
 
 
-_NOBLE_ATTIRE_PRESET = AUTHORED_ITEM_RECIPE_PRESETS_BY_PRESET_ID[
-    "item_variant.fine_clothes.noble_s_attire"
-]
 _PACKAGE_ROWS: tuple[
     tuple[
         str,
@@ -90,8 +71,8 @@ _PACKAGE_ROWS: tuple[
         "Common Clothes",
         10,
         StartingEquipmentPackageDefinition(entries=(
-            _entry(FARMHAND_TUNIC_PRESET, BodyPart.BODY),
-            _entry(BROWN_LEATHER_SHOES_PRESET, BodyPart.FEET),
+            _entry("apparel.common_clothes.farmhand_tunic", BodyPart.BODY),
+            _entry("apparel.leather_shoes.brown", BodyPart.FEET),
         )),
     ),
     (
@@ -99,8 +80,8 @@ _PACKAGE_ROWS: tuple[
         "Traveler's Clothes",
         20,
         StartingEquipmentPackageDefinition(entries=(
-            _entry(THIEF_GARB_PRESET, BodyPart.BODY),
-            _entry(DARK_BOOTS_PRESET, BodyPart.FEET),
+            _entry("apparel.travelers_clothes.thief_garb", BodyPart.BODY),
+            _entry("apparel.leather_boots.dark", BodyPart.FEET),
         )),
     ),
     (
@@ -108,8 +89,8 @@ _PACKAGE_ROWS: tuple[
         "Fine Clothes",
         30,
         StartingEquipmentPackageDefinition(entries=(
-            _entry(_NOBLE_ATTIRE_PRESET, BodyPart.BODY),
-            _entry(BROWN_LEATHER_SHOES_PRESET, BodyPart.FEET),
+            _entry("apparel.fine_clothes", BodyPart.BODY),
+            _entry("apparel.leather_shoes.brown", BodyPart.FEET),
         )),
     ),
     (
@@ -117,8 +98,8 @@ _PACKAGE_ROWS: tuple[
         "Robes",
         40,
         StartingEquipmentPackageDefinition(entries=(
-            _entry(HEDGE_WIZARD_ROBE_PRESET, BodyPart.BODY),
-            _entry(BLUE_CLOTH_SHOES_PRESET, BodyPart.FEET),
+            _entry("apparel.robes.hedge_wizard", BodyPart.BODY),
+            _entry("apparel.cloth_shoes.blue", BodyPart.FEET),
         )),
     ),
 )
@@ -132,13 +113,6 @@ def _declaration(
     definition: StartingEquipmentPackageDefinition,
 ) -> ContentDeclaration:
     ref = _ref(apparel_id)
-    related_refs = tuple(sorted(
-        {
-            entry.recipe.ref.identity_key: entry.recipe.ref
-            for entry in definition.entries
-        }.values(),
-        key=lambda item_ref: item_ref.identity_key,
-    ))
     return ContentDeclaration(
         ref=ref,
         mode=ContentDeclarationMode.TYPED_DEFINITION,
@@ -165,7 +139,6 @@ def _declaration(
                     sort_group="starting_apparel",
                     sort_order=sort_order,
                 ),
-                related_content_refs=related_refs,
             ),
         ),
         provenance=ContentProvenance(
@@ -178,23 +151,13 @@ def _declaration(
             fidelity=ContentFidelity.COMPLETE,
             review_status=ContentReviewStatus.REVIEWED,
             notes=(
-                "The package authenticates exact reviewed recipe variants; "
+                "The package authenticates exact direct apparel identities; "
                 "class armor remains mechanically authoritative when both "
                 "occupy the body slot."
             ),
         ),
         definition_payload=definition,
-        dependencies=tuple(
-            ContentDependency(
-                relation=ContentDependencyRelation.EQUIPS_ITEM,
-                target_ref=item_ref,
-                phase=ContentDependencyPhase.CONSTRUCTION,
-                notes=(
-                    "Starting apparel grants this exact reviewed item recipe."
-                ),
-            )
-            for item_ref in related_refs
-        ),
+        dependencies=(),
     )
 
 

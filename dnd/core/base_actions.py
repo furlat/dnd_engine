@@ -2,7 +2,7 @@
 
 import time
 
-from pydantic import BaseModel, Field, ConfigDict, PrivateAttr, computed_field, model_validator
+from pydantic import BaseModel, Field, ConfigDict, PrivateAttr, computed_field, field_validator, model_validator
 from dnd.action_timing import action_timing_enabled, record_action_timing
 from dnd.core.action_types import (
     ActionPresentationKind,
@@ -14,9 +14,8 @@ from dnd.core.events import Event, EventType, EventPhase, EventProcessor, Range,
 from dnd.core.base_object import BaseObject
 from dnd.core.base_block import BaseBlock
 from dnd.core.combat_log import ActionLogData, CombatLogEntry, CombatLogEntryType, MultiEntityLogData, md_color
-from dnd.core.content.identities import ContentRef
+from dnd.core.content.identities import ContentRef, validate_namespaced_id
 from dnd.core.content.runtime import (
-    AuthoredBehaviorAttribution,
     BehaviorBinding,
     active_runtime_behavior_binding,
     runtime_behavior_provider,
@@ -568,14 +567,20 @@ class Cost(BaseCost):
 class ActionEvent(Event):
     """Event emitted by the base action pipeline."""
 
-    behavior_binding: Optional[BehaviorBinding] = Field(
+    behavior_id: Optional[str] = Field(
         default=None,
-        exclude=True,
-        repr=False,
         description=(
-            "Immutable authored behavior identity captured before this event "
-            "version enters the queue."
+            "Primitive identity of the executable rule captured before queue "
+            "admission."
         ),
+    )
+    provided_by_id: Optional[str] = Field(
+        default=None,
+        description="Primitive identity of the direct semantic provider.",
+    )
+    origin_root_id: Optional[str] = Field(
+        default=None,
+        description="Optional durable primitive root of the provider chain.",
     )
     costs: List[BaseCost] = Field(default_factory=list, description="Serializable action costs.")
     source_item_uuid: Optional[UUID] = Field(
@@ -632,8 +637,12 @@ class ActionEvent(Event):
 
     def model_post_init(self, __context: Any) -> None:
         """Freeze active authored identity before the event is registered."""
-        if self.behavior_binding is None:
-            self.behavior_binding = active_runtime_behavior_binding()
+        if self.behavior_id is None and self.provided_by_id is None:
+            binding = active_runtime_behavior_binding()
+            if binding is not None:
+                self.behavior_id = binding.behavior_id
+                self.provided_by_id = binding.provided_by_id
+                self.origin_root_id = binding.origin_root_id
         super().model_post_init(__context)
 
     def add_cost(self, cost: Cost) -> None:
@@ -695,6 +704,12 @@ class ActionEvent(Event):
     @model_validator(mode="after")
     def validate_cold_presentation_facts(self) -> "ActionEvent":
         """Keep item and target-application identities internally coherent."""
+        if (self.behavior_id is None) != (self.provided_by_id is None):
+            raise ValueError(
+                "behavior_id and provided_by_id must be present together"
+            )
+        if self.behavior_id is None and self.origin_root_id is not None:
+            raise ValueError("origin_root_id requires a behavior identity")
         if self.source_item_presentation is not None:
             if self.source_item_uuid is None:
                 raise ValueError("source item presentation requires source_item_uuid")
@@ -708,6 +723,13 @@ class ActionEvent(Event):
         if (self.application_index is None) != (self.application_id is None):
             raise ValueError("application_index and application_id must be set together")
         return self
+
+    @field_validator("behavior_id", "provided_by_id", "origin_root_id")
+    @classmethod
+    def _validate_behavior_id(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return validate_namespaced_id(value, "action event behavior identity")
 
     def get_participant_entity_uuids(self) -> Set[UUID]:
         """Return the actor and every entity selected by the action.
@@ -825,7 +847,7 @@ class BaseAction(BaseObject):
     description: str = Field(default="", description="UI and combat-log description for this action.")
     semantic_key: Optional[str] = Field(
         default=None,
-        description="Optional stable semantic registry key overriding the action's class identity.",
+        description="Optional stable policy/grouping key; never behavior provenance.",
     )
     behavior_binding: Optional[BehaviorBinding] = Field(
         default=None,
@@ -1736,7 +1758,7 @@ class BaseAction(BaseObject):
         Returns:
             The terminal action event, or None when application cannot begin.
         """
-        with runtime_behavior_provider(self):
+        with runtime_behavior_provider(self.behavior_binding):
             with EventQueue.batch_on_event_callbacks():
                 return self._apply_action(parent_event)
 
@@ -2158,11 +2180,11 @@ class AvailableActionInfo(BaseModel):
             "never authored presentation identity."
         ),
     )
-    behavior_attribution: AuthoredBehaviorAttribution = Field(
-        description=(
-            "Exact authored behavior identity used for catalog-backed "
-            "presentation; execution and display names are not identity."
-        ),
+    behavior_id: str = Field(description="Primitive executable-rule identity.")
+    provided_by_id: str = Field(description="Primitive direct-provider identity.")
+    origin_root_id: Optional[str] = Field(
+        default=None,
+        description="Optional durable primitive root of the provider chain.",
     )
     configured_action_ref: Optional[ContentRef] = Field(
         default=None,
@@ -2286,6 +2308,13 @@ class AvailableActionInfo(BaseModel):
             )
         return self
 
+    @field_validator("behavior_id", "provided_by_id", "origin_root_id")
+    @classmethod
+    def _validate_behavior_id(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return validate_namespaced_id(value, "discovered behavior identity")
+
     @property
     def execution_template(self) -> Optional[BaseAction]:
         """Return the exact action object that produced this discovery row."""
@@ -2300,15 +2329,22 @@ class AvailableHandlerInfo(BaseModel):
     """Player-toggleable event handler exposed with available actions."""
 
     name: str = Field(description="Handler display name.")
-    behavior_attribution: AuthoredBehaviorAttribution = Field(
-        description=(
-            "Exact authored behavior identity used for catalog-backed "
-            "reaction presentation."
-        ),
+    behavior_id: str = Field(description="Primitive handler-rule identity.")
+    provided_by_id: str = Field(description="Primitive direct-provider identity.")
+    origin_root_id: Optional[str] = Field(
+        default=None,
+        description="Optional durable primitive root of the provider chain.",
     )
     uuid: UUID = Field(description="Stable handler UUID.")
     enabled: bool = Field(description="Whether the handler is currently enabled.")
     trigger_event: str = Field(description="Primary trigger event type, when declared.")
+
+    @field_validator("behavior_id", "provided_by_id", "origin_root_id")
+    @classmethod
+    def _validate_behavior_id(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return validate_namespaced_id(value, "discovered handler identity")
 
 
 class AvailableActionsResult(BaseModel):

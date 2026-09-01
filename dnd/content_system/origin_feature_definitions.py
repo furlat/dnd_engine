@@ -35,16 +35,6 @@ from dnd.core.language_types import SrdLanguageId
 from dnd.core.creature_types import DamageType, Size
 from dnd.core.saving_throw_types import SavingThrowEffectTag
 from dnd.types.senses import SenseMode, SensesType
-from dnd.items.weapons import (
-    BATTLEAXE_REF,
-    HANDAXE_REF,
-    LIGHT_HAMMER_REF,
-    LONGBOW_REF,
-    LONGSWORD_REF,
-    SHORTBOW_REF,
-    SHORTSWORD_REF,
-    WARHAMMER_REF,
-)
 
 
 _PACK_ID = "content.srd_5_1_cc"
@@ -177,10 +167,10 @@ def _language_subjects(
     )
 
 
-def _weapon_subject(ref: ContentRef) -> ProficiencySubject:
+def _weapon_subject(item_id: str) -> ProficiencySubject:
     return ProficiencySubject(
         subject_kind=ProficiencySubjectKind.WEAPON,
-        content_ref=ref,
+        subject_id=item_id,
     )
 
 
@@ -549,17 +539,17 @@ DWARF_COMBAT_TRAINING_DECLARATION = _declaration(
     sort_order=290,
     definition=OriginStructuralFeatureDefinition(
         automatic_proficiencies=tuple(
-            _weapon_subject(ref)
-            for ref in (
-                BATTLEAXE_REF,
-                HANDAXE_REF,
-                LIGHT_HAMMER_REF,
-                WARHAMMER_REF,
+            _weapon_subject(item_id)
+            for item_id in (
+                "weapon.battleaxe",
+                "weapon.handaxe",
+                "weapon.light_hammer",
+                "weapon.warhammer",
             )
         ),
     ),
     provenance_notes=(
-        "All four SRD weapon proficiencies use exact installed item refs and "
+        "All four SRD weapon proficiencies use exact direct item IDs and "
         "the ordinary source-owned proficiency materialization path."
     ),
 )
@@ -576,12 +566,12 @@ HIGH_ELF_WEAPON_TRAINING_DECLARATION = _declaration(
     sort_order=295,
     definition=OriginStructuralFeatureDefinition(
         automatic_proficiencies=tuple(
-            _weapon_subject(ref)
-            for ref in (
-                LONGBOW_REF,
-                LONGSWORD_REF,
-                SHORTBOW_REF,
-                SHORTSWORD_REF,
+            _weapon_subject(item_id)
+            for item_id in (
+                "weapon.longbow",
+                "weapon.longsword",
+                "weapon.shortbow",
+                "weapon.shortsword",
             )
         ),
     ),

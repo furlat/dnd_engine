@@ -3,13 +3,15 @@
 from enum import Enum
 from typing import Self
 
-from pydantic import BaseModel, ConfigDict, field_validator, model_validator
-
-from dnd.core.content.identities import (
-    ContentDefinitionKind,
-    ContentRef,
-    validate_namespaced_id,
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    ValidationInfo,
+    field_validator,
+    model_validator,
 )
+
+from dnd.core.content.identities import validate_namespaced_id
 
 
 SAVING_THROW_CONTEXT_KEY = "saving_throw_context"
@@ -26,33 +28,33 @@ class SavingThrowEffectTag(str, Enum):
 class SavingThrowContext(BaseModel):
     """Exact authored cause of one saving throw.
 
-    `cause_ref` identifies the action, spell, item, trait, or other authored
+    `cause_id` identifies the action, spell, item, trait, or other authored
     definition that requested the save. `effect_id` distinguishes one stable
-    effect within that definition. `condition_ref` is present only when the
+    effect within that definition. `condition_id` is present only when the
     save gates one exact condition definition.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    cause_ref: ContentRef
+    cause_id: str
     effect_id: str
-    condition_ref: ContentRef | None = None
+    condition_id: str | None = None
     is_magical: bool
     effect_tags: tuple[SavingThrowEffectTag, ...] = ()
 
-    @field_validator("effect_id")
+    @field_validator("cause_id", "effect_id", "condition_id")
     @classmethod
-    def _validate_effect_id(cls, value: str) -> str:
-        return validate_namespaced_id(value, "effect_id")
+    def _validate_semantic_id(
+        cls,
+        value: str | None,
+        info: ValidationInfo,
+    ) -> str | None:
+        if value is None:
+            return None
+        return validate_namespaced_id(value, info.field_name)
 
     @model_validator(mode="after")
     def _validate_exact_facts(self) -> Self:
-        if (
-            self.condition_ref is not None
-            and self.condition_ref.definition_kind
-            is not ContentDefinitionKind.CONDITION
-        ):
-            raise ValueError("condition_ref must identify a condition")
         if self.effect_tags != tuple(
             sorted(set(self.effect_tags), key=lambda tag: tag.value),
         ):

@@ -82,16 +82,6 @@ from dnd.core.language_types import SrdLanguageId
 from dnd.core.creature_types import DamageType, Size
 from dnd.core.saving_throw_types import SavingThrowEffectTag
 from dnd.types.senses import SensesType
-from dnd.items.weapons import (
-    BATTLEAXE_REF,
-    HANDAXE_REF,
-    LIGHT_HAMMER_REF,
-    LONGBOW_REF,
-    LONGSWORD_REF,
-    SHORTBOW_REF,
-    SHORTSWORD_REF,
-    WARHAMMER_REF,
-)
 
 
 def _payload(
@@ -493,12 +483,12 @@ def test_dwarf_combat_training_owns_all_four_exact_srd_weapon_refs() -> None:
     payload = _payload(declaration)
 
     assert tuple(
-        row.content_ref for row in payload.automatic_proficiencies
+        row.subject_id for row in payload.automatic_proficiencies
     ) == (
-        BATTLEAXE_REF,
-        HANDAXE_REF,
-        LIGHT_HAMMER_REF,
-        WARHAMMER_REF,
+        "weapon.battleaxe",
+        "weapon.handaxe",
+        "weapon.light_hammer",
+        "weapon.warhammer",
     )
     assert all(
         row.subject_kind is ProficiencySubjectKind.WEAPON
@@ -514,12 +504,12 @@ def test_high_elf_owns_exact_weapon_training_cantrip_and_language_choices() -> N
     assert isinstance(variant, SpeciesVariantDefinition)
 
     assert tuple(
-        row.content_ref for row in payload.automatic_proficiencies
+        row.subject_id for row in payload.automatic_proficiencies
     ) == (
-        LONGBOW_REF,
-        LONGSWORD_REF,
-        SHORTBOW_REF,
-        SHORTSWORD_REF,
+        "weapon.longbow",
+        "weapon.longsword",
+        "weapon.shortbow",
+        "weapon.shortsword",
     )
     requirements = {
         requirement.choice_id: requirement

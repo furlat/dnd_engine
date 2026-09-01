@@ -947,7 +947,11 @@ def test_eb_07_013_item_conditions_index_expire_and_destroy_cleanly() -> None:
     """EB-07-013: BaseItem condition lifecycle uses BaseBlock cleanup plus destroy."""
     reset_condition_state()
     source = configured_entity("Source")
-    item = BaseItem(source_entity_uuid=source.uuid, name="Conditioned Wand")
+    item = BaseItem(
+        source_entity_uuid=source.uuid,
+        item_id="fixture.conditioned_wand",
+        name="Conditioned Wand",
+    )
     assert item.allow_events_conditions is True
 
     first = EngineBookMarkerCondition(

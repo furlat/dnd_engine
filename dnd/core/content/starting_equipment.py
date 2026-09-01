@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from dnd.core.content.identities import ContentDefinitionKind
-from dnd.core.content.recipes import ContentRecipe
+from dnd.core.content.identities import validate_namespaced_id
 from dnd.core.equipment_types import EquipmentSlot
 
 
@@ -14,18 +13,14 @@ class StartingEquipmentPackageEntry(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    recipe: ContentRecipe
+    item_id: str
     quantity: int = Field(default=1, ge=1)
     equipped_slot: EquipmentSlot | None = None
 
-    @model_validator(mode="after")
-    def _validate_item_recipe(self) -> "StartingEquipmentPackageEntry":
-        if self.recipe.ref.definition_kind is not ContentDefinitionKind.ITEM:
-            raise ValueError(
-                "starting equipment entries must reference item recipes",
-            )
-        self.recipe.verify_integrity()
-        return self
+    @field_validator("item_id")
+    @classmethod
+    def _validate_item_id(cls, value: str) -> str:
+        return validate_namespaced_id(value, "item_id")
 
 
 class StartingEquipmentPackageDefinition(BaseModel):
@@ -39,7 +34,7 @@ class StartingEquipmentPackageDefinition(BaseModel):
     def _validate_entries(self) -> "StartingEquipmentPackageDefinition":
         identities = tuple(
             (
-                row.recipe.recipe_digest,
+                row.item_id,
                 row.quantity,
                 row.equipped_slot.value
                 if row.equipped_slot is not None

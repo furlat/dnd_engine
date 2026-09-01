@@ -23,7 +23,7 @@ from dnd.core.condition_types import (
     ConditionRemovalTrigger,
     ConditionTag,
 )
-from dnd.core.content.identities import ContentRef
+from dnd.core.content.identities import ContentRef, validate_namespaced_id
 
 
 ConditionSaveAbility = Literal[
@@ -194,12 +194,20 @@ class OriginRootConditionEffectGate(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     kind: Literal["origin_root"] = "origin_root"
-    origin_root_refs: tuple[ContentRef, ...] = Field(min_length=1)
+    origin_root_ids: tuple[str, ...] = Field(min_length=1)
+
+    @field_validator("origin_root_ids")
+    @classmethod
+    def _validate_ids(cls, values: tuple[str, ...]) -> tuple[str, ...]:
+        return tuple(
+            validate_namespaced_id(value, "origin_root_id")
+            for value in values
+        )
 
     @model_validator(mode="after")
-    def _validate_unique_refs(self) -> Self:
-        if len(self.origin_root_refs) != len(set(self.origin_root_refs)):
-            raise ValueError("origin-root refs must be unique")
+    def _validate_unique_ids(self) -> Self:
+        if len(self.origin_root_ids) != len(set(self.origin_root_ids)):
+            raise ValueError("origin-root IDs must be unique")
         return self
 
 

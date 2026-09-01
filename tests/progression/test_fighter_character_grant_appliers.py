@@ -173,7 +173,7 @@ def test_fighting_styles_install_exact_reversible_structure(
         handler = context.entity.get_event_handler_by_name(handler_name)
         assert handler is not None
         assert handler.behavior_binding is not None
-        assert handler.behavior_binding.provided_by_ref == content_ref
+        assert handler.behavior_binding.provided_by_id == content_ref.content_id
 
     _remove(context, receipt)
 
@@ -196,7 +196,7 @@ def test_second_wind_uses_final_fighter_level_and_exact_ownership(
     assert isinstance(action, fighter.SecondWind)
     assert action.fighter_level == 12
     assert action.behavior_binding is not None
-    assert action.behavior_binding.provided_by_ref == SECOND_WIND_REF
+    assert action.behavior_binding.provided_by_id == SECOND_WIND_REF.content_id
     resource = context.entity.action_economy.resources["second_wind"]
     assert (resource.current, resource.maximum) == (1, 1)
     assert not context.entity.active_conditions
@@ -317,7 +317,7 @@ def test_survivor_is_one_exact_bound_reversible_handler(
     handler = context.entity.get_event_handler_by_name("Survivor")
     assert handler is not None
     assert handler.behavior_binding is not None
-    assert handler.behavior_binding.provided_by_ref == SURVIVOR_REF
+    assert handler.behavior_binding.provided_by_id == SURVIVOR_REF.content_id
     assert not context.entity.active_conditions
 
     _remove(context, receipt)
@@ -337,7 +337,7 @@ def test_lucky_feat_is_exact_bound_and_reversible_without_condition(
     handler = context.entity.get_event_handler_by_name("Lucky")
     assert handler is not None
     assert handler.behavior_binding is not None
-    assert handler.behavior_binding.provided_by_ref == LUCKY_FEAT_REF
+    assert handler.behavior_binding.provided_by_id == LUCKY_FEAT_REF.content_id
     assert not context.entity.active_conditions
 
     _remove(context, receipt)

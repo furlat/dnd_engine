@@ -6,15 +6,13 @@ import pytest
 
 from dnd.actions import Attack, AttackEvent
 from dnd.actions_functional import setup_standard_actions
-from dnd.blocks.equipment import Shield
 from dnd.classes.fighter import FightingStyleProtection
 from dnd.conditions import Invisible
-from dnd.content_system.item_bindings import ItemRuntimeOrigin
-from dnd.content_system.item_materialization import materialize_item
+from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.modifiers import AdvantageStatus
 from dnd.entity import Entity
-from dnd.items.armors import SHIELD_RECIPE
+from dnd.game import Game
 from dnd.monsters.bestiary import create_goblin, create_skeleton
 from tests.engine.support import reset_combat_state
 from dnd.core.gridmap import get_map
@@ -35,22 +33,6 @@ def _protection_scene(*, shield: bool = True) -> ProtectionScene:
         position=(4, 4),
         faction="heroes",
     )
-    if shield:
-        protector.equipment.equip(
-            materialize_item(
-                SHIELD_RECIPE,
-                protector.uuid,
-                origin=ItemRuntimeOrigin.STARTER,
-                expected_type=Shield,
-            ),
-            WeaponSlot.MELEE_OFF,
-        )
-    protector.add_condition(
-        FightingStyleProtection(
-            source_entity_uuid=protector.uuid,
-            target_entity_uuid=protector.uuid,
-        )
-    )
     ally = create_goblin(
         name="Protection Ally",
         position=(4, 5),
@@ -60,6 +42,21 @@ def _protection_scene(*, shield: bool = True) -> ProtectionScene:
         name="Protection Enemy",
         position=(4, 6),
         faction="monsters",
+    )
+    for entity in (protector, ally, enemy):
+        entity.compose_entity()
+        Game().deploy_entity(entity, entity.position)
+
+    if shield:
+        protector.equipment.equip(
+            build_authored_item("shield.shield", protector.uuid),
+            WeaponSlot.MELEE_OFF,
+        )
+    protector.add_condition(
+        FightingStyleProtection(
+            source_entity_uuid=protector.uuid,
+            target_entity_uuid=protector.uuid,
+        )
     )
     setup_standard_actions(enemy)
     Entity.update_all_entities_senses(max_distance=50)

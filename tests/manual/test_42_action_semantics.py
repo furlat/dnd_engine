@@ -81,7 +81,7 @@ from dnd.core.base_actions import (
     TargetType,
     TopologyEffectProfile,
 )
-from tests.content_identity import synthetic_action_attribution
+from tests.content_identity import synthetic_action_identity
 from dnd.core.modifiers import AdvantageStatus
 from dnd.spells.conjuration import Darkness, Daylight, FogCloud
 from dnd.spells.divination import SeeInvisibility, TrueSeeing
@@ -126,7 +126,7 @@ def _action(
     return AvailableActionInfo(
         template_name=template_name,
         semantic_key=semantic_key,
-        behavior_attribution=synthetic_action_attribution(
+        **synthetic_action_identity(
             "action.synthetic_semantics",
         ),
         base_template_name=base_template_name,

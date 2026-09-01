@@ -10,12 +10,12 @@ import tomllib
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from contextvars import ContextVar
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from functools import lru_cache
 from importlib import invalidate_caches
 from pathlib import Path
-from types import ModuleType
+from types import MappingProxyType, ModuleType
 from uuid import UUID
 
 from dnd.blocks.sensory import spatial_senses_system
@@ -154,6 +154,11 @@ class LoadedContentSystem:
     packs: tuple[DiscoveredContentPack, ...]
     built_in_artifact_digest: str
     content_set_digest: str
+    behavior_declarations_by_class: Mapping[
+        type[object],
+        ContentDeclaration,
+    ] = field(default_factory=lambda: MappingProxyType({}))
+    provider_only_behavior_ids: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True, slots=True)
@@ -1738,11 +1743,6 @@ def _content_set_digest(
                 ),
                 "descriptor": declaration.descriptor.model_dump(mode="json"),
                 "provenance": declaration.provenance.model_dump(mode="json"),
-                "item_definition": (
-                    declaration.item_definition.model_dump(mode="json")
-                    if declaration.item_definition is not None
-                    else None
-                ),
                 "definition_payload": (
                     declaration.definition_payload.model_dump(mode="json")
                     if declaration.definition_payload is not None

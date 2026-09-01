@@ -8,16 +8,12 @@ from uuid import UUID, uuid4
 
 from dnd.actions import Disengage, Hide, SpellAction
 from dnd.actions_functional import register_spell
-from dnd.blocks.base_item import EquippableItem
+from dnd.blocks.base_item import BaseItem, EquippableItem
 from dnd.conditions import Blinded, Poisoned
+from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.content_system.character_materialization import materialize_character
 from dnd.content_system.creature_bindings import CREATURE_RUNTIME_BINDINGS
 from dnd.content_system.creature_materialization import materialize_creature
-from dnd.content_system.item_bindings import (
-    ITEM_RUNTIME_BINDINGS,
-    ItemRuntimeOrigin,
-)
-from dnd.content_system.item_materialization import materialize_item
 from dnd.content_system.spell_catalog_composition import (
     SPELL_CATALOG_COMPOSITION_ROWS,
 )
@@ -48,6 +44,15 @@ from dnd.encounter import Encounter
 from dnd.entity import Entity
 from dnd.game import Game
 from dnd.items.torches import Torch
+from dnd.items.consumables import build_healing_potion
+from dnd.items.spell_items import (
+    build_fireball_scroll,
+    build_hold_person_scroll,
+    build_magic_missile_scroll,
+    build_spike_growth_scroll,
+    build_wand_of_fire,
+    build_wand_of_magic_missiles,
+)
 from dnd.reactions import add_opportunity_attack_handler
 from dnd.scenarios.encounter_compatibility import (
     check_built_encounter_compatibility,
@@ -207,27 +212,42 @@ def _materialize_member(
     raise TypeError(f"Unsupported roster source: {source!r}")
 
 
+def _build_granted_item(entity: Entity, effect: RosterItemGrant) -> BaseItem:
+    if effect.heal_amount is not None:
+        return build_healing_potion(
+            entity.uuid,
+            heal_amount=effect.heal_amount,
+        )
+    if effect.cast_level is not None:
+        if effect.item_id == "spell_item.scroll_fireball":
+            return build_fireball_scroll(entity.uuid, cast_level=effect.cast_level)
+        if effect.item_id == "spell_item.scroll_hold_person":
+            return build_hold_person_scroll(entity.uuid, cast_level=effect.cast_level)
+        if effect.item_id == "spell_item.scroll_magic_missile":
+            return build_magic_missile_scroll(entity.uuid, cast_level=effect.cast_level)
+        return build_spike_growth_scroll(entity.uuid, cast_level=effect.cast_level)
+    if effect.charges is not None:
+        if effect.item_id == "spell_item.wand_fire":
+            return build_wand_of_fire(entity.uuid, charges=effect.charges)
+        return build_wand_of_magic_missiles(entity.uuid, charges=effect.charges)
+    return build_authored_item(effect.item_id, entity.uuid)
+
+
 def _apply_item_grant(entity: Entity, effect: RosterItemGrant) -> None:
     for _ in range(effect.count):
-        item = materialize_item(
-            effect.recipe,
-            entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-        )
+        item = _build_granted_item(entity, effect)
         try:
             if effect.placement is RosterItemPlacement.INVENTORY:
                 if not entity.loot_item(item):
                     raise ValueError(
                         f"Inventory rejected "
-                        f"{effect.recipe.ref.identity_key!r} "
+                        f"{effect.item_id!r} "
                         f"for {entity.name!r}",
                     )
             else:
                 if not isinstance(item, EquippableItem):
                     raise TypeError(
-                        f"Equipped setup recipe "
-                        f"{effect.recipe.ref.identity_key!r} is not "
-                        "equippable",
+                        f"Equipped setup item {effect.item_id!r} is not equippable",
                     )
                 slot = effect.equipment_slot
                 if effect.replace_existing and slot is not None:
@@ -235,7 +255,7 @@ def _apply_item_grant(entity: Entity, effect: RosterItemGrant) -> None:
                 if not entity.equipment.equip(item, slot):
                     raise ValueError(
                         f"Equipment rejected "
-                        f"{effect.recipe.ref.identity_key!r} for "
+                        f"{effect.item_id!r} for "
                         f"{entity.name!r}",
                     )
             if effect.on_grant == "ignite":
@@ -243,7 +263,7 @@ def _apply_item_grant(entity: Entity, effect: RosterItemGrant) -> None:
                     raise TypeError("ignite setup effect requires a Torch")
                 item.ignite(entity.uuid)
         except BaseException:
-            ITEM_RUNTIME_BINDINGS.discard(item.uuid)
+            item.destroy()
             raise
 
 
@@ -335,19 +355,10 @@ def _apply_immediate_setup_effect(
 
 
 def _discard_provisional_entities(entities: tuple[Entity, ...]) -> None:
-    """Release scenario-owned provisional aggregates and runtime bindings."""
+    """Release scenario-owned provisional aggregates and creature bindings."""
     for entity in reversed(entities):
         if entity.creation_committed:
             continue
-        item_uuids = {
-            *entity.inventory.items,
-            *(
-                item.uuid
-                for item in entity.equipment.get_all_equipped_items()
-            ),
-        }
-        for item_uuid in item_uuids:
-            ITEM_RUNTIME_BINDINGS.discard(item_uuid)
         CREATURE_RUNTIME_BINDINGS.discard(entity.uuid)
         if Entity.get(entity.uuid) is entity:
             entity.discard_uncommitted()

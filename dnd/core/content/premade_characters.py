@@ -10,7 +10,6 @@ from typing import Literal, Self
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from dnd.core.content.identities import (
-    ContentDefinitionKind,
     validate_namespaced_id,
 )
 from dnd.core.content.durable_characters import (
@@ -61,19 +60,14 @@ class StarterHoldingTemplate(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    recipe: ContentRecipe
+    item_id: str
     quantity: int = Field(default=1, ge=1)
     equipped_slot: EquipmentSlot | None = None
 
-    @model_validator(mode="after")
-    def _validate_item_recipe(self) -> Self:
-        if self.recipe.ref.definition_kind != ContentDefinitionKind.ITEM:
-            raise ValueError(
-                "StarterHoldingTemplate recipe must reference an item "
-                "definition",
-            )
-        self.recipe.verify_integrity()
-        return self
+    @field_validator("item_id")
+    @classmethod
+    def _validate_item_id(cls, value: str) -> str:
+        return validate_namespaced_id(value, "item_id")
 
 
 class CharacterCreationPlanKind(str, Enum):

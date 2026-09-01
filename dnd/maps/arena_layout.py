@@ -6,24 +6,18 @@ from uuid import UUID, uuid4
 
 from dnd.core.base_block import LightLevel
 from dnd.core.gridmap import GridMap
-from dnd.content_system.item_bindings import ItemRuntimeOrigin
-from dnd.content_system.item_materialization import materialize_item
-from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
-from dnd.items.consumables import healing_potion_recipe
+from dnd.content.items.environment_item_builders import (
+    build_directional_door,
+    build_directional_wall,
+    build_trap_lever,
+    build_wall_torch,
+)
+from dnd.items.consumables import build_healing_potion
 from dnd.items.environment import DirectionalDoor, DirectionalWall
-from dnd.items.environment_content import (
-    WALL_TORCH_RECIPE,
-    directional_door_recipe,
-    directional_wall_recipe,
-    trap_lever_recipe,
-)
-from dnd.items.environment_interactables import (
-    PullLeverAction,
-    TrapLever,
-)
+from dnd.items.environment_interactables import TrapLever
 from dnd.items.torches import WallTorch
 from dnd.core.base_tiles import difficult_terrain_factory
-from dnd.types.world import CardinalDirection
+from dnd.types.world import CardinalDirection, WorldEdgeChannel
 
 ARENA_WIDTH = 15
 ARENA_HEIGHT = 15
@@ -40,11 +34,10 @@ WALL_POSITIONS: Tuple[Tuple[int, int], ...] = tuple(
 
 DOOR_DIRECTIONS: Tuple[str, ...] = ("west",)
 WALL_DIRECTIONS: Tuple[str, ...] = DOOR_DIRECTIONS
-STANDARD_BLOCKING_CHANNELS: Tuple[str, ...] = (
-    "movement",
-    "vision",
-    "light",
-    "propagation",
+STANDARD_BLOCKING_CHANNELS: Tuple[WorldEdgeChannel, ...] = (
+    WorldEdgeChannel.MOVEMENT,
+    WorldEdgeChannel.OPTICAL,
+    WorldEdgeChannel.PROPAGATION,
 )
 
 WATER_POSITIONS: Tuple[Tuple[int, int], ...] = (
@@ -86,13 +79,8 @@ def place_standard_directional_barrier(grid: GridMap) -> StandardBarrierObjects:
     walls = []
     for position in WALL_POSITIONS:
         grid.set_tile(position[0], position[1], name="Floor")
-        wall = materialize_item(
-            directional_wall_recipe(
-                blocked_channels=STANDARD_BLOCKING_CHANNELS,
-            ),
-            uuid4(),
-            origin=ItemRuntimeOrigin.ENVIRONMENT,
-            expected_type=DirectionalWall,
+        wall = build_directional_wall(
+            blocked_channels=STANDARD_BLOCKING_CHANNELS,
         )
         wall.place_on_grid(
             position,
@@ -101,15 +89,10 @@ def place_standard_directional_barrier(grid: GridMap) -> StandardBarrierObjects:
         walls.append(wall)
 
     grid.set_tile(DOOR_POSITION[0], DOOR_POSITION[1], name="Floor")
-    door = materialize_item(
-        directional_door_recipe(
-            display_name="Door",
-            blocked_channels=STANDARD_BLOCKING_CHANNELS,
-            is_open=False,
-        ),
-        uuid4(),
-        origin=ItemRuntimeOrigin.ENVIRONMENT,
-        expected_type=DirectionalDoor,
+    door = build_directional_door(
+        display_name="Door",
+        blocked_channels=STANDARD_BLOCKING_CHANNELS,
+        is_open=False,
     )
     door.place_on_grid(
         DOOR_POSITION,
@@ -157,43 +140,21 @@ def build_standard_arena_environment(grid: GridMap) -> StandardArenaObjects:
 
     wall_torches_list = []
     for position in WALL_TORCH_POSITIONS:
-        wall_torch = materialize_item(
-            WALL_TORCH_RECIPE,
-            uuid4(),
-            origin=ItemRuntimeOrigin.ENVIRONMENT,
-            expected_type=WallTorch,
-        )
+        wall_torch = build_wall_torch()
         wall_torch.mount(position, lit=False)
         wall_torches_list.append(wall_torch)
     wall_torches = tuple(wall_torches_list)
 
     healing_potion_uuids = []
     for position in HEALING_POTION_POSITIONS:
-        potion = materialize_item(
-            healing_potion_recipe(heal_amount=10),
-            uuid4(),
-            origin=ItemRuntimeOrigin.LOOT,
-        )
+        potion = build_healing_potion(uuid4(), heal_amount=10)
         potion.place_on_grid(position)
         healing_potion_uuids.append(potion.uuid)
 
-    lever_action = PullLeverAction(
-        source_entity_uuid=uuid4(),
+    lever = build_trap_lever(
         trap_condition_uuid=spike_condition_uuid,
-        template=True,
+        charges=1,
     )
-    lever = materialize_item(
-        trap_lever_recipe(charges=1),
-        uuid4(),
-        origin=ItemRuntimeOrigin.ENVIRONMENT,
-        expected_type=TrapLever,
-    )
-    SERVER_CONTENT_SYSTEM_RUNTIME.bind_child(
-        lever_action,
-        provider=lever,
-        runtime_owner_uuid=lever.uuid,
-    )
-    lever.use_action_templates.append(lever_action)
     lever.place_on_grid(TRAP_LEVER_POSITION)
 
     return StandardArenaObjects(

@@ -33,10 +33,8 @@ from dnd.core.events import (
     Trigger,
 )
 from dnd.actions import Attack
-from dnd.blocks.equipment import Shield, Weapon
 from dnd.blocks.health import HealthConfig, HitDiceConfig
-from dnd.content_system.item_bindings import ItemRuntimeOrigin
-from dnd.content_system.item_materialization import materialize_item
+from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.core.content.runtime import HandlerDispatchOutcome
 from dnd.classes.feats import LuckyFeature
 from dnd.classes.fighter import GreatWeaponFighting
@@ -48,13 +46,6 @@ from dnd.core.modifiers import (
 )
 from dnd.core.values import AutoHitStatus, BaseValue, CriticalStatus, ModifiableValue
 from dnd.entity import Entity, EntityConfig, determine_attack_outcome
-from dnd.items.armors import WOODEN_SHIELD_RECIPE
-from dnd.items.weapons import (
-    GREATSWORD_RECIPE,
-    LONGSWORD_RECIPE,
-    SHORTBOW_RECIPE,
-    SHORTSWORD_RECIPE,
-)
 from dnd.spells.spell_utils import fire_heal_roll_result
 from tests.engine.support import create_test_entity
 
@@ -1118,21 +1109,11 @@ def test_eb_03_013_great_weapon_fighting_filters_damage_result_events() -> None:
         config=EntityConfig(position=(1, 0)),
     )
     fighter.equipment.equip(
-        materialize_item(
-            GREATSWORD_RECIPE,
-            fighter.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
-        ),
+        build_authored_item("weapon.greatsword", fighter.uuid),
         WeaponSlot.MELEE_MAIN,
     )
     fighter.equipment.equip(
-        materialize_item(
-            SHORTBOW_RECIPE,
-            fighter.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
-        ),
+        build_authored_item("weapon.shortbow", fighter.uuid),
         WeaponSlot.RANGED_MAIN,
     )
     fighter.add_condition(
@@ -1187,12 +1168,7 @@ def test_eb_03_013_great_weapon_fighting_filters_damage_result_events() -> None:
         config=EntityConfig(position=(0, 1)),
     )
     one_handed_fighter.equipment.equip(
-        materialize_item(
-            SHORTSWORD_RECIPE,
-            one_handed_fighter.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
-        ),
+        build_authored_item("weapon.shortsword", one_handed_fighter.uuid),
         WeaponSlot.MELEE_MAIN,
     )
     one_handed_fighter.add_condition(
@@ -1231,12 +1207,7 @@ def test_eb_03_014_real_attack_pipeline_applies_modified_damage_rolls() -> None:
         config=EntityConfig(position=(2, 1)),
     )
     attacker.equipment.equip(
-        materialize_item(
-            GREATSWORD_RECIPE,
-            attacker.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
-        ),
+        build_authored_item("weapon.greatsword", attacker.uuid),
         WeaponSlot.MELEE_MAIN,
     )
     attacker.add_condition(
@@ -1456,12 +1427,7 @@ def test_eb_03_016_attack_d20_slot_and_gwf_extra_packet_boundaries() -> None:
         config=EntityConfig(position=(2, 1)),
     )
     attacker.equipment.equip(
-        materialize_item(
-            GREATSWORD_RECIPE,
-            attacker.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
-        ),
+        build_authored_item("weapon.greatsword", attacker.uuid),
         WeaponSlot.MELEE_MAIN,
     )
     attacker.equipment.extra_attack_damage_dices.append(4)
@@ -1539,21 +1505,11 @@ def test_eb_03_017_gwf_requires_versatile_weapon_to_be_two_handed() -> None:
         config=EntityConfig(position=(1, 0)),
     )
     attacker.equipment.equip(
-        materialize_item(
-            LONGSWORD_RECIPE,
-            attacker.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
-        ),
+        build_authored_item("weapon.longsword", attacker.uuid),
         WeaponSlot.MELEE_MAIN,
     )
     attacker.equipment.equip(
-        materialize_item(
-            WOODEN_SHIELD_RECIPE,
-            attacker.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Shield,
-        ),
+        build_authored_item("shield.wooden", attacker.uuid),
         WeaponSlot.MELEE_OFF,
     )
     attacker.add_condition(

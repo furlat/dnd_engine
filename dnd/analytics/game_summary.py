@@ -1028,7 +1028,7 @@ def _reduce_terminal_event(
         condition_key = _condition_key(event.condition)
         _increment(target_stats.conditions_removed, condition_key)
     if isinstance(event, ItemChargeConsumptionEvent) and event.phase == EventPhase.COMPLETION:
-        _increment(source_stats.item_charges_spent, event.item_semantic_key, event.amount)
+        _increment(source_stats.item_charges_spent, event.item_id, event.amount)
     if isinstance(event, TurnStartEvent) and event.phase == EventPhase.COMPLETION:
         statistics_for(event.entity_uuid).turns_started += 1
     if isinstance(event, TurnEndEvent) and event.phase == EventPhase.COMPLETION:

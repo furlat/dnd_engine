@@ -4,7 +4,7 @@ from types import MappingProxyType
 from typing import Any, Optional
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field
 
 from dnd.actions import (
     entity_action_economy_cost_applier,
@@ -44,23 +44,15 @@ from dnd.core.content.dependencies import (
     ContentDependencyRelation,
 )
 from dnd.core.content.identities import ContentDefinitionKind
-from dnd.core.content.item_definitions import (
-    ItemDefinition,
-    ItemPersistencePolicy,
-)
-from dnd.core.content.materialization import ItemBuildContext
 from dnd.core.content.provenance import (
     ContentFidelity,
     ContentProvenance,
     ContentProvenanceRelation,
     ContentReviewStatus,
 )
-from dnd.core.content.recipes import ContentRecipe
 from dnd.core.content.registration import (
-    ContentDeclaration,
     behavior_identity,
     get_content_declaration,
-    item_factory,
 )
 from dnd.core.content.runtime import (
     RuntimeBehaviorKind,
@@ -118,62 +110,6 @@ TIMED_FIRE_WEAPON_COAT_CONDITION_SEMANTIC_KEY = (
     "content.neurodragon:condition:"
     "condition.consumable.weapon_coat.timed_fire@1"
 )
-
-
-class HealingPotionParameters(BaseModel):
-    """Durable authored parameters for one healing-potion stack."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    heal_amount: int = 7
-
-
-class TimedWeaponCoatParameters(BaseModel):
-    """Durable authored duration for the timed fire-coat variant."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    rounds: int = 3
-
-
-class EmptyConsumableParameters(BaseModel):
-    """Definitions with no authored construction variants."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-
-_POSSESSION_ITEM_DEFINITION = ItemDefinition(
-    persistence_policy=ItemPersistencePolicy.POSSESSION,
-)
-
-
-def _descriptor(
-    *,
-    content_id: str,
-    display_name: str,
-    description: str,
-    group: str,
-    visual_variant_key: str,
-    sort_order: int,
-    tags: tuple[str, ...],
-    icon_key: str | None = None,
-) -> ContentDescriptorSpec:
-    """Build stable public catalog metadata for one consumable definition."""
-    return ContentDescriptorSpec(
-        display_name=display_name,
-        description=description,
-        tags=("consumable", "neurodragon", *tags),
-        visibility=ContentVisibility.PUBLIC,
-        presentation=ContentPresentation(
-            icon_key=icon_key or content_id,
-            visual_variant_key=visual_variant_key,
-            ui_group=f"consumables.{group}",
-        ),
-        ordering=ContentOrdering(
-            sort_group=f"consumables.{group}",
-            sort_order=sort_order,
-        ),
-    )
 
 
 def _provenance(display_name: str) -> ContentProvenance:
@@ -269,20 +205,6 @@ def _consumable_condition_identity(
             ),
         ),
         provenance=_provenance(display_name),
-    )
-
-
-def _grants_action(
-    action_type: type[BaseAction],
-) -> tuple[ContentDependency, ...]:
-    """Build the exact item-to-action dependency edge."""
-    return (
-        ContentDependency(
-            relation=ContentDependencyRelation.GRANTS_ACTION,
-            target_ref=get_content_declaration(action_type).ref,
-            phase=ContentDependencyPhase.RUNTIME_REFERENCE,
-            notes="Provided through this consumable's use actions.",
-        ),
     )
 
 
@@ -418,45 +340,6 @@ class _HealingPotion(UsableItem):
     max_stack: int = Field(
         default=10,
         description="Maximum number of healing potions in one stack.",
-    )
-
-
-@item_factory(
-    pack_id="content.neurodragon",
-    content_id="consumable.healing_potion",
-    version=1,
-    parameters=HealingPotionParameters,
-    descriptor=_descriptor(
-        content_id="consumable.healing_potion",
-        display_name="Potion of Healing",
-        description="A single-use potion that restores a fixed amount of health.",
-        group="potions",
-        visual_variant_key="healing_potion",
-        sort_order=10,
-        tags=("healing", "potion"),
-        icon_key="item.potion-of-healing",
-    ),
-    provenance=_provenance("Potion of Healing"),
-    item_definition=_POSSESSION_ITEM_DEFINITION,
-    dependencies=_grants_action(_DrinkHealingPotionAction),
-)
-def _build_healing_potion(
-    context: object,
-    parameters: HealingPotionParameters,
-) -> _HealingPotion:
-    """Construct one canonical healing potion from its durable heal amount."""
-    item_context = ItemBuildContext.model_validate(context)
-    action = _DrinkHealingPotionAction(
-        source_entity_uuid=uuid4(),
-        source_item_uuid=uuid4(),
-        heal_amount=parameters.heal_amount,
-        template=True,
-    )
-    return _HealingPotion(
-        source_entity_uuid=item_context.source_entity_uuid,
-        content_ref=item_context.requested_ref,
-        use_action_templates=[action],
-        stack_id=f"healing_potion_{parameters.heal_amount}",
     )
 
 
@@ -776,7 +659,7 @@ class _ApplyWeaponCoatAction(BaseAction):
         )
         bind_runtime_behavior_child(
             coat,
-            provider=self,
+            provider_binding=self.behavior_binding,
             runtime_owner_uuid=entity.uuid,
         )
         entity.add_condition(coat, parent_event=execution_event)
@@ -830,207 +713,6 @@ class _WeaponCoat(UsableItem):
     max_stack: int = Field(
         default=10,
         description="Maximum number of coats in one stack.",
-    )
-
-
-def _weapon_coat(
-    context: object,
-    *,
-    display_name: str,
-    damage_type: DamageType,
-    semantic_key: str,
-    condition_semantic_key: str,
-    stack_id: str,
-    include_off_hand: bool,
-    duration: Optional[int] = None,
-    concentration: bool = False,
-) -> _WeaponCoat:
-    """Construct one exact weapon-coat variant."""
-    item_context = ItemBuildContext.model_validate(context)
-    actions: list[BaseAction] = [
-        _ApplyWeaponCoatAction(
-            source_entity_uuid=uuid4(),
-            source_item_uuid=uuid4(),
-            name="Coat Main Hand",
-            semantic_key=semantic_key,
-            condition_semantic_key=condition_semantic_key,
-            weapon_slot="MELEE_MAIN",
-            coat_damage_type=damage_type,
-            coat_duration=duration,
-            use_concentration=concentration,
-            template=True,
-        )
-    ]
-    if include_off_hand:
-        actions.append(
-            _ApplyWeaponCoatAction(
-                source_entity_uuid=uuid4(),
-                source_item_uuid=uuid4(),
-                name="Coat Off Hand",
-                semantic_key=semantic_key,
-                condition_semantic_key=condition_semantic_key,
-                weapon_slot="MELEE_OFF",
-                coat_damage_type=damage_type,
-                coat_duration=duration,
-                use_concentration=concentration,
-                template=True,
-            )
-        )
-    return _WeaponCoat(
-        source_entity_uuid=item_context.source_entity_uuid,
-        content_ref=item_context.requested_ref,
-        name=display_name,
-        use_action_templates=actions,
-        stack_id=stack_id,
-    )
-
-
-@item_factory(
-    pack_id="content.neurodragon",
-    content_id="consumable.weapon_coat.fire",
-    version=1,
-    parameters=EmptyConsumableParameters,
-    descriptor=_descriptor(
-        content_id="consumable.weapon_coat.fire",
-        display_name="Weapon Coat of Flame",
-        description="A single-use coating that adds 1d6 fire damage.",
-        group="weapon_coats",
-        visual_variant_key="fire",
-        sort_order=10,
-        tags=("fire", "weapon_coat"),
-    ),
-    provenance=_provenance("Weapon Coat of Flame"),
-    item_definition=_POSSESSION_ITEM_DEFINITION,
-    dependencies=_grants_action(_ApplyWeaponCoatAction),
-)
-def _build_fire_weapon_coat(
-    context: object,
-    parameters: EmptyConsumableParameters,
-) -> _WeaponCoat:
-    """Construct the permanent fire coat with main/off-hand actions."""
-    _ = parameters
-    return _weapon_coat(
-        context,
-        display_name="Weapon Coat of Flame",
-        damage_type=DamageType.FIRE,
-        semantic_key=FIRE_WEAPON_COAT_APPLY_SEMANTIC_KEY,
-        condition_semantic_key=FIRE_WEAPON_COAT_CONDITION_SEMANTIC_KEY,
-        stack_id="weapon_coat_fire",
-        include_off_hand=True,
-    )
-
-
-@item_factory(
-    pack_id="content.neurodragon",
-    content_id="consumable.weapon_coat.lightning",
-    version=1,
-    parameters=EmptyConsumableParameters,
-    descriptor=_descriptor(
-        content_id="consumable.weapon_coat.lightning",
-        display_name="Weapon Coat of Lightning",
-        description="A single-use coating that adds 1d6 lightning damage.",
-        group="weapon_coats",
-        visual_variant_key="lightning",
-        sort_order=20,
-        tags=("lightning", "weapon_coat"),
-    ),
-    provenance=_provenance("Weapon Coat of Lightning"),
-    item_definition=_POSSESSION_ITEM_DEFINITION,
-    dependencies=_grants_action(_ApplyWeaponCoatAction),
-)
-def _build_lightning_weapon_coat(
-    context: object,
-    parameters: EmptyConsumableParameters,
-) -> _WeaponCoat:
-    """Construct the permanent lightning coat with main/off-hand actions."""
-    _ = parameters
-    return _weapon_coat(
-        context,
-        display_name="Weapon Coat of Lightning",
-        damage_type=DamageType.LIGHTNING,
-        semantic_key=LIGHTNING_WEAPON_COAT_APPLY_SEMANTIC_KEY,
-        condition_semantic_key=(
-            LIGHTNING_WEAPON_COAT_CONDITION_SEMANTIC_KEY
-        ),
-        stack_id="weapon_coat_lightning",
-        include_off_hand=True,
-    )
-
-
-@item_factory(
-    pack_id="content.neurodragon",
-    content_id="consumable.weapon_coat.concentration_fire",
-    version=1,
-    parameters=EmptyConsumableParameters,
-    descriptor=_descriptor(
-        content_id="consumable.weapon_coat.concentration_fire",
-        display_name="Concentrated Weapon Coat of Flame",
-        description=(
-            "A single-use fire coating maintained by concentration."
-        ),
-        group="weapon_coats",
-        visual_variant_key="concentration_fire",
-        sort_order=30,
-        tags=("concentration", "fire", "weapon_coat"),
-    ),
-    provenance=_provenance("Concentrated Weapon Coat of Flame"),
-    item_definition=_POSSESSION_ITEM_DEFINITION,
-    dependencies=_grants_action(_ApplyWeaponCoatAction),
-)
-def _build_concentration_fire_weapon_coat(
-    context: object,
-    parameters: EmptyConsumableParameters,
-) -> _WeaponCoat:
-    """Construct the concentration-bound fire coat."""
-    _ = parameters
-    return _weapon_coat(
-        context,
-        display_name="Weapon Coat of Flame",
-        damage_type=DamageType.FIRE,
-        semantic_key=CONCENTRATION_FIRE_WEAPON_COAT_APPLY_SEMANTIC_KEY,
-        condition_semantic_key=(
-            CONCENTRATION_FIRE_WEAPON_COAT_CONDITION_SEMANTIC_KEY
-        ),
-        stack_id="weapon_coat_fire",
-        include_off_hand=False,
-        concentration=True,
-    )
-
-
-@item_factory(
-    pack_id="content.neurodragon",
-    content_id="consumable.weapon_coat.timed_fire",
-    version=1,
-    parameters=TimedWeaponCoatParameters,
-    descriptor=_descriptor(
-        content_id="consumable.weapon_coat.timed_fire",
-        display_name="Timed Weapon Coat of Flame",
-        description="A single-use fire coating lasting a fixed number of rounds.",
-        group="weapon_coats",
-        visual_variant_key="timed_fire",
-        sort_order=40,
-        tags=("fire", "timed", "weapon_coat"),
-    ),
-    provenance=_provenance("Timed Weapon Coat of Flame"),
-    item_definition=_POSSESSION_ITEM_DEFINITION,
-    dependencies=_grants_action(_ApplyWeaponCoatAction),
-)
-def _build_timed_fire_weapon_coat(
-    context: object,
-    parameters: TimedWeaponCoatParameters,
-) -> _WeaponCoat:
-    """Construct the round-limited fire coat."""
-    return _weapon_coat(
-        context,
-        display_name="Weapon Coat of Flame",
-        damage_type=DamageType.FIRE,
-        semantic_key=TIMED_FIRE_WEAPON_COAT_APPLY_SEMANTIC_KEY,
-        condition_semantic_key=(
-            TIMED_FIRE_WEAPON_COAT_CONDITION_SEMANTIC_KEY
-        ),
-        stack_id="weapon_coat_fire",
-        include_off_hand=False,
-        duration=parameters.rounds,
     )
 
 
@@ -1162,49 +844,6 @@ class _PotionOfGreaterInvisibility(UsableItem):
     )
 
 
-@item_factory(
-    pack_id="content.neurodragon",
-    content_id="consumable.potion_greater_invisibility",
-    version=1,
-    parameters=EmptyConsumableParameters,
-    descriptor=_descriptor(
-        content_id="consumable.potion_greater_invisibility",
-        display_name="Potion of Greater Invisibility",
-        description=(
-            "A single-use potion granting Greater Invisibility until its "
-            "maintenance check fails."
-        ),
-        group="potions",
-        visual_variant_key="greater_invisibility",
-        sort_order=20,
-        tags=("buff", "invisibility", "potion"),
-    ),
-    provenance=_provenance("Potion of Greater Invisibility"),
-    item_definition=_POSSESSION_ITEM_DEFINITION,
-    dependencies=_grants_action(
-        _DrinkGreaterInvisibilityPotionAction,
-    ),
-)
-def _build_potion_of_greater_invisibility(
-    context: object,
-    parameters: EmptyConsumableParameters,
-) -> _PotionOfGreaterInvisibility:
-    """Construct the canonical Greater Invisibility potion."""
-    _ = parameters
-    item_context = ItemBuildContext.model_validate(context)
-    action = _DrinkGreaterInvisibilityPotionAction(
-        source_entity_uuid=uuid4(),
-        source_item_uuid=uuid4(),
-        template=True,
-    )
-    return _PotionOfGreaterInvisibility(
-        source_entity_uuid=item_context.source_entity_uuid,
-        content_ref=item_context.requested_ref,
-        use_action_templates=[action],
-        stack_id="potion_of_greater_invisibility",
-    )
-
-
 @_consumable_action_identity(
     content_id="action.item.potion_haste.drink",
     display_name="Drink Haste Potion",
@@ -1324,130 +963,162 @@ class _PotionOfHaste(UsableItem):
     )
 
 
-@item_factory(
-    pack_id="content.neurodragon",
-    content_id="consumable.potion_haste",
-    version=1,
-    parameters=EmptyConsumableParameters,
-    descriptor=_descriptor(
-        content_id="consumable.potion_haste",
-        display_name="Potion of Haste",
-        description=(
-            "A single-use potion granting Haste for 10 rounds without "
-            "concentration."
-        ),
-        group="potions",
-        visual_variant_key="haste",
-        sort_order=30,
-        tags=("buff", "haste", "potion"),
-        icon_key="item.potion-of-haste",
-    ),
-    provenance=_provenance("Potion of Haste"),
-    item_definition=_POSSESSION_ITEM_DEFINITION,
-    dependencies=_grants_action(_DrinkHastePotionAction),
-)
-def _build_potion_of_haste(
-    context: object,
-    parameters: EmptyConsumableParameters,
-) -> _PotionOfHaste:
-    """Construct the canonical Haste potion."""
-    _ = parameters
-    item_context = ItemBuildContext.model_validate(context)
-    action = _DrinkHastePotionAction(
-        source_entity_uuid=uuid4(),
-        source_item_uuid=uuid4(),
-        template=True,
+def build_healing_potion(
+    source_entity_uuid: UUID,
+    *,
+    stack_count: int = 1,
+    heal_amount: int = 7,
+) -> UsableItem:
+    """Construct a healing-potion stack directly."""
+    if heal_amount < 0:
+        raise ValueError("healing potion heal_amount cannot be negative")
+    return _HealingPotion(
+        source_entity_uuid=source_entity_uuid,
+        item_id="consumable.healing_potion",
+        use_action_templates=[_DrinkHealingPotionAction(
+            source_entity_uuid=uuid4(),
+            source_item_uuid=uuid4(),
+            heal_amount=heal_amount,
+            template=True,
+        )],
+        stack_id=f"healing_potion_{heal_amount}",
+        stack_count=stack_count,
     )
+
+
+def build_haste_potion(source_entity_uuid: UUID) -> UsableItem:
+    """Construct one Haste potion directly."""
     return _PotionOfHaste(
-        source_entity_uuid=item_context.source_entity_uuid,
-        content_ref=item_context.requested_ref,
-        use_action_templates=[action],
+        source_entity_uuid=source_entity_uuid,
+        item_id="consumable.potion_haste",
+        use_action_templates=[_DrinkHastePotionAction(
+            source_entity_uuid=uuid4(),
+            source_item_uuid=uuid4(),
+            template=True,
+        )],
         stack_id="potion_of_haste",
     )
 
 
-HEALING_POTION_DECLARATION = get_content_declaration(_build_healing_potion)
-HEALING_POTION_REF = HEALING_POTION_DECLARATION.ref
-
-FIRE_WEAPON_COAT_DECLARATION = get_content_declaration(
-    _build_fire_weapon_coat,
-)
-FIRE_WEAPON_COAT_REF = FIRE_WEAPON_COAT_DECLARATION.ref
-
-LIGHTNING_WEAPON_COAT_DECLARATION = get_content_declaration(
-    _build_lightning_weapon_coat,
-)
-LIGHTNING_WEAPON_COAT_REF = LIGHTNING_WEAPON_COAT_DECLARATION.ref
-
-CONCENTRATION_FIRE_WEAPON_COAT_DECLARATION = get_content_declaration(
-    _build_concentration_fire_weapon_coat,
-)
-CONCENTRATION_FIRE_WEAPON_COAT_REF = (
-    CONCENTRATION_FIRE_WEAPON_COAT_DECLARATION.ref
-)
-
-TIMED_FIRE_WEAPON_COAT_DECLARATION = get_content_declaration(
-    _build_timed_fire_weapon_coat,
-)
-TIMED_FIRE_WEAPON_COAT_REF = TIMED_FIRE_WEAPON_COAT_DECLARATION.ref
-
-GREATER_INVISIBILITY_POTION_DECLARATION = get_content_declaration(
-    _build_potion_of_greater_invisibility,
-)
-GREATER_INVISIBILITY_POTION_REF = (
-    GREATER_INVISIBILITY_POTION_DECLARATION.ref
-)
-
-HASTE_POTION_DECLARATION = get_content_declaration(_build_potion_of_haste)
-HASTE_POTION_REF = HASTE_POTION_DECLARATION.ref
-
-
-def healing_potion_recipe(*, heal_amount: int = 7) -> ContentRecipe:
-    """Return an authenticated healing-potion recipe."""
-    return ContentRecipe.create(
-        ref=HEALING_POTION_REF,
-        parameters={"heal_amount": heal_amount},
+def build_greater_invisibility_potion(
+    source_entity_uuid: UUID,
+) -> UsableItem:
+    """Construct one Greater Invisibility potion directly."""
+    return _PotionOfGreaterInvisibility(
+        source_entity_uuid=source_entity_uuid,
+        item_id="consumable.potion_greater_invisibility",
+        use_action_templates=[_DrinkGreaterInvisibilityPotionAction(
+            source_entity_uuid=uuid4(),
+            source_item_uuid=uuid4(),
+            template=True,
+        )],
+        stack_id="potion_of_greater_invisibility",
     )
 
 
-def timed_fire_weapon_coat_recipe(*, rounds: int = 3) -> ContentRecipe:
-    """Return an authenticated timed-fire-coat recipe."""
-    return ContentRecipe.create(
-        ref=TIMED_FIRE_WEAPON_COAT_REF,
-        parameters={"rounds": rounds},
+def _build_direct_weapon_coat(
+    source_entity_uuid: UUID,
+    *,
+    item_id: str,
+    display_name: str,
+    damage_type: DamageType,
+    action_id: str,
+    condition_id: str,
+    stack_id: str,
+    include_off_hand: bool = True,
+    duration: Optional[int] = None,
+    concentration: bool = False,
+) -> UsableItem:
+    """Construct one weapon coating from explicit mechanical facts."""
+    actions = [_ApplyWeaponCoatAction(
+        source_entity_uuid=uuid4(),
+        source_item_uuid=uuid4(),
+        name="Coat Main Hand",
+        semantic_key=action_id,
+        condition_semantic_key=condition_id,
+        weapon_slot="MELEE_MAIN",
+        coat_damage_type=damage_type,
+        coat_duration=duration,
+        use_concentration=concentration,
+        template=True,
+    )]
+    if include_off_hand:
+        actions.append(_ApplyWeaponCoatAction(
+            source_entity_uuid=uuid4(),
+            source_item_uuid=uuid4(),
+            name="Coat Off Hand",
+            semantic_key=action_id,
+            condition_semantic_key=condition_id,
+            weapon_slot="MELEE_OFF",
+            coat_damage_type=damage_type,
+            coat_duration=duration,
+            use_concentration=concentration,
+            template=True,
+        ))
+    return _WeaponCoat(
+        source_entity_uuid=source_entity_uuid,
+        item_id=item_id,
+        name=display_name,
+        use_action_templates=actions,
+        stack_id=stack_id,
     )
 
 
-HEALING_POTION_RECIPE = healing_potion_recipe()
-FIRE_WEAPON_COAT_RECIPE = ContentRecipe.create(
-    ref=FIRE_WEAPON_COAT_REF,
-    parameters={},
-)
-LIGHTNING_WEAPON_COAT_RECIPE = ContentRecipe.create(
-    ref=LIGHTNING_WEAPON_COAT_REF,
-    parameters={},
-)
-CONCENTRATION_FIRE_WEAPON_COAT_RECIPE = ContentRecipe.create(
-    ref=CONCENTRATION_FIRE_WEAPON_COAT_REF,
-    parameters={},
-)
-TIMED_FIRE_WEAPON_COAT_RECIPE = timed_fire_weapon_coat_recipe()
-GREATER_INVISIBILITY_POTION_RECIPE = ContentRecipe.create(
-    ref=GREATER_INVISIBILITY_POTION_REF,
-    parameters={},
-)
-HASTE_POTION_RECIPE = ContentRecipe.create(
-    ref=HASTE_POTION_REF,
-    parameters={},
-)
+def build_fire_weapon_coat(source_entity_uuid: UUID) -> UsableItem:
+    return _build_direct_weapon_coat(
+        source_entity_uuid,
+        item_id="consumable.weapon_coat.fire",
+        display_name="Weapon Coat of Flame",
+        damage_type=DamageType.FIRE,
+        action_id=FIRE_WEAPON_COAT_APPLY_SEMANTIC_KEY,
+        condition_id=FIRE_WEAPON_COAT_CONDITION_SEMANTIC_KEY,
+        stack_id="weapon_coat_fire",
+    )
 
 
-NEURODRAGON_CONSUMABLE_DECLARATIONS: tuple[ContentDeclaration, ...] = (
-    HEALING_POTION_DECLARATION,
-    FIRE_WEAPON_COAT_DECLARATION,
-    LIGHTNING_WEAPON_COAT_DECLARATION,
-    CONCENTRATION_FIRE_WEAPON_COAT_DECLARATION,
-    TIMED_FIRE_WEAPON_COAT_DECLARATION,
-    GREATER_INVISIBILITY_POTION_DECLARATION,
-    HASTE_POTION_DECLARATION,
-)
+def build_lightning_weapon_coat(source_entity_uuid: UUID) -> UsableItem:
+    return _build_direct_weapon_coat(
+        source_entity_uuid,
+        item_id="consumable.weapon_coat.lightning",
+        display_name="Weapon Coat of Lightning",
+        damage_type=DamageType.LIGHTNING,
+        action_id=LIGHTNING_WEAPON_COAT_APPLY_SEMANTIC_KEY,
+        condition_id=LIGHTNING_WEAPON_COAT_CONDITION_SEMANTIC_KEY,
+        stack_id="weapon_coat_lightning",
+    )
+
+
+def build_concentration_fire_weapon_coat(
+    source_entity_uuid: UUID,
+) -> UsableItem:
+    return _build_direct_weapon_coat(
+        source_entity_uuid,
+        item_id="consumable.weapon_coat.concentration_fire",
+        display_name="Concentrated Weapon Coat of Flame",
+        damage_type=DamageType.FIRE,
+        action_id=CONCENTRATION_FIRE_WEAPON_COAT_APPLY_SEMANTIC_KEY,
+        condition_id=CONCENTRATION_FIRE_WEAPON_COAT_CONDITION_SEMANTIC_KEY,
+        stack_id="weapon_coat_fire",
+        include_off_hand=False,
+        concentration=True,
+    )
+
+
+def build_timed_fire_weapon_coat(
+    source_entity_uuid: UUID,
+    *,
+    rounds: int = 3,
+) -> UsableItem:
+    if rounds < 1:
+        raise ValueError("timed fire weapon coat rounds must be positive")
+    return _build_direct_weapon_coat(
+        source_entity_uuid,
+        item_id="consumable.weapon_coat.timed_fire",
+        display_name="Timed Weapon Coat of Flame",
+        damage_type=DamageType.FIRE,
+        action_id=TIMED_FIRE_WEAPON_COAT_APPLY_SEMANTIC_KEY,
+        condition_id=TIMED_FIRE_WEAPON_COAT_CONDITION_SEMANTIC_KEY,
+        stack_id="weapon_coat_fire",
+        include_off_hand=False,
+        duration=rounds,
+    )

@@ -24,7 +24,6 @@ from dnd.core.content.effects import (
     ConditionEffectCoverage,
 )
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
-from dnd.core.content.item_definitions import ItemDefinition
 from dnd.core.content.provenance import ContentProvenance
 from dnd.core.content.runtime import RuntimeBehaviorKind
 
@@ -195,7 +194,6 @@ class ContentDeclaration(BaseModel):
     descriptor: ContentDescriptor
     provenance: ContentProvenance
     runtime_behavior_kind: RuntimeBehaviorKind | None = None
-    item_definition: ItemDefinition | None = None
     definition_payload: SerializeAsAny[BaseModel] | None = None
     dependencies: tuple[ContentDependency, ...] = ()
     condition_effect_coverage: ConditionEffectCoverage = (
@@ -209,10 +207,6 @@ class ContentDeclaration(BaseModel):
     def _validate_bound_contract(self) -> "ContentDeclaration":
         if self.descriptor.ref != self.ref:
             raise ValueError("descriptor ref must match declaration ref")
-        item_owned_kind = self.ref.definition_kind in {
-            ContentDefinitionKind.ITEM,
-            ContentDefinitionKind.ENVIRONMENT_OBJECT,
-        }
         if self.mode == ContentDeclarationMode.FACTORY:
             if self.construction is None:
                 raise ValueError(
@@ -224,16 +218,6 @@ class ContentDeclaration(BaseModel):
                 runtime_behavior_kind=self.runtime_behavior_kind,
                 parameter_model=self.construction.parameter_model,
             )
-            if item_owned_kind and self.item_definition is None:
-                raise ValueError(
-                    "item and environment_object declarations require "
-                    "item_definition",
-                )
-            if not item_owned_kind and self.item_definition is not None:
-                raise ValueError(
-                    "item_definition is reserved for item and "
-                    "environment_object declarations",
-                )
             if self.definition_payload is not None:
                 raise ValueError(
                     "factory declaration cannot own typed definition",
@@ -246,10 +230,6 @@ class ContentDeclaration(BaseModel):
             if self.construction is not None:
                 raise ValueError(
                     "behavior_identity declaration cannot be constructible",
-                )
-            if self.item_definition is not None:
-                raise ValueError(
-                    "behavior_identity declaration cannot own item_definition",
                 )
             if self.runtime_behavior_kind is None:
                 raise ValueError(
@@ -277,7 +257,6 @@ class ContentDeclaration(BaseModel):
                 )
             if (
                 self.construction is not None
-                or self.item_definition is not None
                 or self.runtime_behavior_kind is not None
             ):
                 raise ValueError(
@@ -339,7 +318,6 @@ def content_factory(
     descriptor: ContentDescriptorSpec,
     provenance: ContentProvenance,
     runtime_behavior_kind: RuntimeBehaviorKind | None = None,
-    item_definition: ItemDefinition | None = None,
     dependencies: tuple[ContentDependency, ...] = (),
     condition_effect_profile: AuthoredConditionEffectProfile | None = None,
     condition_lifecycle: AuthoredConditionLifecycle | None = None,
@@ -370,7 +348,6 @@ def content_factory(
             descriptor=bound_descriptor,
             provenance=provenance,
             runtime_behavior_kind=runtime_behavior_kind,
-            item_definition=item_definition,
             dependencies=dependencies,
             condition_effect_coverage=(
                 ConditionEffectCoverage.PROFILED
@@ -531,60 +508,6 @@ def behavior_identity(
         return definition
 
     return decorate
-
-
-def item_factory(
-    *,
-    pack_id: str,
-    content_id: str,
-    version: int,
-    parameters: type[BaseModel],
-    descriptor: ContentDescriptorSpec,
-    provenance: ContentProvenance,
-    item_definition: ItemDefinition,
-    dependencies: tuple[ContentDependency, ...] = (),
-    condition_effect_profile: AuthoredConditionEffectProfile | None = None,
-) -> Callable[[_Factory], _Factory]:
-    """Declare an item reconstruction factory."""
-    return content_factory(
-        definition_kind=ContentDefinitionKind.ITEM,
-        pack_id=pack_id,
-        content_id=content_id,
-        version=version,
-        parameters=parameters,
-        descriptor=descriptor,
-        provenance=provenance,
-        item_definition=item_definition,
-        dependencies=dependencies,
-        condition_effect_profile=condition_effect_profile,
-    )
-
-
-def environment_object_factory(
-    *,
-    pack_id: str,
-    content_id: str,
-    version: int,
-    parameters: type[BaseModel],
-    descriptor: ContentDescriptorSpec,
-    provenance: ContentProvenance,
-    item_definition: ItemDefinition,
-    dependencies: tuple[ContentDependency, ...] = (),
-    condition_effect_profile: AuthoredConditionEffectProfile | None = None,
-) -> Callable[[_Factory], _Factory]:
-    """Declare a non-possession environment-object reconstruction factory."""
-    return content_factory(
-        definition_kind=ContentDefinitionKind.ENVIRONMENT_OBJECT,
-        pack_id=pack_id,
-        content_id=content_id,
-        version=version,
-        parameters=parameters,
-        descriptor=descriptor,
-        provenance=provenance,
-        item_definition=item_definition,
-        dependencies=dependencies,
-        condition_effect_profile=condition_effect_profile,
-    )
 
 
 def creature_factory(

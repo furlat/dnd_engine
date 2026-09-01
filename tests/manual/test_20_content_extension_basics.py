@@ -4,8 +4,6 @@ from uuid import uuid4
 
 from dnd.actions_functional import execute_by_index, get_available_actions
 from dnd.blocks.base_item import UsableItem
-from dnd.content_system.item_bindings import ItemRuntimeOrigin
-from dnd.content_system.item_materialization import materialize_item
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition, SpellProtectionRegistry
 from dnd.core.base_actions import (
@@ -20,34 +18,23 @@ from dnd.core.values import BaseValue
 from dnd.entity import Entity
 from dnd.extensions.field_focus import (
     DeployFieldFocus,
-    FIELD_KIT_RECIPE,
     FieldFocus,
-    field_kit_recipe,
+    build_field_kit,
 )
 from tests.manual.extension_scenario_support import (
+    create_goblin,
     create_field_medic,
     create_field_training_scene,
     find_action_info,
     find_item_action,
     inventory_item_named,
 )
-from dnd.monsters.bestiary import create_goblin
+from tests.engine.support import reset_combat_state
 
 
 def reset_content_extension_state(width: int = 8, height: int = 6) -> None:
     """Clear global state and create a small content-extension arena."""
-    EventQueue.reset()
-    EventQueue.set_combat_log_callback(None)
-    EventQueue.set_perceiver_computer(None)
-    EventQueue.set_revealed_computer(None)
-    SpellProtectionRegistry.reset()
-    BaseObject._registry.clear()
-    BaseBlock._registry.clear()
-    BaseCondition._registry.clear()
-    BaseValue._registry.clear()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
-    GridMap.reset()
+    reset_combat_state()
     get_map().create_rectangle(0, 0, width, height)
 
 
@@ -56,12 +43,7 @@ def _materialize_field_kit(
     *,
     charges: int = 1,
 ) -> UsableItem:
-    return materialize_item(
-        field_kit_recipe(charges=charges),
-        owner_uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=UsableItem,
-    )
+    return build_field_kit(owner_uuid, charges=charges)
 
 
 def test_content_pack_module_exposes_expected_surfaces(capsys) -> None:
@@ -77,8 +59,8 @@ def test_content_pack_module_exposes_expected_surfaces(capsys) -> None:
     assert action.name == "Deploy Field Focus"
     assert action.target_type == TargetType.SELF
     assert action.costs[0].cost_type == "bonus_actions"
-    assert FIELD_KIT_RECIPE.ref.content_id == "gear.field_kit"
-    assert callable(field_kit_recipe)
+    assert build_field_kit(source_uuid).item_id == "gear.field_kit"
+    assert callable(build_field_kit)
     assert callable(create_field_medic)
     assert callable(create_field_training_scene)
 
@@ -98,7 +80,7 @@ def test_content_pack_module_exposes_expected_surfaces(capsys) -> None:
         ),
         (
             "composition: "
-            f"kit_recipe={'yes' if callable(field_kit_recipe) else 'no'}, "
+            f"kit_builder={'yes' if callable(build_field_kit) else 'no'}, "
             f"medic={'yes' if callable(create_field_medic) else 'no'}, "
             f"scene={'yes' if callable(create_field_training_scene) else 'no'}"
         ),
@@ -106,7 +88,7 @@ def test_content_pack_module_exposes_expected_surfaces(capsys) -> None:
     expected_lines = [
         "module surfaces: condition=Field Focus, action=Deploy Field Focus, target=self, cost=bonus_actions",
         "condition defaults: movement=+10, armor=+1, field=Bonus feet of movement while focused.",
-        "composition: kit_recipe=yes, medic=yes, scene=yes",
+        "composition: kit_builder=yes, medic=yes, scene=yes",
     ]
 
     print("\n".join(readout_lines))

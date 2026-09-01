@@ -11,6 +11,7 @@ from dnd.core.creature_types import DamageType
 from dnd.entity import Entity, EntityConfig
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.spells.evocation import FireBolt, RayOfFrost
+from tests.engine.support import create_test_entity
 
 
 @pytest.fixture(autouse=True)
@@ -21,8 +22,8 @@ def _reset_engine() -> Iterator[None]:
 
 
 def _caster() -> Entity:
-    return Entity.create(
-        source_entity_uuid=uuid4(),
+    return create_test_entity(
+        source_id=uuid4(),
         name="Affinity Sorcerer",
         config=EntityConfig(
             ability_scores=AbilityScoresConfig(
@@ -35,8 +36,8 @@ def _caster() -> Entity:
 
 
 def _target(*, position: tuple[int, int] = (2, 1)) -> Entity:
-    return Entity.create(
-        source_entity_uuid=uuid4(),
+    return create_test_entity(
+        source_id=uuid4(),
         name="Target",
         config=EntityConfig(
             position=position,

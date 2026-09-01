@@ -6,12 +6,8 @@ Contains: CallLightning, PoisonSpray, AcidSplash, Grease, Web, Cloudkill,
 from typing import Any, Dict, Literal, Optional, List, Set, Tuple, cast as type_cast
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
+from pydantic import Field, PrivateAttr
 
-from dnd.content_system.item_bindings import ItemRuntimeOrigin
-from dnd.content_system.item_runtime_materialization import (
-    materialize_item_from_installed_runtime,
-)
 from dnd.core.base_actions import (
     ActionCategory,
     ActionEvent,
@@ -35,23 +31,13 @@ from dnd.core.base_actions import (
     TopologyEffectProfile,
 )
 from dnd.core.base_conditions import BaseCondition, Duration
-from dnd.core.content.dependencies import (
-    ContentDependency,
-    ContentDependencyPhase,
-    ContentDependencyRelation,
-)
 from dnd.core.content.descriptors import (
     ContentDescriptorSpec,
     ContentOrdering,
     ContentPresentation,
     ContentVisibility,
 )
-from dnd.core.content.item_definitions import (
-    ItemDefinition,
-    ItemPersistencePolicy,
-)
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
-from dnd.core.content.materialization import ItemBuildContext
 from dnd.core.content.spatial_effect_definitions import (
     SpatialEffectTransitionDefinition,
 )
@@ -61,12 +47,8 @@ from dnd.core.content.provenance import (
     ContentProvenanceRelation,
     ContentReviewStatus,
 )
-from dnd.core.content.recipes import ContentRecipe
 from dnd.core.content.registration import (
-    ContentDeclaration,
     behavior_identity,
-    environment_object_factory,
-    get_content_declaration,
 )
 from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.core.condition_types import (
@@ -4395,6 +4377,16 @@ class GuardianOfFaithObject(BaseItem):
     is_pickable: bool = Field(default=False, description="Whether guardian of faith object can be picked up as an item.")
 
 
+def build_guardian_of_faith_object(
+    source_entity_uuid: UUID,
+) -> GuardianOfFaithObject:
+    """Construct the private spell-owned guardian directly."""
+    return GuardianOfFaithObject(
+        source_entity_uuid=source_entity_uuid,
+        item_id="environment.spell_object.guardian_of_faith",
+    )
+
+
 GUARDIAN_OF_FAITH_ZONE_CONTENT_REF = ContentRef(
     pack_id="content.srd_5_1_cc",
     definition_kind=ContentDefinitionKind.CONDITION,
@@ -4559,12 +4551,7 @@ class GuardianOfFaith(SpellAction):
             status_message=f"{caster.name} summons a Guardian of Faith"
         )
 
-        guardian = materialize_item_from_installed_runtime(
-            GUARDIAN_OF_FAITH_OBJECT_RECIPE,
-            caster.uuid,
-            origin=ItemRuntimeOrigin.ENCOUNTER_ONLY,
-            expected_type=GuardianOfFaithObject,
-        )
+        guardian = build_guardian_of_faith_object(caster.uuid)
         guardian.place_on_grid(position)
         zone = GuardianOfFaithZone(
             source_entity_uuid=caster.uuid,
@@ -4786,6 +4773,17 @@ class HeroesFeastObject(UsableItem):
         ]
 
 
+def build_heroes_feast_object(
+    source_entity_uuid: UUID,
+) -> HeroesFeastObject:
+    """Construct the spell-created feast directly."""
+    return HeroesFeastObject(
+        source_entity_uuid=source_entity_uuid,
+        item_id="environment.spell_object.heroes_feast",
+        caster_uuid=source_entity_uuid,
+    )
+
+
 class HeroesFeast(SpellAction):
     """Heroes' Feast — 6th-level conjuration.
 
@@ -4826,168 +4824,9 @@ class HeroesFeast(SpellAction):
             status_message=f"{caster.name} conjures a Heroes' Feast"
         )
 
-        feast = materialize_item_from_installed_runtime(
-            HEROES_FEAST_OBJECT_RECIPE,
-            caster.uuid,
-            origin=ItemRuntimeOrigin.ENCOUNTER_ONLY,
-            expected_type=HeroesFeastObject,
-        )
+        feast = build_heroes_feast_object(caster.uuid)
         feast.place_on_grid(position)
 
         return effect_event.with_updates(
             status_message=f"A magnificent feast appears at {position}"
         )
-
-
-class SpellEnvironmentObjectParameters(BaseModel):
-    """Spell-created floor objects have no durable construction variants."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-
-_SPELL_ENVIRONMENT_OBJECT_DEFINITION = ItemDefinition(
-    persistence_policy=ItemPersistencePolicy.ENCOUNTER_ONLY,
-)
-
-
-def _spell_environment_descriptor(
-    *,
-    content_id: str,
-    display_name: str,
-    description: str,
-    visual_variant_key: str,
-    sort_order: int,
-) -> ContentDescriptorSpec:
-    """Build public, mechanics-free presentation for a spell-created object."""
-    return ContentDescriptorSpec(
-        display_name=display_name,
-        description=description,
-        tags=("environment", "spell", "srd", "summoned"),
-        visibility=ContentVisibility.PUBLIC,
-        presentation=ContentPresentation(
-            icon_key=content_id,
-            sprite_key=visual_variant_key,
-            visual_variant_key=visual_variant_key,
-            vfx_profile=content_id,
-            ui_group="environment.spell_objects",
-        ),
-        ordering=ContentOrdering(
-            sort_group="environment.spell_objects",
-            sort_order=sort_order,
-        ),
-    )
-
-
-def _spell_environment_provenance(
-    *,
-    display_name: str,
-    source_page: int,
-) -> ContentProvenance:
-    """Return reviewed SRD provenance for a spell-created floor object."""
-    return ContentProvenance(
-        primary_source_id="wotc.srd_5_1_cc",
-        source_anchor=(
-            f"SRD 5.1 (CC-BY-4.0), p. {source_page}, "
-            f"Spell Descriptions: {display_name}"
-        ),
-        relation=ContentProvenanceRelation.FAITHFUL_IMPLEMENTATION,
-        fidelity=ContentFidelity.PARTIAL,
-        review_status=ContentReviewStatus.REVIEWED,
-        notes=(
-            "Encounter-only floor object created by the owning spell; "
-            "existing mechanics preserved."
-        ),
-    )
-
-
-@environment_object_factory(
-    pack_id="content.srd_5_1_cc",
-    content_id="environment.spell_object.guardian_of_faith",
-    version=1,
-    parameters=SpellEnvironmentObjectParameters,
-    descriptor=_spell_environment_descriptor(
-        content_id="environment.spell_object.guardian_of_faith",
-        display_name="Guardian of Faith",
-        description="The spectral guardian created by Guardian of Faith.",
-        visual_variant_key="guardian_of_faith",
-        sort_order=10,
-    ),
-    provenance=_spell_environment_provenance(
-        display_name="Guardian of Faith",
-        source_page=150,
-    ),
-    item_definition=_SPELL_ENVIRONMENT_OBJECT_DEFINITION,
-)
-def _build_guardian_of_faith_object(
-    raw_context: object,
-    parameters: SpellEnvironmentObjectParameters,
-) -> GuardianOfFaithObject:
-    _ = parameters
-    context = ItemBuildContext.model_validate(raw_context)
-    return GuardianOfFaithObject(
-        source_entity_uuid=context.source_entity_uuid,
-        content_ref=context.requested_ref,
-    )
-
-
-@environment_object_factory(
-    pack_id="content.srd_5_1_cc",
-    content_id="environment.spell_object.heroes_feast",
-    version=1,
-    parameters=SpellEnvironmentObjectParameters,
-    descriptor=_spell_environment_descriptor(
-        content_id="environment.spell_object.heroes_feast",
-        display_name="Heroes' Feast",
-        description="The magnificent feast created by Heroes' Feast.",
-        visual_variant_key="heroes_feast",
-        sort_order=20,
-    ),
-    provenance=_spell_environment_provenance(
-        display_name="Heroes' Feast",
-        source_page=154,
-    ),
-    item_definition=_SPELL_ENVIRONMENT_OBJECT_DEFINITION,
-    dependencies=(
-        ContentDependency(
-            relation=ContentDependencyRelation.GRANTS_ACTION,
-            target_ref=get_content_declaration(EatFromFeast).ref,
-            phase=ContentDependencyPhase.RUNTIME_REFERENCE,
-        ),
-    ),
-)
-def _build_heroes_feast_object(
-    raw_context: object,
-    parameters: SpellEnvironmentObjectParameters,
-) -> HeroesFeastObject:
-    _ = parameters
-    context = ItemBuildContext.model_validate(raw_context)
-    return HeroesFeastObject(
-        source_entity_uuid=context.source_entity_uuid,
-        content_ref=context.requested_ref,
-        caster_uuid=context.source_entity_uuid,
-    )
-
-
-GUARDIAN_OF_FAITH_OBJECT_DECLARATION = get_content_declaration(
-    _build_guardian_of_faith_object,
-)
-HEROES_FEAST_OBJECT_DECLARATION = get_content_declaration(
-    _build_heroes_feast_object,
-)
-GUARDIAN_OF_FAITH_OBJECT_REF = GUARDIAN_OF_FAITH_OBJECT_DECLARATION.ref
-HEROES_FEAST_OBJECT_REF = HEROES_FEAST_OBJECT_DECLARATION.ref
-GUARDIAN_OF_FAITH_OBJECT_RECIPE = ContentRecipe.create(
-    ref=GUARDIAN_OF_FAITH_OBJECT_REF,
-    parameters={},
-)
-HEROES_FEAST_OBJECT_RECIPE = ContentRecipe.create(
-    ref=HEROES_FEAST_OBJECT_REF,
-    parameters={},
-)
-SRD_SPELL_ENVIRONMENT_OBJECT_DECLARATIONS: tuple[
-    ContentDeclaration,
-    ...,
-] = (
-    GUARDIAN_OF_FAITH_OBJECT_DECLARATION,
-    HEROES_FEAST_OBJECT_DECLARATION,
-)

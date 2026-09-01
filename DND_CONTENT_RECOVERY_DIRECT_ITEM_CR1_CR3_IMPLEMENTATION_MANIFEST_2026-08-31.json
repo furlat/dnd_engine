@@ -1,0 +1,937 @@
+{
+  "schema": "dnd.direct_item_cri.candidate_manifest.v1",
+  "base_revision": "205fd679fde51d5319d332f12ec241d7aecd93a6",
+  "scope": "entire active dirty checkout against the July reconstruction checkpoint; this manifest and the mutable implementation ledger are self-excluded",
+  "counts": {
+    "production": 92,
+    "tests": 84,
+    "documents": 8
+  },
+  "normalized_entry_sha256": "11f7c1ba60f90726e3ec76e94268712486e83fcac5f8b3f1041d01b3fcef4f92",
+  "production": [
+    {
+      "path": "dnd/actions.py",
+      "status": "M",
+      "sha256": "a6db23db060a694f84160215168c58e9e8b8859d3aecdb93d8588fd9e246ceb4"
+    },
+    {
+      "path": "dnd/analytics/game_summary.py",
+      "status": "M",
+      "sha256": "776b9af3c1bc07846444d970bfc0c6ed79e62627227724fb8987d03505f37d94"
+    },
+    {
+      "path": "dnd/blocks/base_item.py",
+      "status": "M",
+      "sha256": "9c6a7adea0d9def548cb889cae76cf46745d1feef2cf8dacfac12427d2e3515b"
+    },
+    {
+      "path": "dnd/blocks/creature_proficiencies.py",
+      "status": "M",
+      "sha256": "791b2ee48d01abad877b5999eb88ec2d78bb9da1d653c88faeb3a0689c658407"
+    },
+    {
+      "path": "dnd/blocks/equipment.py",
+      "status": "M",
+      "sha256": "7f6fddc05c0775dd6e2f46989ae61135bb6505dcb20f5c553d64cd32a111d078"
+    },
+    {
+      "path": "dnd/blocks/inventory.py",
+      "status": "M",
+      "sha256": "d8c7eb6a0aa70dc8f1d4ad16100dac4cd6654edc28e729b5265c3c670927e8ca"
+    },
+    {
+      "path": "dnd/classes/sorcerer_progression_definitions.py",
+      "status": "M",
+      "sha256": "be23a92e7bdbfb680e61f4054e261b041401c90aa1cec29804fc9429c73d2169"
+    },
+    {
+      "path": "dnd/classes/sorcerer_structural_feature_definitions.py",
+      "status": "M",
+      "sha256": "7a16b79175a9bc05ff4dae846efe43a0260efb5f9477432f36580defb4c312da"
+    },
+    {
+      "path": "dnd/classes/structural_feature_definitions.py",
+      "status": "M",
+      "sha256": "d4981f5627f5bc27be29a00ee21b91ffcda0b98a70c2e8ffeb2b4a3fce92559e"
+    },
+    {
+      "path": "dnd/conditions.py",
+      "status": "M",
+      "sha256": "b4e2d74cf2c867828bcc3d2d5d6aa27ae86ee3390d3d36e7d74c224571999899"
+    },
+    {
+      "path": "dnd/content/__init__.py",
+      "status": "??",
+      "sha256": "c0f4da4bb215d4e11461454e71023b146b4ad7456bd85dca42631d55d5de2bce"
+    },
+    {
+      "path": "dnd/content/items/__init__.py",
+      "status": "??",
+      "sha256": "033b154abc7caa801e76eda7f26ee0ac6b8f0a5d8fd84c2030e7c1762137d48a"
+    },
+    {
+      "path": "dnd/content/items/authored_item_builders.py",
+      "status": "??",
+      "sha256": "b6543c09f34d3ecfb2477da0d7235fe1c2640aa7b16bb6595e426610cc45134b"
+    },
+    {
+      "path": "dnd/content/items/authored_item_definitions.py",
+      "status": "??",
+      "sha256": "1b5f9b9639d9aa7f5410fb7f039600ee948be4077ae4ac744572a5ee229f2ac8"
+    },
+    {
+      "path": "dnd/content/items/environment_item_builders.py",
+      "status": "??",
+      "sha256": "6180fa036417eeacc1e6437d13786ad20bc1f2b42aa35166a7bd7579f90ff388"
+    },
+    {
+      "path": "dnd/content/items/item_loadouts.py",
+      "status": "??",
+      "sha256": "88a2518535c2538dff6d677b099e75803de9875f47f36b980fe871b93c40a923"
+    },
+    {
+      "path": "dnd/content_system/acolyte_starting_holdings.py",
+      "status": "M",
+      "sha256": "a804a9a1d4a9d90d3bee21f4042824332d92039dcb91cb3e635255d32239576d"
+    },
+    {
+      "path": "dnd/content_system/background_starting_holdings.py",
+      "status": "M",
+      "sha256": "fa0d17f7446d41238b1bce5e0d66760433f0a26c41216588813225e1079ec1f5"
+    },
+    {
+      "path": "dnd/content_system/barbarian_character_grant_appliers.py",
+      "status": "M",
+      "sha256": "be6347036fa5fc4a3c284ccf5b1825bf0ac1fd768f61400dfc97ed6a7b7f327a"
+    },
+    {
+      "path": "dnd/content_system/behavior_bindings.py",
+      "status": "M",
+      "sha256": "cc527940e43d271ef2f0b38cda9a2c4ba8cf2c3e18c0c437fafd1f93698cb63d"
+    },
+    {
+      "path": "dnd/content_system/bootstrap.py",
+      "status": "M",
+      "sha256": "ddce22d98d35fbcce32747454c3476e78a7acdd147273b4f400fb39d443e9ac4"
+    },
+    {
+      "path": "dnd/content_system/builtin_character_builds.py",
+      "status": "M",
+      "sha256": "c1ad02abbe462ffc2388182a0c4fd12a6449f53d055a2280c1956c0e864ba666"
+    },
+    {
+      "path": "dnd/content_system/builtin_inventory.py",
+      "status": "M",
+      "sha256": "8320549ed393e9233eac9803aadafdf2bb0a047e2f1f713b31f404352ac77dab"
+    },
+    {
+      "path": "dnd/content_system/character_build_validation.py",
+      "status": "M",
+      "sha256": "6d572e018df279dacaa6aa2b03dc9a664b4e19ef8d9014c301f2043d8304f399"
+    },
+    {
+      "path": "dnd/content_system/character_grant_applier_runtime.py",
+      "status": "M",
+      "sha256": "f696211418f71fb9504e313810b302c04f07b38fb5f2778c92abf0ede1abe0f1"
+    },
+    {
+      "path": "dnd/content_system/character_materialization.py",
+      "status": "M",
+      "sha256": "e7d439a61c2faf3456cfc1a4288954f128d2648b4ba27d3f004714dc7ad27f27"
+    },
+    {
+      "path": "dnd/content_system/condition_effect_population.py",
+      "status": "M",
+      "sha256": "17bf8bcd13d923837b99e73709de9b18393d1da2239595560e72d1bac57c7dd2"
+    },
+    {
+      "path": "dnd/content_system/creature_possessions.py",
+      "status": "M",
+      "sha256": "80631357588811f5414d99fcc8143049303312f13b593af59d790c696431e037"
+    },
+    {
+      "path": "dnd/content_system/dragonborn_character_grant_appliers.py",
+      "status": "M",
+      "sha256": "8ebaefa8b67c4cbe68629505d5e1cbf96d4f32b95437119d15d77906f4d68ccd"
+    },
+    {
+      "path": "dnd/content_system/extra_attack_character_grant_appliers.py",
+      "status": "M",
+      "sha256": "0177627347db5bd01fe09b9dfe1e50188cc2b14f1ea1114a092a85fb834f223d"
+    },
+    {
+      "path": "dnd/content_system/fighter_character_grant_appliers.py",
+      "status": "M",
+      "sha256": "8b9bfd29180a0c6a376a34b0a16e4b8e3bfaaf9f9b693b084e507e8f8ab467fe"
+    },
+    {
+      "path": "dnd/content_system/icon_bindings.py",
+      "status": "M",
+      "sha256": "ffe5233627c54be7d71aec210aac5c5ef4d364cf9c52687dcf72d9ec1248a557"
+    },
+    {
+      "path": "dnd/content_system/item_bindings.py",
+      "status": "D",
+      "sha256": null
+    },
+    {
+      "path": "dnd/content_system/item_materialization.py",
+      "status": "D",
+      "sha256": null
+    },
+    {
+      "path": "dnd/content_system/item_runtime_materialization.py",
+      "status": "D",
+      "sha256": null
+    },
+    {
+      "path": "dnd/content_system/origin_feature_definitions.py",
+      "status": "M",
+      "sha256": "8cbb5aa2344402887cfadc6c04d115f0cff01a43df775d3e99b6afd634fdaf20"
+    },
+    {
+      "path": "dnd/content_system/origin_innate_spellcasting.py",
+      "status": "M",
+      "sha256": "2e9147489b0bffe3a522fafab803da3a2487cd383088683facfe6ce127b7b8be"
+    },
+    {
+      "path": "dnd/content_system/origin_runtime_character_grant_appliers.py",
+      "status": "M",
+      "sha256": "3e4aeae1c3c73866aeb87f8544731b199229552c254eead1f2f9403512298fab"
+    },
+    {
+      "path": "dnd/content_system/pack_loader.py",
+      "status": "M",
+      "sha256": "f6c24437b153e530ab7eea9a9589a1c0837ba8f7ff71d2906efda5a1c1eee3a9"
+    },
+    {
+      "path": "dnd/content_system/reaction_definitions.py",
+      "status": "M",
+      "sha256": "c622d1300dc5d031faa690481c1576d4db1a8033325e492792b50e81e517d79b"
+    },
+    {
+      "path": "dnd/content_system/runtime.py",
+      "status": "M",
+      "sha256": "bc6184811f5351f2b0495519169ca81c922cada80f2384595f7a957e5bfc3ae1"
+    },
+    {
+      "path": "dnd/content_system/starting_apparel_definitions.py",
+      "status": "M",
+      "sha256": "a4c69bf0419cf1e93f9d536fc63477629151c6cf42f9e40c3515d20f59b5a90f"
+    },
+    {
+      "path": "dnd/content_system/starting_equipment_definitions.py",
+      "status": "M",
+      "sha256": "7da8c8ddbbe2e1858da870117e973fefcbcd97359b857db39525cc3caaef7d39"
+    },
+    {
+      "path": "dnd/core/base_actions.py",
+      "status": "M",
+      "sha256": "55b1e90eff3f4e90aba4b83b47b2cc70fad08058ac415e78dc74369bb44b4f53"
+    },
+    {
+      "path": "dnd/core/base_block.py",
+      "status": "M",
+      "sha256": "832927a3aee03b6edff4aad35ac8089f2fd184c514dc3cf460b2e1a91f61604d"
+    },
+    {
+      "path": "dnd/core/base_conditions.py",
+      "status": "M",
+      "sha256": "26dcd28dcb67d5ebafe4a4d7443383f8a5ce7c9c8c60f8e05e5002f31872426a"
+    },
+    {
+      "path": "dnd/core/content/durable_characters.py",
+      "status": "M",
+      "sha256": "a5db2ddd84897a90d7c66588686143317e45c30b8c30fbaa6e76022d1ac3e138"
+    },
+    {
+      "path": "dnd/core/content/effects.py",
+      "status": "M",
+      "sha256": "e2d6ffc0ddb6084b08723c403ff5cc13c5f3bddb712d26722bbebd23f3e65633"
+    },
+    {
+      "path": "dnd/core/content/encounters.py",
+      "status": "M",
+      "sha256": "3c7302edbf8b5ccdff701a3d4896c53fb46b5d7f951a9efa834659e54ede8080"
+    },
+    {
+      "path": "dnd/core/content/icon_bindings_generated.py",
+      "status": "M",
+      "sha256": "d5d4f2c07c3dfdc55d0a4899737710ae10c6c4da258987c5fb807869bc98717e"
+    },
+    {
+      "path": "dnd/core/content/item_definitions.py",
+      "status": "D",
+      "sha256": null
+    },
+    {
+      "path": "dnd/core/content/materialization.py",
+      "status": "M",
+      "sha256": "47720820b71bc27fd740fbd9c0a37c6ae566d6297912b64f60e9a2f7cf329058"
+    },
+    {
+      "path": "dnd/core/content/premade_characters.py",
+      "status": "M",
+      "sha256": "8355a10453e073e06de19f0bd5f59eae0b833a01ae5255c0aa1b6574f01c82cd"
+    },
+    {
+      "path": "dnd/core/content/registration.py",
+      "status": "M",
+      "sha256": "338d8c4fdfc49a5b48bc345afcd1a0d24fa0f2421576e7a85539130cffe03137"
+    },
+    {
+      "path": "dnd/core/content/runtime.py",
+      "status": "M",
+      "sha256": "9b8fb9e1ea9cbadb374320e2c9489c622ba288417cb7acd2b8610021c301790f"
+    },
+    {
+      "path": "dnd/core/content/starting_equipment.py",
+      "status": "M",
+      "sha256": "b6c3ab4c79285b367ea16517faab6c334f8a8f91f0b9a5f9f8673cc00697fc28"
+    },
+    {
+      "path": "dnd/core/events.py",
+      "status": "M",
+      "sha256": "c4f89c51633098f14f4d27d3a01ed9413de6938b07bbf5befd0bf66ff3c10c63"
+    },
+    {
+      "path": "dnd/core/item_types.py",
+      "status": "M",
+      "sha256": "aa1c3fbdaf2cc4a174bbfdf82df3e7d2f9d8888567eee7e78fdc1c29f016003d"
+    },
+    {
+      "path": "dnd/core/saving_throw_types.py",
+      "status": "M",
+      "sha256": "4977cb0f3bda0839ab93f0bac0d6a4a700216302ec18939ea369bef3d0140c4b"
+    },
+    {
+      "path": "dnd/core/spell_execution.py",
+      "status": "M",
+      "sha256": "dbb6e2cf06a7ffa9a452752bfbe5fb64e21d3b2d868bc0226bdd70d27cb199dc"
+    },
+    {
+      "path": "dnd/entity.py",
+      "status": "M",
+      "sha256": "86b9d69bbd6329159a4da554af72b2168fdb52c19b2551023bbbc19515159ec8"
+    },
+    {
+      "path": "dnd/extensions/field_focus.py",
+      "status": "M",
+      "sha256": "08eb12f503db92ef64430a1d4139c2baf52b410edbdbcef0de0a61bc9f05e132"
+    },
+    {
+      "path": "dnd/items/acolyte_gear.py",
+      "status": "D",
+      "sha256": null
+    },
+    {
+      "path": "dnd/items/apparel_presets.py",
+      "status": "D",
+      "sha256": null
+    },
+    {
+      "path": "dnd/items/armors.py",
+      "status": "D",
+      "sha256": null
+    },
+    {
+      "path": "dnd/items/authored_presentations.py",
+      "status": "D",
+      "sha256": null
+    },
+    {
+      "path": "dnd/items/authored_variant_presets.py",
+      "status": "D",
+      "sha256": null
+    },
+    {
+      "path": "dnd/items/consumables.py",
+      "status": "M",
+      "sha256": "7c0e401c995aff0ccb9de2df27b1153a310b65079b22975b32acc726f97c47f2"
+    },
+    {
+      "path": "dnd/items/environment_content.py",
+      "status": "D",
+      "sha256": null
+    },
+    {
+      "path": "dnd/items/spell_items.py",
+      "status": "M",
+      "sha256": "c0dbe0a8b5c275c1bc43776226e36811fb4fd528e7fc3174075e3c1e222da998"
+    },
+    {
+      "path": "dnd/items/torches.py",
+      "status": "M",
+      "sha256": "7063c90ba06555be558f8981169337d5d828bc3c8f67bae31a00f1e9a5e7cb05"
+    },
+    {
+      "path": "dnd/items/weapons.py",
+      "status": "D",
+      "sha256": null
+    },
+    {
+      "path": "dnd/maps/arena_layout.py",
+      "status": "M",
+      "sha256": "99fa08237ee5e42ad22537ec369f01e127b9fb6e1d949f057e76f164d2c90893"
+    },
+    {
+      "path": "dnd/monsters/bestiary.py",
+      "status": "M",
+      "sha256": "2749174e69c09f21e90e8649c043e754a27c146e353004e3a03502f9abf29380"
+    },
+    {
+      "path": "dnd/monsters/bestiary_content.py",
+      "status": "M",
+      "sha256": "4133d43c275a692b997c5c3513fc350f32e0da6794b83ee2d2d4bdb9d918d9bc"
+    },
+    {
+      "path": "dnd/monsters/bestiary_items.py",
+      "status": "D",
+      "sha256": null
+    },
+    {
+      "path": "dnd/monsters/circus_fighter.py",
+      "status": "M",
+      "sha256": "dae5a8c0440bd2e95e5b4e20eb5798c03bb28cb73fbd532818d5478fbc3ef559"
+    },
+    {
+      "path": "dnd/monsters/circus_fighter_items.py",
+      "status": "D",
+      "sha256": null
+    },
+    {
+      "path": "dnd/monsters/configured_srd_creatures.py",
+      "status": "M",
+      "sha256": "be5ba39f0a7dc3cde5fd0d989677923d82258119e00f5462cb653a1052da78f6"
+    },
+    {
+      "path": "dnd/monsters/srd_roster.py",
+      "status": "M",
+      "sha256": "976c066dd73ac3417d5d6081c1a9b5472796ee81fb5facf11f257e93d2fe71bb"
+    },
+    {
+      "path": "dnd/monsters/srd_roster_items.py",
+      "status": "D",
+      "sha256": null
+    },
+    {
+      "path": "dnd/origins/dragonborn.py",
+      "status": "M",
+      "sha256": "c8468d498bc8cb0312965eb8139496c683287b3ca7c5dd5fc4121195d96e5432"
+    },
+    {
+      "path": "dnd/player_character_body.py",
+      "status": "M",
+      "sha256": "3510b37d8905574c73a7fb4bcca8b98aae3c4e1622450449077c29217cda1ed7"
+    },
+    {
+      "path": "dnd/runtime_reset.py",
+      "status": "M",
+      "sha256": "db19934bd89cacdeb7a3c83a9140ee930df15340d96be96185bdf37bbff052ac"
+    },
+    {
+      "path": "dnd/scenarios/authored_catalog.json",
+      "status": "M",
+      "sha256": "0bbc3d910cd19d227f5fb32fc4cf6c3b5c445572c5b2f7bbb6e71a5e45af54f6"
+    },
+    {
+      "path": "dnd/scenarios/battlefield_catalog.py",
+      "status": "M",
+      "sha256": "7d24c0a2f2755ad5b7de69886560134cd65cb577b2367742a580ad195410003e"
+    },
+    {
+      "path": "dnd/scenarios/encounter_assembler.py",
+      "status": "M",
+      "sha256": "e8d3eb0a37db199d954ccc14e436a2b9e0bc1ff8fe7f4b884a31a94d5aee66b8"
+    },
+    {
+      "path": "dnd/spells/abjuration.py",
+      "status": "M",
+      "sha256": "ef83f7eb61bf1c55d4ddaea39d685c8e09b7b2dc9f05cc8a5d7ca0b7a8ac68a5"
+    },
+    {
+      "path": "dnd/spells/catalog_content.py",
+      "status": "M",
+      "sha256": "4bb236ed97008df961d5ea7a1b52543bc4b62087b8c17c27ad2efbca095135f9"
+    },
+    {
+      "path": "dnd/spells/conjuration.py",
+      "status": "M",
+      "sha256": "ae88994c87d0b4e1d51f51a8dde91b59d32b7080405bc3bc2119e44f09a581bb"
+    },
+    {
+      "path": "dnd/spells/infernal.py",
+      "status": "M",
+      "sha256": "a9d8690c86e52e1a2f6ae6ee7ae18f4c3d12968f40eacc3130b59e58fdb1e393"
+    },
+    {
+      "path": "dnd/spells/reaction_spell_content.py",
+      "status": "M",
+      "sha256": "7173fcdc4c24811d7624eb8da449ba34b2e739673d0c06901436f52c9fe8217d"
+    }
+  ],
+  "tests": [
+    {
+      "path": "tests/architecture/test_content_recovery_cr0_evidence.py",
+      "status": "??",
+      "sha256": "15d5b4e0424cb1f29613365267381bc64f78a494dc0126499715b2e0e95f08d4"
+    },
+    {
+      "path": "tests/architecture/test_content_recovery_cri_direct_items.py",
+      "status": "??",
+      "sha256": "659d1355b378fbe5d9de5d1bcc2cab3746afb096148eb4612cb1339b60bd82d4"
+    },
+    {
+      "path": "tests/content_identity.py",
+      "status": "M",
+      "sha256": "79422fd5f443da95e70cf437348f2cb105f8a5cd7290d66ca3c4b422ab19fef6"
+    },
+    {
+      "path": "tests/engine/test_action_discovery.py",
+      "status": "M",
+      "sha256": "c7033a192a01523a18256cb9530fd0dba9938f022030a743cd9424caef093443"
+    },
+    {
+      "path": "tests/engine/test_cold_presentation_facts.py",
+      "status": "M",
+      "sha256": "cdd664990ea1d8a2ec19f7dd71fd18a9855368d346cc861adc09467ad2dea04f"
+    },
+    {
+      "path": "tests/engine/test_condition_lifecycle.py",
+      "status": "M",
+      "sha256": "152891598873a20e6f5426e345e23341d517022a8f92d03300ea99fd5adc1957"
+    },
+    {
+      "path": "tests/engine/test_content_recovery_behavior_semantics.py",
+      "status": "??",
+      "sha256": "4f0428f5d7451e4bab7f195821a03ad7c0626a7278a946e386f7c78daff41486"
+    },
+    {
+      "path": "tests/engine/test_content_recovery_item_semantics.py",
+      "status": "??",
+      "sha256": "d18c2e5bfe4db977f10079a60aee2efa4f445f7acfc4a456d30914974593165d"
+    },
+    {
+      "path": "tests/engine/test_dice_event_semantics.py",
+      "status": "M",
+      "sha256": "2ef16dd52275987b043d852f46c0ade1ca89e1474ab36999e353acf13bd7da99"
+    },
+    {
+      "path": "tests/engine/test_direct_item_runtime.py",
+      "status": "??",
+      "sha256": "cb6ee3d5909af3ea92835b131808d401c9e986068d802dabc9f7ec1068dbf40b"
+    },
+    {
+      "path": "tests/engine/test_entity_composition.py",
+      "status": "M",
+      "sha256": "97782a0cead04c3cec765f00f3b2a1b28676efa4737e38ed2d7deb8b94c786ee"
+    },
+    {
+      "path": "tests/engine/test_equipment_domain_ownership.py",
+      "status": "M",
+      "sha256": "f482f61d951dbdd570f08cd89fcbd821c75ecfb0337edd41943e51b71df41ca4"
+    },
+    {
+      "path": "tests/engine/test_equipment_replication_facts.py",
+      "status": "M",
+      "sha256": "e77356feed17e964be09344d7e4900dec72b519fbfbc4b383e89f29021e9cea4"
+    },
+    {
+      "path": "tests/engine/test_items_inventory_equipment.py",
+      "status": "M",
+      "sha256": "8dada440644991be8ee68403b9bf3f8a882ce560989f5ed9beaeda8999c6f05b"
+    },
+    {
+      "path": "tests/engine/test_manual_14_core_combat_flow.py",
+      "status": "M",
+      "sha256": "03deead35931281350b395dfa04e1ab817af64abc93dcd100d6033ba3fa4fc6e"
+    },
+    {
+      "path": "tests/engine/test_monster_presets.py",
+      "status": "M",
+      "sha256": "57e9a28dbec2db7260447266a8488ee008a92ed10df4b3d780537f444a457d8e"
+    },
+    {
+      "path": "tests/engine/test_runtime_reset.py",
+      "status": "M",
+      "sha256": "aef1f667551ff8ef6f9dcc8aef32104bbd78b5142fbcae8e27fc5a8f3f1c1b73"
+    },
+    {
+      "path": "tests/engine/test_spatial_conditions.py",
+      "status": "M",
+      "sha256": "54821333489fc0cd8d84370fd33c275adac934a0ff80a69ebb1c1af80c0ba032"
+    },
+    {
+      "path": "tests/engine/test_spell_families.py",
+      "status": "M",
+      "sha256": "3b8867cddae1e652cb5cda16594c90aa0662ad46e0b1b94bc590db97f6c33f3d"
+    },
+    {
+      "path": "tests/engine/test_world_entity_initialization.py",
+      "status": "M",
+      "sha256": "6a015a25c2d10da8831014332d3b8c712f39888fe1dc37d9c77579dd1752a1dc"
+    },
+    {
+      "path": "tests/engine/test_world_geometry_contract.py",
+      "status": "M",
+      "sha256": "eaabbdf35432cf762ed74440d2e48b48c420e9628735615866e045f2cf232c54"
+    },
+    {
+      "path": "tests/manual/extension_scenario_support.py",
+      "status": "M",
+      "sha256": "d86cc0a2245267c822901819a8286f4a534a7978657056f2fb8e5a0f5faf8a55"
+    },
+    {
+      "path": "tests/manual/test_09_action_discovery_and_costs.py",
+      "status": "M",
+      "sha256": "d47452b1063e7e375a768d405320e85d39c95a8113d3a93f56b698306f5ce67d"
+    },
+    {
+      "path": "tests/manual/test_11_equipment_inventory_and_items.py",
+      "status": "M",
+      "sha256": "b034eb36f6eb7c00bf858b9b14c5feaeefe7abe24ca31232ab55727b95309be3"
+    },
+    {
+      "path": "tests/manual/test_125_haste_restricted_action.py",
+      "status": "M",
+      "sha256": "9f586bf6fea1ba3a275a8815c749269649c980eb571fd0a2a63a01db5fa5bcb1"
+    },
+    {
+      "path": "tests/manual/test_126_slow_legacy_contract.py",
+      "status": "M",
+      "sha256": "b4fce9e3c8e9870be44661f3b543a75d3b1f6622921593dc7c6dd874a2aaac26"
+    },
+    {
+      "path": "tests/manual/test_131_advanced_item_world_legacy_contract.py",
+      "status": "M",
+      "sha256": "d90c3fe4d3fff0acb9bd22735a46ca4249c46e2afbd961e179530b4c9c01b68c"
+    },
+    {
+      "path": "tests/manual/test_131_inventory_use_actions_legacy_contract.py",
+      "status": "M",
+      "sha256": "c89bc21f8cc6b5ce6f32eead78dd18e3e5d90a3ec5bd93bb1e18b92b3b6b28a4"
+    },
+    {
+      "path": "tests/manual/test_132_barbarian_unarmored_defense.py",
+      "status": "M",
+      "sha256": "83e07d7a81044161bac3a7b69c3c15ebaea180b21b9d91820fddaa225d0a5bb9"
+    },
+    {
+      "path": "tests/manual/test_133_new_spells_batch4_legacy_contract.py",
+      "status": "M",
+      "sha256": "856610f488ce6e4fee0ecd442d86f0b6f8dd82ac13545875d18e0decc12bf7c7"
+    },
+    {
+      "path": "tests/manual/test_134_cleric_batch1_legacy_contract.py",
+      "status": "M",
+      "sha256": "85aaca7e912bf8c1d55710a1e80c3de0b64df95748307b95c64c8345d8d62fa4"
+    },
+    {
+      "path": "tests/manual/test_134_stackable_usable_item_legacy_contract.py",
+      "status": "M",
+      "sha256": "ad96a13dd91d37657138d97b21dabcf6e2e5f50ad67f6b1b5f44b4c9ef71c40f"
+    },
+    {
+      "path": "tests/manual/test_135_cleric_batches_2_4_5_legacy_contract.py",
+      "status": "M",
+      "sha256": "bdcab29b8c3dae1260afe0c168118ff03a6a6ac5bcb361c97ebe46e7884086f4"
+    },
+    {
+      "path": "tests/manual/test_135_stealth_lighting_legacy_contract.py",
+      "status": "M",
+      "sha256": "dc12e81b815b025f6660801f2b93a9d4fea6f1e96e9f1fa3f42bfe8358b9cedf"
+    },
+    {
+      "path": "tests/manual/test_142_item_equip_hooks_legacy_contract.py",
+      "status": "M",
+      "sha256": "a33a06cd83584d472629699ae4ffecc5784b2222b3fb10b8db5de3c99c409987"
+    },
+    {
+      "path": "tests/manual/test_144_handler_toggle_legacy_contract.py",
+      "status": "M",
+      "sha256": "84e6230785204010766062d15478f82074584cf556756e8fa3c016d962c24606"
+    },
+    {
+      "path": "tests/manual/test_145_haste_legacy_manifest.py",
+      "status": "M",
+      "sha256": "9ece42d752d6c8b514cf919000ab60dc5c0f05987876d6af26ff13eb799e0bea"
+    },
+    {
+      "path": "tests/manual/test_151_native_ai_execution.py",
+      "status": "M",
+      "sha256": "bc39f256ee762a486622b9a0fbc26b074a7dd481dc81a64eb75ae9e7b647dc8d"
+    },
+    {
+      "path": "tests/manual/test_154_content_system_contracts.py",
+      "status": "M",
+      "sha256": "38516164ac481746f0d3469132e7ca1e7f32d26860b6ca92b07d3d411391c7fe"
+    },
+    {
+      "path": "tests/manual/test_165_item_content_identity.py",
+      "status": "D",
+      "sha256": null
+    },
+    {
+      "path": "tests/manual/test_167_item_runtime_bindings.py",
+      "status": "D",
+      "sha256": null
+    },
+    {
+      "path": "tests/manual/test_167_srd_weapon_content_factories.py",
+      "status": "D",
+      "sha256": null
+    },
+    {
+      "path": "tests/manual/test_169_neurodragon_weapon_content_factories.py",
+      "status": "M",
+      "sha256": "2aeee175593ec4eb4a3b396c9c18443cf5d43546616ee7094ac19f3abaf516b2"
+    },
+    {
+      "path": "tests/manual/test_170_neurodragon_consumable_content_factories.py",
+      "status": "M",
+      "sha256": "34daf051a0cbc5a84220911d3384651e4f03bcc7d5c13d2d1f7edecb6d3f0652"
+    },
+    {
+      "path": "tests/manual/test_172_behavior_runtime_binding.py",
+      "status": "M",
+      "sha256": "a44d083206d116ba1cd9ad25fd8d2126ce72dddb5716052503b3ba7548b4d9ff"
+    },
+    {
+      "path": "tests/manual/test_173_character_revision_repository.py",
+      "status": "M",
+      "sha256": "ef3fc64b19674424d59f24e9dcf65ba28d08d88a896b2c1a64c489fc6c18c4ee"
+    },
+    {
+      "path": "tests/manual/test_178_remaining_possession_item_roots.py",
+      "status": "M",
+      "sha256": "22e60d2fe857716bcb876dee53f31d154f95686bd3ab655c65227deba382465a"
+    },
+    {
+      "path": "tests/manual/test_180_srd_creature_possession_bindings.py",
+      "status": "M",
+      "sha256": "974ab0e06f4c2483efc00dc0d91fa897fdaa212b952a10e76e36f81f2675ef49"
+    },
+    {
+      "path": "tests/manual/test_183_content_icon_bindings.py",
+      "status": "M",
+      "sha256": "4eb9f2c8ee0ef52405fdd949f86bafff36bd27af6f19ca7ca2ade8d0ead9c9a2"
+    },
+    {
+      "path": "tests/manual/test_20_content_extension_basics.py",
+      "status": "M",
+      "sha256": "befa1d1d374620ac555488b7fb6b7dcd7c9ad13fa19f51efe63bb23f1c7c3d02"
+    },
+    {
+      "path": "tests/manual/test_31_subjective_runtime_epochs.py",
+      "status": "M",
+      "sha256": "53adbf825671fa2ba76066e36bbe434928d4df0199dd042c9934979ce5437860"
+    },
+    {
+      "path": "tests/manual/test_42_action_semantics.py",
+      "status": "M",
+      "sha256": "e8280382231fe151f424c529a38881518e489a79989e39b625070006a9c17133"
+    },
+    {
+      "path": "tests/manual/test_45_policy_routines.py",
+      "status": "M",
+      "sha256": "1d646a8b0c45d9a789aefff3d713a4a6013fda6dca166e615579a40fab84255c"
+    },
+    {
+      "path": "tests/manual/test_71_authored_roster_catalog.py",
+      "status": "M",
+      "sha256": "acfb53449b3fb8c5d6eb4ed11e70e6522965da385afd69a0990ba5217a96cfa7"
+    },
+    {
+      "path": "tests/manual/test_84_generic_roster_duels.py",
+      "status": "M",
+      "sha256": "4e5ef23c33dacd1bac29f7d4b2f9ac34508f2004cf71e16b40efdb902c20421c"
+    },
+    {
+      "path": "tests/manual/test_durable_character_revision_contracts.py",
+      "status": "D",
+      "sha256": null
+    },
+    {
+      "path": "tests/manual/test_legacy_reactive_reaction_coverage.py",
+      "status": "M",
+      "sha256": "d7e901de36d86ad6ae7a6efd962d98fab65fcfd3127ca2cf8686e1287e1ef1eb"
+    },
+    {
+      "path": "tests/manual/test_neurodragon_apparel_content_factories.py",
+      "status": "D",
+      "sha256": null
+    },
+    {
+      "path": "tests/manual/test_neurodragon_spell_item_content_factories.py",
+      "status": "M",
+      "sha256": "4c5f32b9335c0c45ad8534348283bd193b4a3f7c6c1adfa651288ee8bd87602e"
+    },
+    {
+      "path": "tests/manual/test_premade_character_content.py",
+      "status": "M",
+      "sha256": "e2a57fab39c78566d0138bf25cd4d46e4cbdd62558174ed907eb25cc915267c6"
+    },
+    {
+      "path": "tests/manual/test_protection_reaction_legacy_contract.py",
+      "status": "M",
+      "sha256": "fe9ab211fc46b18a77d254f72029860edd5129b5cc3d9209cb844ce252d977fc"
+    },
+    {
+      "path": "tests/manual/test_remaining_creature_content_factories.py",
+      "status": "M",
+      "sha256": "aa3ee633e1495f3fc76c73a3fa097e87a68945ea00d7a503e7fd8853a62eddd9"
+    },
+    {
+      "path": "tests/manual/test_remaining_spell_legacy_contract.py",
+      "status": "M",
+      "sha256": "c7fd6c64c98e0cdf664071ba31ceaa2a462ad82fe1896d6ce9013fa8e6749176"
+    },
+    {
+      "path": "tests/manual/test_srd_creature_content_factories.py",
+      "status": "M",
+      "sha256": "7e8cf73744f796b288f157c62372024152abe861511e6ed90373c872e8f94cd6"
+    },
+    {
+      "path": "tests/progression/test_barbarian_berserker_materialization.py",
+      "status": "M",
+      "sha256": "35389945b3f8d02afcbe4403dfb78da94111904e2ac458e944ccb84cfbfed0cc"
+    },
+    {
+      "path": "tests/progression/test_barbarian_character_grant_appliers.py",
+      "status": "M",
+      "sha256": "91b95eca1993466a64eb6bd49dd30879f99d675e1d1ccc18fdacbb083a40f8ab"
+    },
+    {
+      "path": "tests/progression/test_content_recovery_character_semantics.py",
+      "status": "??",
+      "sha256": "6132d9665b7b8e38f31e7e4c076264aef9172742ef3c66c3b7eb1a3bec7c5f02"
+    },
+    {
+      "path": "tests/progression/test_direct_item_durable_and_proficiency.py",
+      "status": "??",
+      "sha256": "bbdd3c365cab9d7f77a8d5c0c36d64262e93748bf792bf918e186cae97a50bcf"
+    },
+    {
+      "path": "tests/progression/test_dwarf_acolyte_authored_content.py",
+      "status": "M",
+      "sha256": "16556644aa183fa4351377062e0c5f9f446661c7dcf2bcbc2620a8bffbe59a71"
+    },
+    {
+      "path": "tests/progression/test_fighter_champion_materialization.py",
+      "status": "M",
+      "sha256": "c4eb5e65080b26fb486abe7bd8ce8bc821ecb8e8fd6bc40ee280e23523b00385"
+    },
+    {
+      "path": "tests/progression/test_fighter_character_grant_appliers.py",
+      "status": "M",
+      "sha256": "d886fd5c11cbe68aa680c425117bdfc7f6812d7e9a6cd50ecfb6731f56915ea5"
+    },
+    {
+      "path": "tests/progression/test_half_orc_origin_runtime.py",
+      "status": "M",
+      "sha256": "02bf0d694f981166a474d2e61e831c71a568e3c4be419e53dbad4e5ae0485413"
+    },
+    {
+      "path": "tests/progression/test_halfling_origin_runtime.py",
+      "status": "M",
+      "sha256": "be0b53f4b3195cc95f03835c0395d94194aca686983c14b29387d1c92859f05e"
+    },
+    {
+      "path": "tests/progression/test_origin_feature_definitions.py",
+      "status": "M",
+      "sha256": "3e3c2f17d24cebc366f5e36084e696db6cf9ca913735e42a05e7a4b1b3637970"
+    },
+    {
+      "path": "tests/progression/test_origin_innate_spellcasting.py",
+      "status": "M",
+      "sha256": "fea791db3cd20d200b81c05b1262ef761d29ff77a36c5ab8bf48c5d6cc4ae81c"
+    },
+    {
+      "path": "tests/progression/test_origin_integration_matrix.py",
+      "status": "M",
+      "sha256": "e0297318b7333cf8f9fb964c662480c0904151a04f94b7c84115c6782d577f6c"
+    },
+    {
+      "path": "tests/progression/test_origin_structural_feature_applier.py",
+      "status": "M",
+      "sha256": "be2ec1868bcf93497be8655c7fffee20c6e3786361f2c88405ce592269ebb7bd"
+    },
+    {
+      "path": "tests/progression/test_saving_throw_context.py",
+      "status": "M",
+      "sha256": "720238b291046335160c772c0617aa8b8c6caa7943accfa041ca7731dbe9819a"
+    },
+    {
+      "path": "tests/progression/test_schema2_character_materialization.py",
+      "status": "M",
+      "sha256": "0dfa1a5f98c1dcc56b9277ce8ce0e63de127096127bd8a40e20d98b33b45136a"
+    },
+    {
+      "path": "tests/progression/test_sorcerer_character_grant_appliers.py",
+      "status": "M",
+      "sha256": "e89ef9750f74ac915093bd73a2e02a289e180efd9834e9d93978d15f8bdcd646"
+    },
+    {
+      "path": "tests/progression/test_sorcerer_class_materialization.py",
+      "status": "M",
+      "sha256": "c0bf4aada8623d1989c7210a5a42b25d043eca934b74ab2e3f6decaaa446d6a4"
+    },
+    {
+      "path": "tests/progression/test_sorcerer_progression_definitions.py",
+      "status": "M",
+      "sha256": "4b88d0b28353b8b933919fc98882381467cdf4a5d5dd4233c1f4d2439ddbaaa3"
+    },
+    {
+      "path": "tests/progression/test_sorcerer_spell_source_materialization.py",
+      "status": "M",
+      "sha256": "4379f4aaf48fcbae8b8845e41b4e41770377dd6292b3855f8419e15281cba060"
+    },
+    {
+      "path": "tests/progression/test_spell_damage_affinity_contributions.py",
+      "status": "M",
+      "sha256": "5d6208924b9cd4bf1420778f55c2563e189fcabf8a80e069321a7e76fe798ae0"
+    }
+  ],
+  "documents": [
+    {
+      "path": "DND_CONTENT_RECOVERY_CR0_COMPLETION_LEDGER_2026-08-30.md",
+      "status": "??",
+      "sha256": "b04eb0ed05d8e8d17a3c2136f9454aa9d08c22712c0ed63da551832eec1f09ef"
+    },
+    {
+      "path": "DND_CONTENT_RECOVERY_CR0_EVIDENCE_FREEZE_IMPLEMENTATION_PLAN_2026-08-30.md",
+      "status": "??",
+      "sha256": "55de34336d2e171fb158db5694cd2aed036c16719dbc0a3b10c920ef0b9b8fa5"
+    },
+    {
+      "path": "DND_CONTENT_RECOVERY_DIRECT_ITEM_CR2I_SCOPE_AMENDMENT_2026-08-31.md",
+      "status": "??",
+      "sha256": "57dc83d374ab1e425cdf88c9a4f2f7beb6d88a03b83b47aee8d3de27e85366c6"
+    },
+    {
+      "path": "DND_CONTENT_RECOVERY_DIRECT_ITEM_HARD_CUT_CR1_CR3_IMPLEMENTATION_PLAN_2026-08-31.md",
+      "status": "??",
+      "sha256": "51b06ddd6c67742fe32dee8f7bb729a72134d54df1805d6b434ad68dba24ae0b"
+    },
+    {
+      "path": "DND_CONTENT_RECOVERY_PRIMITIVE_BEHAVIOR_FACT_IMPLEMENTATION_LEDGER_2026-08-31.md",
+      "status": "??",
+      "sha256": "0f7e3a6271f8b7a5fe7528b48a8a85ad8af6d28fd3e9630e9d6c28c60c6b2817"
+    },
+    {
+      "path": "DND_CONTENT_RECOVERY_PRIMITIVE_BEHAVIOR_FACT_SEQUENCE_AMENDMENT_2026-08-31.md",
+      "status": "??",
+      "sha256": "8300f661bfc629de52f4aa3316ab935d9129d20dae549510277c0c1a9bd5d0de"
+    },
+    {
+      "path": "DND_JULY_RECONSTRUCTION_CONTENT_RECOVERY_AUDIT_AND_MIGRATION_PLAN_2026-08-30.md",
+      "status": "??",
+      "sha256": "3e6a38a534331f0cdf92127fe5d9b765bf7e81a7d44baee08876bfd1613bec7b"
+    },
+    {
+      "path": "content_data/ledgers/content_recovery_cr0_evidence.json",
+      "status": "??",
+      "sha256": "8693fbbeb949cf18bc9f4b7a1ba81845fac2db4bc5adc131729c5dc0d70bf5c7"
+    }
+  ]
+}

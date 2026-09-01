@@ -126,8 +126,8 @@ BUILT_IN_CONTENT_ICON_BINDINGS: dict[
         'item.weapon-coat',
         '9c409e6909fe4a7bf03412a4d9e8ec2cb7b61acb1c6b006ee245f5eb5b5a9143',
     ),
-    'content.neurodragon:background:background.adventurer@2#16608fb2907400176f04e742b8472e897cde6b39a0e7ea21f594eb4dbaaec1b7': (
-        '16608fb2907400176f04e742b8472e897cde6b39a0e7ea21f594eb4dbaaec1b7',
+    'content.neurodragon:background:background.adventurer@2#42fda96d9d82f825de86cb6d2c82b62d3f97b702562e51cb1fcbe411374baf47': (
+        '42fda96d9d82f825de86cb6d2c82b62d3f97b702562e51cb1fcbe411374baf47',
         'intentional_null',
         None,
         None,
@@ -396,414 +396,6 @@ BUILT_IN_CONTENT_ICON_BINDINGS: dict[
         None,
         None,
     ),
-    'content.neurodragon:environment_object:environment.arcane_device@1#fda604d02349a52f014ddc2c0399832fcdd0081ed53e2a25bdbc2330a8a74cf2': (
-        'fda604d02349a52f014ddc2c0399832fcdd0081ed53e2a25bdbc2330a8a74cf2',
-        'bind',
-        'object.arcane-device',
-        '6929e52a53f60a32b10f31a52deb9fd294ea74569450861505e7af81cd80782b',
-    ),
-    'content.neurodragon:environment_object:environment.arcane_machine_gun@1#685581238c7aade0c9f7cedeccc5ec031eb76eae056feae8f41045c199f1cb4f': (
-        '685581238c7aade0c9f7cedeccc5ec031eb76eae056feae8f41045c199f1cb4f',
-        'bind',
-        'object.arcane-machine-gun',
-        '9cb649ba38acc693d69c2450a47dfbcbdefed253597e483b8c9455e00f8e0f1d',
-    ),
-    'content.neurodragon:environment_object:environment.blocker.barricade@1#685581238c7aade0c9f7cedeccc5ec031eb76eae056feae8f41045c199f1cb4f': (
-        '685581238c7aade0c9f7cedeccc5ec031eb76eae056feae8f41045c199f1cb4f',
-        'bind',
-        'object.barricade',
-        '86c609cb439991be55f4470a0f5e989e8b823efcfb400271a5c041e4cdc01419',
-    ),
-    'content.neurodragon:environment_object:environment.blocker.boulder@1#685581238c7aade0c9f7cedeccc5ec031eb76eae056feae8f41045c199f1cb4f': (
-        '685581238c7aade0c9f7cedeccc5ec031eb76eae056feae8f41045c199f1cb4f',
-        'bind',
-        'object.boulder',
-        'b3403bbf0c0bc76a858408b83262646feb493d8110ba9b49b4a7336e75f31529',
-    ),
-    'content.neurodragon:environment_object:environment.blocker.crate@1#685581238c7aade0c9f7cedeccc5ec031eb76eae056feae8f41045c199f1cb4f': (
-        '685581238c7aade0c9f7cedeccc5ec031eb76eae056feae8f41045c199f1cb4f',
-        'bind',
-        'object.crate',
-        'a900ffc11566920a7e112c6379dcd17ee9b00ebe3e52ebd2706d74b4637f6037',
-    ),
-    'content.neurodragon:environment_object:environment.blocker.oil_barrel@1#685581238c7aade0c9f7cedeccc5ec031eb76eae056feae8f41045c199f1cb4f': (
-        '685581238c7aade0c9f7cedeccc5ec031eb76eae056feae8f41045c199f1cb4f',
-        'bind',
-        'object.oil-barrel',
-        '19e120fda1e703aff4c33a128635956cc57151bf814ceb6d13d1ba834b5c5905',
-    ),
-    'content.neurodragon:environment_object:environment.campfire@1#685581238c7aade0c9f7cedeccc5ec031eb76eae056feae8f41045c199f1cb4f': (
-        '685581238c7aade0c9f7cedeccc5ec031eb76eae056feae8f41045c199f1cb4f',
-        'bind',
-        'object.campfire',
-        '9a15f4133e6c74b044ced8618fdcea529394490c5c41ffd193b85d5f1f5de2d1',
-    ),
-    'content.neurodragon:environment_object:environment.directional_door@1#6e16c65b95be90b3a9177a1f2d9223776fcc6d7c1ebac7a3713786fdec083ca8': (
-        '6e16c65b95be90b3a9177a1f2d9223776fcc6d7c1ebac7a3713786fdec083ca8',
-        'bind',
-        'object.directional-door',
-        'ef2596c47e881f0d1fc2361a616431a077c9cbc0967ffd9facd49e1fd43743ca',
-    ),
-    'content.neurodragon:environment_object:environment.directional_wall@1#77eaa1ae5b4be3228a01b62f68cbff93d8361c4ebb1649562e003b85b81665a7': (
-        '77eaa1ae5b4be3228a01b62f68cbff93d8361c4ebb1649562e003b85b81665a7',
-        'bind',
-        'object.directional-wall',
-        '3704c277e40a7f8798028c2db7c574ff65ad073f9fe9aef6bcf5280ee647af6b',
-    ),
-    'content.neurodragon:environment_object:environment.door@1#8b4eb75737ec1ed86cafdd6bfcfbcbaf9feea14359cc8bb5c4453fc080303927': (
-        '8b4eb75737ec1ed86cafdd6bfcfbcbaf9feea14359cc8bb5c4453fc080303927',
-        'bind',
-        'object.door',
-        '9837ec0f543aa5037f424ce65eaf3960812d0d450bc91fed544c8a50e4fb5766',
-    ),
-    'content.neurodragon:environment_object:environment.fireball_cannon@1#4680ed96e2aad9079627ccefa9b7d8c29929236a16d609832383b565cc53b055': (
-        '4680ed96e2aad9079627ccefa9b7d8c29929236a16d609832383b565cc53b055',
-        'bind',
-        'object.fireball-cannon',
-        'd07c1590f928631b63e78d18863dd648c8e9729617033900cb780eb0709745e5',
-    ),
-    'content.neurodragon:environment_object:environment.storage_chest@1#054f0de68dcdc3672b0d088b8bcc98fe57d9a50b06e732c9f31577ef40d96482': (
-        '054f0de68dcdc3672b0d088b8bcc98fe57d9a50b06e732c9f31577ef40d96482',
-        'bind',
-        'object.chest',
-        '55cc591fdb7fb4c6801a8900b50402315e686940a9d8e75e7b3f2ec306db395d',
-    ),
-    'content.neurodragon:environment_object:environment.trap_lever@1#0f6a86982ae1c0472a075f1ec68f7b9d58ccd8c64065d3154cf2729a35c66616': (
-        '0f6a86982ae1c0472a075f1ec68f7b9d58ccd8c64065d3154cf2729a35c66616',
-        'bind',
-        'object.trap-lever',
-        'ea6f83f2e23bca94220b99307ed227e3437717dbdfc550e82797b6d765e34097',
-    ),
-    'content.neurodragon:environment_object:environment.wall_torch@1#685581238c7aade0c9f7cedeccc5ec031eb76eae056feae8f41045c199f1cb4f': (
-        '685581238c7aade0c9f7cedeccc5ec031eb76eae056feae8f41045c199f1cb4f',
-        'bind',
-        'object.wall-torch',
-        '0ba27b239c07f825ce05efb0156c20f21baf7dad1a6849dd69208a6a240eef08',
-    ),
-    'content.neurodragon:item:apparel.armored_boots@1#d2850fbdf5caa8aa5f4ef255d52d139c5ca49a65addb1e1d69f7394244176244': (
-        'd2850fbdf5caa8aa5f4ef255d52d139c5ca49a65addb1e1d69f7394244176244',
-        'bind',
-        'item.armored-boots',
-        'a8e1a6c7c99903afdc62c47a9c8365a5411d27e712c1bed55425e9f2e146d85f',
-    ),
-    'content.neurodragon:item:apparel.bracers@1#d2850fbdf5caa8aa5f4ef255d52d139c5ca49a65addb1e1d69f7394244176244': (
-        'd2850fbdf5caa8aa5f4ef255d52d139c5ca49a65addb1e1d69f7394244176244',
-        'bind',
-        'item.bracers',
-        'd6a80da28e3191dd5a8e7813c77d022444a8ecddb28b9307aaccac9bcb3fdd7b',
-    ),
-    'content.neurodragon:item:apparel.chain_coif@1#d2850fbdf5caa8aa5f4ef255d52d139c5ca49a65addb1e1d69f7394244176244': (
-        'd2850fbdf5caa8aa5f4ef255d52d139c5ca49a65addb1e1d69f7394244176244',
-        'bind',
-        'item.chain-coif',
-        '606a07b7219c6a5554672d95cd548e4f16abd2eb6f4ad621d9e33cc2d276c4ee',
-    ),
-    'content.neurodragon:item:apparel.cloth_hood@1#d2850fbdf5caa8aa5f4ef255d52d139c5ca49a65addb1e1d69f7394244176244': (
-        'd2850fbdf5caa8aa5f4ef255d52d139c5ca49a65addb1e1d69f7394244176244',
-        'bind',
-        'item.cloth-hood',
-        'ab1e982fb377938b03b0e58d0bf0553cf3fcb035c9e0f5c1222d10c511d1450e',
-    ),
-    'content.neurodragon:item:apparel.cloth_shoes@1#d2850fbdf5caa8aa5f4ef255d52d139c5ca49a65addb1e1d69f7394244176244': (
-        'd2850fbdf5caa8aa5f4ef255d52d139c5ca49a65addb1e1d69f7394244176244',
-        'bind',
-        'item.cloth-shoes',
-        '8c1b60f2e4e1580c8b1e37d9a432fdb2870680abcdaf97512113aa44ef32c3a7',
-    ),
-    'content.neurodragon:item:apparel.common_clothes@1#d2850fbdf5caa8aa5f4ef255d52d139c5ca49a65addb1e1d69f7394244176244': (
-        'd2850fbdf5caa8aa5f4ef255d52d139c5ca49a65addb1e1d69f7394244176244',
-        'bind',
-        'item.common-clothes',
-        '71ee96377b21b6c2db9b26199a8426ef6045dac92f8d44acb846426ba6375ece',
-    ),
-    'content.neurodragon:item:apparel.costume@1#d2850fbdf5caa8aa5f4ef255d52d139c5ca49a65addb1e1d69f7394244176244': (
-        'd2850fbdf5caa8aa5f4ef255d52d139c5ca49a65addb1e1d69f7394244176244',
-        'bind',
-        'item.costume',
-        '364855e3ea58e78e0aeaa2b03249a56ab4e71b1426f2cebd67cc1487f45b5ba5',
-    ),
-    'content.neurodragon:item:apparel.crown@1#ae289aaef4c6c26c2c3d95dce5907149b4d20c2ed6a3c04268b537a87c4fdbd9': (
-        'ae289aaef4c6c26c2c3d95dce5907149b4d20c2ed6a3c04268b537a87c4fdbd9',
-        'bind',
-        'item.crown',
-        '04d7a5d817a1bedda31494ab0606bed58c84b17b9c71468b24d3f62702867e74',
-    ),
-    'content.neurodragon:item:apparel.fine_clothes@1#d2850fbdf5caa8aa5f4ef255d52d139c5ca49a65addb1e1d69f7394244176244': (
-        'd2850fbdf5caa8aa5f4ef255d52d139c5ca49a65addb1e1d69f7394244176244',
-        'bind',
-        'item.fine-clothes',
-        '4fa680e1a73a5e2dc71601b81e385925cf4f68d32ee1dd97b83e6f62ac8a5022',
-    ),
-    'content.neurodragon:item:apparel.gauntlets@1#d2850fbdf5caa8aa5f4ef255d52d139c5ca49a65addb1e1d69f7394244176244': (
-        'd2850fbdf5caa8aa5f4ef255d52d139c5ca49a65addb1e1d69f7394244176244',
-        'bind',
-        'item.gauntlets',
-        '81b596ba0892e651083530f5f38a165103dc60888b4a32f2e9fc7ce910e526be',
-    ),
-    'content.neurodragon:item:apparel.great_helm@1#d2850fbdf5caa8aa5f4ef255d52d139c5ca49a65addb1e1d69f7394244176244': (
-        'd2850fbdf5caa8aa5f4ef255d52d139c5ca49a65addb1e1d69f7394244176244',
-        'bind',
-        'item.great-helm',
-        '71deba0a168030ccccf51c7893369170a122466ace1d9a78bc2836bcdb40bac6',
-    ),
-    'content.neurodragon:item:apparel.horned_helmet@1#d2850fbdf5caa8aa5f4ef255d52d139c5ca49a65addb1e1d69f7394244176244': (
-        'd2850fbdf5caa8aa5f4ef255d52d139c5ca49a65addb1e1d69f7394244176244',
-        'bind',
-        'item.horned-helmet',
-        'c61d9b16105b1b1035b53c8536ce77b49444978c4bad715723bc9f86fa767b87',
-    ),
-    'content.neurodragon:item:apparel.iron_helmet@1#ae289aaef4c6c26c2c3d95dce5907149b4d20c2ed6a3c04268b537a87c4fdbd9': (
-        'ae289aaef4c6c26c2c3d95dce5907149b4d20c2ed6a3c04268b537a87c4fdbd9',
-        'bind',
-        'item.iron-helmet',
-        '634ee9859b3af68de828511a0813c2165e46b72f80444464d1e00277b1b6610a',
-    ),
-    'content.neurodragon:item:apparel.leather_boots@1#d2850fbdf5caa8aa5f4ef255d52d139c5ca49a65addb1e1d69f7394244176244': (
-        'd2850fbdf5caa8aa5f4ef255d52d139c5ca49a65addb1e1d69f7394244176244',
-        'bind',
-        'item.leather-boots',
-        '5e397e2e9abfb095491d307d24a86872aa023e3d932ccb1ffe519b31e9aad7af',
-    ),
-    'content.neurodragon:item:apparel.leather_gloves@1#d2850fbdf5caa8aa5f4ef255d52d139c5ca49a65addb1e1d69f7394244176244': (
-        'd2850fbdf5caa8aa5f4ef255d52d139c5ca49a65addb1e1d69f7394244176244',
-        'bind',
-        'item.leather-gloves',
-        '95a6b7f1e5fff29f6be6b60037aeb473ee429f818ff55a6280ac3d8f81c7e6e6',
-    ),
-    'content.neurodragon:item:apparel.leather_hood@1#d2850fbdf5caa8aa5f4ef255d52d139c5ca49a65addb1e1d69f7394244176244': (
-        'd2850fbdf5caa8aa5f4ef255d52d139c5ca49a65addb1e1d69f7394244176244',
-        'bind',
-        'item.leather-hood',
-        '0e218ca55e5ddd277aca204bc5402b79c8375dd3e0cd04813e974ab4189decac',
-    ),
-    'content.neurodragon:item:apparel.leather_shoes@1#d2850fbdf5caa8aa5f4ef255d52d139c5ca49a65addb1e1d69f7394244176244': (
-        'd2850fbdf5caa8aa5f4ef255d52d139c5ca49a65addb1e1d69f7394244176244',
-        'bind',
-        'item.leather-shoes',
-        '5e268a5cd7d4e40cd51347e074b752276f7b83f278ed2dee117e79030b6a49d5',
-    ),
-    'content.neurodragon:item:apparel.monster_hands@1#d2850fbdf5caa8aa5f4ef255d52d139c5ca49a65addb1e1d69f7394244176244': (
-        'd2850fbdf5caa8aa5f4ef255d52d139c5ca49a65addb1e1d69f7394244176244',
-        'bind',
-        'item.monster-hands',
-        '0285b9b3b054f718f3f9210ffdc9fdc5832136ccda6fb371ba450d68de1a3be5',
-    ),
-    'content.neurodragon:item:apparel.monster_helm@1#d2850fbdf5caa8aa5f4ef255d52d139c5ca49a65addb1e1d69f7394244176244': (
-        'd2850fbdf5caa8aa5f4ef255d52d139c5ca49a65addb1e1d69f7394244176244',
-        'bind',
-        'item.monster-helm',
-        '350f670d4e63cc9f0991504fbfffb4ba9e86e2dc1e3c66bddefa7879ee1cf639',
-    ),
-    'content.neurodragon:item:apparel.robes@1#d2850fbdf5caa8aa5f4ef255d52d139c5ca49a65addb1e1d69f7394244176244': (
-        'd2850fbdf5caa8aa5f4ef255d52d139c5ca49a65addb1e1d69f7394244176244',
-        'bind',
-        'item.robes',
-        'e9bdd6c425209913ec4ca0acb4c22540ec199d2039c76c15d438fcf53a4c02be',
-    ),
-    'content.neurodragon:item:apparel.sandals@1#d2850fbdf5caa8aa5f4ef255d52d139c5ca49a65addb1e1d69f7394244176244': (
-        'd2850fbdf5caa8aa5f4ef255d52d139c5ca49a65addb1e1d69f7394244176244',
-        'bind',
-        'item.sandals',
-        'ac60c9b799e0deab310129eb762e9a69abe8bc7acb24598600e2105233294697',
-    ),
-    'content.neurodragon:item:apparel.spellblade_crown@1#1822a3ffb8ed55b3d986c1ea7c5f72501168ab640af9ff6b7cbd3a0888b39f26': (
-        '1822a3ffb8ed55b3d986c1ea7c5f72501168ab640af9ff6b7cbd3a0888b39f26',
-        'bind',
-        'item.crown',
-        '04d7a5d817a1bedda31494ab0606bed58c84b17b9c71468b24d3f62702867e74',
-    ),
-    'content.neurodragon:item:apparel.travelers_clothes@1#d2850fbdf5caa8aa5f4ef255d52d139c5ca49a65addb1e1d69f7394244176244': (
-        'd2850fbdf5caa8aa5f4ef255d52d139c5ca49a65addb1e1d69f7394244176244',
-        'bind',
-        'item.traveler-s-clothes',
-        'c1edbe58a08bdbbe73a7a5c45c8eb93a8229c6a940690c8c27db92bf60fb33e2',
-    ),
-    'content.neurodragon:item:apparel.wizard_hat@1#ae289aaef4c6c26c2c3d95dce5907149b4d20c2ed6a3c04268b537a87c4fdbd9': (
-        'ae289aaef4c6c26c2c3d95dce5907149b4d20c2ed6a3c04268b537a87c4fdbd9',
-        'bind',
-        'item.wizard-s-hat',
-        '1f6523d3b7509ed6ede1074378d62d7dff76f35e59fcfef6ef4550704f254b88',
-    ),
-    'content.neurodragon:item:armor.armor_scraps@1#370bee3252b8d936c988ebcd859c75030680399cdbe9a538625c62cfb8b77963': (
-        '370bee3252b8d936c988ebcd859c75030680399cdbe9a538625c62cfb8b77963',
-        'bind',
-        'item.armor-scraps',
-        '62ea6936a09510a90234c31b26c86d4e4727b9456c6589dc2f9f8f73a786d671',
-    ),
-    'content.neurodragon:item:armor.circus.performer_leather@1#404246a3a1d8ea4b5ce6159a6c2c37cacb4a0ab5be77194b3747257b7e15ba9c': (
-        '404246a3a1d8ea4b5ce6159a6c2c37cacb4a0ab5be77194b3747257b7e15ba9c',
-        'bind',
-        'item.circus-performer-leather',
-        '788a14aceb1561f76365cbbc86f0d054b24abf2a6d8128831063e3c7903f73c4',
-    ),
-    'content.neurodragon:item:armor.cloth@1#1822a3ffb8ed55b3d986c1ea7c5f72501168ab640af9ff6b7cbd3a0888b39f26': (
-        '1822a3ffb8ed55b3d986c1ea7c5f72501168ab640af9ff6b7cbd3a0888b39f26',
-        'bind',
-        'item.cloth-armor',
-        'bebe8ba12b3ce6e74d60bd8700b3468b1bddab2f6158ea26b9c19d0874268b8a',
-    ),
-    'content.neurodragon:item:consumable.acid_flask@1#05c324b1db243a36bb44de74e32ba6a1f0ae0e1a9b043df7d3f3f072f215e5b0': (
-        '05c324b1db243a36bb44de74e32ba6a1f0ae0e1a9b043df7d3f3f072f215e5b0',
-        'bind',
-        'item.acid-flask',
-        'abf0444da4974bc8eea56ffbaf8665d08f961139558fbed39092c344758b377b',
-    ),
-    'content.neurodragon:item:consumable.healing_potion@1#69906b30dff31885bcc5e5e079afd475b5231821a0fa535cf7b60487c8173d83': (
-        '69906b30dff31885bcc5e5e079afd475b5231821a0fa535cf7b60487c8173d83',
-        'bind',
-        'item.potion-of-healing',
-        '68a638040386125009a4353504e49c7d3a13b8a792cb099ab9cdb93de569d4a6',
-    ),
-    'content.neurodragon:item:consumable.potion_greater_invisibility@1#d4711f833ed4f3874f33242961bc96933f1e76fa97cdef7b3461c39bba91e806': (
-        'd4711f833ed4f3874f33242961bc96933f1e76fa97cdef7b3461c39bba91e806',
-        'bind',
-        'item.potion-of-greater-invisibility',
-        'ea1a479122ab597030baa618c3f4ed226061156f86cd0477637cdb1b9bb61a15',
-    ),
-    'content.neurodragon:item:consumable.potion_haste@1#d4711f833ed4f3874f33242961bc96933f1e76fa97cdef7b3461c39bba91e806': (
-        'd4711f833ed4f3874f33242961bc96933f1e76fa97cdef7b3461c39bba91e806',
-        'bind',
-        'item.potion-of-haste',
-        '455f7a69cd5607712c49f120546d68b6fc284a9124c9e995edc48f3f43199d06',
-    ),
-    'content.neurodragon:item:consumable.weapon_coat.concentration_fire@1#d4711f833ed4f3874f33242961bc96933f1e76fa97cdef7b3461c39bba91e806': (
-        'd4711f833ed4f3874f33242961bc96933f1e76fa97cdef7b3461c39bba91e806',
-        'bind',
-        'item.weapon-coat-of-flame',
-        '27509f6ebfb4c799e93600d4915f55c63708f852e5ed2d5c7b4d82ab59fecc57',
-    ),
-    'content.neurodragon:item:consumable.weapon_coat.fire@1#d4711f833ed4f3874f33242961bc96933f1e76fa97cdef7b3461c39bba91e806': (
-        'd4711f833ed4f3874f33242961bc96933f1e76fa97cdef7b3461c39bba91e806',
-        'bind',
-        'item.weapon-coat-of-flame',
-        '27509f6ebfb4c799e93600d4915f55c63708f852e5ed2d5c7b4d82ab59fecc57',
-    ),
-    'content.neurodragon:item:consumable.weapon_coat.lightning@1#d4711f833ed4f3874f33242961bc96933f1e76fa97cdef7b3461c39bba91e806': (
-        'd4711f833ed4f3874f33242961bc96933f1e76fa97cdef7b3461c39bba91e806',
-        'bind',
-        'item.weapon-coat-of-lightning',
-        '0e9d4028496ad361d10cb2c156a0caa1a45813ef00149009dcd3323c4e85894f',
-    ),
-    'content.neurodragon:item:consumable.weapon_coat.timed_fire@1#723d3fa1e47abd475685cd805b5a9d3b2520400209c6a77718c0ea4effd77b08': (
-        '723d3fa1e47abd475685cd805b5a9d3b2520400209c6a77718c0ea4effd77b08',
-        'bind',
-        'item.weapon-coat-of-flame',
-        '27509f6ebfb4c799e93600d4915f55c63708f852e5ed2d5c7b4d82ab59fecc57',
-    ),
-    'content.neurodragon:item:equipment.portable_torch@1#fd434261d1d600fc65359f1f30ba389e0d5de5ba34ac5fedf0a133c39a7b8374': (
-        'fd434261d1d600fc65359f1f30ba389e0d5de5ba34ac5fedf0a133c39a7b8374',
-        'bind',
-        'item.torch',
-        '47fb894fc802b96e2686ba177e09ee425f07bdb5ac352f13e44d792d651525b3',
-    ),
-    'content.neurodragon:item:gear.field_kit@1#de0cd0292067e61c4dc9675492f91cdd268fd69507f7754ba1f166cf59a01206': (
-        'de0cd0292067e61c4dc9675492f91cdd268fd69507f7754ba1f166cf59a01206',
-        'bind',
-        'item.field-kit',
-        'd031f5306b4d5efd7c0730e7b1368795d2ac3c8c33d3d3e3cf769e95b30157d5',
-    ),
-    'content.neurodragon:item:shield.wooden@1#cbd1206590f5d371380629e18a10857333791e252d7945b82a998dee38eab137': (
-        'cbd1206590f5d371380629e18a10857333791e252d7945b82a998dee38eab137',
-        'bind',
-        'item.wooden-shield',
-        '684f395747f716d1911aee703dc7917c35fed23e0b01140b1813caa311827b7d',
-    ),
-    'content.neurodragon:item:spell_item.scroll_fire_bolt@1#13420c23a62088081ba5530869639924c7854d136616bbfaef9328496dc55445': (
-        '13420c23a62088081ba5530869639924c7854d136616bbfaef9328496dc55445',
-        'bind',
-        'item.scroll-of-fire-bolt',
-        'a847924bcca698331e709023e6fe7f5e67c0ec187b35b6df0e8fced7c2bfc11a',
-    ),
-    'content.neurodragon:item:spell_item.scroll_fireball@1#76b2b15a5445424eabac876a6752e4f8b834689c3918ee98a2e2a84c1b980b65': (
-        '76b2b15a5445424eabac876a6752e4f8b834689c3918ee98a2e2a84c1b980b65',
-        'bind',
-        'item.scroll-of-fireball',
-        'd585c4c9c1f7ae62a6f6e7959cbd0ba24adb774a45bf5d8909683a9ba09ee92b',
-    ),
-    'content.neurodragon:item:spell_item.scroll_hold_person@1#020693730c67a5675efbe80fd9ca3a663a2e08fd623dca79c61c6afdcc180008': (
-        '020693730c67a5675efbe80fd9ca3a663a2e08fd623dca79c61c6afdcc180008',
-        'bind',
-        'item.scroll-of-hold-person',
-        '4cbaf3073f3b1ef9a6d4666a68562521f5bad4326689c84e3389186b8ca5d054',
-    ),
-    'content.neurodragon:item:spell_item.scroll_invisibility@1#334ff1960d2217b08e9e9b8366b46fd43c712d5e73fd8eac2235f865f13326b0': (
-        '334ff1960d2217b08e9e9b8366b46fd43c712d5e73fd8eac2235f865f13326b0',
-        'bind',
-        'item.scroll-of-invisibility',
-        '76dff5981ac9059deddbb98703d9e4067bb6f0b3c03c2c7ab938c0b0c613445b',
-    ),
-    'content.neurodragon:item:spell_item.scroll_mage_armor@1#6a6910a1a1bf83a47d0839f0119d3a36f21f1b50b0c7c1ab7c1701dacb16f371': (
-        '6a6910a1a1bf83a47d0839f0119d3a36f21f1b50b0c7c1ab7c1701dacb16f371',
-        'bind',
-        'item.scroll-of-mage-armor',
-        '03e52dd0001bfaf881fcf7681de6e6e69492c02fe4f04d9e0ff565618d69f1ba',
-    ),
-    'content.neurodragon:item:spell_item.scroll_magic_missile@1#27b7a2cd25d6e850f7abf839ef62355c4a093747c710635bdf24453a3be199ce': (
-        '27b7a2cd25d6e850f7abf839ef62355c4a093747c710635bdf24453a3be199ce',
-        'bind',
-        'item.scroll-of-magic-missile',
-        '2ecfa5b828bee1f06a9cad0f893388c886719c9e2823dd533a9edd110d93705e',
-    ),
-    'content.neurodragon:item:spell_item.scroll_spike_growth@1#49c7551892e7eb905da2dbb7bf41a0d47f29ad4c0090a1255c2e1b3e44d1a21f': (
-        '49c7551892e7eb905da2dbb7bf41a0d47f29ad4c0090a1255c2e1b3e44d1a21f',
-        'bind',
-        'item.scroll-of-spike-growth',
-        '58692a4136346493af793c4df621e6ce261c2beceaba19bea058b9d81b202365',
-    ),
-    'content.neurodragon:item:spell_item.wand_fire@1#69fb95677b37dcc4d23c129412cecbd7e7a6e220d2f5a411ff847fe9350b8a3f': (
-        '69fb95677b37dcc4d23c129412cecbd7e7a6e220d2f5a411ff847fe9350b8a3f',
-        'bind',
-        'item.wand-of-fire',
-        'd645ed97c669e414d6d2417f133d7c855e06926a3b33fa918499710cdab0f93c',
-    ),
-    'content.neurodragon:item:spell_item.wand_magic_missiles@1#53291ac1c476a81560953c1a5a6551f8bfb0c133a06a7b84590fd4f3b0e05bb9': (
-        '53291ac1c476a81560953c1a5a6551f8bfb0c133a06a7b84590fd4f3b0e05bb9',
-        'bind',
-        'item.wand-of-magic-missiles',
-        '2cf223869e492ece61a32eb7664284011472671bf6b9e0f23917207b9f8da401',
-    ),
-    'content.neurodragon:item:weapon.arcane_staff@1#ac17a4e8272bf2e282a07f8f5d835534d316e11cac3f883af389388c21eed171': (
-        'ac17a4e8272bf2e282a07f8f5d835534d316e11cac3f883af389388c21eed171',
-        'bind',
-        'item.quarterstaff',
-        'f665ea33a4b7d1a7df434d0ec80389671226bfaf075467636674bf0b10bf8146',
-    ),
-    'content.neurodragon:item:weapon.assassin_dagger@1#6baf6955f426dd520838af360e20cecc30b2ce6367c5e547fdd96ffc555b9f62': (
-        '6baf6955f426dd520838af360e20cecc30b2ce6367c5e547fdd96ffc555b9f62',
-        'bind',
-        'item.dagger',
-        '929e623a96820f0994a307e16a2e6f680244b786c5b8571298f4fe0e3f50af1e',
-    ),
-    'content.neurodragon:item:weapon.circus.flaming_scimitar@1#404246a3a1d8ea4b5ce6159a6c2c37cacb4a0ab5be77194b3747257b7e15ba9c': (
-        '404246a3a1d8ea4b5ce6159a6c2c37cacb4a0ab5be77194b3747257b7e15ba9c',
-        'bind',
-        'item.scimitar',
-        'af2a5fb2bc8aea272a902592206ede13f1deefd7b88a563bf38e9c12cb7de3b0',
-    ),
-    'content.neurodragon:item:weapon.circus.longsword_plus_one@1#404246a3a1d8ea4b5ce6159a6c2c37cacb4a0ab5be77194b3747257b7e15ba9c': (
-        '404246a3a1d8ea4b5ce6159a6c2c37cacb4a0ab5be77194b3747257b7e15ba9c',
-        'bind',
-        'item.longsword',
-        '165dd87a3a025ed0d157a986eee1ba60cb5fce3456f1de3bdc888fecf6bbc204',
-    ),
-    'content.neurodragon:item:weapon.circus.rusty_dagger@1#404246a3a1d8ea4b5ce6159a6c2c37cacb4a0ab5be77194b3747257b7e15ba9c': (
-        '404246a3a1d8ea4b5ce6159a6c2c37cacb4a0ab5be77194b3747257b7e15ba9c',
-        'bind',
-        'item.dagger',
-        '929e623a96820f0994a307e16a2e6f680244b786c5b8571298f4fe0e3f50af1e',
-    ),
-    'content.neurodragon:item:weapon.circus.soul_draining_morningstar@1#404246a3a1d8ea4b5ce6159a6c2c37cacb4a0ab5be77194b3747257b7e15ba9c': (
-        '404246a3a1d8ea4b5ce6159a6c2c37cacb4a0ab5be77194b3747257b7e15ba9c',
-        'bind',
-        'item.morningstar',
-        '85680002ae4e51e0bb9702943f6edcaf0e3c6ad56366b2a444b842e6cebdbc4a',
-    ),
-    'content.neurodragon:item:weapon.double_bladed_sword@1#14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1': (
-        '14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1',
-        'bind',
-        'item.double-bladed-sword',
-        '85826f6ab71a8b473556e101c5b3b0d42a34f71b6803849c87a03defffe08980',
-    ),
     'content.neurodragon:spell:spell.aegis_spark@1#e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00': (
         'e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00',
         'bind',
@@ -816,26 +408,26 @@ BUILT_IN_CONTENT_ICON_BINDINGS: dict[
         'spell.necrotic-bless',
         '148171f3d386fc202268269ff48ad6dd20c186623c91772a66f4306fec984445',
     ),
-    'content.neurodragon:starting_equipment_package:starting_apparel.common_clothes@1#dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605': (
-        'dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605',
+    'content.neurodragon:starting_equipment_package:starting_apparel.common_clothes@1#695f535874d0f10da3a9c48fb0f2c421eb245810806098d91dbee35efeef36e2': (
+        '695f535874d0f10da3a9c48fb0f2c421eb245810806098d91dbee35efeef36e2',
         'bind',
         'item.common-clothes',
         '71ee96377b21b6c2db9b26199a8426ef6045dac92f8d44acb846426ba6375ece',
     ),
-    'content.neurodragon:starting_equipment_package:starting_apparel.fine_clothes@1#dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605': (
-        'dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605',
+    'content.neurodragon:starting_equipment_package:starting_apparel.fine_clothes@1#695f535874d0f10da3a9c48fb0f2c421eb245810806098d91dbee35efeef36e2': (
+        '695f535874d0f10da3a9c48fb0f2c421eb245810806098d91dbee35efeef36e2',
         'bind',
         'item.fine-clothes',
         '4fa680e1a73a5e2dc71601b81e385925cf4f68d32ee1dd97b83e6f62ac8a5022',
     ),
-    'content.neurodragon:starting_equipment_package:starting_apparel.robes@1#dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605': (
-        'dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605',
+    'content.neurodragon:starting_equipment_package:starting_apparel.robes@1#695f535874d0f10da3a9c48fb0f2c421eb245810806098d91dbee35efeef36e2': (
+        '695f535874d0f10da3a9c48fb0f2c421eb245810806098d91dbee35efeef36e2',
         'bind',
         'item.robes',
         'e9bdd6c425209913ec4ca0acb4c22540ec199d2039c76c15d438fcf53a4c02be',
     ),
-    'content.neurodragon:starting_equipment_package:starting_apparel.travelers_clothes@1#dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605': (
-        'dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605',
+    'content.neurodragon:starting_equipment_package:starting_apparel.travelers_clothes@1#695f535874d0f10da3a9c48fb0f2c421eb245810806098d91dbee35efeef36e2': (
+        '695f535874d0f10da3a9c48fb0f2c421eb245810806098d91dbee35efeef36e2',
         'bind',
         'item.travelers-clothes',
         'f724d906569f59571f72c365d99b8a88902384716a99294813f6b704e077c030',
@@ -1158,26 +750,26 @@ BUILT_IN_CONTENT_ICON_BINDINGS: dict[
         'action.leadership',
         'd0a2c151bf57897ff20324e135348b062fd66196a2acdbe480fc913c50969955',
     ),
-    'content.srd_5_1_cc:background:background.acolyte@2#16608fb2907400176f04e742b8472e897cde6b39a0e7ea21f594eb4dbaaec1b7': (
-        '16608fb2907400176f04e742b8472e897cde6b39a0e7ea21f594eb4dbaaec1b7',
+    'content.srd_5_1_cc:background:background.acolyte@2#42fda96d9d82f825de86cb6d2c82b62d3f97b702562e51cb1fcbe411374baf47': (
+        '42fda96d9d82f825de86cb6d2c82b62d3f97b702562e51cb1fcbe411374baf47',
         'intentional_null',
         None,
         None,
     ),
-    'content.srd_5_1_cc:class:class.barbarian@1#d0f9e328a9dca84b2bf3240c01d48cc74589685f2bf000add3b8ea842cbf0b17': (
-        'd0f9e328a9dca84b2bf3240c01d48cc74589685f2bf000add3b8ea842cbf0b17',
+    'content.srd_5_1_cc:class:class.barbarian@1#bf194ca9318890324ead6363083065975b362ddd3ca71863e524bc47422310d8': (
+        'bf194ca9318890324ead6363083065975b362ddd3ca71863e524bc47422310d8',
         'bind',
         'action.rage',
         'b1a425b1325d82daabfc96bf3152a68a5e2faf65c32aa557035ff289330d1beb',
     ),
-    'content.srd_5_1_cc:class:class.fighter@1#d0f9e328a9dca84b2bf3240c01d48cc74589685f2bf000add3b8ea842cbf0b17': (
-        'd0f9e328a9dca84b2bf3240c01d48cc74589685f2bf000add3b8ea842cbf0b17',
+    'content.srd_5_1_cc:class:class.fighter@1#bf194ca9318890324ead6363083065975b362ddd3ca71863e524bc47422310d8': (
+        'bf194ca9318890324ead6363083065975b362ddd3ca71863e524bc47422310d8',
         'bind',
         'action.extra-attack',
         '6e5987a53a1f60dfe730d9748a36a4a0a50e54f93c682ea5048d18280ee29353',
     ),
-    'content.srd_5_1_cc:class:class.sorcerer@1#d0f9e328a9dca84b2bf3240c01d48cc74589685f2bf000add3b8ea842cbf0b17': (
-        'd0f9e328a9dca84b2bf3240c01d48cc74589685f2bf000add3b8ea842cbf0b17',
+    'content.srd_5_1_cc:class:class.sorcerer@1#bf194ca9318890324ead6363083065975b362ddd3ca71863e524bc47422310d8': (
+        'bf194ca9318890324ead6363083065975b362ddd3ca71863e524bc47422310d8',
         'bind',
         'condition.dnd-classes-sorcerer-sorcerypointsfeature',
         '011c66a9f3c459efbccbd44f953ac96f5f64f078ace4ba13e99aec20a9f9afab',
@@ -1440,6 +1032,12 @@ BUILT_IN_CONTENT_ICON_BINDINGS: dict[
         'spell.ray-of-frost',
         'b23a7e2d97466bc2eff3705e71902f253bfab10e4fd2c7d48b09d6ba4074dd2b',
     ),
+    'content.srd_5_1_cc:class_feature:class_feature.sorcerer.draconic_presence@1#da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c': (
+        'da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c',
+        'bind',
+        'spell.fear',
+        '3526c4961134dfcabebf6beaff859887d4ef3a41304d26df61f31619d067f5b2',
+    ),
     'content.srd_5_1_cc:class_feature:class_feature.sorcerer.draconic_presence.aura@1#2687590eedb36e5161aef83b10fbd3a38f68581b0d93ebdf0e283294ae8c2e6c': (
         '2687590eedb36e5161aef83b10fbd3a38f68581b0d93ebdf0e283294ae8c2e6c',
         'bind',
@@ -1452,23 +1050,11 @@ BUILT_IN_CONTENT_ICON_BINDINGS: dict[
         'spell.fear',
         '3526c4961134dfcabebf6beaff859887d4ef3a41304d26df61f31619d067f5b2',
     ),
-    'content.srd_5_1_cc:class_feature:class_feature.sorcerer.draconic_presence@1#da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c': (
-        'da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c',
-        'bind',
-        'spell.fear',
-        '3526c4961134dfcabebf6beaff859887d4ef3a41304d26df61f31619d067f5b2',
-    ),
     'content.srd_5_1_cc:class_feature:class_feature.sorcerer.draconic_resilience@1#2687590eedb36e5161aef83b10fbd3a38f68581b0d93ebdf0e283294ae8c2e6c': (
         '2687590eedb36e5161aef83b10fbd3a38f68581b0d93ebdf0e283294ae8c2e6c',
         'bind',
         'condition.dnd-classes-sorcerer-draconicresilience',
         'fbb2b9c054c24d70db59af5afb009d1c618cdc5d1b61673789dcc889bdbfd46d',
-    ),
-    'content.srd_5_1_cc:class_feature:class_feature.sorcerer.dragon_wings.active@1#2687590eedb36e5161aef83b10fbd3a38f68581b0d93ebdf0e283294ae8c2e6c': (
-        '2687590eedb36e5161aef83b10fbd3a38f68581b0d93ebdf0e283294ae8c2e6c',
-        'bind',
-        'spell.haste',
-        '64115c139b5cf97cadcafd16d93ef1daa66fc43f50b806b1c5c949dd56f3f3d9',
     ),
     'content.srd_5_1_cc:class_feature:class_feature.sorcerer.dragon_wings@1#da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c': (
         'da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c',
@@ -1476,14 +1062,20 @@ BUILT_IN_CONTENT_ICON_BINDINGS: dict[
         'spell.haste',
         '64115c139b5cf97cadcafd16d93ef1daa66fc43f50b806b1c5c949dd56f3f3d9',
     ),
-    'content.srd_5_1_cc:class_feature:class_feature.sorcerer.elemental_affinity.resistance@1#2687590eedb36e5161aef83b10fbd3a38f68581b0d93ebdf0e283294ae8c2e6c': (
+    'content.srd_5_1_cc:class_feature:class_feature.sorcerer.dragon_wings.active@1#2687590eedb36e5161aef83b10fbd3a38f68581b0d93ebdf0e283294ae8c2e6c': (
         '2687590eedb36e5161aef83b10fbd3a38f68581b0d93ebdf0e283294ae8c2e6c',
+        'bind',
+        'spell.haste',
+        '64115c139b5cf97cadcafd16d93ef1daa66fc43f50b806b1c5c949dd56f3f3d9',
+    ),
+    'content.srd_5_1_cc:class_feature:class_feature.sorcerer.elemental_affinity@1#da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c': (
+        'da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c',
         'bind',
         'condition.dnd-classes-sorcerer-elementalaffinity',
         'bc624f2e20742c9619e2766f09a27658a23dae4a560a9f5f3a3381787c16c675',
     ),
-    'content.srd_5_1_cc:class_feature:class_feature.sorcerer.elemental_affinity@1#da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c': (
-        'da590d9ba59b9d5a5744592a934452ad951332496572817264c6c728382f300c',
+    'content.srd_5_1_cc:class_feature:class_feature.sorcerer.elemental_affinity.resistance@1#2687590eedb36e5161aef83b10fbd3a38f68581b0d93ebdf0e283294ae8c2e6c': (
+        '2687590eedb36e5161aef83b10fbd3a38f68581b0d93ebdf0e283294ae8c2e6c',
         'bind',
         'condition.dnd-classes-sorcerer-elementalaffinity',
         'bc624f2e20742c9619e2766f09a27658a23dae4a560a9f5f3a3381787c16c675',
@@ -1782,17 +1374,17 @@ BUILT_IN_CONTENT_ICON_BINDINGS: dict[
         'condition.dnd-spells-evocation-gustofwindzone',
         'eecb3c713ea189f32744454b858301d2a5a2ccafb7b4e37ad8173714a1532d69',
     ),
-    'content.srd_5_1_cc:condition:condition.spell.haste.lethargy@1#230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa': (
-        '230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa',
-        'bind',
-        'condition.dnd-spells-transmutation-hastelethargyeffect',
-        '944e14859e362a933549709be6a448dc0ff806c4cb959134c0e4aede91242cd2',
-    ),
     'content.srd_5_1_cc:condition:condition.spell.haste@1#230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa': (
         '230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa',
         'bind',
         'condition.dnd-spells-transmutation-hasteeffect',
         'bc224e5f7dd4a53d3d222031d67a144002809e6f902ea759adfa1c03e85ff11d',
+    ),
+    'content.srd_5_1_cc:condition:condition.spell.haste.lethargy@1#230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa': (
+        '230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa',
+        'bind',
+        'condition.dnd-spells-transmutation-hastelethargyeffect',
+        '944e14859e362a933549709be6a448dc0ff806c4cb959134c0e4aede91242cd2',
     ),
     'content.srd_5_1_cc:condition:condition.spell.heroes_feast@1#230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa': (
         '230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa',
@@ -2190,371 +1782,11 @@ BUILT_IN_CONTENT_ICON_BINDINGS: dict[
         None,
         None,
     ),
-    'content.srd_5_1_cc:environment_object:environment.spell_object.guardian_of_faith@1#d189fceed4267b5fad505100ddcf3c404fecf824fcfe829d4440ced7fe3997e4': (
-        'd189fceed4267b5fad505100ddcf3c404fecf824fcfe829d4440ced7fe3997e4',
-        'bind',
-        'spell.guardian-of-faith',
-        '11cb8be0f7ea9ed014f27cb5c94eb4ce376ed75391d63def99656ef5d588385b',
-    ),
-    'content.srd_5_1_cc:environment_object:environment.spell_object.heroes_feast@1#d189fceed4267b5fad505100ddcf3c404fecf824fcfe829d4440ced7fe3997e4': (
-        'd189fceed4267b5fad505100ddcf3c404fecf824fcfe829d4440ced7fe3997e4',
-        'bind',
-        'spell.heroes-feast',
-        'f9582cd3cd96c3340c59c4b2f12ba04ee91cbe91342a202bd6470cc6b0a8f5ba',
-    ),
     'content.srd_5_1_cc:feat:feat.lucky@1#73cd514d4386ed22cd1d6fd2641336efceca75056b54dd63e81b96f4395f708d': (
         '73cd514d4386ed22cd1d6fd2641336efceca75056b54dd63e81b96f4395f708d',
         'bind',
         'condition.dnd-classes-feats-luckyfeature',
         '4552c6b87821a918ca1f0f7565958c0e4ad02366107147a6c10e5db31e46ddfe',
-    ),
-    'content.srd_5_1_cc:item:armor.breastplate@1#17016b36f8d6b9dbef0e3d6faa5444ae3d24337077490b1afb6e22aefd4cc911': (
-        '17016b36f8d6b9dbef0e3d6faa5444ae3d24337077490b1afb6e22aefd4cc911',
-        'bind',
-        'item.breastplate',
-        'fbf97d4464decb1cacdd4ee0e2fe01a72528db2592c11ba9671e96c21e51a43a',
-    ),
-    'content.srd_5_1_cc:item:armor.chain_mail@1#17016b36f8d6b9dbef0e3d6faa5444ae3d24337077490b1afb6e22aefd4cc911': (
-        '17016b36f8d6b9dbef0e3d6faa5444ae3d24337077490b1afb6e22aefd4cc911',
-        'bind',
-        'item.chain-mail',
-        '302ec29c6bb2ba07e2cd0df5b9ad6798d793d8ecaddcdcf607f9140b376f6edb',
-    ),
-    'content.srd_5_1_cc:item:armor.chain_shirt@1#17016b36f8d6b9dbef0e3d6faa5444ae3d24337077490b1afb6e22aefd4cc911': (
-        '17016b36f8d6b9dbef0e3d6faa5444ae3d24337077490b1afb6e22aefd4cc911',
-        'bind',
-        'item.chain-shirt',
-        'f82986326e2f39f667edde18922a17816f6d2f5fef3a95491ef663c15edd14e5',
-    ),
-    'content.srd_5_1_cc:item:armor.creature.dire_wolf_natural@1#6a547b0b599372a01c074dccb9d251acbd009e51e54f822a65c2f29ea81e45a7': (
-        '6a547b0b599372a01c074dccb9d251acbd009e51e54f822a65c2f29ea81e45a7',
-        'bind',
-        'item.natural-armor',
-        '0cb8dd121c5b859f66f7fc793e6a9d3376411bfa05fe230a11a528adcffbd9d1',
-    ),
-    'content.srd_5_1_cc:item:armor.creature.wolf_natural@1#6a547b0b599372a01c074dccb9d251acbd009e51e54f822a65c2f29ea81e45a7': (
-        '6a547b0b599372a01c074dccb9d251acbd009e51e54f822a65c2f29ea81e45a7',
-        'bind',
-        'item.natural-armor',
-        '0cb8dd121c5b859f66f7fc793e6a9d3376411bfa05fe230a11a528adcffbd9d1',
-    ),
-    'content.srd_5_1_cc:item:armor.half_plate@1#17016b36f8d6b9dbef0e3d6faa5444ae3d24337077490b1afb6e22aefd4cc911': (
-        '17016b36f8d6b9dbef0e3d6faa5444ae3d24337077490b1afb6e22aefd4cc911',
-        'bind',
-        'item.half-plate',
-        '1b38d9bb7cab107c9d791b13bede7e77e50da819a1fe06277cbeab4ef58b0026',
-    ),
-    'content.srd_5_1_cc:item:armor.hide@1#17016b36f8d6b9dbef0e3d6faa5444ae3d24337077490b1afb6e22aefd4cc911': (
-        '17016b36f8d6b9dbef0e3d6faa5444ae3d24337077490b1afb6e22aefd4cc911',
-        'bind',
-        'item.hide-armor',
-        'fa3838b2ec68c7a871158ee34ffa0a3be55c78ba2466ef94c41387749caee35b',
-    ),
-    'content.srd_5_1_cc:item:armor.leather@1#17016b36f8d6b9dbef0e3d6faa5444ae3d24337077490b1afb6e22aefd4cc911': (
-        '17016b36f8d6b9dbef0e3d6faa5444ae3d24337077490b1afb6e22aefd4cc911',
-        'bind',
-        'item.leather-armor',
-        '8d7eb62466351b80878962e30795b0564dfad1f4f0b84fdce2bfdd3352e5940e',
-    ),
-    'content.srd_5_1_cc:item:armor.padded@1#17016b36f8d6b9dbef0e3d6faa5444ae3d24337077490b1afb6e22aefd4cc911': (
-        '17016b36f8d6b9dbef0e3d6faa5444ae3d24337077490b1afb6e22aefd4cc911',
-        'bind',
-        'item.padded',
-        '25857118a9308b360f909e7cbe0fc329cb880076beaf6cf52aacd42594f83f71',
-    ),
-    'content.srd_5_1_cc:item:armor.plate@1#17016b36f8d6b9dbef0e3d6faa5444ae3d24337077490b1afb6e22aefd4cc911': (
-        '17016b36f8d6b9dbef0e3d6faa5444ae3d24337077490b1afb6e22aefd4cc911',
-        'bind',
-        'item.plate-armor',
-        '0485112ce605727b5f0aaae6a4de0d1e2d69b27e2484ca9dc184eca39f0c8727',
-    ),
-    'content.srd_5_1_cc:item:armor.ring_mail@1#17016b36f8d6b9dbef0e3d6faa5444ae3d24337077490b1afb6e22aefd4cc911': (
-        '17016b36f8d6b9dbef0e3d6faa5444ae3d24337077490b1afb6e22aefd4cc911',
-        'bind',
-        'item.ring-mail',
-        '7b6d60345b96b0bd663709a40ccc0536ed814c8022443d8379873edcc14e1f04',
-    ),
-    'content.srd_5_1_cc:item:armor.scale_mail@1#17016b36f8d6b9dbef0e3d6faa5444ae3d24337077490b1afb6e22aefd4cc911': (
-        '17016b36f8d6b9dbef0e3d6faa5444ae3d24337077490b1afb6e22aefd4cc911',
-        'bind',
-        'item.scale-mail',
-        '0c204133cc50a7a1d33faa2b1354646e9b6f214ade106490b1945265e94d441e',
-    ),
-    'content.srd_5_1_cc:item:armor.splint@1#17016b36f8d6b9dbef0e3d6faa5444ae3d24337077490b1afb6e22aefd4cc911': (
-        '17016b36f8d6b9dbef0e3d6faa5444ae3d24337077490b1afb6e22aefd4cc911',
-        'bind',
-        'item.splint-armor',
-        '64eefa559320a89bd33f08ec31395604a7accf9c876ecd04187e473541c0b0d6',
-    ),
-    'content.srd_5_1_cc:item:armor.studded_leather@1#17016b36f8d6b9dbef0e3d6faa5444ae3d24337077490b1afb6e22aefd4cc911': (
-        '17016b36f8d6b9dbef0e3d6faa5444ae3d24337077490b1afb6e22aefd4cc911',
-        'bind',
-        'item.studded-leather',
-        '58796097287821d5eec27a5c85aac0aea8cece37d2e612c3573000392f3ad047',
-    ),
-    'content.srd_5_1_cc:item:gear.common_clothes@1#005ebfc5bef103c69dbce0bc7626d2f97b22476bfcb8fa787edb046c807f9b2a': (
-        '005ebfc5bef103c69dbce0bc7626d2f97b22476bfcb8fa787edb046c807f9b2a',
-        'bind',
-        'item.common-clothes',
-        '71ee96377b21b6c2db9b26199a8426ef6045dac92f8d44acb846426ba6375ece',
-    ),
-    'content.srd_5_1_cc:item:gear.holy_symbol@1#005ebfc5bef103c69dbce0bc7626d2f97b22476bfcb8fa787edb046c807f9b2a': (
-        '005ebfc5bef103c69dbce0bc7626d2f97b22476bfcb8fa787edb046c807f9b2a',
-        'bind',
-        'item.holy-symbol',
-        'f8a6549499a84e5a8c76c9c79c06cacd3c894d765360d34502707b7856e35eb9',
-    ),
-    'content.srd_5_1_cc:item:gear.incense@1#005ebfc5bef103c69dbce0bc7626d2f97b22476bfcb8fa787edb046c807f9b2a': (
-        '005ebfc5bef103c69dbce0bc7626d2f97b22476bfcb8fa787edb046c807f9b2a',
-        'bind',
-        'item.incense',
-        '6ce4a10c00b0cd9d49a04f017a95a224726fb99b69d67eac98896a4cd8dd4497',
-    ),
-    'content.srd_5_1_cc:item:gear.prayer_book@1#005ebfc5bef103c69dbce0bc7626d2f97b22476bfcb8fa787edb046c807f9b2a': (
-        '005ebfc5bef103c69dbce0bc7626d2f97b22476bfcb8fa787edb046c807f9b2a',
-        'bind',
-        'item.prayer-book',
-        '4aa4a7eaec08bfd51384f69f52bfc6d52cf93936a87c0e17d8d0ef3942f4caae',
-    ),
-    'content.srd_5_1_cc:item:gear.vestments@1#005ebfc5bef103c69dbce0bc7626d2f97b22476bfcb8fa787edb046c807f9b2a': (
-        '005ebfc5bef103c69dbce0bc7626d2f97b22476bfcb8fa787edb046c807f9b2a',
-        'bind',
-        'item.vestments',
-        '465e8ff12b78d071ca4af9f1aecad2a5ab1d1f4a707ff68e12dd2b51b51609f9',
-    ),
-    'content.srd_5_1_cc:item:shield.shield@1#17016b36f8d6b9dbef0e3d6faa5444ae3d24337077490b1afb6e22aefd4cc911': (
-        '17016b36f8d6b9dbef0e3d6faa5444ae3d24337077490b1afb6e22aefd4cc911',
-        'bind',
-        'item.shield',
-        '5cfe8848a0291088d6c230e8c8d910d093420b4eb11df451d2020fe74d5998ec',
-    ),
-    'content.srd_5_1_cc:item:weapon.battleaxe@1#14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1': (
-        '14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1',
-        'bind',
-        'item.battleaxe',
-        '68385ecff3306668ec19a9cfd4aca0e1f028bfe30837845eb7e33e4b4e27c142',
-    ),
-    'content.srd_5_1_cc:item:weapon.club@1#f65db9f725391b9c350400a2fc1789c14ab864a63f4a6be263cfcb9c8fa398f4': (
-        'f65db9f725391b9c350400a2fc1789c14ab864a63f4a6be263cfcb9c8fa398f4',
-        'bind',
-        'item.club',
-        '9a3129ca841a954740687a5a6ca0bbf1883762c416607fda44d6c2cc4c6b486a',
-    ),
-    'content.srd_5_1_cc:item:weapon.creature.bandit_captain_thrown_dagger@1#6a547b0b599372a01c074dccb9d251acbd009e51e54f822a65c2f29ea81e45a7': (
-        '6a547b0b599372a01c074dccb9d251acbd009e51e54f822a65c2f29ea81e45a7',
-        'bind',
-        'item.dagger',
-        '929e623a96820f0994a307e16a2e6f680244b786c5b8571298f4fe0e3f50af1e',
-    ),
-    'content.srd_5_1_cc:item:weapon.creature.bugbear_morningstar@1#6a547b0b599372a01c074dccb9d251acbd009e51e54f822a65c2f29ea81e45a7': (
-        '6a547b0b599372a01c074dccb9d251acbd009e51e54f822a65c2f29ea81e45a7',
-        'bind',
-        'item.morningstar',
-        '85680002ae4e51e0bb9702943f6edcaf0e3c6ad56366b2a444b842e6cebdbc4a',
-    ),
-    'content.srd_5_1_cc:item:weapon.creature.dire_wolf_bite@1#6a547b0b599372a01c074dccb9d251acbd009e51e54f822a65c2f29ea81e45a7': (
-        '6a547b0b599372a01c074dccb9d251acbd009e51e54f822a65c2f29ea81e45a7',
-        'bind',
-        'item.bite',
-        '55987e2c8b0e5330d23b28aca6dcb18a55ca020a1272f7c1dac16a80d25432be',
-    ),
-    'content.srd_5_1_cc:item:weapon.creature.ghoul_bite@1#6a547b0b599372a01c074dccb9d251acbd009e51e54f822a65c2f29ea81e45a7': (
-        '6a547b0b599372a01c074dccb9d251acbd009e51e54f822a65c2f29ea81e45a7',
-        'bind',
-        'item.bite',
-        '55987e2c8b0e5330d23b28aca6dcb18a55ca020a1272f7c1dac16a80d25432be',
-    ),
-    'content.srd_5_1_cc:item:weapon.creature.ghoul_claws@1#6a547b0b599372a01c074dccb9d251acbd009e51e54f822a65c2f29ea81e45a7': (
-        '6a547b0b599372a01c074dccb9d251acbd009e51e54f822a65c2f29ea81e45a7',
-        'bind',
-        'item.claws',
-        '779b9a1e62632269cfb238355f0b34d88050128cccb3e53c80e4fe3225ab7817',
-    ),
-    'content.srd_5_1_cc:item:weapon.creature.kobold_sling@1#6a547b0b599372a01c074dccb9d251acbd009e51e54f822a65c2f29ea81e45a7': (
-        '6a547b0b599372a01c074dccb9d251acbd009e51e54f822a65c2f29ea81e45a7',
-        'bind',
-        'item.sling',
-        '4d232e697d301cd150d4e2e0fd196e492f79aa93f9eedf6e6fd1c15ad71136b5',
-    ),
-    'content.srd_5_1_cc:item:weapon.creature.ogre_greatclub@1#6a547b0b599372a01c074dccb9d251acbd009e51e54f822a65c2f29ea81e45a7': (
-        '6a547b0b599372a01c074dccb9d251acbd009e51e54f822a65c2f29ea81e45a7',
-        'bind',
-        'item.club',
-        '9a3129ca841a954740687a5a6ca0bbf1883762c416607fda44d6c2cc4c6b486a',
-    ),
-    'content.srd_5_1_cc:item:weapon.creature.ogre_thrown_javelin@1#6a547b0b599372a01c074dccb9d251acbd009e51e54f822a65c2f29ea81e45a7': (
-        '6a547b0b599372a01c074dccb9d251acbd009e51e54f822a65c2f29ea81e45a7',
-        'bind',
-        'item.javelin',
-        '20310290c5ee18f1f698355f467a1bff3f137f3da3ee12d6b3c7cb0090cecaf4',
-    ),
-    'content.srd_5_1_cc:item:weapon.creature.ogre_zombie_morningstar@1#6a547b0b599372a01c074dccb9d251acbd009e51e54f822a65c2f29ea81e45a7': (
-        '6a547b0b599372a01c074dccb9d251acbd009e51e54f822a65c2f29ea81e45a7',
-        'bind',
-        'item.morningstar',
-        '85680002ae4e51e0bb9702943f6edcaf0e3c6ad56366b2a444b842e6cebdbc4a',
-    ),
-    'content.srd_5_1_cc:item:weapon.creature.spy_hand_crossbow@1#6a547b0b599372a01c074dccb9d251acbd009e51e54f822a65c2f29ea81e45a7': (
-        '6a547b0b599372a01c074dccb9d251acbd009e51e54f822a65c2f29ea81e45a7',
-        'bind',
-        'item.light-crossbow',
-        '3c8684fe1f48c90e4765a245c76957d39e2a6fdceeef0c3b6b34d3c8fd543d45',
-    ),
-    'content.srd_5_1_cc:item:weapon.creature.thrown_javelin@1#6a547b0b599372a01c074dccb9d251acbd009e51e54f822a65c2f29ea81e45a7': (
-        '6a547b0b599372a01c074dccb9d251acbd009e51e54f822a65c2f29ea81e45a7',
-        'bind',
-        'item.javelin',
-        '20310290c5ee18f1f698355f467a1bff3f137f3da3ee12d6b3c7cb0090cecaf4',
-    ),
-    'content.srd_5_1_cc:item:weapon.creature.wolf_bite@1#6a547b0b599372a01c074dccb9d251acbd009e51e54f822a65c2f29ea81e45a7': (
-        '6a547b0b599372a01c074dccb9d251acbd009e51e54f822a65c2f29ea81e45a7',
-        'bind',
-        'item.bite',
-        '55987e2c8b0e5330d23b28aca6dcb18a55ca020a1272f7c1dac16a80d25432be',
-    ),
-    'content.srd_5_1_cc:item:weapon.creature.zombie_slam@1#6a547b0b599372a01c074dccb9d251acbd009e51e54f822a65c2f29ea81e45a7': (
-        '6a547b0b599372a01c074dccb9d251acbd009e51e54f822a65c2f29ea81e45a7',
-        'bind',
-        'item.slam',
-        'a01b093a10b4f8afdb308e8b157a44f87c90c14a8ba32597a8887d9ea8a27356',
-    ),
-    'content.srd_5_1_cc:item:weapon.dagger@1#14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1': (
-        '14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1',
-        'bind',
-        'item.dagger',
-        '929e623a96820f0994a307e16a2e6f680244b786c5b8571298f4fe0e3f50af1e',
-    ),
-    'content.srd_5_1_cc:item:weapon.dart@1#14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1': (
-        '14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1',
-        'bind',
-        'item.dagger',
-        '929e623a96820f0994a307e16a2e6f680244b786c5b8571298f4fe0e3f50af1e',
-    ),
-    'content.srd_5_1_cc:item:weapon.greataxe@1#14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1': (
-        '14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1',
-        'bind',
-        'item.greataxe',
-        '1b76441a78ee647f24759fcdc16082da53ae80fc89da1a1a38843a94109fde50',
-    ),
-    'content.srd_5_1_cc:item:weapon.greatsword@1#14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1': (
-        '14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1',
-        'bind',
-        'item.greatsword',
-        'cbc61ab5f0d0d8a191d96d36f0301fd3748778810208bf9b8f5cf7c7c8a14657',
-    ),
-    'content.srd_5_1_cc:item:weapon.handaxe@1#14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1': (
-        '14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1',
-        'bind',
-        'item.handaxe',
-        '82257dc130f6ecba74f3dc9819f78440e9b0ba32988ab2100765af968be4f67f',
-    ),
-    'content.srd_5_1_cc:item:weapon.heavy_crossbow@1#14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1': (
-        '14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1',
-        'bind',
-        'item.heavy-crossbow',
-        '16b6e7c5f85b080393b82d31fb8ac88e30024da989607c2c2b44114f3dbe5b57',
-    ),
-    'content.srd_5_1_cc:item:weapon.javelin@1#14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1': (
-        '14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1',
-        'bind',
-        'item.javelin',
-        '20310290c5ee18f1f698355f467a1bff3f137f3da3ee12d6b3c7cb0090cecaf4',
-    ),
-    'content.srd_5_1_cc:item:weapon.light_crossbow@1#14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1': (
-        '14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1',
-        'bind',
-        'item.light-crossbow',
-        '3c8684fe1f48c90e4765a245c76957d39e2a6fdceeef0c3b6b34d3c8fd543d45',
-    ),
-    'content.srd_5_1_cc:item:weapon.light_hammer@1#14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1': (
-        '14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1',
-        'bind',
-        'item.light-hammer',
-        '143962f97858a6c9b1643cd43bd5c984bd524b3b4d3547ce43df8a23b2d9e07a',
-    ),
-    'content.srd_5_1_cc:item:weapon.longbow@1#14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1': (
-        '14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1',
-        'bind',
-        'item.longbow',
-        '51bd120ba023502d7ce66ef232a27ff9a053a70e2ff38a689a0c745e73ff8461',
-    ),
-    'content.srd_5_1_cc:item:weapon.longsword@1#14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1': (
-        '14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1',
-        'bind',
-        'item.longsword',
-        '165dd87a3a025ed0d157a986eee1ba60cb5fce3456f1de3bdc888fecf6bbc204',
-    ),
-    'content.srd_5_1_cc:item:weapon.mace@1#14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1': (
-        '14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1',
-        'bind',
-        'item.mace',
-        '41a24f630a683c9cce42be8efe162b19fcc4ed56c418d8dac229f408be2b83f8',
-    ),
-    'content.srd_5_1_cc:item:weapon.morningstar@1#14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1': (
-        '14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1',
-        'bind',
-        'item.morningstar',
-        '85680002ae4e51e0bb9702943f6edcaf0e3c6ad56366b2a444b842e6cebdbc4a',
-    ),
-    'content.srd_5_1_cc:item:weapon.quarterstaff@1#14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1': (
-        '14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1',
-        'bind',
-        'item.quarterstaff',
-        'f665ea33a4b7d1a7df434d0ec80389671226bfaf075467636674bf0b10bf8146',
-    ),
-    'content.srd_5_1_cc:item:weapon.rapier@1#14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1': (
-        '14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1',
-        'bind',
-        'item.rapier',
-        '8aaddc11d686d3642c62ceaea6ca02805e9ec400cd4e5fe6479c38d5232cde16',
-    ),
-    'content.srd_5_1_cc:item:weapon.scimitar@1#14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1': (
-        '14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1',
-        'bind',
-        'item.scimitar',
-        'af2a5fb2bc8aea272a902592206ede13f1deefd7b88a563bf38e9c12cb7de3b0',
-    ),
-    'content.srd_5_1_cc:item:weapon.shortbow@1#14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1': (
-        '14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1',
-        'bind',
-        'item.shortbow',
-        'd8a6110e6b039f5c7eda3c180b20cf9b6212822fd8cab42786beb478c092f176',
-    ),
-    'content.srd_5_1_cc:item:weapon.shortsword@1#14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1': (
-        '14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1',
-        'bind',
-        'item.shortsword',
-        'be9118bedd35d757d80b44980faebd9c2576a2e90288ef9db6c67a3d1c5d2368',
-    ),
-    'content.srd_5_1_cc:item:weapon.sickle@1#14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1': (
-        '14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1',
-        'bind',
-        'item.sickle',
-        '50260b9268e9e89c2cef4d3800700a8548e855523b317edb6e142a129f7bed59',
-    ),
-    'content.srd_5_1_cc:item:weapon.sling@1#14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1': (
-        '14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1',
-        'bind',
-        'item.sling',
-        '4d232e697d301cd150d4e2e0fd196e492f79aa93f9eedf6e6fd1c15ad71136b5',
-    ),
-    'content.srd_5_1_cc:item:weapon.spear@1#14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1': (
-        '14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1',
-        'bind',
-        'item.spear',
-        '0dd6c78321111f5e8aff2a672d17f6314505bccedfbf7fbcf5fc43dcc4601248',
-    ),
-    'content.srd_5_1_cc:item:weapon.trident@1#14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1': (
-        '14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1',
-        'bind',
-        'item.trident',
-        '5bc377503f25a804e060cdbec489957687ed19f8eeda0b1ffcfcd121627dfbef',
-    ),
-    'content.srd_5_1_cc:item:weapon.warhammer@1#14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1': (
-        '14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1',
-        'bind',
-        'item.warhammer',
-        '52d431331c9466653bc592a129aa2cb834e66979bb697f7d0c29fe68dc326ae5',
     ),
     'content.srd_5_1_cc:reaction:reaction.class_feature.barbarian.retaliation@1#636ffe03ecf4e9d65b406137f0b2812c3a667e4641a56b912c67453ce0790d4b': (
         '636ffe03ecf4e9d65b406137f0b2812c3a667e4641a56b912c67453ce0790d4b',
@@ -2598,80 +1830,80 @@ BUILT_IN_CONTENT_ICON_BINDINGS: dict[
         'reaction.shield',
         'f679eedfae024e27329c14e0cd27aa32dc59540af7e446c0732ec279d2f51793',
     ),
-    'content.srd_5_1_cc:species:species.dragonborn@2#940437f6c22130a76f9e82b1655d168a090bfd32966d49119a450ebfb85fc61a': (
-        '940437f6c22130a76f9e82b1655d168a090bfd32966d49119a450ebfb85fc61a',
+    'content.srd_5_1_cc:species:species.dragonborn@2#0f87de6dd67a03aaf1ccd258b9fc0ed3424ff02bfed148b010d155b7f35121a6': (
+        '0f87de6dd67a03aaf1ccd258b9fc0ed3424ff02bfed148b010d155b7f35121a6',
         'intentional_null',
         None,
         None,
     ),
-    'content.srd_5_1_cc:species:species.dwarf@2#940437f6c22130a76f9e82b1655d168a090bfd32966d49119a450ebfb85fc61a': (
-        '940437f6c22130a76f9e82b1655d168a090bfd32966d49119a450ebfb85fc61a',
+    'content.srd_5_1_cc:species:species.dwarf@2#0f87de6dd67a03aaf1ccd258b9fc0ed3424ff02bfed148b010d155b7f35121a6': (
+        '0f87de6dd67a03aaf1ccd258b9fc0ed3424ff02bfed148b010d155b7f35121a6',
         'intentional_null',
         None,
         None,
     ),
-    'content.srd_5_1_cc:species:species.elf@2#940437f6c22130a76f9e82b1655d168a090bfd32966d49119a450ebfb85fc61a': (
-        '940437f6c22130a76f9e82b1655d168a090bfd32966d49119a450ebfb85fc61a',
+    'content.srd_5_1_cc:species:species.elf@2#0f87de6dd67a03aaf1ccd258b9fc0ed3424ff02bfed148b010d155b7f35121a6': (
+        '0f87de6dd67a03aaf1ccd258b9fc0ed3424ff02bfed148b010d155b7f35121a6',
         'intentional_null',
         None,
         None,
     ),
-    'content.srd_5_1_cc:species:species.gnome@2#940437f6c22130a76f9e82b1655d168a090bfd32966d49119a450ebfb85fc61a': (
-        '940437f6c22130a76f9e82b1655d168a090bfd32966d49119a450ebfb85fc61a',
+    'content.srd_5_1_cc:species:species.gnome@2#0f87de6dd67a03aaf1ccd258b9fc0ed3424ff02bfed148b010d155b7f35121a6': (
+        '0f87de6dd67a03aaf1ccd258b9fc0ed3424ff02bfed148b010d155b7f35121a6',
         'intentional_null',
         None,
         None,
     ),
-    'content.srd_5_1_cc:species:species.half_elf@2#940437f6c22130a76f9e82b1655d168a090bfd32966d49119a450ebfb85fc61a': (
-        '940437f6c22130a76f9e82b1655d168a090bfd32966d49119a450ebfb85fc61a',
+    'content.srd_5_1_cc:species:species.half_elf@2#0f87de6dd67a03aaf1ccd258b9fc0ed3424ff02bfed148b010d155b7f35121a6': (
+        '0f87de6dd67a03aaf1ccd258b9fc0ed3424ff02bfed148b010d155b7f35121a6',
         'intentional_null',
         None,
         None,
     ),
-    'content.srd_5_1_cc:species:species.half_orc@2#940437f6c22130a76f9e82b1655d168a090bfd32966d49119a450ebfb85fc61a': (
-        '940437f6c22130a76f9e82b1655d168a090bfd32966d49119a450ebfb85fc61a',
+    'content.srd_5_1_cc:species:species.half_orc@2#0f87de6dd67a03aaf1ccd258b9fc0ed3424ff02bfed148b010d155b7f35121a6': (
+        '0f87de6dd67a03aaf1ccd258b9fc0ed3424ff02bfed148b010d155b7f35121a6',
         'intentional_null',
         None,
         None,
     ),
-    'content.srd_5_1_cc:species:species.halfling@2#940437f6c22130a76f9e82b1655d168a090bfd32966d49119a450ebfb85fc61a': (
-        '940437f6c22130a76f9e82b1655d168a090bfd32966d49119a450ebfb85fc61a',
+    'content.srd_5_1_cc:species:species.halfling@2#0f87de6dd67a03aaf1ccd258b9fc0ed3424ff02bfed148b010d155b7f35121a6': (
+        '0f87de6dd67a03aaf1ccd258b9fc0ed3424ff02bfed148b010d155b7f35121a6',
         'intentional_null',
         None,
         None,
     ),
-    'content.srd_5_1_cc:species:species.human@2#940437f6c22130a76f9e82b1655d168a090bfd32966d49119a450ebfb85fc61a': (
-        '940437f6c22130a76f9e82b1655d168a090bfd32966d49119a450ebfb85fc61a',
+    'content.srd_5_1_cc:species:species.human@2#0f87de6dd67a03aaf1ccd258b9fc0ed3424ff02bfed148b010d155b7f35121a6': (
+        '0f87de6dd67a03aaf1ccd258b9fc0ed3424ff02bfed148b010d155b7f35121a6',
         'intentional_null',
         None,
         None,
     ),
-    'content.srd_5_1_cc:species:species.tiefling@2#940437f6c22130a76f9e82b1655d168a090bfd32966d49119a450ebfb85fc61a': (
-        '940437f6c22130a76f9e82b1655d168a090bfd32966d49119a450ebfb85fc61a',
+    'content.srd_5_1_cc:species:species.tiefling@2#0f87de6dd67a03aaf1ccd258b9fc0ed3424ff02bfed148b010d155b7f35121a6': (
+        '0f87de6dd67a03aaf1ccd258b9fc0ed3424ff02bfed148b010d155b7f35121a6',
         'intentional_null',
         None,
         None,
     ),
-    'content.srd_5_1_cc:species_variant:species_variant.dwarf.hill@2#0bb7732cd5ff26034d71d982c5e06a5fe9fda6fa9a3e8579b3fd1e29428b33a7': (
-        '0bb7732cd5ff26034d71d982c5e06a5fe9fda6fa9a3e8579b3fd1e29428b33a7',
+    'content.srd_5_1_cc:species_variant:species_variant.dwarf.hill@2#ce2287c120a329ce2b4af4ff6e053777ddafd1c7dcaef104ebcc58d357c7c086': (
+        'ce2287c120a329ce2b4af4ff6e053777ddafd1c7dcaef104ebcc58d357c7c086',
         'intentional_null',
         None,
         None,
     ),
-    'content.srd_5_1_cc:species_variant:species_variant.elf.high@2#0bb7732cd5ff26034d71d982c5e06a5fe9fda6fa9a3e8579b3fd1e29428b33a7': (
-        '0bb7732cd5ff26034d71d982c5e06a5fe9fda6fa9a3e8579b3fd1e29428b33a7',
+    'content.srd_5_1_cc:species_variant:species_variant.elf.high@2#ce2287c120a329ce2b4af4ff6e053777ddafd1c7dcaef104ebcc58d357c7c086': (
+        'ce2287c120a329ce2b4af4ff6e053777ddafd1c7dcaef104ebcc58d357c7c086',
         'intentional_null',
         None,
         None,
     ),
-    'content.srd_5_1_cc:species_variant:species_variant.gnome.rock@2#0bb7732cd5ff26034d71d982c5e06a5fe9fda6fa9a3e8579b3fd1e29428b33a7': (
-        '0bb7732cd5ff26034d71d982c5e06a5fe9fda6fa9a3e8579b3fd1e29428b33a7',
+    'content.srd_5_1_cc:species_variant:species_variant.gnome.rock@2#ce2287c120a329ce2b4af4ff6e053777ddafd1c7dcaef104ebcc58d357c7c086': (
+        'ce2287c120a329ce2b4af4ff6e053777ddafd1c7dcaef104ebcc58d357c7c086',
         'intentional_null',
         None,
         None,
     ),
-    'content.srd_5_1_cc:species_variant:species_variant.halfling.lightfoot@2#0bb7732cd5ff26034d71d982c5e06a5fe9fda6fa9a3e8579b3fd1e29428b33a7': (
-        '0bb7732cd5ff26034d71d982c5e06a5fe9fda6fa9a3e8579b3fd1e29428b33a7',
+    'content.srd_5_1_cc:species_variant:species_variant.halfling.lightfoot@2#ce2287c120a329ce2b4af4ff6e053777ddafd1c7dcaef104ebcc58d357c7c086': (
+        'ce2287c120a329ce2b4af4ff6e053777ddafd1c7dcaef104ebcc58d357c7c086',
         'intentional_null',
         None,
         None,
@@ -3348,80 +2580,80 @@ BUILT_IN_CONTENT_ICON_BINDINGS: dict[
         'spell.web',
         '1648e98e9c045136637e4748a69d34d187a41d41328c85b9df3ed2375e6f8a61',
     ),
-    'content.srd_5_1_cc:starting_equipment_package:starting_equipment.barbarian.dual_axes@1#dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605': (
-        'dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605',
+    'content.srd_5_1_cc:starting_equipment_package:starting_equipment.barbarian.dual_axes@1#695f535874d0f10da3a9c48fb0f2c421eb245810806098d91dbee35efeef36e2': (
+        '695f535874d0f10da3a9c48fb0f2c421eb245810806098d91dbee35efeef36e2',
         'bind',
         'item.handaxe',
         '82257dc130f6ecba74f3dc9819f78440e9b0ba32988ab2100765af968be4f67f',
     ),
-    'content.srd_5_1_cc:starting_equipment_package:starting_equipment.barbarian.greataxe@1#dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605': (
-        'dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605',
+    'content.srd_5_1_cc:starting_equipment_package:starting_equipment.barbarian.greataxe@1#695f535874d0f10da3a9c48fb0f2c421eb245810806098d91dbee35efeef36e2': (
+        '695f535874d0f10da3a9c48fb0f2c421eb245810806098d91dbee35efeef36e2',
         'bind',
         'item.greataxe',
         '1b76441a78ee647f24759fcdc16082da53ae80fc89da1a1a38843a94109fde50',
     ),
-    'content.srd_5_1_cc:starting_equipment_package:starting_equipment.barbarian.sword_shield@1#dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605': (
-        'dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605',
+    'content.srd_5_1_cc:starting_equipment_package:starting_equipment.barbarian.sword_shield@1#695f535874d0f10da3a9c48fb0f2c421eb245810806098d91dbee35efeef36e2': (
+        '695f535874d0f10da3a9c48fb0f2c421eb245810806098d91dbee35efeef36e2',
         'bind',
         'item.longsword',
         '165dd87a3a025ed0d157a986eee1ba60cb5fce3456f1de3bdc888fecf6bbc204',
     ),
-    'content.srd_5_1_cc:starting_equipment_package:starting_equipment.fighter.archery@1#dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605': (
-        'dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605',
+    'content.srd_5_1_cc:starting_equipment_package:starting_equipment.fighter.archery@1#695f535874d0f10da3a9c48fb0f2c421eb245810806098d91dbee35efeef36e2': (
+        '695f535874d0f10da3a9c48fb0f2c421eb245810806098d91dbee35efeef36e2',
         'bind',
         'item.longbow',
         '51bd120ba023502d7ce66ef232a27ff9a053a70e2ff38a689a0c745e73ff8461',
     ),
-    'content.srd_5_1_cc:starting_equipment_package:starting_equipment.fighter.dual_wield@1#dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605': (
-        'dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605',
+    'content.srd_5_1_cc:starting_equipment_package:starting_equipment.fighter.dual_wield@1#695f535874d0f10da3a9c48fb0f2c421eb245810806098d91dbee35efeef36e2': (
+        '695f535874d0f10da3a9c48fb0f2c421eb245810806098d91dbee35efeef36e2',
         'bind',
         'item.shortsword',
         'be9118bedd35d757d80b44980faebd9c2576a2e90288ef9db6c67a3d1c5d2368',
     ),
-    'content.srd_5_1_cc:starting_equipment_package:starting_equipment.fighter.greatsword@1#dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605': (
-        'dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605',
+    'content.srd_5_1_cc:starting_equipment_package:starting_equipment.fighter.greatsword@1#695f535874d0f10da3a9c48fb0f2c421eb245810806098d91dbee35efeef36e2': (
+        '695f535874d0f10da3a9c48fb0f2c421eb245810806098d91dbee35efeef36e2',
         'bind',
         'item.greatsword',
         'cbc61ab5f0d0d8a191d96d36f0301fd3748778810208bf9b8f5cf7c7c8a14657',
     ),
-    'content.srd_5_1_cc:starting_equipment_package:starting_equipment.fighter.sword_shield@1#dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605': (
-        'dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605',
+    'content.srd_5_1_cc:starting_equipment_package:starting_equipment.fighter.sword_shield@1#695f535874d0f10da3a9c48fb0f2c421eb245810806098d91dbee35efeef36e2': (
+        '695f535874d0f10da3a9c48fb0f2c421eb245810806098d91dbee35efeef36e2',
         'bind',
         'item.longsword',
         '165dd87a3a025ed0d157a986eee1ba60cb5fce3456f1de3bdc888fecf6bbc204',
     ),
-    'content.srd_5_1_cc:starting_equipment_package:starting_equipment.sorcerer.dagger@1#dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605': (
-        'dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605',
+    'content.srd_5_1_cc:starting_equipment_package:starting_equipment.sorcerer.dagger@1#695f535874d0f10da3a9c48fb0f2c421eb245810806098d91dbee35efeef36e2': (
+        '695f535874d0f10da3a9c48fb0f2c421eb245810806098d91dbee35efeef36e2',
         'bind',
         'item.dagger',
         '929e623a96820f0994a307e16a2e6f680244b786c5b8571298f4fe0e3f50af1e',
     ),
-    'content.srd_5_1_cc:starting_equipment_package:starting_equipment.sorcerer.quarterstaff@1#dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605': (
-        'dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605',
+    'content.srd_5_1_cc:starting_equipment_package:starting_equipment.sorcerer.quarterstaff@1#695f535874d0f10da3a9c48fb0f2c421eb245810806098d91dbee35efeef36e2': (
+        '695f535874d0f10da3a9c48fb0f2c421eb245810806098d91dbee35efeef36e2',
         'bind',
         'item.quarterstaff',
         'f665ea33a4b7d1a7df434d0ec80389671226bfaf075467636674bf0b10bf8146',
     ),
-    'content.srd_5_1_cc:starting_equipment_package:starting_holdings.background.acolyte@1#dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605': (
-        'dfdeeaf56b76136a5385be374cfd8635668a73247d4ee1ecd757baeda912f605',
+    'content.srd_5_1_cc:starting_equipment_package:starting_holdings.background.acolyte@1#695f535874d0f10da3a9c48fb0f2c421eb245810806098d91dbee35efeef36e2': (
+        '695f535874d0f10da3a9c48fb0f2c421eb245810806098d91dbee35efeef36e2',
         'bind',
         'item.holy-symbol',
         'f8a6549499a84e5a8c76c9c79c06cacd3c894d765360d34502707b7856e35eb9',
     ),
-    'content.srd_5_1_cc:subclass:subclass.barbarian.berserker@1#d8920a80b484a2ce45b1a98e6d29160fed576ead7d0e1d9f63d1c00218bc6f3d': (
-        'd8920a80b484a2ce45b1a98e6d29160fed576ead7d0e1d9f63d1c00218bc6f3d',
+    'content.srd_5_1_cc:subclass:subclass.barbarian.berserker@1#988ec83cb5af32ccf2c9dae683ab1f76edefc9e65d425d0ac42835d9bba2b38b': (
+        '988ec83cb5af32ccf2c9dae683ab1f76edefc9e65d425d0ac42835d9bba2b38b',
         'bind',
         'condition.dnd-classes-rage-frenzyfeature',
         'b7078278f019a8966ca7dbf1b338bb6f1559be54220b77993ee262a82008397d',
     ),
-    'content.srd_5_1_cc:subclass:subclass.fighter.champion@1#d8920a80b484a2ce45b1a98e6d29160fed576ead7d0e1d9f63d1c00218bc6f3d': (
-        'd8920a80b484a2ce45b1a98e6d29160fed576ead7d0e1d9f63d1c00218bc6f3d',
+    'content.srd_5_1_cc:subclass:subclass.fighter.champion@1#988ec83cb5af32ccf2c9dae683ab1f76edefc9e65d425d0ac42835d9bba2b38b': (
+        '988ec83cb5af32ccf2c9dae683ab1f76edefc9e65d425d0ac42835d9bba2b38b',
         'bind',
         'condition.dnd-classes-fighter-improvedcritical',
         '5237efe57f75f076f43714b8037f2678f7b1f0fa4dc6f5a5658fb03cd1507c8f',
     ),
-    'content.srd_5_1_cc:subclass:subclass.sorcerer.draconic_bloodline@1#d8920a80b484a2ce45b1a98e6d29160fed576ead7d0e1d9f63d1c00218bc6f3d': (
-        'd8920a80b484a2ce45b1a98e6d29160fed576ead7d0e1d9f63d1c00218bc6f3d',
+    'content.srd_5_1_cc:subclass:subclass.sorcerer.draconic_bloodline@1#988ec83cb5af32ccf2c9dae683ab1f76edefc9e65d425d0ac42835d9bba2b38b': (
+        '988ec83cb5af32ccf2c9dae683ab1f76edefc9e65d425d0ac42835d9bba2b38b',
         'bind',
         'condition.dnd-classes-sorcerer-draconicresilience',
         'fbb2b9c054c24d70db59af5afb009d1c618cdc5d1b61673789dcc889bdbfd46d',
@@ -3492,14 +2724,14 @@ BUILT_IN_CONTENT_ICON_BINDINGS: dict[
         'condition.dnd-monsters-traits-bonusdamagefeature',
         'c9d7699e8a5c2ed5aea53ef4c0be8058c869213081bb0720e86d21fc4f3a8368',
     ),
-    'content.srd_5_1_cc:trait:trait.origin.background.acolyte.proficiencies@1#693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f': (
-        '693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f',
+    'content.srd_5_1_cc:trait:trait.origin.background.acolyte.proficiencies@1#d6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714': (
+        'd6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714',
         'bind',
         'trait.acolyte-proficiencies',
         '1d9935ff3aa8a91c7c06b386b2bce58eb003707d0ff998bc9cbccc4ae114e7e8',
     ),
-    'content.srd_5_1_cc:trait:trait.origin.background.acolyte.shelter_of_the_faithful@1#693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f': (
-        '693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f',
+    'content.srd_5_1_cc:trait:trait.origin.background.acolyte.shelter_of_the_faithful@1#d6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714': (
+        'd6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714',
         'bind',
         'trait.shelter-of-the-faithful',
         '50df9fb5865694f53cf714e0018cf6444444a54fca8dafc39c85d6a2f257c124',
@@ -3564,56 +2796,56 @@ BUILT_IN_CONTENT_ICON_BINDINGS: dict[
         'trait.draconic-ancestry-cold-cone',
         '662db8d0c2f1b31083088b8ec6fdbff2f0288248b16cb5f0f748b8cb0df645c5',
     ),
-    'content.srd_5_1_cc:trait:trait.origin.dwarf.combat_training@1#693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f': (
-        '693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f',
+    'content.srd_5_1_cc:trait:trait.origin.dwarf.combat_training@1#d6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714': (
+        'd6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714',
         'bind',
         'trait.dwarven-combat-training',
         'b7a1ecdd013455079f1af0990218fb607c1fd506d3fe5830a480add6a80753fb',
     ),
-    'content.srd_5_1_cc:trait:trait.origin.dwarf.dwarven_resilience@1#693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f': (
-        '693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f',
+    'content.srd_5_1_cc:trait:trait.origin.dwarf.dwarven_resilience@1#d6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714': (
+        'd6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714',
         'bind',
         'trait.dwarven-resilience',
         'f4ccdcea09643e891671bd8ef5b645d00e5bef766d090f8ad63e035811b22e21',
     ),
-    'content.srd_5_1_cc:trait:trait.origin.dwarf.physical.medium_25@1#693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f': (
-        '693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f',
+    'content.srd_5_1_cc:trait:trait.origin.dwarf.physical.medium_25@1#d6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714': (
+        'd6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714',
         'bind',
         'trait.origin-size-and-speed',
         'd6bbec3f03560907876909430db8591d1239467c5f1046cb69df8dfe2f1dde75',
     ),
-    'content.srd_5_1_cc:trait:trait.origin.dwarf.stonecunning@1#693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f': (
-        '693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f',
+    'content.srd_5_1_cc:trait:trait.origin.dwarf.stonecunning@1#d6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714': (
+        'd6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714',
         'bind',
         'trait.stonecunning',
         '34ff247f71476d06a7121d252156158f4d21369e4a7294a68993d9033b4cf0a3',
     ),
-    'content.srd_5_1_cc:trait:trait.origin.elf.fey_ancestry@1#693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f': (
-        '693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f',
+    'content.srd_5_1_cc:trait:trait.origin.elf.fey_ancestry@1#d6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714': (
+        'd6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714',
         'bind',
         'trait.fey-ancestry',
         'e12b76662e36b4f9e11d49981925fd104415252a519abeffd043cbb764a6a321',
     ),
-    'content.srd_5_1_cc:trait:trait.origin.elf.keen_senses@1#693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f': (
-        '693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f',
+    'content.srd_5_1_cc:trait:trait.origin.elf.keen_senses@1#d6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714': (
+        'd6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714',
         'bind',
         'trait.keen-senses',
         'fd452caea00144c5c9db5484470a9baabde676d927e8218014513e8c54703ee6',
     ),
-    'content.srd_5_1_cc:trait:trait.origin.elf.trance@1#693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f': (
-        '693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f',
+    'content.srd_5_1_cc:trait:trait.origin.elf.trance@1#d6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714': (
+        'd6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714',
         'bind',
         'trait.trance',
         'ff8fef2d2f42336cfe6c0369b916f1b5ba5a973cc9585b223d22fb268634a26a',
     ),
-    'content.srd_5_1_cc:trait:trait.origin.gnome.cunning@1#693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f': (
-        '693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f',
+    'content.srd_5_1_cc:trait:trait.origin.gnome.cunning@1#d6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714': (
+        'd6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714',
         'bind',
         'trait.gnome-cunning',
         '4d3badc33ffada69b47ed3650e6fc04374740c572d3d552fb45cd88383b374fc',
     ),
-    'content.srd_5_1_cc:trait:trait.origin.half_orc.menacing@1#693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f': (
-        '693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f',
+    'content.srd_5_1_cc:trait:trait.origin.half_orc.menacing@1#d6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714': (
+        'd6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714',
         'bind',
         'trait.half-orc-menacing',
         '03234891e5b9cf17b0ab3ff6851314038fc83e745fbd7e7ea85c95af1e421778',
@@ -3624,14 +2856,14 @@ BUILT_IN_CONTENT_ICON_BINDINGS: dict[
         'trait.half-orc-relentless-endurance',
         '99192caf281cf625dfcfbcb8bdf37a5a90060a287b4fcabbdd329d30a7fe4f61',
     ),
-    'content.srd_5_1_cc:trait:trait.origin.half_orc.savage_attacks@1#693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f': (
-        '693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f',
+    'content.srd_5_1_cc:trait:trait.origin.half_orc.savage_attacks@1#d6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714': (
+        'd6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714',
         'bind',
         'trait.half-orc-savage-attacks',
         '6e793aae67ac7d2e05d552a8a235ed69b62058ac34c1d33dd5f01b24660aa61b',
     ),
-    'content.srd_5_1_cc:trait:trait.origin.halfling.brave@1#693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f': (
-        '693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f',
+    'content.srd_5_1_cc:trait:trait.origin.halfling.brave@1#d6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714': (
+        'd6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714',
         'bind',
         'trait.halfling-brave',
         '0751831b421482f222d1b19c6aacb55fcb345d3b5c9ccfb172feed02a4c74a9b',
@@ -3642,116 +2874,116 @@ BUILT_IN_CONTENT_ICON_BINDINGS: dict[
         'trait.halfling-lucky',
         '81f1127e17126e3cfe57b84b65fd18c6e8478ee67fd38ed1696e91c11c5698a3',
     ),
-    'content.srd_5_1_cc:trait:trait.origin.halfling.nimbleness@1#693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f': (
-        '693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f',
+    'content.srd_5_1_cc:trait:trait.origin.halfling.nimbleness@1#d6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714': (
+        'd6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714',
         'bind',
         'trait.halfling-nimbleness',
         '34a609794ff515169a0c9c837836ce367c54263e48159eca68e2703d49e397db',
     ),
-    'content.srd_5_1_cc:trait:trait.origin.high_elf.weapon_training@1#693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f': (
-        '693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f',
+    'content.srd_5_1_cc:trait:trait.origin.high_elf.weapon_training@1#d6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714': (
+        'd6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714',
         'bind',
         'trait.elf-weapon-training',
         'fa0be3b3742270442f25aee32dfaa8e2ab8d6f05f5b9b7dd9deb97e117908a34',
     ),
-    'content.srd_5_1_cc:trait:trait.origin.hill_dwarf.dwarven_toughness@1#693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f': (
-        '693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f',
+    'content.srd_5_1_cc:trait:trait.origin.hill_dwarf.dwarven_toughness@1#d6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714': (
+        'd6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714',
         'bind',
         'trait.dwarven-toughness',
         '5b2f4cc2a0d78128dceb751aebb40ccc58f5123a4836992a2746b668dca3b7f1',
     ),
-    'content.srd_5_1_cc:trait:trait.origin.lightfoot.naturally_stealthy@1#693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f': (
-        '693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f',
+    'content.srd_5_1_cc:trait:trait.origin.lightfoot.naturally_stealthy@1#d6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714': (
+        'd6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714',
         'bind',
         'trait.naturally-stealthy',
         '45291636d0497a71152af9d769d2b4a95488a91ef353fbba6bce17eb36d8cf05',
     ),
-    'content.srd_5_1_cc:trait:trait.origin.rock_gnome.artificers_lore@1#693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f': (
-        '693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f',
+    'content.srd_5_1_cc:trait:trait.origin.rock_gnome.artificers_lore@1#d6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714': (
+        'd6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714',
         'bind',
         'trait.artificers-lore',
         'ecaa4cf5567186e81cff38b8f5fc2642b67ead9d6ae11de0101516021e1a0dc8',
     ),
-    'content.srd_5_1_cc:trait:trait.origin.rock_gnome.tinker@1#693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f': (
-        '693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f',
+    'content.srd_5_1_cc:trait:trait.origin.rock_gnome.tinker@1#d6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714': (
+        'd6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714',
         'bind',
         'trait.rock-gnome-tinker',
         '0ee53cb257ff42cc27470d8214692cf3acc59d107e5b8e691e4ca091957cca30',
     ),
-    'content.srd_5_1_cc:trait:trait.origin.shared.darkvision_60@1#693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f': (
-        '693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f',
+    'content.srd_5_1_cc:trait:trait.origin.shared.darkvision_60@1#d6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714': (
+        'd6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714',
         'bind',
         'trait.darkvision',
         'f9b292c41292ca586a88144105e090455e281e5bc6e0a3b1457264102477d1eb',
     ),
-    'content.srd_5_1_cc:trait:trait.origin.shared.physical.medium_30@1#693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f': (
-        '693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f',
+    'content.srd_5_1_cc:trait:trait.origin.shared.physical.medium_30@1#d6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714': (
+        'd6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714',
         'bind',
         'trait.origin-size-and-speed',
         'd6bbec3f03560907876909430db8591d1239467c5f1046cb69df8dfe2f1dde75',
     ),
-    'content.srd_5_1_cc:trait:trait.origin.shared.physical.small_25@1#693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f': (
-        '693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f',
+    'content.srd_5_1_cc:trait:trait.origin.shared.physical.small_25@1#d6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714': (
+        'd6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714',
         'bind',
         'trait.origin-size-and-speed',
         'd6bbec3f03560907876909430db8591d1239467c5f1046cb69df8dfe2f1dde75',
     ),
-    'content.srd_5_1_cc:trait:trait.origin.species.dragonborn.languages@1#693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f': (
-        '693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f',
+    'content.srd_5_1_cc:trait:trait.origin.species.dragonborn.languages@1#d6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714': (
+        'd6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714',
         'bind',
         'trait.origin-languages',
         '41ed0e22063ffbe3cdcefdce82190970d5e9cfd83292f2b19b27194869c53386',
     ),
-    'content.srd_5_1_cc:trait:trait.origin.species.dwarf.languages@1#693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f': (
-        '693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f',
+    'content.srd_5_1_cc:trait:trait.origin.species.dwarf.languages@1#d6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714': (
+        'd6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714',
         'bind',
         'trait.origin-languages',
         '41ed0e22063ffbe3cdcefdce82190970d5e9cfd83292f2b19b27194869c53386',
     ),
-    'content.srd_5_1_cc:trait:trait.origin.species.elf.languages@1#693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f': (
-        '693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f',
+    'content.srd_5_1_cc:trait:trait.origin.species.elf.languages@1#d6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714': (
+        'd6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714',
         'bind',
         'trait.origin-languages',
         '41ed0e22063ffbe3cdcefdce82190970d5e9cfd83292f2b19b27194869c53386',
     ),
-    'content.srd_5_1_cc:trait:trait.origin.species.gnome.languages@1#693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f': (
-        '693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f',
+    'content.srd_5_1_cc:trait:trait.origin.species.gnome.languages@1#d6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714': (
+        'd6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714',
         'bind',
         'trait.origin-languages',
         '41ed0e22063ffbe3cdcefdce82190970d5e9cfd83292f2b19b27194869c53386',
     ),
-    'content.srd_5_1_cc:trait:trait.origin.species.half_elf.languages@1#693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f': (
-        '693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f',
+    'content.srd_5_1_cc:trait:trait.origin.species.half_elf.languages@1#d6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714': (
+        'd6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714',
         'bind',
         'trait.origin-languages',
         '41ed0e22063ffbe3cdcefdce82190970d5e9cfd83292f2b19b27194869c53386',
     ),
-    'content.srd_5_1_cc:trait:trait.origin.species.half_orc.languages@1#693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f': (
-        '693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f',
+    'content.srd_5_1_cc:trait:trait.origin.species.half_orc.languages@1#d6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714': (
+        'd6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714',
         'bind',
         'trait.origin-languages',
         '41ed0e22063ffbe3cdcefdce82190970d5e9cfd83292f2b19b27194869c53386',
     ),
-    'content.srd_5_1_cc:trait:trait.origin.species.halfling.languages@1#693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f': (
-        '693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f',
+    'content.srd_5_1_cc:trait:trait.origin.species.halfling.languages@1#d6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714': (
+        'd6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714',
         'bind',
         'trait.origin-languages',
         '41ed0e22063ffbe3cdcefdce82190970d5e9cfd83292f2b19b27194869c53386',
     ),
-    'content.srd_5_1_cc:trait:trait.origin.species.human.languages@1#693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f': (
-        '693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f',
+    'content.srd_5_1_cc:trait:trait.origin.species.human.languages@1#d6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714': (
+        'd6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714',
         'bind',
         'trait.origin-languages',
         '41ed0e22063ffbe3cdcefdce82190970d5e9cfd83292f2b19b27194869c53386',
     ),
-    'content.srd_5_1_cc:trait:trait.origin.species.tiefling.languages@1#693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f': (
-        '693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f',
+    'content.srd_5_1_cc:trait:trait.origin.species.tiefling.languages@1#d6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714': (
+        'd6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714',
         'bind',
         'trait.origin-languages',
         '41ed0e22063ffbe3cdcefdce82190970d5e9cfd83292f2b19b27194869c53386',
     ),
-    'content.srd_5_1_cc:trait:trait.origin.tiefling.fire_resistance@1#693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f': (
-        '693aaeffd1f9201ac1a8b905d5e2b1e32bd4aef1a99373046215eb13965a8a8f',
+    'content.srd_5_1_cc:trait:trait.origin.tiefling.fire_resistance@1#d6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714': (
+        'd6e02fd5582adfb7604460b049f4c128b0c233d35b48e2a00017c80bbd3f6714',
         'bind',
         'trait.hellish-resistance',
         'ff5a8bc3e9997e8c5467c97b18e0bef3ff9789dbe593a59343e893b4100f9321',

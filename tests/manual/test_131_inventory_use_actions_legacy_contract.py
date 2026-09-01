@@ -25,8 +25,12 @@ from dnd.blocks.equipment import EquipmentConfig, Weapon
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.skills import SkillConfig, SkillSetConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
-from dnd.content_system.item_bindings import ItemRuntimeOrigin
-from dnd.content_system.item_materialization import materialize_item
+from dnd.content.items.authored_item_builders import build_authored_item
+from dnd.content.items.environment_item_builders import (
+    build_arcane_device,
+    build_arcane_machine_gun,
+    build_fireball_cannon,
+)
 from dnd.core.base_actions import AvailableActionInfo, AvailableTarget, TargetType
 from dnd.core.base_block import BaseBlock
 from dnd.core.dice import fixed_dice_faces
@@ -37,30 +41,22 @@ from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import NumericalModifier
 from dnd.entity import Entity, EntityConfig
 from dnd.items.consumables import (
-    CONCENTRATION_FIRE_WEAPON_COAT_RECIPE,
-    FIRE_WEAPON_COAT_RECIPE,
-    timed_fire_weapon_coat_recipe,
-)
-from dnd.items.environment_content import (
-    ARCANE_MACHINE_GUN_RECIPE,
-    arcane_device_recipe,
-    fireball_cannon_recipe,
+    build_concentration_fire_weapon_coat,
+    build_fire_weapon_coat,
+    build_timed_fire_weapon_coat,
 )
 from dnd.items.spell_items import (
-    FIREBALL_SCROLL_RECIPE,
-    FIRE_BOLT_SCROLL_RECIPE,
-    HOLD_PERSON_SCROLL_RECIPE,
-    MAGE_ARMOR_SCROLL_RECIPE,
-    MAGIC_MISSILE_SCROLL_RECIPE,
     SpellGrantingItem,
-    SPIKE_GROWTH_SCROLL_RECIPE,
-    fire_bolt_scroll_recipe,
-    magic_missile_scroll_recipe,
-    wand_of_fire_recipe,
-    wand_of_magic_missiles_recipe,
+    build_fire_bolt_scroll,
+    build_fireball_scroll,
+    build_hold_person_scroll,
+    build_mage_armor_scroll,
+    build_magic_missile_scroll,
+    build_spike_growth_scroll,
+    build_wand_of_fire,
+    build_wand_of_magic_missiles,
 )
 from dnd.items.environment_interactables import ArcaneDevice
-from dnd.items.weapons import SHORTSWORD_RECIPE
 from dnd.spells.evocation import Fireball
 from dnd.spells.transmutation import SpikeGrowthZone
 from tests.engine.support import (
@@ -350,42 +346,12 @@ def test_scroll_targeting_matrix_is_item_bound() -> None:
     caster = create_caster((1, 5))
     target = create_target((5, 5))
     scrolls = {
-        "Fireball": materialize_item(
-            FIREBALL_SCROLL_RECIPE,
-            caster.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=SpellGrantingItem,
-        ),
-        "Magic Missile": materialize_item(
-            MAGIC_MISSILE_SCROLL_RECIPE,
-            caster.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=SpellGrantingItem,
-        ),
-        "Hold Person": materialize_item(
-            HOLD_PERSON_SCROLL_RECIPE,
-            caster.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=SpellGrantingItem,
-        ),
-        "Mage Armor": materialize_item(
-            MAGE_ARMOR_SCROLL_RECIPE,
-            caster.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=SpellGrantingItem,
-        ),
-        "Spike Growth": materialize_item(
-            SPIKE_GROWTH_SCROLL_RECIPE,
-            caster.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=SpellGrantingItem,
-        ),
-        "Fire Bolt": materialize_item(
-            FIRE_BOLT_SCROLL_RECIPE,
-            caster.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=SpellGrantingItem,
-        ),
+        "Fireball": build_fireball_scroll(caster.uuid),
+        "Magic Missile": build_magic_missile_scroll(caster.uuid),
+        "Hold Person": build_hold_person_scroll(caster.uuid),
+        "Mage Armor": build_mage_armor_scroll(caster.uuid),
+        "Spike Growth": build_spike_growth_scroll(caster.uuid),
+        "Fire Bolt": build_fire_bolt_scroll(caster.uuid),
     }
     for scroll in scrolls.values():
         put_in_inventory(caster, scroll)
@@ -424,12 +390,7 @@ def test_scroll_execute_by_index_consumes_item_not_spell_slots() -> None:
     reset_item_arena()
     caster = create_caster((1, 5))
     target = create_target((4, 5))
-    scroll = materialize_item(
-        MAGIC_MISSILE_SCROLL_RECIPE,
-        caster.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=SpellGrantingItem,
-    )
+    scroll = build_magic_missile_scroll(caster.uuid)
     put_in_inventory(caster, scroll)
     Entity.update_all_entities_senses()
     slots_before = {
@@ -467,11 +428,9 @@ def test_magic_missile_scroll_level_controls_dart_count() -> None:
         reset_item_arena()
         caster = create_caster((1, 5))
         target = create_target((4, 5))
-        scroll = materialize_item(
-            magic_missile_scroll_recipe(cast_level=cast_level),
+        scroll = build_magic_missile_scroll(
             caster.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=SpellGrantingItem,
+            cast_level=cast_level,
         )
         put_in_inventory(caster, scroll)
         Entity.update_all_entities_senses()
@@ -500,11 +459,7 @@ def test_permanent_weapon_coat_discovery_damage_and_cleanup() -> None:
     reset_item_arena()
     caster = create_caster((3, 3))
     target = create_target((4, 3))
-    coat = materialize_item(
-        FIRE_WEAPON_COAT_RECIPE,
-        caster.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-    )
+    coat = build_fire_weapon_coat(caster.uuid)
     put_in_inventory(caster, coat)
     Entity.update_all_entities_senses()
     unavailable_coat_actions = [
@@ -526,18 +481,10 @@ def test_permanent_weapon_coat_discovery_damage_and_cleanup() -> None:
         for info in unavailable_coat_actions
     )
 
-    main = materialize_item(
-        SHORTSWORD_RECIPE,
-        caster.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
-    )
-    off = materialize_item(
-        SHORTSWORD_RECIPE,
-        caster.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
-    )
+    main = build_authored_item("weapon.shortsword", caster.uuid)
+    off = build_authored_item("weapon.shortsword", caster.uuid)
+    assert isinstance(main, Weapon)
+    assert isinstance(off, Weapon)
     assert caster.equipment.equip(main, WeaponSlot.MELEE_MAIN)
     assert caster.equipment.equip(off, WeaponSlot.MELEE_OFF)
     actions = [
@@ -597,12 +544,7 @@ def test_magic_missile_wand_depletes_without_destroying_item() -> None:
     reset_item_arena()
     caster = create_caster((1, 5))
     target = create_target((4, 5))
-    wand = materialize_item(
-        wand_of_magic_missiles_recipe(charges=3),
-        caster.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=SpellGrantingItem,
-    )
+    wand = build_wand_of_magic_missiles(caster.uuid, charges=3)
     put_in_inventory(caster, wand)
     Entity.update_all_entities_senses()
 
@@ -636,12 +578,7 @@ def test_wand_of_fire_enforces_per_spell_charge_costs() -> None:
     caster = create_caster((5, 5))
     target = create_target((7, 5))
     force_save(target, "dexterity", succeeds=False)
-    wand = materialize_item(
-        wand_of_fire_recipe(charges=7),
-        caster.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=SpellGrantingItem,
-    )
+    wand = build_wand_of_fire(caster.uuid, charges=7)
     put_in_inventory(caster, wand)
     Entity.update_all_entities_senses()
     rows = [
@@ -713,12 +650,7 @@ def test_wand_fireballs_preserve_explicit_level_and_variant_isolation() -> None:
         caster = create_caster((5, 5))
         target = create_target((8, 5))
         force_save(target, "dexterity", succeeds=False)
-        wand = materialize_item(
-            wand_of_fire_recipe(charges=7),
-            caster.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=SpellGrantingItem,
-        )
+        wand = build_wand_of_fire(caster.uuid, charges=7)
         put_in_inventory(caster, wand)
         Entity.update_all_entities_senses()
         slots_before = {
@@ -812,12 +744,7 @@ def test_arcane_machine_gun_is_repeatable_environment_spell_source() -> None:
     reset_item_arena()
     caster = create_caster((1, 5))
     target = create_target((4, 5))
-    gun = materialize_item(
-        ARCANE_MACHINE_GUN_RECIPE,
-        caster.uuid,
-        origin=ItemRuntimeOrigin.ENVIRONMENT,
-        expected_type=SpellGrantingItem,
-    )
+    gun = build_arcane_machine_gun(caster.uuid)
     gun.place_on_grid((2, 5))
     Entity.update_all_entities_senses()
     info = item_action(caster, gun.uuid, "Magic Missile")
@@ -848,12 +775,7 @@ def test_fireball_cannon_depletes_and_disappears_from_discovery() -> None:
     reset_item_arena()
     caster = create_caster((1, 5))
     create_target((8, 5))
-    cannon = materialize_item(
-        fireball_cannon_recipe(charges=3),
-        caster.uuid,
-        origin=ItemRuntimeOrigin.ENVIRONMENT,
-        expected_type=SpellGrantingItem,
-    )
+    cannon = build_fireball_cannon(charges=3)
     cannon.place_on_grid((2, 5))
     Entity.update_all_entities_senses()
 
@@ -881,19 +803,9 @@ def test_environment_actions_require_range_and_arcana_proficiency() -> None:
     """Environment item discovery enforces both actor and spatial predicates."""
     reset_item_arena()
     novice = create_caster((1, 5), name="Novice")
-    adjacent_device = materialize_item(
-        arcane_device_recipe(),
-        novice.uuid,
-        origin=ItemRuntimeOrigin.ENVIRONMENT,
-        expected_type=ArcaneDevice,
-    )
+    adjacent_device = build_arcane_device(novice.uuid)
     adjacent_device.place_on_grid((2, 5))
-    far_gun = materialize_item(
-        ARCANE_MACHINE_GUN_RECIPE,
-        novice.uuid,
-        origin=ItemRuntimeOrigin.ENVIRONMENT,
-        expected_type=SpellGrantingItem,
-    )
+    far_gun = build_arcane_machine_gun(novice.uuid)
     far_gun.place_on_grid((4, 5))
     Entity.update_all_entities_senses()
     novice_sources = {
@@ -911,12 +823,7 @@ def test_environment_actions_require_range_and_arcana_proficiency() -> None:
         name="Scholar",
         arcana_proficient=True,
     )
-    device = materialize_item(
-        arcane_device_recipe(),
-        scholar.uuid,
-        origin=ItemRuntimeOrigin.ENVIRONMENT,
-        expected_type=ArcaneDevice,
-    )
+    device = build_arcane_device(scholar.uuid)
     device.place_on_grid((2, 5))
     set_hp(scholar, 50)
     Entity.update_all_entities_senses()
@@ -940,12 +847,7 @@ def test_fireball_scroll_resolves_both_save_branches_and_consumes() -> None:
     passing = create_target((6, 5), name="Passing")
     force_save(failing, "dexterity", succeeds=False)
     force_save(passing, "dexterity", succeeds=True)
-    scroll = materialize_item(
-        FIREBALL_SCROLL_RECIPE,
-        caster.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=SpellGrantingItem,
-    )
+    scroll = build_fireball_scroll(caster.uuid)
     put_in_inventory(caster, scroll)
     Entity.update_all_entities_senses()
     info = item_action(caster, scroll.uuid, "Fireball")
@@ -987,12 +889,7 @@ def test_wand_burning_hands_preserves_direction_and_damage() -> None:
     east = create_target((7, 5), name="East")
     west = create_target((3, 5), name="West")
     force_save(east, "dexterity", succeeds=False)
-    wand = materialize_item(
-        wand_of_fire_recipe(),
-        caster.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=SpellGrantingItem,
-    )
+    wand = build_wand_of_fire(caster.uuid)
     put_in_inventory(caster, wand)
     Entity.update_all_entities_senses()
     info = item_action(caster, wand.uuid, "Burning Hands")
@@ -1020,12 +917,7 @@ def test_hold_person_scroll_owns_concentration_cleanup() -> None:
     caster = create_caster((1, 5))
     target = create_target((4, 5), name="Held")
     force_save(target, "wisdom", succeeds=False)
-    scroll = materialize_item(
-        HOLD_PERSON_SCROLL_RECIPE,
-        caster.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=SpellGrantingItem,
-    )
+    scroll = build_hold_person_scroll(caster.uuid)
     put_in_inventory(caster, scroll)
     Entity.update_all_entities_senses()
     info = item_action(caster, scroll.uuid, "Hold Person")
@@ -1060,12 +952,7 @@ def test_spike_growth_scroll_owns_entry_damage_and_terrain_cleanup() -> None:
     grid = get_map()
     caster = create_caster((1, 5))
     target = create_target((15, 5), name="Zone Victim")
-    scroll = materialize_item(
-        SPIKE_GROWTH_SCROLL_RECIPE,
-        caster.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=SpellGrantingItem,
-    )
+    scroll = build_spike_growth_scroll(caster.uuid)
     put_in_inventory(caster, scroll)
     Entity.update_all_entities_senses()
     info = item_action(caster, scroll.uuid, "Spike Growth")
@@ -1116,12 +1003,7 @@ def test_mage_armor_and_fire_bolt_scroll_effects() -> None:
     """Self-buff and attack-roll scrolls retain their concrete spell effects."""
     reset_item_arena()
     caster = create_caster((1, 5))
-    mage_armor = materialize_item(
-        MAGE_ARMOR_SCROLL_RECIPE,
-        caster.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=SpellGrantingItem,
-    )
+    mage_armor = build_mage_armor_scroll(caster.uuid)
     put_in_inventory(caster, mage_armor)
     Entity.update_all_entities_senses()
     armor_info = item_action(caster, mage_armor.uuid, "Mage Armor")
@@ -1145,12 +1027,7 @@ def test_mage_armor_and_fire_bolt_scroll_effects() -> None:
     reset_item_arena()
     caster = create_caster((1, 5))
     target = create_target((4, 5))
-    fire_bolt = materialize_item(
-        fire_bolt_scroll_recipe(caster_level=5),
-        caster.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=SpellGrantingItem,
-    )
+    fire_bolt = build_fire_bolt_scroll(caster.uuid, caster_level=5)
     put_in_inventory(caster, fire_bolt)
     Entity.update_all_entities_senses()
     modifier_uuid = force_spell_attack_hit(caster)
@@ -1178,18 +1055,10 @@ def test_weapon_coat_concentration_and_timed_lifetimes() -> None:
     """Concentration and round duration each remove only their coat packet."""
     reset_item_arena()
     caster = create_caster((3, 3))
-    sword = materialize_item(
-        SHORTSWORD_RECIPE,
-        caster.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
-    )
+    sword = build_authored_item("weapon.shortsword", caster.uuid)
+    assert isinstance(sword, Weapon)
     assert caster.equipment.equip(sword, WeaponSlot.MELEE_MAIN)
-    concentrating_coat = materialize_item(
-        CONCENTRATION_FIRE_WEAPON_COAT_RECIPE,
-        caster.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-    )
+    concentrating_coat = build_concentration_fire_weapon_coat(caster.uuid)
     put_in_inventory(caster, concentrating_coat)
     Entity.update_all_entities_senses()
     info = item_action(caster, concentrating_coat.uuid, "Coat Main Hand")
@@ -1211,11 +1080,7 @@ def test_weapon_coat_concentration_and_timed_lifetimes() -> None:
     assert sword.extra_damage_dices == []
 
     caster.action_economy.reset_all_costs()
-    timed_coat = materialize_item(
-        timed_fire_weapon_coat_recipe(rounds=3),
-        caster.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-    )
+    timed_coat = build_timed_fire_weapon_coat(caster.uuid, rounds=3)
     put_in_inventory(caster, timed_coat)
     info = item_action(caster, timed_coat.uuid, "Coat Main Hand")
     result = execute_use_action(

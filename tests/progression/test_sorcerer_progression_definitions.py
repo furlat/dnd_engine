@@ -46,13 +46,6 @@ from dnd.core.content.durable_characters import (
 from dnd.core.content.identities import ContentDefinitionKind
 from dnd.core.content.registration import ContentDeclarationMode
 from dnd.core.progression import CasterProgression
-from dnd.items.weapons import (
-    DAGGER_REF,
-    DART_REF,
-    LIGHT_CROSSBOW_REF,
-    QUARTERSTAFF_REF,
-    SLING_REF,
-)
 
 
 def _feature_ref(condition_type: type[BaseCondition]):
@@ -144,16 +137,16 @@ def test_sorcerer_entry_modes_spell_source_and_saves_are_exact() -> None:
     ) == (AbilityScoreName.CHARISMA, 13)
 
     assert tuple(
-        (row.subject_kind, row.subject_id, row.content_ref)
+        (row.subject_kind, row.subject_id)
         for row in definition.first_class_proficiencies.automatic
     ) == tuple(
-        (ProficiencySubjectKind.WEAPON, None, content_ref)
-        for content_ref in (
-            DAGGER_REF,
-            DART_REF,
-            LIGHT_CROSSBOW_REF,
-            QUARTERSTAFF_REF,
-            SLING_REF,
+        (ProficiencySubjectKind.WEAPON, item_id)
+        for item_id in (
+            "weapon.dagger",
+            "weapon.dart",
+            "weapon.light_crossbow",
+            "weapon.quarterstaff",
+            "weapon.sling",
         )
     )
     first_choices = definition.first_class_proficiencies.choices

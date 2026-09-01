@@ -15,7 +15,6 @@ from dnd.content_system.character_materialization import (
     remove_character_composition,
 )
 from dnd.content_system.creature_bindings import CREATURE_RUNTIME_BINDINGS
-from dnd.content_system.item_bindings import ITEM_RUNTIME_BINDINGS
 from dnd.content_system.character_appearance import FIGHTER_HUMAN_APPEARANCE
 from dnd.content_system.extra_attack_character_grant_appliers import (
     EXTRA_ATTACK_FEATURE_REF,
@@ -39,7 +38,7 @@ from dnd.core.content.durable_characters import (
     AbilityScoreName,
     CharacterDefinitionRevisionV2,
     CharacterHoldingsRevision,
-    CharacterItemV1,
+    CharacterItemV2,
     CharacterLoadoutRevisionV1,
     ClassDefinition,
     ClassLevelDefinition,
@@ -76,8 +75,6 @@ from dnd.core.creature_types import DamageType
 from dnd.core.progression import CasterProgression
 from dnd.encounter import Encounter, EncounterState
 from dnd.entity import Entity
-from dnd.items.consumables import HEALING_POTION_RECIPE
-from dnd.items.torches import TORCH_RECIPE
 from dnd.monsters.bestiary import create_goblin
 from dnd.player_character_body import PLAYER_CHARACTER_BODY_RECIPE
 from dnd.runtime_reset import reset_engine_runtime
@@ -187,6 +184,10 @@ def _runtime_with(
             packs=(),
             built_in_artifact_digest="a" * 64,
             content_set_digest=_CONTENT_SET_DIGEST,
+            behavior_declarations_by_class=(
+                built_in.behavior_declarations_by_class
+            ),
+            provider_only_behavior_ids=built_in.provider_only_behavior_ids,
         ),
     )
     return runtime, species.ref, background.ref, class_declaration.ref
@@ -379,13 +380,13 @@ def test_failed_holdings_hydration_discards_items_equipment_and_light() -> None:
         character_id=character_id,
         holdings_revision=1,
         items=(
-            CharacterItemV1.create(
+            CharacterItemV2.create(
                 character_item_id=torch_item_id,
-                recipe=TORCH_RECIPE,
+                item_id="equipment.portable_torch",
             ),
-            CharacterItemV1.create(
+            CharacterItemV2.create(
                 character_item_id=invalid_item_id,
-                recipe=HEALING_POTION_RECIPE,
+                item_id="consumable.healing_potion",
                 equipped_slot=WeaponSlot.MELEE_MAIN,
             ),
         ),
@@ -394,7 +395,7 @@ def test_failed_holdings_hydration_discards_items_equipment_and_light() -> None:
 
     with pytest.raises(
         TypeError,
-        match="equipped_slot requires an equippable item definition",
+        match="initial item consumable.healing_potion is not equippable",
     ):
         materialize_character(
             definition=definition,
@@ -413,10 +414,6 @@ def test_failed_holdings_hydration_discards_items_equipment_and_light() -> None:
 
     assert Entity.get(runtime_entity_uuid) is None
     assert runtime_entity_uuid not in CREATURE_RUNTIME_BINDINGS.bindings
-    assert not {
-        binding.character_item_id
-        for binding in ITEM_RUNTIME_BINDINGS.bindings.values()
-    }.intersection({torch_item_id, invalid_item_id})
     assert not get_map()._light_sources
 
 
@@ -609,8 +606,8 @@ def test_extra_attack_resolves_repeated_ranks_and_removes_one_family() -> None:
     assert len(family_actions) == 1
     assert family_actions[0].behavior_binding is not None
     assert (
-        family_actions[0].behavior_binding.provided_by_ref
-        == EXTRA_ATTACK_FEATURE_REF
+        family_actions[0].behavior_binding.provided_by_id
+        == EXTRA_ATTACK_FEATURE_REF.content_id
     )
     assert len([
         handler

@@ -16,7 +16,7 @@ from dnd.core.content.durable_characters import (
     CharacterAppearanceSelection,
     CharacterDefinitionRevisionV2,
     CharacterHoldingsRevision,
-    CharacterItemV1,
+    CharacterItemV2,
     CharacterLoadoutRevisionV1,
     ClassLevelEntry,
     ClassLevelId,
@@ -140,14 +140,10 @@ def _definition(
     )
 
 
-def _item(*, quantity: int = 1) -> CharacterItemV1:
-    return CharacterItemV1.create(
+def _item(*, quantity: int = 1) -> CharacterItemV2:
+    return CharacterItemV2.create(
         character_item_id=ITEM_ID,
-        recipe=_recipe(
-            ContentDefinitionKind.ITEM,
-            "item.club",
-            parameters={"material": "oak"},
-        ),
+        item_id="weapon.club",
         quantity=quantity,
         equipped_slot=WeaponSlot.MELEE_MAIN,
     )

@@ -67,7 +67,7 @@ from dnd.spells.illusion import Blur, GreaterInvisibility, MirrorImage
 from dnd.spells.necromancy import BestowCurse, EyebiteStrike
 from tests.manual.test_28_subjective_observation_stream import create_observation_game
 from tests.manual.test_53_srd_monster_traits import reset_srd_trait_state
-from tests.content_identity import synthetic_action_attribution
+from tests.content_identity import synthetic_action_identity
 
 
 def _materialize_srd_fixture(
@@ -273,7 +273,7 @@ def test_epoch_row_descriptor_cache_reuses_semantic_derivation(monkeypatch) -> N
     row = AvailableActionInfo(
         template_name="Dodge",
         semantic_key="dnd.actions.Dodge",
-        behavior_attribution=synthetic_action_attribution(
+        **synthetic_action_identity(
             "action.epoch_cache_probe",
         ),
         target_type=TargetType.SELF,
@@ -326,7 +326,7 @@ def test_epoch_row_id_falls_back_to_semantic_key_not_display_name() -> None:
     first = AvailableActionInfo(
         template_name="",
         semantic_key="rules.localized.semantic_action",
-        behavior_attribution=synthetic_action_attribution(
+        **synthetic_action_identity(
             "action.localized_epoch_probe",
         ),
         target_type=TargetType.POSITION,

@@ -206,7 +206,7 @@ def _install_origin_innate_spellcasting(
                 try:
                     context.runtime.bind_granted_behavior(
                         spell,
-                        provider_ref=grant.provider_ref,
+                        provider_id=grant.provider_ref.content_id,
                         runtime_owner_uuid=context.entity.uuid,
                     )
                     context.entity.register_action(spell)
@@ -245,7 +245,7 @@ def _install_origin_innate_spellcasting(
             try:
                 context.runtime.bind_granted_behavior(
                     handler,
-                    provider_ref=grant.provider_ref,
+                    provider_id=grant.provider_ref.content_id,
                     runtime_owner_uuid=context.entity.uuid,
                 )
                 context.entity.add_event_handler(handler)

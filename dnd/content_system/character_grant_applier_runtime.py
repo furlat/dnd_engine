@@ -138,7 +138,7 @@ def register_bound_action(
     """Bind and register one action under its exact authored provider."""
     context.runtime.bind_granted_behavior(
         action,
-        provider_ref=provider_ref,
+        provider_id=provider_ref.content_id,
         runtime_owner_uuid=context.entity.uuid,
     )
     context.entity.register_action(action)
@@ -155,7 +155,7 @@ def install_bound_handler(
         raise ValueError("handler grant requires exact content identity")
     context.runtime.bind_granted_behavior(
         handler,
-        provider_ref=content_ref,
+        provider_id=content_ref.content_id,
         runtime_owner_uuid=context.entity.uuid,
     )
     context.entity.add_event_handler(handler)

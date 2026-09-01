@@ -447,7 +447,7 @@ def _apply_relentless_rage(
     try:
         context.runtime.bind_granted_behavior(
             handler,
-            provider_ref=RELENTLESS_RAGE_REF,
+            provider_id=RELENTLESS_RAGE_REF.content_id,
             runtime_owner_uuid=entity.uuid,
         )
         entity.add_event_handler(handler)

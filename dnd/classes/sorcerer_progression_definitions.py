@@ -70,13 +70,6 @@ from dnd.core.progression import (
     SpellcastingClassContribution,
     maximum_spell_rank_for_contribution,
 )
-from dnd.items.weapons import (
-    DAGGER_REF,
-    DART_REF,
-    LIGHT_CROSSBOW_REF,
-    QUARTERSTAFF_REF,
-    SLING_REF,
-)
 from dnd.spells.catalog_content import SPELL_CONTENT_DECLARATIONS
 from dnd.spells.reaction_spell_content import (
     LEARNED_REACTION_SPELL_DECLARATIONS,
@@ -267,10 +260,10 @@ def _subject(
     return ProficiencySubject(subject_kind=kind, subject_id=subject_id)
 
 
-def _weapon_subject(content_ref: ContentRef) -> ProficiencySubject:
+def _weapon_subject(item_id: str) -> ProficiencySubject:
     return ProficiencySubject(
         subject_kind=ProficiencySubjectKind.WEAPON,
-        content_ref=content_ref,
+        subject_id=item_id,
     )
 
 
@@ -287,13 +280,13 @@ _SORCERER_SKILL_SUBJECTS = tuple(
 )
 _SORCERER_FIRST_PROFICIENCIES = ClassProficiencyPackage(
     automatic=tuple(
-        _weapon_subject(content_ref)
-        for content_ref in (
-            DAGGER_REF,
-            DART_REF,
-            LIGHT_CROSSBOW_REF,
-            QUARTERSTAFF_REF,
-            SLING_REF,
+        _weapon_subject(item_id)
+        for item_id in (
+            "weapon.dagger",
+            "weapon.dart",
+            "weapon.light_crossbow",
+            "weapon.quarterstaff",
+            "weapon.sling",
         )
     ),
     choices=(

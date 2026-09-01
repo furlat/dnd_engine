@@ -15,8 +15,7 @@ from dnd.actions_functional import (
     setup_standard_actions,
 )
 from dnd.blocks.equipment import BodyArmor, Weapon
-from dnd.content_system.item_bindings import ItemRuntimeOrigin
-from dnd.content_system.item_materialization import materialize_item
+from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.core.base_actions import TargetType
 from dnd.core.dice import AttackOutcome, fixed_dice_faces
 from dnd.core.equipment_types import WeaponSlot
@@ -29,8 +28,6 @@ from dnd.core.modifiers import (
     NumericalModifier,
 )
 from dnd.entity import Entity
-from dnd.items.armors import CHAIN_MAIL_RECIPE
-from dnd.items.weapons import DAGGER_RECIPE
 from dnd.spells.conjuration import (
     AcidSplash,
     CallLightning,
@@ -168,12 +165,7 @@ def test_shocking_grasp_damage_scaling_metal_advantage_and_reaction_lifecycle() 
         "monsters",
     )
     target.equipment.equip(
-        materialize_item(
-            CHAIN_MAIL_RECIPE,
-            target.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=BodyArmor,
-        ),
+        build_authored_item("armor.chain_mail", target.uuid),
     )
     Entity.update_all_entities_senses(max_distance=60)
     hp_before = get_hp(target)
@@ -246,12 +238,7 @@ def test_guiding_bolt_hit_upcast_mark_and_first_attack_cleanup() -> None:
         "heroes",
     )
     attacker.equipment.equip(
-        materialize_item(
-            DAGGER_RECIPE,
-            attacker.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
-        ),
+        build_authored_item("weapon.dagger", attacker.uuid),
         WeaponSlot.MELEE_MAIN,
     )
     setup_standard_actions(attacker)
@@ -1454,7 +1441,15 @@ def test_close_area_spells_execute_save_geometry_damage_and_push_rules() -> None
 
     reset_spell_regression_arena(16, 10)
     grid = get_map()
-    grid.set_tile(6, 5, walkable=False, visible=False, name="Cone Wall")
+    grid.set_tile(
+        6,
+        5,
+        walking_cost=0,
+        flying_cost=0,
+        blocks_optics=True,
+        blocks_propagation=True,
+        name="Cone Wall",
+    )
     caster = create_spell_regression_actor(
         "Blocked Cone Caster",
         (5, 5),
@@ -1640,7 +1635,15 @@ def test_fireball_enforces_cast_los_range_and_explosion_occlusion() -> None:
         "monsters",
     )
     for y in range(12):
-        grid.set_tile(5, y, walkable=False, visible=False, name="Wall")
+        grid.set_tile(
+            5,
+            y,
+            walking_cost=0,
+            flying_cost=0,
+            blocks_optics=True,
+            blocks_propagation=True,
+            name="Wall",
+        )
     Entity.update_all_entities_senses(max_distance=250)
 
     blocked = Fireball(
@@ -1696,7 +1699,15 @@ def test_fireball_enforces_cast_los_range_and_explosion_occlusion() -> None:
         (8, 5),
         "monsters",
     )
-    grid.set_tile(7, 5, walkable=False, visible=False, name="Explosion Wall")
+    grid.set_tile(
+        7,
+        5,
+        walking_cost=0,
+        flying_cost=0,
+        blocks_optics=True,
+        blocks_propagation=True,
+        name="Explosion Wall",
+    )
     force_save_result(visible, "dexterity", succeeds=False)
     force_save_result(behind_wall, "dexterity", succeeds=False)
     Entity.update_all_entities_senses(max_distance=100)
@@ -1732,7 +1743,14 @@ def test_thunderwave_push_stops_before_walls_and_occupied_cells() -> None:
         (7, 4),
         "monsters",
     )
-    grid.set_tile(8, 4, walkable=False, visible=True, name="Push Wall")
+    grid.set_tile(
+        8,
+        4,
+        walking_cost=0,
+        flying_cost=0,
+        blocks_propagation=True,
+        name="Push Wall",
+    )
     force_save_result(target, "constitution", succeeds=False)
     Entity.update_all_entities_senses(max_distance=80)
     caster_hp = get_hp(caster)
