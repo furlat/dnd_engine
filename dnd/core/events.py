@@ -1097,7 +1097,7 @@ class BaseHandler(BaseObject):
     name: str = Field(default="BaseHandler", description="Human-readable handler label.")
     semantic_key: Optional[str] = Field(
         default=None,
-        description="Stable rules-content identity; defaults to the processor's code identity.",
+        description="Optional stable policy/grouping key; never behavior provenance.",
     )
     behavior_binding: Optional[BehaviorBinding] = Field(
         default=None,
@@ -1143,11 +1143,8 @@ class BaseHandler(BaseObject):
         if self.semantic_key:
             return self.semantic_key
         if self.behavior_binding is not None:
-            return self.behavior_binding.definition_ref.identity_key
-        module = getattr(self.event_processor, "__module__", type(self.event_processor).__module__)
-        qualname = getattr(self.event_processor, "__qualname__", type(self.event_processor).__qualname__)
-        code_identity = f"{module}.{qualname}".replace(".<locals>.", ".")
-        return f"unbound:{code_identity}"
+            return self.behavior_binding.behavior_id
+        return "unbound:handler"
 
     def __call__(self, event: Event, source_entity_uuid: Optional[UUID] = None) -> Optional[Event]:
         """Execute the stored event processor if this handler is enabled.
@@ -1491,7 +1488,7 @@ class EventQueue:
         """Invoke one matched handler and publish passive effect evidence."""
         before_cursor = cls.event_cursor()
         before_event_index = len(cls._all_events)
-        with runtime_behavior_provider(handler):
+        with runtime_behavior_provider(handler.behavior_binding):
             result = handler(event)
         emitted_event_count = cls.event_cursor() - before_cursor
         result_changed = result is not None and result != event
@@ -1503,11 +1500,19 @@ class EventQueue:
             outcome = HandlerDispatchOutcome.EMITTED_EVENTS
         else:
             outcome = HandlerDispatchOutcome.NO_EFFECT
+        binding = handler.behavior_binding
         evidence = HandlerDispatchEvidence(
             dispatch_index=cls._handler_dispatch_cursor,
             handler_semantic_key=handler.get_semantic_key(),
             handler_name=handler.name,
             content_kind=handler.content_kind,
+            behavior_id=(binding.behavior_id if binding is not None else None),
+            provided_by_id=(
+                binding.provided_by_id if binding is not None else None
+            ),
+            origin_root_id=(
+                binding.origin_root_id if binding is not None else None
+            ),
             handler_uuid=str(handler.uuid),
             source_entity_uuid=str(handler.source_entity_uuid) if handler.source_entity_uuid else None,
             event_uuid=str(event.uuid),
@@ -1517,7 +1522,6 @@ class EventQueue:
             outcome=outcome,
             emitted_event_count=emitted_event_count,
         )
-        binding = handler.behavior_binding
         if (
             result is not None
             and evidence.effected
@@ -1533,7 +1537,9 @@ class EventQueue:
                 EffectiveHandlerPresentation(
                     dispatch_index=evidence.dispatch_index,
                     handler_name=handler.name,
-                    behavior_binding=binding,
+                    behavior_id=binding.behavior_id,
+                    provided_by_id=binding.provided_by_id,
+                    origin_root_id=binding.origin_root_id,
                     source_entity_uuid=handler.source_entity_uuid,
                     triggering_event_uuid=event.uuid,
                     triggering_lineage_uuid=event.lineage_uuid,
@@ -2297,7 +2303,11 @@ class EventQueue:
         Args:
             event_handler: Handler containing one or more trigger conditions.
         """
-        bind_runtime_handler_before_admission(event_handler)
+        bind_runtime_handler_before_admission(
+            event_handler,
+            current_binding=event_handler.behavior_binding,
+            runtime_owner_uuid=event_handler.source_entity_uuid,
+        )
         for trigger in event_handler.trigger_conditions:
             if trigger.is_simple():
                 cls._event_handlers_by_simple_trigger[trigger.get_simple_trigger()].append(event_handler)
@@ -2375,7 +2385,11 @@ class EventQueue:
             event_type: Spatial event type for legacy handlers.
             event_phase: Spatial event phase for legacy handlers.
         """
-        bind_runtime_handler_before_admission(handler)
+        bind_runtime_handler_before_admission(
+            handler,
+            current_binding=handler.behavior_binding,
+            runtime_owner_uuid=handler.source_entity_uuid,
+        )
         if isinstance(handler, SpatialHandler):
             actual_positions = handler.positions if not positions else positions
             event_key = (handler.event_type, handler.event_phase)
@@ -3306,7 +3320,7 @@ class SpatialEffectInteractionEvent(Event):
     duration_rounds: Optional[int] = Field(default=None, ge=1)
     damage_type: Optional[DamageType] = None
     source_object_uuid: Optional[UUID] = None
-    source_content_ref: Optional[ContentRef] = None
+    source_item_id: Optional[str] = None
 
     @model_validator(mode="after")
     def validate_interaction_positions(self) -> "SpatialEffectInteractionEvent":
@@ -3349,11 +3363,7 @@ class SpatialEffectInteractionEvent(Event):
                 "operation": self.operation.value,
                 "intensity": self.intensity.value,
                 "affected_positions": self.positions,
-                "source_content_identity": (
-                    self.source_content_ref.identity_key
-                    if self.source_content_ref is not None
-                    else None
-                ),
+                "source_item_id": self.source_item_id,
             },
         )
 

@@ -79,7 +79,7 @@ def install_dragonborn_ancestry_feature(
         resource_installed = True
         runtime.bind_granted_behavior(
             action,
-            provider_ref=definition_ref,
+            provider_id=definition_ref.content_id,
             runtime_owner_uuid=entity.uuid,
         )
         entity.register_action(action)

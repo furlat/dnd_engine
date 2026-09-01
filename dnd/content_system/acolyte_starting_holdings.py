@@ -2,11 +2,6 @@
 
 from __future__ import annotations
 
-from dnd.core.content.dependencies import (
-    ContentDependency,
-    ContentDependencyPhase,
-    ContentDependencyRelation,
-)
 from dnd.core.content.descriptors import (
     ContentDescriptor,
     ContentDescriptorSpec,
@@ -30,13 +25,6 @@ from dnd.core.content.starting_equipment import (
     StartingEquipmentPackageDefinition,
     StartingEquipmentPackageEntry,
 )
-from dnd.items.acolyte_gear import (
-    COMMON_CLOTHES_RECIPE,
-    HOLY_SYMBOL_RECIPE,
-    INCENSE_RECIPE,
-    PRAYER_BOOK_RECIPE,
-    VESTMENTS_RECIPE,
-)
 
 
 _CONTRACT_HASH = compute_definition_contract_hash(
@@ -53,30 +41,18 @@ ACOLYTE_STARTING_HOLDINGS_REF = ContentRef(
 )
 ACOLYTE_STARTING_HOLDINGS_DEFINITION = StartingEquipmentPackageDefinition(
     entries=(
-        StartingEquipmentPackageEntry(recipe=HOLY_SYMBOL_RECIPE),
-        StartingEquipmentPackageEntry(recipe=PRAYER_BOOK_RECIPE),
+        StartingEquipmentPackageEntry(item_id="gear.holy_symbol"),
+        StartingEquipmentPackageEntry(item_id="gear.prayer_book"),
         StartingEquipmentPackageEntry(
-            recipe=INCENSE_RECIPE,
+            item_id="gear.incense",
             quantity=5,
         ),
         StartingEquipmentPackageEntry(
-            recipe=VESTMENTS_RECIPE,
+            item_id="gear.vestments",
         ),
-        StartingEquipmentPackageEntry(recipe=COMMON_CLOTHES_RECIPE),
+        StartingEquipmentPackageEntry(item_id="gear.common_clothes"),
     ),
 )
-
-
-def _dependencies() -> tuple[ContentDependency, ...]:
-    return tuple(
-        ContentDependency(
-            relation=ContentDependencyRelation.CREATES_ITEM,
-            target_ref=entry.recipe.ref,
-            phase=ContentDependencyPhase.CONSTRUCTION,
-            notes="The Acolyte background grants this exact possession.",
-        )
-        for entry in ACOLYTE_STARTING_HOLDINGS_DEFINITION.entries
-    )
 
 
 ACOLYTE_STARTING_HOLDINGS_DECLARATION = ContentDeclaration(
@@ -106,10 +82,6 @@ ACOLYTE_STARTING_HOLDINGS_DECLARATION = ContentDeclaration(
                 sort_group="starting_holdings.background",
                 sort_order=10,
             ),
-            related_content_refs=tuple(
-                entry.recipe.ref
-                for entry in ACOLYTE_STARTING_HOLDINGS_DEFINITION.entries
-            ),
         ),
     ),
     provenance=ContentProvenance(
@@ -125,7 +97,7 @@ ACOLYTE_STARTING_HOLDINGS_DECLARATION = ContentDeclaration(
         ),
     ),
     definition_payload=ACOLYTE_STARTING_HOLDINGS_DEFINITION,
-    dependencies=_dependencies(),
+    dependencies=(),
 )
 
 

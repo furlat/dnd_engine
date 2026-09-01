@@ -60,6 +60,9 @@ def _runtime() -> ContentSystemRuntime:
             packs=(),
             built_in_artifact_digest="a" * 64,
             content_set_digest="b" * 64,
+            provider_only_behavior_ids=frozenset({
+                HALF_ORC_RELENTLESS_ENDURANCE_REF.content_id,
+            }),
         ),
     )
     return runtime

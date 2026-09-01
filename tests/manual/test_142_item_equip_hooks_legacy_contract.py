@@ -8,8 +8,7 @@ from pydantic import PrivateAttr
 
 from dnd.blocks.base_item import BaseItem, EquippableItem
 from dnd.blocks.equipment import BodyArmor, Cloak, Shield, Weapon
-from dnd.content_system.item_bindings import ItemRuntimeOrigin
-from dnd.content_system.item_materialization import materialize_item
+from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.equipment_types import (
     ArmorType,
@@ -22,8 +21,6 @@ from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
-from dnd.items.armors import LEATHER_ARMOR_RECIPE, WOODEN_SHIELD_RECIPE
-from dnd.items.weapons import LONGSWORD_RECIPE
 from dnd.monsters.bestiary import create_skeleton
 from tests.engine.test_items_inventory_equipment import (
     put_in_inventory,
@@ -279,6 +276,7 @@ class _CloakOfProtection(Cloak):
 def _create_defender_sword(owner_uuid: UUID) -> _DefenderSword:
     """Create the archived direct-modifier hook fixture."""
     return _DefenderSword(
+        item_id="test.defender_sword",
         source_entity_uuid=owner_uuid,
         name="Defender Sword",
         damage_dice=8,
@@ -292,6 +290,7 @@ def _create_defender_sword(owner_uuid: UUID) -> _DefenderSword:
 def _create_cloak_of_protection(owner_uuid: UUID) -> _CloakOfProtection:
     """Create the archived condition-owned hook fixture."""
     return _CloakOfProtection(
+        item_id="test.cloak_of_protection",
         source_entity_uuid=owner_uuid,
         name="Cloak of Protection",
         type=ArmorType.CLOTH,
@@ -329,25 +328,13 @@ def test_direct_equipment_tracks_concrete_items_slots_containers_and_positions()
         position=(2, 2),
         darkvision=False,
     )
-    sword = materialize_item(
-        LONGSWORD_RECIPE,
-        uuid4(),
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
-    )
+    sword = build_authored_item("weapon.longsword", uuid4())
+    assert isinstance(sword, Weapon)
     armor_owner_uuid = uuid4()
-    armor = materialize_item(
-        LEATHER_ARMOR_RECIPE,
-        armor_owner_uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=BodyArmor,
-    )
-    shield = materialize_item(
-        WOODEN_SHIELD_RECIPE,
-        uuid4(),
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Shield,
-    )
+    armor = build_authored_item("armor.leather", armor_owner_uuid)
+    shield = build_authored_item("shield.wooden", uuid4())
+    assert isinstance(armor, BodyArmor)
+    assert isinstance(shield, Shield)
 
     assert isinstance(sword, EquippableItem)
     assert isinstance(armor, EquippableItem)

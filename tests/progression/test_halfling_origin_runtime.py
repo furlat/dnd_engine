@@ -39,6 +39,7 @@ from dnd.origins.halfling import (
     HALFLING_LUCKY_REF,
 )
 from dnd.runtime_reset import reset_engine_runtime
+from tests.engine.support import create_test_entity
 
 
 @pytest.fixture(autouse=True)
@@ -64,6 +65,9 @@ def _runtime() -> ContentSystemRuntime:
             packs=(),
             built_in_artifact_digest="a" * 64,
             content_set_digest="b" * 64,
+            provider_only_behavior_ids=frozenset({
+                HALFLING_LUCKY_REF.content_id,
+            }),
         ),
     )
     return runtime
@@ -147,8 +151,8 @@ def test_halfling_lucky_rerolls_natural_one_and_must_use_replacement() -> None:
 
 def test_halfling_nimbleness_allows_traversal_but_not_ending_in_larger_space() -> None:
     reset_engine_runtime(grid_size=(5, 1))
-    halfling = Entity.create(
-        source_entity_uuid=uuid4(),
+    halfling = create_test_entity(
+        source_id=uuid4(),
         name="Halfling",
         config=EntityConfig(
             position=(1, 0),
@@ -156,8 +160,8 @@ def test_halfling_nimbleness_allows_traversal_but_not_ending_in_larger_space() -
             size=Size.SMALL,
         ),
     )
-    larger = Entity.create(
-        source_entity_uuid=uuid4(),
+    larger = create_test_entity(
+        source_id=uuid4(),
         name="Larger creature",
         config=EntityConfig(
             position=(2, 0),
@@ -194,8 +198,8 @@ def test_halfling_nimbleness_allows_traversal_but_not_ending_in_larger_space() -
 
 def test_halfling_nimbleness_does_not_bypass_same_size_creatures() -> None:
     reset_engine_runtime(grid_size=(5, 1))
-    halfling = Entity.create(
-        source_entity_uuid=uuid4(),
+    halfling = create_test_entity(
+        source_id=uuid4(),
         name="Halfling",
         config=EntityConfig(
             position=(1, 0),
@@ -203,8 +207,8 @@ def test_halfling_nimbleness_does_not_bypass_same_size_creatures() -> None:
             size=Size.SMALL,
         ),
     )
-    same_size = Entity.create(
-        source_entity_uuid=uuid4(),
+    same_size = create_test_entity(
+        source_id=uuid4(),
         name="Same-size creature",
         config=EntityConfig(
             position=(2, 0),
@@ -226,8 +230,8 @@ def test_halfling_nimbleness_does_not_bypass_same_size_creatures() -> None:
 
 def test_naturally_stealthy_allows_hide_behind_one_larger_creature() -> None:
     reset_engine_runtime(grid_size=(6, 3))
-    hider = Entity.create(
-        source_entity_uuid=uuid4(),
+    hider = create_test_entity(
+        source_id=uuid4(),
         name="Lightfoot",
         config=EntityConfig(
             position=(4, 1),
@@ -235,8 +239,8 @@ def test_naturally_stealthy_allows_hide_behind_one_larger_creature() -> None:
             size=Size.SMALL,
         ),
     )
-    Entity.create(
-        source_entity_uuid=uuid4(),
+    create_test_entity(
+        source_id=uuid4(),
         name="Larger cover",
         config=EntityConfig(
             position=(2, 1),
@@ -244,8 +248,8 @@ def test_naturally_stealthy_allows_hide_behind_one_larger_creature() -> None:
             size=Size.MEDIUM,
         ),
     )
-    observer = Entity.create(
-        source_entity_uuid=uuid4(),
+    observer = create_test_entity(
+        source_id=uuid4(),
         name="Observer",
         config=EntityConfig(
             position=(0, 1),
@@ -274,8 +278,8 @@ def test_naturally_stealthy_allows_hide_behind_one_larger_creature() -> None:
 
 def test_naturally_stealthy_requires_intervening_creature_to_be_larger() -> None:
     reset_engine_runtime(grid_size=(6, 3))
-    hider = Entity.create(
-        source_entity_uuid=uuid4(),
+    hider = create_test_entity(
+        source_id=uuid4(),
         name="Lightfoot",
         config=EntityConfig(
             position=(4, 1),
@@ -283,8 +287,8 @@ def test_naturally_stealthy_requires_intervening_creature_to_be_larger() -> None
             size=Size.SMALL,
         ),
     )
-    Entity.create(
-        source_entity_uuid=uuid4(),
+    create_test_entity(
+        source_id=uuid4(),
         name="Same-size cover",
         config=EntityConfig(
             position=(2, 1),
@@ -292,8 +296,8 @@ def test_naturally_stealthy_requires_intervening_creature_to_be_larger() -> None
             size=Size.SMALL,
         ),
     )
-    observer = Entity.create(
-        source_entity_uuid=uuid4(),
+    observer = create_test_entity(
+        source_id=uuid4(),
         name="Observer",
         config=EntityConfig(
             position=(0, 1),

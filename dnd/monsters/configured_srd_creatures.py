@@ -10,7 +10,6 @@ from dnd.content_system.creature_possessions import (
     CreaturePossessionDisposition,
     CreaturePossessionGrant,
     apply_creature_possessions,
-    creature_possession_dependencies,
 )
 from dnd.core.content.dependencies import (
     ContentDependency,
@@ -37,22 +36,6 @@ from dnd.core.content.registration import (
 )
 from dnd.core.equipment_types import BodyPart
 from dnd.entity import Entity
-from dnd.items.armors import (
-    ARMORED_BOOTS_RECIPE,
-    LEATHER_BOOTS_RECIPE,
-)
-from dnd.items.apparel_presets import (
-    ACOLYTE_VESTMENTS_PRESET,
-    BLUE_CLOTH_SHOES_PRESET,
-    BROWN_BOOTS_PRESET,
-    BROWN_LEATHER_SHOES_PRESET,
-    DARK_BOOTS_PRESET,
-    FARMHAND_TUNIC_PRESET,
-    PEASANT_RAGS_PRESET,
-    ROPE_SANDALS_PRESET,
-    THIEF_GARB_PRESET,
-    WIZARD_ROBE_PRESET,
-)
 from dnd.monsters.srd_roster import (
     SRD_CREATURE_DECLARATIONS_BY_ID,
     SRD_CREATURE_RECIPES_BY_ID,
@@ -67,43 +50,43 @@ class ConfiguredSrdCreatureParameters(BaseModel):
 
 
 def _equipped(
-    recipe: ContentRecipe,
+    item_id: str,
     slot: BodyPart,
 ) -> CreaturePossessionGrant:
     return CreaturePossessionGrant(
-        recipe=recipe,
+        item_id=item_id,
         disposition=CreaturePossessionDisposition.EQUIPPED,
         equipment_slot=slot,
     )
 
 
-_LEATHER_BOOTS = (_equipped(LEATHER_BOOTS_RECIPE, BodyPart.FEET),)
-_DARK_BOOTS = (_equipped(DARK_BOOTS_PRESET.recipe, BodyPart.FEET),)
-_ARMORED_BOOTS = (_equipped(ARMORED_BOOTS_RECIPE, BodyPart.FEET),)
+_LEATHER_BOOTS = (_equipped("apparel.leather_boots", BodyPart.FEET),)
+_DARK_BOOTS = (_equipped("apparel.leather_boots.dark", BodyPart.FEET),)
+_ARMORED_BOOTS = (_equipped("apparel.armored_boots", BodyPart.FEET),)
 
 
 CONFIGURED_SRD_CREATURE_WARDROBE_GRANTS_BY_ID = MappingProxyType({
     "commoner": (
-        _equipped(FARMHAND_TUNIC_PRESET.recipe, BodyPart.BODY),
-        _equipped(BROWN_LEATHER_SHOES_PRESET.recipe, BodyPart.FEET),
+        _equipped("apparel.common_clothes.farmhand_tunic", BodyPart.BODY),
+        _equipped("apparel.leather_shoes.brown", BodyPart.FEET),
     ),
     "bandit": _DARK_BOOTS,
     "cultist": _DARK_BOOTS,
     "guard": _LEATHER_BOOTS,
     "tribal_warrior": _LEATHER_BOOTS,
     "kobold": (
-        _equipped(PEASANT_RAGS_PRESET.recipe, BodyPart.BODY),
-        _equipped(ROPE_SANDALS_PRESET.recipe, BodyPart.FEET),
+        _equipped("apparel.common_clothes.peasant_rags", BodyPart.BODY),
+        _equipped("apparel.sandals.rope", BodyPart.FEET),
     ),
     "acolyte": (
-        _equipped(ACOLYTE_VESTMENTS_PRESET.recipe, BodyPart.BODY),
-        _equipped(ROPE_SANDALS_PRESET.recipe, BodyPart.FEET),
+        _equipped("apparel.robes.acolyte_vestments", BodyPart.BODY),
+        _equipped("apparel.sandals.rope", BodyPart.FEET),
     ),
-    "scout": (_equipped(BROWN_BOOTS_PRESET.recipe, BodyPart.FEET),),
+    "scout": (_equipped("apparel.leather_boots.brown", BodyPart.FEET),),
     "thug": _LEATHER_BOOTS,
     "spy": (
-        _equipped(THIEF_GARB_PRESET.recipe, BodyPart.BODY),
-        _equipped(DARK_BOOTS_PRESET.recipe, BodyPart.FEET),
+        _equipped("apparel.travelers_clothes.thief_garb", BodyPart.BODY),
+        _equipped("apparel.leather_boots.dark", BodyPart.FEET),
     ),
     "berserker": _LEATHER_BOOTS,
     "bandit_captain": _DARK_BOOTS,
@@ -112,8 +95,8 @@ CONFIGURED_SRD_CREATURE_WARDROBE_GRANTS_BY_ID = MappingProxyType({
     "knight": _ARMORED_BOOTS,
     "veteran": _ARMORED_BOOTS,
     "mage": (
-        _equipped(WIZARD_ROBE_PRESET.recipe, BodyPart.BODY),
-        _equipped(BLUE_CLOTH_SHOES_PRESET.recipe, BodyPart.FEET),
+        _equipped("apparel.robes.wizard", BodyPart.BODY),
+        _equipped("apparel.cloth_shoes.blue", BodyPart.FEET),
     ),
     "orc": _LEATHER_BOOTS,
     "hobgoblin": _ARMORED_BOOTS,
@@ -200,7 +183,6 @@ def _declare_configured_srd_creature(
                     "NeuroDragon presentation root."
                 ),
             ),
-            *creature_possession_dependencies(grants),
         ),
     )(factory)
     return get_content_declaration(declared_factory)

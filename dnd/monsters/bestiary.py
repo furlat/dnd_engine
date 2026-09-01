@@ -4,19 +4,14 @@ from uuid import UUID, uuid4
 from typing import Optional, Tuple
 
 from dnd.entity import Entity, EntityConfig
-from dnd.actions_functional import setup_standard_actions
+from dnd.actions_functional import setup_standard_actions, update_weapon_templates
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
-from dnd.blocks.equipment import (
-    EquipmentConfig, BodyArmor, Helmet, Shield, Weapon,
-)
-from dnd.content_system.item_bindings import ItemRuntimeOrigin
-from dnd.content_system.item_runtime_materialization import (
-    materialize_item_from_installed_runtime,
-)
+from dnd.blocks.equipment import EquipmentConfig
+from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.core.content.identities import ContentRef
 from dnd.core.content.materialization import CreaturePossessionMode
-from dnd.core.equipment_types import WeaponSlot
+from dnd.core.equipment_types import BodyPart, WeaponSlot
 from dnd.blocks.skills import SkillSetConfig, SkillConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.appearance import AppearanceConfig
@@ -25,11 +20,6 @@ from dnd.core.progression import full_caster_spell_slots_for_level, proficiency_
 from dnd.core.base_block import SenseMode, SensesType
 from dnd.actions import Hide, Disengage
 
-from dnd.items.armors import (
-    CROWN_RECIPE,
-    LEATHER_ARMOR_RECIPE,
-    WOODEN_SHIELD_RECIPE,
-)
 from dnd.blocks.spellcasting import SpellcastingConfig
 from dnd.spells.evocation import (
     FireBolt, Fireball, MagicMissile, BurningHands, LightningBolt, Shatter, Thunderwave
@@ -37,26 +27,9 @@ from dnd.spells.evocation import (
 from dnd.actions_functional import register_spell
 from dnd.spells.illusion import Invisibility, GreaterInvisibility
 from dnd.spells.evocation import EldritchBlast
-from dnd.items.consumables import (
-    GREATER_INVISIBILITY_POTION_RECIPE,
-    HASTE_POTION_RECIPE,
-)
-from dnd.items.spell_items import (
-    ACID_FLASK_RECIPE,
-    INVISIBILITY_SCROLL_RECIPE,
-)
-from dnd.items.weapons import (
-    ARCANE_STAFF_RECIPE,
-    DAGGER_RECIPE,
-    LONGSWORD_RECIPE,
-    SCIMITAR_RECIPE,
-    SHORTBOW_RECIPE,
-    SHORTSWORD_RECIPE,
-)
 from dnd.spells.abjuration import register_shield_reaction
 from dnd.spells.necromancy import NecroticBless
 from dnd.monsters.skeleton_abilities import MarkTargetAction
-from dnd.monsters.bestiary_items import ARMOR_SCRAPS_RECIPE
 
 GOBLIN_NIMBLE_HIDE_ACTION = "Nimble Escape: Hide"
 GOBLIN_NIMBLE_DISENGAGE_ACTION = "Nimble Escape: Disengage"
@@ -212,35 +185,13 @@ def create_goblin(
     ):
         return entity
 
-    scimitar = materialize_item_from_installed_runtime(
-        SCIMITAR_RECIPE,
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
-    )
-    shortbow = materialize_item_from_installed_runtime(
-        SHORTBOW_RECIPE,
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
-    )
-    leather_armor = materialize_item_from_installed_runtime(
-        LEATHER_ARMOR_RECIPE,
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=BodyArmor,
-    )
-    shield = materialize_item_from_installed_runtime(
-        WOODEN_SHIELD_RECIPE,
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Shield,
-    )
-
-    entity.equipment.equip(leather_armor)
-    entity.equipment.equip(scimitar, WeaponSlot.MELEE_MAIN)
-    entity.equipment.equip(shortbow, WeaponSlot.RANGED_MAIN)
-    entity.equipment.equip(shield, WeaponSlot.MELEE_OFF)
+    entity.install_initial_items((
+        (build_authored_item("armor.leather", entity.uuid), BodyPart.BODY),
+        (build_authored_item("weapon.scimitar", entity.uuid), WeaponSlot.MELEE_MAIN),
+        (build_authored_item("weapon.shortbow", entity.uuid), WeaponSlot.RANGED_MAIN),
+        (build_authored_item("shield.wooden", entity.uuid), WeaponSlot.MELEE_OFF),
+    ))
+    update_weapon_templates(entity)
 
     return entity
 
@@ -344,28 +295,12 @@ def create_skeleton(
     ):
         return entity
 
-    shortsword = materialize_item_from_installed_runtime(
-        SHORTSWORD_RECIPE,
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
-    )
-    shortbow = materialize_item_from_installed_runtime(
-        SHORTBOW_RECIPE,
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
-    )
-    armor_scraps = materialize_item_from_installed_runtime(
-        ARMOR_SCRAPS_RECIPE,
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=BodyArmor,
-    )
-
-    entity.equipment.equip(armor_scraps)
-    entity.equipment.equip(shortsword, WeaponSlot.MELEE_MAIN)
-    entity.equipment.equip(shortbow, WeaponSlot.RANGED_MAIN)
+    entity.install_initial_items((
+        (build_authored_item("armor.armor_scraps", entity.uuid), BodyPart.BODY),
+        (build_authored_item("weapon.shortsword", entity.uuid), WeaponSlot.MELEE_MAIN),
+        (build_authored_item("weapon.shortbow", entity.uuid), WeaponSlot.RANGED_MAIN),
+    ))
+    update_weapon_templates(entity)
 
     return entity
 
@@ -464,62 +399,25 @@ def create_goblin_archer(
     ):
         return entity
 
-    shortbow = materialize_item_from_installed_runtime(
-        SHORTBOW_RECIPE,
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
-    )
-    scimitar = materialize_item_from_installed_runtime(
-        SCIMITAR_RECIPE,
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
-    )
-    dagger = materialize_item_from_installed_runtime(
-        DAGGER_RECIPE,
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
-    )
-    leather_armor = materialize_item_from_installed_runtime(
-        LEATHER_ARMOR_RECIPE,
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=BodyArmor,
-    )
-
-    entity.equipment.equip(leather_armor)
-    entity.equipment.equip(shortbow, WeaponSlot.RANGED_MAIN)
-    entity.equipment.equip(scimitar, WeaponSlot.MELEE_MAIN)
-    entity.equipment.equip(dagger, WeaponSlot.MELEE_OFF)
+    entity.install_initial_items((
+        (build_authored_item("armor.leather", entity.uuid), BodyPart.BODY),
+        (build_authored_item("weapon.shortbow", entity.uuid), WeaponSlot.RANGED_MAIN),
+        (build_authored_item("weapon.scimitar", entity.uuid), WeaponSlot.MELEE_MAIN),
+        (build_authored_item("weapon.dagger", entity.uuid), WeaponSlot.MELEE_OFF),
+    ))
+    update_weapon_templates(entity)
 
     return entity
 
 
 def _add_caster_default_possessions(entity: Entity) -> None:
     """Attach the generic caster's authored starting possessions."""
-    dagger = materialize_item_from_installed_runtime(
-        DAGGER_RECIPE,
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
-    )
-    entity.equipment.equip(dagger, WeaponSlot.MELEE_MAIN)
-
-    potion = materialize_item_from_installed_runtime(
-        GREATER_INVISIBILITY_POTION_RECIPE,
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-    )
-    entity.loot_item(potion)
-
-    haste_potion = materialize_item_from_installed_runtime(
-        HASTE_POTION_RECIPE,
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-    )
-    entity.loot_item(haste_potion)
+    entity.install_initial_items((
+        (build_authored_item("weapon.dagger", entity.uuid), WeaponSlot.MELEE_MAIN),
+        (build_authored_item("consumable.potion_greater_invisibility", entity.uuid), None),
+        (build_authored_item("consumable.potion_haste", entity.uuid), None),
+    ))
+    update_weapon_templates(entity)
 
 
 def create_caster(
@@ -758,35 +656,13 @@ def create_skeleton_warrior(
     ):
         return entity
 
-    longsword = materialize_item_from_installed_runtime(
-        LONGSWORD_RECIPE,
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
-    )
-    shield = materialize_item_from_installed_runtime(
-        WOODEN_SHIELD_RECIPE,
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Shield,
-    )
-    armor_scraps = materialize_item_from_installed_runtime(
-        ARMOR_SCRAPS_RECIPE,
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=BodyArmor,
-    )
-
-    entity.equipment.equip(armor_scraps)
-    entity.equipment.equip(longsword, WeaponSlot.MELEE_MAIN)
-    entity.equipment.equip(shield, WeaponSlot.MELEE_OFF)
-
-    acid_flask = materialize_item_from_installed_runtime(
-        ACID_FLASK_RECIPE,
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-    )
-    entity.loot_item(acid_flask)
+    entity.install_initial_items((
+        (build_authored_item("armor.armor_scraps", entity.uuid), BodyPart.BODY),
+        (build_authored_item("weapon.longsword", entity.uuid), WeaponSlot.MELEE_MAIN),
+        (build_authored_item("shield.wooden", entity.uuid), WeaponSlot.MELEE_OFF),
+        (build_authored_item("consumable.acid_flask", entity.uuid), None),
+    ))
+    update_weapon_templates(entity)
 
     return entity
 
@@ -882,35 +758,13 @@ def create_skeleton_archer(
     ):
         return entity
 
-    shortbow = materialize_item_from_installed_runtime(
-        SHORTBOW_RECIPE,
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
-    )
-    dagger1 = materialize_item_from_installed_runtime(
-        DAGGER_RECIPE,
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
-    )
-    dagger2 = materialize_item_from_installed_runtime(
-        DAGGER_RECIPE,
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
-    )
-    armor_scraps = materialize_item_from_installed_runtime(
-        ARMOR_SCRAPS_RECIPE,
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=BodyArmor,
-    )
-
-    entity.equipment.equip(armor_scraps)
-    entity.equipment.equip(shortbow, WeaponSlot.RANGED_MAIN)
-    entity.equipment.equip(dagger1, WeaponSlot.MELEE_MAIN)
-    entity.equipment.equip(dagger2, WeaponSlot.MELEE_OFF)
+    entity.install_initial_items((
+        (build_authored_item("armor.armor_scraps", entity.uuid), BodyPart.BODY),
+        (build_authored_item("weapon.shortbow", entity.uuid), WeaponSlot.RANGED_MAIN),
+        (build_authored_item("weapon.dagger", entity.uuid), WeaponSlot.MELEE_MAIN),
+        (build_authored_item("weapon.dagger", entity.uuid), WeaponSlot.MELEE_OFF),
+    ))
+    update_weapon_templates(entity)
 
     return entity
 
@@ -1013,34 +867,12 @@ def create_skeleton_warlock(
     ):
         return entity
 
-    staff = materialize_item_from_installed_runtime(
-        ARCANE_STAFF_RECIPE,
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
-    )
-    armor_scraps = materialize_item_from_installed_runtime(
-        ARMOR_SCRAPS_RECIPE,
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=BodyArmor,
-    )
-    crown = materialize_item_from_installed_runtime(
-        CROWN_RECIPE,
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Helmet,
-    )
-
-    entity.equipment.equip(armor_scraps)
-    entity.equipment.equip(crown)
-    entity.equipment.equip(staff, WeaponSlot.MELEE_MAIN)
-
-    scroll = materialize_item_from_installed_runtime(
-        INVISIBILITY_SCROLL_RECIPE,
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-    )
-    entity.loot_item(scroll)
+    entity.install_initial_items((
+        (build_authored_item("armor.armor_scraps", entity.uuid), BodyPart.BODY),
+        (build_authored_item("apparel.crown", entity.uuid), BodyPart.HEAD),
+        (build_authored_item("weapon.arcane_staff", entity.uuid), WeaponSlot.MELEE_MAIN),
+        (build_authored_item("spell_item.scroll_invisibility", entity.uuid), None),
+    ))
+    update_weapon_templates(entity)
 
     return entity

@@ -13,8 +13,7 @@ from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.base_item import BaseItem, EquippableItem
 from dnd.blocks.equipment import EquipmentConfig, Weapon
-from dnd.content_system.item_bindings import ItemRuntimeOrigin
-from dnd.content_system.item_materialization import materialize_item
+from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.inventory import Inventory
 from dnd.core.base_block import BaseBlock
@@ -23,8 +22,7 @@ from dnd.core.gridmap import get_map
 from dnd.core.item_types import ItemRarity
 from dnd.core.creature_types import DamageType
 from dnd.entity import Entity, EntityConfig
-from dnd.items.weapons import LONGSWORD_RECIPE
-from tests.engine.support import reset_combat_state
+from tests.engine.support import create_test_entity, reset_combat_state
 
 
 THIS_FILE = "tests/manual/test_131_advanced_item_world_legacy_contract.py"
@@ -141,8 +139,8 @@ def create_actor(
 ) -> Entity:
     """Create the minimal current-architecture actor needed by item actions."""
     actor_uuid = uuid4()
-    actor = Entity.create(
-        source_entity_uuid=actor_uuid,
+    actor = create_test_entity(
+        source_id=actor_uuid,
         name=name,
         config=EntityConfig(
             ability_scores=AbilityScoresConfig(
@@ -166,12 +164,7 @@ def create_actor(
         ),
     )
     actor.equipment.equip(
-        materialize_item(
-            LONGSWORD_RECIPE,
-            actor.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
-        ),
+        build_authored_item("weapon.longsword", actor.uuid),
         WeaponSlot.MELEE_MAIN,
     )
     setup_standard_actions(actor)
@@ -187,6 +180,7 @@ def create_floor_item(
     """Create a pickable item, optionally in one authoritative floor slot."""
     item = BaseItem(
         source_entity_uuid=uuid4(),
+        item_id="test.floor_item",
         name=name,
         is_pickable=True,
         weight=weight,
@@ -208,11 +202,12 @@ def create_breakable(
     source_uuid = uuid4()
     item = BaseItem(
         source_entity_uuid=source_uuid,
+        item_id="test.breakable",
         name=name,
         is_pickable=False,
         is_targetable=True,
         health=BaseItem.create_item_health(source_uuid, 8),
-        blocks_vision_field=blocks_vision,
+        blocks_optics_field=blocks_vision,
         blocks_movement=blocks_movement,
         weight=50,
     )
@@ -275,8 +270,9 @@ def test_portable_vision_blocker_drop_and_pickup_update_los() -> None:
     hidden_item = create_floor_item((5, 5), name="Far Gem")
     blocker = BaseItem(
         source_entity_uuid=dropper.uuid,
+        item_id="test.portable_wall",
         name="Portable Wall",
-        blocks_vision_field=True,
+        blocks_optics_field=True,
         blocks_movement=True,
         is_pickable=True,
     )
@@ -324,6 +320,7 @@ def test_inventory_removes_floor_item_from_grid_senses_and_object_targets() -> N
     source_uuid = uuid4()
     crate = BaseItem(
         source_entity_uuid=source_uuid,
+        item_id="test.portable_crate",
         name="Portable Crate",
         is_pickable=True,
         is_targetable=True,
@@ -347,7 +344,11 @@ def test_drop_is_explicit_lifecycle_operation_not_discovered_action() -> None:
     """Drop routes explicitly, fires its hook, and handles a foreign UUID."""
     reset_item_world()
     actor = create_actor((5, 5))
-    item = DropTrackingItem(source_entity_uuid=actor.uuid, name="Trackable")
+    item = DropTrackingItem(
+        source_entity_uuid=actor.uuid,
+        item_id="test.drop_tracking_item",
+        name="Trackable",
+    )
     assert actor.inventory.add_item(item)
 
     available_names = {
@@ -417,6 +418,7 @@ def test_nonbreakable_or_unseen_items_are_not_object_targets() -> None:
     actor = create_actor((1, 5))
     pillar = BaseItem(
         source_entity_uuid=uuid4(),
+        item_id="test.pillar",
         name="Indestructible Pillar",
         is_targetable=True,
         is_pickable=False,
@@ -424,7 +426,13 @@ def test_nonbreakable_or_unseen_items_are_not_object_targets() -> None:
     )
     pillar.place_on_grid((2, 5))
     for y in range(10):
-        grid.set_tile(3, y, walkable=False, visible=False, name="Wall")
+        grid.set_tile(
+            3,
+            y,
+            walking_cost=0,
+            blocks_optics=True,
+            name="Wall",
+        )
     hidden = create_floor_item((5, 5), name="Hidden Gem")
     Entity.update_all_entities_senses()
 
@@ -473,9 +481,15 @@ def test_inventory_weight_equippable_flags_and_tag_filters() -> None:
     """Inventory value semantics preserve zero weight, stacks, and tags."""
     reset_combat_state()
     inventory = Inventory(source_entity_uuid=uuid4(), weight_capacity=10)
-    feather = BaseItem(source_entity_uuid=uuid4(), name="Feather", weight=0)
+    feather = BaseItem(
+        source_entity_uuid=uuid4(),
+        item_id="test.feather",
+        name="Feather",
+        weight=0,
+    )
     arrows = BaseItem(
         source_entity_uuid=uuid4(),
+        item_id="test.arrows",
         name="Arrows",
         weight=0.5,
         stack_count=5,
@@ -484,6 +498,7 @@ def test_inventory_weight_equippable_flags_and_tag_filters() -> None:
     potions = [
         BaseItem(
             source_entity_uuid=uuid4(),
+            item_id=f"test.potion.{tag}",
             name=name,
             tags=["consumable", tag],
         )
@@ -491,6 +506,7 @@ def test_inventory_weight_equippable_flags_and_tag_filters() -> None:
     ]
     ring = EquippableItem(
         source_entity_uuid=uuid4(),
+        item_id="test.magic_ring",
         name="Magic Ring",
         rarity=ItemRarity.RARE,
     )
@@ -511,6 +527,7 @@ def test_inventory_weight_equippable_flags_and_tag_filters() -> None:
 
     too_heavy = BaseItem(
         source_entity_uuid=uuid4(),
+        item_id="test.cannonballs",
         name="Cannonballs",
         weight=5,
         stack_count=3,

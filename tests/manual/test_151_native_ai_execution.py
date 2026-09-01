@@ -33,8 +33,9 @@ from dnd.core.base_actions import (
     AvailableActionsResult,
     TargetType,
 )
-from tests.content_identity import synthetic_action_attribution
+from tests.content_identity import synthetic_action_identity
 from dnd.entity import Entity
+from dnd.game import Game
 from dnd.monsters.bestiary import create_goblin, create_skeleton
 from tests.manual.test_09_action_discovery_and_costs import (
     create_tutorial_actor,
@@ -341,7 +342,10 @@ def test_bundled_basic_policy_executes_natively_without_transport() -> None:
     """The vendored policy performs an adjacent attack entirely in process."""
     _reset()
     actor = create_goblin(name="Native Goblin", position=(5, 5), faction="a")
-    create_skeleton(name="Target", position=(6, 5), faction="b")
+    target = create_skeleton(name="Target", position=(6, 5), faction="b")
+    for entity in (actor, target):
+        entity.compose_entity()
+        Game().deploy_entity(entity, entity.position)
     Entity.update_all_entities_senses()
     controller = NativeAIController.create(
         source_entity_uuid=actor.uuid,
@@ -367,7 +371,7 @@ def test_native_epoch_omits_affordable_action_without_exact_target_binding() -> 
     targetless_spell = AvailableActionInfo(
         template_name="Targetless__slot_3",
         semantic_key="test.targetless",
-        behavior_attribution=synthetic_action_attribution(
+        **synthetic_action_identity(
             "action.targetless_spell",
         ),
         target_type=TargetType.POSITION_AOE,

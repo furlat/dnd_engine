@@ -24,39 +24,56 @@ from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.equipment import EquipmentConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.base_item import ItemChargeConsumptionEvent
-from dnd.content_system.item_bindings import ItemRuntimeOrigin
-from dnd.content_system.item_materialization import materialize_item
+from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.core.base_actions import ActionCategory, BaseAction, Cost, TargetType
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.condition_types import HazardFilter
 from dnd.core.base_object import BaseObject
 from dnd.core.events import EventPhase, EventQueue, EventType
+from dnd.core.content.runtime import BehaviorBinding
 from dnd.core.gridmap import GridMap, get_map
 from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import BaseValue
 from dnd.entity import Entity, EntityConfig
-from dnd.items.consumables import HEALING_POTION_RECIPE
-from dnd.items.spell_items import fireball_scroll_recipe, fire_bolt_scroll_recipe
+from dnd.items.spell_items import build_fireball_scroll, build_fire_bolt_scroll
 from tests.manual.reactive_fixture_support import PrepareIntercept
-from dnd.items.weapons import CLUB_RECIPE
-from dnd.monsters.bestiary import create_goblin, create_skeleton
+from dnd.monsters.bestiary import (
+    create_goblin as _create_goblin,
+    create_skeleton as _create_skeleton,
+)
+from dnd.game import Game
 from dnd.spells.evocation import Fireball
 from dnd.spells.conjuration import MistyStep
+from tests.engine.support import create_test_entity, reset_combat_state
+
+
+_action_game: Game | None = None
+
+
+def _deploy_bestiary_entity(entity: Entity) -> Entity:
+    """Compose and deploy one factory result into this test world."""
+    if _action_game is None:
+        raise RuntimeError("reset_action_state must precede entity creation")
+    entity.compose_entity()
+    _action_game.deploy_entity(entity, entity.position)
+    return entity
+
+
+def create_goblin(*args, **kwargs) -> Entity:
+    return _deploy_bestiary_entity(_create_goblin(*args, **kwargs))
+
+
+def create_skeleton(*args, **kwargs) -> Entity:
+    return _deploy_bestiary_entity(_create_skeleton(*args, **kwargs))
 
 
 def reset_action_state() -> None:
     """Clear global state and create the tutorial arena."""
-    EventQueue.reset()
-    EventQueue.set_combat_log_callback(None)
-    BaseObject._registry.clear()
-    BaseBlock._registry.clear()
-    BaseCondition._registry.clear()
-    BaseValue._registry.clear()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
-    GridMap.reset()
+    global _action_game
+    reset_combat_state()
+    _action_game = Game()
     get_map().create_rectangle(0, 0, 20, 20)
 
 
@@ -89,7 +106,7 @@ def create_tutorial_actor(
         position=position,
         faction=faction,
     )
-    actor = Entity.create(source_entity_uuid=actor_id, name=name, config=config)
+    actor = create_test_entity(source_id=actor_id, name=name, config=config)
     if standard_actions:
         setup_standard_actions(actor)
     return actor
@@ -449,11 +466,7 @@ def test_contextual_object_and_environment_discovery_remains_sparse() -> None:
     """Invalid contextual affordances do not become authored disabled rows."""
     reset_action_state()
     hero = create_tutorial_actor(position=(3, 3))
-    distant_potion = materialize_item(
-        HEALING_POTION_RECIPE,
-        uuid4(),
-        origin=ItemRuntimeOrigin.LOOT,
-    )
+    distant_potion = build_authored_item("consumable.healing_potion", uuid4())
     distant_potion.place_on_grid((5, 3))
     Entity.update_all_entities_senses()
 
@@ -475,11 +488,7 @@ def test_unaffordable_authored_position_and_object_paths_do_no_target_work(
     """Disabled authored rows survive without path, LOS, or object validation."""
     reset_action_state()
     hero = create_tutorial_actor(position=(3, 3))
-    club = materialize_item(
-        CLUB_RECIPE,
-        uuid4(),
-        origin=ItemRuntimeOrigin.LOOT,
-    )
+    club = build_authored_item("weapon.club", uuid4())
     club.place_on_grid((4, 3))
     Entity.update_all_entities_senses()
     jump = hero.get_action_template("Jump")
@@ -520,10 +529,15 @@ def test_position_action_rows_report_no_rules_valid_targets(
     actor = create_tutorial_actor(position=(2, 2))
     if template_name == "Prepare Intercept":
         actor.register_action(
-            PrepareIntercept(
-                source_entity_uuid=actor.uuid,
-                template=True,
-            )
+                PrepareIntercept(
+                    source_entity_uuid=actor.uuid,
+                    behavior_binding=BehaviorBinding(
+                        behavior_id="test.prepare_intercept",
+                        provided_by_id="test.prepare_intercept",
+                        runtime_owner_uuid=actor.uuid,
+                    ),
+                    template=True,
+                )
         )
     Entity.update_all_entities_senses()
 
@@ -549,10 +563,15 @@ def test_position_action_rows_report_target_cost_unaffordable(
     actor = create_tutorial_actor(position=(2, 2))
     if template_name == "Prepare Intercept":
         actor.register_action(
-            PrepareIntercept(
-                source_entity_uuid=actor.uuid,
-                template=True,
-            )
+                PrepareIntercept(
+                    source_entity_uuid=actor.uuid,
+                    behavior_binding=BehaviorBinding(
+                        behavior_id="test.prepare_intercept",
+                        provided_by_id="test.prepare_intercept",
+                        runtime_owner_uuid=actor.uuid,
+                    ),
+                    template=True,
+                )
         )
     Entity.update_all_entities_senses()
     template = actor.get_action_template(template_name)
@@ -739,11 +758,7 @@ def test_unaffordable_contextual_self_item_stays_stable_without_validation(
     """A disabled self-use item projects status without prerequisite work."""
     reset_action_state()
     hero = create_tutorial_actor(position=(3, 3))
-    potion = materialize_item(
-        HEALING_POTION_RECIPE,
-        uuid4(),
-        origin=ItemRuntimeOrigin.STARTER,
-    )
+    potion = build_authored_item("consumable.healing_potion", uuid4())
     assert hero.loot_item(potion)
     Entity.update_all_entities_senses()
     monkeypatch.setattr(BaseAction, "pre_validate", unexpected_discovery_work)
@@ -773,11 +788,7 @@ def test_unaffordable_contextual_entity_item_stays_stable_without_target_work(
     """A disabled entity scroll projects status before target enumeration."""
     reset_action_state()
     hero = create_tutorial_actor(position=(3, 3))
-    scroll = materialize_item(
-        fire_bolt_scroll_recipe(caster_level=5),
-        uuid4(),
-        origin=ItemRuntimeOrigin.STARTER,
-    )
+    scroll = build_fire_bolt_scroll(uuid4(), caster_level=5)
     assert hero.loot_item(scroll)
     create_skeleton(name="Scroll Target", position=(4, 3), faction="monsters")
     Entity.update_all_entities_senses()
@@ -808,11 +819,7 @@ def test_unaffordable_contextual_aoe_item_stays_stable_without_preview_work(
     """A disabled AoE scroll projects status before position enumeration."""
     reset_action_state()
     hero = create_tutorial_actor(position=(3, 3))
-    scroll = materialize_item(
-        fireball_scroll_recipe(cast_level=3),
-        uuid4(),
-        origin=ItemRuntimeOrigin.STARTER,
-    )
+    scroll = build_fireball_scroll(uuid4(), cast_level=3)
     assert hero.loot_item(scroll)
     create_skeleton(name="Blast Target", position=(5, 3), faction="monsters")
     Entity.update_all_entities_senses()
@@ -922,11 +929,7 @@ def test_floor_and_inventory_item_actions_are_discovered_and_routed(capsys) -> N
     """Object and item-use actions appear through the same discovery result."""
     reset_action_state()
     actor = create_tutorial_actor(position=(3, 3))
-    potion = materialize_item(
-        HEALING_POTION_RECIPE,
-        uuid4(),
-        origin=ItemRuntimeOrigin.LOOT,
-    )
+    potion = build_authored_item("consumable.healing_potion", uuid4())
     potion.place_on_grid((4, 3))
     Entity.update_all_entities_senses()
 
@@ -1025,11 +1028,7 @@ def test_item_bound_spell_consumes_its_charge_before_action_completion() -> None
         position=(4, 2),
         faction="monsters",
     )
-    scroll = materialize_item(
-        fire_bolt_scroll_recipe(caster_level=5),
-        actor.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-    )
+    scroll = build_fire_bolt_scroll(actor.uuid, caster_level=5)
     assert actor.loot_item(scroll)
     Entity.update_all_entities_senses(max_distance=20)
     available = get_available_actions(actor)

@@ -10,8 +10,7 @@ from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.equipment import Weapon
 from dnd.blocks.health import HealthConfig, HitDiceConfig
-from dnd.content_system.item_bindings import ItemRuntimeOrigin
-from dnd.content_system.item_materialization import materialize_item
+from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.core import dice as dice_module
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_object import BaseObject
@@ -31,7 +30,6 @@ from dnd.core.life_types import LifeState
 from dnd.core.creature_types import DamageType
 from dnd.core.values import BaseValue
 from dnd.entity import Entity, EntityConfig
-from dnd.items.weapons import SCIMITAR_RECIPE, SHORTBOW_RECIPE
 from tests.engine.support import create_test_entity, reset_combat_state
 
 
@@ -105,21 +103,11 @@ def create_combatant(
         ),
     )
     actor.equipment.equip(
-        materialize_item(
-            SCIMITAR_RECIPE,
-            actor.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
-        ),
+        build_authored_item("weapon.scimitar", actor.uuid),
         WeaponSlot.MELEE_MAIN,
     )
     actor.equipment.equip(
-        materialize_item(
-            SHORTBOW_RECIPE,
-            actor.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
-        ),
+        build_authored_item("weapon.shortbow", actor.uuid),
         WeaponSlot.RANGED_MAIN,
     )
     setup_standard_actions(actor)

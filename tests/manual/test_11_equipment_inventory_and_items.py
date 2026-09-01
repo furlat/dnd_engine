@@ -13,8 +13,8 @@ from dnd.blocks.base_item import (
 from dnd.blocks.equipment import BodyArmor, EquipmentConfig, Shield, Weapon
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.inventory import Inventory
-from dnd.content_system.item_bindings import ItemRuntimeOrigin
-from dnd.content_system.item_materialization import materialize_item
+from dnd.content.items.authored_item_builders import build_authored_item
+from dnd.content.items.environment_item_builders import build_directional_door
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_actions import ActionEvent, ActionPresentationKind
 from dnd.core.base_conditions import BaseCondition
@@ -35,34 +35,19 @@ from dnd.core.values import BaseValue, ModifiableValue
 from dnd.types.world import CardinalDirection
 from dnd.entity import Entity, EntityConfig
 from dnd.items.consumables import (
-    GREATER_INVISIBILITY_POTION_RECIPE,
-    HASTE_POTION_RECIPE,
-    HEALING_POTION_RECIPE,
-    healing_potion_recipe,
+    build_greater_invisibility_potion,
+    build_haste_potion,
+    build_healing_potion,
 )
-from dnd.items.armors import CHAIN_MAIL_RECIPE, SHIELD_RECIPE
 from dnd.items.environment import DirectionalDoor as TutorialDoor
-from dnd.items.environment_content import directional_door_recipe
-from dnd.items.weapons import (
-    GREATSWORD_RECIPE,
-    SHORTBOW_RECIPE,
-    SHORTSWORD_RECIPE,
-)
 from dnd.conditions import GreaterInvisibilityEffect
 from dnd.spells.transmutation import HasteEffect
+from tests.engine.support import create_test_entity, reset_combat_state
 
 
 def reset_item_tutorial_state() -> None:
     """Clear global state and create a small tutorial grid."""
-    EventQueue.reset()
-    EventQueue.set_combat_log_callback(None)
-    BaseObject._registry.clear()
-    BaseBlock._registry.clear()
-    BaseCondition._registry.clear()
-    BaseValue._registry.clear()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
-    GridMap.reset()
+    reset_combat_state()
     get_map().create_rectangle(0, 0, 8, 4)
 
 
@@ -94,7 +79,7 @@ def create_tutorial_actor(
         position=position,
         faction="heroes",
     )
-    return Entity.create(source_entity_uuid=actor_id, name=name, config=config)
+    return create_test_entity(source_id=actor_id, name=name, config=config)
 
 
 def put_in_inventory(entity: Entity, item: BaseItem) -> None:
@@ -106,6 +91,7 @@ def create_tutorial_hand_crossbow(source_id: UUID) -> Weapon:
     """Create a light ranged weapon for ranged off-hand loadout examples."""
     return Weapon(
         source_entity_uuid=source_id,
+        item_id="test.hand_crossbow",
         name="Tutorial Hand Crossbow",
         description="A light one-handed ranged weapon for loadout examples.",
         damage_dice=6,
@@ -125,7 +111,12 @@ def test_first_item_example_prints_visible_location_lifecycle(capsys) -> None:
     """One item prints floor, inventory, and dropped location states."""
     reset_item_tutorial_state()
     collector = create_tutorial_actor("Collector", position=(0, 0))
-    key = BaseItem(source_entity_uuid=uuid4(), name="Silver Key", weight=1)
+    key = BaseItem(
+        source_entity_uuid=uuid4(),
+        item_id="test.silver_key",
+        name="Silver Key",
+        weight=1,
+    )
 
     key.place_on_grid((1, 0))
     floor_state = (
@@ -209,7 +200,12 @@ def test_items_move_between_floor_inventory_and_drop_locations(capsys) -> None:
     """An item has one authoritative location at a time."""
     reset_item_tutorial_state()
     collector = create_tutorial_actor("Collector", position=(0, 0))
-    key = BaseItem(source_entity_uuid=uuid4(), name="Silver Key", weight=1)
+    key = BaseItem(
+        source_entity_uuid=uuid4(),
+        item_id="test.silver_key",
+        name="Silver Key",
+        weight=1,
+    )
 
     key.place_on_grid((1, 0))
 
@@ -309,21 +305,9 @@ def test_inventory_stacks_and_capacity_are_atomic(capsys) -> None:
     """Stack merges consume incoming objects only when the full insert succeeds."""
     reset_item_tutorial_state()
     alchemist = create_tutorial_actor("Alchemist")
-    first = materialize_item(
-        HEALING_POTION_RECIPE,
-        alchemist.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-    )
-    second = materialize_item(
-        HEALING_POTION_RECIPE,
-        alchemist.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-    )
-    third = materialize_item(
-        HEALING_POTION_RECIPE,
-        alchemist.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-    )
+    first = build_healing_potion(alchemist.uuid)
+    second = build_healing_potion(alchemist.uuid)
+    third = build_healing_potion(alchemist.uuid)
     first.stack_count = 8
     second.stack_count = 2
     third.stack_count = 5
@@ -359,16 +343,8 @@ def test_inventory_stacks_and_capacity_are_atomic(capsys) -> None:
         name="Tight Pack",
         weight_capacity=10,
     )
-    existing = materialize_item(
-        healing_potion_recipe(heal_amount=4),
-        alchemist.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-    )
-    incoming = materialize_item(
-        healing_potion_recipe(heal_amount=4),
-        alchemist.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-    )
+    existing = build_healing_potion(alchemist.uuid, heal_amount=4)
+    incoming = build_healing_potion(alchemist.uuid, heal_amount=4)
     existing.stack_count = 8
     incoming.stack_count = 5
     existing.weight = 1
@@ -419,24 +395,12 @@ def test_equipment_moves_items_and_applies_equipment_effects(capsys) -> None:
     """Equipping gear moves it out of inventory and applies item hooks."""
     reset_item_tutorial_state()
     guard = create_tutorial_actor("Guard", strength=10)
-    sword = materialize_item(
-        SHORTSWORD_RECIPE,
-        guard.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
-    )
-    shield = materialize_item(
-        SHIELD_RECIPE,
-        guard.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Shield,
-    )
-    armor = materialize_item(
-        CHAIN_MAIL_RECIPE,
-        guard.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=BodyArmor,
-    )
+    sword = build_authored_item("weapon.shortsword", guard.uuid)
+    shield = build_authored_item("shield.shield", guard.uuid)
+    armor = build_authored_item("armor.chain_mail", guard.uuid)
+    assert isinstance(sword, Weapon)
+    assert isinstance(shield, Shield)
+    assert isinstance(armor, BodyArmor)
     put_in_inventory(guard, sword)
     put_in_inventory(guard, shield)
     put_in_inventory(guard, armor)
@@ -540,18 +504,10 @@ def test_two_handed_melee_displaces_by_order_while_ranged_loadout_stays_parallel
     """Melee hand conflicts displace older gear; ranged slots are independent."""
     reset_item_tutorial_state()
     warrior = create_tutorial_actor("Warrior")
-    greatsword = materialize_item(
-        GREATSWORD_RECIPE,
-        warrior.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
-    )
-    shield = materialize_item(
-        SHIELD_RECIPE,
-        warrior.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Shield,
-    )
+    greatsword = build_authored_item("weapon.greatsword", warrior.uuid)
+    shield = build_authored_item("shield.shield", warrior.uuid)
+    assert isinstance(greatsword, Weapon)
+    assert isinstance(shield, Shield)
     put_in_inventory(warrior, greatsword)
     put_in_inventory(warrior, shield)
 
@@ -574,18 +530,10 @@ def test_two_handed_melee_displaces_by_order_while_ranged_loadout_stays_parallel
     )
 
     second = create_tutorial_actor("Second Warrior", position=(2, 0))
-    second_greatsword = materialize_item(
-        GREATSWORD_RECIPE,
-        second.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
-    )
-    second_shield = materialize_item(
-        SHIELD_RECIPE,
-        second.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Shield,
-    )
+    second_greatsword = build_authored_item("weapon.greatsword", second.uuid)
+    second_shield = build_authored_item("shield.shield", second.uuid)
+    assert isinstance(second_greatsword, Weapon)
+    assert isinstance(second_shield, Shield)
     put_in_inventory(second, second_greatsword)
     put_in_inventory(second, second_shield)
 
@@ -608,24 +556,12 @@ def test_two_handed_melee_displaces_by_order_while_ranged_loadout_stays_parallel
     )
 
     skirmisher = create_tutorial_actor("Skirmisher", position=(4, 0))
-    sword = materialize_item(
-        SHORTSWORD_RECIPE,
-        skirmisher.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
-    )
-    skirmisher_shield = materialize_item(
-        SHIELD_RECIPE,
-        skirmisher.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Shield,
-    )
-    bow = materialize_item(
-        SHORTBOW_RECIPE,
-        skirmisher.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
-    )
+    sword = build_authored_item("weapon.shortsword", skirmisher.uuid)
+    skirmisher_shield = build_authored_item("shield.shield", skirmisher.uuid)
+    bow = build_authored_item("weapon.shortbow", skirmisher.uuid)
+    assert isinstance(sword, Weapon)
+    assert isinstance(skirmisher_shield, Shield)
+    assert isinstance(bow, Weapon)
     main_crossbow = create_tutorial_hand_crossbow(skirmisher.uuid)
     off_crossbow = create_tutorial_hand_crossbow(skirmisher.uuid)
     for item in [sword, skirmisher_shield, bow, main_crossbow, off_crossbow]:
@@ -726,12 +662,7 @@ def test_usable_items_and_environment_objects_expose_item_bound_actions(capsys) 
     """Usable items clone actions with user and item identity at use time."""
     reset_item_tutorial_state()
     patient = create_tutorial_actor("Patient")
-    potion = materialize_item(
-        HEALING_POTION_RECIPE,
-        patient.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=UsableItem,
-    )
+    potion = build_healing_potion(patient.uuid)
     potion.stack_count = 2
     put_in_inventory(patient, potion)
 
@@ -784,7 +715,7 @@ def test_usable_items_and_environment_objects_expose_item_bound_actions(capsys) 
     assert charge_completion.parent_event is not None
     charge_parent = EventQueue.get_event_by_uuid(charge_completion.parent_event)
     assert charge_parent is not None
-    assert charge_parent.phase is EventPhase.EFFECT
+    assert charge_parent.phase is EventPhase.DECLARATION
     first_drink_state = (
         first_drink.canceled,
         patient.get_hp(),
@@ -814,12 +745,8 @@ def test_usable_items_and_environment_objects_expose_item_bound_actions(capsys) 
         BaseBlock.get(potion.uuid) is not None,
     )
 
-    door = materialize_item(
-        directional_door_recipe(display_name="Tutorial Door"),
-        patient.uuid,
-        origin=ItemRuntimeOrigin.ENVIRONMENT,
-        expected_type=TutorialDoor,
-    )
+    door = build_directional_door(display_name="Tutorial Door")
+    assert isinstance(door, TutorialDoor)
     door.place_on_grid(
         (1, 0),
         boundary_direction=CardinalDirection.WEST,
@@ -894,11 +821,7 @@ def test_condition_potion_keeps_presentation_and_condition_log_in_one_lineage() 
     """A condition potion exposes one drink action with a readable child effect."""
     reset_item_tutorial_state()
     actor = create_tutorial_actor("Potion Tester")
-    potion = materialize_item(
-        HASTE_POTION_RECIPE,
-        actor.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-    )
+    potion = build_haste_potion(actor.uuid)
     put_in_inventory(actor, potion)
 
     completion = execute_use_action(actor, potion.uuid, "Drink Haste Potion")
@@ -929,11 +852,7 @@ def test_magic_condition_potions_preserve_magical_origin_and_haste_lethargy() ->
     """Magic-item conditions retain their origin and exact removal behavior."""
     reset_item_tutorial_state()
     actor = create_tutorial_actor("Magic Potion Tester")
-    haste_potion = materialize_item(
-        HASTE_POTION_RECIPE,
-        actor.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-    )
+    haste_potion = build_haste_potion(actor.uuid)
     put_in_inventory(actor, haste_potion)
     haste_potion_uuid = haste_potion.uuid
     base_speed = actor.action_economy.movement.normalized_score
@@ -970,11 +889,7 @@ def test_magic_condition_potions_preserve_magical_origin_and_haste_lethargy() ->
 
     reset_item_tutorial_state()
     actor = create_tutorial_actor("Invisibility Potion Tester")
-    invisibility_potion = materialize_item(
-        GREATER_INVISIBILITY_POTION_RECIPE,
-        actor.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-    )
+    invisibility_potion = build_greater_invisibility_potion(actor.uuid)
     put_in_inventory(actor, invisibility_potion)
 
     invisibility_completion = execute_use_action(

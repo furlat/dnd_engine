@@ -16,7 +16,6 @@ from dnd.core.action_types import RestrictedActionGrant
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.content.origin_features import OriginCapability
 from dnd.core.content.runtime import (
-    AuthoredBehaviorAttribution,
     BehaviorBinding,
     bind_runtime_action_before_admission,
     bind_runtime_root_owned_behavior,
@@ -770,7 +769,7 @@ class Entity(BaseBlock):
             if proficiencies.is_weapon_proficient((category,))
         ]
         weapon_proficiencies.extend(sorted(
-            set(proficiencies.base_weapon_ref_keys)
+            set(proficiencies.base_weapon_ids)
             | {
                 key
                 for key, sources in proficiencies.specific_weapon_sources.items()
@@ -1059,6 +1058,10 @@ class Entity(BaseBlock):
             for block in BaseBlock._registry.values()
             if block.source_entity_uuid == self.uuid
         )
+        owned_source_uuids = {
+            self.uuid,
+            *(block.uuid for block in owned_blocks),
+        }
         for block in owned_blocks:
             for condition in tuple(block.active_conditions_by_uuid.values()):
                 block._discard_condition_indexes(condition)
@@ -1077,10 +1080,10 @@ class Entity(BaseBlock):
             grid._commit_entity_membership(self.uuid, self.position, None)
         self.__class__._entity_registry.pop(self.uuid, None)
         for obj in tuple(BaseObject._registry.values()):
-            if obj.source_entity_uuid == self.uuid:
+            if obj.source_entity_uuid in owned_source_uuids:
                 obj.remove_from_register()
         for value in tuple(BaseValue._registry.values()):
-            if value.source_entity_uuid == self.uuid:
+            if value.source_entity_uuid in owned_source_uuids:
                 value.remove_from_register()
         for block in owned_blocks:
             BaseBlock.unregister(block.uuid)
@@ -1110,6 +1113,48 @@ class Entity(BaseBlock):
                 "registered action ownership disagrees with entity identity",
             )
         self._entity_created_event()
+
+    def install_initial_items(
+        self,
+        items: Sequence[Tuple[BaseItem, Optional[EquipmentSlot]]],
+    ) -> None:
+        """Install one complete initial loadout before the birth fact."""
+        if self.creation_committed:
+            raise RuntimeError("initial items require an uncommitted entity")
+        if self.is_deployed or self.is_spatially_suspended:
+            raise RuntimeError("initial items require world absence")
+
+        try:
+            placements = tuple(items)
+            seen_uuids: set[UUID] = set()
+            inventory_items: list[BaseItem] = []
+            equipment_items: list[
+                Tuple[EquippableItem, Optional[EquipmentSlot]]
+            ] = []
+            for item, slot in placements:
+                if item.uuid in seen_uuids:
+                    raise ValueError(f"duplicate initial item UUID {item.uuid}")
+                seen_uuids.add(item.uuid)
+                if BaseBlock.get(item.uuid) is not item:
+                    raise ValueError(
+                        f"initial item {item.item_id} is not registered",
+                    )
+                if slot is None:
+                    inventory_items.append(item)
+                    continue
+                if not isinstance(item, EquippableItem):
+                    raise TypeError(
+                        f"initial item {item.item_id} is not equippable",
+                    )
+                equipment_items.append((item, slot))
+
+            self.inventory.validate_initial_items(inventory_items)
+            self.equipment.validate_initial_items(equipment_items)
+            self.inventory.install_initial_items(inventory_items)
+            self.equipment.install_initial_items(equipment_items)
+        except BaseException:
+            self.discard_uncommitted()
+            raise
 
     def compose_entity(self) -> EntityCreatedEvent:
         """Validate and publish exactly one birth fact for this aggregate."""
@@ -1489,7 +1534,12 @@ class Entity(BaseBlock):
             condition.target_entity_uuid = self.uuid
         bind_runtime_root_owned_behavior(
             condition,
-            origin_root_ref=self.content_ref,
+            current_binding=condition.behavior_binding,
+            origin_root_id=(
+                self.content_ref.content_id
+                if self.content_ref is not None
+                else None
+            ),
             runtime_owner_uuid=self.uuid,
         )
         if context is not None:
@@ -2317,7 +2367,7 @@ class Entity(BaseBlock):
         weapon = self.equipment.get_weapon(weapon_slot)
         if not self.creature_proficiencies.is_weapon_proficient(
             weapon.properties if weapon is not None else None,
-            weapon.content_ref if weapon is not None else None,
+            weapon.item_id if weapon is not None else None,
         ):
             proficiency_bonus = proficiency_bonus.model_copy(deep=True)
             proficiency_bonus.update_normalizers(lambda _bonus: 0)
@@ -2590,7 +2640,7 @@ class Entity(BaseBlock):
             self.proficiency_bonus.normalized_score
             if self.creature_proficiencies.is_weapon_proficient(
                 weapon.properties if weapon is not None else None,
-                weapon.content_ref if weapon is not None else None,
+                weapon.item_id if weapon is not None else None,
             )
             else 0
         )
@@ -3745,11 +3795,11 @@ class Entity(BaseBlock):
             spell_execution = current_spell_execution()
             if (
                 spell_execution is not None
-                and spell_execution.cause_ref is not None
+                and spell_execution.cause_id is not None
                 and spell_execution.saving_throw_effect_id is not None
             ):
                 saving_throw_context = SavingThrowContext(
-                    cause_ref=spell_execution.cause_ref,
+                    cause_id=spell_execution.cause_id,
                     effect_id=spell_execution.saving_throw_effect_id,
                     is_magical=True,
                     effect_tags=spell_execution.saving_throw_effect_tags,
@@ -4316,7 +4366,12 @@ class Entity(BaseBlock):
             raise ValueError("Can only register templates (template=True)")
         bind_runtime_action_before_admission(
             action,
-            origin_root_ref=self.content_ref,
+            current_binding=action.behavior_binding,
+            origin_root_id=(
+                self.content_ref.content_id
+                if self.content_ref is not None
+                else None
+            ),
             runtime_owner_uuid=self.uuid,
         )
         self.registered_actions.append(action)
@@ -4444,9 +4499,9 @@ class Entity(BaseBlock):
         action_info = AvailableActionInfo(
             template_name=template_name,
             semantic_key=template.get_semantic_key(),
-            behavior_attribution=AuthoredBehaviorAttribution.from_binding(
-                behavior_binding,
-            ),
+            behavior_id=behavior_binding.behavior_id,
+            provided_by_id=behavior_binding.provided_by_id,
+            origin_root_id=behavior_binding.origin_root_id,
             configured_action_ref=template.configured_action_ref,
             target_type=target_type,
             availability_status=availability_status,
@@ -4508,11 +4563,9 @@ class Entity(BaseBlock):
                 trigger_event = handler.trigger_conditions[0].event_type.value
             infos.append(AvailableHandlerInfo(
                 name=handler.name,
-                behavior_attribution=(
-                    AuthoredBehaviorAttribution.from_binding(
-                        behavior_binding,
-                    )
-                ),
+                behavior_id=behavior_binding.behavior_id,
+                provided_by_id=behavior_binding.provided_by_id,
+                origin_root_id=behavior_binding.origin_root_id,
                 uuid=handler.uuid,
                 enabled=handler.enabled,
                 trigger_event=trigger_event,

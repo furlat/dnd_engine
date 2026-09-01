@@ -23,10 +23,6 @@ from dnd.core.content.identities import (
     ContentDefinitionKind,
     ContentRef,
 )
-from dnd.core.content.item_definitions import (
-    ItemDefinition,
-    ItemPersistencePolicy,
-)
 from dnd.core.content.provenance import (
     ContentFidelity,
     ContentProvenance,
@@ -42,7 +38,7 @@ from dnd.core.content.registration import (
     ContentDeclaration,
     ContentDeclarationMode,
     get_content_declaration,
-    item_factory,
+    content_factory,
     scan_module_content_declarations,
 )
 from dnd.core.content.registry import ContentRegistryBuilder
@@ -78,9 +74,10 @@ _SRD_PROVENANCE = ContentProvenance(
 )
 
 
-@item_factory(
+@content_factory(
+    definition_kind=ContentDefinitionKind.CREATURE,
     pack_id="fixture.core",
-    content_id="item.clockwork_flask",
+    content_id="creature.clockwork_fixture",
     version=1,
     parameters=_TestItemParameters,
     descriptor=ContentDescriptorSpec(
@@ -90,9 +87,6 @@ _SRD_PROVENANCE = ContentProvenance(
         tags=("fixture", "item"),
     ),
     provenance=_SRD_PROVENANCE,
-    item_definition=ItemDefinition(
-        persistence_policy=ItemPersistencePolicy.POSSESSION,
-    ),
 )
 def _create_test_item(context: object, parameters: _TestItemParameters) -> tuple[object, int]:
     """Return enough data to prove typed parameter materialization."""
@@ -111,18 +105,18 @@ def test_content_ref_is_normalized_namespaced_and_contract_bound() -> None:
     ref = declaration.ref
 
     assert ref.pack_id == "fixture.core"
-    assert ref.definition_kind == ContentDefinitionKind.ITEM
-    assert ref.content_id == "item.clockwork_flask"
+    assert ref.definition_kind == ContentDefinitionKind.CREATURE
+    assert ref.content_id == "creature.clockwork_fixture"
     assert ref.content_version == 1
     assert len(ref.definition_contract_hash) == 64
-    assert ref.identity_key == "fixture.core:item:item.clockwork_flask@1"
+    assert ref.identity_key == "fixture.core:creature:creature.clockwork_fixture@1"
 
     for invalid in ("Fixture.Core", "fixture core", "dnd.items.TestItem", ""):
         with pytest.raises(ValidationError):
             ContentRef(
                 pack_id=invalid,
-                definition_kind=ContentDefinitionKind.ITEM,
-                content_id="item.valid",
+                definition_kind=ContentDefinitionKind.CREATURE,
+                content_id="creature.valid",
                 content_version=1,
                 definition_contract_hash="b" * 64,
             )
@@ -244,7 +238,6 @@ def test_direct_declaration_cannot_lie_about_parameter_contract() -> None:
             mode=declaration.mode,
             descriptor=declaration.descriptor,
             provenance=declaration.provenance,
-            item_definition=declaration.item_definition,
             construction=ContentConstruction(
                 parameter_model=DifferentParameters,
                 factory=declaration.construction.factory,
@@ -266,7 +259,6 @@ def test_direct_declaration_requires_exact_two_argument_factory_shape() -> None:
             mode=declaration.mode,
             descriptor=declaration.descriptor,
             provenance=declaration.provenance,
-            item_definition=declaration.item_definition,
             construction=ContentConstruction(
                 parameter_model=declaration.construction.parameter_model,
                 factory=cast(
@@ -274,20 +266,6 @@ def test_direct_declaration_requires_exact_two_argument_factory_shape() -> None:
                     invalid_factory,
                 ),
             ),
-        )
-
-
-def test_item_declaration_requires_explicit_persistence_semantics() -> None:
-    """No item can enter the registry without a settlement policy."""
-    declaration = get_content_declaration(_create_test_item)
-    assert declaration.construction is not None
-    with pytest.raises(ValidationError, match="require item_definition"):
-        ContentDeclaration(
-            ref=declaration.ref,
-            mode=declaration.mode,
-            descriptor=declaration.descriptor,
-            provenance=declaration.provenance,
-            construction=declaration.construction,
         )
 
 

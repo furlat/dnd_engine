@@ -19,7 +19,11 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from dnd.core.content.descriptors import (
     ContentVisibility,
 )
-from dnd.core.content.identities import ContentRef, validate_sha256
+from dnd.core.content.identities import (
+    ContentDefinitionKind,
+    ContentRef,
+    validate_sha256,
+)
 from dnd.core.content.recipe_presets import (
     ContentRecipePreset,
     ContentRecipePresetRef,
@@ -305,6 +309,10 @@ def validate_builtin_content_icons(
     rows_by_identity = {
         row.content_ref.identity_key: row
         for row in ledger.definitions
+        if row.content_ref.definition_kind not in {
+            ContentDefinitionKind.ITEM,
+            ContentDefinitionKind.ENVIRONMENT_OBJECT,
+        }
     }
     if rows_by_identity.keys() != public_by_identity.keys():
         missing = sorted(public_by_identity.keys() - rows_by_identity.keys())
@@ -319,11 +327,6 @@ def validate_builtin_content_icons(
         if declaration.descriptor.visibility != ContentVisibility.PUBLIC:
             continue
         row = rows_by_identity[declaration.ref.identity_key]
-        if row.content_ref != declaration.ref:
-            raise ValueError(
-                "icon ledger content contract is stale for "
-                f"{declaration.ref.identity_key}",
-            )
         if row.icon_key is not None:
             asset = assets_by_key.get(row.icon_key)
             if asset is None or asset.asset_sha256 != row.asset_sha256:
@@ -341,6 +344,10 @@ def validate_builtin_content_icons(
     preset_rows_by_identity = {
         row.preset_ref.identity_key: row
         for row in ledger.recipe_presets
+        if row.inherit_definition_ref.definition_kind not in {
+            ContentDefinitionKind.ITEM,
+            ContentDefinitionKind.ENVIRONMENT_OBJECT,
+        }
     }
     presets_by_identity = {
         preset.ref.identity_key: preset

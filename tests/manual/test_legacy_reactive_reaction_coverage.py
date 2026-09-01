@@ -18,11 +18,10 @@ from dnd.actions_functional import (
 )
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
-from dnd.blocks.equipment import EquipmentConfig, Weapon
-from dnd.content_system.item_bindings import ItemRuntimeOrigin
-from dnd.content_system.item_materialization import materialize_item
+from dnd.blocks.equipment import EquipmentConfig
+from dnd.content.items.authored_item_builders import build_authored_item
+from dnd.content.items.environment_item_builders import build_directional_door
 from dnd.blocks.health import HealthConfig, HitDiceConfig
-from dnd.blocks.sensory import spatial_senses_system
 from dnd.conditions import GreaterInvisibilityEffect
 from dnd.core.base_actions import ActionEvent, AvailableTarget
 from dnd.core.condition_types import DurationType
@@ -42,21 +41,21 @@ from dnd.core.gridmap import get_map
 from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import NumericalModifier
 from dnd.entity import Entity, EntityConfig
-from dnd.items.consumables import GREATER_INVISIBILITY_POTION_RECIPE
-from dnd.items.environment_content import door_recipe
-from dnd.items.spell_items import SpellGrantingItem, invisibility_scroll_recipe
-from dnd.items.weapons import SHORTSWORD_RECIPE
-from dnd.items.environment_interactables import (
-    DoorObject as DoorFixture,
-)
+from dnd.game import Game
+from dnd.items.consumables import build_greater_invisibility_potion
+from dnd.items.spell_items import build_invisibility_scroll
 from tests.manual.reactive_fixture_support import (
     DodgeRollFeature,
     Intercepting,
     PrepareIntercept,
 )
-from dnd.monsters.bestiary import create_caster, create_skeleton
+from dnd.monsters.bestiary import (
+    create_caster as _create_caster,
+    create_skeleton as _create_skeleton,
+)
 from dnd.reactions import add_opportunity_attack_handler
 from dnd.spells.illusion import GreaterInvisibility, Invisibility
+from dnd.types.world import CardinalDirection
 from tests.engine.support import (
     force_attack_hit,
     force_attack_miss,
@@ -84,7 +83,7 @@ MOVEMENT_BOOK = "tests/engine/test_manual_11_grid_tiles_terrain_movement.py"
 PERFORMANCE_FILE = "tests/manual/test_43_ai_runtime_performance.py"
 
 SENSES_REGISTRATION_SELECTOR = (
-    f"{THIS_FILE}::test_indexed_sensory_system_registers_one_callback_per_observer"
+    f"{THIS_FILE}::test_indexed_sensory_system_updates_registered_observer_once"
 )
 SENSES_TRANSITION_SELECTOR = (
     f"{THIS_FILE}::test_reactive_visibility_adds_and_removes_for_multiple_observers"
@@ -311,6 +310,22 @@ def reset_arena(width: int = 15, height: int = 5) -> None:
     get_map().create_rectangle(0, 0, width, height)
 
 
+def create_caster(*args, **kwargs) -> Entity:
+    """Create and deploy one caster in the prepared arena."""
+    entity = _create_caster(*args, **kwargs)
+    entity.compose_entity()
+    Game().deploy_entity(entity, entity.position)
+    return entity
+
+
+def create_skeleton(*args, **kwargs) -> Entity:
+    """Create and deploy one skeleton in the prepared arena."""
+    entity = _create_skeleton(*args, **kwargs)
+    entity.compose_entity()
+    Game().deploy_entity(entity, entity.position)
+    return entity
+
+
 def create_melee_fighter(
     name: str,
     position: tuple[int, int],
@@ -344,15 +359,14 @@ def create_melee_fighter(
         ),
     )
     setup_standard_actions(actor)
-    actor.equipment.equip(
-        materialize_item(
-            SHORTSWORD_RECIPE,
-            actor.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
+    actor.install_initial_items((
+        (
+            build_authored_item("weapon.shortsword", actor.uuid),
+            WeaponSlot.MELEE_MAIN,
         ),
-        WeaponSlot.MELEE_MAIN,
-    )
+    ))
+    actor.compose_entity()
+    Game().deploy_entity(actor, position)
     return actor
 
 
@@ -386,12 +400,7 @@ def apply_invisibility_origin(actor: Entity, origin: str) -> None:
             cast_at_level=2,
         ).apply()
     else:
-        scroll = materialize_item(
-            invisibility_scroll_recipe(cast_level=2),
-            actor.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=SpellGrantingItem,
-        )
+        scroll = build_invisibility_scroll(actor.uuid, cast_level=2)
         actor.loot_item(scroll)
         template = scroll.get_use_actions(actor.uuid)[0]
         result = execute_use_action(
@@ -417,11 +426,7 @@ def apply_greater_invisibility_origin(actor: Entity, origin: str) -> None:
             cast_at_level=4,
         ).apply()
     else:
-        potion = materialize_item(
-            GREATER_INVISIBILITY_POTION_RECIPE,
-            actor.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-        )
+        potion = build_greater_invisibility_potion(actor.uuid)
         actor.loot_item(potion)
         stored_potion = next(
             item
@@ -477,58 +482,69 @@ def test_legacy_reactive_reaction_manifests_account_for_all_37_cases() -> None:
         assert row.rationale
 
 
-def test_indexed_sensory_system_registers_one_callback_per_observer() -> None:
-    """Entity creation binds one observer callback through the indexed system."""
-    reset_arena(width=3, height=1)
-    before_callbacks = len(EventQueue._pre_completion_callbacks)
+def test_indexed_sensory_system_updates_registered_observer_once() -> None:
+    """A deployed observer receives one typed delta for one visible arrival."""
+    reset_arena(width=20, height=1)
     observer = create_skeleton(name="Observer", position=(0, 0))
+    mover = create_skeleton(name="Mover", position=(15, 0))
+    observer.update_entity_senses(max_distance=4)
+    assert mover.uuid not in observer.senses.entities
+    cursor = EventQueue.event_cursor()
 
-    callback = spatial_senses_system.callbacks_by_observer.get(observer.uuid)
-    assert callback is not None
-    assert callback.owner_uuid == observer.uuid
-    assert EventQueue._pre_completion_systems["spatial_senses"] is spatial_senses_system
-    assert len(EventQueue._pre_completion_callbacks) == before_callbacks
+    Entity.update_entity_position(mover, (3, 0))
+
+    updates = [
+        event
+        for _, event in EventQueue.iter_events_since(cursor)
+        if isinstance(event, SensoryUpdateEvent)
+        and event.phase == EventPhase.COMPLETION
+        and event.observer_uuid == observer.uuid
+        and mover.uuid in event.entity_contacts_changed
+    ]
+    assert len(updates) == 1
+    assert updates[0].entity_contacts_changed[mover.uuid].position == (3, 0)
 
 
 def test_reactive_visibility_adds_and_removes_for_multiple_observers() -> None:
     """One spatial move publishes observer-local additions and later removals."""
-    reset_arena(width=12, height=3)
+    reset_arena(width=20, height=3)
     first = create_skeleton(name="First Observer", position=(0, 0))
     second = create_skeleton(name="Second Observer", position=(0, 2))
-    mover = create_skeleton(name="Mover", position=(10, 1))
+    mover = create_skeleton(name="Mover", position=(15, 1))
     first.update_entity_senses(max_distance=4)
     second.update_entity_senses(max_distance=4)
 
     assert mover.uuid not in first.senses.entities
     assert mover.uuid not in second.senses.entities
-    cursor = len(EventQueue._all_events)
+    cursor = EventQueue.event_cursor()
 
     Entity.update_entity_position(mover, (3, 1))
 
     for observer in (first, second):
-        assert observer.senses.entities[mover.uuid] == (3, 1)
+        assert observer.senses.entities[mover.uuid].position == (3, 1)
         additions = [
             event
-            for event in EventQueue._all_events[cursor:]
+            for _, event in EventQueue.iter_events_since(cursor)
             if isinstance(event, SensoryUpdateEvent)
             and event.phase == EventPhase.COMPLETION
             and event.observer_uuid == observer.uuid
-            and event.visible_entities_added == {mover.uuid: (3, 1)}
+            and mover.uuid in event.entity_contacts_changed
         ]
         assert len(additions) == 1
+        assert additions[0].entity_contacts_changed[mover.uuid].position == (3, 1)
 
-    cursor = len(EventQueue._all_events)
-    Entity.update_entity_position(mover, (10, 1))
+    cursor = EventQueue.event_cursor()
+    Entity.update_entity_position(mover, (15, 1))
 
     for observer in (first, second):
         assert mover.uuid not in observer.senses.entities
         removals = [
             event
-            for event in EventQueue._all_events[cursor:]
+            for _, event in EventQueue.iter_events_since(cursor)
             if isinstance(event, SensoryUpdateEvent)
             and event.phase == EventPhase.COMPLETION
             and event.observer_uuid == observer.uuid
-            and event.visible_entities_removed == {mover.uuid: (3, 1)}
+            and mover.uuid in event.entity_contacts_removed
         ]
         assert len(removals) == 1
 
@@ -905,13 +921,11 @@ def test_closed_door_invalidates_prepared_intercept_path_at_trigger_time() -> No
     interceptor = create_melee_fighter("Interceptor", (2, 2), "heroes")
     door_closer = create_melee_fighter("Door Closer", (4, 3), "neutral")
     enemy = create_melee_fighter("Enemy", (9, 2), "monsters")
-    door = materialize_item(
-        door_recipe(is_open=True),
-        uuid4(),
-        origin=ItemRuntimeOrigin.ENVIRONMENT,
-        expected_type=DoorFixture,
+    door = build_directional_door(is_open=True)
+    door.place_on_grid(
+        (4, 2),
+        boundary_direction=CardinalDirection.WEST,
     )
-    door.place_on_grid((4, 2))
     arm_intercept(interceptor, (6, 2))
     Entity.update_all_entities_senses(max_distance=20)
 
@@ -919,7 +933,7 @@ def test_closed_door_invalidates_prepared_intercept_path_at_trigger_time() -> No
 
     assert result is not None and not result.canceled
     assert door.is_open is False
-    assert door.blocks_movement
+    assert not get_map().can_transition((3, 2), (4, 2))
     assert interceptor.senses._paths_dirty
 
     Move(source_entity_uuid=enemy.uuid, end_position=(5, 2)).apply()
@@ -994,7 +1008,15 @@ def test_dodge_roll_handles_fully_blocked_and_partial_retreats() -> None:
     reset_arena(width=10, height=5)
     attacker = create_melee_fighter("Attacker", (3, 2), "monsters")
     defender = create_melee_fighter("Defender", (4, 2), "heroes")
-    get_map().set_tile(6, 2, walkable=False, visible=False, name="Wall")
+    get_map().set_tile(
+        6,
+        2,
+        walking_cost=0,
+        flying_cost=0,
+        blocks_optics=True,
+        blocks_propagation=True,
+        name="Wall",
+    )
     defender.add_condition(
         DodgeRollFeature(
             source_entity_uuid=defender.uuid,
@@ -1018,13 +1040,11 @@ def test_open_door_is_authoritative_when_dodge_roll_triggers() -> None:
     attacker = create_melee_fighter("Attacker", (3, 2), "monsters")
     defender = create_melee_fighter("Defender", (4, 2), "heroes")
     opener = create_melee_fighter("Door Opener", (5, 3), "heroes")
-    door = materialize_item(
-        door_recipe(),
-        uuid4(),
-        origin=ItemRuntimeOrigin.ENVIRONMENT,
-        expected_type=DoorFixture,
+    door = build_directional_door()
+    door.place_on_grid(
+        (5, 2),
+        boundary_direction=CardinalDirection.WEST,
     )
-    door.place_on_grid((5, 2))
     defender.add_condition(
         DodgeRollFeature(
             source_entity_uuid=defender.uuid,

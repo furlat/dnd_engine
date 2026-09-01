@@ -1,7 +1,7 @@
 """Inventory block for entity item storage."""
 
 from dataclasses import dataclass
-from typing import Optional, List, Dict
+from typing import Dict, Iterable, List, Optional
 from uuid import UUID
 from pydantic import Field
 
@@ -120,6 +120,68 @@ class Inventory(BaseBlock):
             if self.total_weight + item.weight * item.stack_count > self.weight_capacity:
                 return False
         return True
+
+    def validate_initial_items(self, items: Iterable[BaseItem]) -> None:
+        """Validate a complete unpublished inventory without mutating it."""
+        candidates = tuple(items)
+        seen_uuids = set(self.items)
+        seen_stack_ids = {
+            item.stack_id
+            for item in self.items.values()
+            if item.stack_id is not None
+        }
+        for item in candidates:
+            if item.uuid in seen_uuids:
+                raise ValueError(f"duplicate initial item UUID {item.uuid}")
+            seen_uuids.add(item.uuid)
+            if item.source_entity_uuid != self.source_entity_uuid:
+                raise ValueError(
+                    f"initial item {item.item_id} belongs to another entity",
+                )
+            if (
+                item.owner_uuid is not None
+                or item.stored_in_uuid is not None
+                or item.tile_uuid is not None
+                or item.is_equipped
+                or item.equipped_slot is not None
+            ):
+                raise ValueError(
+                    f"initial item {item.item_id} is already placed",
+                )
+            if item.stack_count > item.max_stack:
+                raise ValueError(
+                    f"initial item {item.item_id} exceeds its stack limit",
+                )
+            if item.stack_id is not None:
+                if item.stack_id in seen_stack_ids:
+                    raise ValueError(
+                        f"duplicate initial stack {item.stack_id!r}",
+                    )
+                seen_stack_ids.add(item.stack_id)
+
+        if (
+            self.max_slots is not None
+            and self.item_count + len(candidates) > self.max_slots
+        ):
+            raise ValueError("initial items exceed inventory slot capacity")
+        added_weight = sum(
+            item.weight * item.stack_count
+            for item in candidates
+        )
+        if (
+            self.weight_capacity is not None
+            and self.total_weight + added_weight > self.weight_capacity
+        ):
+            raise ValueError("initial items exceed inventory weight capacity")
+
+    def install_initial_items(self, items: Iterable[BaseItem]) -> None:
+        """Install validated initial holdings without publishing Events."""
+        candidates = tuple(items)
+        self.validate_initial_items(candidates)
+        for item in candidates:
+            result = self.add_item_with_result(item)
+            if not result.succeeded or result.inserted_item is not item:
+                raise RuntimeError("validated initial inventory commit diverged")
 
     def add_item_with_result(self, item: BaseItem) -> InventoryAddResult:
         """Add an item stack atomically and return every changed stack.

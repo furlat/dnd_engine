@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from typing import Iterator
 from uuid import UUID
 
-from dnd.core.content.identities import ContentRef
+from dnd.core.content.identities import validate_namespaced_id
 from dnd.core.creature_types import DamageType
 from dnd.core.saving_throw_types import SavingThrowEffectTag
 
@@ -25,10 +25,18 @@ class SpellExecutionState:
 
     source_entity_uuid: UUID
     damage_type: DamageType | None
-    cause_ref: ContentRef | None = None
+    cause_id: str | None = None
     saving_throw_effect_id: str | None = None
     saving_throw_effect_tags: tuple[SavingThrowEffectTag, ...] = ()
     lineage_uuid: UUID | None = None
+
+    def __post_init__(self) -> None:
+        """Reject malformed primitive spell provenance at scope admission."""
+        if self.cause_id is not None:
+            self.cause_id = validate_namespaced_id(
+                self.cause_id,
+                "spell execution cause identity",
+            )
 
 
 _CURRENT_SPELL_EXECUTION: ContextVar[SpellExecutionState | None] = ContextVar(
@@ -42,7 +50,7 @@ def spell_execution_scope(
     *,
     source_entity_uuid: UUID,
     damage_type: DamageType | None,
-    cause_ref: ContentRef | None = None,
+    cause_id: str | None = None,
     saving_throw_effect_id: str | None = None,
     saving_throw_effect_tags: tuple[SavingThrowEffectTag, ...] = (),
 ) -> Iterator[SpellExecutionState]:
@@ -51,7 +59,7 @@ def spell_execution_scope(
     state = SpellExecutionState(
         source_entity_uuid=source_entity_uuid,
         damage_type=damage_type,
-        cause_ref=cause_ref,
+        cause_id=cause_id,
         saving_throw_effect_id=saving_throw_effect_id,
         saving_throw_effect_tags=saving_throw_effect_tags,
     )

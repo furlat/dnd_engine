@@ -210,7 +210,7 @@ def test_all_rage_advancements_share_one_action_family_and_max_capacity(
     assert len(rage_actions) == len(end_actions) == 1
     assert rage_actions[0].rage_damage == 4
     assert rage_actions[0].behavior_binding is not None
-    assert rage_actions[0].behavior_binding.provided_by_ref == RAGE_REF
+    assert rage_actions[0].behavior_binding.provided_by_id == RAGE_REF.content_id
     assert not context.entity.active_conditions
 
     _remove(context, *receipts)
@@ -243,7 +243,7 @@ def test_berserker_replaces_rage_with_configured_frenzy_and_cleans_state(
     assert frenzy.mindless_rage is True
     assert frenzy.persistent_rage is True
     assert frenzy.behavior_binding is not None
-    assert frenzy.behavior_binding.provided_by_ref == FRENZY_REF
+    assert frenzy.behavior_binding.provided_by_id == FRENZY_REF.content_id
 
     raging = rage.Raging(
         source_entity_uuid=context.entity.uuid,
@@ -279,7 +279,7 @@ def test_reckless_feature_owns_only_action_and_cleans_transient_state(
     action = context.entity.get_action_template("Reckless Attack")
     assert isinstance(action, barbarian.RecklessAttack)
     assert action.behavior_binding is not None
-    assert action.behavior_binding.provided_by_ref == RECKLESS_ATTACK_REF
+    assert action.behavior_binding.provided_by_id == RECKLESS_ATTACK_REF.content_id
     transient = barbarian.RecklessAttacking(
         source_entity_uuid=context.entity.uuid,
         target_entity_uuid=context.entity.uuid,
@@ -470,7 +470,7 @@ def test_relentless_persistent_and_indomitable_install_no_feature_conditions(
         handler = context.entity.get_event_handler_by_name(name)
         assert handler is not None
         assert handler.behavior_binding is not None
-        assert handler.behavior_binding.provided_by_ref == expected_ref
+        assert handler.behavior_binding.provided_by_id == expected_ref.content_id
     assert not context.entity.active_conditions
 
     _remove(context, *receipts)
@@ -544,7 +544,7 @@ def test_berserker_action_and_reaction_roots_are_exact_and_reversible(
         )
         assert behavior is not None
         assert behavior.behavior_binding is not None
-        assert behavior.behavior_binding.provided_by_ref == content_ref
+        assert behavior.behavior_binding.provided_by_id == content_ref.content_id
     assert not context.entity.active_conditions
 
     _remove(context, receipt)

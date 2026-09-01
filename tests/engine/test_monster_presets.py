@@ -19,10 +19,6 @@ from dnd.core.modifiers import (
 from dnd.core.values import BaseValue
 from dnd.entity import Entity
 from dnd.game import Game
-from dnd.items.consumables import (
-    GREATER_INVISIBILITY_POTION_RECIPE,
-    HASTE_POTION_RECIPE,
-)
 from dnd.monsters.bestiary import (
     create_caster,
     create_goblin,
@@ -313,11 +309,9 @@ def test_eb_17_011_create_caster_inventory_potions_are_item_use_actions() -> Non
     available_item_names = available_item_template_names(caster)
 
     assert invisibility_potion.is_consumable
+    assert invisibility_potion.item_id == "consumable.potion_greater_invisibility"
     assert invisibility_potion.charges == 1
-    assert (
-        invisibility_potion.stack_id
-        == GREATER_INVISIBILITY_POTION_RECIPE.recipe_digest
-    )
+    assert invisibility_potion.stack_id == "potion_of_greater_invisibility"
     assert len(invisibility_actions) == 1
     assert invisibility_actions[0].name == "Drink Greater Invisibility Potion"
     assert invisibility_actions[0].source_item_uuid == invisibility_potion.uuid
@@ -327,8 +321,9 @@ def test_eb_17_011_create_caster_inventory_potions_are_item_use_actions() -> Non
     ] == [("bonus_actions", 1)]
 
     assert haste_potion.is_consumable
+    assert haste_potion.item_id == "consumable.potion_haste"
     assert haste_potion.charges == 1
-    assert haste_potion.stack_id == HASTE_POTION_RECIPE.recipe_digest
+    assert haste_potion.stack_id == "potion_of_haste"
     assert len(haste_actions) == 1
     assert haste_actions[0].name == "Drink Haste Potion"
     assert haste_actions[0].source_item_uuid == haste_potion.uuid

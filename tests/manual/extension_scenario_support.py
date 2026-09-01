@@ -7,18 +7,24 @@ from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.base_item import UsableItem
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
-from dnd.content_system.item_bindings import ItemRuntimeOrigin
-from dnd.content_system.item_runtime_materialization import (
-    materialize_item_from_installed_runtime,
-)
 from dnd.core.base_actions import AvailableActionInfo
 from dnd.entity import Entity, EntityConfig
 from dnd.extensions.aegis_spark import AegisTrainingFeature
 from dnd.extensions.field_focus import (
     DeployFieldFocus,
-    FIELD_KIT_RECIPE,
+    build_field_kit,
 )
-from dnd.monsters.bestiary import create_goblin
+from dnd.game import Game
+from dnd.monsters.bestiary import create_goblin as _create_goblin
+from tests.engine.support import create_test_entity
+
+
+def create_goblin(*args, **kwargs) -> Entity:
+    """Create and explicitly deploy one goblin in the prepared test world."""
+    entity = _create_goblin(*args, **kwargs)
+    entity.compose_entity()
+    Game().deploy_entity(entity, entity.position)
+    return entity
 
 
 def create_spell_feature_actor(
@@ -27,8 +33,8 @@ def create_spell_feature_actor(
     faction: str,
 ) -> Entity:
     actor_id = uuid4()
-    return Entity.create(
-        source_entity_uuid=actor_id,
+    return create_test_entity(
+        source_id=actor_id,
         name=name,
         config=EntityConfig(
             ability_scores=AbilityScoresConfig(
@@ -84,12 +90,7 @@ def create_field_medic(
         DeployFieldFocus(source_entity_uuid=medic.uuid, template=True),
     )
     medic.loot_item(
-        materialize_item_from_installed_runtime(
-            FIELD_KIT_RECIPE,
-            medic.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=UsableItem,
-        ),
+        build_field_kit(medic.uuid),
     )
     return medic
 
@@ -97,12 +98,7 @@ def create_field_medic(
 def create_field_training_scene() -> tuple[Entity, Entity, UsableItem]:
     medic = create_field_medic()
     ally = create_goblin(name="Field Ally", position=(2, 1), faction="heroes")
-    floor_kit = materialize_item_from_installed_runtime(
-        FIELD_KIT_RECIPE,
-        medic.uuid,
-        origin=ItemRuntimeOrigin.LOOT,
-        expected_type=UsableItem,
-    )
+    floor_kit = build_field_kit(medic.uuid)
     floor_kit.place_on_grid((1, 2))
     Entity.update_all_entities_senses(max_distance=20)
     return medic, ally, floor_kit

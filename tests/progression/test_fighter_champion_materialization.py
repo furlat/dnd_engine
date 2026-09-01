@@ -168,6 +168,10 @@ def _runtime_with_neutral_origins() -> tuple[
             packs=loaded.packs,
             built_in_artifact_digest=loaded.built_in_artifact_digest,
             content_set_digest=loaded.content_set_digest,
+            behavior_declarations_by_class=(
+                loaded.behavior_declarations_by_class
+            ),
+            provider_only_behavior_ids=loaded.provider_only_behavior_ids,
         ),
     )
     return (
@@ -355,7 +359,7 @@ def test_fighter_five_champion_materializes_and_reverses_exactly() -> None:
     for action_type, provider_ref in expected_action_providers.items():
         action = feature_actions[action_type]
         assert action.behavior_binding is not None
-        assert action.behavior_binding.provided_by_ref == provider_ref
+        assert action.behavior_binding.provided_by_id == provider_ref.content_id
         assert action.source_entity_uuid == entity.uuid
     second_wind = feature_actions[fighter.SecondWind]
     assert isinstance(second_wind, fighter.SecondWind)
@@ -366,8 +370,8 @@ def test_fighter_five_champion_materializes_and_reverses_exactly() -> None:
         for handler in entity.event_handlers.values()
         if (
             handler.behavior_binding is not None
-            and handler.behavior_binding.provided_by_ref
-            == EXTRA_ATTACK_FEATURE_REF
+            and handler.behavior_binding.provided_by_id
+            == EXTRA_ATTACK_FEATURE_REF.content_id
         )
     )
     assert len(extra_attack_handlers) == 1

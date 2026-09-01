@@ -17,7 +17,6 @@ from dnd.content_system.builtin_character_builds import (
     starter_holdings_for_build,
 )
 from dnd.content_system.creature_materialization import materialize_creature
-from dnd.content_system.item_bindings import ITEM_RUNTIME_BINDINGS
 from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
 from dnd.core.content.identities import ContentDefinitionKind
 from dnd.core.content.materialization import (
@@ -76,15 +75,13 @@ def _runtime_holdings(
 ) -> Counter[tuple[str, str | None, int]]:
     rows: Counter[tuple[str, str | None, int]] = Counter()
     for item in entity.equipment.get_all_equipped_items():
-        binding = ITEM_RUNTIME_BINDINGS.require(item.uuid)
         rows[(
-            binding.recipe.recipe_digest,
+            item.item_id,
             item.equipped_slot,
             item.stack_count,
         )] += 1
     for item in entity.inventory.items.values():
-        binding = ITEM_RUNTIME_BINDINGS.require(item.uuid)
-        rows[(binding.recipe.recipe_digest, None, item.stack_count)] += 1
+        rows[(item.item_id, None, item.stack_count)] += 1
     return rows
 
 
@@ -93,7 +90,7 @@ def _authored_holdings(
 ) -> Counter[tuple[str, str | None, int]]:
     return Counter(
         (
-            holding.recipe.recipe_digest,
+            holding.item_id,
             (
                 holding.equipped_slot.value
                 if holding.equipped_slot is not None

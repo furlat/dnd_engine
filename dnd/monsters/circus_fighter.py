@@ -4,28 +4,20 @@ from uuid import UUID, uuid4
 
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
-from dnd.blocks.equipment import BodyArmor, EquipmentConfig, Weapon
+from dnd.blocks.equipment import EquipmentConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.saving_throws import SavingThrowConfig, SavingThrowSetConfig
 from dnd.blocks.skills import SkillConfig, SkillSetConfig
 from dnd.conditions import Blinded
-from dnd.content_system.item_bindings import ItemRuntimeOrigin
-from dnd.content_system.item_runtime_materialization import (
-    materialize_item_from_installed_runtime,
-)
+from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.core.creature_types import DamageType
-from dnd.core.equipment_types import WeaponSlot
+from dnd.core.equipment_types import BodyPart, WeaponSlot
 from dnd.entity import Entity, EntityConfig
 from dnd.monsters.circus_fighter_conditions import (
     CircusPerformer,
     DualWielder,
     ElementalAffinity,
     ElementalWeaponMastery,
-)
-from dnd.monsters.circus_fighter_items import (
-    FLAMING_SCIMITAR_RECIPE,
-    PERFORMER_LEATHER_RECIPE,
-    RUSTY_DAGGER_RECIPE,
 )
 from dnd.reactions import add_opportunity_attack_handler
 
@@ -115,28 +107,20 @@ def create_warrior(
         config=entity_config,
     )
 
-    dagger = materialize_item_from_installed_runtime(
-        RUSTY_DAGGER_RECIPE,
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
-    )
-    flaming_scimitar = materialize_item_from_installed_runtime(
-        FLAMING_SCIMITAR_RECIPE,
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=Weapon,
-    )
-    light_armor = materialize_item_from_installed_runtime(
-        PERFORMER_LEATHER_RECIPE,
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-        expected_type=BodyArmor,
-    )
-
-    entity.equipment.equip(light_armor)
-    entity.equipment.equip(flaming_scimitar, WeaponSlot.MELEE_MAIN)
-    entity.equipment.equip(dagger, WeaponSlot.MELEE_OFF)
+    entity.install_initial_items((
+        (
+            build_authored_item("armor.circus.performer_leather", entity.uuid),
+            BodyPart.BODY,
+        ),
+        (
+            build_authored_item("weapon.circus.flaming_scimitar", entity.uuid),
+            WeaponSlot.MELEE_MAIN,
+        ),
+        (
+            build_authored_item("weapon.circus.rusty_dagger", entity.uuid),
+            WeaponSlot.MELEE_OFF,
+        ),
+    ))
 
     dual_wielder = DualWielder(
         source_entity_uuid=entity.uuid, target_entity_uuid=entity.uuid

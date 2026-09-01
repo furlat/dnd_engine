@@ -1,5 +1,7 @@
 """Concrete engine conditions and condition-related event handlers."""
 
+from types import MappingProxyType
+
 from pydantic import Field, PrivateAttr
 from dnd.core.base_conditions import BaseCondition, ConditionApplicationEvent
 from dnd.core.condition_types import (
@@ -2430,9 +2432,7 @@ def greater_invisibility_check_processor(event: Event, source_entity_uuid: UUID)
 
 
 
-CORE_STANDARD_CONDITION_DECLARATIONS = tuple(
-    get_content_declaration(condition_type)
-    for condition_type in (
+_CORE_STANDARD_CONDITION_TYPES = (
         Underwater,
         Blinded,
         Charmed,
@@ -2455,5 +2455,12 @@ CORE_STANDARD_CONDITION_DECLARATIONS = tuple(
         Concentrating,
         NoReactions,
         Hidden,
-    )
+)
+CORE_STANDARD_CONDITION_DECLARATIONS_BY_CLASS = MappingProxyType({
+    condition_type: get_content_declaration(condition_type)
+    for condition_type in _CORE_STANDARD_CONDITION_TYPES
+})
+CORE_STANDARD_CONDITION_DECLARATIONS = tuple(
+    CORE_STANDARD_CONDITION_DECLARATIONS_BY_CLASS[condition_type]
+    for condition_type in _CORE_STANDARD_CONDITION_TYPES
 )

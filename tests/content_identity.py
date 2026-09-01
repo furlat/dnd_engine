@@ -1,24 +1,15 @@
-"""Explicit authored identity fixtures for synthetic transport rows."""
-
-from dnd.core.content.identities import ContentDefinitionKind, ContentRef
-from dnd.core.content.runtime import AuthoredBehaviorAttribution
+"""Explicit primitive behavior facts for synthetic discovery rows."""
 
 
-def synthetic_action_attribution(
+def synthetic_action_identity(
     content_id: str,
-) -> AuthoredBehaviorAttribution:
-    """Return one exact test-pack action attribution for a synthetic row."""
-    ref = ContentRef(
-        pack_id="tests.synthetic",
-        definition_kind=ContentDefinitionKind.ACTION,
-        content_id=content_id,
-        content_version=1,
-        definition_contract_hash="f" * 64,
-    )
-    return AuthoredBehaviorAttribution(
-        definition_ref=ref,
-        provided_by_ref=ref,
-    )
+) -> dict[str, str | None]:
+    """Return direct primitive fields for one synthetic action row."""
+    return {
+        "behavior_id": content_id,
+        "provided_by_id": content_id,
+        "origin_root_id": None,
+    }
 
 
-__all__ = ["synthetic_action_attribution"]
+__all__ = ["synthetic_action_identity"]

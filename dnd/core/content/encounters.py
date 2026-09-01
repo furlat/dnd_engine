@@ -23,7 +23,11 @@ from pydantic import (
     model_validator,
 )
 
-from dnd.core.content.identities import ContentDefinitionKind, ContentRef
+from dnd.core.content.identities import (
+    ContentDefinitionKind,
+    ContentRef,
+    validate_namespaced_id,
+)
 from dnd.core.content.recipes import ContentRecipe
 from dnd.core.creature_types import DamageType
 from dnd.core.equipment_types import EquipmentSlot
@@ -211,20 +215,23 @@ class RosterItemGrant(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     kind: Literal["item_grant"] = "item_grant"
-    recipe: ContentRecipe
+    item_id: str
     count: int = Field(default=1, ge=1)
     placement: RosterItemPlacement = RosterItemPlacement.INVENTORY
     equipment_slot: EquipmentSlot | None = None
     replace_existing: bool = False
     on_grant: Literal["none", "ignite"] = "none"
+    heal_amount: int | None = Field(default=None, ge=0)
+    cast_level: int | None = Field(default=None, ge=1, le=9)
+    charges: int | None = Field(default=None, ge=0)
+
+    @field_validator("item_id")
+    @classmethod
+    def _validate_item_id(cls, value: str) -> str:
+        return validate_namespaced_id(value, "item_id")
 
     @model_validator(mode="after")
     def _validate_item_grant(self) -> Self:
-        if self.recipe.ref.definition_kind not in {
-            ContentDefinitionKind.ITEM,
-            ContentDefinitionKind.ENVIRONMENT_OBJECT,
-        }:
-            raise ValueError("item grant requires an item recipe")
         if self.placement is RosterItemPlacement.EQUIPPED:
             if self.equipment_slot is None:
                 raise ValueError(
@@ -234,6 +241,29 @@ class RosterItemGrant(BaseModel):
             raise ValueError(
                 "inventory/default-slot item grants forbid equipment_slot",
             )
+        finite_fields = {
+            "heal_amount": self.heal_amount,
+            "cast_level": self.cast_level,
+            "charges": self.charges,
+        }
+        supplied = {
+            name for name, value in finite_fields.items() if value is not None
+        }
+        allowed_by_item = {
+            "consumable.healing_potion": {"heal_amount"},
+            "spell_item.scroll_fireball": {"cast_level"},
+            "spell_item.scroll_hold_person": {"cast_level"},
+            "spell_item.scroll_magic_missile": {"cast_level"},
+            "spell_item.scroll_spike_growth": {"cast_level"},
+            "spell_item.wand_fire": {"charges"},
+            "spell_item.wand_magic_missiles": {"charges"},
+        }
+        if not supplied <= allowed_by_item.get(self.item_id, set()):
+            raise ValueError(
+                f"item grant {self.item_id!r} has incompatible finite state",
+            )
+        if self.on_grant == "ignite" and self.item_id != "equipment.portable_torch":
+            raise ValueError("ignite setup effect requires equipment.portable_torch")
         return self
 
 

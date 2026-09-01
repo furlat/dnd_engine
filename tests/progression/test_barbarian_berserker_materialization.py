@@ -23,8 +23,7 @@ from dnd.content_system.character_materialization import (
     remove_character_composition,
 )
 from dnd.content_system.character_appearance import BARBARIAN_HUMAN_APPEARANCE
-from dnd.content_system.item_bindings import ItemRuntimeOrigin
-from dnd.content_system.item_materialization import materialize_item
+from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.content_system.pack_loader import LoadedContentSystem
 from dnd.content_system.runtime import ContentSystemRuntime
 from dnd.content_system.starting_equipment_definitions import (
@@ -77,7 +76,6 @@ from dnd.actions import AttackEvent
 from dnd.blocks.equipment import Weapon
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
-from dnd.items.weapons import GREATSWORD_RECIPE
 from dnd.player_character_body import PLAYER_CHARACTER_BODY_RECIPE
 from dnd.runtime_reset import reset_engine_runtime
 
@@ -172,6 +170,10 @@ def _runtime_with_neutral_origins() -> tuple[
             packs=loaded.packs,
             built_in_artifact_digest=loaded.built_in_artifact_digest,
             content_set_digest=loaded.content_set_digest,
+            behavior_declarations_by_class=(
+                loaded.behavior_declarations_by_class
+            ),
+            provider_only_behavior_ids=loaded.provider_only_behavior_ids,
         ),
     )
     return runtime, loaded.content_set_digest, species.ref, background.ref
@@ -417,12 +419,7 @@ def test_level_twenty_berserker_materializes_and_reverses_exactly() -> None:
     )
 
     entity.equipment.equip(
-        materialize_item(
-            GREATSWORD_RECIPE,
-            entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
-        ),
+        build_authored_item("weapon.greatsword", entity.uuid),
         WeaponSlot.MELEE_MAIN,
     )
     target = Entity.create(

@@ -6,6 +6,7 @@ from pydantic import (
     SerializerFunctionWrapHandler,
     computed_field,
     field_serializer,
+    field_validator,
     model_serializer,
     model_validator,
 )
@@ -35,6 +36,7 @@ from dnd.core.saving_throw_types import (
     SavingThrowContext,
     SavingThrowEffectTag,
 )
+from dnd.core.content.identities import validate_namespaced_id
 from dnd.types.senses import OpticalObscurement
 
 
@@ -165,11 +167,22 @@ class ConditionApplicationEvent(Event):
 
     name: str = Field(default="Condition Application", description="Condition application event name.")
     condition: 'BaseCondition' = Field(description="Condition being applied.")
+    behavior_id: Optional[str] = Field(
+        default=None,
+        description="Primitive identity of the condition rule being applied.",
+    )
     event_type: EventType = Field(default=EventType.CONDITION_APPLICATION, description="Condition application event type.")
     source_entity_name: Optional[str] = Field(default=None, description="Display name of the source entity.")
     target_entity_name: Optional[str] = Field(default=None, description="Display name of the target entity.")
     resulting_ac: Optional[int] = Field(default=None, description="Entity AC after condition application for frontend reducers.")
     resulting_max_hp: Optional[int] = Field(default=None, description="Entity max HP after condition application for frontend reducers.")
+
+    @field_validator("behavior_id")
+    @classmethod
+    def _validate_behavior_id(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return validate_namespaced_id(value, "condition event behavior identity")
 
     def get_effect_origin(self) -> Optional[EffectOrigin]:
         """Return the immutable origin inherited by the applied condition."""
@@ -209,6 +222,10 @@ class ConditionRemovalEvent(Event):
 
     name: str = Field(default="Condition Removal", description="Condition removal event name.")
     condition: 'BaseCondition' = Field(description="Condition being removed.")
+    behavior_id: Optional[str] = Field(
+        default=None,
+        description="Primitive identity of the condition rule being removed.",
+    )
     expired: bool = Field(default=False, description="Whether expiration caused this removal.")
     event_type: EventType = Field(default=EventType.CONDITION_REMOVAL, description="Condition removal event type.")
     source_entity_name: Optional[str] = Field(default=None, description="Display name of the source entity.")
@@ -216,6 +233,13 @@ class ConditionRemovalEvent(Event):
 
     resulting_ac: Optional[int] = Field(default=None, description="Entity AC after condition removal for frontend reducers.")
     resulting_max_hp: Optional[int] = Field(default=None, description="Entity max HP after condition removal for frontend reducers.")
+
+    @field_validator("behavior_id")
+    @classmethod
+    def _validate_behavior_id(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return validate_namespaced_id(value, "condition event behavior identity")
 
     def get_effect_origin(self) -> Optional[EffectOrigin]:
         """Return the immutable origin owned by the removed condition."""
@@ -264,7 +288,7 @@ class BaseCondition(BaseObject):
     )
     semantic_key: Optional[str] = Field(
         default=None,
-        description="Stable rules-content identity; defaults to the condition class identity.",
+        description="Optional stable policy/grouping key; never behavior provenance.",
     )
     behavior_binding: Optional[BehaviorBinding] = Field(
         default=None,
@@ -303,9 +327,9 @@ class BaseCondition(BaseObject):
                 "it can request a saving throw",
             )
         return SavingThrowContext(
-            cause_ref=binding.definition_ref,
+            cause_id=binding.behavior_id,
             effect_id=effect_id,
-            condition_ref=binding.definition_ref,
+            condition_id=binding.behavior_id,
             is_magical=(
                 ConditionTag.MAGICAL in self.tags
                 if is_magical is None
@@ -353,7 +377,7 @@ class BaseCondition(BaseObject):
     def get_semantic_key(self) -> str:
         """Return authored identity, explicit legacy key, or an unbound marker."""
         if self.behavior_binding is not None:
-            return self.behavior_binding.definition_ref.identity_key
+            return self.behavior_binding.behavior_id
         if self.semantic_key:
             return self.semantic_key
         return f"unbound:{type(self).__module__}.{type(self).__name__}"
@@ -573,6 +597,11 @@ class BaseCondition(BaseObject):
         return ConditionApplicationEvent(
             name=self.name,
             condition=self,
+            behavior_id=(
+                self.behavior_binding.behavior_id
+                if self.behavior_binding is not None
+                else None
+            ),
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.target_entity_uuid,
             phase=EventPhase.DECLARATION,
@@ -595,6 +624,11 @@ class BaseCondition(BaseObject):
         return ConditionRemovalEvent(
             name=self.name if self.name else "Condition Removal",
             condition=self,
+            behavior_id=(
+                self.behavior_binding.behavior_id
+                if self.behavior_binding is not None
+                else None
+            ),
             expired=expired,
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.target_entity_uuid,
@@ -709,6 +743,7 @@ class BaseCondition(BaseObject):
         )
         bind_runtime_behavior(
             self,
+            current_binding=self.behavior_binding,
             runtime_owner_uuid=runtime_owner_uuid,
         )
         if declaration_event is None:
@@ -728,7 +763,7 @@ class BaseCondition(BaseObject):
         if execution_event.canceled:
             return execution_event
 
-        with runtime_behavior_provider(self):
+        with runtime_behavior_provider(self.behavior_binding):
             (
                 modifers_uuids,
                 event_handlers_uuids,

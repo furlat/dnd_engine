@@ -8,6 +8,7 @@ those two identities distinct and joins them only through explicit
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from types import MappingProxyType
 from uuid import UUID
 
 from dnd.core.content.dependencies import (
@@ -107,6 +108,10 @@ SHIELD_SPELL_DECLARATION = get_content_declaration(ShieldLearnedSpell)
 COUNTERSPELL_SPELL_DECLARATION = get_content_declaration(
     CounterspellLearnedSpell,
 )
+LEARNED_REACTION_SPELL_DECLARATIONS_BY_CLASS = MappingProxyType({
+    ShieldLearnedSpell: SHIELD_SPELL_DECLARATION,
+    CounterspellLearnedSpell: COUNTERSPELL_SPELL_DECLARATION,
+})
 
 
 def _create_learned_counterspell_handler(
@@ -221,6 +226,7 @@ __all__ = [
     "COUNTERSPELL_SPELL_DECLARATION",
     "CounterspellLearnedSpell",
     "LEARNED_REACTION_SPELL_DECLARATIONS",
+    "LEARNED_REACTION_SPELL_DECLARATIONS_BY_CLASS",
     "LEARNED_REACTION_SPELL_SPECS",
     "LearnedReactionHandlerFactory",
     "LearnedReactionSpellSpec",

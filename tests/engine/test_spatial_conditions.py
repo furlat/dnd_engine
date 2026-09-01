@@ -10,8 +10,10 @@ from dnd.core.base_conditions import BaseCondition
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import ResistanceStatus
-from dnd.content_system.item_bindings import ItemRuntimeOrigin
-from dnd.content_system.item_materialization import materialize_item
+from dnd.content.items.environment_item_builders import (
+    OilBarrel,
+    build_oil_barrel,
+)
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.events import (
     Event,
@@ -28,10 +30,6 @@ from dnd.conditions import Concentrating
 from dnd.entity import Entity
 from dnd.game import Game
 from dnd.items.environment_interactables import PullLeverAction
-from dnd.items.environment_content import (
-    OIL_BARREL_RECIPE,
-    OilBarrel,
-)
 from dnd.monsters.bestiary import create_goblin as _create_goblin
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.spatial.area_conditions import AreaCondition, SpatialCondition
@@ -1209,18 +1207,8 @@ def test_oil_barrel_destruction_uses_direct_material_transition() -> None:
     """The authored barrel spills Oil and fire damage transforms that Oil."""
     reset_engine_runtime(grid_size=(4, 2))
     source_uuid = uuid4()
-    mundane = materialize_item(
-        OIL_BARREL_RECIPE,
-        source_uuid,
-        origin=ItemRuntimeOrigin.ENVIRONMENT,
-        expected_type=OilBarrel,
-    )
-    burning = materialize_item(
-        OIL_BARREL_RECIPE,
-        source_uuid,
-        origin=ItemRuntimeOrigin.ENVIRONMENT,
-        expected_type=OilBarrel,
-    )
+    mundane = build_oil_barrel(source_uuid)
+    burning = build_oil_barrel(source_uuid)
     mundane.place_on_grid((1, 0))
     burning.place_on_grid((2, 0))
     cursor = EventQueue.event_cursor()

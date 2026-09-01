@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from types import MappingProxyType
 
 from dnd.classes.barbarian import RetaliationReactionHandler
 from dnd.classes.fighter import ProtectionReactionHandler
@@ -204,6 +205,14 @@ REACTION_BEHAVIOR_DECLARATIONS: tuple[ContentDeclaration, ...] = tuple(
     _declare_reaction_behavior(spec)
     for spec in REACTION_BEHAVIOR_IDENTITY_SPECS
 )
+REACTION_BEHAVIOR_DECLARATIONS_BY_CLASS = MappingProxyType({
+    spec.handler_type: declaration
+    for spec, declaration in zip(
+        REACTION_BEHAVIOR_IDENTITY_SPECS,
+        REACTION_BEHAVIOR_DECLARATIONS,
+        strict=True,
+    )
+})
 PARRY_REACTION_DECLARATION = next(
     declaration
     for spec, declaration in zip(
@@ -238,6 +247,7 @@ if len({
 
 __all__ = [
     "REACTION_BEHAVIOR_DECLARATIONS",
+    "REACTION_BEHAVIOR_DECLARATIONS_BY_CLASS",
     "REACTION_BEHAVIOR_IDENTITY_SPECS",
     "PARRY_REACTION_DECLARATION",
     "PROTECTION_REACTION_DECLARATION",

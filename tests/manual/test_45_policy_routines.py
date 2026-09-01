@@ -74,7 +74,7 @@ from dnd.core.base_actions import (
     BaseCost,
     TargetType,
 )
-from tests.content_identity import synthetic_action_attribution
+from tests.content_identity import synthetic_action_identity
 
 
 def test_quickened_projection_repairs_only_the_declared_action_cost() -> None:
@@ -82,7 +82,7 @@ def test_quickened_projection_repairs_only_the_declared_action_cost() -> None:
     activation = AvailableActionInfo(
         template_name="Opaque",
         semantic_key="dnd.classes.sorcerer.QuickenedSpell",
-        behavior_attribution=synthetic_action_attribution(
+        **synthetic_action_identity(
             "action.quickened_projection",
         ),
         target_type=TargetType.SELF,
@@ -163,7 +163,7 @@ def test_twinned_projection_uses_base_spell_level_and_preserves_repeat_policy() 
     activation = AvailableActionInfo(
         template_name="Opaque",
         semantic_key="dnd.classes.sorcerer.TwinnedSpell",
-        behavior_attribution=synthetic_action_attribution(
+        **synthetic_action_identity(
             "action.twinned_projection",
         ),
         target_type=TargetType.SELF,

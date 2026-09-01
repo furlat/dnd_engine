@@ -16,8 +16,7 @@ from dnd.actions_functional import (
     setup_standard_actions,
 )
 from dnd.blocks.equipment import Weapon
-from dnd.content_system.item_bindings import ItemRuntimeOrigin
-from dnd.content_system.item_materialization import materialize_item
+from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import EventPhase, EventQueue, EventType
@@ -28,7 +27,6 @@ from dnd.core.modifiers import (
     AutoHitStatus,
 )
 from dnd.entity import Entity
-from dnd.items.weapons import DAGGER_RECIPE
 from dnd.spells.abjuration import (
     Banishment,
     GlobeOfInvulnerability,
@@ -84,12 +82,7 @@ def _true_strike_scene(caster_level: int) -> tuple[Entity, Entity]:
         "monsters",
     )
     caster.equipment.equip(
-        materialize_item(
-            DAGGER_RECIPE,
-            caster.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
-        ),
+        build_authored_item("weapon.dagger", caster.uuid),
         WeaponSlot.MELEE_MAIN,
     )
     setup_standard_actions(caster)

@@ -163,9 +163,9 @@ def _config(
 
 
 def _origin_root(
-    *refs: ContentRef,
+    *root_ids: str,
 ) -> tuple[OriginRootConditionEffectGate, ...]:
-    return (OriginRootConditionEffectGate(origin_root_refs=refs),)
+    return (OriginRootConditionEffectGate(origin_root_ids=root_ids),)
 
 
 def _apply(
@@ -1322,22 +1322,22 @@ _ACTION_AND_REACTION_BRANCHES: dict[_Definition, tuple[_Branch, ...]] = {
             (
                 "fire",
                 consumables._FireWeaponCoatCondition,
-                consumables.FIRE_WEAPON_COAT_REF,
+                "consumable.weapon_coat.fire",
             ),
             (
                 "lightning",
                 consumables._LightningWeaponCoatCondition,
-                consumables.LIGHTNING_WEAPON_COAT_REF,
+                "consumable.weapon_coat.lightning",
             ),
             (
                 "concentration_fire",
                 consumables._ConcentrationFireWeaponCoatCondition,
-                consumables.CONCENTRATION_FIRE_WEAPON_COAT_REF,
+                "consumable.weapon_coat.concentration_fire",
             ),
             (
                 "timed_fire",
                 consumables._TimedFireWeaponCoatCondition,
-                consumables.TIMED_FIRE_WEAPON_COAT_REF,
+                "consumable.weapon_coat.timed_fire",
             ),
         )
     ),
@@ -1874,9 +1874,9 @@ NO_CONDITION_EFFECT_SPELL_TYPES: tuple[_Definition, ...] = (
     necromancy.Harm,
     necromancy.FingerOfDeath,
     enchantment.PowerWordKill,
+    conjuration.GuardianOfFaith,
 )
 INDIRECT_CONDITION_EFFECT_SPELL_TYPES: tuple[_Definition, ...] = (
-    conjuration.GuardianOfFaith,
     conjuration.HeroesFeast,
 )
 INTERNAL_CONDITION_PRODUCER_TYPES: tuple[_Definition, ...] = (
@@ -1897,7 +1897,6 @@ INTERNAL_ONLY_CONDITION_EFFECT_SOURCE_TYPES: tuple[_Definition, ...] = (
     monster_traits.SurpriseAttackFeature,
     monster_traits.DivineEminenceActive,
     abjuration.AntimagicFieldZone,
-    conjuration._build_guardian_of_faith_object,
 )
 
 

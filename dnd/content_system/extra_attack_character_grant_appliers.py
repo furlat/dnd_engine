@@ -113,7 +113,7 @@ def install_extra_attack_family(
     )
     context.runtime.bind_granted_behavior(
         action,
-        provider_ref=EXTRA_ATTACK_FEATURE_REF,
+        provider_id=EXTRA_ATTACK_FEATURE_REF.content_id,
         runtime_owner_uuid=entity.uuid,
     )
     entity.register_action(action)
@@ -121,7 +121,7 @@ def install_extra_attack_family(
     try:
         context.runtime.bind_granted_behavior(
             handler,
-            provider_ref=EXTRA_ATTACK_FEATURE_REF,
+            provider_id=EXTRA_ATTACK_FEATURE_REF.content_id,
             runtime_owner_uuid=entity.uuid,
         )
         entity.add_event_handler(handler)

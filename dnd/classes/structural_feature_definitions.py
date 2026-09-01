@@ -5,6 +5,8 @@ composition layer resolves their exact content references and installs
 source-owned component grants with reversible receipts.
 """
 
+from types import MappingProxyType
+
 from dnd.core.content.descriptors import (
     ContentDescriptorSpec,
     ContentOrdering,
@@ -132,6 +134,10 @@ STRUCTURAL_CLASS_FEATURE_DECLARATIONS: tuple[ContentDeclaration, ...] = (
     REMARKABLE_ATHLETE_DECLARATION,
     UNARMORED_DEFENSE_DECLARATION,
 )
+STRUCTURAL_CLASS_FEATURE_DECLARATIONS_BY_CLASS = MappingProxyType({
+    RemarkableAthleteStructuralFeature: REMARKABLE_ATHLETE_DECLARATION,
+    BarbarianUnarmoredDefenseStructuralFeature: UNARMORED_DEFENSE_DECLARATION,
+})
 
 
 __all__ = [
@@ -139,5 +145,6 @@ __all__ = [
     "REMARKABLE_ATHLETE_DECLARATION",
     "RemarkableAthleteStructuralFeature",
     "STRUCTURAL_CLASS_FEATURE_DECLARATIONS",
+    "STRUCTURAL_CLASS_FEATURE_DECLARATIONS_BY_CLASS",
     "UNARMORED_DEFENSE_DECLARATION",
 ]

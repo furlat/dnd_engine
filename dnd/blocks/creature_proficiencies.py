@@ -6,11 +6,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from dnd.core.base_block import BaseBlock
-from dnd.core.content.identities import (
-    ContentDefinitionKind,
-    ContentRef,
-    validate_namespaced_id,
-)
+from dnd.core.content.identities import validate_namespaced_id
 from dnd.core.equipment_types import ArmorType, WeaponProperty
 from dnd.core.proficiency_types import ProficiencyMode, ProficiencySourceSet
 
@@ -31,7 +27,7 @@ class CreatureProficienciesConfig(BaseModel):
 
     base_simple_weapons: bool = True
     base_martial_weapons: bool = True
-    base_weapon_refs: tuple[ContentRef, ...] = ()
+    base_weapon_ids: tuple[str, ...] = ()
     base_armor_types: tuple[ArmorType, ...] = (
         ArmorType.LIGHT,
         ArmorType.MEDIUM,
@@ -48,7 +44,7 @@ class CreatureProficiencies(BaseBlock):
     name: str = "Creature Proficiencies"
     base_simple_weapons: bool = True
     base_martial_weapons: bool = True
-    base_weapon_ref_keys: frozenset[str] = Field(default_factory=frozenset)
+    base_weapon_ids: frozenset[str] = Field(default_factory=frozenset)
     base_armor_types: frozenset[ArmorType] = Field(
         default_factory=lambda: frozenset(_ARMOR_CATEGORIES),
     )
@@ -93,19 +89,15 @@ class CreatureProficiencies(BaseBlock):
         if unsupported:
             values = ", ".join(sorted(row.value for row in unsupported))
             raise ValueError(f"unsupported armor proficiency categories: {values}")
-        base_weapon_ref_keys: set[str] = set()
-        for ref in resolved.base_weapon_refs:
-            if ref.definition_kind != ContentDefinitionKind.ITEM:
-                raise ValueError(
-                    "specific weapon proficiency must reference an item "
-                    "definition",
-                )
-            base_weapon_ref_keys.add(ref.identity_key)
+        base_weapon_ids = frozenset(
+            validate_namespaced_id(item_id, "specific weapon item_id")
+            for item_id in resolved.base_weapon_ids
+        )
         return cls(
             source_entity_uuid=source_entity_uuid,
             base_simple_weapons=resolved.base_simple_weapons,
             base_martial_weapons=resolved.base_martial_weapons,
-            base_weapon_ref_keys=frozenset(base_weapon_ref_keys),
+            base_weapon_ids=base_weapon_ids,
             base_armor_types=frozenset(resolved.base_armor_types),
             base_shields=resolved.base_shields,
             base_languages=frozenset(
@@ -139,16 +131,15 @@ class CreatureProficiencies(BaseBlock):
     def add_specific_weapon_source(
         self,
         source_id: UUID,
-        weapon_ref: ContentRef,
+        weapon_id: str,
     ) -> None:
-        """Grant proficiency with one exact authored weapon definition."""
-        if weapon_ref.definition_kind != ContentDefinitionKind.ITEM:
-            raise ValueError(
-                "specific weapon proficiency must reference an item "
-                "definition",
-            )
+        """Grant proficiency with one exact authored weapon item."""
+        weapon_key = validate_namespaced_id(
+            weapon_id,
+            "specific weapon item_id",
+        )
         sources = self.specific_weapon_sources.setdefault(
-            weapon_ref.identity_key,
+            weapon_key,
             ProficiencySourceSet(),
         )
         sources.add(source_id, ProficiencyMode.FULL)
@@ -220,14 +211,17 @@ class CreatureProficiencies(BaseBlock):
     def is_weapon_proficient(
         self,
         properties: Iterable[WeaponProperty] | None,
-        weapon_ref: ContentRef | None = None,
+        weapon_id: str | None = None,
     ) -> bool:
         """Return proficiency for an unarmed, simple, or martial attack."""
         if properties is None:
             return True
-        if weapon_ref is not None:
-            weapon_key = weapon_ref.identity_key
-            if weapon_key in self.base_weapon_ref_keys:
+        if weapon_id is not None:
+            weapon_key = validate_namespaced_id(
+                weapon_id,
+                "specific weapon item_id",
+            )
+            if weapon_key in self.base_weapon_ids:
                 return True
             exact_sources = self.specific_weapon_sources.get(weapon_key)
             if exact_sources is not None and exact_sources.sources:

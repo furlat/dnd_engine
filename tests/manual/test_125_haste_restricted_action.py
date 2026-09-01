@@ -19,8 +19,7 @@ from dnd.blocks.action_economy import (
 )
 from dnd.blocks.equipment import Weapon
 from dnd.blocks.health import HealthConfig, HitDiceConfig
-from dnd.content_system.item_bindings import ItemRuntimeOrigin
-from dnd.content_system.item_materialization import materialize_item
+from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.classes.fighter import (
     ActionSurge,
     ActionSurgeFeature,
@@ -47,10 +46,9 @@ from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.action_types import HasteActionPolicy
 from dnd.entity import Entity, EntityConfig
-from dnd.items.weapons import DAGGER_RECIPE, GREATSWORD_RECIPE
 from dnd.spells.transmutation import HasteEffect
 from dnd.spells.transmutation import SlowedEffect
-from tests.engine.support import reset_combat_state
+from tests.engine.support import create_test_entity, reset_combat_state
 
 
 HASTE_GRANT_SUFFIX = "__grant_haste"
@@ -70,8 +68,8 @@ def _create_creature(
     faction: str,
 ) -> Entity:
     """Create one armed creature with the standard action surface."""
-    entity = Entity.create(
-        source_entity_uuid=uuid4(),
+    entity = create_test_entity(
+        source_id=uuid4(),
         name=name,
         config=EntityConfig(
             ability_scores=AbilityScoresConfig(
@@ -94,12 +92,7 @@ def _create_creature(
         ),
     )
     entity.equipment.equip(
-        materialize_item(
-            GREATSWORD_RECIPE,
-            entity.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
-        ),
+        build_authored_item("weapon.greatsword", entity.uuid),
         WeaponSlot.MELEE_MAIN,
     )
     setup_standard_actions(entity)
@@ -378,15 +371,10 @@ def test_haste_extra_attack_miss_keeps_weapon_presentation_metadata() -> None:
     assert event.damage_types == [DamageType.SLASHING]
     weapon = fighter.equipment.get_weapon(WeaponSlot.MELEE_MAIN)
     assert weapon is not None
-    assert weapon.content_ref is not None
     assert event.source_item_uuid == weapon.uuid
     assert event.source_item_presentation is not None
     assert event.source_item_presentation.item_uuid == weapon.uuid
-    assert event.source_item_presentation.content_ref is not None
-    assert (
-        event.source_item_presentation.content_ref.model_dump(mode="python")
-        == weapon.content_ref.model_dump(mode="python")
-    )
+    assert event.source_item_presentation.item_id == weapon.item_id
 
 
 def test_all_equipped_weapon_attack_families_use_the_cold_item_snapshot() -> None:
@@ -394,7 +382,6 @@ def test_all_equipped_weapon_attack_families_use_the_cold_item_snapshot() -> Non
     fighter, target = _create_hasted_fighter(extra_attacks=1)
     weapon = fighter.equipment.get_weapon(WeaponSlot.MELEE_MAIN)
     assert weapon is not None
-    assert weapon.content_ref is not None
 
     actions = (
         Attack(
@@ -419,11 +406,7 @@ def test_all_equipped_weapon_attack_families_use_the_cold_item_snapshot() -> Non
         assert event.source_item_uuid == weapon.uuid
         assert event.source_item_presentation is not None
         assert event.source_item_presentation.item_uuid == weapon.uuid
-        assert event.source_item_presentation.content_ref is not None
-        assert (
-            event.source_item_presentation.content_ref.model_dump(mode="python")
-            == weapon.content_ref.model_dump(mode="python")
-        )
+        assert event.source_item_presentation.item_id == weapon.item_id
 
 
 def test_weapon_attack_metadata_snapshot_is_typed_and_handles_unarmed_slots() -> None:
@@ -514,21 +497,11 @@ def test_haste_does_not_convert_an_off_hand_bonus_action_into_an_action() -> Non
     fighter, target = _create_hasted_fighter(extra_attacks=1)
     fighter.equipment.unequip(WeaponSlot.MELEE_MAIN)
     fighter.equipment.equip(
-        materialize_item(
-            DAGGER_RECIPE,
-            fighter.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
-        ),
+        build_authored_item("weapon.dagger", fighter.uuid),
         WeaponSlot.MELEE_MAIN,
     )
     fighter.equipment.equip(
-        materialize_item(
-            DAGGER_RECIPE,
-            fighter.uuid,
-            origin=ItemRuntimeOrigin.STARTER,
-            expected_type=Weapon,
-        ),
+        build_authored_item("weapon.dagger", fighter.uuid),
         WeaponSlot.MELEE_OFF,
     )
     update_weapon_templates(fighter)

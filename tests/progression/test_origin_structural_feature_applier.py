@@ -89,7 +89,7 @@ def test_origin_structural_feature_installs_and_reverses_exact_sources() -> None
     wisdom_save = entity.saving_throws.get_saving_throw("wisdom").bonus
     wisdom_save.set_context({
         SAVING_THROW_CONTEXT_KEY: SavingThrowContext(
-            cause_ref=_feature_ref(),
+            cause_id=_feature_ref().content_id,
             effect_id="origin.fixture.magical_effect",
             is_magical=True,
         ),
@@ -97,7 +97,7 @@ def test_origin_structural_feature_installs_and_reverses_exact_sources() -> None
     assert wisdom_save.advantage is AdvantageStatus.ADVANTAGE
     wisdom_save.set_context({
         SAVING_THROW_CONTEXT_KEY: SavingThrowContext(
-            cause_ref=_feature_ref(),
+            cause_id=_feature_ref().content_id,
             effect_id="origin.fixture.poison",
             is_magical=False,
             effect_tags=(SavingThrowEffectTag.POISON,),
@@ -128,7 +128,7 @@ def test_origin_structural_feature_installs_and_reverses_exact_sources() -> None
     assert not entity.has_origin_capability(OriginCapability.TRANCE)
     wisdom_save.set_context({
         SAVING_THROW_CONTEXT_KEY: SavingThrowContext(
-            cause_ref=_feature_ref(),
+            cause_id=_feature_ref().content_id,
             effect_id="origin.fixture.magical_effect",
             is_magical=True,
         ),

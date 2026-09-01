@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from types import MappingProxyType
 from typing import Any, cast
 from uuid import UUID
 
@@ -368,11 +369,15 @@ DRAGONBORN_BREATH_WEAPON_DECLARATION = get_content_declaration(
 DRAGONBORN_BREATH_WEAPON_REF = (
     DRAGONBORN_BREATH_WEAPON_DECLARATION.ref
 )
+DRAGONBORN_BEHAVIOR_DECLARATIONS_BY_CLASS = MappingProxyType({
+    DragonbornBreathWeapon: DRAGONBORN_BREATH_WEAPON_DECLARATION,
+})
 
 
 __all__ = [
     "DRAGONBORN_BREATH_RESOURCE",
     "DRAGONBORN_BREATH_WEAPON_DECLARATION",
+    "DRAGONBORN_BEHAVIOR_DECLARATIONS_BY_CLASS",
     "DRAGONBORN_BREATH_WEAPON_REF",
     "DragonbornBreathWeapon",
     "DragonbornBreathWeaponEvent",

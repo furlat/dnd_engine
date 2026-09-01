@@ -18,8 +18,6 @@ from dnd.blocks.base_item import BaseItem
 from dnd.blocks.equipment import EquipmentConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
-from dnd.content_system.item_bindings import ItemRuntimeOrigin
-from dnd.content_system.item_materialization import materialize_item
 from dnd.core.base_actions import (
     ActionAvailabilityStatus,
     ActionCategory,
@@ -35,7 +33,7 @@ from dnd.core.creature_types import DamageType
 from dnd.core.values import BaseValue
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
-from dnd.items.consumables import HEALING_POTION_RECIPE
+from dnd.items.consumables import build_healing_potion
 from dnd.monsters.bestiary import (
     create_goblin as _create_goblin,
     create_skeleton as _create_skeleton,
@@ -186,6 +184,18 @@ def test_eb_09_002_standard_actions_discover_self_position_and_entity_groups() -
     assert hide_info.valid_targets == []
 
     dash_info = find_action(available, "Dash")
+    dash_template = goblin.get_action_template("Dash")
+    assert dash_template is not None
+    assert dash_template.behavior_binding is not None
+    assert (
+        dash_info.behavior_id,
+        dash_info.provided_by_id,
+        dash_info.origin_root_id,
+    ) == (
+        dash_template.behavior_binding.behavior_id,
+        dash_template.behavior_binding.provided_by_id,
+        dash_template.behavior_binding.origin_root_id,
+    )
     assert dash_info.target_type == TargetType.SELF
     assert dash_info.valid_targets[0].index == 0
     assert dash_info.cost_type == "actions"
@@ -229,6 +239,15 @@ def test_eb_09_003_execute_by_index_instantiates_and_applies_costs() -> None:
 
     assert result is not None
     assert not result.canceled
+    assert (
+        result.behavior_id,
+        result.provided_by_id,
+        result.origin_root_id,
+    ) == (
+        dash_info.behavior_id,
+        dash_info.provided_by_id,
+        dash_info.origin_root_id,
+    )
     assert "Dashing" in entity.active_conditions
     assert entity.action_economy.actions.normalized_score == 0
 
@@ -242,11 +261,7 @@ def test_eb_09_004_floor_objects_create_object_actions_and_can_be_picked_up() ->
     """EB-09-004: visible floor objects surface OBJECT actions."""
     reset_action_state()
     entity = configured_entity(position=(3, 3))
-    potion = materialize_item(
-        HEALING_POTION_RECIPE,
-        uuid4(),
-        origin=ItemRuntimeOrigin.LOOT,
-    )
+    potion = build_healing_potion(uuid4())
     potion.place_on_grid((4, 3))
     Entity.update_all_entities_senses()
 
@@ -272,11 +287,7 @@ def test_eb_09_005_inventory_use_actions_are_routed_and_consume_charges() -> Non
     """EB-09-005: inventory use actions appear with item metadata and execute by index."""
     reset_action_state()
     entity = configured_entity(position=(3, 3))
-    potion = materialize_item(
-        HEALING_POTION_RECIPE,
-        entity.uuid,
-        origin=ItemRuntimeOrigin.STARTER,
-    )
+    potion = build_healing_potion(entity.uuid)
     assert entity.loot_item(potion)
 
     available = get_available_actions(entity)
@@ -302,16 +313,8 @@ def test_eb_09_006_nearby_environment_use_actions_are_distance_gated() -> None:
     """EB-09-006: environment UsableItem actions only appear within 5 feet."""
     reset_action_state()
     entity = configured_entity(position=(3, 3))
-    nearby = materialize_item(
-        HEALING_POTION_RECIPE,
-        uuid4(),
-        origin=ItemRuntimeOrigin.LOOT,
-    )
-    far = materialize_item(
-        HEALING_POTION_RECIPE,
-        uuid4(),
-        origin=ItemRuntimeOrigin.LOOT,
-    )
+    nearby = build_healing_potion(uuid4())
+    far = build_healing_potion(uuid4())
     nearby.place_on_grid((4, 3))
     far.place_on_grid((8, 8))
     Entity.update_all_entities_senses()
@@ -639,6 +642,7 @@ def test_eb_09_012_attack_object_discovers_and_destroys_breakables() -> None:
     crate_source = uuid4()
     crate = BaseItem(
         source_entity_uuid=crate_source,
+        item_id="test.item.training_crate",
         name="Training Crate",
         is_pickable=False,
         is_targetable=True,

@@ -775,30 +775,13 @@ if (
 ):
     raise ValueError("Spell catalog metadata table contains duplicate keys")
 
-_SPELL_OBJECT_DEPENDENCIES_BY_CLASS: Mapping[
-    type[SpellAction],
-    tuple[ContentDependency, ...],
-] = MappingProxyType({
-    conjuration.GuardianOfFaith: (
-        ContentDependency(
-            relation=ContentDependencyRelation.CREATES_OBJECT,
-            target_ref=conjuration.GUARDIAN_OF_FAITH_OBJECT_REF,
-            phase=ContentDependencyPhase.RUNTIME_REFERENCE,
-        ),
-    ),
-    conjuration.HeroesFeast: (
-        ContentDependency(
-            relation=ContentDependencyRelation.CREATES_OBJECT,
-            target_ref=conjuration.HEROES_FEAST_OBJECT_REF,
-            phase=ContentDependencyPhase.RUNTIME_REFERENCE,
-        ),
-    ),
-})
-
 _SPELL_GRANTED_ACTION_TYPES_BY_CLASS: Mapping[
     type[SpellAction],
     tuple[type[object], ...],
 ] = MappingProxyType({
+    conjuration.HeroesFeast: (
+        conjuration.EatFromFeast,
+    ),
     abjuration.FreedomOfMovement: (
         abjuration.FreedomOfMovementEscape,
     ),
@@ -833,10 +816,7 @@ def _spell_runtime_dependencies(
             (),
         )
     )
-    return (
-        *_SPELL_OBJECT_DEPENDENCIES_BY_CLASS.get(spell_type, ()),
-        *action_dependencies,
-    )
+    return action_dependencies
 
 
 def _get_optional_declaration(

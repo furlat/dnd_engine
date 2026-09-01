@@ -6,7 +6,6 @@ from uuid import UUID
 
 from dnd.content_system.behavior_bindings import BehaviorBinder
 from dnd.content_system.pack_loader import LoadedContentSystem
-from dnd.core.content.identities import ContentRef
 from dnd.core.content.recipes import ContentRecipe
 from dnd.core.content.runtime import (
     BehaviorBinding,
@@ -43,7 +42,12 @@ class ContentSystemRuntime:
         """Install once; permit idempotent bootstrap of the authenticated set."""
         existing = self._loaded
         if existing is None:
-            binder = BehaviorBinder(loaded.registry)
+            binder = BehaviorBinder(
+                loaded.behavior_declarations_by_class,
+                provider_only_behavior_ids=(
+                    loaded.provider_only_behavior_ids
+                ),
+            )
             if self._owns_engine_behavior_gateway:
                 install_runtime_behavior_binding_gateway(
                     binder,
@@ -79,7 +83,9 @@ class ContentSystemRuntime:
         self,
         behavior: object,
         *,
-        provider: object,
+        provider_binding: BehaviorBinding | None = None,
+        provided_by_id: str | None = None,
+        origin_root_id: str | None = None,
         runtime_owner_uuid: UUID,
     ) -> BehaviorBinding:
         """Bind one explicit provider-owned behavior in this runtime."""
@@ -90,7 +96,9 @@ class ContentSystemRuntime:
         with runtime_behavior_binding_gateway(binder):
             return bind_runtime_behavior_child(
                 behavior,
-                provider=provider,
+                provider_binding=provider_binding,
+                provided_by_id=provided_by_id,
+                origin_root_id=origin_root_id,
                 runtime_owner_uuid=runtime_owner_uuid,
             )
 
@@ -98,7 +106,7 @@ class ContentSystemRuntime:
         self,
         behavior: object,
         *,
-        provider_ref: ContentRef,
+        provider_id: str,
         runtime_owner_uuid: UUID,
     ) -> BehaviorBinding:
         """Bind one structural grant through an exact provider definition."""
@@ -108,7 +116,7 @@ class ContentSystemRuntime:
             raise RuntimeError("Content system behavior binder is not installed")
         return binder.bind_granted(
             behavior,
-            provider_ref=provider_ref,
+            provider_id=provider_id,
             runtime_owner_uuid=runtime_owner_uuid,
         )
 

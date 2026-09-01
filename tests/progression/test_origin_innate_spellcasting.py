@@ -10,7 +10,9 @@ from pydantic import ValidationError
 
 from dnd.classes.progression_definitions import FIGHTER_CLASS_REF
 from dnd.content_system.builtin_inventory import (
+    BUILT_IN_BEHAVIOR_DECLARATIONS_BY_CLASS,
     BUILT_IN_DECLARATION_INVENTORY,
+    BUILT_IN_PROVIDER_ONLY_BEHAVIOR_IDS,
     BUILT_IN_RECIPE_PRESET_INVENTORY,
 )
 from dnd.content_system.character_appearance import FIGHTER_HUMAN_APPEARANCE
@@ -78,6 +80,7 @@ from dnd.actions import SpellAction
 from dnd.entity import Entity, EntityConfig
 from dnd.player_character_body import PLAYER_CHARACTER_BODY_RECIPE
 from dnd.runtime_reset import reset_engine_runtime
+from tests.engine.support import create_test_entity
 
 
 @pytest.fixture(autouse=True)
@@ -190,6 +193,10 @@ def _loaded_builtin() -> LoadedContentSystem:
         packs=(),
         built_in_artifact_digest="c" * 64,
         content_set_digest="d" * 64,
+        behavior_declarations_by_class=(
+            BUILT_IN_BEHAVIOR_DECLARATIONS_BY_CLASS
+        ),
+        provider_only_behavior_ids=BUILT_IN_PROVIDER_ONLY_BEHAVIOR_IDS,
     )
 
 
@@ -579,8 +586,8 @@ def test_tiefling_hellish_rebuke_spends_fixed_use_and_deals_rank_two_damage(
     loaded = _loaded_builtin()
     runtime = ContentSystemRuntime()
     runtime.install(loaded)
-    tiefling = Entity.create(
-        source_entity_uuid=uuid4(),
+    tiefling = create_test_entity(
+        name="Tiefling",
         config=EntityConfig(
             position=(2, 2),
             faction="heroes",
@@ -595,8 +602,8 @@ def test_tiefling_hellish_rebuke_spends_fixed_use_and_deals_rank_two_damage(
             ),
         ),
     )
-    attacker = Entity.create(
-        source_entity_uuid=uuid4(),
+    attacker = create_test_entity(
+        name="Attacker",
         config=EntityConfig(
             position=(3, 2),
             faction="monsters",

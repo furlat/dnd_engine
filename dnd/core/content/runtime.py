@@ -10,9 +10,9 @@ from enum import Enum
 from typing import Optional, Protocol
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from dnd.core.content.identities import ContentRef
+from dnd.core.content.identities import validate_namespaced_id
 
 
 class RuntimeBehaviorKind(str, Enum):
@@ -32,7 +32,7 @@ class RuntimeBehaviorKind(str, Enum):
 
 
 class BehaviorBinding(BaseModel):
-    """Immutable authored identity attached to one live rules behavior.
+    """Immutable semantic identity attached to one live rules behavior.
 
     The binding deliberately separates the behavior's own meaning from the
     definition that provided it and from an optional durable root. Runtime
@@ -42,18 +42,15 @@ class BehaviorBinding(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    definition_ref: ContentRef = Field(
-        description="Exact authored definition describing this behavior.",
+    behavior_id: str = Field(
+        description="Namespaced identity of the executable rule.",
     )
-    provided_by_ref: ContentRef = Field(
-        description="Exact definition that installed or granted the behavior.",
+    provided_by_id: str = Field(
+        description="Namespaced identity that installed or granted the rule.",
     )
-    origin_root_ref: ContentRef | None = Field(
+    origin_root_id: str | None = Field(
         default=None,
-        description=(
-            "Optional constructible durable root from which the provider "
-            "closure originated."
-        ),
+        description="Optional durable semantic root of the provider chain.",
     )
     runtime_owner_uuid: UUID = Field(
         description=(
@@ -62,43 +59,12 @@ class BehaviorBinding(BaseModel):
         ),
     )
 
-
-class AuthoredBehaviorAttribution(BaseModel):
-    """Transport-safe authored identity of one discoverable live behavior.
-
-    This immutable projection intentionally excludes the encounter-local
-    runtime owner. Action and handler discovery can therefore join directly
-    to the content catalog without treating a transient UUID, display label,
-    semantic key, or Python type as durable identity.
-    """
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    definition_ref: ContentRef = Field(
-        description="Exact authored definition describing the behavior.",
-    )
-    provided_by_ref: ContentRef = Field(
-        description="Exact authored definition that installed the behavior.",
-    )
-    origin_root_ref: ContentRef | None = Field(
-        default=None,
-        description=(
-            "Optional durable constructible root from which the provider "
-            "closure originated."
-        ),
-    )
-
+    @field_validator("behavior_id", "provided_by_id", "origin_root_id")
     @classmethod
-    def from_binding(
-        cls,
-        binding: BehaviorBinding,
-    ) -> "AuthoredBehaviorAttribution":
-        """Drop runtime correlation while preserving exact authored closure."""
-        return cls(
-            definition_ref=binding.definition_ref,
-            provided_by_ref=binding.provided_by_ref,
-            origin_root_ref=binding.origin_root_ref,
-        )
+    def _validate_semantic_id(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return validate_namespaced_id(value, "behavior identity")
 
 
 class RuntimeBehaviorBindingGateway(Protocol):
@@ -109,7 +75,7 @@ class RuntimeBehaviorBindingGateway(Protocol):
         behavior: object,
         *,
         runtime_owner_uuid: UUID,
-    ) -> BehaviorBinding:
+    ) -> BehaviorBinding | None:
         """Bind one directly declared behavior with itself as provider."""
         ...
 
@@ -117,7 +83,7 @@ class RuntimeBehaviorBindingGateway(Protocol):
         self,
         behavior: object,
         *,
-        provider: object,
+        provider_binding: BehaviorBinding,
         runtime_owner_uuid: UUID,
     ) -> BehaviorBinding:
         """Bind one runtime child through an exact active provider."""
@@ -127,25 +93,38 @@ class RuntimeBehaviorBindingGateway(Protocol):
         self,
         behavior: object,
         *,
-        origin_root_ref: ContentRef,
+        origin_root_id: str,
         runtime_owner_uuid: UUID,
     ) -> BehaviorBinding | None:
         """Bind an explicitly root-owned behavior or decline ordinary ones."""
         ...
 
+    def bind_direct_child(
+        self,
+        behavior: object,
+        *,
+        provided_by_id: str,
+        origin_root_id: str | None,
+        runtime_owner_uuid: UUID,
+    ) -> BehaviorBinding:
+        """Bind one child through explicit primitive provider facts."""
+        ...
 
-_DECLARATION_ATTRIBUTE = "__dnd_content_declaration__"
+
 _runtime_behavior_binding_gateway: RuntimeBehaviorBindingGateway | None = None
 _runtime_behavior_binding_content_set_digest: str | None = None
-_active_behavior_provider: ContextVar[object | None] = ContextVar(
-    "dnd_active_behavior_provider",
-    default=None,
+_runtime_behavior_context_generation = 0
+_active_behavior_binding: ContextVar[
+    tuple[int, BehaviorBinding | None]
+] = ContextVar(
+    "dnd_active_behavior_binding",
+    default=(0, None),
 )
 _scoped_behavior_binding_gateway: ContextVar[
-    RuntimeBehaviorBindingGateway | None
+    tuple[int, RuntimeBehaviorBindingGateway | None]
 ] = ContextVar(
     "dnd_scoped_behavior_binding_gateway",
-    default=None,
+    default=(0, None),
 )
 
 
@@ -176,30 +155,30 @@ def install_runtime_behavior_binding_gateway(
     )
 
 
-def has_direct_behavior_declaration(behavior: object) -> bool:
-    """Return whether the runtime class owns an exact declaration."""
-    namespace = getattr(type(behavior), "__dict__", None)
-    return (
-        namespace is not None
-        and namespace.get(_DECLARATION_ATTRIBUTE) is not None
-    )
-
-
 @contextmanager
 def runtime_behavior_binding_gateway(
     gateway: RuntimeBehaviorBindingGateway,
 ) -> Iterator[None]:
-    """Use one isolated runtime's registry during its materialization call."""
-    token = _scoped_behavior_binding_gateway.set(gateway)
+    """Use one isolated runtime's cold behavior admission during materialization."""
+    generation = _runtime_behavior_context_generation
+    token = _scoped_behavior_binding_gateway.set((generation, gateway))
     try:
         yield
     finally:
-        _scoped_behavior_binding_gateway.reset(token)
+        if generation == _runtime_behavior_context_generation:
+            _scoped_behavior_binding_gateway.reset(token)
+        else:
+            _scoped_behavior_binding_gateway.set((
+                _runtime_behavior_context_generation,
+                None,
+            ))
 
 
 def _current_behavior_binding_gateway(
 ) -> RuntimeBehaviorBindingGateway | None:
-    scoped = _scoped_behavior_binding_gateway.get()
+    generation, scoped = _scoped_behavior_binding_gateway.get()
+    if generation != _runtime_behavior_context_generation:
+        scoped = None
     if scoped is not None:
         return scoped
     return _runtime_behavior_binding_gateway
@@ -208,28 +187,19 @@ def _current_behavior_binding_gateway(
 def bind_runtime_behavior(
     behavior: object,
     *,
+    current_binding: BehaviorBinding | None,
     runtime_owner_uuid: UUID,
 ) -> BehaviorBinding | None:
-    """Bind a migrated behavior, leaving undeclared residuals explicit.
-
-    Decorated behaviors fail closed when startup did not install the content
-    gateway. Undecorated legacy/custom behaviors remain visibly unbound rather
-    than acquiring a Python-path identity disguised as authored content.
-    """
-    existing = getattr(behavior, "behavior_binding", None)
-    if isinstance(existing, BehaviorBinding):
-        if existing.runtime_owner_uuid != runtime_owner_uuid:
+    """Bind through installed cold admission, otherwise remain explicit/unbound."""
+    if current_binding is not None:
+        if current_binding.runtime_owner_uuid != runtime_owner_uuid:
             raise ValueError(
                 "Runtime behavior is already bound to a different owner",
             )
-        return existing
-    if not has_direct_behavior_declaration(behavior):
-        return None
+        return current_binding
     gateway = _current_behavior_binding_gateway()
     if gateway is None:
-        raise RuntimeError(
-            "Content system is not installed for declared runtime behavior",
-        )
+        return None
     return gateway.bind_independent(
         behavior,
         runtime_owner_uuid=runtime_owner_uuid,
@@ -239,20 +209,21 @@ def bind_runtime_behavior(
 def bind_runtime_root_owned_behavior(
     behavior: object,
     *,
-    origin_root_ref: ContentRef | None,
+    current_binding: BehaviorBinding | None,
+    origin_root_id: str | None,
     runtime_owner_uuid: UUID,
 ) -> BehaviorBinding | None:
     """Bind explicit root-owned behavior, otherwise preserve independence."""
-    existing = getattr(behavior, "behavior_binding", None)
-    if isinstance(existing, BehaviorBinding):
-        if existing.runtime_owner_uuid != runtime_owner_uuid:
+    if current_binding is not None:
+        if current_binding.runtime_owner_uuid != runtime_owner_uuid:
             raise ValueError(
                 "Runtime behavior is already bound to a different owner",
             )
-        return existing
-    if origin_root_ref is None or not has_direct_behavior_declaration(behavior):
+        return current_binding
+    if origin_root_id is None:
         return bind_runtime_behavior(
             behavior,
+            current_binding=current_binding,
             runtime_owner_uuid=runtime_owner_uuid,
         )
     gateway = _current_behavior_binding_gateway()
@@ -262,7 +233,7 @@ def bind_runtime_root_owned_behavior(
         )
     binding = gateway.bind_root_owned(
         behavior,
-        origin_root_ref=origin_root_ref,
+        origin_root_id=origin_root_id,
         runtime_owner_uuid=runtime_owner_uuid,
     )
     if binding is not None:
@@ -276,7 +247,9 @@ def bind_runtime_root_owned_behavior(
 def bind_runtime_behavior_child(
     behavior: object,
     *,
-    provider: object,
+    provider_binding: BehaviorBinding | None = None,
+    provided_by_id: str | None = None,
+    origin_root_id: str | None = None,
     runtime_owner_uuid: UUID,
 ) -> BehaviorBinding:
     """Explicitly bind one declared child through an authenticated provider.
@@ -291,30 +264,46 @@ def bind_runtime_behavior_child(
         raise RuntimeError(
             "Content system is not installed for provider-owned behavior",
         )
-    return gateway.bind_child(
+    if provider_binding is not None:
+        if provided_by_id is not None or origin_root_id is not None:
+            raise ValueError("Use either a provider binding or direct IDs")
+        return gateway.bind_child(
+            behavior,
+            provider_binding=provider_binding,
+            runtime_owner_uuid=runtime_owner_uuid,
+        )
+    if provided_by_id is None:
+        raise ValueError("Direct behavior child requires provided_by_id")
+    return gateway.bind_direct_child(
         behavior,
-        provider=provider,
+        provided_by_id=provided_by_id,
+        origin_root_id=origin_root_id,
         runtime_owner_uuid=runtime_owner_uuid,
     )
 
 
 @contextmanager
 def runtime_behavior_provider(
-    behavior: object,
+    binding: BehaviorBinding | None,
 ) -> Iterator[None]:
-    """Expose one behavior while it creates children, masking unbound scopes.
+    """Expose one immutable behavior fact while it creates causal children.
 
     An intentionally undeclared internal behavior is still a causal boundary.
     It must not let an outer action, condition, or handler become the implicit
     provider of private children created inside that behavior.
     """
-    binding = getattr(behavior, "behavior_binding", None)
-    provider = behavior if isinstance(binding, BehaviorBinding) else None
-    token = _active_behavior_provider.set(provider)
+    generation = _runtime_behavior_context_generation
+    token = _active_behavior_binding.set((generation, binding))
     try:
         yield
     finally:
-        _active_behavior_provider.reset(token)
+        if generation == _runtime_behavior_context_generation:
+            _active_behavior_binding.reset(token)
+        else:
+            _active_behavior_binding.set((
+                _runtime_behavior_context_generation,
+                None,
+            ))
 
 
 def active_runtime_behavior_binding() -> BehaviorBinding | None:
@@ -324,16 +313,28 @@ def active_runtime_behavior_binding() -> BehaviorBinding | None:
     admission.  The runtime behavior object itself never crosses the event or
     transport boundary.
     """
-    provider = _active_behavior_provider.get()
-    binding = getattr(provider, "behavior_binding", None)
-    return binding if isinstance(binding, BehaviorBinding) else None
+    generation, binding = _active_behavior_binding.get()
+    if generation != _runtime_behavior_context_generation:
+        return None
+    return binding
+
+
+def reset_runtime_behavior_context() -> None:
+    """Clear encounter-local behavior scopes without uninstalling cold content."""
+    global _runtime_behavior_context_generation
+
+    _runtime_behavior_context_generation += 1
+    cleared = (_runtime_behavior_context_generation, None)
+    _active_behavior_binding.set(cleared)
+    _scoped_behavior_binding_gateway.set(cleared)
 
 
 def bind_runtime_action_before_admission(
     action: object,
     *,
+    current_binding: BehaviorBinding | None,
     runtime_owner_uuid: UUID,
-    origin_root_ref: ContentRef | None = None,
+    origin_root_id: str | None = None,
 ) -> BehaviorBinding | None:
     """Bind an independent or provider-granted action before registration.
 
@@ -341,25 +342,21 @@ def bind_runtime_action_before_admission(
     provider retains its own exact definition and names that provider as the
     grant source. Ordinary entity-composition actions bind independently.
     """
-    existing = getattr(action, "behavior_binding", None)
-    if isinstance(existing, BehaviorBinding):
-        if existing.runtime_owner_uuid != runtime_owner_uuid:
+    if current_binding is not None:
+        if current_binding.runtime_owner_uuid != runtime_owner_uuid:
             raise ValueError(
                 "Runtime behavior is already bound to a different owner",
             )
-        return existing
+        return current_binding
 
-    provider = _active_behavior_provider.get()
-    if provider is None:
+    provider_binding = active_runtime_behavior_binding()
+    if provider_binding is None:
         return bind_runtime_root_owned_behavior(
             action,
-            origin_root_ref=origin_root_ref,
+            current_binding=current_binding,
+            origin_root_id=origin_root_id,
             runtime_owner_uuid=runtime_owner_uuid,
         )
-
-    provider_binding = getattr(provider, "behavior_binding", None)
-    if not isinstance(provider_binding, BehaviorBinding):
-        raise RuntimeError("Active runtime action provider is not bound")
     gateway = _current_behavior_binding_gateway()
     if gateway is None:
         raise RuntimeError(
@@ -367,36 +364,32 @@ def bind_runtime_action_before_admission(
         )
     return gateway.bind_child(
         action,
-        provider=provider,
+        provider_binding=provider_binding,
         runtime_owner_uuid=runtime_owner_uuid,
     )
 
 
 def bind_runtime_handler_before_admission(
     handler: object,
+    *,
+    current_binding: BehaviorBinding | None,
+    runtime_owner_uuid: UUID,
 ) -> BehaviorBinding | None:
     """Bind a declared or provider-owned handler before any runtime index sees it."""
-    owner_uuid = getattr(handler, "source_entity_uuid", None)
-    if not isinstance(owner_uuid, UUID):
-        raise TypeError("Runtime handler requires a UUID owner")
-    existing = getattr(handler, "behavior_binding", None)
-    if isinstance(existing, BehaviorBinding):
-        if existing.runtime_owner_uuid != owner_uuid:
+    if current_binding is not None:
+        if current_binding.runtime_owner_uuid != runtime_owner_uuid:
             raise ValueError(
                 "Runtime behavior is already bound to a different owner",
             )
-        return existing
+        return current_binding
 
-    provider = _active_behavior_provider.get()
-    if provider is None:
+    provider_binding = active_runtime_behavior_binding()
+    if provider_binding is None:
         return bind_runtime_behavior(
             handler,
-            runtime_owner_uuid=owner_uuid,
+            current_binding=current_binding,
+            runtime_owner_uuid=runtime_owner_uuid,
         )
-
-    provider_binding = getattr(provider, "behavior_binding", None)
-    if not isinstance(provider_binding, BehaviorBinding):
-        raise RuntimeError("Active runtime behavior provider is not bound")
     gateway = _current_behavior_binding_gateway()
     if gateway is None:
         raise RuntimeError(
@@ -404,8 +397,8 @@ def bind_runtime_handler_before_admission(
         )
     return gateway.bind_child(
         handler,
-        provider=provider,
-        runtime_owner_uuid=owner_uuid,
+        provider_binding=provider_binding,
+        runtime_owner_uuid=runtime_owner_uuid,
     )
 
 
@@ -437,6 +430,18 @@ class HandlerDispatchEvidence(BaseModel):
     )
     content_kind: RuntimeBehaviorKind = Field(
         description="Rules-behavior family represented by the handler.",
+    )
+    behavior_id: str | None = Field(
+        default=None,
+        description="Primitive identity of the dispatched handler rule.",
+    )
+    provided_by_id: str | None = Field(
+        default=None,
+        description="Primitive identity of the handler's semantic provider.",
+    )
+    origin_root_id: str | None = Field(
+        default=None,
+        description="Optional durable primitive root of the provider chain.",
     )
     handler_uuid: str = Field(
         min_length=1,
@@ -470,6 +475,23 @@ class HandlerDispatchEvidence(BaseModel):
         description="Number of engine event versions appended during the handler call.",
     )
 
+    @field_validator("behavior_id", "provided_by_id", "origin_root_id")
+    @classmethod
+    def _validate_behavior_id(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return validate_namespaced_id(value, "handler dispatch identity")
+
+    @model_validator(mode="after")
+    def _validate_behavior_fact(self) -> "HandlerDispatchEvidence":
+        if (self.behavior_id is None) != (self.provided_by_id is None):
+            raise ValueError(
+                "behavior_id and provided_by_id must be present together"
+            )
+        if self.behavior_id is None and self.origin_root_id is not None:
+            raise ValueError("origin_root_id requires a behavior identity")
+        return self
+
     @property
     def effected(self) -> bool:
         """Whether the invocation produced an observable engine effect."""
@@ -488,7 +510,9 @@ class EffectiveHandlerPresentation:
 
     dispatch_index: int
     handler_name: str
-    behavior_binding: BehaviorBinding
+    behavior_id: str
+    provided_by_id: str
+    origin_root_id: str | None
     source_entity_uuid: UUID
     triggering_event_uuid: UUID
     triggering_lineage_uuid: UUID
