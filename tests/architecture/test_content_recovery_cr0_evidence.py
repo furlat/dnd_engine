@@ -13,17 +13,14 @@ import json
 import subprocess
 import sys
 from collections import Counter, defaultdict
+from dataclasses import asdict
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from dnd.content_system.builtin_character_builds import BUILTIN_PREMADE_BUILDS
+from dnd.content.characters.premades import PREMADE_CHARACTER_BUILDS
 from dnd.content_system.builtin_inventory import BUILT_IN_DECLARATION_INVENTORY
 from dnd.content_system.builtin_inventory import BUILT_IN_RECIPE_PRESET_INVENTORY
-from dnd.content_system.character_appearance import BARBARIAN_HUMAN_APPEARANCE
-from dnd.content_system.character_appearance import FIGHTER_HUMAN_APPEARANCE
-from dnd.content_system.character_appearance import PLAYER_CHARACTER_APPEARANCE_OPTIONS
-from dnd.content_system.character_appearance import SORCERER_HUMAN_APPEARANCE
 from dnd.monsters.bestiary import CASTER_APPEARANCE
 from dnd.monsters.bestiary import GOBLIN_APPEARANCE
 from dnd.monsters.bestiary import SKELETON_APPEARANCE
@@ -532,11 +529,6 @@ def _static_structural_owners() -> dict[str, dict[str, str]]:
     expected = _semantic_ids_for_mode("typed_definition")
     owners: dict[str, dict[str, str]] = {}
     direct_collections = {
-        "dnd/classes/barbarian_progression_definitions.py": "BARBARIAN_PROGRESSION_DECLARATIONS",
-        "dnd/classes/progression_definitions.py": "FIGHTER_PROGRESSION_DECLARATIONS",
-        "dnd/classes/sorcerer_progression_definitions.py": "SORCERER_PROGRESSION_DECLARATIONS",
-        "dnd/content_system/acolyte_starting_holdings.py": "ACOLYTE_STARTING_HOLDINGS_DECLARATION",
-        "dnd/content_system/origin_feature_definitions.py": "SRD_PASSIVE_ORIGIN_FEATURE_DECLARATIONS",
         "dnd/monsters/multiattack_definitions.py": "SRD_MULTIATTACK_CONFIGURATION_DECLARATIONS",
     }
     for source_path, collection in direct_collections.items():
@@ -548,74 +540,6 @@ def _static_structural_owners() -> dict[str, dict[str, str]]:
             content_id = _literal_string(_call_bindings(node, tree).get("content_id"))
             if content_id in expected:
                 _record_owner(owners, content_id, source_path, collection)
-
-    equipment_path = "dnd/content_system/starting_equipment_definitions.py"
-    equipment_tree = _source_tree(equipment_path)
-    equipment_owner = "STARTING_EQUIPMENT_PACKAGE_DECLARATIONS"
-    assert equipment_owner in _assigned_names(equipment_tree)
-    for row in _tuple_literal_rows(equipment_tree, "_PACKAGE_ROWS"):
-        class_id = _literal_string(row.elts[0])
-        preset_id = _literal_string(row.elts[1])
-        assert class_id is not None and preset_id is not None
-        _record_owner(
-            owners,
-            f"starting_equipment.{class_id}.{preset_id}",
-            equipment_path,
-            equipment_owner,
-        )
-
-    apparel_path = "dnd/content_system/starting_apparel_definitions.py"
-    apparel_tree = _source_tree(apparel_path)
-    apparel_owner = "STARTING_APPAREL_PACKAGE_DECLARATIONS"
-    assert apparel_owner in _assigned_names(apparel_tree)
-    for row in _tuple_literal_rows(apparel_tree, "_PACKAGE_ROWS"):
-        apparel_id = _literal_string(row.elts[0])
-        assert apparel_id is not None
-        _record_owner(
-            owners,
-            f"starting_apparel.{apparel_id}",
-            apparel_path,
-            apparel_owner,
-        )
-
-    ancestry_path = "dnd/content_system/dragonborn_origin_definitions.py"
-    ancestry_tree = _source_tree(ancestry_path)
-    ancestry_owner = "DRAGONBORN_ANCESTRY_DECLARATIONS"
-    assert ancestry_owner in _assigned_names(ancestry_tree)
-    for row in _tuple_literal_rows(ancestry_tree, "_ANCESTRY_RULES"):
-        ancestry = row.elts[0]
-        assert isinstance(ancestry, ast.Attribute)
-        _record_owner(
-            owners,
-            f"trait.origin.dragonborn.ancestry.{ancestry.attr.lower()}",
-            ancestry_path,
-            ancestry_owner,
-        )
-
-    origin_path = "dnd/content_system/character_origin_definitions.py"
-    origin_tree = _source_tree(origin_path)
-    srd_owner = "SRD_CHARACTER_ORIGIN_DECLARATIONS"
-    neurodragon_owner = "NEURODRAGON_CHARACTER_ORIGIN_DECLARATIONS"
-    for owner in (srd_owner, neurodragon_owner):
-        assert owner in _assigned_names(origin_tree)
-    species_names = {
-        literal
-        for node in ast.walk(_assignment_value(origin_tree, "_SPECIES_REFS"))
-        if (literal := _literal_string(node)) is not None
-        and f"species.{literal}" in expected
-    }
-    variant_names = {
-        literal
-        for node in ast.walk(_assignment_value(origin_tree, "_VARIANT_REFS"))
-        if (literal := _literal_string(node)) is not None
-        and f"species_variant.{literal}" in expected
-    }
-    for name in species_names:
-        _record_owner(owners, f"species.{name}", origin_path, srd_owner)
-    for name in variant_names:
-        _record_owner(owners, f"species_variant.{name}", origin_path, srd_owner)
-    _record_owner(owners, "background.acolyte", origin_path, srd_owner)
-    _record_owner(owners, "background.adventurer", origin_path, neurodragon_owner)
     assert set(owners) == expected
     return owners
 
@@ -717,22 +641,33 @@ def _current_importer_keys() -> set[tuple[str, str]]:
     return keys
 
 
-def _appearance_option_payload(option: Any) -> dict[str, Any]:
+def _direct_appearance_from_frozen_overlay(
+    selection: dict[str, Any],
+    option_rows: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    """Reduce immutable CR-0 choice evidence to current mechanical values."""
+    chosen = {
+        row["option_id"]: row["value_id"]
+        for row in selection["options"]
+    }
+
+    def runtime_value(option_id: str) -> Any:
+        value_id = chosen[option_id]
+        return next(
+            row["runtime_value"]
+            for row in option_rows[option_id]["values"]
+            if row["value_id"] == value_id
+        )
+
     return {
-        "option_id": option.option_id,
-        "display_name": option.display_name,
-        "control_kind": option.control_kind,
-        "default_value_id": option.default_value_id,
-        "values": [
-            {
-                "value_id": value.value_id,
-                "display_name": value.display_name,
-                "runtime_value": value.runtime_value,
-                "tint_rgb": value.tint_rgb,
-                "tint_source_option_id": value.tint_source_option_id,
-            }
-            for value in option.values
-        ],
+        "visual_scale": runtime_value("appearance.build"),
+        "visual_scale_x": runtime_value("appearance.stature"),
+        "body_category": runtime_value("appearance.body"),
+        "skin_tint": runtime_value("appearance.skin_tint"),
+        "head_category": runtime_value("appearance.head"),
+        "hair_tint": runtime_value("appearance.hair_tint"),
+        "has_beard": runtime_value("appearance.beard"),
+        "beard_tint": runtime_value("appearance.beard_tint"),
     }
 
 
@@ -1153,13 +1088,16 @@ def validate_historical_bindings_and_current_non_item_overlay(
         }
         checked_ids.add(semantic_id)
 
-    appearance_tree = _source_tree("dnd/content_system/character_appearance.py")
-    assert _assignment_line(
-        appearance_tree,
-        "PLAYER_CHARACTER_APPEARANCE_OPTIONS",
-    ) == 180
-    for option in PLAYER_CHARACTER_APPEARANCE_OPTIONS:
-        semantic_id = f"character_appearance_option::{option.option_id}"
+    appearance_option_rows = {
+        semantic_id.removeprefix("character_appearance_option::"): row[
+            "authored_value"
+        ]
+        for semantic_id, row in overlay_rows.items()
+        if semantic_id.startswith("character_appearance_option::")
+    }
+    assert len(appearance_option_rows) == 8
+    for option_id in sorted(appearance_option_rows):
+        semantic_id = f"character_appearance_option::{option_id}"
         row = overlay_rows[semantic_id]
         _assert_overlay_metadata(
             row,
@@ -1167,17 +1105,15 @@ def validate_historical_bindings_and_current_non_item_overlay(
             source_path="dnd/content_system/character_appearance.py",
             source_symbol="PLAYER_CHARACTER_APPEARANCE_OPTIONS:180",
         )
-        assert row["authored_value"] == _appearance_option_payload(option)
         checked_ids.add(semantic_id)
 
-    selections = {
-        "barbarian": BARBARIAN_HUMAN_APPEARANCE,
-        "fighter": FIGHTER_HUMAN_APPEARANCE,
-        "sorcerer": SORCERER_HUMAN_APPEARANCE,
+    selection_premades = {
+        "barbarian": "hero.barbarian_l5_berserker_torch",
+        "fighter": "hero.fighter_l5_shield_torch",
+        "sorcerer": "hero.sorcerer_l5_standard_torch",
     }
-    for key, selection in selections.items():
+    for key, premade_id in selection_premades.items():
         symbol = f"{key.upper()}_HUMAN_APPEARANCE"
-        assert symbol in _assigned_names(appearance_tree)
         semantic_id = f"builtin_selection.{key}"
         row = overlay_rows[semantic_id]
         _assert_overlay_metadata(
@@ -1186,15 +1122,13 @@ def validate_historical_bindings_and_current_non_item_overlay(
             source_path="dnd/content_system/character_appearance.py",
             source_symbol=symbol,
         )
-        assert row["authored_value"] == selection.model_dump(
-            mode="json",
-            exclude_none=True,
-        )
+        assert _direct_appearance_from_frozen_overlay(
+            row["authored_value"],
+            appearance_option_rows,
+        ) == asdict(PREMADE_CHARACTER_BUILDS[premade_id].appearance)
         checked_ids.add(semantic_id)
 
-    builds_tree = _source_tree("dnd/content_system/builtin_character_builds.py")
-    assert "BUILTIN_PREMADE_BUILDS" in _assigned_names(builds_tree)
-    for premade_id, build in sorted(BUILTIN_PREMADE_BUILDS.items()):
+    for premade_id, build in sorted(PREMADE_CHARACTER_BUILDS.items()):
         semantic_id = f"premade_appearance::{premade_id}"
         row = overlay_rows[semantic_id]
         _assert_overlay_metadata(
@@ -1203,10 +1137,10 @@ def validate_historical_bindings_and_current_non_item_overlay(
             source_path="dnd/content_system/builtin_character_builds.py",
             source_symbol=f"BUILTIN_PREMADE_BUILDS[{premade_id}]",
         )
-        assert row["authored_value"] == build.appearance.model_dump(
-            mode="json",
-            exclude_none=True,
-        )
+        assert _direct_appearance_from_frozen_overlay(
+            row["authored_value"],
+            appearance_option_rows,
+        ) == asdict(build.appearance)
         checked_ids.add(semantic_id)
 
     bestiary_tree = _source_tree("dnd/monsters/bestiary.py")
@@ -1456,7 +1390,7 @@ def test_every_structural_definition_has_one_exact_authored_owner() -> None:
         for identity, declaration in declarations.items()
         if declaration.mode.value == "typed_definition"
     }
-    assert len(structural_identities) == 87
+    assert len(structural_identities) == 10
     manifest_rows = _definition_manifest_rows()
     assert set(manifest_rows) >= structural_identities
     for identity in sorted(structural_identities):

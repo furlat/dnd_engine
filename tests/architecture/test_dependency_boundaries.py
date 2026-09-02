@@ -115,6 +115,7 @@ CONTENT_CONTRACT_ALLOWED_NEUTRAL_DEPENDENCIES = frozenset({
     "dnd.core.equipment_types",
     "dnd.core.progression",
     "dnd.core.saving_throw_types",
+    "dnd.types.abilities",
     "dnd.types.senses",
     "dnd.types.spatial_effects",
 })

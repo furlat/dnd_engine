@@ -15,7 +15,6 @@ import dnd.actions as actions
 import dnd.classes.barbarian as barbarian
 import dnd.classes.fighter as fighter
 import dnd.classes.rage as rage
-import dnd.classes.sorcerer as sorcerer
 import dnd.extensions.aegis_spark as aegis_spark
 import dnd.extensions.field_focus as field_focus
 import dnd.items.consumables as consumables
@@ -144,73 +143,6 @@ ACTION_BEHAVIOR_IDENTITY_SPECS: tuple[ActionBehaviorIdentitySpec, ...] = (
     _srd(rage.FrenziedStrike, "action.class.barbarian.frenzied_strike", "Frenzied Strike", "Make the bonus-action melee attack granted by Frenzy.", root_owned=True),
     _srd(rage.Frenzy, "action.class.barbarian.frenzy", "Frenzy", "Enter a frenzied rage.", root_owned=True),
     _srd(rage.Rage, "action.class.barbarian.rage", "Rage", "Spend a rage use to enter a primal rage.", root_owned=True),
-    _srd(
-        sorcerer.ConvertSPToSlot,
-        "action.class.sorcerer.convert_sorcery_points_to_slot",
-        "Convert Sorcery Points to Slot",
-        "Spend sorcery points to create a spell slot.",
-        root_owned=True,
-        icon_key="action.convert-sorcery-points-to-slot",
-    ),
-    _srd(
-        sorcerer.ConvertSlotToSP,
-        "action.class.sorcerer.convert_slot_to_sorcery_points",
-        "Convert Slot to Sorcery Points",
-        "Spend a spell slot to recover sorcery points.",
-        root_owned=True,
-        icon_key="action.convert-slot-to-sorcery-points",
-    ),
-    _srd(sorcerer.DistantSpell, "action.class.sorcerer.distant_spell", "Distant Spell", "Empower the next eligible spell with increased range.", root_owned=True),
-    _srd(
-        sorcerer.ElementalAffinityResistanceAction,
-        "action.class.sorcerer.elemental_affinity.resistance",
-        "Elemental Affinity Resistance",
-        "Spend one sorcery point for 1 hour of ancestry resistance.",
-        root_owned=True,
-        icon_key="condition.dnd-classes-sorcerer-elementalaffinity",
-    ),
-    _srd(
-        sorcerer.Fly,
-        "action.class.sorcerer.dragon_wings.fly",
-        "Fly",
-        "Move using manifested dragon wings.",
-        root_owned=True,
-        icon_key="action.move",
-    ),
-    _srd(
-        sorcerer.DragonWings,
-        "action.class.sorcerer.dragon_wings.toggle",
-        "Dragon Wings",
-        "Manifest or dismiss dragon wings as a bonus action.",
-        granted_action_types=(sorcerer.Fly,),
-        root_owned=True,
-        icon_key="spell.haste",
-    ),
-    _srd(
-        sorcerer.DraconicPresence,
-        "action.class.sorcerer.draconic_presence",
-        "Draconic Presence",
-        "Concentrate on a 60-foot aura of awe or fear for up to 1 minute.",
-        root_owned=True,
-        icon_key="spell.fear",
-    ),
-    _srd(
-        sorcerer.QuickenedSpell,
-        "action.class.sorcerer.quickened_spell",
-        "Quickened Spell",
-        "Empower the next eligible spell to use a bonus action.",
-        root_owned=True,
-        icon_key="action.quickened-spell",
-    ),
-    _srd(
-        sorcerer.TwinnedSpell,
-        "action.class.sorcerer.twinned_spell",
-        "Twinned Spell",
-        "Empower the next eligible spell with a second target.",
-        root_owned=True,
-        icon_key="action.twinned-spell",
-    ),
-
     # Original extension, item, environment, and maintained fixture actions.
     _original(
         aegis_spark.AegisSpark,

@@ -8,7 +8,8 @@ from dnd.core.values import ModifiableValue
 from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import NumericalModifier
 from dnd.blocks.abilities import Ability, AbilityScores
-from dnd.core.events import Event, EventQueue, EventType, EventPhase, Range, RangeType, AbilityName, Damage
+from dnd.core.events import Event, EventQueue, EventType, EventPhase, Range, RangeType, Damage
+from dnd.types.abilities import AbilityName
 from dnd.core.equipment_types import (
     ArmorType,
     BodyPart,

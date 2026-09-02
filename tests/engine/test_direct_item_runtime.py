@@ -28,10 +28,7 @@ from dnd.content.items.item_loadouts import (
     CLASS_STARTING_LOADOUTS,
 )
 from dnd.content_system.bootstrap import bootstrap_content_system
-from dnd.content_system.builtin_character_builds import (
-    BUILTIN_PREMADE_BUILDS,
-    starter_holdings_for_build,
-)
+from dnd.content.characters.premades import PREMADE_CHARACTER_BUILDS
 from dnd.content_system.creature_possessions import (
     CreaturePossessionDisposition,
     CreaturePossessionGrant,
@@ -119,8 +116,8 @@ def _all_authored_holder_rows() -> tuple[tuple[str, int], ...]:
     premade_holdings = tuple(
         (row.item_id, row.quantity)
         for row in chain.from_iterable(
-            starter_holdings_for_build(build)
-            for build in BUILTIN_PREMADE_BUILDS.values()
+            build.item_loadout
+            for build in PREMADE_CHARACTER_BUILDS.values()
         )
     )
     return direct_loadouts + creature_grants + premade_holdings

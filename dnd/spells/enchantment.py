@@ -24,7 +24,7 @@ from dnd.core.condition_types import (
     ConditionRemovalTrigger,
     ConditionTag,
 )
-from dnd.core.content.origin_features import OriginCapability
+from dnd.types.character_progression import OriginCapability
 from dnd.core.events import (
     Event, EventPhase, RangeType, Range, EventType, EventHandler, Trigger,
     D20RollResultEvent,

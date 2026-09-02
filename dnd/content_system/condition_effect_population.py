@@ -16,7 +16,6 @@ import dnd.actions as actions
 import dnd.classes.barbarian as barbarian
 import dnd.classes.fighter as fighter
 import dnd.classes.rage as rage
-import dnd.classes.sorcerer as sorcerer
 import dnd.conditions as conditions
 import dnd.extensions.aegis_spark as aegis_spark
 import dnd.extensions.field_focus as field_focus
@@ -64,7 +63,6 @@ from dnd.core.content.effects import (
     ConditionEffectSelector,
     ConditionEffectTarget,
     ConditionSaveDCSource,
-    ConditionSaveAbility,
     ConditionSaveOutcome,
     ConfigurationConditionEffectGate,
     OriginRootConditionEffectGate,
@@ -77,6 +75,7 @@ from dnd.core.content.registration import (
     replace_content_declaration_at_cold_startup,
 )
 from dnd.core.content.runtime import RuntimeBehaviorKind
+from dnd.types.abilities import AbilityName
 from dnd.spells.catalog_content import (
     SPELL_CATALOG_METADATA_BY_CLASS,
     SPELL_CONTENT_IDENTITY_SPECS,
@@ -133,7 +132,7 @@ _ATTACK_HIT = (
 
 
 def _failed_save(
-    ability: ConditionSaveAbility,
+    ability: AbilityName,
     *,
     dc_source: ConditionSaveDCSource = (
         ConditionSaveDCSource.ACTOR_SPELL_SAVE_DC
@@ -1050,7 +1049,7 @@ _SPELL_BRANCHES: dict[_Definition, tuple[_Branch, ...]] = {
 
 
 def _succeeded_save(
-    ability: ConditionSaveAbility,
+    ability: AbilityName,
     *,
     dc_source: ConditionSaveDCSource = (
         ConditionSaveDCSource.ACTOR_ACTION_DC
@@ -1217,68 +1216,6 @@ _ACTION_AND_REACTION_BRANCHES: dict[_Definition, tuple[_Branch, ...]] = {
             gates=_succeeded_save("wisdom"),
         ),
     ),
-    # Sorcerer actions.
-    sorcerer.ElementalAffinityResistanceAction: _single_apply(
-        sorcerer.ElementalAffinityResistance,
-        target=ConditionEffectTarget.ACTOR,
-    ),
-    sorcerer.DragonWings: (
-        _branch(
-            "manifest",
-            ConditionEffectDisposition.BENEFICIAL,
-            (
-                _apply(
-                    "condition.dragon_wings",
-                    sorcerer.DragonWingsActive,
-                    ConditionEffectTarget.ACTOR,
-                ),
-            ),
-            gates=_config("toggle", "manifest"),
-        ),
-        _branch(
-            "dismiss",
-            ConditionEffectDisposition.NEUTRAL,
-            (
-                _remove(
-                    "condition.dragon_wings.remove",
-                    sorcerer.DragonWingsActive,
-                    ConditionEffectTarget.ACTOR,
-                ),
-            ),
-            gates=_config("toggle", "dismiss"),
-        ),
-    ),
-    sorcerer.DraconicPresence: (
-        _branch(
-            "aura",
-            ConditionEffectDisposition.BENEFICIAL,
-            (
-                _apply(
-                    "condition.concentrating",
-                    conditions.Concentrating,
-                    ConditionEffectTarget.ACTOR,
-                ),
-                _apply(
-                    "condition.draconic_presence_aura",
-                    sorcerer.DraconicPresenceAura,
-                    ConditionEffectTarget.ACTOR,
-                ),
-            ),
-        ),
-    ),
-    sorcerer.QuickenedSpell: _single_apply(
-        sorcerer.MetamagicActive,
-        target=ConditionEffectTarget.ACTOR,
-    ),
-    sorcerer.TwinnedSpell: _single_apply(
-        sorcerer.MetamagicActive,
-        target=ConditionEffectTarget.ACTOR,
-    ),
-    sorcerer.DistantSpell: _single_apply(
-        sorcerer.MetamagicActive,
-        target=ConditionEffectTarget.ACTOR,
-    ),
-
     # Items and original extensions.
     field_focus.DeployFieldFocus: _single_apply(
         field_focus.FieldFocus,
@@ -1590,56 +1527,6 @@ _ACTION_AND_REACTION_BRANCHES: dict[_Definition, tuple[_Branch, ...]] = {
     ),
 
     # Public condition/zone behaviors that directly create child conditions.
-    sorcerer.DraconicPresenceAura: (
-        _branch(
-            "failed-save-awe",
-            ConditionEffectDisposition.HARMFUL,
-            (
-                _apply(
-                    "condition.charmed",
-                    conditions.Charmed,
-                    ConditionEffectTarget.EACH_AFFECTED_ENTITY,
-                ),
-            ),
-            gates=(
-                *_failed_save(
-                    "wisdom",
-                    dc_source=ConditionSaveDCSource.ACTOR_ACTION_DC,
-                ),
-                *_config("presence_mode", "awe"),
-            ),
-        ),
-        _branch(
-            "failed-save-fear",
-            ConditionEffectDisposition.HARMFUL,
-            (
-                _apply(
-                    "condition.frightened",
-                    conditions.Frightened,
-                    ConditionEffectTarget.EACH_AFFECTED_ENTITY,
-                ),
-            ),
-            gates=(
-                *_failed_save(
-                    "wisdom",
-                    dc_source=ConditionSaveDCSource.ACTOR_ACTION_DC,
-                ),
-                *_config("presence_mode", "fear"),
-            ),
-        ),
-        _branch(
-            "successful-save-immunity",
-            ConditionEffectDisposition.BENEFICIAL,
-            (
-                _apply(
-                    "condition.draconic_presence_immunity",
-                    sorcerer.DraconicPresenceImmunity,
-                    ConditionEffectTarget.EACH_AFFECTED_ENTITY,
-                ),
-            ),
-            gates=_succeeded_save("wisdom"),
-        ),
-    ),
     conjuration.GreaseZone: _single_apply(
         conditions.Prone,
         target=ConditionEffectTarget.EACH_AFFECTED_ENTITY,

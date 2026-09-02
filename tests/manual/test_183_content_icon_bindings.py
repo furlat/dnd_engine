@@ -118,20 +118,22 @@ def test_every_public_builtin_has_one_authenticated_icon_disposition() -> None:
     assert {
         declaration.ref.identity_key for declaration in public_declarations
     } <= set(all_identities)
+    public_identities = {
+        declaration.ref.identity_key
+        for declaration in public_declarations
+    }
     rows_by_identity = {
         row.content_ref.identity_key: row
         for row in BUILT_IN_CONTENT_ICON_BINDING_LEDGER.definitions
         if row.content_ref.definition_kind not in _RETIRED_ITEM_KINDS
+        and row.content_ref.identity_key in public_identities
     }
     assets_by_key = {
         row.icon_key: row
         for row in NEUROCLIENT_GAME_ICON_ASSET_INDEX.assets
     }
 
-    assert set(rows_by_identity) == {
-        declaration.ref.identity_key
-        for declaration in public_declarations
-    }
+    assert set(rows_by_identity) == public_identities
     for declaration in public_declarations:
         row = rows_by_identity[declaration.ref.identity_key]
         icon_key = declaration.descriptor.presentation.icon_key

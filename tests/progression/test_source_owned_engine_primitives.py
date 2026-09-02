@@ -20,11 +20,16 @@ from dnd.blocks.skills import Skill
 from dnd.blocks.saving_throws import SavingThrow
 from dnd.blocks.spellcasting import SpellcastingBlock
 from dnd.core.base_actions import BaseAction
-from dnd.core.content.durable_characters import RitualPreparationPolicy
+from dnd.core.base_block import BaseBlock
+from dnd.core.base_object import BaseObject
+from dnd.core.values import BaseValue, ModifiableValue
+from dnd.types.character_progression import RitualPreparationPolicy
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.equipment_types import ArmorType, WeaponProperty, WeaponSlot
-from dnd.core.events import AbilityName, Range, RangeType
+from dnd.core.events import Range, RangeType
+from dnd.types.abilities import AbilityName
 from dnd.core.feature_grants import AttackMultiplicityGrant
+from dnd.core.modifiers import NumericalModifier
 from dnd.core.creature_types import DamageType
 from dnd.core.proficiency_types import ProficiencyMode
 from dnd.core.progression import CasterProgression
@@ -163,7 +168,7 @@ def test_extra_attack_uses_highest_applicable_rank_and_exact_removal() -> None:
     economy.add_attack_multiplicity_grant(
         AttackMultiplicityGrant(
             grant_id=lower_source,
-            provider_ref=lower_ref,
+            provider_id=lower_ref.content_id,
             attacks_per_attack_action=2,
             acquisition_ordinal=5,
         ),
@@ -171,7 +176,7 @@ def test_extra_attack_uses_highest_applicable_rank_and_exact_removal() -> None:
     economy.add_attack_multiplicity_grant(
         AttackMultiplicityGrant(
             grant_id=higher_source,
-            provider_ref=higher_ref,
+            provider_id=higher_ref.content_id,
             attacks_per_attack_action=3,
             acquisition_ordinal=11,
         ),
@@ -225,11 +230,72 @@ def test_hit_dice_remove_by_uuid_preserves_other_blocks_and_spend() -> None:
     )
     health = Health(source_entity_uuid=owner_uuid, hit_dices=[d10, d6])
     d6.spend()
+    removed_values = (d10.hit_dice_value, d10.hit_dice_count)
+    sibling_values = (d6.hit_dice_value, d6.hit_dice_count)
+    removed_channels = tuple(
+        channel
+        for value in removed_values
+        for channel in (
+            value.self_static,
+            value.to_target_static,
+            value.self_contextual,
+            value.to_target_contextual,
+        )
+    )
+    sibling_channels = tuple(
+        channel
+        for value in sibling_values
+        for channel in (
+            value.self_static,
+            value.to_target_static,
+            value.self_contextual,
+            value.to_target_contextual,
+        )
+    )
+    removed_modifier_ids = {
+        modifier_uuid
+        for channel in removed_channels
+        for modifier_uuid in channel.get_all_modifier_uuids()
+    }
+    sibling_modifier_ids = {
+        modifier_uuid
+        for channel in sibling_channels
+        for modifier_uuid in channel.get_all_modifier_uuids()
+    }
+
+    target_uuid = uuid4()
+    target_value = ModifiableValue.create(
+        source_entity_uuid=target_uuid,
+        target_entity_uuid=owner_uuid,
+    )
+    borrowed_modifier = NumericalModifier(
+        source_entity_uuid=target_uuid,
+        target_entity_uuid=owner_uuid,
+        name="Borrowed hit-die proof",
+        value=3,
+    )
+    target_value.to_target_static.add_value_modifier(borrowed_modifier)
+    d10.hit_dice_value.set_target_entity(target_uuid)
+    d10.hit_dice_value.set_from_target(target_value)
+    borrowed_channel_uuid = target_value.to_target_static.uuid
 
     assert health.remove_hit_dice_by_uuid(d10.uuid)
     assert health.hit_dices == [d6]
     assert d6.spent_hit_dice == 1
     assert not health.remove_hit_dice_by_uuid(d10.uuid)
+    assert d10.uuid not in BaseBlock._registry
+    assert all(value.uuid not in BaseValue._registry for value in removed_values)
+    assert all(channel.uuid not in BaseValue._registry for channel in removed_channels)
+    assert removed_modifier_ids.isdisjoint(BaseObject._registry)
+    assert d6.uuid in BaseBlock._registry
+    assert all(value.uuid in BaseValue._registry for value in sibling_values)
+    assert all(channel.uuid in BaseValue._registry for channel in sibling_channels)
+    assert sibling_modifier_ids <= BaseObject._registry.keys()
+    assert borrowed_channel_uuid in BaseValue._registry
+    assert borrowed_modifier.uuid in BaseObject._registry
+    assert target_value.to_target_static.value_modifiers == {
+        borrowed_modifier.uuid: borrowed_modifier,
+    }
 
 
 def test_equipment_selects_highest_owned_ac_formula_and_reverts_exactly() -> None:
@@ -279,13 +345,7 @@ def test_spellcasting_sources_resolve_ability_without_replacing_legacy_default()
         entity.spellcasting.add_source(
             source_id,
             cast(AbilityName, ability),
-            provider_ref=ContentRef(
-                pack_id="fixture.source_owned_primitives",
-                definition_kind=ContentDefinitionKind.CLASS,
-                content_id=content_id,
-                content_version=1,
-                definition_contract_hash="a" * 64,
-            ),
+            provider_id=content_id,
             caster_progression=CasterProgression.FULL_CASTER,
             provider_level=5,
             maximum_spell_rank=3,
@@ -324,6 +384,7 @@ def test_creature_training_owns_weapon_armor_and_shield_proficiency() -> None:
     )
     weapon = Weapon(
         source_entity_uuid=entity.uuid,
+        item_id="weapon.fixture.martial",
         damage_dice=8,
         dice_numbers=1,
         damage_type=DamageType.SLASHING,
@@ -360,20 +421,6 @@ def test_creature_training_owns_weapon_armor_and_shield_proficiency() -> None:
 
 
 def test_exact_weapon_training_does_not_overgrant_a_whole_category() -> None:
-    dagger_ref = ContentRef(
-        pack_id="content.srd_5_1_cc",
-        definition_kind=ContentDefinitionKind.ITEM,
-        content_id="weapon.dagger",
-        content_version=1,
-        definition_contract_hash="a" * 64,
-    )
-    quarterstaff_ref = ContentRef(
-        pack_id="content.srd_5_1_cc",
-        definition_kind=ContentDefinitionKind.ITEM,
-        content_id="weapon.quarterstaff",
-        content_version=1,
-        definition_contract_hash="b" * 64,
-    )
     source = uuid4()
     entity = Entity.create(
         source_entity_uuid=uuid4(),
@@ -393,7 +440,7 @@ def test_exact_weapon_training_does_not_overgrant_a_whole_category() -> None:
     )
     dagger = Weapon(
         source_entity_uuid=entity.uuid,
-        content_ref=dagger_ref,
+        item_id="weapon.dagger",
         damage_dice=4,
         dice_numbers=1,
         damage_type=DamageType.PIERCING,
@@ -402,7 +449,7 @@ def test_exact_weapon_training_does_not_overgrant_a_whole_category() -> None:
     )
     quarterstaff = Weapon(
         source_entity_uuid=entity.uuid,
-        content_ref=quarterstaff_ref,
+        item_id="weapon.quarterstaff",
         damage_dice=6,
         dice_numbers=1,
         damage_type=DamageType.BLUDGEONING,
@@ -412,7 +459,7 @@ def test_exact_weapon_training_does_not_overgrant_a_whole_category() -> None:
 
     entity.creature_proficiencies.add_specific_weapon_source(
         source,
-        dagger_ref,
+        "weapon.dagger",
     )
     assert entity.equipment.equip(dagger, WeaponSlot.MELEE_MAIN)
     assert entity.attack_bonus().normalized_score == 5

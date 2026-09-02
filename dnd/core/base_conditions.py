@@ -683,9 +683,16 @@ class BaseCondition(BaseObject):
         """
         del parent_event
 
+    def _release_owned_duration(self) -> None:
+        """Release the exact duration child owned by this condition."""
+        if self.duration.owned_by_condition != self.uuid:
+            raise RuntimeError("condition duration owner identity is inconsistent")
+        self.duration.remove_from_register()
+
     def discard_uncommitted_runtime_state(self) -> None:
         """Release provisional mechanics without publishing removal events."""
         self._release_owned_runtime_state()
+        self._release_owned_duration()
         self.applied = True
         try:
             self.remove_condition_modifiers()
@@ -892,6 +899,7 @@ class BaseCondition(BaseObject):
                 continue
             elif isinstance(event_handler, EventHandler):
                 event_handler.remove()
+                event_handler.remove_from_register()
         self.event_handlers_uuids.clear()
         return True
 
@@ -941,6 +949,7 @@ class BaseCondition(BaseObject):
             return removed_event
 
         self._release_owned_runtime_state(parent_event=parent_event)
+        self._release_owned_duration()
         self.remove_condition_modifiers()
         self.remove_event_handlers()
         self.remove_spatial_handlers()

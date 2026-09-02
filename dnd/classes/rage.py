@@ -11,6 +11,7 @@ Contains all rage/frenzy related code:
 
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.base_block import BaseBlock
+from dnd.core.base_object import BaseObject
 from dnd.core.base_actions import (
     ActionOutcomeProfile, BaseAction, ActionEvent, Cost, TargetType, BaseCost, ActionCategory
 )
@@ -42,6 +43,64 @@ from dnd.actions import (
 from pydantic import Field
 from typing import Any, Optional, List, Tuple, cast
 from uuid import UUID
+
+
+def _child_binding(parent_binding, behavior_id: str, runtime_owner_uuid: UUID):
+    """Derive one exact direct child fact from this family-local provider."""
+    if parent_binding is None:
+        return None
+    return parent_binding.model_copy(update={
+        "behavior_id": behavior_id,
+        "provided_by_id": parent_binding.behavior_id,
+        "runtime_owner_uuid": runtime_owner_uuid,
+    })
+
+
+def _owning_template(action: BaseAction, entity: Entity) -> BaseAction:
+    """Resolve the exact Entity-owned template that produced an execution."""
+    template_uuid = action.registered_template_uuid
+    if template_uuid is None:
+        raise RuntimeError("Rage-family execution has no registered template owner")
+    template = next(
+        (
+            candidate
+            for candidate in entity.registered_actions
+            if candidate.uuid == template_uuid
+        ),
+        None,
+    )
+    if template is None:
+        raise RuntimeError("Rage-family registered template owner is missing")
+    return template
+
+
+def _purge_mindless_rage_conditions(
+    entity: Entity,
+    parent_event: Event,
+) -> bool:
+    """Atomically remove exact Charm/Fear state after rage commits."""
+    conditions = tuple(
+        condition
+        for condition_name in ("Charmed", "Frightened")
+        for condition in (entity.active_conditions.get(condition_name),)
+        if condition is not None
+    )
+    prepared = []
+    visited: set[UUID] = set()
+    for condition in conditions:
+        canceled = BaseBlock._prepare_condition_removal_tree(
+            condition,
+            condition_owner=entity,
+            expire=False,
+            parent_event=parent_event,
+            prepared=prepared,
+            visited=visited,
+        )
+        if canceled is not None:
+            BaseBlock._cancel_prepared_condition_removals(prepared, canceled)
+            return False
+    BaseBlock._commit_prepared_condition_removals(prepared)
+    return True
 
 
 def rage_damage_check(
@@ -81,10 +140,11 @@ def rage_damage_check(
 
     rage_damage = raging.rage_damage
 
-    return NumericalModifier.create(
+    return NumericalModifier(
         source_entity_uuid=source_entity_uuid,
         name="Rage Damage",
-        value=rage_damage
+        value=rage_damage,
+        use_register=False,
     )
 
 
@@ -252,6 +312,7 @@ class Raging(BaseCondition):
         rage_damage: Damage bonus supplied by the active rage state to melee attacks.
         mindless_rage: Whether this rage purges charm and fear.
         persistent_rage: Whether inactivity can end this rage.
+        owning_action_template_uuid: Exact action template that owns this root.
     """
     name: str = Field(
         default="Raging",
@@ -273,6 +334,24 @@ class Raging(BaseCondition):
         default=False,
         description="Whether inactivity can end this active rage.",
     )
+    owning_action_template_uuid: Optional[UUID] = Field(
+        default=None,
+        exclude=True,
+        description="Exact Rage or Frenzy template that owns this root.",
+    )
+
+    def _record_modifier(self, value_uuid: UUID, modifier_uuid: UUID) -> None:
+        """Retain one exact modifier immediately after owner admission."""
+        self.modifers_uuids.setdefault(value_uuid, []).append(modifier_uuid)
+
+    def _admit_handler(self, target: Entity, handler: EventHandler) -> None:
+        """Retain one exact handler immediately after owner admission."""
+        try:
+            target.add_event_handler(handler)
+        except BaseException:
+            handler.remove_from_register()
+            raise
+        self.event_handlers_uuids.append(handler.uuid)
 
     def _apply(self, declaration_event: Event) -> Tuple[
         List[Tuple[UUID, UUID]],
@@ -292,14 +371,6 @@ class Raging(BaseCondition):
                 status_message=f"Target entity {self.target_entity_uuid} not found"
             )
 
-        if self.mindless_rage:
-            for cond_name in ["Charmed", "Frightened"]:
-                if cond_name in target.active_conditions:
-                    target.remove_condition(cond_name)
-
-        outs: List[Tuple[UUID, UUID]] = []
-        handler_uuids: List[UUID] = []
-
         athletics = target.skill_set.get_skill("athletics")
         str_adv_mod = AdvantageModifier(
             name="Raging",
@@ -307,8 +378,14 @@ class Raging(BaseCondition):
             source_entity_uuid=self.target_entity_uuid,
             target_entity_uuid=self.target_entity_uuid
         )
-        mod_uuid = athletics.skill_bonus.self_static.add_advantage_modifier(str_adv_mod)
-        outs.append((athletics.skill_bonus.uuid, mod_uuid))
+        try:
+            mod_uuid = athletics.skill_bonus.self_static.add_advantage_modifier(
+                str_adv_mod,
+            )
+        except BaseException:
+            str_adv_mod.remove_from_register()
+            raise
+        self._record_modifier(athletics.skill_bonus.uuid, mod_uuid)
 
         str_save = target.saving_throws.get_saving_throw("strength")
         str_save_adv = AdvantageModifier(
@@ -317,8 +394,14 @@ class Raging(BaseCondition):
             source_entity_uuid=self.target_entity_uuid,
             target_entity_uuid=self.target_entity_uuid
         )
-        mod_uuid = str_save.bonus.self_static.add_advantage_modifier(str_save_adv)
-        outs.append((str_save.bonus.uuid, mod_uuid))
+        try:
+            mod_uuid = str_save.bonus.self_static.add_advantage_modifier(
+                str_save_adv,
+            )
+        except BaseException:
+            str_save_adv.remove_from_register()
+            raise
+        self._record_modifier(str_save.bonus.uuid, mod_uuid)
 
         rage_dmg_mod = ContextualNumericalModifier(
             name="Rage Damage",
@@ -326,8 +409,15 @@ class Raging(BaseCondition):
             target_entity_uuid=self.target_entity_uuid,
             callable=rage_damage_check
         )
-        mod_uuid = target.equipment.melee_damage_bonus.self_contextual.add_value_modifier(rage_dmg_mod)
-        outs.append((target.equipment.melee_damage_bonus.uuid, mod_uuid))
+        try:
+            mod_uuid = (
+                target.equipment.melee_damage_bonus.self_contextual
+                .add_value_modifier(rage_dmg_mod)
+            )
+        except BaseException:
+            rage_dmg_mod.remove_from_register()
+            raise
+        self._record_modifier(target.equipment.melee_damage_bonus.uuid, mod_uuid)
 
         for damage_type in [DamageType.BLUDGEONING, DamageType.PIERCING, DamageType.SLASHING]:
             resist_mod = ResistanceModifier(
@@ -337,27 +427,83 @@ class Raging(BaseCondition):
                 value=ResistanceStatus.RESISTANCE,
                 damage_type=damage_type
             )
-            mod_uuid = target.health.damage_reduction.self_static.add_resistance_modifier(resist_mod)
-            outs.append((target.health.damage_reduction.uuid, mod_uuid))
+            try:
+                mod_uuid = (
+                    target.health.damage_reduction.self_static
+                    .add_resistance_modifier(resist_mod)
+                )
+            except BaseException:
+                resist_mod.remove_from_register()
+                raise
+            self._record_modifier(target.health.damage_reduction.uuid, mod_uuid)
 
         maintenance_handler = create_rage_maintenance_handler(target.uuid)
-        target.add_event_handler(maintenance_handler)
-        handler_uuids.append(maintenance_handler.uuid)
+        maintenance_handler.behavior_binding = self.behavior_binding
+        self._admit_handler(target, maintenance_handler)
 
         armor_handler = create_rage_armor_handler(target.uuid)
-        target.add_event_handler(armor_handler)
-        handler_uuids.append(armor_handler.uuid)
+        armor_handler.behavior_binding = self.behavior_binding
+        self._admit_handler(target, armor_handler)
 
         death_handler = create_rage_death_handler(target.uuid)
-        target.add_event_handler(death_handler)
-        handler_uuids.append(death_handler.uuid)
+        death_handler.behavior_binding = self.behavior_binding
+        self._admit_handler(target, death_handler)
 
         effect_event = declaration_event.phase_to(
             EventPhase.EFFECT,
             status_message=f"{target.name} enters a rage!"
         )
 
-        return outs, handler_uuids, [], [], effect_event
+        return [], [], [], [], effect_event
+
+    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
+        """Release the exact action-template root edge after state cleanup."""
+        target = (
+            Entity.get(self.target_entity_uuid)
+            if self.target_entity_uuid is not None
+            else None
+        )
+        if target is not None and self.owning_action_template_uuid is not None:
+            template = next(
+                (
+                    candidate
+                    for candidate in target.registered_actions
+                    if candidate.uuid == self.owning_action_template_uuid
+                ),
+                None,
+            )
+            if template is not None:
+                template.active_raging_condition_uuid = None
+        return super()._remove(event)
+
+    def remove_condition_modifiers(self) -> bool:
+        """Detach and unregister this Raging instance's exact modifiers."""
+        owned = tuple(
+            modifier
+            for modifier_uuids in self.modifers_uuids.values()
+            for modifier_uuid in modifier_uuids
+            for modifier in (BaseObject.get(modifier_uuid),)
+            if modifier is not None
+        )
+        removed = super().remove_condition_modifiers()
+        if removed:
+            for modifier in owned:
+                modifier.remove_from_register()
+        return removed
+
+    def remove_event_handlers(self) -> bool:
+        """Detach and unregister this Raging instance's exact handlers."""
+        owned = tuple(
+            handler
+            for handler_uuid in self.event_handlers_uuids
+            for handler in (BaseObject.get(handler_uuid),)
+            if handler is not None
+        )
+        removed = super().remove_event_handlers()
+        if removed:
+            for handler in owned:
+                handler.remove_from_register()
+        return removed
 
 
 class Rage(BaseAction):
@@ -370,6 +516,7 @@ class Rage(BaseAction):
         rage_damage: Damage bonus copied into the applied Raging condition.
         mindless_rage: Whether the resulting rage purges charm and fear.
         persistent_rage: Whether inactivity can end the resulting rage.
+        active_raging_condition_uuid: Exact active root owned by this template.
         costs: Bonus-action and rage-resource costs rebuilt after model initialization.
     """
     name: str = Field(default="Rage", description="Action name displayed for entering rage.")
@@ -392,6 +539,11 @@ class Rage(BaseAction):
     persistent_rage: bool = Field(
         default=False,
         description="Whether inactivity can end the resulting active rage.",
+    )
+    active_raging_condition_uuid: Optional[UUID] = Field(
+        default=None,
+        exclude=True,
+        description="Exact active Raging root produced by this template.",
     )
 
     costs: List[Cost] = Field(
@@ -463,18 +615,36 @@ class Rage(BaseAction):
         if entity is None:
             return execution_event.cancel(status_message="Entity not found")
 
+        template = _owning_template(self, entity)
         raging = Raging(
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.source_entity_uuid,
             rage_damage=self.rage_damage,
             mindless_rage=self.mindless_rage,
             persistent_rage=self.persistent_rage,
+            owning_action_template_uuid=template.uuid,
+            behavior_binding=_child_binding(
+                self.behavior_binding,
+                "class_feature.barbarian.raging",
+                entity.uuid,
+            ),
         )
-        entity.add_condition(raging, parent_event=execution_event)
+        applied = entity.add_condition(raging, parent_event=execution_event)
+        if applied is None or applied.canceled:
+            return applied
+        template.active_raging_condition_uuid = raging.uuid
+        purge_succeeded = (
+            not raging.mindless_rage
+            or _purge_mindless_rage_conditions(entity, applied)
+        )
 
         return execution_event.phase_to(
             EventPhase.EFFECT,
-            status_message=f"{entity.name} enters a rage!"
+            status_message=(
+                f"{entity.name} enters a rage!"
+                if purge_succeeded
+                else f"{entity.name} enters a rage; Mindless Rage purge was blocked"
+            ),
         )
 
     def _apply_costs(self, execution_event: ActionEvent) -> ActionEvent:
@@ -646,7 +816,6 @@ class RageFeature(BaseCondition):
 
         return super()._remove(event)
 
-
 class Frenzied(BaseCondition):
     """Active Berserker frenzy state applied by the Frenzy action.
 
@@ -654,6 +823,7 @@ class Frenzied(BaseCondition):
         name: Condition name used for active Berserker frenzy state lookup and cleanup.
         description: Short rules-facing summary of the active frenzy state.
         rage_damage: Damage bonus retained for the frenzied rage state.
+        frenzied_strike_action_uuid: Exact action owned by this condition.
     """
     name: str = Field(
         default="Frenzied",
@@ -666,6 +836,11 @@ class Frenzied(BaseCondition):
     rage_damage: int = Field(
         default=2,
         description="Damage bonus retained for the frenzied rage state.",
+    )
+    frenzied_strike_action_uuid: Optional[UUID] = Field(
+        default=None,
+        exclude=True,
+        description="Exact Frenzied Strike action owned by this condition.",
     )
 
     def _apply(self, declaration_event: Event) -> Tuple[
@@ -688,9 +863,20 @@ class Frenzied(BaseCondition):
 
         frenzied_strike = FrenziedStrike(
             source_entity_uuid=target.uuid,
-            template=True
+            template=True,
+            semantic_key="action.class.barbarian.frenzied_strike",
+            behavior_binding=_child_binding(
+                self.behavior_binding,
+                "action.class.barbarian.frenzied_strike",
+                target.uuid,
+            ),
         )
-        target.register_action(frenzied_strike)
+        try:
+            target.register_action(frenzied_strike)
+        except BaseException:
+            frenzied_strike.remove_from_register()
+            raise
+        self.frenzied_strike_action_uuid = frenzied_strike.uuid
 
         effect_event = declaration_event.phase_to(
             EventPhase.EFFECT,
@@ -699,13 +885,35 @@ class Frenzied(BaseCondition):
 
         return [], [], [], [], effect_event
 
-    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
-        """Clean up FrenziedStrike action on removal."""
+    def _release_owned_runtime_state(
+        self,
+        *,
+        parent_event: Optional[Event] = None,
+    ) -> None:
+        """Release exact Frenzied state that may exist before admission."""
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if target:
-            target.unregister_action("Frenzied Strike")
+        if target is not None and self.frenzied_strike_action_uuid is not None:
+            if not target.unregister_action_by_uuid(
+                self.frenzied_strike_action_uuid,
+            ):
+                raise RuntimeError("Frenzied-owned strike action is missing")
+            self.frenzied_strike_action_uuid = None
+        super()._release_owned_runtime_state(parent_event=parent_event)
 
-        return super()._remove(event)
+
+def _release_failed_frenzied_graph(
+    entity: Entity,
+    raging: Raging,
+    parent_event: Event,
+) -> None:
+    """Release the exact provisional graph after Frenzied admission fails."""
+    if not entity.remove_condition_by_uuid(
+        raging.uuid,
+        parent_event=parent_event,
+    ):
+        raise RuntimeError(
+            "Frenzy admission failed and its Raging root could not be released",
+        )
 
 
 class FrenziedStrike(BaseAction):
@@ -835,6 +1043,7 @@ class Frenzy(BaseAction):
         rage_damage: Damage bonus copied into the applied Raging and Frenzied conditions.
         mindless_rage: Whether the resulting frenzy purges charm and fear.
         persistent_rage: Whether inactivity can end the resulting frenzy.
+        active_raging_condition_uuid: Exact active root owned by this template.
         costs: Bonus-action and rage-resource costs rebuilt after model initialization.
     """
     name: str = Field(default="Frenzy", description="Action name displayed for entering Berserker frenzy.")
@@ -857,6 +1066,11 @@ class Frenzy(BaseAction):
     persistent_rage: bool = Field(
         default=False,
         description="Whether inactivity can end the resulting active rage.",
+    )
+    active_raging_condition_uuid: Optional[UUID] = Field(
+        default=None,
+        exclude=True,
+        description="Exact active Raging root produced by this template.",
     )
 
     costs: List[Cost] = Field(
@@ -912,28 +1126,69 @@ class Frenzy(BaseAction):
         if entity is None:
             return execution_event.cancel(status_message="Entity not found")
 
+        template = _owning_template(self, entity)
         raging = Raging(
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.source_entity_uuid,
             rage_damage=self.rage_damage,
             mindless_rage=self.mindless_rage,
             persistent_rage=self.persistent_rage,
+            owning_action_template_uuid=template.uuid,
+            behavior_binding=_child_binding(
+                self.behavior_binding,
+                "class_feature.barbarian.raging",
+                entity.uuid,
+            ),
         )
-        entity.add_condition(raging, parent_event=execution_event)
+        raging_applied = entity.add_condition(raging, parent_event=execution_event)
+        if raging_applied is None or raging_applied.canceled:
+            return raging_applied
 
         frenzied = Frenzied(
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.source_entity_uuid,
             rage_damage=self.rage_damage,
-            parent_condition=raging.uuid
+            parent_condition=raging.uuid,
+            behavior_binding=_child_binding(
+                raging.behavior_binding,
+                "class_feature.barbarian.frenzied",
+                entity.uuid,
+            ),
         )
-        entity.add_condition(frenzied, parent_event=execution_event)
+        try:
+            frenzied_applied = entity.add_condition(
+                frenzied,
+                parent_event=execution_event,
+            )
+        except BaseException:
+            _release_failed_frenzied_graph(
+                entity,
+                raging,
+                parent_event=execution_event,
+            )
+            raise
+        if frenzied_applied is None or frenzied_applied.canceled:
+            _release_failed_frenzied_graph(
+                entity,
+                raging,
+                parent_event=frenzied_applied or execution_event,
+            )
+            return frenzied_applied
 
         raging.sub_conditions.append(frenzied.uuid)
+        template.active_raging_condition_uuid = raging.uuid
+        purge_succeeded = (
+            not raging.mindless_rage
+            or _purge_mindless_rage_conditions(entity, raging_applied)
+        )
 
         return execution_event.phase_to(
             EventPhase.EFFECT,
-            status_message=f"{entity.name} enters a frenzy!"
+            status_message=(
+                f"{entity.name} enters a frenzy!"
+                if purge_succeeded
+                else f"{entity.name} enters a frenzy; Mindless Rage purge was blocked"
+            ),
         )
 
     def _apply_costs(self, execution_event: ActionEvent) -> ActionEvent:

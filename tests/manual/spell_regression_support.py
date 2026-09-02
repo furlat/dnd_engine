@@ -6,7 +6,7 @@ from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
-from dnd.core.events import AbilityName
+from dnd.types.abilities import AbilityName
 from dnd.core.gridmap import get_map
 from dnd.core.creature_types import CreatureType
 from dnd.core.modifiers import NumericalModifier

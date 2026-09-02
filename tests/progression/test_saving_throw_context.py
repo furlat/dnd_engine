@@ -9,7 +9,7 @@ from pydantic import ValidationError
 
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
-from dnd.core.content.origin_features import OriginCapability
+from dnd.types.character_progression import OriginCapability
 from dnd.core.content.runtime import BehaviorBinding
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus

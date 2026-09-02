@@ -14,7 +14,8 @@ from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.condition_types import ConditionTag, DurationType
 from dnd.core.base_object import BaseObject
-from dnd.core.events import EventPhase, EventQueue, SkillName
+from dnd.core.events import EventPhase, EventQueue
+from dnd.types.abilities import SkillName
 from dnd.core.gridmap import get_map
 from dnd.core.life_types import LifeState
 from dnd.core.creature_types import DamageType

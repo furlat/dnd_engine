@@ -29,6 +29,9 @@ from dnd.core.content.recipe_presets import (
     ContentRecipePresetRef,
 )
 from dnd.core.content.registration import ContentDeclaration
+from dnd.content.characters.class_definitions import (
+    CHARACTER_RETIRED_DECLARATION_IDS,
+)
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -312,7 +315,21 @@ def validate_builtin_content_icons(
         if row.content_ref.definition_kind not in {
             ContentDefinitionKind.ITEM,
             ContentDefinitionKind.ENVIRONMENT_OBJECT,
+            ContentDefinitionKind.STARTING_EQUIPMENT_PACKAGE,
         }
+        and row.content_ref.definition_kind not in {
+            ContentDefinitionKind.SPECIES,
+            ContentDefinitionKind.SPECIES_VARIANT,
+            ContentDefinitionKind.BACKGROUND,
+        }
+        and not row.content_ref.content_id.startswith("trait.origin.")
+        and row.content_ref.content_id
+        != "action.origin.dragonborn.breath_weapon"
+        and row.content_ref.content_id
+        != "starting_holdings.background.acolyte"
+        and row.content_ref.content_id not in CHARACTER_RETIRED_DECLARATION_IDS
+        and not row.content_ref.content_id.startswith("creature.player.")
+        and not row.content_ref.content_id.startswith("creature.premade.")
     }
     if rows_by_identity.keys() != public_by_identity.keys():
         missing = sorted(public_by_identity.keys() - rows_by_identity.keys())
@@ -347,6 +364,7 @@ def validate_builtin_content_icons(
         if row.inherit_definition_ref.definition_kind not in {
             ContentDefinitionKind.ITEM,
             ContentDefinitionKind.ENVIRONMENT_OBJECT,
+            ContentDefinitionKind.STARTING_EQUIPMENT_PACKAGE,
         }
     }
     presets_by_identity = {

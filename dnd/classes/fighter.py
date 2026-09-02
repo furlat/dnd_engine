@@ -19,7 +19,7 @@ from dnd.core.condition_types import ConditionCategory, DurationType
 from dnd.core.base_actions import (
     ActionOutcomeProfile, BaseAction, ActionEvent, Cost, TargetType, BaseCost, ActionCategory
 )
-from dnd.core.content.runtime import RuntimeBehaviorKind
+from dnd.core.content.runtime import BehaviorBinding, RuntimeBehaviorKind
 from dnd.core.events import (
     Event, EventPhase, EventType, EventQueue,
     Trigger, EventHandler, DamageRollResultEvent, RangeType, SavingThrowEvent
@@ -141,10 +141,11 @@ def defense_ac_check(
 
     body_armor = entity.equipment.body_armor
     if body_armor and body_armor.type != ArmorType.CLOTH:
-        return NumericalModifier.create(
+        return NumericalModifier(
             source_entity_uuid=source_entity_uuid,
             name="Defense",
-            value=1
+            value=1,
+            use_register=False,
         )
 
     return None
@@ -238,10 +239,11 @@ def dueling_damage_check(
     if off_hand is not None and not isinstance(off_hand, Shield):
         return None
 
-    return NumericalModifier.create(
+    return NumericalModifier(
         source_entity_uuid=source_entity_uuid,
         name="Dueling",
-        value=2
+        value=2,
+        use_register=False,
     )
 
 
@@ -500,9 +502,14 @@ class ProtectionReactionHandler(EventHandler):
     """Independently authored reaction installed by the Protection style."""
 
 
-def create_protection_handler(source_entity_uuid: UUID) -> ProtectionReactionHandler:
+def create_protection_handler(
+    source_entity_uuid: UUID,
+    *,
+    handler_uuid: UUID | None = None,
+) -> ProtectionReactionHandler:
     """Create an EventHandler for Protection fighting style."""
     return ProtectionReactionHandler(
+        **({} if handler_uuid is None else {"uuid": handler_uuid}),
         name="Protection",
         semantic_key="feature.fighter.protection",
         content_kind=RuntimeBehaviorKind.REACTION,
@@ -589,10 +596,11 @@ def twf_off_hand_melee_ability_bonus(
     else:
         bonus = entity.ability_scores.strength.modifier
 
-    return NumericalModifier.create(
+    return NumericalModifier(
         source_entity_uuid=source_entity_uuid,
         name="Two-Weapon Fighting",
-        value=bonus
+        value=bonus,
+        use_register=False,
     )
 
 
@@ -612,10 +620,11 @@ def twf_off_hand_ranged_ability_bonus(
     if not off_hand:
         return None
 
-    return NumericalModifier.create(
+    return NumericalModifier(
         source_entity_uuid=source_entity_uuid,
         name="Two-Weapon Fighting",
-        value=entity.ability_scores.dexterity.modifier
+        value=entity.ability_scores.dexterity.modifier,
+        use_register=False,
     )
 
 
@@ -1049,7 +1058,14 @@ class ActionSurgeFeature(BaseCondition):
 
         action_surge = ActionSurge(
             source_entity_uuid=target.uuid,
-            template=True
+            template=True,
+            semantic_key="action.class.fighter.action_surge",
+            behavior_binding=BehaviorBinding(
+                behavior_id="action.class.fighter.action_surge",
+                provided_by_id="class_feature.fighter.action_surge",
+                origin_root_id="class.fighter",
+                runtime_owner_uuid=target.uuid,
+            ),
         )
         target.register_action(action_surge)
 
@@ -1228,9 +1244,14 @@ def extra_attack_resource_processor(
     return None
 
 
-def create_extra_attack_resource_handler(source_entity_uuid: UUID) -> EventHandler:
+def create_extra_attack_resource_handler(
+    source_entity_uuid: UUID,
+    *,
+    handler_uuid: UUID | None = None,
+) -> EventHandler:
     """Create an EventHandler that manages extra_attacks resource for Fighter."""
     return EventHandler(
+        **({} if handler_uuid is None else {"uuid": handler_uuid}),
         name="Extra Attack Resource",
         source_entity_uuid=source_entity_uuid,
         trigger_conditions=[
@@ -1325,6 +1346,9 @@ class ExtraAttack(BaseAction):
                         "weapon_slot": slot,
                         "template": False,
                         "use_register": False,
+                        "registered_template_uuid": (
+                            self.registered_template_uuid or self.uuid
+                        ),
                     },
                 ),
             )
@@ -1454,11 +1478,24 @@ class ExtraAttackFeature(BaseCondition):
                     source_entity_uuid=target.uuid,
                     weapon_slot=slot,
                     name=f"Extra Attack_{slot.value}",
-                    template=True
+                    template=True,
+                    semantic_key="action.feature.extra_attack",
+                    behavior_binding=BehaviorBinding(
+                        behavior_id="action.feature.extra_attack",
+                        provided_by_id="class_feature.extra_attack",
+                        origin_root_id="class.fighter",
+                        runtime_owner_uuid=target.uuid,
+                    ),
                 )
                 target.register_action(extra_attack)
 
         handler = create_extra_attack_resource_handler(target.uuid)
+        handler.behavior_binding = BehaviorBinding(
+            behavior_id="class_feature.extra_attack",
+            provided_by_id="class_feature.extra_attack",
+            origin_root_id="class.fighter",
+            runtime_owner_uuid=target.uuid,
+        )
         target.add_event_handler(handler)
         handler_uuids.append(handler.uuid)
 
@@ -1540,9 +1577,14 @@ def indomitable_processor(
     )
 
 
-def create_indomitable_handler(source_entity_uuid: UUID) -> EventHandler:
+def create_indomitable_handler(
+    source_entity_uuid: UUID,
+    *,
+    handler_uuid: UUID | None = None,
+) -> EventHandler:
     """Create EventHandler for Indomitable."""
     return EventHandler(
+        **({} if handler_uuid is None else {"uuid": handler_uuid}),
         name="Indomitable",
         source_entity_uuid=source_entity_uuid,
         trigger_conditions=[
@@ -1712,9 +1754,14 @@ def survivor_processor(
     )
 
 
-def create_survivor_handler(source_entity_uuid: UUID) -> EventHandler:
+def create_survivor_handler(
+    source_entity_uuid: UUID,
+    *,
+    handler_uuid: UUID | None = None,
+) -> EventHandler:
     """Create EventHandler for Survivor turn start healing."""
     return EventHandler(
+        **({} if handler_uuid is None else {"uuid": handler_uuid}),
         name="Survivor",
         source_entity_uuid=source_entity_uuid,
         trigger_conditions=[

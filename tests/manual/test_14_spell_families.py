@@ -15,13 +15,13 @@ from dnd.core.base_conditions import BaseCondition, SpellProtectionRegistry
 from dnd.core.base_object import BaseObject
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.events import (
-    AbilityName,
     DamageAppliedEvent,
     EventPhase,
     EventQueue,
     EventType,
     TakeDamageEvent,
 )
+from dnd.types.abilities import AbilityName
 from dnd.core.gridmap import GridMap, get_map
 from dnd.core.creature_types import CreatureType, DamageType
 from dnd.core.modifiers import (
