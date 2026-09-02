@@ -35,7 +35,7 @@ from dnd.core.base_actions import AvailableActionInfo, AvailableTarget, TargetTy
 from dnd.core.base_block import BaseBlock
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import AbilityName
+from dnd.types.abilities import AbilityName
 from dnd.core.gridmap import get_map
 from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import NumericalModifier

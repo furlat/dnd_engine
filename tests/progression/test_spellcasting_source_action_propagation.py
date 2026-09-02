@@ -7,9 +7,9 @@ from dnd.actions import SpellAction, SpellEvent
 from dnd.actions_functional import register_spell
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.core.base_actions import ActionOutcomeProfile
-from dnd.core.content.durable_characters import RitualPreparationPolicy
-from dnd.core.content.identities import ContentDefinitionKind, ContentRef
-from dnd.core.events import AbilityName, EventPhase
+from dnd.core.events import EventPhase
+from dnd.types.abilities import AbilityName
+from dnd.types.character_progression import RitualPreparationPolicy
 from dnd.core.creature_types import DamageType
 from dnd.core.progression import CasterProgression
 from dnd.entity import Entity, EntityConfig
@@ -56,13 +56,7 @@ def _multiclass_caster() -> tuple[Entity, UUID, UUID]:
         caster.spellcasting.add_source(
             source_id,
             cast(AbilityName, ability),
-            provider_ref=ContentRef(
-                pack_id="fixture.spell_source_propagation",
-                definition_kind=ContentDefinitionKind.CLASS,
-                content_id=content_id,
-                content_version=1,
-                definition_contract_hash="a" * 64,
-            ),
+            provider_id=content_id,
             caster_progression=CasterProgression.FULL_CASTER,
             provider_level=5,
             maximum_spell_rank=3,

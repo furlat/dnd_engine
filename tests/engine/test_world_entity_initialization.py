@@ -1,5 +1,6 @@
 """Public chronology and ownership proofs for cold world/entity birth."""
 
+from dataclasses import replace
 from uuid import uuid4
 
 import pytest
@@ -8,13 +9,13 @@ from pydantic import ValidationError
 from dnd.actions_functional import setup_standard_actions
 from dnd.blocks.base_item import BaseItem
 from dnd.blocks.inventory import Inventory
-from dnd.content_system.creature_materialization import materialize_creature
-from dnd.core.base_block import BaseBlock
-from dnd.core.content.encounters import AuthoredCreatureRosterSource
-from dnd.core.content.materialization import (
-    CreatureDeploymentRole,
-    CreaturePossessionMode,
+from dnd.content.characters.builds import create_character
+from dnd.content.characters.premades import (
+    PREMADE_CHARACTER_BUILDS,
+    SORCERER_PREMADE_ID,
 )
+from dnd.core.base_block import BaseBlock
+from dnd.core.content.encounters import RosterItemGrant
 from dnd.core.creature_types import DamageType
 from dnd.core.equipment_types import ArmorType, WeaponProperty
 from dnd.core.events import (
@@ -48,6 +49,12 @@ from dnd.items.torches import WallTorch
 def _events():
     """Return the current objective stream through its indexed public read."""
     return tuple(event for _, event in EventQueue.iter_events_since(0))
+
+
+def _skeleton_creature_encounter_recipe():
+    """Retain the authored battlefield and its creature-only roster."""
+    recipe = encounter_recipe("encounter.standard_skeleton_doors")
+    return recipe.model_copy(update={"roster_slots": recipe.roster_slots[1:]})
 
 
 def _expected_entity_created_fields(entity: Entity) -> dict[str, object]:
@@ -128,9 +135,12 @@ def _expected_entity_created_fields(entity: Entity) -> dict[str, object]:
     return {
         "entity_uuid": entity.uuid,
         "entity_kind_id": (
-            entity.content_ref.identity_key
-            if entity.content_ref is not None
-            else f"{type(entity).__module__}.{type(entity).__qualname__}"
+            entity.character_body_id
+            or (
+                entity.content_ref.identity_key
+                if entity.content_ref is not None
+                else f"{type(entity).__module__}.{type(entity).__qualname__}"
+            )
         ),
         "entity_name": entity.name,
         "entity_description": entity.description,
@@ -144,23 +154,12 @@ def _expected_entity_created_fields(entity: Entity) -> dict[str, object]:
             if entity.content_ref is not None
             else None
         ),
-        "species_ref": (
-            entity.character_species_ref.identity_key
-            if entity.character_species_ref is not None
-            else None
-        ),
-        "species_variant_ref": (
-            entity.character_species_variant_ref.identity_key
-            if entity.character_species_variant_ref is not None
-            else None
-        ),
-        "background_ref": (
-            entity.character_background_ref.identity_key
-            if entity.character_background_ref is not None
-            else None
-        ),
-        "applied_origin_state": entity.character_origin_state,
-        "class_levels": entity.character_class_levels,
+        "character_body_id": entity.character_body_id,
+        "species": entity.character_species,
+        "species_variant": entity.character_species_variant,
+        "background": entity.character_background,
+        "applied_origin_state": entity.applied_origin_state,
+        "applied_class_levels": entity.applied_class_levels,
         "ability_scores": tuple(
             (ability.name, ability.ability_score.score)
             for ability in entity.ability_scores.abilities_list
@@ -211,13 +210,21 @@ def _expected_entity_created_fields(entity: Entity) -> dict[str, object]:
         "death_save_successes": entity.death_save_successes,
         "death_save_failures": entity.death_save_failures,
         "origin_capabilities": tuple(sorted(
-            capability.value
-            for capability, sources in entity.origin_capability_sources.items()
-            if sources
+            (
+                capability
+                for capability, sources
+                in entity.origin_capability_sources.items()
+                if sources
+            ),
+            key=lambda capability: capability.value,
         )),
         "body_semantics": tuple(body_semantics),
         "appearance": appearance,
-        "feature_ids": entity.character_feature_ids,
+        "feature_ids": tuple(sorted(
+            feature_id
+            for feature_id, sources in entity.feature_sources.items()
+            if sources
+        )),
         "weapon_proficiencies": tuple(weapon_proficiencies),
         "armor_proficiencies": tuple(
             armor_type.value
@@ -274,7 +281,7 @@ def _expected_entity_created_fields(entity: Entity) -> dict[str, object]:
         )),
         "attack_multiplicity": tuple(
             (
-                grant.provider_ref.identity_key,
+                grant.provider_id,
                 grant.attacks_per_attack_action,
                 grant.acquisition_ordinal,
             )
@@ -284,7 +291,7 @@ def _expected_entity_created_fields(entity: Entity) -> dict[str, object]:
         "spell_sources": tuple(
             (
                 source.source_kind,
-                source.provider_ref.identity_key,
+                source.provider_id,
                 source.ability,
                 source.provider_level,
                 source.maximum_spell_rank,
@@ -302,8 +309,8 @@ def _expected_entity_created_fields(entity: Entity) -> dict[str, object]:
         "reaction_spell_ids": tuple(sorted(
             entity.spellcasting.learned_reaction_spell_handlers
         )),
-        "prepared_spell_ids": entity.character_prepared_spell_ids,
-        "feature_toggle_ids": entity.character_feature_toggle_ids,
+        "prepared_spell_selections": entity.prepared_spell_selections,
+        "feature_toggle_selections": entity.feature_toggle_selections,
         "spell_slots": tuple(
             (
                 rank,
@@ -640,21 +647,19 @@ def test_entity_birth_is_one_complete_fact_and_precedes_deployment() -> None:
 def test_rich_entity_birth_matches_all_declared_aggregate_fields() -> None:
     """One real composed character publishes every field without omission."""
     reset_engine_runtime()
-    recipe = encounter_recipe("encounter.standard_skeleton_doors")
-    recipe_slot = recipe.roster_slots[0]
-    member = recipe_slot.roster.members[0]
-    assert isinstance(member.source, AuthoredCreatureRosterSource)
-
-    entity = materialize_creature(
-        member.source.recipe,
-        runtime_entity_uuid=uuid4(),
-        display_name="Rich entity birth proof",
-        faction=recipe_slot.faction_id,
-        position=(2, 2),
-        deployment_role=CreatureDeploymentRole(role_id="test.rich_birth"),
-        possession_mode=(
-            CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS
+    premade = PREMADE_CHARACTER_BUILDS[SORCERER_PREMADE_ID]
+    entity = create_character(
+        replace(
+            premade,
+            name="Rich entity birth proof",
+            position=(2, 2),
+            item_loadout=tuple(
+                row
+                for row in premade.item_loadout
+                if row.item_id != "equipment.portable_torch"
+            ),
         ),
+        runtime_entity_uuid=uuid4(),
     )
     expected = _expected_entity_created_fields(entity)
     declared_fields = tuple(
@@ -663,8 +668,8 @@ def test_rich_entity_birth_matches_all_declared_aggregate_fields() -> None:
         if field_name not in Event.model_fields
     )
     assert tuple(expected) == declared_fields
-    assert len(declared_fields) == 64
-    assert expected["class_levels"]
+    assert len(declared_fields) == 65
+    assert expected["applied_class_levels"]
     assert expected["feature_ids"]
     assert expected["handler_ids"]
     assert expected["spell_sources"]
@@ -672,7 +677,12 @@ def test_rich_entity_birth_matches_all_declared_aggregate_fields() -> None:
     assert expected["items"]
     assert expected["equipment"]
 
-    created = entity.compose_entity()
+    created = next(
+        event
+        for event in _events()
+        if isinstance(event, EntityCreatedEvent)
+        and event.entity_uuid == entity.uuid
+    )
 
     assert {
         field_name: getattr(created, field_name)
@@ -709,7 +719,7 @@ def test_prepared_scenario_uses_one_passed_game_and_required_chronology() -> Non
     game = Game()
 
     assembled = prepare_encounter_recipe(
-        encounter_recipe("encounter.standard_skeleton_doors"),
+        _skeleton_creature_encounter_recipe(),
         game=game,
     )
     events = _events()
@@ -758,9 +768,13 @@ def test_prepared_scenario_uses_one_passed_game_and_required_chronology() -> Non
     }
     for entity in assembled.entities:
         created = created_by_entity[entity.uuid]
-        assert created.applied_origin_state == entity.character_origin_state
-        assert created.class_levels == entity.character_class_levels
-        assert created.feature_ids == entity.character_feature_ids
+        assert created.applied_origin_state == entity.applied_origin_state
+        assert created.applied_class_levels == entity.applied_class_levels
+        assert created.feature_ids == tuple(sorted(
+            feature_id
+            for feature_id, sources in entity.feature_sources.items()
+            if sources
+        ))
         assert len(created.feature_ids) == len(set(created.feature_ids))
         assert created.action_ids == tuple(sorted(
             action.get_semantic_key()
@@ -784,40 +798,6 @@ def test_prepared_scenario_uses_one_passed_game_and_required_chronology() -> Non
         assert {item.item_uuid for item in created.items}.issuperset(
             entity.inventory.items,
         )
-    hero = assembled.entities_by_member_address[("roster_1", "hero")]
-    hero_birth = created_by_entity[hero.uuid]
-    assert hero_birth.applied_origin_state is not None
-    base_scores, flexible_bonuses, origin_choices = (
-        hero_birth.applied_origin_state
-    )
-    assert {ability for ability, _score in base_scores} == {
-        "strength",
-        "dexterity",
-        "constitution",
-        "intelligence",
-        "wisdom",
-        "charisma",
-    }
-    assert tuple(amount for _ability, amount in flexible_bonuses) == (2, 1)
-    assert origin_choices
-    assert all(values for _choice_id, values in origin_choices)
-    choice_values = {
-        choice_id: values
-        for level in hero_birth.class_levels
-        for choice_id, values in level[5]
-    }
-    assert any(
-        "quickened_spell" in value
-        for values in choice_values.values()
-        for value in values
-    )
-    assert any(
-        "twinned_spell" in value
-        for values in choice_values.values()
-        for value in values
-    )
-    assert any("quickened_spell" in value for value in hero_birth.feature_ids)
-    assert any("twinned_spell" in value for value in hero_birth.feature_ids)
 
 
 def test_authored_world_rejects_a_vetoed_torch_without_false_light() -> None:
@@ -944,9 +924,26 @@ def test_scenario_immediate_grant_failure_discards_every_provisional_owner(
         fail_after_first_grant,
     )
 
+    recipe = _skeleton_creature_encounter_recipe()
+    slot = recipe.roster_slots[0]
+    first_member, *remaining_members = slot.roster.members
+    first_member = first_member.model_copy(update={
+        "scenario_setup_effects": (
+            RosterItemGrant(item_id="equipment.portable_torch"),
+        ),
+    })
+    roster = slot.roster.model_copy(update={
+        "members": (first_member, *remaining_members),
+    })
+    recipe = recipe.model_copy(update={
+        "roster_slots": (
+            slot.model_copy(update={"roster": roster}),
+        ),
+    })
+
     with pytest.raises(RuntimeError, match="immediate grant failure"):
         prepare_encounter_recipe(
-            encounter_recipe("encounter.standard_skeleton_doors"),
+            recipe,
             game=game,
         )
 
@@ -991,7 +988,7 @@ def test_second_member_prevalidation_failure_publishes_no_partial_births(
 
     with pytest.raises(RuntimeError, match="second-member validation failure"):
         prepare_encounter_recipe(
-            encounter_recipe("encounter.standard_skeleton_doors"),
+            _skeleton_creature_encounter_recipe(),
             game=game,
         )
 

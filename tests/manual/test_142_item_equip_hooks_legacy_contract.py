@@ -16,7 +16,8 @@ from dnd.core.equipment_types import (
     EquipmentSlot,
     WeaponSlot,
 )
-from dnd.core.events import AbilityName, Event, EventPhase, Range, RangeType
+from dnd.core.events import Event, EventPhase, Range, RangeType
+from dnd.types.abilities import AbilityName
 from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import ModifiableValue

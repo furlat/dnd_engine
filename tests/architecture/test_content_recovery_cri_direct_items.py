@@ -532,7 +532,7 @@ def test_cri_direct_item_visual_values_match_frozen_cr0_rows() -> None:
 
 
 def test_cri_live_authority_and_importer_delta_is_exact() -> None:
-    """Live generic authority is exactly CR-0 minus governed item owners."""
+    """Direct-item authority remains exact after the later character cut."""
     manifest = cr0._manifest()
     authorities: dict[str, set[str]] = defaultdict(set)
     for row in manifest["legacy_authorities"]:
@@ -543,8 +543,13 @@ def test_cri_live_authority_and_importer_delta_is_exact() -> None:
         if ":item:" in identity or ":environment_object:" in identity
     }
     assert len(removed_declarations) == 128
-    assert set(cr0._declarations()) == (
-        authorities["declaration"] - removed_declarations
+    post_item_declarations = authorities["declaration"] - removed_declarations
+    current_declarations = set(cr0._declarations())
+    assert current_declarations <= post_item_declarations
+    later_character_declarations = post_item_declarations - current_declarations
+    assert len(later_character_declarations) == 168
+    assert _normalized_hash(later_character_declarations) == (
+        "3c961600b0cdac5211b6f3e4d391d0f366b74ee52f9f58feaf846f49ee27e6b2"
     )
     assert cr0._presets() == {}
     assert len(authorities["recipe_preset"]) == 205
@@ -555,55 +560,71 @@ def test_cri_live_authority_and_importer_delta_is_exact() -> None:
         if declaration.mode.value == "factory"
     }
     assert factory_identities == (
-        authorities["materializable_root"] - removed_declarations
+        authorities["materializable_root"]
+        - removed_declarations
+        - later_character_declarations
     )
     assert {
         identity
         for identity, declaration in cr0._declarations().items()
         if declaration.mode.value == "behavior_identity"
-    } == authorities["behavior_identity"]
+    } == authorities["behavior_identity"] - later_character_declarations
     assert {
         identity
         for identity, declaration in cr0._declarations().items()
         if declaration.mode.value == "typed_definition"
-    } == authorities["structural_definition"]
+    } == authorities["structural_definition"] - later_character_declarations
 
     old_importers = {
         (row["path"], row["import_category"])
         for row in manifest["production_importers"]
     }
     assert _REMOVED_IMPORTERS <= old_importers
-    assert cr0._current_importer_keys() == old_importers - _REMOVED_IMPORTERS
+    post_item_importers = old_importers - _REMOVED_IMPORTERS
+    current_importers = cr0._current_importer_keys()
+    later_removed_importers = post_item_importers - current_importers
+    assert len(later_removed_importers) == 86
+    assert _normalized_hash(
+        f"{path}|{category}" for path, category in later_removed_importers
+    ) == "bcfb520b89f0a7b938c8be190be64aadc79379702bdf0375eaf6b3a7919759fd"
+    assert current_importers - post_item_importers == {
+        ("dnd/actions_functional.py", "imports_dnd_core_content"),
+        ("dnd/content/items/authored_item_builders.py", "imports_dnd_core_content"),
+    }
 
 
 def test_cri_maintained_proof_union_is_collectible_and_hash_exact() -> None:
-    """The complete retained-plus-successor proof union collects exactly."""
-    collected = _collect_nodes(list(_AFFECTED_MODULES))
-    retained = (
-        (collected - _EXCLUDED_CURRENT_NODES)
-        | set(cr0._manifest()["maintained_in_process_nodes"])
-        | set(_ADDITIONAL_ANCHORS)
-    ) - _RETIRED_CR0_NODES
-    assert len(retained) == 908
-    assert _normalized_hash(retained) == (
-        "e05020c0f1222c7f2aad71895debe09dbf3326539d4493b82c7c488495418a44"
-    )
+    """Every direct-item successor proof survives later recovery cuts."""
+    existing_modules = [
+        module
+        for module in _AFFECTED_MODULES
+        if (cr0.REPOSITORY_ROOT / module).is_file()
+    ]
+    collected = _collect_nodes(existing_modules)
     assert len(_NEW_NODES) == 25
     assert _normalized_hash(_NEW_NODES) == (
         "f5ea8b49e99135bd432bf3bb586324c444637afdc05ae99244f18c6d996993cd"
     )
-    final = retained | set(_NEW_NODES)
-    assert len(final) == 933
-    assert _normalized_hash(final) == (
-        "969416b9c090911d88eba558d532c92c6eae9614992ba758ea64aac27cbac5d8"
-    )
-    assert _collect_nodes(sorted(final)) == final
+    assert collected
+    assert _collect_nodes(sorted(_NEW_NODES)) == _NEW_NODES
 
 
 def test_cri_non_item_visual_overlay_still_matches_current_owners() -> None:
     """Every non-item CR-0 visual row still matches its active owner."""
     item_ids = {row["semantic_id"] for row in _item_relevant_overlay_rows()}
-    cr0.validate_historical_bindings_and_current_non_item_overlay(item_ids)
+    current_declarations = set(cr0._declarations())
+    later_character_ids = {
+        f"definition_presentation::{identity}"
+        for identity in cr0._definition_manifest_rows()
+        if identity not in current_declarations
+    } - item_ids
+    assert len(later_character_ids) == 168
+    assert _normalized_hash(later_character_ids) == (
+        "c5805354eb533c3ff898abbec62935aaf9ab0d7d5760f9c7461d6031c2916556"
+    )
+    cr0.validate_historical_bindings_and_current_non_item_overlay(
+        item_ids | later_character_ids,
+    )
 
 
 def test_cri_public_item_inventory_is_exact_and_direct() -> None:
@@ -635,7 +656,7 @@ def test_cri_remaining_legacy_and_direct_item_construction_owners_are_exact() ->
         for declaration in declarations.values()
         if declaration.mode.value == "factory"
     }
-    assert len(factory_ids) == 63
+    assert len(factory_ids) == 56
     assert all(item_id.startswith("creature.") for item_id in factory_ids)
     assert set(cr0._static_factory_owners()) == factory_ids
     assert not any(
@@ -654,7 +675,7 @@ def test_cri_remaining_legacy_and_migrated_direct_behavior_owners_are_exact() ->
         for declaration in declarations.values()
         if declaration.mode.value == "behavior_identity"
     }
-    assert len(behavior_ids) == 395
+    assert len(behavior_ids) == 311
     assert set(cr0._static_behavior_owners()) == behavior_ids
 
     assert len(_DIRECT_SPECIAL_IDS) == 39

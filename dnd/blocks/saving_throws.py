@@ -3,15 +3,9 @@ from uuid import UUID, uuid4, uuid5
 from pydantic import BaseModel, Field,  computed_field
 from dnd.core.values import ModifiableValue
 from dnd.core.modifiers import NumericalModifier
-from typing import Literal as TypeLiteral
-
 from dnd.core.base_block import BaseBlock
-from dnd.core.events import AbilityName
 from dnd.core.proficiency_types import ProficiencyMode, ProficiencySourceSet
-SavingThrowName = TypeLiteral[
-    'strength_saving_throw', 'dexterity_saving_throw', 'constitution_saving_throw',
-    'intelligence_saving_throw', 'wisdom_saving_throw', 'charisma_saving_throw'
-]
+from dnd.types.abilities import AbilityName, SavingThrowName
 
 saving_throw_name_to_ability = {
     "strength_saving_throw": "strength",

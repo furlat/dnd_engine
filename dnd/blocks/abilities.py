@@ -1,20 +1,17 @@
-from typing import Dict, Optional, List, Literal, Tuple
+from typing import Dict, Optional, List, Tuple
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field,  computed_field
 from dnd.core.values import ModifiableValue
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.proficiency_types import ProficiencyMode, ProficiencySourceSet
 
-from dnd.core.events import AbilityName
+from dnd.types.abilities import AbilityName
 
 from dnd.core.base_block import BaseBlock
 
 def ability_score_normalizer(score: int) -> int:
     """ Normalizes the ability score to obtain the modifier with: (score - 10) // 2 """
     return (score - 10) // 2
-abilities = Literal['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma']
-
-
 class AbilityConfig(BaseModel):
     """
     Configuration for an Ability block.
@@ -153,7 +150,7 @@ class Ability(BaseBlock):
     @classmethod
     def create(cls, source_entity_uuid: UUID, source_entity_name: Optional[str] = None,
                 target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None,
-                name: Literal['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'] = 'strength', config: Optional[AbilityConfig] = None) -> 'Ability':
+                name: AbilityName = 'strength', config: Optional[AbilityConfig] = None) -> 'Ability':
         """
         Create a new BaseBlock instance with the given parameters. Subclasses should override this method to add their own attributes and handle the modifiable values initialization in the method.
 
@@ -274,7 +271,7 @@ class AbilityScores(BaseBlock):
         return [self.strength, self.dexterity, self.constitution, self.intelligence, self.wisdom, self.charisma]
     @computed_field
     @property
-    def ability_blocks_uuid_by_name(self) -> Dict[abilities, UUID]:
+    def ability_blocks_uuid_by_name(self) -> Dict[AbilityName, UUID]:
         """
         A dictionary mapping ability names to their UUIDs.
 
@@ -291,7 +288,7 @@ class AbilityScores(BaseBlock):
         }
     @computed_field
     @property
-    def ability_blocks_names_by_uuid(self) -> Dict[UUID, abilities]:
+    def ability_blocks_names_by_uuid(self) -> Dict[UUID, AbilityName]:
         """
         A dictionary mapping ability UUIDs to their names.
 
@@ -331,7 +328,7 @@ class AbilityScores(BaseBlock):
             return ability_object.modifier
         raise ValueError(f"No Ability found with UUID {ability_uuid}")
 
-    def get_modifier_from_name(self, ability_name: abilities) -> int:
+    def get_modifier_from_name(self, ability_name: AbilityName) -> int:
         """
         Get the modifier for a specific ability by its name.
 

@@ -13,7 +13,8 @@ from dnd.core.base_actions import (
 )
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition
-from dnd.core.events import Event, EventPhase, SkillName
+from dnd.core.events import Event, EventPhase
+from dnd.types.abilities import SkillName
 from dnd.core.gridmap import get_map
 from dnd.core.item_types import ItemPresentationState
 from dnd.blocks.base_item import UsableItem

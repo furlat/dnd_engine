@@ -60,7 +60,6 @@ _FORBIDDEN_PACK_IMPORT_PREFIXES = (
     "dnd.content_system",
     "dnd.controller",
     "dnd.encounter",
-    "dnd.premade_characters",
     "dnd.runtime_reset",
     "dnd.scenarios",
 )

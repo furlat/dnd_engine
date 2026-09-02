@@ -59,7 +59,7 @@ from dnd.core.content.registration import (
     creature_factory,
     get_content_declaration,
 )
-from dnd.core.events import AbilityName
+from dnd.types.abilities import AbilityName
 from dnd.core.creature_types import CreatureType, DamageType, Size
 from dnd.content_system.action_definitions import (
     ACTION_BEHAVIOR_DECLARATIONS_BY_CLASS,

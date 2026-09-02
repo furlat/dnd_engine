@@ -15,7 +15,8 @@ from dnd.core.condition_types import ConditionRemovalTrigger, DurationType
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus
 
 from dnd.core.dice import  DiceRoll, AttackOutcome, RollType
-from dnd.core.events import RangeType, Event, EventQueue, EventType, Range, Damage, EventPhase, DamageRollPacket, DamageRollResultEvent, StepMovementEvent, ForcedMovementEvent, SkillCheckEvent, SpatialChangeEvent, AbilityName, MovementTrajectory
+from dnd.core.events import RangeType, Event, EventQueue, EventType, Range, Damage, EventPhase, DamageRollPacket, DamageRollResultEvent, StepMovementEvent, ForcedMovementEvent, SkillCheckEvent, SpatialChangeEvent, MovementTrajectory
+from dnd.types.abilities import AbilityName
 from dnd.core.elevation import support_distance_feet
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.effect_types import EffectOrigin
@@ -544,6 +545,7 @@ class Move(BaseAction):
         if not self.template:
             raise ValueError("Can only instantiate from a template")
 
+        registered_template_uuid = self.registered_template_uuid or self.uuid
         update_dict: dict = {
             "uuid": uuid4(),
             "template": False,
@@ -552,6 +554,7 @@ class Move(BaseAction):
             "costs": [],
         }
         update_dict.update(overrides)
+        update_dict["registered_template_uuid"] = registered_template_uuid
 
         instance = self.model_copy(deep=True, update=update_dict)
 
@@ -1177,6 +1180,9 @@ class TraverseConnector(BaseAction):
                 "uuid": uuid4(),
                 "template": False,
                 "use_register": False,
+                "registered_template_uuid": (
+                    self.registered_template_uuid or self.uuid
+                ),
                 "connector_traversal": discovery,
                 "costs": self._variant_costs(connector),
             }))
@@ -4716,6 +4722,7 @@ class SpellAction(BaseAction):
         Returns:
             A new SpellAction instance configured for this cast level
         """
+        registered_template_uuid = self.registered_template_uuid or self.uuid
         update_dict: dict = {
             "uuid": uuid4(),
             "cast_at_level": cast_at_level,
@@ -4732,6 +4739,7 @@ class SpellAction(BaseAction):
             "alt_skip_slot": False,
         }
         update_dict.update(overrides)
+        update_dict["registered_template_uuid"] = registered_template_uuid
 
         return self.model_copy(deep=False, update=update_dict)
 

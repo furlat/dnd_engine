@@ -4,7 +4,6 @@ from uuid import uuid4
 
 import pytest
 
-from dnd.classes.content_factories import PLAYER_CLASS_CREATURE_RECIPES_BY_ID
 from dnd.content_system.creature_materialization import materialize_creature
 from dnd.core.content.materialization import (
     CreatureDeploymentRole,
@@ -24,16 +23,15 @@ def _reset_engine():
 
 @pytest.mark.parametrize(
     ("creature_id", "recipe"),
-    tuple(BESTIARY_CREATURE_RECIPES_BY_ID.items())
-    + tuple(PLAYER_CLASS_CREATURE_RECIPES_BY_ID.items()),
+    tuple(BESTIARY_CREATURE_RECIPES_BY_ID.items()),
 )
 @pytest.mark.parametrize("possession_mode", tuple(CreaturePossessionMode))
-def test_all_eleven_roots_materialize_both_possession_modes(
+def test_all_bestiary_roots_materialize_both_possession_modes(
     creature_id: str,
     recipe: ContentRecipe,
     possession_mode: CreaturePossessionMode,
 ) -> None:
-    """All roots construct, and default mode installs direct possessions."""
+    """All creature roots construct, and default mode installs possessions."""
     entity = materialize_creature(
         recipe,
         runtime_entity_uuid=uuid4(),

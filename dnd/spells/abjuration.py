@@ -38,7 +38,8 @@ from dnd.core.content.registration import get_content_declaration
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.core.effect_types import EffectOriginKind
-from dnd.core.events import AbilityName, Event, EventPhase, EventType, EventHandler, Trigger, RangeType, Range, EventQueue, SpatialChangeEvent, TakeDamageEvent, InstantDeathEvent, D20RollResultEvent, HealRollResultEvent
+from dnd.core.events import Event, EventPhase, EventType, EventHandler, Trigger, RangeType, Range, EventQueue, SpatialChangeEvent, TakeDamageEvent, InstantDeathEvent, D20RollResultEvent, HealRollResultEvent
+from dnd.types.abilities import AbilityName
 from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import (
     ResistanceModifier,
@@ -976,7 +977,7 @@ def counterspell_reaction_processor(
     if learned_spell_ref is not None:
         source_ids = (
             entity.spellcasting.learned_reaction_spell_source_ids(
-                learned_spell_ref,
+                learned_spell_ref.content_id,
             )
         )
         if not source_ids:

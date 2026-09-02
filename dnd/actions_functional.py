@@ -22,6 +22,7 @@ from dnd.core.events import (
 )
 from dnd.blocks.equipment import Weapon, WeaponEquipEvent, WeaponUnequipEvent
 from dnd.core.equipment_types import WeaponSlot
+from dnd.core.content.runtime import BehaviorBinding
 from dnd.entity import Entity
 from dnd.actions import Move, Swim, Dash, Dodge, Disengage, DropConcentration, ShakeAwake, Hide, Attack, Jump, Shove, PickUp, AttackObject, Drop, SpellAction
 from dnd.conditions import (
@@ -80,18 +81,38 @@ def setup_standard_actions(entity: Entity) -> None:
     entity.registered_actions = []
     _remove_standard_action_handlers(entity)
 
-    entity.register_action(Move(source_entity_uuid=entity.uuid, template=True))
-    entity.register_action(Swim(source_entity_uuid=entity.uuid, template=True))
-    entity.register_action(Jump(source_entity_uuid=entity.uuid, template=True))
-    entity.register_action(Dash(source_entity_uuid=entity.uuid, template=True))
-    entity.register_action(Dodge(source_entity_uuid=entity.uuid, template=True))
-    entity.register_action(Disengage(source_entity_uuid=entity.uuid, template=True))
-    entity.register_action(Hide(source_entity_uuid=entity.uuid, template=True))
-    entity.register_action(DropConcentration(source_entity_uuid=entity.uuid, template=True))
-    entity.register_action(ShakeAwake(source_entity_uuid=entity.uuid, template=True))
-    entity.register_action(Shove(source_entity_uuid=entity.uuid, template=True))
-    entity.register_action(PickUp(source_entity_uuid=entity.uuid, template=True))
-    entity.register_action(AttackObject(source_entity_uuid=entity.uuid, template=True))
+    for action, behavior_id in (
+        (Move(source_entity_uuid=entity.uuid, template=True), "action.move"),
+        (Swim(source_entity_uuid=entity.uuid, template=True), "action.swim"),
+        (Jump(source_entity_uuid=entity.uuid, template=True), "action.jump"),
+        (Dash(source_entity_uuid=entity.uuid, template=True), "action.dash"),
+        (Dodge(source_entity_uuid=entity.uuid, template=True), "action.dodge"),
+        (
+            Disengage(source_entity_uuid=entity.uuid, template=True),
+            "action.disengage",
+        ),
+        (Hide(source_entity_uuid=entity.uuid, template=True), "action.hide"),
+        (
+            DropConcentration(source_entity_uuid=entity.uuid, template=True),
+            "action.drop_concentration",
+        ),
+        (
+            ShakeAwake(source_entity_uuid=entity.uuid, template=True),
+            "action.shake_awake",
+        ),
+        (Shove(source_entity_uuid=entity.uuid, template=True), "action.shove"),
+        (PickUp(source_entity_uuid=entity.uuid, template=True), "action.pick_up"),
+        (
+            AttackObject(source_entity_uuid=entity.uuid, template=True),
+            "action.attack_object",
+        ),
+    ):
+        action.behavior_binding = BehaviorBinding(
+            behavior_id=behavior_id,
+            provided_by_id=behavior_id,
+            runtime_owner_uuid=entity.uuid,
+        )
+        entity.register_action(action)
 
     update_weapon_templates(entity)
 
@@ -200,12 +221,18 @@ def update_weapon_template(entity: Entity, slot: WeaponSlot) -> None:
 
     weapon = entity.equipment._get_weapon_by_slot(slot)
     if weapon is not None and isinstance(weapon, Weapon):
-        entity.register_action(Attack(
+        action = Attack(
             source_entity_uuid=entity.uuid,
             weapon_slot=slot,
             name=template_name,
-            template=True
-        ))
+            template=True,
+            behavior_binding=BehaviorBinding(
+                behavior_id="action.attack",
+                provided_by_id="action.attack",
+                runtime_owner_uuid=entity.uuid,
+            ),
+        )
+        entity.register_action(action)
 
 
 def update_weapon_templates(entity: Entity) -> None:
@@ -305,12 +332,14 @@ def _bind_executable_action(action: BaseAction, **overrides) -> BaseAction:
     if action.template:
         return action.instantiate(**overrides)
 
+    registered_template_uuid = action.registered_template_uuid or action.uuid
     update_dict: dict = {
         "uuid": uuid4(),
         "template": False,
         "use_register": False,
     }
     update_dict.update(overrides)
+    update_dict["registered_template_uuid"] = registered_template_uuid
     return action.model_copy(deep=True, update=update_dict)
 
 

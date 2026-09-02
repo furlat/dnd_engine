@@ -26,7 +26,7 @@ from dnd.core.content.registration import (
     get_content_declaration,
 )
 from dnd.core.content.runtime import RuntimeBehaviorKind
-from dnd.core.events import AbilityName
+from dnd.types.abilities import AbilityName
 from dnd.core.creature_types import DamageType
 import dnd.spells.abjuration as abjuration
 import dnd.spells.conjuration as conjuration

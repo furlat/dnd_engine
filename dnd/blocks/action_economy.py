@@ -617,6 +617,18 @@ class ActionEconomy(BaseBlock):
         resource = self.resources.get(name)
         return resource.current if resource else 0
 
+    def set_resource_current(self, name: str, current: int) -> None:
+        """Set current uses within one existing resource's owned capacity."""
+        resource = self.resources.get(name)
+        if resource is None:
+            raise KeyError(f"resource {name!r} is not installed")
+        if not 0 <= current <= resource.maximum:
+            raise ValueError(
+                f"resource {name!r} current must be between 0 and "
+                f"{resource.maximum}",
+            )
+        resource.current = current
+
     def on_short_rest(self) -> None:
         """Recharge resources that recharge on short rest."""
         for resource in self.resources.values():
@@ -703,7 +715,11 @@ class ActionEconomy(BaseBlock):
                     f"for rank {rank}"
                 )
             return existing_uuid
-        floor = NumericalModifier.create(
+        floor = NumericalModifier(
+            uuid=uuid5(
+                self.source_entity_uuid,
+                f"dnd-engine:normal-spell-slot-floor:v1:{rank}",
+            ),
             source_entity_uuid=self.source_entity_uuid,
             name="Normal Spell Slot Availability Floor",
             value=0,
@@ -711,6 +727,30 @@ class ActionEconomy(BaseBlock):
         value.self_static.add_min_constraint(floor)
         self._normal_spell_slot_floor_modifier_uuids[rank] = floor.uuid
         return floor.uuid
+
+    def _release_unused_normal_spell_slot_floors(self) -> None:
+        """Release exact floors after both capacity and spend are absent."""
+        if self._normal_spell_slot_capacity_receipt is not None:
+            return
+        for rank, floor_uuid in tuple(
+            self._normal_spell_slot_floor_modifier_uuids.items()
+        ):
+            if self.get_cost_modifiers(spell_slot_cost_type(rank)):
+                continue
+            value = self.spell_slot_value(rank)
+            floor = value.self_static.min_constraints.get(floor_uuid)
+            if (
+                floor is None
+                or floor.name != "Normal Spell Slot Availability Floor"
+                or floor.value != 0
+            ):
+                raise RuntimeError(
+                    "normal spell-slot availability floor ownership conflict "
+                    f"for rank {rank}"
+                )
+            value.self_static.remove_min_constraint(floor_uuid)
+            floor.remove_from_register()
+            self._normal_spell_slot_floor_modifier_uuids.pop(rank)
 
     def set_normal_spell_slot_capacity(
         self,
@@ -765,11 +805,16 @@ class ActionEconomy(BaseBlock):
             self.spell_slot_value(rank).self_static.remove_value_modifier(
                 modifier_uuid
             )
+            NumericalModifier.unregister(modifier_uuid)
 
         new_handles: List[Tuple[int, UUID]] = []
         for rank in range(1, 10):
             self._ensure_normal_spell_slot_floor(rank)
-            capacity_modifier = NumericalModifier.create(
+            capacity_modifier = NumericalModifier(
+                uuid=uuid5(
+                    source_id,
+                    f"dnd-engine:normal-spell-slot-capacity:v1:{rank}",
+                ),
                 source_entity_uuid=self.source_entity_uuid,
                 name=(
                     "Normal Spell Slot Capacity "
@@ -811,7 +856,9 @@ class ActionEconomy(BaseBlock):
             self.spell_slot_value(rank).self_static.remove_value_modifier(
                 modifier_uuid
             )
+            NumericalModifier.unregister(modifier_uuid)
         self._normal_spell_slot_capacity_receipt = None
+        self._release_unused_normal_spell_slot_floors()
         return True
 
     def _get_value_for_cost_type(self, cost_type: CostType) -> ModifiableValue:
@@ -896,6 +943,8 @@ class ActionEconomy(BaseBlock):
             value = self.spell_slot_value(level)
             for modifier in self.get_cost_modifiers(cost_type):
                 value.self_static.remove_value_modifier(modifier.uuid)
+                modifier.remove_from_register()
+        self._release_unused_normal_spell_slot_floors()
 
     def consume(self, cost_type: CostType, amount: int, cost_name: Optional[str] = None) -> None:
         """Consume a turn resource, named action bucket, or spell slot.
@@ -1075,6 +1124,7 @@ class ActionEconomy(BaseBlock):
             value = self._get_value_for_cost_type(handle.cost_type)
             value.self_static.remove_value_modifier(handle.modifier_uuid)
             modifier.remove_from_register()
+        self._release_unused_normal_spell_slot_floors()
     def commit_fixed_costs_without_dispatch(
         self,
         *,

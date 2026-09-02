@@ -7,14 +7,13 @@ import pytest
 
 from dnd.actions_functional import execute_by_index, get_available_actions
 from dnd.blocks.health import HealthConfig, HitDiceConfig
-from dnd.content_system.bootstrap import bootstrap_content_system
-from dnd.content_system.builtin_character_builds import BUILTIN_PREMADE_BUILDS
-from tests.progression.materialization_support import (
-    materialize_builtin_character,
+from dnd.content.characters.premades import (
+    SPELLBLADE_PREMADE_ID,
+    create_premade_character,
 )
-from dnd.content_system.runtime import ContentSystemRuntime
 from dnd.core.events import Event
 from dnd.entity import Entity, EntityConfig
+from dnd.game import Game
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.spells.transmutation import HasteEffect
 
@@ -24,13 +23,6 @@ def _reset_engine() -> Iterator[None]:
     reset_engine_runtime(grid_size=(12, 12))
     yield
     reset_engine_runtime()
-
-
-@pytest.fixture(scope="module")
-def runtime() -> ContentSystemRuntime:
-    installed = ContentSystemRuntime()
-    installed.install(bootstrap_content_system())
-    return installed
 
 
 def _execute(
@@ -73,19 +65,13 @@ def _execute(
     return event
 
 
-def test_hasted_spellblade_casts_with_action_haste_surge_and_bonus_action(
-    runtime: ContentSystemRuntime,
-) -> None:
+def test_hasted_spellblade_casts_with_action_haste_surge_and_bonus_action() -> None:
     """Four leveled casts consume four independent BG3-style turn budgets."""
-    spellblade = materialize_builtin_character(
-        build=BUILTIN_PREMADE_BUILDS[
-            "hero.fighter_2_sorcerer_3_spellblade"
-        ],
-        display_name="Hasted Spellblade",
+    spellblade = create_premade_character(
+        SPELLBLADE_PREMADE_ID,
         faction="heroes",
         position=(2, 2),
-        runtime=runtime,
-    ).entity
+    )
     target = Entity.create(
         source_entity_uuid=uuid4(),
         name="Durable Target",
@@ -103,6 +89,10 @@ def test_hasted_spellblade_casts_with_action_haste_surge_and_bonus_action(
             faction="enemies",
         ),
     )
+    target.compose_entity()
+    game = Game()
+    game.deploy_entity(spellblade, spellblade.position)
+    game.deploy_entity(target, target.position)
     spellblade.add_condition(
         HasteEffect(
             source_entity_uuid=spellblade.uuid,

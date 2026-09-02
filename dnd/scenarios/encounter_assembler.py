@@ -11,20 +11,17 @@ from dnd.actions_functional import register_spell
 from dnd.blocks.base_item import BaseItem, EquippableItem
 from dnd.conditions import Blinded, Poisoned
 from dnd.content.items.authored_item_builders import build_authored_item
-from dnd.content_system.character_materialization import materialize_character
 from dnd.content_system.creature_bindings import CREATURE_RUNTIME_BINDINGS
 from dnd.content_system.creature_materialization import materialize_creature
 from dnd.content_system.spell_catalog_composition import (
     SPELL_CATALOG_COMPOSITION_ROWS,
 )
 from dnd.controller import Controller, PassController
-from dnd.core.content.character_deployment import CharacterDeploymentSnapshot
 from dnd.core.content.encounters import (
     AuthoredCreatureRosterSource,
     EncounterCompatibilityReport,
     EncounterRecipe,
     FixedRosterOpeningPolicy,
-    OwnedCharacterRosterSource,
     RosterBehaviorGrant,
     RosterDamageAffinity,
     RosterItemGrant,
@@ -139,7 +136,6 @@ def _materialize_member(
     recipe_slot,
     member,
     position: tuple[int, int],
-    character_deployments: Mapping[UUID, CharacterDeploymentSnapshot],
 ) -> Entity:
     role = CreatureDeploymentRole(
         role_id=(
@@ -161,54 +157,6 @@ def _materialize_member(
                 CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS
             ),
         )
-    if isinstance(source, OwnedCharacterRosterSource):
-        deployment = character_deployments.get(source.character_id)
-        if deployment is None:
-            raise IncompatibleEncounterError(
-                f"Character {source.character_id} was not resolved",
-            )
-        expected_identity = (
-            source.expected_character_row_version,
-            source.expected_definition_revision,
-            source.expected_definition_digest,
-            source.expected_holdings_revision,
-            source.expected_holdings_digest,
-            source.expected_loadout_revision,
-            source.expected_loadout_digest,
-            source.expected_ruleset_digest,
-        )
-        actual_identity = (
-            deployment.character_row_version,
-            deployment.definition.definition_revision,
-            deployment.definition.definition_digest,
-            deployment.holdings.holdings_revision,
-            deployment.holdings.holdings_digest,
-            deployment.loadout.loadout_revision,
-            deployment.loadout.loadout_digest,
-            deployment.expected_ruleset_digest,
-        )
-        if actual_identity != expected_identity:
-            raise IncompatibleEncounterError(
-                f"Character {source.character_id} changed after encounter "
-                "normalization",
-            )
-        return materialize_character(
-            definition=deployment.definition,
-            holdings=deployment.holdings,
-            loadout=deployment.loadout,
-            runtime_entity_uuid=None,
-            display_name=deployment.display_name,
-            faction=recipe_slot.faction_id,
-            position=position,
-            deployment_role=role,
-            expected_ruleset_digest=deployment.expected_ruleset_digest,
-            multiclass_slot_rounding_policy=(
-                deployment.multiclass_slot_rounding_policy
-            ),
-            permissive_multiclass_prerequisites=(
-                deployment.permissive_multiclass_prerequisites
-            ),
-        ).entity
     raise TypeError(f"Unsupported roster source: {source!r}")
 
 
@@ -456,9 +404,6 @@ def assemble_encounter_recipe(
     recipe: EncounterRecipe,
     *,
     game: Game,
-    character_deployments: (
-        Mapping[UUID, CharacterDeploymentSnapshot] | None
-    ) = None,
     start_encounter: bool = True,
 ) -> AssembledEncounter:
     """Validate and assemble one recipe into the caller-owned empty Game."""
@@ -466,14 +411,11 @@ def assemble_encounter_recipe(
         raise ValueError("scenario assembly requires an empty Game")
     if Entity.get_all_entities():
         raise ValueError("scenario assembly requires no registered Entities")
-    deployments = character_deployments or {}
     battlefield_spec = get_battlefield(recipe.battlefield_id)
     static_report = check_encounter_compatibility(
         recipe,
         battlefield_spec,
-        available_character_ids=frozenset(
-            str(character_id) for character_id in deployments
-        ),
+        available_character_ids=frozenset(),
     )
     if not static_report.admitted:
         raise IncompatibleEncounterError(
@@ -525,7 +467,6 @@ def assemble_encounter_recipe(
                     position=positions[
                         recipe_slot.roster_slot_id
                     ][member.member_id],
-                    character_deployments=deployments,
                 )
                 entities.append(entity)
                 by_address[
@@ -590,15 +531,11 @@ def prepare_encounter_recipe(
     recipe: EncounterRecipe,
     *,
     game: Game,
-    character_deployments: (
-        Mapping[UUID, CharacterDeploymentSnapshot] | None
-    ) = None,
 ) -> AssembledEncounter:
     """Build a validated encounter without crossing its start boundary."""
     return assemble_encounter_recipe(
         recipe,
         game=game,
-        character_deployments=character_deployments,
         start_encounter=False,
     )
 

@@ -8,11 +8,11 @@ for logs, sensory updates, and API streams.
 
 __all__ = [
     "EventType", "SpatialChangeType", "EventPhase", "RangeType", "MovementTrajectory",
-    "AbilityName", "SkillName",
     "Event", "Trigger", "BaseHandler", "EventHandler", "SpatialHandler", "EventQueue",
     "SensoryUpdateReason", "SensoryUpdateEvent",
     "WorldTileState", "WorldObjectState", "WorldConnectorState",
-    "WorldInitializedEvent", "EntityCreatedEvent",
+    "WorldInitializedEvent", "EntityCreatedEvent", "EntityLevelAddedEvent",
+    "EntityLevelRemovedEvent",
     "SpatialEffectChangeEvent", "SpatialEffectInteractionEvent",
     "D20Event", "SavingThrowEvent", "SkillCheckEvent",
     "RollModificationOperation", "RollModification", "DiceRollResultEvent",
@@ -37,7 +37,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from enum import Enum
 from pydantic import BaseModel, Field, ConfigDict, PrivateAttr, StrictInt, field_serializer, model_validator
-from typing import Literal as TypeLiteral, Union, List, Optional, Dict, Self, Literal, TypeVar, Protocol, runtime_checkable, Tuple, Any, Set, Iterator, Sequence, cast
+from typing import Union, List, Optional, Dict, Self, Literal, TypeVar, Protocol, runtime_checkable, Tuple, Any, Set, Iterator, Sequence, cast
 from dnd.core.values import ModifiableValue
 
 from dnd.core.combat_log import (
@@ -72,6 +72,18 @@ from dnd.types.spatial_effects import (
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.item_types import ItemPresentationState
 from dnd.types.materials import TileSurface
+from dnd.types.abilities import AbilityName, SavingThrowName, SkillName
+from dnd.types.character_progression import (
+    AppliedClassLevel,
+    AppliedOriginState,
+    Background,
+    CharacterClass,
+    FeatureToggleSelection,
+    OriginCapability,
+    PreparedSpellSelection,
+    Species,
+    SpeciesVariant,
+)
 from dnd.types.world import LightLevel
 from dnd.types.world_placement import BoundaryStructure, WorldObjectPlacement
 from dnd.core.world_edges import ElevationSurfaceKind, SlopeAxis
@@ -137,20 +149,6 @@ class EntityWithEventHandlers(Protocol):
         """
         ...
 
-AbilityName = TypeLiteral[
-    'strength', 'dexterity', 'constitution',
-    'intelligence', 'wisdom', 'charisma'
-]
-
-SkillName = TypeLiteral[
-    'acrobatics', 'animal_handling', 'arcana', 'athletics',
-    'deception', 'history', 'insight', 'intimidation',
-    'investigation', 'medicine', 'nature', 'perception',
-    'performance', 'persuasion', 'religion', 'sleight_of_hand',
-    'stealth', 'survival'
-]
-
-
 class EventType(str, Enum):
     """Kinds of state transitions that handlers and logs can subscribe to."""
 
@@ -182,6 +180,8 @@ class EventType(str, Enum):
     ITEM_CHARGE_CONSUMPTION = "item_charge_consumption"
     WORLD_INITIALIZED = "world_initialized"
     ENTITY_CREATED = "entity_created"
+    ENTITY_LEVEL_ADDED = "entity_level_added"
+    ENTITY_LEVEL_REMOVED = "entity_level_removed"
 
     TRIGGER_EVENT = "trigger_event"
 
@@ -847,31 +847,16 @@ class EntityCreatedEvent(Event):
     weight: StrictInt
     faction: Optional[str] = None
     creature_content_ref: Optional[str] = None
-    species_ref: Optional[str] = None
-    species_variant_ref: Optional[str] = None
-    background_ref: Optional[str] = None
-    applied_origin_state: Optional[
-        Tuple[
-            Tuple[Tuple[str, StrictInt], ...],
-            Tuple[Tuple[str, StrictInt], ...],
-            Tuple[Tuple[str, Tuple[str, ...]], ...],
-        ]
-    ] = None
-    class_levels: Tuple[
-        Tuple[
-            str,
-            StrictInt,
-            str,
-            StrictInt,
-            Optional[str],
-            Tuple[Tuple[str, Tuple[str, ...]], ...],
-        ],
-        ...,
-    ] = ()
-    ability_scores: Tuple[Tuple[str, StrictInt], ...] = ()
-    skill_proficiencies: Tuple[str, ...] = ()
-    skill_expertise: Tuple[str, ...] = ()
-    saving_throw_proficiencies: Tuple[str, ...] = ()
+    character_body_id: Optional[str] = None
+    species: Optional[Species] = None
+    species_variant: Optional[SpeciesVariant] = None
+    background: Optional[Background] = None
+    applied_origin_state: Optional[AppliedOriginState] = None
+    applied_class_levels: Tuple[AppliedClassLevel, ...] = ()
+    ability_scores: Tuple[Tuple[AbilityName, StrictInt], ...] = ()
+    skill_proficiencies: Tuple[SkillName, ...] = ()
+    skill_expertise: Tuple[SkillName, ...] = ()
+    saving_throw_proficiencies: Tuple[SavingThrowName, ...] = ()
     proficiency_bonus: StrictInt = 0
     initiative: StrictInt = 0
     armor_class: StrictInt = Field(default=10, ge=0)
@@ -892,7 +877,7 @@ class EntityCreatedEvent(Event):
     uses_death_saves: bool = False
     death_save_successes: StrictInt = Field(default=0, ge=0, le=3)
     death_save_failures: StrictInt = Field(default=0, ge=0, le=3)
-    origin_capabilities: Tuple[str, ...] = ()
+    origin_capabilities: Tuple[OriginCapability, ...] = ()
     body_semantics: Tuple[Tuple[str, str], ...] = ()
     appearance: Tuple[
         Tuple[str, Union[str, StrictInt, float, bool, None]], ...
@@ -914,8 +899,8 @@ class EntityCreatedEvent(Event):
     spell_sources: Tuple[Tuple[str, str, str, StrictInt, StrictInt], ...] = ()
     known_spell_ids: Tuple[str, ...] = ()
     reaction_spell_ids: Tuple[str, ...] = ()
-    prepared_spell_ids: Tuple[str, ...] = ()
-    feature_toggle_ids: Tuple[str, ...] = ()
+    prepared_spell_selections: Tuple[PreparedSpellSelection, ...] = ()
+    feature_toggle_selections: Tuple[FeatureToggleSelection, ...] = ()
     spell_slots: Tuple[Tuple[StrictInt, StrictInt], ...] = ()
     armor_class_formulas: Tuple[
         Tuple[str, StrictInt, Tuple[str, ...], bool, bool], ...
@@ -923,6 +908,46 @@ class EntityCreatedEvent(Event):
     items: Tuple[ItemPresentationState, ...] = ()
     inventory_item_uuids: Tuple[UUID, ...] = ()
     equipment: Tuple[Tuple[str, UUID], ...] = ()
+
+
+class _EntityLevelFact(Event):
+    """Shared terminal facts for one direct progression step."""
+
+    entity_uuid: UUID
+    previous_total_level: StrictInt = Field(ge=0, le=20)
+    new_total_level: StrictInt = Field(ge=0, le=20)
+    level: AppliedClassLevel
+    resulting_class_levels: Tuple[Tuple[CharacterClass, StrictInt], ...] = ()
+    applied_origin_state: Optional[AppliedOriginState] = None
+    applied_class_levels: Tuple[AppliedClassLevel, ...] = ()
+    prepared_spell_selections: Tuple[PreparedSpellSelection, ...] = ()
+    feature_toggle_selections: Tuple[FeatureToggleSelection, ...] = ()
+    changed_feature_ids: Tuple[str, ...] = ()
+    changed_action_ids: Tuple[str, ...] = ()
+    changed_handler_ids: Tuple[str, ...] = ()
+    changed_resource_ids: Tuple[str, ...] = ()
+    changed_spell_source_ids: Tuple[str, ...] = ()
+    changed_spell_ids: Tuple[str, ...] = ()
+
+
+class EntityLevelAddedEvent(_EntityLevelFact):
+    """Terminal fact for one committed direct class-level addition."""
+
+    name: str = Field(default="Entity Level Added")
+    event_type: EventType = Field(
+        default=EventType.ENTITY_LEVEL_ADDED,
+        frozen=True,
+    )
+
+
+class EntityLevelRemovedEvent(_EntityLevelFact):
+    """Terminal fact for one committed direct class-level removal."""
+
+    name: str = Field(default="Entity Level Removed")
+    event_type: EventType = Field(
+        default=EventType.ENTITY_LEVEL_REMOVED,
+        frozen=True,
+    )
 
 
 def _enrich_multi_entity_log_from_children(
@@ -2314,6 +2339,33 @@ class EventQueue:
             cls._event_handlers_by_trigger[trigger].append(event_handler)
         cls._event_handlers[event_handler.uuid] = event_handler
         cls._event_handlers_by_source_entity_uuid[event_handler.source_entity_uuid].append(event_handler)
+
+    @classmethod
+    def event_handler_order(cls) -> Tuple[UUID, ...]:
+        """Return the exact global non-spatial handler dispatch order."""
+        return tuple(cls._event_handlers)
+
+    @classmethod
+    def set_event_handler_order(cls, ordered_uuids: Tuple[UUID, ...]) -> None:
+        """Reorder existing non-spatial handlers without changing membership."""
+        if len(set(ordered_uuids)) != len(ordered_uuids):
+            raise ValueError("event handler order contains duplicate UUIDs")
+        if set(ordered_uuids) != set(cls._event_handlers):
+            raise ValueError("event handler order must name every registered handler")
+        order = {handler_uuid: index for index, handler_uuid in enumerate(ordered_uuids)}
+        handlers = dict(cls._event_handlers)
+        cls._event_handlers.clear()
+        cls._event_handlers.update(
+            (handler_uuid, handlers[handler_uuid])
+            for handler_uuid in ordered_uuids
+        )
+        for index in (
+            cls._event_handlers_by_trigger,
+            cls._event_handlers_by_simple_trigger,
+            cls._event_handlers_by_source_entity_uuid,
+        ):
+            for rows in index.values():
+                rows.sort(key=lambda handler: order[handler.uuid])
 
     @classmethod
     def remove_event_handler(cls, event_handler: EventHandler) -> None:

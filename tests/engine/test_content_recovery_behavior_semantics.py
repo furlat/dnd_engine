@@ -406,7 +406,9 @@ def test_counterspell_committed_quickened_cast_consumes_override() -> None:
     template = caster.get_action_template("Fireball")
     assert isinstance(template, SpellAction)
 
-    quickened = QuickenedSpell(source_entity_uuid=caster.uuid).apply()
+    quickened_template = caster.get_action_template("Quickened Spell")
+    assert isinstance(quickened_template, QuickenedSpell)
+    quickened = quickened_template.instantiate().apply()
     assert quickened is not None and not quickened.canceled
     assert "MetamagicActive" in caster.active_conditions
     assert template.effective_costs[0].cost_type == "bonus_actions"
