@@ -14,7 +14,6 @@ from dnd.core.values import CriticalStatus, AutoHitStatus
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.action_types import RestrictedActionGrant
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
-from dnd.core.content.origin_features import OriginCapability
 from dnd.core.content.runtime import (
     BehaviorBinding,
     bind_runtime_action_before_admission,
@@ -71,7 +70,18 @@ from dnd.blocks.base_item import (
 )
 from dnd.core.item_types import ItemLocation
 from dnd.blocks.appearance import Appearance, AppearanceConfig
-from dnd.core.events import AbilityName, SkillName
+from dnd.types.abilities import AbilityName, SkillName
+from dnd.types.character_progression import (
+    AppliedClassLevel,
+    AppliedOriginState,
+    Background,
+    FeatureToggleSelection,
+    OriginCapability,
+    PreparedSpellSelection,
+    Species,
+    SpeciesVariant,
+)
+from dnd.types.character_receipts import CharacterGrantReceipt
 from dnd.core.gridmap import (
     ENTITY_WORLD_PRESENCE_LIGHT_SUPPRESSION_TOKEN,
     get_map,
@@ -274,61 +284,41 @@ class Entity(BaseBlock):
         exclude=True,
         description="Exact authored creature definition used for this runtime entity.",
     )
-    character_species_ref: Optional[ContentRef] = Field(
+    character_body_id: Optional[str] = Field(
         default=None,
-        exclude=True,
-        description="Exact installed species identity for a player character.",
+        description="Direct body identity for a composed player character.",
     )
-    character_species_variant_ref: Optional[ContentRef] = Field(
+    character_species: Optional[Species] = Field(
         default=None,
-        exclude=True,
-        description="Exact optional installed species-variant identity.",
+        description="Direct species identity for a player character.",
     )
-    character_background_ref: Optional[ContentRef] = Field(
+    character_species_variant: Optional[SpeciesVariant] = Field(
         default=None,
-        exclude=True,
-        description="Exact installed background identity for a player character.",
+        description="Optional direct species-variant identity.",
     )
-    character_origin_state: Optional[
-        Tuple[
-            Tuple[Tuple[str, int], ...],
-            Tuple[Tuple[str, int], ...],
-            Tuple[Tuple[str, Tuple[str, ...]], ...],
-        ]
-    ] = Field(
+    character_background: Optional[Background] = Field(
         default=None,
-        exclude=True,
-        description="Authenticated origin construction state applied at composition.",
+        description="Direct background identity for a player character.",
     )
-    character_class_levels: Tuple[
-        Tuple[
-            str,
-            int,
-            str,
-            int,
-            Optional[str],
-            Tuple[Tuple[str, Tuple[str, ...]], ...],
-        ],
-        ...,
-    ] = Field(
-        default=(),
-        exclude=True,
-        description="Authenticated class-level ledger applied at composition.",
+    applied_origin_state: Optional[AppliedOriginState] = Field(
+        default=None,
+        description="Selections required to rebuild installed origin mechanics.",
     )
-    character_feature_ids: Tuple[str, ...] = Field(
+    applied_class_levels: Tuple[AppliedClassLevel, ...] = Field(
         default=(),
-        exclude=True,
-        description="Authenticated structural feature identities applied at composition.",
+        description="Ordered semantic class-level state installed on this Entity.",
     )
-    character_prepared_spell_ids: Tuple[str, ...] = Field(
-        default=(),
-        exclude=True,
-        description="Authenticated prepared-spell selections at composition.",
+    feature_sources: Dict[str, Set[UUID]] = Field(
+        default_factory=dict,
+        description="Source-owned structural character features.",
     )
-    character_feature_toggle_ids: Tuple[str, ...] = Field(
+    prepared_spell_selections: Tuple[PreparedSpellSelection, ...] = Field(
         default=(),
-        exclude=True,
-        description="Authenticated enabled feature-toggle identities at composition.",
+        description="Prepared spells grouped by their exact semantic source.",
+    )
+    feature_toggle_selections: Tuple[FeatureToggleSelection, ...] = Field(
+        default=(),
+        description="Explicit enabled and disabled player feature selections.",
     )
     ability_scores: AbilityScores = Field(
         default_factory=lambda: AbilityScores.create(source_entity_uuid=uuid4()),
@@ -502,6 +492,9 @@ class Entity(BaseBlock):
         frozenset[Tuple[int, int]],
     ] = PrivateAttr(default_factory=dict)
     _life_state_modifier_ownership: ModifierOwnership = PrivateAttr(default_factory=list)
+    _character_grant_receipts: Dict[str, CharacterGrantReceipt] = PrivateAttr(
+        default_factory=dict,
+    )
 
     _entity_registry: ClassVar[Dict[UUID, 'Entity']] = {}
     _LIFE_STATE_LIGHT_SUPPRESSION_TOKEN: ClassVar[str] = "entity.life_state.dead"
@@ -522,43 +515,120 @@ class Entity(BaseBlock):
             raise ValueError("Entity content_ref must identify a creature")
         return value
 
+    @field_validator("character_body_id")
+    @classmethod
+    def _validate_character_body_id(cls, value: Optional[str]) -> Optional[str]:
+        if value is not None and (not value or "." not in value):
+            raise ValueError("character_body_id must be a namespaced semantic ID")
+        return value
+
+    @field_validator("prepared_spell_selections")
+    @classmethod
+    def _validate_prepared_spell_sources(
+        cls,
+        value: Tuple[PreparedSpellSelection, ...],
+    ) -> Tuple[PreparedSpellSelection, ...]:
+        source_ids = tuple(row.source_id for row in value)
+        if len(set(source_ids)) != len(source_ids):
+            raise ValueError("prepared spell sources must be unique")
+        return value
+
+    @field_validator("feature_toggle_selections")
+    @classmethod
+    def _validate_feature_toggle_ids(
+        cls,
+        value: Tuple[FeatureToggleSelection, ...],
+    ) -> Tuple[FeatureToggleSelection, ...]:
+        feature_ids = tuple(row.feature_id for row in value)
+        if len(set(feature_ids)) != len(feature_ids):
+            raise ValueError("feature toggle IDs must be unique")
+        return value
+
+    def set_character_body_identity(self, character_body_id: str) -> None:
+        """Install the direct character body on an untyped Entity aggregate."""
+        if self.content_ref is not None:
+            raise RuntimeError("a character body cannot coexist with creature content")
+        if self.character_body_id is not None:
+            raise RuntimeError("character body identity is already installed")
+        if not character_body_id or "." not in character_body_id:
+            raise ValueError("character_body_id must be a namespaced semantic ID")
+        self.character_body_id = character_body_id
+
+    def clear_character_body_identity(self) -> None:
+        """Clear the direct body identity during unpublished rollback."""
+        self.character_body_id = None
+
     def set_character_origin_identity(
         self,
         *,
-        species_ref: ContentRef,
-        species_variant_ref: ContentRef | None,
-        background_ref: ContentRef,
+        species: Species,
+        species_variant: SpeciesVariant | None,
+        background: Background,
     ) -> None:
-        """Install one exact composition-owned character origin identity."""
-        if (
-            species_ref.definition_kind is not ContentDefinitionKind.SPECIES
-            or background_ref.definition_kind
-            is not ContentDefinitionKind.BACKGROUND
-            or (
-                species_variant_ref is not None
-                and species_variant_ref.definition_kind
-                is not ContentDefinitionKind.SPECIES_VARIANT
-            )
-        ):
-            raise ValueError(
-                "character origin refs must identify species, optional "
-                "species variant, and background definitions",
-            )
+        """Install one exact direct character origin identity."""
         if any((
-            self.character_species_ref is not None,
-            self.character_species_variant_ref is not None,
-            self.character_background_ref is not None,
+            self.character_species is not None,
+            self.character_species_variant is not None,
+            self.character_background is not None,
         )):
             raise RuntimeError("character origin identity is already installed")
-        self.character_species_ref = species_ref
-        self.character_species_variant_ref = species_variant_ref
-        self.character_background_ref = background_ref
+        self.character_species = species
+        self.character_species_variant = species_variant
+        self.character_background = background
 
     def clear_character_origin_identity(self) -> None:
         """Remove the composition-owned character origin identity."""
-        self.character_species_ref = None
-        self.character_species_variant_ref = None
-        self.character_background_ref = None
+        self.character_species = None
+        self.character_species_variant = None
+        self.character_background = None
+
+    def add_feature_source(self, feature_id: str, source_id: UUID) -> None:
+        """Install one structural feature from one exact source."""
+        if not feature_id or "." not in feature_id:
+            raise ValueError("feature_id must be a namespaced semantic ID")
+        self.feature_sources.setdefault(feature_id, set()).add(source_id)
+
+    def remove_feature_source(self, feature_id: str, source_id: UUID) -> bool:
+        """Remove one source without disturbing sibling feature providers."""
+        sources = self.feature_sources.get(feature_id)
+        if sources is None or source_id not in sources:
+            return False
+        sources.remove(source_id)
+        if not sources:
+            del self.feature_sources[feature_id]
+        return True
+
+    def has_feature(self, feature_id: str) -> bool:
+        """Return whether any exact source currently provides a feature."""
+        return bool(self.feature_sources.get(feature_id))
+
+    def store_character_grant_receipt(
+        self,
+        receipt: CharacterGrantReceipt,
+    ) -> None:
+        """Store one family receipt under its semantic progression step."""
+        if receipt.step_id in self._character_grant_receipts:
+            raise RuntimeError(f"character receipt {receipt.step_id} already exists")
+        self._character_grant_receipts[receipt.step_id] = receipt
+
+    def character_grant_receipt(
+        self,
+        step_id: str,
+    ) -> CharacterGrantReceipt:
+        """Return the exact receipt owned by one semantic progression step."""
+        try:
+            return self._character_grant_receipts[step_id]
+        except KeyError as error:
+            raise KeyError(f"character receipt {step_id} is not installed") from error
+
+    def remove_character_grant_receipt(
+        self,
+        step_id: str,
+    ) -> CharacterGrantReceipt:
+        """Remove and return the exact receipt for direct family cleanup."""
+        receipt = self.character_grant_receipt(step_id)
+        del self._character_grant_receipts[step_id]
+        return receipt
 
     def model_post_init(self, __context: Any) -> None:
         """Register identity without publishing world presence."""
@@ -749,6 +819,10 @@ class Entity(BaseBlock):
 
     def _entity_created_event(self) -> EntityCreatedEvent:
         """Capture this finished aggregate without consulting another owner."""
+        if self.character_body_id is not None and self.content_ref is not None:
+            raise RuntimeError(
+                "character body identity cannot coexist with creature content",
+            )
         proficiencies = self.creature_proficiencies
         inventory_items = tuple(self.inventory.items.values())
         equipped_by_slot = tuple(
@@ -837,9 +911,12 @@ class Entity(BaseBlock):
             phase=EventPhase.COMPLETION,
             entity_uuid=self.uuid,
             entity_kind_id=(
-                self.content_ref.identity_key
-                if self.content_ref is not None
-                else f"{type(self).__module__}.{type(self).__qualname__}"
+                self.character_body_id
+                or (
+                    self.content_ref.identity_key
+                    if self.content_ref is not None
+                    else f"{type(self).__module__}.{type(self).__qualname__}"
+                )
             ),
             entity_name=self.name,
             entity_description=self.description,
@@ -853,23 +930,12 @@ class Entity(BaseBlock):
                 if self.content_ref is not None
                 else None
             ),
-            species_ref=(
-                self.character_species_ref.identity_key
-                if self.character_species_ref is not None
-                else None
-            ),
-            species_variant_ref=(
-                self.character_species_variant_ref.identity_key
-                if self.character_species_variant_ref is not None
-                else None
-            ),
-            background_ref=(
-                self.character_background_ref.identity_key
-                if self.character_background_ref is not None
-                else None
-            ),
-            applied_origin_state=self.character_origin_state,
-            class_levels=self.character_class_levels,
+            character_body_id=self.character_body_id,
+            species=self.character_species,
+            species_variant=self.character_species_variant,
+            background=self.character_background,
+            applied_origin_state=self.applied_origin_state,
+            applied_class_levels=self.applied_class_levels,
             ability_scores=tuple(
                 (ability.name, ability.ability_score.score)
                 for ability in self.ability_scores.abilities_list
@@ -921,15 +987,20 @@ class Entity(BaseBlock):
             death_save_failures=self.death_save_failures,
             origin_capabilities=tuple(sorted(
                 (
-                    capability.value
+                    capability
                     for capability, sources
                     in self.origin_capability_sources.items()
                     if sources
                 ),
+                key=lambda capability: capability.value,
             )),
             body_semantics=tuple(body_semantics),
             appearance=appearance,
-            feature_ids=self.character_feature_ids,
+            feature_ids=tuple(sorted(
+                feature_id
+                for feature_id, sources in self.feature_sources.items()
+                if sources
+            )),
             weapon_proficiencies=tuple(weapon_proficiencies),
             armor_proficiencies=tuple(
                 armor_type.value
@@ -984,7 +1055,7 @@ class Entity(BaseBlock):
             )),
             attack_multiplicity=tuple(
                 (
-                    grant.provider_ref.identity_key,
+                    grant.provider_id,
                     grant.attacks_per_attack_action,
                     grant.acquisition_ordinal,
                 )
@@ -994,7 +1065,7 @@ class Entity(BaseBlock):
             spell_sources=tuple(
                 (
                     source.source_kind,
-                    source.provider_ref.identity_key,
+                    source.provider_id,
                     source.ability,
                     source.provider_level,
                     source.maximum_spell_rank,
@@ -1013,8 +1084,8 @@ class Entity(BaseBlock):
             reaction_spell_ids=tuple(sorted(
                 self.spellcasting.learned_reaction_spell_handlers
             )),
-            prepared_spell_ids=self.character_prepared_spell_ids,
-            feature_toggle_ids=self.character_feature_toggle_ids,
+            prepared_spell_selections=self.prepared_spell_selections,
+            feature_toggle_selections=self.feature_toggle_selections,
             spell_slots=tuple(
                 (
                     rank,
@@ -1074,7 +1145,10 @@ class Entity(BaseBlock):
         self.registered_actions.clear()
         grid = get_map()
         for block in owned_blocks:
-            grid.cleanup_block_light_sources(block.uuid)
+            grid.cleanup_block_light_sources(
+                block.uuid,
+                publish_event=False,
+            )
         spatial_senses_system.unregister_observer(self.uuid)
         if grid.get_entity_position(self.uuid) is not None:
             grid._commit_entity_membership(self.uuid, self.position, None)
@@ -4393,6 +4467,18 @@ class Entity(BaseBlock):
             action.remove_from_register()
             return True
         return False
+
+    def set_registered_action_order(self, ordered_uuids: Tuple[UUID, ...]) -> None:
+        """Reorder existing action templates without changing membership."""
+        if len(set(ordered_uuids)) != len(ordered_uuids):
+            raise ValueError("registered action order contains duplicate UUIDs")
+        actions = {action.uuid: action for action in self.registered_actions}
+        if set(ordered_uuids) != set(actions):
+            raise ValueError("registered action order must name every action")
+        self.registered_actions[:] = [
+            actions[action_uuid]
+            for action_uuid in ordered_uuids
+        ]
 
     def get_action_template(self, name: str) -> Optional[BaseAction]:
         """Get a registered action template by name.

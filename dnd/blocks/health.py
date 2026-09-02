@@ -1,10 +1,11 @@
 from typing import Optional, List, Literal, Tuple
-from uuid import UUID, uuid4
+from uuid import UUID, uuid4, uuid5
 from pydantic import BaseModel, Field, computed_field, field_validator
 from dnd.core.damage import DamageComponentResolution, DamageResolution
 from dnd.core.life_types import LifeState
 from dnd.core.values import ModifiableValue
 from dnd.core.creature_types import DamageType
+from dnd.core.base_object import BaseObject
 from dnd.core.modifiers import (
     NumericalModifier,
     ResistanceStatus,
@@ -15,6 +16,23 @@ from random import randint
 from functools import cached_property
 
 from dnd.core.base_block import BaseBlock
+
+
+def _unregister_hit_dice_value(value: ModifiableValue) -> None:
+    """Unregister one hit-die value's locally owned object tree."""
+    owned_channels = (
+        value.self_static,
+        value.to_target_static,
+        value.self_contextual,
+        value.to_target_contextual,
+    )
+    for channel in owned_channels:
+        for modifier_uuid in channel.get_all_modifier_uuids():
+            BaseObject.unregister(modifier_uuid)
+        channel.remove_all_modifiers()
+        channel.remove_from_register()
+    value.reset_from_target()
+    value.remove_from_register()
 
 
 class HitDiceConfig(BaseModel):
@@ -191,7 +209,8 @@ class HitDice(BaseBlock):
     @classmethod
     def create(cls, source_entity_uuid: UUID, name: str = "HitDice", source_entity_name: Optional[str] = None,
                 target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None,
-                config: Optional[HitDiceConfig] = None) -> 'HitDice':
+                config: Optional[HitDiceConfig] = None,
+                identity_uuid: Optional[UUID] = None) -> 'HitDice':
         """Create a hit-dice block from optional configuration.
 
         Args:
@@ -201,23 +220,76 @@ class HitDice(BaseBlock):
             target_entity_uuid: Optional target entity UUID.
             target_entity_name: Optional target entity display name.
             config: Optional hit-dice configuration to materialize.
+            identity_uuid: Optional stable identity root for the hit die and
+                its two locally owned modifiable values.
 
         Returns:
             HitDice block with modifiable die size and count values.
         """
-        if config is None:
-            return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name,
-                       target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name)
-        else:
-            modifiable_hit_dice_value = ModifiableValue.create(source_entity_uuid=source_entity_uuid,base_value=config.hit_dice_value, value_name="Hit Dice Value")
-            for modifier in config.hit_dice_value_modifiers:
-                modifiable_hit_dice_value.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
-            modifiable_hit_dice_count = ModifiableValue.create(source_entity_uuid=source_entity_uuid,base_value=config.hit_dice_count, value_name="Hit Dice Count")
-            for modifier in config.hit_dice_count_modifiers:
-                modifiable_hit_dice_count.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
-            return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name,
-                       target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name,
-                       hit_dice_value=modifiable_hit_dice_value, hit_dice_count=modifiable_hit_dice_count, mode=config.mode, ignore_first_level=config.ignore_first_level, spent_hit_dice=config.spent_hit_dice)
+        resolved = config or HitDiceConfig()
+        value_identity = (
+            uuid5(identity_uuid, "hit_dice_value")
+            if identity_uuid is not None
+            else None
+        )
+        count_identity = (
+            uuid5(identity_uuid, "hit_dice_count")
+            if identity_uuid is not None
+            else None
+        )
+        modifiable_hit_dice_value = ModifiableValue.create(
+            source_entity_uuid=source_entity_uuid,
+            base_value=resolved.hit_dice_value,
+            value_name="Hit Dice Value",
+            identity_uuid=value_identity,
+        )
+        for index, modifier in enumerate(resolved.hit_dice_value_modifiers):
+            modifier_uuid = (
+                uuid5(identity_uuid, f"hit_dice_value_modifier:{index}")
+                if identity_uuid is not None
+                else uuid4()
+            )
+            modifiable_hit_dice_value.self_static.add_value_modifier(
+                NumericalModifier(
+                    uuid=modifier_uuid,
+                    source_entity_uuid=source_entity_uuid,
+                    name=modifier[0],
+                    value=modifier[1],
+                )
+            )
+        modifiable_hit_dice_count = ModifiableValue.create(
+            source_entity_uuid=source_entity_uuid,
+            base_value=resolved.hit_dice_count,
+            value_name="Hit Dice Count",
+            identity_uuid=count_identity,
+        )
+        for index, modifier in enumerate(resolved.hit_dice_count_modifiers):
+            modifier_uuid = (
+                uuid5(identity_uuid, f"hit_dice_count_modifier:{index}")
+                if identity_uuid is not None
+                else uuid4()
+            )
+            modifiable_hit_dice_count.self_static.add_value_modifier(
+                NumericalModifier(
+                    uuid=modifier_uuid,
+                    source_entity_uuid=source_entity_uuid,
+                    name=modifier[0],
+                    value=modifier[1],
+                )
+            )
+        return cls(
+            uuid=identity_uuid or uuid4(),
+            source_entity_uuid=source_entity_uuid,
+            name=name,
+            source_entity_name=source_entity_name,
+            target_entity_uuid=target_entity_uuid,
+            target_entity_name=target_entity_name,
+            hit_dice_value=modifiable_hit_dice_value,
+            hit_dice_count=modifiable_hit_dice_count,
+            mode=resolved.mode,
+            ignore_first_level=resolved.ignore_first_level,
+            spent_hit_dice=resolved.spent_hit_dice,
+        )
 class HealthConfig(BaseModel):
     """Configuration used to materialize a health block."""
 
@@ -343,7 +415,9 @@ class Health(BaseBlock):
             if hit_dice.uuid != hit_dice_uuid:
                 continue
             del self.hit_dices[index]
-            type(hit_dice).unregister(hit_dice.uuid)
+            _unregister_hit_dice_value(hit_dice.hit_dice_value)
+            _unregister_hit_dice_value(hit_dice.hit_dice_count)
+            HitDice.unregister(hit_dice.uuid)
             return True
         return False
 

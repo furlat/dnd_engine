@@ -38,7 +38,8 @@ from dnd.core.values import ModifiableValue
 from dnd.core.dice import AttackOutcome
 from typing import cast as type_cast
 from dnd.core.equipment_types import ArmorType, WeaponSlot
-from dnd.core.events import EventPhase, RangeType, Range, Damage, Healing, ForcedMovementEvent, EventType, EventHandler, Trigger, Event, EventQueue, SpatialChangeEvent, AbilityName, SpatialEffectInteractionEvent
+from dnd.core.events import EventPhase, RangeType, Range, Damage, Healing, ForcedMovementEvent, EventType, EventHandler, Trigger, Event, EventQueue, SpatialChangeEvent, SpatialEffectInteractionEvent
+from dnd.types.abilities import AbilityName
 from dnd.core.creature_types import CreatureType, DamageType
 from dnd.core.modifiers import (
     AdvantageModifier,

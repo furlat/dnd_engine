@@ -311,6 +311,7 @@ class Torch(UsableItem):
         entity = Entity.get(carrier_entity_uuid)
         if entity is None:
             return
+        publish_event = entity.creation_committed
         self._light_source_uuid = grid.add_light_source(
             position=entity.position,
             very_bright_radius_feet=self.very_bright_radius_feet,
@@ -318,7 +319,10 @@ class Torch(UsableItem):
             dim_radius_feet=self.dim_radius_feet,
             anchor_uuid=carrier_entity_uuid,
             parent_event=parent_event,
+            publish_event=publish_event,
         )
+        if not publish_event:
+            return
         flame_event = ExposedFlameEvent(
             source_entity_uuid=carrier_entity_uuid,
             target_entity_uuid=self.uuid,

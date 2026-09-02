@@ -880,6 +880,12 @@ class BaseAction(BaseObject):
         default=False,
         description="True when this action is a reusable template instead of an executable instance.",
     )
+    registered_template_uuid: Optional[UUID] = Field(
+        default=None,
+        exclude=True,
+        frozen=True,
+        description="Exact Entity-owned template that produced this execution.",
+    )
     include_self: bool = Field(
         default=False,
         description="Whether the acting entity can be included in this action's target set.",
@@ -1410,12 +1416,14 @@ class BaseAction(BaseObject):
         if not self.template:
             raise ValueError("Can only instantiate from a template")
 
+        registered_template_uuid = self.registered_template_uuid or self.uuid
         update_dict: dict = {
             "uuid": uuid4(),
             "template": False,
             "use_register": False,
         }
         update_dict.update(overrides)
+        update_dict["registered_template_uuid"] = registered_template_uuid
 
         return self.model_copy(deep=True, update=update_dict)
 
@@ -1454,12 +1462,14 @@ class BaseAction(BaseObject):
                 for cost in self.target_independent_effective_costs
             ):
                 continue
+            registered_template_uuid = self.registered_template_uuid or self.uuid
             variant = self.model_copy(
                 deep=True,
                 update={
                     "uuid": uuid4(),
                     "template": False,
                     "use_register": False,
+                    "registered_template_uuid": registered_template_uuid,
                 },
             )
             variant._restricted_action_grant = grant

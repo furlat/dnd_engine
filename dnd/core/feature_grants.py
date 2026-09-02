@@ -3,9 +3,6 @@
 from dataclasses import dataclass
 from uuid import UUID
 
-from dnd.core.content.identities import ContentRef
-
-
 @dataclass(frozen=True, slots=True)
 class AttackMultiplicityGrant:
     """One source-owned entitlement to attacks within an Attack action.
@@ -16,7 +13,7 @@ class AttackMultiplicityGrant:
     """
 
     grant_id: UUID
-    provider_ref: ContentRef
+    provider_id: str
     attacks_per_attack_action: int
     acquisition_ordinal: int
 
@@ -28,6 +25,8 @@ class AttackMultiplicityGrant:
             )
         if self.acquisition_ordinal < 1:
             raise ValueError("acquisition_ordinal must be positive")
+        if not self.provider_id or "." not in self.provider_id:
+            raise ValueError("provider_id must be a namespaced semantic ID")
 
 
 __all__ = ["AttackMultiplicityGrant"]

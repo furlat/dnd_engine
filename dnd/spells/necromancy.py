@@ -28,7 +28,8 @@ from dnd.core.condition_types import (
 )
 from dnd.core.base_tiles import MovementMode
 from dnd.core.dice import AttackOutcome, Dice, RollType
-from dnd.core.events import EventPhase, RangeType, Range, Damage, EventType, EventHandler, Trigger, Event, AbilityName, SkillName, ForcedMovementEvent
+from dnd.core.events import EventPhase, RangeType, Range, Damage, EventType, EventHandler, Trigger, Event, ForcedMovementEvent
+from dnd.types.abilities import AbilityName, SkillName
 from dnd.core.gridmap import get_map
 from dnd.core.creature_types import CreatureType, DamageType
 from dnd.core.modifiers import (

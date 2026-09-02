@@ -5,7 +5,7 @@ from dnd.core.values import ModifiableValue
 from dnd.core.modifiers import NumericalModifier
 
 from dnd.core.base_block import BaseBlock
-from dnd.core.events import AbilityName, SkillName
+from dnd.types.abilities import AbilityName, SkillName
 from dnd.core.proficiency_types import ProficiencyMode, ProficiencySourceSet
 
 SKILL_TO_ABILITY: Dict['SkillName', AbilityName] = {

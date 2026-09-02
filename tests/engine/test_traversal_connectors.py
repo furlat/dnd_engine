@@ -167,6 +167,7 @@ def test_connector_variant_commits_one_exact_transfer_and_cost() -> None:
     assert len(variants) == 1
     variant = variants[0]
     assert isinstance(variant, TraverseConnector)
+    assert variant.registered_template_uuid == template.uuid
     assert variant.connector_traversal is not None
     assert variant.connector_traversal.command.connector_uuid == connector.uuid
 

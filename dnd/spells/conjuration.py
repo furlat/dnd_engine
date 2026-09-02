@@ -2870,6 +2870,39 @@ class Darkness(SpellAction):
     costs: List[Cost] = Field(default_factory=lambda: [
         Cost(name="Darkness Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
     ], description="Action economy costs paid to execute darkness.")
+    active_concentration_slot_uuid: Optional[UUID] = Field(
+        default=None,
+        exclude=True,
+        repr=False,
+        description="Exact concentration slot retained by the registered template.",
+    )
+
+    def _retain_active_concentration_slot(
+        self,
+        concentration: Concentrating,
+    ) -> None:
+        """Retain this cast's exact slot on its Entity-owned template."""
+        slot_uuid = concentration.get_slot_by_spell_name(self.name)
+        if slot_uuid is None:
+            raise RuntimeError("Darkness concentration slot was not established")
+        self.active_concentration_slot_uuid = slot_uuid
+        template_uuid = self.registered_template_uuid
+        if template_uuid is None:
+            return
+        caster = Entity.get(self.source_entity_uuid)
+        if caster is None:
+            raise RuntimeError("Darkness caster disappeared during execution")
+        template = next(
+            (
+                action
+                for action in caster.registered_actions
+                if action.uuid == template_uuid
+            ),
+            None,
+        )
+        if not isinstance(template, Darkness):
+            raise RuntimeError("Darkness registered template is missing")
+        template.active_concentration_slot_uuid = slot_uuid
 
     def get_world_effect_profile(self, actor: Any) -> ActionWorldEffectProfile:
         """Declare Darkness's concealment and magical vision blocker.
@@ -2956,6 +2989,7 @@ class Darkness(SpellAction):
 
         concentration = self.ensure_concentration(effect_event)
         concentration.add_linked_condition(zone.uuid, zone.uuid)
+        self._retain_active_concentration_slot(concentration)
 
         return effect_event.with_updates(
             status_message=f"Darkness active: 15ft sphere at {target_pos}"

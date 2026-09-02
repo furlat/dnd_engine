@@ -1,6 +1,6 @@
 from pydantic import Field, computed_field, model_validator
 from typing import List, Optional, Dict, Any, Callable, ClassVar, Union, Self
-from uuid import UUID, uuid4
+from uuid import UUID, uuid4, uuid5
 from dnd.core.base_object import BaseObject
 from dnd.core.creature_types import DamageType, Size
 from dnd.core.modifiers import (
@@ -1394,7 +1394,8 @@ class ModifiableValue(BaseValue):
     @classmethod
     def create(cls, source_entity_uuid: UUID, source_entity_name: Optional[str] = None,
                target_entity_uuid: Optional[UUID] = None, target_entity_name: Optional[str] = None,
-               base_value: int = 0, value_name: str = "Value", score_normalizer: Optional[Callable[[int], int]] = None, global_normalizer: bool = True) -> 'ModifiableValue':
+               base_value: int = 0, value_name: str = "Value", score_normalizer: Optional[Callable[[int], int]] = None,
+               global_normalizer: bool = True, identity_uuid: Optional[UUID] = None) -> 'ModifiableValue':
         """Create a value whose primary channels share source metadata.
 
         Args:
@@ -1408,13 +1409,22 @@ class ModifiableValue(BaseValue):
                 modifiers.
             global_normalizer: Whether to propagate the normalizer into child
                 channels.
+            identity_uuid: Optional stable identity root. When supplied, the
+                value, its four locally owned channels, and its base modifier
+                receive identities derived from this UUID.
 
         Returns:
             New modifiable value with initialized self and outgoing channels.
         """
         normalizer = score_normalizer if score_normalizer is not None else lambda x: x
 
+        def owned_uuid(name: str) -> UUID:
+            if identity_uuid is None:
+                return uuid4()
+            return uuid5(identity_uuid, name)
+
         base_modifier = NumericalModifier(
+            uuid=owned_uuid("base_modifier"),
             source_entity_uuid=source_entity_uuid,
             target_entity_uuid=source_entity_uuid,
             value=base_value,
@@ -1423,10 +1433,12 @@ class ModifiableValue(BaseValue):
         )
 
         obj = cls(
+            uuid=identity_uuid or uuid4(),
             name=value_name,
             source_entity_uuid=source_entity_uuid,
             source_entity_name=source_entity_name,
             self_static=StaticValue(
+                uuid=owned_uuid("self_static"),
                 source_entity_uuid=source_entity_uuid,
                 source_entity_name=source_entity_name,
                 value_modifiers={base_modifier.uuid: base_modifier},
@@ -1434,6 +1446,7 @@ class ModifiableValue(BaseValue):
                 global_normalizer=global_normalizer
             ),
             to_target_static=StaticValue(
+                uuid=owned_uuid("to_target_static"),
                 source_entity_uuid=source_entity_uuid,
                 source_entity_name=source_entity_name,
                 is_outgoing_modifier=True,
@@ -1441,12 +1454,14 @@ class ModifiableValue(BaseValue):
                 global_normalizer=global_normalizer
             ),
             self_contextual=ContextualValue(
+                uuid=owned_uuid("self_contextual"),
                 source_entity_uuid=source_entity_uuid,
                 source_entity_name=source_entity_name,
                 score_normalizer=normalizer,
                 global_normalizer=global_normalizer
             ),
             to_target_contextual=ContextualValue(
+                uuid=owned_uuid("to_target_contextual"),
                 source_entity_uuid=source_entity_uuid,
                 source_entity_name=source_entity_name,
                 is_outgoing_modifier=True,

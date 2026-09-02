@@ -3480,7 +3480,8 @@ class GridMap:
     def add_light_source(self, position: Tuple[int, int], bright_radius_feet: int,
                          dim_radius_feet: int, anchor_uuid: Optional[UUID] = None,
                          very_bright_radius_feet: int = 0,
-                         parent_event: Optional[UUID] = None) -> UUID:
+                         parent_event: Optional[UUID] = None,
+                         publish_event: bool = True) -> UUID:
         """Add a light source at a position.
 
         Computes illuminated area via FOV from position.
@@ -3511,7 +3512,11 @@ class GridMap:
                 anchor.attach_light_source(source.uuid)
 
         if self._is_light_effectively_active(source):
-            self._apply_light_source(source, parent_event=parent_event)
+            self._apply_light_source(
+                source,
+                parent_event=parent_event,
+                publish_event=publish_event,
+            )
 
         return source.uuid
 
@@ -3524,26 +3529,36 @@ class GridMap:
         return source.position if source is not None else None
 
     def remove_light_source(self, light_uuid: UUID,
-                            parent_event: Optional[UUID] = None) -> None:
+                            parent_event: Optional[UUID] = None,
+                            publish_event: bool = True) -> None:
         """Remove a light source and clean up tile modifiers."""
         source = self._light_sources.pop(light_uuid, None)
         if source is None:
             return
 
-        self._remove_light_source_tiles(source, parent_event=parent_event)
+        self._remove_light_source_tiles(
+            source,
+            parent_event=parent_event,
+            publish_event=publish_event,
+        )
 
         if source.anchor_uuid:
             anchor = BaseBlock.get(source.anchor_uuid)
             if anchor:
                 anchor.detach_light_source(light_uuid)
 
-    def cleanup_block_light_sources(self, block_uuid: UUID) -> None:
+    def cleanup_block_light_sources(
+        self,
+        block_uuid: UUID,
+        *,
+        publish_event: bool = True,
+    ) -> None:
         """Permanently remove all light sources attached to a destroyed block."""
         block = BaseBlock.get(block_uuid)
         if block is None:
             return
         for light_uuid in block.get_attached_light_sources():
-            self.remove_light_source(light_uuid)
+            self.remove_light_source(light_uuid, publish_event=publish_event)
         self._block_light_suppressions.pop(block_uuid, None)
 
     def _is_light_effectively_active(self, source: LightSourceData) -> bool:
@@ -3696,7 +3711,8 @@ class GridMap:
         return result
 
     def _apply_light_source(self, source: LightSourceData,
-                            parent_event: Optional[UUID] = None) -> None:
+                            parent_event: Optional[UUID] = None,
+                            publish_event: bool = True) -> None:
         """Compute and apply illumination from a light source to tiles.
         Suppresses per-tile events and fires a single senses update after."""
         if not self._is_light_effectively_active(source):
@@ -3708,10 +3724,14 @@ class GridMap:
             if tile is not None:
                 if tile._add_illumination(source.uuid, level):
                     changed_positions.append(pos)
-        self._fire_light_batch_events(changed_positions, parent_event=parent_event)
+        if publish_event:
+            self._fire_light_batch_events(changed_positions, parent_event=parent_event)
+        elif changed_positions:
+            self._bump_spatial_revisions({"illumination"})
 
     def _remove_light_source_tiles(self, source: LightSourceData,
-                                   parent_event: Optional[UUID] = None) -> None:
+                                   parent_event: Optional[UUID] = None,
+                                   publish_event: bool = True) -> None:
         """Remove illumination from all tiles affected by this light source.
         Suppresses per-tile events and fires a single senses update after."""
         changed_positions: List[Tuple[int, int]] = []
@@ -3721,7 +3741,10 @@ class GridMap:
                 if tile._remove_light_modifier(source.uuid):
                     changed_positions.append(pos)
         source.affected_tiles.clear()
-        self._fire_light_batch_events(changed_positions, parent_event=parent_event)
+        if publish_event:
+            self._fire_light_batch_events(changed_positions, parent_event=parent_event)
+        elif changed_positions:
+            self._bump_spatial_revisions({"illumination"})
 
     def _fire_light_batch_events(
         self,

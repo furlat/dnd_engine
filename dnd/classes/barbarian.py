@@ -132,6 +132,7 @@ def reckless_attack_check(
         value=AdvantageStatus.ADVANTAGE,
         source_entity_uuid=source_entity_uuid,
         target_entity_uuid=target_entity_uuid,
+        use_register=False,
     )
 
 
@@ -141,6 +142,7 @@ class RecklessAttacking(BaseCondition):
     Attributes:
         name: Marker condition name for active Reckless Attack state.
         description: Short rules-facing summary of the active Reckless Attack state.
+        owning_action_template_uuid: Exact action template that owns this root.
     """
     name: str = Field(
         default="Reckless Attacking",
@@ -149,6 +151,11 @@ class RecklessAttacking(BaseCondition):
     description: str = Field(
         default="Advantage on melee STR attacks, but attackers have advantage against you",
         description="Short rules-facing summary of the active Reckless Attack state.",
+    )
+    owning_action_template_uuid: Optional[UUID] = Field(
+        default=None,
+        exclude=True,
+        description="Exact Reckless Attack template that owns this root.",
     )
 
     def _apply(self, declaration_event: Event) -> Tuple[
@@ -202,6 +209,26 @@ class RecklessAttacking(BaseCondition):
 
         return outs, [], [], [], effect_event
 
+    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
+        """Release the exact action-template root edge after cleanup."""
+        target = (
+            Entity.get(self.target_entity_uuid)
+            if self.target_entity_uuid is not None
+            else None
+        )
+        if target is not None and self.owning_action_template_uuid is not None:
+            template = next(
+                (
+                    candidate
+                    for candidate in target.registered_actions
+                    if candidate.uuid == self.owning_action_template_uuid
+                ),
+                None,
+            )
+            if template is not None:
+                template.active_reckless_condition_uuid = None
+        return super()._remove(event)
+
 
 class RecklessAttack(BaseAction):
     """Barbarian action that enables Reckless Attack for the current turn.
@@ -211,6 +238,7 @@ class RecklessAttack(BaseAction):
         description: Short rules-facing summary of the Reckless Attack action.
         target_type: Reckless Attack always targets the acting Barbarian.
         costs: Reckless Attack has no action or resource costs.
+        active_reckless_condition_uuid: Exact active root owned by this template.
     """
     name: str = Field(default="Reckless Attack", description="Action name displayed for Reckless Attack.")
     description: str = Field(
@@ -225,6 +253,11 @@ class RecklessAttack(BaseAction):
     costs: List[Cost] = Field(
         default_factory=list,
         description="Reckless Attack has no action or resource costs.",
+    )
+    active_reckless_condition_uuid: Optional[UUID] = Field(
+        default=None,
+        exclude=True,
+        description="Exact active Reckless Attacking root from this template.",
     )
 
     def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[ActionEvent]:
@@ -259,11 +292,37 @@ class RecklessAttack(BaseAction):
         if entity is None:
             return execution_event.cancel(status_message="Entity not found")
 
+        if self.registered_template_uuid is None:
+            raise RuntimeError("Reckless Attack execution has no template owner")
+        template = next(
+            (
+                candidate
+                for candidate in entity.registered_actions
+                if candidate.uuid == self.registered_template_uuid
+            ),
+            None,
+        )
+        if template is None:
+            raise RuntimeError("Reckless Attack template owner is missing")
+        binding = self.behavior_binding
         reckless = RecklessAttacking(
             source_entity_uuid=self.source_entity_uuid,
-            target_entity_uuid=self.source_entity_uuid
+            target_entity_uuid=self.source_entity_uuid,
+            owning_action_template_uuid=template.uuid,
+            behavior_binding=(
+                binding.model_copy(update={
+                    "behavior_id": "class_feature.barbarian.reckless_attacking",
+                    "provided_by_id": binding.behavior_id,
+                    "runtime_owner_uuid": entity.uuid,
+                })
+                if binding is not None
+                else None
+            ),
         )
-        entity.add_condition(reckless, parent_event=execution_event)
+        applied = entity.add_condition(reckless, parent_event=execution_event)
+        if applied is None or applied.canceled:
+            return applied
+        template.active_reckless_condition_uuid = reckless.uuid
 
         return execution_event.phase_to(
             EventPhase.EFFECT,
@@ -362,7 +421,8 @@ def danger_sense_check(
         name="Danger Sense",
         value=AdvantageStatus.ADVANTAGE,
         source_entity_uuid=source_entity_uuid,
-        target_entity_uuid=target_entity_uuid
+        target_entity_uuid=target_entity_uuid,
+        use_register=False,
     )
 
 
@@ -437,10 +497,11 @@ def fast_movement_check(
     if body_armor and body_armor.type == ArmorType.HEAVY:
         return None
 
-    return NumericalModifier.create(
+    return NumericalModifier(
         source_entity_uuid=source_entity_uuid,
         name="Fast Movement",
-        value=10
+        value=10,
+        use_register=False,
     )
 
 
@@ -877,9 +938,14 @@ def indomitable_might_processor(event: Event, source_entity_uuid: UUID) -> Optio
     return None
 
 
-def create_indomitable_might_handler(source_entity_uuid: UUID) -> EventHandler:
+def create_indomitable_might_handler(
+    source_entity_uuid: UUID,
+    *,
+    handler_uuid: UUID | None = None,
+) -> EventHandler:
     """Create handler for Indomitable Might."""
     return EventHandler(
+        **({} if handler_uuid is None else {"uuid": handler_uuid}),
         name="Indomitable Might",
         source_entity_uuid=source_entity_uuid,
         trigger_conditions=[
@@ -1048,9 +1114,12 @@ class RetaliationReactionHandler(EventHandler):
 
 def create_retaliation_handler(
     source_entity_uuid: UUID,
+    *,
+    handler_uuid: UUID | None = None,
 ) -> RetaliationReactionHandler:
     """Create handler for Retaliation."""
     return RetaliationReactionHandler(
+        **({} if handler_uuid is None else {"uuid": handler_uuid}),
         name="Retaliation",
         semantic_key="feature.barbarian.retaliation",
         content_kind=RuntimeBehaviorKind.REACTION,

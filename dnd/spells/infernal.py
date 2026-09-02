@@ -129,11 +129,8 @@ def _rebuke_processor(
     source_entity_uuid: UUID,
     *,
     spell_ref: ContentRef,
-    spellcasting_source_id: UUID | None,
-    fixed_cast_rank: int | None,
-    resource_name: str | None,
 ) -> Event | None:
-    """Resolve one reaction using either an innate use or a normal slot."""
+    """Resolve one reaction through a currently owning casting source."""
     if (
         not isinstance(event, TakeDamageEvent)
         or event.get_effective_damage() <= 0
@@ -145,16 +142,11 @@ def _rebuke_processor(
     attacker = Entity.get(event.source_entity_uuid)
     if caster is None or attacker is None:
         return None
-    resolved_source_id = spellcasting_source_id
-    if resolved_source_id is None:
-        source_ids = (
-            caster.spellcasting.learned_reaction_spell_source_ids(
-                spell_ref,
-            )
-        )
-        if not source_ids:
-            return None
-        resolved_source_id = source_ids[0]
+    source_options = caster.spellcasting.learned_reaction_spell_sources(
+        spell_ref.content_id,
+    )
+    if not source_options:
+        return None
     if not caster.action_economy.can_afford("reactions", 1):
         return None
     caster.materialize_navigation(max_distance=60)
@@ -166,19 +158,29 @@ def _rebuke_processor(
     ):
         return None
 
-    cast_rank = fixed_cast_rank
-    if resource_name is not None:
-        if not caster.action_economy.can_afford_resource(resource_name, 1):
-            return None
-    else:
-        cast_rank = caster.get_lowest_spell_slot(1)
-        if cast_rank is None:
-            return None
-    assert cast_rank is not None
+    selected_source = None
+    cast_rank = None
+    for source in source_options:
+        if source.resource_name is not None:
+            if caster.action_economy.can_afford_resource(source.resource_name, 1):
+                selected_source = source
+                cast_rank = source.fixed_cast_rank
+                break
+            continue
+        available_rank = caster.get_lowest_spell_slot(1)
+        if available_rank is not None:
+            selected_source = source
+            cast_rank = available_rank
+            break
+    if selected_source is None or cast_rank is None:
+        return None
 
     caster.action_economy.consume("reactions", 1)
-    if resource_name is not None:
-        if not caster.action_economy.consume_resource(resource_name, 1):
+    if selected_source.resource_name is not None:
+        if not caster.action_economy.consume_resource(
+            selected_source.resource_name,
+            1,
+        ):
             raise RuntimeError("validated innate rebuke resource disappeared")
     else:
         caster.action_economy.consume(spell_slot_cost_type(cast_rank), 1)
@@ -199,7 +201,7 @@ def _rebuke_processor(
         attacker.uuid,
         "dexterity",
         caster.spell_save_dc(
-            spellcasting_source_id=resolved_source_id,
+            spellcasting_source_id=selected_source.source_id,
         ),
         parent_event=effect.uuid,
         saving_throw_context=SavingThrowContext(
@@ -235,12 +237,11 @@ def _rebuke_processor(
 def create_hellish_rebuke_reaction_handler(
     source_entity_uuid: UUID,
     *,
-    spellcasting_source_id: UUID | None = None,
-    fixed_cast_rank: int | None = None,
-    resource_name: str | None = None,
+    handler_uuid: UUID | None = None,
 ) -> HellishRebukeReactionHandler:
-    """Create one source-bound Hellish Rebuke reaction."""
+    """Create one Hellish Rebuke handler shared by its casting sources."""
     return HellishRebukeReactionHandler(
+        **({} if handler_uuid is None else {"uuid": handler_uuid}),
         name="Hellish Rebuke",
         semantic_key="reaction.spell.hellish_rebuke",
         content_kind=RuntimeBehaviorKind.REACTION,
@@ -255,9 +256,6 @@ def create_hellish_rebuke_reaction_handler(
         event_processor=partial(
             _rebuke_processor,
             spell_ref=HELLISH_REBUKE_SPELL_DECLARATION.ref,
-            spellcasting_source_id=spellcasting_source_id,
-            fixed_cast_rank=fixed_cast_rank,
-            resource_name=resource_name,
         ),
         player_toggleable=True,
     )

@@ -736,6 +736,26 @@ class BaseBlock(BaseModel):
         if event_handler.uuid in self.event_handlers:
             self.remove_event_handler_from_dicts(event_handler)
 
+    def set_event_handler_order(self, ordered_uuids: Tuple[UUID, ...]) -> None:
+        """Reorder this block's existing handlers without changing ownership."""
+        if len(set(ordered_uuids)) != len(ordered_uuids):
+            raise ValueError("block event handler order contains duplicate UUIDs")
+        if set(ordered_uuids) != set(self.event_handlers):
+            raise ValueError("block event handler order must name every handler")
+        order = {handler_uuid: index for index, handler_uuid in enumerate(ordered_uuids)}
+        handlers = dict(self.event_handlers)
+        self.event_handlers.clear()
+        self.event_handlers.update(
+            (handler_uuid, handlers[handler_uuid])
+            for handler_uuid in ordered_uuids
+        )
+        for index in (
+            self.event_handlers_by_trigger,
+            self.event_handlers_by_simple_trigger,
+        ):
+            for rows in index.values():
+                rows.sort(key=lambda handler: order[handler.uuid])
+
     def get_event_handler_by_name(self, name: str) -> Optional[EventHandler]:
         """Find the first local event handler matching a name.
 

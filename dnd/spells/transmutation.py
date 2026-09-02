@@ -50,8 +50,9 @@ from dnd.core.action_types import (
 )
 from dnd.core.base_block import SensesType, SenseMode
 from dnd.core.events import (
-    Event, EventPhase, EventType, EventHandler, Trigger, Range, RangeType, SpatialChangeEvent, Damage, Healing, AbilityName, ForcedMovementEvent
+    Event, EventPhase, EventType, EventHandler, Trigger, Range, RangeType, SpatialChangeEvent, Damage, Healing, ForcedMovementEvent
 )
+from dnd.types.abilities import AbilityName
 from dnd.core.dice import AttackOutcome
 from dnd.core.creature_types import DamageType, Size
 from dnd.core.modifiers import (

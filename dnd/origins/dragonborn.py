@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-from types import MappingProxyType
-from typing import Any, cast
-from uuid import UUID
-
+from typing import Any, Literal, cast
 from pydantic import Field
 
 from dnd.actions import (
@@ -13,7 +10,6 @@ from dnd.actions import (
     entity_action_economy_cost_evaluator,
     entity_resource_cost_evaluator,
 )
-from dnd.core.aoe import Cone, Line
 from dnd.core.base_actions import (
     ActionCategory,
     ActionEvent,
@@ -26,35 +22,12 @@ from dnd.core.base_actions import (
     OutcomeResolution,
     TargetType,
 )
-from dnd.core.content.descriptors import (
-    ContentDescriptorSpec,
-    ContentOrdering,
-    ContentPresentation,
-    ContentVisibility,
-)
-from dnd.core.content.dragonborn import (
-    DragonbornAncestry,
-    DragonbornAncestryFeatureDefinition,
-    DragonbornBreathGeometry,
-    DragonbornSaveAbility,
-)
-from dnd.core.content.identities import ContentDefinitionKind, ContentRef
-from dnd.core.content.provenance import (
-    ContentFidelity,
-    ContentProvenance,
-    ContentProvenanceRelation,
-    ContentReviewStatus,
-)
-from dnd.core.content.registration import (
-    behavior_identity,
-    get_content_declaration,
-)
-from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.core.dice import AttackOutcome, DiceRoll
 from dnd.core.events import Damage, Event, EventPhase
 from dnd.core.creature_types import DamageType
 from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
+from dnd.types.abilities import AbilityName
 
 
 DRAGONBORN_BREATH_RESOURCE = "dragonborn_breath_weapon"
@@ -63,11 +36,10 @@ DRAGONBORN_BREATH_RESOURCE = "dragonborn_breath_weapon"
 class DragonbornBreathWeaponEvent(ActionEvent):
     """Cold typed facts produced by one Dragonborn Breath Weapon use."""
 
-    ancestry_ref: ContentRef
-    ancestry: DragonbornAncestry
+    ancestry: str
     damage_type: DamageType
-    breath_geometry: DragonbornBreathGeometry
-    save_ability: DragonbornSaveAbility
+    breath_geometry: Literal["line", "cone"]
+    save_ability: AbilityName
     save_dc: int = Field(ge=0)
     save_success: bool | None = None
     save_roll: DiceRoll | None = None
@@ -76,46 +48,6 @@ class DragonbornBreathWeaponEvent(ActionEvent):
     damage_rolls: list[DiceRoll] = Field(default_factory=list)
 
 
-@behavior_identity(
-    definition_kind=ContentDefinitionKind.ACTION,
-    runtime_behavior_kind=RuntimeBehaviorKind.ACTION,
-    pack_id="content.srd_5_1_cc",
-    content_id="action.origin.dragonborn.breath_weapon",
-    version=1,
-    descriptor=ContentDescriptorSpec(
-        display_name="Breath Weapon",
-        description=(
-            "Exhale destructive energy in the shape and damage type granted "
-            "by your draconic ancestry."
-        ),
-        tags=("action", "dragonborn", "origin_feature", "srd_5_1"),
-        visibility=ContentVisibility.PUBLIC,
-        presentation=ContentPresentation(
-            icon_key="action.dragonborn-breath-weapon",
-            visual_variant_key="dragonborn_breath_weapon",
-            vfx_profile="dragonborn_breath_weapon",
-            ui_group="actions.origin",
-        ),
-        ordering=ContentOrdering(
-            sort_group="actions.origin",
-            sort_order=10,
-        ),
-    ),
-    provenance=ContentProvenance(
-        primary_source_id="wotc.srd_5_1_cc",
-        source_anchor=(
-            "SRD 5.1 Races: Dragonborn Traits — Draconic Ancestry and "
-            "Breath Weapon"
-        ),
-        relation=ContentProvenanceRelation.FAITHFUL_IMPLEMENTATION,
-        fidelity=ContentFidelity.COMPLETE,
-        review_status=ContentReviewStatus.REVIEWED,
-        notes=(
-            "Uses SRD 5.1 ancestry geometry, save ability, scaling, and "
-            "short-or-long-rest use."
-        ),
-    ),
-)
 class DragonbornBreathWeapon(BaseAction):
     """One ancestry-configured Dragonborn Breath Weapon action."""
 
@@ -130,50 +62,12 @@ class DragonbornBreathWeapon(BaseAction):
     include_self: bool = Field(default=False)
     valid_target_filter: str = Field(default="all")
     aoe_require_targets: bool = Field(default=True)
-    ancestry_ref: ContentRef
-    ancestry: DragonbornAncestry
+    ancestry: str
     damage_type: DamageType
-    breath_geometry: DragonbornBreathGeometry
-    save_ability: DragonbornSaveAbility
+    breath_geometry: Literal["line", "cone"]
+    save_ability: AbilityName
     character_level: int = Field(ge=1, le=20)
     costs: list[Cost] = Field(default_factory=list)
-
-    @classmethod
-    def from_definition(
-        cls,
-        *,
-        source_entity_uuid: UUID,
-        ancestry_ref: ContentRef,
-        definition: DragonbornAncestryFeatureDefinition,
-        character_level: int,
-        template: bool,
-    ) -> "DragonbornBreathWeapon":
-        """Create an action from one exact typed ancestry definition."""
-        return cls(
-            source_entity_uuid=source_entity_uuid,
-            ancestry_ref=ancestry_ref,
-            ancestry=definition.ancestry,
-            damage_type=DamageType(definition.damage_type),
-            breath_geometry=definition.breath_geometry,
-            save_ability=definition.save_ability,
-            character_level=character_level,
-            aoe_shape=(
-                Line(
-                    source_entity_uuid=source_entity_uuid,
-                    target=(1, 0),
-                    length_feet=definition.line_length_feet or 30,
-                    width_feet=definition.line_width_feet or 5,
-                )
-                if definition.breath_geometry
-                is DragonbornBreathGeometry.LINE
-                else Cone(
-                    source_entity_uuid=source_entity_uuid,
-                    target=(1, 0),
-                    length_feet=definition.cone_length_feet or 15,
-                )
-            ),
-            template=template,
-        )
 
     @property
     def damage_dice_count(self) -> int:
@@ -255,7 +149,6 @@ class DragonbornBreathWeapon(BaseAction):
             description=self.description,
             declared_target_entity_uuids=self._declared_target_entity_uuids(),
             aoe_position=self.end_position,
-            ancestry_ref=self.ancestry_ref,
             ancestry=self.ancestry,
             damage_type=self.damage_type,
             breath_geometry=self.breath_geometry,
@@ -363,22 +256,8 @@ class DragonbornBreathWeapon(BaseAction):
         )
 
 
-DRAGONBORN_BREATH_WEAPON_DECLARATION = get_content_declaration(
-    DragonbornBreathWeapon,
-)
-DRAGONBORN_BREATH_WEAPON_REF = (
-    DRAGONBORN_BREATH_WEAPON_DECLARATION.ref
-)
-DRAGONBORN_BEHAVIOR_DECLARATIONS_BY_CLASS = MappingProxyType({
-    DragonbornBreathWeapon: DRAGONBORN_BREATH_WEAPON_DECLARATION,
-})
-
-
 __all__ = [
     "DRAGONBORN_BREATH_RESOURCE",
-    "DRAGONBORN_BREATH_WEAPON_DECLARATION",
-    "DRAGONBORN_BEHAVIOR_DECLARATIONS_BY_CLASS",
-    "DRAGONBORN_BREATH_WEAPON_REF",
     "DragonbornBreathWeapon",
     "DragonbornBreathWeaponEvent",
 ]

@@ -11,7 +11,7 @@ Implements:
 
 from typing import Any, Optional, List, Tuple, Dict, Literal
 from uuid import UUID
-from pydantic import Field
+from pydantic import Field, PrivateAttr
 
 from dnd.core.base_conditions import BaseCondition, Duration
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
@@ -50,6 +50,35 @@ from dnd.types.spatial_effects import (
     SpatialEffectOccupancyPolicy,
     SpatialEffectTriggerKind,
 )
+
+
+def _child_binding(parent_binding, behavior_id: str, runtime_owner_uuid: UUID):
+    """Derive one exact direct child fact from this family-local provider."""
+    if parent_binding is None:
+        return None
+    return parent_binding.model_copy(update={
+        "behavior_id": behavior_id,
+        "provided_by_id": parent_binding.behavior_id,
+        "runtime_owner_uuid": runtime_owner_uuid,
+    })
+
+
+def _owning_template(action: BaseAction, entity: Entity) -> BaseAction:
+    """Resolve the exact Entity-owned template that produced an execution."""
+    template_uuid = action.registered_template_uuid
+    if template_uuid is None:
+        raise RuntimeError("Sorcerer execution has no registered template owner")
+    template = next(
+        (
+            candidate
+            for candidate in entity.registered_actions
+            if candidate.uuid == template_uuid
+        ),
+        None,
+    )
+    if template is None:
+        raise RuntimeError("Sorcerer registered template owner is missing")
+    return template
 
 
 class DraconicResilience(BaseCondition):
@@ -117,6 +146,7 @@ class ElementalAffinityResistance(BaseCondition):
         name: Player-facing temporary resistance name.
         description: Rules summary for the temporary resistance.
         damage_type: Ancestry damage type resisted by this instance.
+        owning_action_template_uuid: Exact action template owning this state.
     """
 
     name: str = Field(
@@ -133,6 +163,10 @@ class ElementalAffinityResistance(BaseCondition):
     damage_type: DamageType = Field(
         default=DamageType.FIRE,
         description="Ancestry damage type resisted by this instance.",
+    )
+    owning_action_template_uuid: UUID = Field(
+        exclude=True,
+        description="Exact Elemental Affinity template owning this state.",
     )
 
     def model_post_init(self, __context: Any) -> None:
@@ -179,6 +213,26 @@ class ElementalAffinityResistance(BaseCondition):
             ),
         )
 
+    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is None:
+            raise RuntimeError("Elemental Affinity condition owner is missing")
+        template = next(
+            (
+                action
+                for action in target.registered_actions
+                if action.uuid == self.owning_action_template_uuid
+            ),
+            None,
+        )
+        if template is None:
+            raise RuntimeError("Elemental Affinity action owner is missing")
+        if template.active_resistance_condition_uuid != self.uuid:
+            raise RuntimeError("Elemental Affinity owner edge is inconsistent")
+        result = super()._remove(event)
+        template.active_resistance_condition_uuid = None
+        return result
+
 
 class ElementalAffinityResistanceAction(BaseAction):
     """Spend one sorcery point for one hour of ancestry resistance.
@@ -189,6 +243,7 @@ class ElementalAffinityResistanceAction(BaseAction):
         target_type: Elemental Affinity affects only the sorcerer.
         action_category: Classifies Elemental Affinity as a class ability.
         damage_type: Selected ancestry damage type.
+        active_resistance_condition_uuid: Exact active root owned by this template.
         costs: One sorcery point and no action-economy cost.
     """
 
@@ -214,6 +269,11 @@ class ElementalAffinityResistanceAction(BaseAction):
     damage_type: DamageType = Field(
         default=DamageType.FIRE,
         description="Selected ancestry damage type.",
+    )
+    active_resistance_condition_uuid: Optional[UUID] = Field(
+        default=None,
+        exclude=True,
+        description="Exact active resistance root owned by this template.",
     )
     costs: List[Cost] = Field(
         default_factory=lambda: [
@@ -248,10 +308,30 @@ class ElementalAffinityResistanceAction(BaseAction):
         entity = Entity.get(self.source_entity_uuid)
         if entity is None:
             return execution_event.cancel(status_message="Entity not found")
+        template = _owning_template(self, entity)
+        if template.active_resistance_condition_uuid is not None:
+            active = entity.active_conditions_by_uuid.get(
+                template.active_resistance_condition_uuid,
+            )
+            if active is None:
+                raise RuntimeError("Elemental Affinity active root is missing")
+            if not entity.remove_condition_by_uuid(
+                active.uuid,
+                parent_event=execution_event,
+            ):
+                return execution_event.cancel(
+                    status_message="Elemental Affinity resistance could not be replaced",
+                )
         effect = ElementalAffinityResistance(
             source_entity_uuid=entity.uuid,
             target_entity_uuid=entity.uuid,
             damage_type=self.damage_type,
+            owning_action_template_uuid=template.uuid,
+            behavior_binding=_child_binding(
+                self.behavior_binding,
+                "class_feature.sorcerer.elemental_affinity.resistance",
+                entity.uuid,
+            ),
             duration=Duration(
                 duration=600,
                 duration_type=DurationType.ROUNDS,
@@ -259,11 +339,12 @@ class ElementalAffinityResistanceAction(BaseAction):
                 target_entity_uuid=entity.uuid,
             ),
         )
-        entity.add_condition(effect, parent_event=execution_event)
-        if not effect.applied:
+        applied = entity.add_condition(effect, parent_event=execution_event)
+        if applied is None or applied.canceled or not effect.applied:
             return execution_event.cancel(
                 status_message="Elemental Affinity resistance failed",
             )
+        template.active_resistance_condition_uuid = effect.uuid
         return execution_event.phase_to(
             EventPhase.EFFECT,
             status_message=(
@@ -290,6 +371,10 @@ class DragonWingsActive(BaseCondition):
         default="Manifested wings permit flying movement at normal speed.",
         description="Rules summary for the active wing state.",
     )
+    owning_action_template_uuid: UUID = Field(
+        exclude=True,
+        description="Exact Dragon Wings template owning this state.",
+    )
 
     def _apply(self, declaration_event: Event) -> Tuple[
         List[Tuple[UUID, UUID]],
@@ -312,6 +397,26 @@ class DragonWingsActive(BaseCondition):
             update={"condition": self},
             status_message=f"{target.name} manifests dragon wings",
         )
+
+    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is None:
+            raise RuntimeError("Dragon Wings condition owner is missing")
+        template = next(
+            (
+                action
+                for action in target.registered_actions
+                if action.uuid == self.owning_action_template_uuid
+            ),
+            None,
+        )
+        if template is None:
+            raise RuntimeError("Dragon Wings action owner is missing")
+        if template.active_wings_condition_uuid != self.uuid:
+            raise RuntimeError("Dragon Wings owner edge is inconsistent")
+        result = super()._remove(event)
+        template.active_wings_condition_uuid = None
+        return result
 
 
 class Fly(Move):
@@ -369,6 +474,11 @@ class DragonWings(BaseAction):
         ],
         description="Bonus-action cost to manifest or dismiss the wings.",
     )
+    active_wings_condition_uuid: Optional[UUID] = Field(
+        default=None,
+        exclude=True,
+        description="Exact manifested-wings root owned by this template.",
+    )
 
     def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
         if Entity.get(self.source_entity_uuid) is None:
@@ -382,21 +492,41 @@ class DragonWings(BaseAction):
         entity = Entity.get(self.source_entity_uuid)
         if entity is None:
             return execution_event.cancel(status_message="Entity not found")
-        active = entity.active_conditions.get("Dragon Wings")
-        if active is not None:
-            entity.remove_condition_by_uuid(
+        template = _owning_template(self, entity)
+        if template.active_wings_condition_uuid is not None:
+            active = entity.active_conditions_by_uuid.get(
+                template.active_wings_condition_uuid,
+            )
+            if active is None:
+                raise RuntimeError("Dragon Wings active root is missing")
+            if not entity.remove_condition_by_uuid(
                 active.uuid,
                 parent_event=execution_event,
-            )
+            ):
+                return execution_event.cancel(
+                    status_message="Dragon wings could not be dismissed",
+                )
             status = "Dragon wings dismissed"
         else:
-            entity.add_condition(
-                DragonWingsActive(
-                    source_entity_uuid=entity.uuid,
-                    target_entity_uuid=entity.uuid,
+            wings = DragonWingsActive(
+                source_entity_uuid=entity.uuid,
+                target_entity_uuid=entity.uuid,
+                owning_action_template_uuid=template.uuid,
+                behavior_binding=_child_binding(
+                    self.behavior_binding,
+                    "class_feature.sorcerer.dragon_wings.active",
+                    entity.uuid,
                 ),
+            )
+            applied = entity.add_condition(
+                wings,
                 parent_event=execution_event,
             )
+            if applied is None or applied.canceled or not wings.applied:
+                return execution_event.cancel(
+                    status_message="Dragon wings could not be manifested",
+                )
+            template.active_wings_condition_uuid = wings.uuid
             status = "Dragon wings manifested"
         return execution_event.phase_to(
             EventPhase.EFFECT,
@@ -431,6 +561,10 @@ class DraconicPresenceImmunity(BaseCondition):
         default=ConditionCategory.STATUS,
         description="Visible rules state retained for its full duration.",
     )
+    owning_action_template_uuid: UUID = Field(
+        exclude=True,
+        description="Exact Draconic Presence template owning this immunity.",
+    )
 
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
@@ -450,6 +584,35 @@ class DraconicPresenceImmunity(BaseCondition):
             update={"condition": self},
             status_message="Draconic Presence immunity applied",
         )
+
+
+    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
+        caster = (
+            Entity.get(self.source_entity_uuid)
+            if self.source_entity_uuid is not None
+            else None
+        )
+        if caster is None:
+            raise RuntimeError("Draconic Presence immunity caster is missing")
+        template = next(
+            (
+                action
+                for action in caster.registered_actions
+                if action.uuid == self.owning_action_template_uuid
+            ),
+            None,
+        )
+        if template is None:
+            raise RuntimeError("Draconic Presence immunity owner is missing")
+        target_uuid = self.target_entity_uuid
+        if (
+            target_uuid is None
+            or template.immunity_condition_uuids.get(target_uuid) != self.uuid
+        ):
+            raise RuntimeError("Draconic Presence immunity owner edge is inconsistent")
+        result = super()._remove(event)
+        del template.immunity_condition_uuids[target_uuid]
+        return result
 
 
 DRACONIC_PRESENCE_AURA_CONTENT_REF = ContentRef(
@@ -485,6 +648,10 @@ class DraconicPresenceAura(AreaCondition):
     mode: DraconicPresenceMode = Field(
         default="awe",
         description="Whether the aura charms through awe or frightens.",
+    )
+    owning_action_template_uuid: UUID = Field(
+        exclude=True,
+        description="Exact Draconic Presence template owning this aura.",
     )
     content_ref: ContentRef = Field(default=DRACONIC_PRESENCE_AURA_CONTENT_REF)
     position: Tuple[int, int]
@@ -553,25 +720,50 @@ class DraconicPresenceAura(AreaCondition):
         )
         _, _, success = target.saving_throw(request)
         if success:
-            target.add_condition(
-                DraconicPresenceImmunity(
+            template = next(
+                (
+                    action
+                    for action in caster.registered_actions
+                    if action.uuid == self.owning_action_template_uuid
+                ),
+                None,
+            )
+            if template is None:
+                raise RuntimeError("Draconic Presence template owner is missing")
+            immunity = DraconicPresenceImmunity(
+                source_entity_uuid=caster.uuid,
+                target_entity_uuid=target.uuid,
+                owning_action_template_uuid=template.uuid,
+                behavior_binding=_child_binding(
+                    self.behavior_binding,
+                    "class_feature.sorcerer.draconic_presence.immunity",
+                    target.uuid,
+                ),
+                duration=Duration(
+                    duration=14_400,
+                    duration_type=DurationType.ROUNDS,
                     source_entity_uuid=caster.uuid,
                     target_entity_uuid=target.uuid,
-                    duration=Duration(
-                        duration=14_400,
-                        duration_type=DurationType.ROUNDS,
-                        source_entity_uuid=caster.uuid,
-                        target_entity_uuid=target.uuid,
-                    ),
                 ),
-                parent_event=event,
             )
+            target.add_condition(immunity, parent_event=event)
+            if immunity.applied:
+                template.immunity_condition_uuids[target.uuid] = immunity.uuid
             return None
 
         effect_type = Charmed if self.mode == "awe" else Frightened
         effect = effect_type(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid,
+            behavior_binding=_child_binding(
+                self.behavior_binding,
+                (
+                    "condition.charmed"
+                    if self.mode == "awe"
+                    else "condition.frightened"
+                ),
+                target.uuid,
+            ),
         )
         target.add_condition(effect, parent_event=event)
         if effect.applied:
@@ -590,6 +782,11 @@ class DraconicPresenceAura(AreaCondition):
                 ),
             ],
             event_processor=self._on_hostile_turn_start,
+            behavior_binding=_child_binding(
+                self.behavior_binding,
+                "class_feature.sorcerer.draconic_presence.aura",
+                self.source_entity_uuid,
+            ),
         )
 
     def _apply(self, declaration_event: Event) -> Tuple[
@@ -605,6 +802,39 @@ class DraconicPresenceAura(AreaCondition):
                 status_message="Draconic Presence caster does not exist",
             )
         return super()._apply(declaration_event)
+
+
+class DraconicPresenceConcentrating(Concentrating):
+    """Concentration root owned by one exact Draconic Presence template."""
+
+    owning_action_template_uuid: UUID = Field(
+        exclude=True,
+        description="Exact Draconic Presence template owning this root.",
+    )
+
+    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
+        target = (
+            Entity.get(self.target_entity_uuid)
+            if self.target_entity_uuid is not None
+            else None
+        )
+        if target is None:
+            raise RuntimeError("Draconic Presence concentration owner is missing")
+        template = next(
+            (
+                action
+                for action in target.registered_actions
+                if action.uuid == self.owning_action_template_uuid
+            ),
+            None,
+        )
+        if template is None:
+            raise RuntimeError("Draconic Presence action owner is missing")
+        if template.active_concentrating_condition_uuid != self.uuid:
+            raise RuntimeError("Draconic Presence owner edge is inconsistent")
+        result = super()._remove(event)
+        template.active_concentrating_condition_uuid = None
+        return result
 
 
 class DraconicPresence(BaseAction):
@@ -632,6 +862,16 @@ class DraconicPresence(BaseAction):
     mode: DraconicPresenceMode = Field(
         default="awe",
         description="Selected aura mode.",
+    )
+    active_concentrating_condition_uuid: Optional[UUID] = Field(
+        default=None,
+        exclude=True,
+        description="Exact concentration root owned by this template.",
+    )
+    immunity_condition_uuids: Dict[UUID, UUID] = Field(
+        default_factory=dict,
+        exclude=True,
+        description="Exact persistent immunity rows owned by this template.",
     )
     costs: List[Cost] = Field(
         default_factory=lambda: [
@@ -664,25 +904,51 @@ class DraconicPresence(BaseAction):
         caster = Entity.get(self.source_entity_uuid)
         if caster is None:
             return execution_event.cancel(status_message="Entity not found")
+        template = _owning_template(self, caster)
+        if template.active_concentrating_condition_uuid is not None:
+            active = caster.active_conditions_by_uuid.get(
+                template.active_concentrating_condition_uuid,
+            )
+            if active is None:
+                raise RuntimeError("Draconic Presence concentration root is missing")
+            if not caster.remove_condition_by_uuid(
+                active.uuid,
+                parent_event=execution_event,
+            ):
+                return execution_event.cancel(
+                    status_message="Draconic Presence concentration could not be replaced",
+                )
 
-        concentration = Concentrating(
+        concentration = DraconicPresenceConcentrating(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=caster.uuid,
             spell_name=self.name,
+            owning_action_template_uuid=template.uuid,
+            behavior_binding=_child_binding(
+                self.behavior_binding,
+                "class_feature.sorcerer.draconic_presence",
+                caster.uuid,
+            ),
         )
-        caster.add_condition(concentration, parent_event=execution_event)
-        installed = caster.active_conditions.get("Concentrating")
-        if not isinstance(installed, Concentrating):
+        applied = caster.add_condition(concentration, parent_event=execution_event)
+        if applied is None or applied.canceled or not concentration.applied:
             return execution_event.cancel(
                 status_message="Draconic Presence concentration failed",
             )
+        template.active_concentrating_condition_uuid = concentration.uuid
 
         aura = DraconicPresenceAura(
             source_entity_uuid=caster.uuid,
             position=caster.position,
             anchor_uuid=caster.uuid,
+            owning_action_template_uuid=template.uuid,
             faction=caster.faction,
             mode=self.mode,
+            behavior_binding=_child_binding(
+                self.behavior_binding,
+                "class_feature.sorcerer.draconic_presence.aura",
+                caster.uuid,
+            ),
             duration=Duration(
                 duration=10,
                 duration_type=DurationType.ROUNDS,
@@ -692,11 +958,15 @@ class DraconicPresence(BaseAction):
         )
         aura_result = aura.activate(parent_event=execution_event)
         if aura_result is None or aura_result.canceled or not aura.applied:
-            installed.cleanup_if_no_effects(parent_event=execution_event)
+            if not caster.remove_condition_by_uuid(
+                concentration.uuid,
+                parent_event=execution_event,
+            ):
+                raise RuntimeError("Draconic Presence failed to release concentration")
             return execution_event.cancel(
                 status_message="Draconic Presence aura failed",
             )
-        installed.add_linked_condition(aura.uuid, aura.uuid)
+        concentration.add_linked_condition(aura.uuid, aura.uuid)
         return execution_event.phase_to(
             EventPhase.EFFECT,
             status_message=(
@@ -719,13 +989,18 @@ class MetamagicActive(BaseCondition):
         description: Rules summary for the pending metamagic override.
         condition_category: Condition category used for lifecycle and cleanup.
         metamagic_type: Metamagic option currently modifying spell templates.
+        owning_action_template_uuid: Exact action template owning this state.
     """
     name: str = Field(default="MetamagicActive", description="Internal condition name for the active metamagic modifier.")
     description: str = Field(default="Metamagic is active — next spell cast will be modified", description="Rules summary for the pending metamagic override.")
     condition_category: ConditionCategory = Field(default=ConditionCategory.STATUS, description="Condition category used for lifecycle and cleanup.")
     metamagic_type: str = Field(default="quickened", description="Metamagic option currently modifying the caster's spell templates.")
+    owning_action_template_uuid: UUID = Field(
+        exclude=True,
+        description="Exact metamagic action template owning this root.",
+    )
 
-    _modified_uuids: List[UUID] = []
+    _modified_uuids: List[UUID] = PrivateAttr(default_factory=list)
 
     def _apply(self, declaration_event: Event) -> Tuple[
         List[Tuple[UUID, UUID]],
@@ -802,16 +1077,25 @@ class MetamagicActive(BaseCondition):
                 ),
             ],
             event_processor=self._on_spell_cast,
+            behavior_binding=_child_binding(
+                self.behavior_binding,
+                "class_feature.sorcerer.metamagic_active",
+                target.uuid,
+            ),
         )
-        target.add_event_handler(handler)
-        handler_uuids = [handler.uuid]
+        try:
+            target.add_event_handler(handler)
+        except BaseException:
+            handler.remove_from_register()
+            raise
+        self.event_handlers_uuids.append(handler.uuid)
 
         effect_event = declaration_event.phase_to(
             EventPhase.EFFECT,
             update={"condition": self},
             status_message=f"Metamagic ({self.metamagic_type}) activated",
         )
-        return [], handler_uuids, [], [], effect_event
+        return [], [], [], [], effect_event
 
     def _on_spell_cast(self, event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
         """Consume metamagic after a successful or execution-canceled cast."""
@@ -838,6 +1122,30 @@ class MetamagicActive(BaseCondition):
                 clear_action_overrides(target, self._modified_uuids)
         self._modified_uuids = []
 
+    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
+        target = (
+            Entity.get(self.target_entity_uuid)
+            if self.target_entity_uuid is not None
+            else None
+        )
+        if target is None:
+            raise RuntimeError("Metamagic condition owner is missing")
+        template = next(
+            (
+                action
+                for action in target.registered_actions
+                if action.uuid == self.owning_action_template_uuid
+            ),
+            None,
+        )
+        if template is None:
+            raise RuntimeError("Metamagic action owner is missing")
+        if template.active_metamagic_condition_uuid != self.uuid:
+            raise RuntimeError("Metamagic owner edge is inconsistent")
+        result = super()._remove(event)
+        template.active_metamagic_condition_uuid = None
+        return result
+
 
 class QuickenedSpell(BaseAction):
     """Activate Quickened Spell for the caster's next eligible spell.
@@ -848,6 +1156,7 @@ class QuickenedSpell(BaseAction):
         target_type: Targeting mode for applying the metamagic to the caster.
         action_category: Discovery and reveal category for the action.
         costs: Sorcery point cost required to activate Quickened Spell.
+        active_metamagic_condition_uuid: Exact active root owned by this template.
     """
     name: str = Field(default="Quickened Spell", description="Display name for the Quickened Spell metamagic action.")
     description: str = Field(default="Next spell costs a bonus action instead of an action", description="Rules summary for the Quickened Spell override.")
@@ -862,6 +1171,11 @@ class QuickenedSpell(BaseAction):
         evaluator=entity_action_economy_cost_evaluator,
         resource_evaluator=entity_resource_cost_evaluator,
     )], description="Sorcery point cost required to activate Quickened Spell.")
+    active_metamagic_condition_uuid: Optional[UUID] = Field(
+        default=None,
+        exclude=True,
+        description="Exact pending metamagic root owned by this template.",
+    )
 
     def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
         entity = Entity.get(self.source_entity_uuid)
@@ -876,11 +1190,22 @@ class QuickenedSpell(BaseAction):
         if not entity:
             return execution_event.cancel(status_message="Entity not found")
 
-        entity.add_condition(MetamagicActive(
+        template = _owning_template(self, entity)
+        active = MetamagicActive(
             source_entity_uuid=entity.uuid,
             target_entity_uuid=entity.uuid,
             metamagic_type="quickened",
-        ), parent_event=execution_event)
+            owning_action_template_uuid=template.uuid,
+            behavior_binding=_child_binding(
+                self.behavior_binding,
+                "class_feature.sorcerer.metamagic_active",
+                entity.uuid,
+            ),
+        )
+        applied = entity.add_condition(active, parent_event=execution_event)
+        if applied is None or applied.canceled or not active.applied:
+            return execution_event.cancel(status_message="Quickened Spell failed")
+        template.active_metamagic_condition_uuid = active.uuid
 
         return execution_event.phase_to(
             EventPhase.EFFECT,
@@ -900,6 +1225,7 @@ class TwinnedSpell(BaseAction):
         target_type: Targeting mode for applying the metamagic to the caster.
         action_category: Discovery and reveal category for the action.
         costs: Base sorcery point cost required to activate Twinned Spell.
+        active_metamagic_condition_uuid: Exact active root owned by this template.
     """
     name: str = Field(default="Twinned Spell", description="Display name for the Twinned Spell metamagic action.")
     description: str = Field(default="Next single-target spell targets two creatures", description="Rules summary for the Twinned Spell override.")
@@ -914,6 +1240,11 @@ class TwinnedSpell(BaseAction):
         evaluator=entity_action_economy_cost_evaluator,
         resource_evaluator=entity_resource_cost_evaluator,
     )], description="Base sorcery point cost required to activate Twinned Spell.")
+    active_metamagic_condition_uuid: Optional[UUID] = Field(
+        default=None,
+        exclude=True,
+        description="Exact pending metamagic root owned by this template.",
+    )
 
     def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
         entity = Entity.get(self.source_entity_uuid)
@@ -928,11 +1259,22 @@ class TwinnedSpell(BaseAction):
         if not entity:
             return execution_event.cancel(status_message="Entity not found")
 
-        entity.add_condition(MetamagicActive(
+        template = _owning_template(self, entity)
+        active = MetamagicActive(
             source_entity_uuid=entity.uuid,
             target_entity_uuid=entity.uuid,
             metamagic_type="twinned",
-        ), parent_event=execution_event)
+            owning_action_template_uuid=template.uuid,
+            behavior_binding=_child_binding(
+                self.behavior_binding,
+                "class_feature.sorcerer.metamagic_active",
+                entity.uuid,
+            ),
+        )
+        applied = entity.add_condition(active, parent_event=execution_event)
+        if applied is None or applied.canceled or not active.applied:
+            return execution_event.cancel(status_message="Twinned Spell failed")
+        template.active_metamagic_condition_uuid = active.uuid
 
         return execution_event.phase_to(
             EventPhase.EFFECT,
@@ -952,6 +1294,7 @@ class DistantSpell(BaseAction):
         target_type: Targeting mode for applying the metamagic to the caster.
         action_category: Discovery and reveal category for the action.
         costs: Sorcery point cost required to activate Distant Spell.
+        active_metamagic_condition_uuid: Exact active root owned by this template.
     """
     name: str = Field(default="Distant Spell", description="Display name for the Distant Spell metamagic action.")
     description: str = Field(default="Next spell has double range", description="Rules summary for the Distant Spell override.")
@@ -966,6 +1309,11 @@ class DistantSpell(BaseAction):
         evaluator=entity_action_economy_cost_evaluator,
         resource_evaluator=entity_resource_cost_evaluator,
     )], description="Sorcery point cost required to activate Distant Spell.")
+    active_metamagic_condition_uuid: Optional[UUID] = Field(
+        default=None,
+        exclude=True,
+        description="Exact pending metamagic root owned by this template.",
+    )
 
     def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
         entity = Entity.get(self.source_entity_uuid)
@@ -980,11 +1328,22 @@ class DistantSpell(BaseAction):
         if not entity:
             return execution_event.cancel(status_message="Entity not found")
 
-        entity.add_condition(MetamagicActive(
+        template = _owning_template(self, entity)
+        active = MetamagicActive(
             source_entity_uuid=entity.uuid,
             target_entity_uuid=entity.uuid,
             metamagic_type="distant",
-        ), parent_event=execution_event)
+            owning_action_template_uuid=template.uuid,
+            behavior_binding=_child_binding(
+                self.behavior_binding,
+                "class_feature.sorcerer.metamagic_active",
+                entity.uuid,
+            ),
+        )
+        applied = entity.add_condition(active, parent_event=execution_event)
+        if applied is None or applied.canceled or not active.applied:
+            return execution_event.cancel(status_message="Distant Spell failed")
+        template.active_metamagic_condition_uuid = active.uuid
 
         return execution_event.phase_to(
             EventPhase.EFFECT,

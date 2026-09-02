@@ -28,9 +28,6 @@ from dnd.classes.fighter import (
     create_extra_attack_resource_handler,
 )
 from dnd.classes.rage import FrenziedStrike
-from dnd.content_system.extra_attack_character_grant_appliers import (
-    EXTRA_ATTACK_FEATURE_REF,
-)
 from dnd.core.base_actions import (
     AvailableActionInfo,
     AvailableActionsResult,
@@ -41,6 +38,7 @@ from dnd.core.dice import AttackOutcome, fixed_dice_faces
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import Event, EventPhase, EventQueue, EventType
 from dnd.core.feature_grants import AttackMultiplicityGrant
+from dnd.core.content.runtime import BehaviorBinding
 from dnd.core.gridmap import get_map
 from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import NumericalModifier
@@ -146,7 +144,7 @@ def _create_hasted_structural_fighter() -> tuple[Entity, Entity]:
     fighter.action_economy.add_attack_multiplicity_grant(
         AttackMultiplicityGrant(
             grant_id=grant_id,
-            provider_ref=EXTRA_ATTACK_FEATURE_REF,
+            provider_id="class_feature.extra_attack",
             attacks_per_attack_action=2,
             acquisition_ordinal=5,
         ),
@@ -164,6 +162,13 @@ def _create_hasted_structural_fighter() -> tuple[Entity, Entity]:
             name="Extra Attack",
             template=True,
             discover_equipped_weapon_slots=True,
+            semantic_key="action.feature.extra_attack",
+            behavior_binding=BehaviorBinding(
+                behavior_id="action.feature.extra_attack",
+                provided_by_id="class_feature.extra_attack",
+                origin_root_id="class.fighter",
+                runtime_owner_uuid=fighter.uuid,
+            ),
         ),
     )
     EventQueue.add_event_handler(
@@ -446,6 +451,14 @@ def test_haste_discovery_exposes_every_standard_action_variant() -> None:
     }
     assert expected_haste_rows <= names
     assert f"Extra Attack_MELEE_MAIN{HASTE_GRANT_SUFFIX}" not in names
+
+    for registered_template in fighter.registered_actions:
+        for variant in registered_template.get_discovery_variants(fighter):
+            if variant is not registered_template:
+                assert (
+                    variant.registered_template_uuid
+                    == registered_template.uuid
+                )
 
     for template_name in expected_haste_rows:
         costs = variants[template_name].effective_costs

@@ -24,16 +24,8 @@ from dnd.core.condition_types import (
     ConditionTag,
 )
 from dnd.core.content.identities import ContentRef, validate_namespaced_id
+from dnd.types.abilities import AbilityName
 
-
-ConditionSaveAbility = Literal[
-    "strength",
-    "dexterity",
-    "constitution",
-    "intelligence",
-    "wisdom",
-    "charisma",
-]
 
 
 class ConditionEffectOperation(str, Enum):
@@ -140,7 +132,7 @@ class SavingThrowConditionEffectGate(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     kind: Literal["saving_throw"] = "saving_throw"
-    ability: ConditionSaveAbility
+    ability: AbilityName
     outcome: ConditionSaveOutcome
     dc_source: ConditionSaveDCSource
     fixed_dc: int | None = Field(default=None, ge=0)
@@ -388,7 +380,6 @@ __all__ = [
     "ConditionEffectSelector",
     "ConditionEffectTarget",
     "ConditionSaveDCSource",
-    "ConditionSaveAbility",
     "ConditionSaveOutcome",
     "SavingThrowConditionEffectGate",
     "ConfigurationConditionEffectGate",

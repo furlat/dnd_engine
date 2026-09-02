@@ -17,7 +17,6 @@ import dnd.classes.barbarian as barbarian
 import dnd.classes.feats as feats
 import dnd.classes.fighter as fighter
 import dnd.classes.rage as rage
-import dnd.classes.sorcerer as sorcerer
 import dnd.conditions as conditions
 import dnd.extensions.aegis_spark as aegis_spark
 import dnd.extensions.field_focus as field_focus
@@ -186,13 +185,6 @@ CONDITION_BEHAVIOR_IDENTITY_SPECS: tuple[
     _srd(rage.FrenzyFeature, ContentDefinitionKind.CLASS_FEATURE, "class_feature.barbarian.frenzy"),
     _srd(rage.RageFeature, ContentDefinitionKind.CLASS_FEATURE, "class_feature.barbarian.rage"),
     _srd(rage.Raging, ContentDefinitionKind.CLASS_FEATURE, "class_feature.barbarian.raging"),
-    _srd(sorcerer.DraconicResilience, ContentDefinitionKind.CLASS_FEATURE, "class_feature.sorcerer.draconic_resilience"),
-    _srd(sorcerer.DraconicPresenceAura, ContentDefinitionKind.CLASS_FEATURE, "class_feature.sorcerer.draconic_presence.aura"),
-    _srd(sorcerer.DraconicPresenceImmunity, ContentDefinitionKind.CLASS_FEATURE, "class_feature.sorcerer.draconic_presence.immunity"),
-    _srd(sorcerer.DragonWingsActive, ContentDefinitionKind.CLASS_FEATURE, "class_feature.sorcerer.dragon_wings.active"),
-    _srd(sorcerer.ElementalAffinityResistance, ContentDefinitionKind.CLASS_FEATURE, "class_feature.sorcerer.elemental_affinity.resistance"),
-    _srd(sorcerer.MetamagicActive, ContentDefinitionKind.CLASS_FEATURE, "class_feature.sorcerer.metamagic_active"),
-    _srd(sorcerer.SorceryPointsFeature, ContentDefinitionKind.CLASS_FEATURE, "class_feature.sorcerer.sorcery_points"),
 
     # Core condition wrappers whose mechanics are supplied by SRD spells.
     _srd(conditions.InvisibilityEffect, ContentDefinitionKind.CONDITION, "condition.spell.invisibility"),
@@ -372,13 +364,6 @@ _GRANTED_ACTION_TYPES_BY_CONDITION: Mapping[
     rage.Frenzied: (rage.FrenziedStrike,),
     rage.FrenzyFeature: (rage.Frenzy,),
     rage.RageFeature: (rage.Rage, rage.EndRage),
-    sorcerer.SorceryPointsFeature: (
-        sorcerer.ConvertSPToSlot,
-        sorcerer.ConvertSlotToSP,
-        sorcerer.DistantSpell,
-        sorcerer.QuickenedSpell,
-        sorcerer.TwinnedSpell,
-    ),
     aegis_spark.AegisTrainingFeature: (aegis_spark.AegisSpark,),
     monster_traits.RampageAvailable: (monster_traits.NaturalAttack,),
     conjuration.WebRestrained: (conjuration.EscapeWebAction,),
@@ -393,7 +378,6 @@ _ROOT_OWNED_CONDITION_TYPES = frozenset({
     fighter.SecondWindFeature,
     rage.FrenzyFeature,
     rage.RageFeature,
-    sorcerer.SorceryPointsFeature,
 })
 
 

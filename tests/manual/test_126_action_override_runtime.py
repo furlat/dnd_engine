@@ -44,13 +44,19 @@ from dnd.blocks.action_economy import (
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
 from dnd.core.aoe import Sphere
+from dnd.core.action_types import (
+    ActionEconomyCostType,
+    RestrictedActionGrant,
+    RestrictedActionKind,
+)
 from dnd.core.base_actions import (
     AvailableActionInfo,
     Cost,
     TargetType,
 )
 from dnd.core.dice import fixed_dice_faces
-from dnd.core.events import AbilityName, EventPhase, EventQueue
+from dnd.core.events import EventPhase, EventQueue
+from dnd.types.abilities import AbilityName
 from dnd.core.gridmap import get_map
 from dnd.core.creature_types import CreatureType
 from dnd.core.modifiers import NumericalModifier
@@ -626,6 +632,7 @@ def test_upcast_variants_preserve_cost_swap_and_skip_slot_overrides() -> None:
 
     assert [variant.cast_at_level for variant in variants] == [2, 3, 4]
     for variant in variants:
+        assert variant.registered_template_uuid == template.uuid
         assert any(
             cost.cost_type == "bonus_actions" and cost.cost == 1
             for cost in variant.effective_costs
@@ -635,6 +642,25 @@ def test_upcast_variants_preserve_cost_swap_and_skip_slot_overrides() -> None:
             for cost in variant.effective_costs
         )
 
+    template.alt_cost_type = None
+    caster.action_economy.add_restricted_action_grant(
+        RestrictedActionGrant(
+            grant_id="test_spell_action",
+            owner_uuid=uuid4(),
+            resource_name="test_spell_action",
+            display_name="Test Spell Action",
+            allowed_kinds=frozenset({RestrictedActionKind.STANDARD_ACTION}),
+            replaced_cost_types=frozenset({ActionEconomyCostType.ACTIONS}),
+        ),
+    )
+    composed_variants = template.get_discovery_variants(caster)
+    assert len(composed_variants) == 6
+    assert all(
+        variant.registered_template_uuid == template.uuid
+        for variant in composed_variants
+    )
+
+    template.alt_cost_type = "bonus_actions"
     template.alt_skip_slot = True
     slotless_variants = template.generate_variants(caster)
 

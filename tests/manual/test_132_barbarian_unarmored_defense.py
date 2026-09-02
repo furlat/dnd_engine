@@ -9,11 +9,17 @@ component re-export paths.
 from uuid import uuid4
 
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
-from dnd.blocks.equipment import BodyArmor, EquipmentConfig, Shield
-from dnd.blocks.health import HealthConfig, HitDiceConfig
+from dnd.blocks.equipment import BodyArmor, Shield
+from dnd.blocks.health import HealthConfig
 from dnd.content.items.authored_item_builders import build_authored_item
-from dnd.core.equipment_types import BodyPart, UnarmoredAc, WeaponSlot
+from dnd.content.characters.barbarian_grants import apply_barbarian_level
+from dnd.core.equipment_types import BodyPart, WeaponSlot
 from dnd.entity import Entity, EntityConfig
+from dnd.types.character_progression import (
+    AppliedClassLevel,
+    CharacterClass,
+    ClassChoiceSelection,
+)
 from tests.engine.support import reset_combat_state
 
 
@@ -24,7 +30,7 @@ def _create_test_barbarian(
 ) -> Entity:
     """Create a level-one-equivalent actor with the Barbarian AC formula."""
     actor_uuid = uuid4()
-    return Entity.create(
+    entity = Entity.create(
         source_entity_uuid=actor_uuid,
         name="Unarmored Defense Barbarian",
         config=EntityConfig(
@@ -36,23 +42,32 @@ def _create_test_barbarian(
                 wisdom=AbilityConfig(ability_score=12),
                 charisma=AbilityConfig(ability_score=10),
             ),
-            health=HealthConfig(
-                hit_dices=[
-                    HitDiceConfig(
-                        hit_dice_value=12,
-                        hit_dice_count=1,
-                        mode="maximums",
-                    )
-                ],
-            ),
-            equipment=EquipmentConfig(
-                unarmored_ac_type=UnarmoredAc.BARBARIAN,
-            ),
+            health=HealthConfig(),
             proficiency_bonus=2,
             position=(0, 0),
             faction="heroes",
         ),
     )
+    apply_barbarian_level(
+        entity,
+        AppliedClassLevel(
+            step_id="class.barbarian.level_1",
+            character_level=1,
+            class_id=CharacterClass.BARBARIAN,
+            resulting_class_level=1,
+            choices=(
+                ClassChoiceSelection(
+                    choice_id="class.barbarian.first_class.starting_equipment",
+                    values=("starting_equipment.barbarian.greataxe",),
+                ),
+                ClassChoiceSelection(
+                    choice_id="class.barbarian.proficiencies.skills",
+                    values=("athletics", "perception"),
+                ),
+            ),
+        ),
+    )
+    return entity
 
 
 def test_unarmored_defense_basic() -> None:

@@ -6,8 +6,6 @@ data lives in :mod:`dnd.core.content.durable_characters`.
 
 from dataclasses import dataclass
 from enum import Enum
-from hashlib import sha256
-import json
 from math import ceil
 from typing import Dict, Iterable
 
@@ -47,9 +45,6 @@ POINT_BUY_COSTS: dict[int, int] = {
     15: 9,
 }
 
-CHARACTER_RULESET_SCHEMA_VERSION = 1
-
-
 class CasterProgression(str, Enum):
     """Normal shared-slot contribution category for one class."""
 
@@ -64,52 +59,6 @@ class MulticlassSlotRoundingPolicy(str, Enum):
 
     SRD_5_2_ROUND_UP = "srd_5_2_round_up"
     SRD_5_1_ROUND_DOWN = "srd_5_1_round_down"
-
-
-def character_ruleset_digest(
-    *,
-    permissive_multiclass_prerequisites: bool,
-    multiclass_slot_rounding_policy: MulticlassSlotRoundingPolicy,
-) -> str:
-    """Authenticate the complete build-rules policy pinned by a character.
-
-    Deployment permissions such as whether a profile currently permits
-    respec, and timing policy for changing prepared spells, do not change the
-    structural meaning of an already-authored build. They therefore remain
-    profile policy rather than inputs to this digest.
-    """
-
-    payload = {
-        "schema_version": CHARACTER_RULESET_SCHEMA_VERSION,
-        "rules_baseline": "srd_5_1_with_selected_bg3_creation_rules",
-        "character_level_cap": 20,
-        "ability_scores": {
-            "point_buy_budget": 27,
-            "minimum_score": 8,
-            "maximum_pre_bonus_score": 15,
-            "flexible_bonus": {
-                "plus_two": 2,
-                "plus_one": 1,
-                "must_target_distinct_abilities": True,
-            },
-            "ordinary_cap": 20,
-        },
-        "hit_points_after_character_level_one": "fixed_class_average",
-        "permissive_multiclass_prerequisites": (
-            permissive_multiclass_prerequisites
-        ),
-        "multiclass_slot_rounding_policy": (
-            multiclass_slot_rounding_policy.value
-        ),
-    }
-    encoded = json.dumps(
-        payload,
-        allow_nan=False,
-        ensure_ascii=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode("utf-8")
-    return sha256(encoded).hexdigest()
 
 
 @dataclass(frozen=True, slots=True)

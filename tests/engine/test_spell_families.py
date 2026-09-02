@@ -21,7 +21,8 @@ from dnd.core.base_tiles import water_factory
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
 from dnd.core.dice import AttackOutcome, RollType
 from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import AbilityName, Event, EventPhase, EventQueue, EventType, RangeType, SpatialEffectInteractionEvent
+from dnd.core.events import Event, EventPhase, EventQueue, EventType, RangeType, SpatialEffectInteractionEvent
+from dnd.types.abilities import AbilityName
 from dnd.core.gridmap import get_map
 from dnd.core.life_types import LifeState
 from dnd.core.creature_types import CreatureType, DamageType
