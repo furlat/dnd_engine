@@ -544,7 +544,6 @@ class WallTorch(UsableItem):
         description="Whether the wall torch currently has a light source.",
     )
     _light_source_uuid: Optional[UUID] = None
-    _wall_torch_position: Optional[Tuple[int, int]] = None
 
     def to_item_presentation_state(
         self,
@@ -588,13 +587,15 @@ class WallTorch(UsableItem):
         """Create this fixture's fixed light source."""
         if self.is_lit:
             return None
-        if self._wall_torch_position is None:
+        placement = get_map().get_object_placement(self.uuid)
+        if placement is None:
             return None
+        position = placement.position
         current = EventQueue.publish_declaration(ExposedFlameEvent(
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.uuid,
             item_uuid=self.uuid,
-            position=self._wall_torch_position,
+            position=position,
             parent_event=parent_event,
             phase=EventPhase.DECLARATION,
             use_register=False,
@@ -605,7 +606,7 @@ class WallTorch(UsableItem):
         if current.canceled:
             return current
         light_source_uuid = get_map().add_light_source(
-            position=self._wall_torch_position,
+            position=position,
             very_bright_radius_feet=self.very_bright_radius_feet,
             bright_radius_feet=self.bright_radius_feet,
             dim_radius_feet=self.dim_radius_feet,
@@ -653,7 +654,6 @@ class WallTorch(UsableItem):
         lit: bool = True,
     ) -> None:
         """Place an already identity-bound fixture and apply its light state."""
-        self._wall_torch_position = position
         self.place_on_grid(position)
         if lit:
             self.light()

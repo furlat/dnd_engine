@@ -25,16 +25,14 @@ from dnd.core.content.battlefields import (
     LightLevelName,
 )
 from dnd.core.gridmap import GridMap, get_map
-from dnd.core.base_block import BaseBlock, MovementMode
+from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.base_tiles import Tile
 from dnd.core.events import (
     EventPhase,
     EventQueue,
-    WorldConnectorState,
     WorldInitializedEvent,
     WorldObjectState,
-    WorldTileState,
 )
 from dnd.core.item_types import ItemLocation
 from dnd.core.traversal_connectors import (
@@ -51,8 +49,12 @@ from dnd.items.environment_interactables import (
     StorageChest,
 )
 from dnd.blocks.base_item import BaseItem
-from dnd.blocks.inventory import Inventory
 from dnd.items.torches import WallTorch
+from dnd.world_authoring import (
+    project_world_connector,
+    project_world_object,
+    project_world_tile,
+)
 from dnd.spatial.environmental_conditions import (
     materialize_spike_trap_condition,
 )
@@ -757,37 +759,13 @@ def build_battlefield(battlefield_id: str) -> BuiltBattlefield:
     return built
 
 
-def _movement_cost(tile: Tile, mode: MovementMode) -> int:
-    """Return one exact integral authored movement multiplier."""
-    cost = tile.get_movement_cost(mode)
-    if int(cost) != cost:
-        raise ValueError("authored Tile movement costs must be integral")
-    return int(cost)
-
-
 def _world_initialized_event(
     built: BuiltBattlefield,
     grid: GridMap,
 ) -> WorldInitializedEvent:
     """Snapshot the complete actor-free cold world."""
     tiles = tuple(
-        WorldTileState(
-            tile_uuid=tile.uuid,
-            position=position,
-            surface=tile.surface,
-            name=tile.name,
-            blocks_optics=tile.blocks_optics,
-            blocks_propagation=tile.blocks_propagation_field,
-            walking_cost=_movement_cost(tile, MovementMode.WALKING),
-            flying_cost=_movement_cost(tile, MovementMode.FLYING),
-            swimming_cost=_movement_cost(tile, MovementMode.SWIMMING),
-            burrowing_cost=_movement_cost(tile, MovementMode.BURROWING),
-            elevation_steps=tile.height,
-            surface_kind=tile.elevation_surface_kind,
-            slope_axis=tile.slope_axis,
-            default_light=tile.default_light,
-            resolved_light=tile.resolved_light_level,
-        )
+        project_world_tile(tile)
         for position, tile in sorted(grid.get_all_tiles().items())
     )
     objects: list[WorldObjectState] = []
@@ -800,43 +778,9 @@ def _world_initialized_event(
             raise RuntimeError(
                 f"world object {placement.object_uuid} is not a BaseItem",
             )
-        storage = item.get_storage_block()
-        contained_items = (
-            tuple(
-                child.to_item_presentation_state()
-                for child in sorted(
-                    storage.items.values(),
-                    key=lambda child: str(child.uuid),
-                )
-            )
-            if isinstance(storage, Inventory)
-            else ()
-        )
-        objects.append(WorldObjectState(
-            placement=placement,
-            item=item.to_item_presentation_state(),
-            contained_items=contained_items,
-        ))
+        objects.append(project_world_object(item, placement))
     connectors = tuple(
-        WorldConnectorState(
-            connector_uuid=connector.uuid,
-            authored_id=connector.authored_id,
-            kind=connector.kind,
-            endpoints=(
-                connector.endpoints[0].position,
-                connector.endpoints[1].position,
-            ),
-            endpoint_elevations_feet=(
-                connector.endpoints[0].elevation_feet,
-                connector.endpoints[1].elevation_feet,
-            ),
-            movement_cost_feet=connector.movement_cost_feet,
-            action_cost_type=connector.action_cost_type,
-            action_cost_amount=connector.action_cost_amount,
-            bidirectional=connector.bidirectional,
-            enabled=connector.enabled,
-            provocation_policy=connector.provocation_policy,
-        )
+        project_world_connector(connector)
         for connector in grid.get_all_connectors()
     )
     return WorldInitializedEvent(

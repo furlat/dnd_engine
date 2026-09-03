@@ -11,7 +11,8 @@ __all__ = [
     "Event", "Trigger", "BaseHandler", "EventHandler", "SpatialHandler", "EventQueue",
     "SensoryUpdateReason", "SensoryUpdateEvent",
     "WorldTileState", "WorldObjectState", "WorldConnectorState",
-    "WorldInitializedEvent", "EntityCreatedEvent", "EntityLevelAddedEvent",
+    "WorldMaterializedState", "WorldInitializedEvent", "WorldModifiedEvent",
+    "EntityCreatedEvent", "EntityLevelAddedEvent",
     "EntityLevelRemovedEvent",
     "SpatialEffectChangeEvent", "SpatialEffectInteractionEvent",
     "D20Event", "SavingThrowEvent", "SkillCheckEvent",
@@ -179,6 +180,7 @@ class EventType(str, Enum):
     ITEM_LOCATION_STATE = "item_location_state"
     ITEM_CHARGE_CONSUMPTION = "item_charge_consumption"
     WORLD_INITIALIZED = "world_initialized"
+    WORLD_MODIFIED = "world_modified"
     ENTITY_CREATED = "entity_created"
     ENTITY_LEVEL_ADDED = "entity_level_added"
     ENTITY_LEVEL_REMOVED = "entity_level_removed"
@@ -807,7 +809,9 @@ class WorldConnectorState(BaseModel):
     connector_uuid: UUID
     authored_id: str
     kind: TraversalConnectorKind
+    presentation_key: str
     endpoints: Tuple[Tuple[int, int], Tuple[int, int]]
+    support_tile_uuids: Tuple[UUID, UUID]
     endpoint_elevations_feet: Tuple[int, int]
     movement_cost_feet: StrictInt = Field(ge=0)
     action_cost_type: Optional[ConnectorActionCostType] = None
@@ -815,6 +819,13 @@ class WorldConnectorState(BaseModel):
     bidirectional: bool
     enabled: bool
     provocation_policy: ConnectorProvocationPolicy
+
+
+WorldMaterializedState = Union[
+    WorldTileState,
+    WorldObjectState,
+    WorldConnectorState,
+]
 
 
 class WorldInitializedEvent(Event):
@@ -830,6 +841,88 @@ class WorldInitializedEvent(Event):
     tiles: Tuple[WorldTileState, ...]
     objects: Tuple[WorldObjectState, ...] = ()
     connectors: Tuple[WorldConnectorState, ...] = ()
+
+
+class WorldModifiedEvent(Event):
+    """One completed structural edit against an already-running world."""
+
+    name: str = Field(default="World Modified")
+    event_type: EventType = Field(default=EventType.WORLD_MODIFIED, frozen=True)
+    tile_position: Optional[Tuple[int, int]] = None
+    object_uuid: Optional[UUID] = None
+    connector_uuid: Optional[UUID] = None
+    before: Optional[WorldMaterializedState] = None
+    after: Optional[WorldMaterializedState] = None
+
+    def post(self, **updates) -> "WorldModifiedEvent":
+        """Validate the prospective copied value before queue publication."""
+        candidate = self.model_copy(update=updates)
+        candidate.validate_materialized_transition()
+        return super().post(**updates)
+
+    @model_validator(mode="after")
+    def validate_materialized_transition(self) -> "WorldModifiedEvent":
+        """Require one addressed family and phase-coherent cold values."""
+        targets = (
+            self.tile_position is not None,
+            self.object_uuid is not None,
+            self.connector_uuid is not None,
+        )
+        if sum(targets) != 1:
+            raise ValueError("world modification requires exactly one target")
+
+        if self.phase in {
+            EventPhase.DECLARATION,
+            EventPhase.EXECUTION,
+            EventPhase.EFFECT,
+            EventPhase.CANCEL,
+        } and self.after is not None:
+            raise ValueError("world modification after-state is completion-only")
+        if self.phase is EventPhase.COMPLETION:
+            if self.before is None and self.after is None:
+                raise ValueError("completed world modification requires state")
+            if self.before == self.after:
+                raise ValueError("completed world modification must change state")
+
+        for state in (self.before, self.after):
+            if state is None:
+                continue
+            if self.tile_position is not None:
+                if type(state) is not WorldTileState:
+                    raise ValueError("Tile target requires WorldTileState")
+                if state.position != self.tile_position:
+                    raise ValueError("Tile state position must match target")
+            elif self.object_uuid is not None:
+                if type(state) is not WorldObjectState:
+                    raise ValueError("object target requires WorldObjectState")
+                if state.item.item_uuid != self.object_uuid:
+                    raise ValueError("object state UUID must match target")
+            else:
+                if type(state) is not WorldConnectorState:
+                    raise ValueError(
+                        "connector target requires WorldConnectorState"
+                    )
+                if state.connector_uuid != self.connector_uuid:
+                    raise ValueError("connector state UUID must match target")
+
+        if (
+            type(self.before) is WorldObjectState
+            and type(self.after) is WorldObjectState
+            and self.before.item.item_uuid != self.after.item.item_uuid
+        ):
+            raise ValueError("object replacement must preserve item UUID")
+        if (
+            type(self.before) is WorldConnectorState
+            and type(self.after) is WorldConnectorState
+            and (
+                self.before.connector_uuid != self.after.connector_uuid
+                or self.before.authored_id != self.after.authored_id
+            )
+        ):
+            raise ValueError(
+                "connector replacement must preserve UUID and authored ID"
+            )
+        return self
 
 
 class EntityCreatedEvent(Event):
@@ -2034,6 +2127,41 @@ class EventQueue:
         event.timestamp = datetime.now(UTC)
         cls._store_event(event)
         return event
+
+    @classmethod
+    def publish_committed_phase(cls, event: EventT) -> EventT:
+        """Publish one execution/effect fact that its owner already committed.
+
+        Matching handlers still observe the authoritative phase and may emit
+        ordinary child reactions. Their returned replacements or
+        cancellations cannot rewrite an already-committed domain fact and do
+        not prevent later handlers from observing it.
+        """
+        if event.use_register:
+            raise ValueError("Committed phases must be constructed unregistered")
+        if event.canceled:
+            raise ValueError("Canceled events cannot be committed facts")
+        if event.phase not in (EventPhase.EXECUTION, EventPhase.EFFECT):
+            raise ValueError("Only execution and effect phases can be committed facts")
+
+        committed = cast(
+            EventT,
+            event.model_copy(update={
+                "use_register": True,
+                "timestamp": datetime.now(UTC),
+            }),
+        )
+        cls._store_event(committed)
+        for handler in cls._get_handlers_for_event(committed):
+            if handler.enabled:
+                cls._invoke_handler(
+                    handler,
+                    committed.model_copy(
+                        update={"use_register": False},
+                        deep=True,
+                    ),
+                )
+        return committed
 
     @classmethod
     def publish_completed_fact(cls, event: EventT) -> EventT:
