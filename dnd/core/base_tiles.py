@@ -6,7 +6,8 @@ from uuid import UUID, uuid4
 from pydantic import Field, PrivateAttr, StrictInt, model_validator
 from dnd.core.base_block import BaseBlock, MovementMode, LightLevel
 from dnd.core.base_conditions import BaseCondition
-from dnd.core.values import ModifiableValue
+from dnd.core.base_object import BaseObject
+from dnd.core.values import BaseValue, ModifiableValue
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.world_edges import ElevationSurfaceKind, SlopeAxis
 from dnd.types.materials import Material, TileSurface
@@ -296,14 +297,7 @@ class Tile(BaseBlock):
     @property
     def resolved_light_level(self) -> LightLevel:
         """Objective light level (no observer). Lights brighten, darkness overrides."""
-        brightest = self.default_light
-        for level in self._illuminations.values():
-            if level.value > brightest.value:
-                brightest = level
-        if not self._illumination_caps:
-            return brightest
-        darkest = min(self._illumination_caps.values(), key=lambda x: x.value)
-        return LightLevel(min(brightest.value, darkest.value))
+        return resolve_tile_light_level(self, self.default_light)
 
     def directions_toward(self, other_position: Tuple[int, int]) -> Tuple[str, ...]:
         """Return tile-relative cardinal directions touched by a transition."""
@@ -339,10 +333,14 @@ class Tile(BaseBlock):
                slope_axis: Optional[SlopeAxis] = None,
                default_light: LightLevel = LightLevel.BRIGHT_LIGHT) -> 'Tile':
         """Create a tile with movement-mode `ModifiableValue` costs."""
-        validate_elevation_surface_tuple(
-            height,
-            elevation_surface_kind,
-            slope_axis,
+        validate_tile_creation_inputs(
+            position, blocks_optics=blocks_optics,
+            blocks_propagation=blocks_propagation, name=name,
+            sprite_name=sprite_name, height=height, surface=surface,
+            walking_cost=walking_cost, flying_cost=flying_cost,
+            swimming_cost=swimming_cost, burrowing_cost=burrowing_cost,
+            elevation_surface_kind=elevation_surface_kind,
+            slope_axis=slope_axis, default_light=default_light,
         )
         cost_values = {
             "walking_cost": walking_cost,
@@ -350,11 +348,6 @@ class Tile(BaseBlock):
             "swimming_cost": swimming_cost,
             "burrowing_cost": burrowing_cost,
         }
-        for cost_name, cost in cost_values.items():
-            if type(cost) is not int or cost < 0:
-                raise ValueError(
-                    f"{cost_name} must be a nonnegative strict integer"
-                )
         tile_uuid = uuid4()
 
         walking_cost_value = ModifiableValue.create(
@@ -409,7 +402,7 @@ class Tile(BaseBlock):
             uuid=tile_uuid,
             source_entity_uuid=tile_uuid,
             position=position,
-            surface=surface or TileSurface(base_material=Material.STONE),
+            surface=surface if surface is not None else TileSurface(base_material=Material.STONE),
             blocks_optics=blocks_optics,
             blocks_propagation_field=blocks_propagation,
             name=name,
@@ -423,6 +416,13 @@ class Tile(BaseBlock):
             slope_axis=slope_axis,
             default_light=default_light
         )
+
+
+# Factory locations are governed by the content-recovery visual overlay.
+# Keep new Tile helper definitions below these authored factories.
+
+
+
 
 
 def floor_factory(position: Tuple[int, int]) -> Tile:
@@ -473,3 +473,174 @@ def difficult_terrain_factory(position: Tuple[int, int]) -> Tile:
     )
 
     return tile
+
+
+def validate_tile_creation_inputs(
+    position: Tuple[int, int],
+    *,
+    blocks_optics: bool,
+    blocks_propagation: bool,
+    name: str,
+    sprite_name: Optional[str],
+    height: int,
+    surface: Optional[TileSurface],
+    walking_cost: int,
+    flying_cost: int,
+    swimming_cost: int,
+    burrowing_cost: int,
+    elevation_surface_kind: ElevationSurfaceKind,
+    slope_axis: Optional[SlopeAxis],
+    default_light: LightLevel,
+) -> None:
+    """Validate every Tile creation input before allocating owned values."""
+    if (
+        type(position) is not tuple
+        or len(position) != 2
+        or any(type(coordinate) is not int for coordinate in position)
+    ):
+        raise TypeError("tile position must be a pair of exact integers")
+    if type(blocks_optics) is not bool:
+        raise TypeError("blocks_optics must be an exact boolean")
+    if type(blocks_propagation) is not bool:
+        raise TypeError("blocks_propagation must be an exact boolean")
+    if type(name) is not str:
+        raise TypeError("tile name must be a string")
+    if sprite_name is not None and type(sprite_name) is not str:
+        raise TypeError("sprite_name must be a string or None")
+    if surface is not None and type(surface) is not TileSurface:
+        raise TypeError("surface must be a TileSurface or None")
+    for cost_name, cost in {
+        "walking_cost": walking_cost,
+        "flying_cost": flying_cost,
+        "swimming_cost": swimming_cost,
+        "burrowing_cost": burrowing_cost,
+    }.items():
+        if type(cost) is not int or cost < 0:
+            raise ValueError(
+                f"{cost_name} must be a nonnegative strict integer"
+            )
+    if type(default_light) is not LightLevel:
+        raise TypeError("default_light must be a LightLevel")
+    validate_elevation_surface_tuple(
+        height,
+        elevation_surface_kind,
+        slope_axis,
+    )
+
+
+def resolve_tile_light_level(
+    tile: Tile,
+    default_light: LightLevel,
+) -> LightLevel:
+    """Preview objective light with another authored default, without mutation."""
+    if type(default_light) is not LightLevel:
+        raise TypeError("default_light must be a LightLevel")
+    brightest = default_light
+    for level in tile._illuminations.values():
+        if level.value > brightest.value:
+            brightest = level
+    if not tile._illumination_caps:
+        return brightest
+    darkest = min(tile._illumination_caps.values(), key=lambda level: level.value)
+    return LightLevel(min(brightest.value, darkest.value))
+
+
+def tile_light_contributions(
+    tile: Tile,
+) -> Tuple[Dict[UUID, LightLevel], Dict[UUID, LightLevel]]:
+    """Return detached GridMap-owned illumination and cap contributions."""
+    return dict(tile._illuminations), dict(tile._illumination_caps)
+
+
+def validate_tile_owned_movement_graph(tile: Tile) -> None:
+    """Authenticate every locally owned movement root, channel, and modifier."""
+    if tile.source_entity_uuid != tile.uuid or BaseBlock.get(tile.uuid) is not tile:
+        raise ValueError("Tile registry ownership is not current")
+    values = (
+        tile.walking_cost,
+        tile.flying_cost,
+        tile.swimming_cost,
+        tile.burrowing_cost,
+    )
+    if len({value.uuid for value in values}) != len(values):
+        raise ValueError("Tile movement value identities are not distinct")
+    channels = tuple(
+        channel
+        for value in values
+        for channel in (
+            value.self_static,
+            value.to_target_static,
+            value.self_contextual,
+            value.to_target_contextual,
+        )
+    )
+    if len({channel.uuid for channel in channels}) != len(channels):
+        raise ValueError("Tile movement channel identities are not distinct")
+
+    seen_modifier_uuids = set()
+    for value in values:
+        if value.source_entity_uuid != tile.uuid or BaseValue.get(value.uuid) is not value:
+            raise ValueError("Tile movement value ownership is not current")
+        for channel in (
+            value.self_static,
+            value.to_target_static,
+            value.self_contextual,
+            value.to_target_contextual,
+        ):
+            if channel.source_entity_uuid != tile.uuid or BaseValue.get(channel.uuid) is not channel:
+                raise ValueError("Tile movement channel ownership is not current")
+            modifier_entries = (
+                tuple(channel.value_modifiers.items())
+                + tuple(channel.min_constraints.items())
+                + tuple(channel.max_constraints.items())
+                + tuple(channel.advantage_modifiers.items())
+                + tuple(channel.critical_modifiers.items())
+                + tuple(channel.auto_hit_modifiers.items())
+                + tuple(channel.size_modifiers.items())
+                + tuple(channel.damage_type_modifiers.items())
+                + tuple(channel.resistance_modifiers.items())
+            )
+            if any(
+                modifier_uuid != modifier.uuid
+                for modifier_uuid, modifier in modifier_entries
+            ):
+                raise ValueError("Tile movement modifier key does not match identity")
+            modifiers = tuple(modifier for _, modifier in modifier_entries)
+            modifier_uuids = {modifier.uuid for modifier in modifiers}
+            if (
+                len(modifier_uuids) != len(modifiers)
+                or seen_modifier_uuids & modifier_uuids
+            ):
+                raise ValueError("Tile movement modifier identities are not distinct")
+            seen_modifier_uuids.update(modifier_uuids)
+            if any(
+                modifier.source_entity_uuid != tile.uuid
+                or BaseObject.get(modifier.uuid) is not modifier
+                for modifier in modifiers
+            ):
+                raise ValueError("Tile movement modifier ownership is not current")
+
+
+def release_tile_owned_movement_graph(tile: Tile) -> None:
+    """Release one detached Tile's authenticated finite value graph."""
+    validate_tile_owned_movement_graph(tile)
+    for value in (
+        tile.walking_cost,
+        tile.flying_cost,
+        tile.swimming_cost,
+        tile.burrowing_cost,
+    ):
+        value.reset_from_target()
+        for channel in (
+            value.self_static,
+            value.to_target_static,
+            value.self_contextual,
+            value.to_target_contextual,
+        ):
+            modifier_uuids = tuple(channel.get_all_modifier_uuids())
+            channel.remove_all_modifiers()
+            for modifier_uuid in modifier_uuids:
+                BaseObject.unregister(modifier_uuid)
+            BaseValue.unregister(channel.uuid)
+        BaseValue.unregister(value.uuid)
+    BaseBlock.unregister(tile.uuid)

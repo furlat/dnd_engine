@@ -520,7 +520,9 @@ def test_every_authored_world_starts_with_one_exact_cold_fact(
         "connector_uuid",
         "authored_id",
         "kind",
+        "presentation_key",
         "endpoints",
+        "support_tile_uuids",
         "endpoint_elevations_feet",
         "movement_cost_feet",
         "action_cost_type",
@@ -536,8 +538,12 @@ def test_every_authored_world_starts_with_one_exact_cold_fact(
             connector_uuid=connector.uuid,
             authored_id=connector.authored_id,
             kind=connector.kind,
+            presentation_key=connector.presentation_key,
             endpoints=tuple(
                 endpoint.position for endpoint in connector.endpoints
+            ),
+            support_tile_uuids=tuple(
+                endpoint.support_tile_uuid for endpoint in connector.endpoints
             ),
             endpoint_elevations_feet=tuple(
                 endpoint.elevation_feet for endpoint in connector.endpoints
