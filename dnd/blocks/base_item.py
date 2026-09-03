@@ -397,19 +397,30 @@ class BaseItem(BaseBlock):
         boundary_direction: Optional[CardinalDirection] = None,
         base_height_steps: Optional[int] = None,
         orientation: Optional[CardinalDirection] = None,
-    ) -> None:
+        parent_event: Optional[UUID] = None,
+    ) -> WorldObjectPlacement:
         """Place this item through GridMap's exact placement contract."""
-        grid = get_map()
-        self.position = position
-        tile = grid.get_tile(position[0], position[1])
-        self.tile_uuid = tile.uuid if tile else None
-        grid.place_object(
+        placement = get_map().place_object(
             self.uuid,
             position,
+            parent_event=parent_event,
             boundary_direction=boundary_direction,
             base_height_steps=base_height_steps,
             orientation=orientation,
         )
+        self.synchronize_floor_placement(placement)
+        return placement
+
+    def synchronize_floor_placement(
+        self,
+        placement: Optional[WorldObjectPlacement],
+    ) -> None:
+        """Mirror one already-committed GridMap placement or its absence."""
+        if placement is None:
+            self.tile_uuid = None
+            return
+        self.position = placement.position
+        self.tile_uuid = placement.tile_uuid
 
     def on_grid_object_removed(self, position: Tuple[int, int], clear_location: bool = True) -> None:
         """Synchronize floor-location fields after GridMap removes this item.

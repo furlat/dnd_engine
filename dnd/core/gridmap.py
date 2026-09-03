@@ -16,9 +16,14 @@ from dnd.core.base_block import BaseBlock, MovementMode, LightLevel
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.positioning import PositionCommitError
 from dnd.core.base_tiles import (
+    release_tile_owned_movement_graph,
+    resolve_tile_light_level,
     Tile,
     TileObjectBand,
+    tile_light_contributions,
     validate_elevation_surface_tuple,
+    validate_tile_owned_movement_graph,
+    validate_tile_creation_inputs,
 )
 from dnd.core.events import Event, SpatialChangeEvent, SpatialChangeType, EventPhase, EventQueue, EventType, SensesUpdateHint, TileElevationChangeEvent, TraversalConnectorChangeEvent
 from dnd.core.traversal_connectors import (
@@ -42,6 +47,7 @@ from dnd.types.spatial_effects import (
     SpatialEffectLayer,
     SpatialEffectOccupancyPolicy,
 )
+from dnd.types.materials import TileSurface
 from dnd.types.world_placement import (
     BoundaryStructure,
     WorldObjectPlacement,
@@ -56,6 +62,7 @@ DIRECTIONAL_CHANNELS: Tuple[str, ...] = (
     "propagation",
 )
 ENTITY_WORLD_PRESENCE_LIGHT_SUPPRESSION_TOKEN = "entity.world_presence.absent"
+OBJECT_WORLD_PRESENCE_LIGHT_SUPPRESSION_TOKEN = "object.world_presence.absent"
 
 
 class LightSourceData(BaseModel):
@@ -233,11 +240,19 @@ class GridMap:
         )
         current_event = cast(
             SpatialChangeEvent,
-            current_event.phase_to(EventPhase.EXECUTION),
+            EventQueue.publish_committed_phase(
+                current_event.model_copy(
+                    update={"use_register": False},
+                ).phase_to(EventPhase.EXECUTION)
+            ),
         )
         current_event = cast(
             SpatialChangeEvent,
-            current_event.phase_to(EventPhase.EFFECT),
+            EventQueue.publish_committed_phase(
+                current_event.model_copy(
+                    update={"use_register": False},
+                ).phase_to(EventPhase.EFFECT)
+            ),
         )
         self._settle_entity_presence_before_completion(current_event)
         return cast(
@@ -319,6 +334,11 @@ class GridMap:
     def connector_revision(self) -> int:
         """Return the current connector-topology revision."""
         return self._connector_revision
+
+    @property
+    def illumination_revision(self) -> int:
+        """Return the current objective illumination revision."""
+        return self._light_revision
 
     @property
     def propagation_revision(self) -> int:
@@ -421,13 +441,18 @@ class GridMap:
         blocks_propagation: bool = False,
         name: str = "Floor",
         sprite_name: Optional[str] = None,
+        surface: Optional[TileSurface] = None,
         walking_cost: int = 1,
         flying_cost: int = 1,
         swimming_cost: int = 0,
         burrowing_cost: int = 0,
+        height: int = 0,
+        elevation_surface_kind: ElevationSurfaceKind = ElevationSurfaceKind.ORDINARY,
+        slope_axis: Optional[SlopeAxis] = None,
         default_light: LightLevel = LightLevel.BRIGHT_LIGHT,
         fire_event: bool = True,
         tile: Optional[Tile] = None,
+        parent_event: Optional[UUID] = None,
     ) -> Tile:
         """Set or replace a tile at a position.
 
@@ -436,25 +461,42 @@ class GridMap:
         Returns the stored tile.
         """
         position = (x, y)
+        if tile is None:
+            validate_tile_creation_inputs(
+                position,
+                blocks_optics=blocks_optics,
+                blocks_propagation=blocks_propagation,
+                name=name,
+                sprite_name=sprite_name,
+                height=height,
+                surface=surface,
+                walking_cost=walking_cost,
+                flying_cost=flying_cost,
+                swimming_cost=swimming_cost,
+                burrowing_cost=burrowing_cost,
+                elevation_surface_kind=elevation_surface_kind,
+                slope_axis=slope_axis,
+                default_light=default_light,
+            )
         old_tile = self._tiles.get(position)
-        if (
-            old_tile is not None
-            and tile is not old_tile
-            and old_tile.get_entity_uuids()
-        ):
-            raise ValueError(
-                f"cannot replace Tile {position} while entity occupancy is present"
-            )
-        if (
-            old_tile is not None
-            and tile is not old_tile
-            and old_tile.get_spatial_condition_uuids()
-        ):
-            raise ValueError(
-                f"cannot replace Tile {position} while spatial conditions cover it"
-            )
+        if old_tile is not None and tile is not old_tile:
+            self.validate_tile_detachment(position)
         old_costs = self._tile_movement_costs(old_tile) if old_tile else None
         old_light = old_tile.resolved_light_level if old_tile else None
+        old_support = (
+            (
+                old_tile.height,
+                old_tile.elevation_surface_kind,
+                old_tile.slope_axis,
+            )
+            if old_tile is not None
+            else None
+        )
+        old_illuminations, old_caps = (
+            tile_light_contributions(old_tile)
+            if old_tile is not None
+            else ({}, {})
+        )
         if tile is None:
             new_costs = (
                 walking_cost,
@@ -464,14 +506,37 @@ class GridMap:
             )
             new_blocks_optics = blocks_optics
             new_blocks_propagation = blocks_propagation
-            new_light = default_light
+            new_light = (
+                resolve_tile_light_level(old_tile, default_light)
+                if old_tile is not None
+                else default_light
+            )
+            new_support = (
+                height,
+                elevation_surface_kind,
+                slope_axis,
+            )
         else:
             new_costs = self._tile_movement_costs(tile)
             new_blocks_optics = tile.blocks_optics
             new_blocks_propagation = tile.blocks_propagation_field
-            new_light = tile.resolved_light_level
+            new_light = (
+                resolve_tile_light_level(old_tile, tile.default_light)
+                if old_tile is not None
+                else tile.resolved_light_level
+            )
+            new_support = (
+                tile.height,
+                tile.elevation_surface_kind,
+                tile.slope_axis,
+            )
 
-        movement_changed = old_costs is None or old_costs != new_costs
+        support_changed = old_support is None or old_support != new_support
+        movement_changed = (
+            old_costs is None
+            or old_costs != new_costs
+            or support_changed
+        )
         optics_changed = (
             old_tile is None
             or old_tile.blocks_optics != new_blocks_optics
@@ -481,10 +546,15 @@ class GridMap:
             or old_tile.blocks_propagation_field != new_blocks_propagation
         )
         illumination_changed = old_light is None or old_light != new_light
-        topology_changed = movement_changed or optics_changed or propagation_changed
+        mechanical_change = (
+            movement_changed
+            or optics_changed
+            or propagation_changed
+            or illumination_changed
+        )
 
         effect: Optional[Event] = None
-        if fire_event and self._events_enabled and topology_changed:
+        if fire_event and self._events_enabled and mechanical_change:
             hint = SensesUpdateHint(
                 requires_fov=optics_changed,
                 requires_paths=movement_changed,
@@ -504,6 +574,7 @@ class GridMap:
                 tile_blocks_propagation=new_blocks_propagation,
                 new_light_level=new_light.value,
                 senses_hint=hint,
+                parent_event=parent_event,
             )
             effect = self._accept_event_effect(declaration)
             if effect is None:
@@ -516,18 +587,26 @@ class GridMap:
                 blocks_propagation=blocks_propagation,
                 name=name,
                 sprite_name=sprite_name,
+                surface=surface,
                 walking_cost=walking_cost,
                 flying_cost=flying_cost,
                 swimming_cost=swimming_cost,
                 burrowing_cost=burrowing_cost,
+                height=height,
+                elevation_surface_kind=elevation_surface_kind,
+                slope_axis=slope_axis,
                 default_light=default_light,
             )
         else:
             tile.position = position
         if old_tile is not None:
             self._tiles_by_uuid.pop(old_tile.uuid, None)
-            if old_tile is not tile:
-                BaseBlock.unregister(old_tile.uuid)
+        if old_tile is not tile:
+            self._seed_replacement_tile_light(
+                tile,
+                old_illuminations,
+                old_caps,
+            )
         self._tiles[position] = tile
         self._tiles_by_uuid[tile.uuid] = position
         self._bounds_dirty = True
@@ -545,15 +624,76 @@ class GridMap:
 
         if effect is not None:
             self._complete_event_effect(effect)
-        elif (
-            fire_event
-            and self._events_enabled
-            and old_light is not None
-            and old_light != tile.resolved_light_level
-        ):
-            self._fire_light_batch_events([position])
+        elif old_tile is not tile:
+            self.recompute_lights_at_position(
+                position,
+                parent_event=parent_event,
+            )
+
+        if old_tile is not None and old_tile is not tile:
+            release_tile_owned_movement_graph(old_tile)
 
         return tile
+
+    def validate_tile_detachment(self, position: Tuple[int, int]) -> Tile:
+        """Reject detachment while another live owner references the Tile."""
+        tile = self._tiles.get(position)
+        if tile is None:
+            raise ValueError(f"Tile not found at {position}")
+        if tile.get_entity_uuids():
+            raise ValueError(
+                f"cannot detach Tile {position} while entity occupancy is present"
+            )
+        if tile.active_conditions_by_uuid:
+            raise ValueError(
+                f"cannot detach Tile {position} while direct conditions are active"
+            )
+        if tile.get_spatial_condition_uuids():
+            raise ValueError(
+                f"cannot detach Tile {position} while spatial conditions cover it"
+            )
+        if tile.event_handlers:
+            raise ValueError(
+                f"cannot detach Tile {position} while event handlers are attached"
+            )
+        if tile.get_attached_light_sources():
+            raise ValueError(
+                f"cannot detach Tile {position} while light sources are attached"
+            )
+        try:
+            validate_tile_owned_movement_graph(tile)
+        except ValueError as error:
+            raise ValueError(
+                f"cannot detach Tile {position}: {error}"
+            ) from error
+        if any(
+            placement.tile_uuid == tile.uuid
+            for placement in self._object_placements.values()
+        ):
+            raise ValueError(
+                f"cannot detach Tile {position} while world objects are placed"
+            )
+        if any(
+            endpoint.support_tile_uuid == tile.uuid
+            for connector in self._connectors_by_uuid.values()
+            for endpoint in connector.endpoints
+        ):
+            raise ValueError(
+                f"cannot detach Tile {position} while connectors are anchored"
+            )
+        return tile
+
+    @staticmethod
+    def _seed_replacement_tile_light(
+        tile: Tile,
+        illuminations: Dict[UUID, LightLevel],
+        caps: Dict[UUID, LightLevel],
+    ) -> None:
+        """Reapply detached GridMap-owned light facts to replacement support."""
+        for source_uuid, level in illuminations.items():
+            tile._add_illumination(source_uuid, level)
+        for source_uuid, level in caps.items():
+            tile._add_illumination_cap(source_uuid, level)
 
     def set_tile_directional_border(self, *args: Any, **kwargs: Any) -> bool:
         """Reject retired scalar side state; place a boundary structure instead."""
@@ -572,40 +712,49 @@ class GridMap:
             return []
         return [(position[0] + delta[0], position[1] + delta[1])]
 
-    def remove_tile(self, x: int, y: int, fire_event: bool = True) -> None:
-        """Remove a tile at the given position."""
+    def remove_tile(
+        self,
+        x: int,
+        y: int,
+        fire_event: bool = True,
+        parent_event: Optional[UUID] = None,
+    ) -> bool:
+        """Remove a free Tile after its detailed change is accepted."""
         position = (x, y)
-        if position in self._tiles:
-            tile = self._tiles[position]
-            if tile.get_entity_uuids():
-                raise ValueError(
-                    f"cannot remove Tile {position} while entity occupancy is present"
-                )
-            if tile.get_spatial_condition_uuids():
-                raise ValueError(
-                    f"cannot remove Tile {position} while spatial conditions cover it"
-                )
-            self._tiles_by_uuid.pop(tile.uuid, None)
-            BaseBlock.unregister(tile.uuid)
-            del self._tiles[position]
-            self._bounds_dirty = True
-            self._bump_all_spatial_revisions()
+        tile = self._tiles.get(position)
+        if tile is None:
+            return False
+        self.validate_tile_detachment(position)
 
-            if fire_event and self._events_enabled:
-                hint = SensesUpdateHint(
+        effect: Optional[Event] = None
+        if fire_event and self._events_enabled:
+            declaration = SpatialChangeEvent(
+                source_entity_uuid=tile.uuid,
+                event_type=EventType.SPATIAL_TILE_CHANGED,
+                change_type=SpatialChangeType.TILE_REMOVED,
+                position=position,
+                senses_hint=SensesUpdateHint(
                     requires_fov=True,
                     requires_light_recompute=True,
                     requires_paths=True,
                     requires_propagation_recompute=True,
-                )
-                event = SpatialChangeEvent(
-                    source_entity_uuid=uuid4(),
-                    event_type=EventType.SPATIAL_TILE_CHANGED,
-                    change_type=SpatialChangeType.TILE_REMOVED,
-                    position=position,
-                    senses_hint=hint,
-                )
-                self._fire_spatial_event(event)
+                ),
+                parent_event=parent_event,
+                phase=EventPhase.DECLARATION,
+                use_register=False,
+            )
+            effect = self._accept_event_effect(declaration)
+            if effect is None:
+                return False
+
+        self._tiles_by_uuid.pop(tile.uuid, None)
+        del self._tiles[position]
+        self._bounds_dirty = True
+        self._bump_all_spatial_revisions()
+        if effect is not None:
+            self._complete_event_effect(effect)
+        release_tile_owned_movement_graph(tile)
+        return True
 
     def get_tile(self, x: int, y: int) -> Optional[Tile]:
         """Get tile at position, or None if no tile exists."""
@@ -653,6 +802,26 @@ class GridMap:
         return TraversalConnector.create(
             definition,
             (endpoints[0], endpoints[1]),
+            connector_uuid=connector_uuid,
+            revision=revision,
+        )
+
+    def validate_connector_candidate(
+        self,
+        definition: TraversalConnectorDefinition,
+        *,
+        connector_uuid: Optional[UUID] = None,
+        revision: int = 1,
+    ) -> TraversalConnector:
+        """Return one detached connector candidate against current supports."""
+        if not isinstance(definition, TraversalConnectorDefinition):
+            raise TypeError("definition must be a TraversalConnectorDefinition")
+        if connector_uuid is not None and type(connector_uuid) is not UUID:
+            raise TypeError("connector_uuid must be a UUID or None")
+        if type(revision) is not int or revision < 1:
+            raise ValueError("connector revision must be a positive exact integer")
+        return self._build_connector(
+            definition,
             connector_uuid=connector_uuid,
             revision=revision,
         )
@@ -947,10 +1116,12 @@ class GridMap:
         parent_event: Optional[UUID] = None,
     ) -> bool:
         """Commit one validated support tuple through its typed lifecycle."""
-        validate_elevation_surface_tuple(height, surface_kind, slope_axis)
-        tile = self._tiles.get(position)
-        if tile is None:
-            raise ValueError(f"cannot set elevation on missing Tile {position}")
+        tile = self.validate_tile_elevation_change(
+            position,
+            height=height,
+            surface_kind=surface_kind,
+            slope_axis=slope_axis,
+        )
         previous = (
             tile.height,
             tile.elevation_surface_kind,
@@ -959,20 +1130,6 @@ class GridMap:
         candidate = (height, surface_kind, slope_axis)
         if previous == candidate:
             return False
-        if height != tile.height and any(
-            placement.position == position
-            and placement.kind is WorldPlacementKind.CENTER
-            for placement in self._object_placements.values()
-        ):
-            raise ValueError(
-                "cannot change support height while center objects are placed"
-            )
-        if height != tile.height and self._connector_uuids_by_endpoint.get(
-            position
-        ):
-            raise ValueError(
-                "cannot change support height while a connector is anchored"
-            )
         declaration = TileElevationChangeEvent(
             source_entity_uuid=tile.uuid,
             target_entity_uuid=tile.uuid,
@@ -1017,6 +1174,35 @@ class GridMap:
         if effect is not None:
             self._complete_event_effect(effect)
         return True
+
+    def validate_tile_elevation_change(
+        self,
+        position: Tuple[int, int],
+        *,
+        height: int,
+        surface_kind: ElevationSurfaceKind,
+        slope_axis: Optional[SlopeAxis],
+    ) -> Tile:
+        """Validate one support edit before its authoring root is declared."""
+        validate_elevation_surface_tuple(height, surface_kind, slope_axis)
+        tile = self._tiles.get(position)
+        if tile is None:
+            raise ValueError(f"cannot set elevation on missing Tile {position}")
+        if height != tile.height and any(
+            placement.position == position
+            and placement.kind is WorldPlacementKind.CENTER
+            for placement in self._object_placements.values()
+        ):
+            raise ValueError(
+                "cannot change support height while center objects are placed"
+            )
+        if height != tile.height and self._connector_uuids_by_endpoint.get(
+            position
+        ):
+            raise ValueError(
+                "cannot change support height while a connector is anchored"
+            )
+        return tile
 
     def has_tile(self, x: int, y: int) -> bool:
         """Check if a tile exists at position."""
@@ -2176,6 +2362,8 @@ class GridMap:
         effect: Event,
     ) -> Event:
         """Publish completion after the owning GridMap state is committed."""
+        if isinstance(effect, SpatialChangeEvent):
+            self._settle_object_presence_before_completion(effect)
         self._recompute_lights_before_spatial_completion(effect)
         completion_updates: Dict[str, Any] = {}
         if (
@@ -2372,11 +2560,31 @@ class GridMap:
         if self._events_enabled and departure_effect is None:
             raise ValueError("object relocation departure was canceled")
         arrival_effect = (
-            self._accept_event_effect(arrival)
-            if self._events_enabled
-            else None
+            None
         )
+        try:
+            arrival_effect = (
+                self._accept_event_effect(arrival)
+                if self._events_enabled
+                else None
+            )
+        except Exception:
+            if departure_effect is not None:
+                cancellation = departure_effect.cancel(
+                    "object relocation arrival failed",
+                )
+                EventQueue.register(
+                    cancellation.model_copy(update={"use_register": True}),
+                )
+            raise
         if self._events_enabled and arrival_effect is None:
+            if departure_effect is not None:
+                cancellation = departure_effect.cancel(
+                    "object relocation arrival was canceled",
+                )
+                EventQueue.register(
+                    cancellation.model_copy(update={"use_register": True}),
+                )
             raise ValueError("object relocation arrival was canceled")
         self._replace_placement_bands(previous, add=False)
         self._replace_placement_bands(candidate, add=True)
@@ -2470,10 +2678,8 @@ class GridMap:
             return False
         self._replace_placement_bands(previous, add=False)
         del self._object_placements[object_uuid]
-        obj.on_grid_object_removed(
-            previous.position,
-            clear_location=clear_object_location,
-        )
+        if clear_object_location:
+            obj.on_grid_object_removed(previous.position)
         self._bump_spatial_revisions(self._object_revision_channels(obj))
         if effect is not None:
             self._complete_event_effect(effect)
@@ -3306,14 +3512,49 @@ class GridMap:
         parent_event: Optional[UUID] = None,
     ) -> bool:
         """Set one Tile's objective ambient light through map ownership."""
+        if type(level) is not LightLevel:
+            raise TypeError("level must be a LightLevel")
         tile = self._tiles.get(position)
         if tile is None:
             raise ValueError(f"light Tile not found at {position}")
-        old = tile.resolved_light_level
-        tile.default_light = level
-        if tile.resolved_light_level == old:
+        if tile.default_light is level:
             return False
-        self._fire_light_batch_events([position], parent_event=parent_event)
+        old = tile.resolved_light_level
+        preview = resolve_tile_light_level(tile, level)
+        execution: Optional[SpatialChangeEvent] = None
+        if preview is not old and self._events_enabled:
+            declaration = SpatialChangeEvent.light_changed(
+                position,
+                tile.uuid,
+                parent_event=parent_event,
+                new_light_level=preview.value,
+                light_level_map={f"{position[0]},{position[1]}": preview.value},
+            )
+            declaration = cast(
+                SpatialChangeEvent,
+                EventQueue.publish_declaration(declaration),
+            )
+            if declaration.canceled:
+                return False
+            execution = cast(
+                SpatialChangeEvent,
+                declaration.phase_to(EventPhase.EXECUTION),
+            )
+            if execution.canceled:
+                return False
+        tile.default_light = level
+        if preview is not old:
+            self._bump_spatial_revisions({"illumination"})
+        if execution is not None:
+            effect = cast(
+                SpatialChangeEvent,
+                EventQueue.publish_committed_phase(
+                    execution.model_copy(
+                        update={"use_register": False},
+                    ).phase_to(EventPhase.EFFECT)
+                ),
+            )
+            self._complete_event_effect(effect)
         return True
 
     def apply_light_modifier(
@@ -3784,7 +4025,43 @@ class GridMap:
             new_light_level=representative_tile.resolved_light_level.value,
             light_level_map=level_map,
         )
-        self._fire_spatial_event(event)
+        self._fire_committed_spatial_event(event)
+
+    def _settle_object_presence_before_completion(
+        self,
+        effect: SpatialChangeEvent,
+    ) -> None:
+        """Settle attached light inside its direct object-placement cause."""
+        object_uuid = effect.object_uuid
+        if object_uuid is None:
+            return
+        if effect.event_type is EventType.SPATIAL_OBJECT_REMOVED:
+            if effect.old_position is not None:
+                return
+            self.set_block_light_suppressed(
+                object_uuid,
+                OBJECT_WORLD_PRESENCE_LIGHT_SUPPRESSION_TOKEN,
+                True,
+                parent_event=effect.uuid,
+            )
+            return
+        if effect.event_type is not EventType.SPATIAL_OBJECT_PLACED:
+            return
+        anchor = BaseBlock.get(object_uuid)
+        if anchor is not None:
+            for light_uuid in anchor.get_attached_light_sources():
+                if light_uuid in self._light_sources:
+                    self.move_light_source(
+                        light_uuid,
+                        effect.position,
+                        parent_event=effect.uuid,
+                    )
+        self.set_block_light_suppressed(
+            object_uuid,
+            OBJECT_WORLD_PRESENCE_LIGHT_SUPPRESSION_TOKEN,
+            False,
+            parent_event=effect.uuid,
+        )
 
     def _settle_entity_presence_before_completion(
         self,
