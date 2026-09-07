@@ -1,5 +1,6 @@
 pydantic
 pytest
+pygame-ce==2.5.8
 fastapi
 requests
 uvicorn

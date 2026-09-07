@@ -3,1287 +3,1453 @@
 Date: 2026-09-03  
 Status: **accepted implementation plan — implementation has not begun**
 
+This candidate supersedes the earlier accepted narrow V-0 draft. The earlier
+review remains historical evidence only; the enlarged 64 x 64, water,
+structure, light, and animation contract requires a complete new review.
+
 ## 1. Requested result
 
-Implement one truthful end-to-end slice from the current in-process D&D engine
-to a real `pygame-ce` window:
+Implement one truthful, scalable in-process seam from the current D&D engine
+to a real pygame-ce window. One command must:
 
-```text
-one direct authored Earth battlefield
-  + one direct premade observer
-  + one closed authoritative EventQueue interval
-        |
-        | synchronous inspection; no EventQueue callback
-        v
-objective diagnostic rows for every stored Event version
-  + detached copies of exactly two admitted concrete Event families
-        |
-        | one ordinary asyncio queue
-        v
-engine-owned sensory-delta reduction into a cold target scene
-        |
-        | human-time pygame frame pump
-        v
-observer-authorized isometric ground, grid, rails, and mouse/Z diagnostics
-        |
-        v
-one exact presentation terminal for the interval
-```
+1. build a 64 x 64 dark battlefield with Earth, Water, a directional stone
+   wall, one closed directional door, and one fixed standing torch;
+2. compose and deploy one existing premade observer;
+3. let the normal authored-world settlement ignite the torch;
+4. execute the existing Open Door and Close Door actions as separate mechanics
+   commands;
+5. capture each completed EventQueue interval synchronously, without adding an
+   EventQueue callback;
+6. let mechanics enqueue all three intervals without waiting for pygame;
+7. reduce only audited copies of existing concrete Events into one
+   observer-authorized renderer target;
+8. show the closed, open, and closed-again states at human speed while water
+   and flame animate from one renderer clock; and
+9. expose objective rows, subjective rows, coverage failures, E/R/D clocks,
+   locality counters, camera state, and exact mouse-to-grid/support-height
+   diagnostics.
 
-The executable is deliberately small. It starts, materializes the scene,
-allows camera inspection, reports every unrepresented Event, and exits cleanly.
-It does not yet play the scripted encounter.
+The visible proof is deliberately small in content but not toy-sized in world
+extent. It proves:
 
-“Vertical seam” means the complete mechanics-to-pixels path. This cut also
-implements the real support-height projection law and proves it against the
-existing elevation battlefield, but the default displayed map remains flat so
-asset semantics, event detachment, subjectivity, and camera math are isolated
-before walls, doors, water, props, and elevation art are combined.
+- exact 64 x 64 cold-world materialization without per-frame full-map work;
+- four-view isometric projection, pan, stepped zoom, grid, and picking;
+- Earth and source-faithful animated Unity water;
+- tile-owned directional walls and a layered frame/leaf door;
+- a source-faithful 16-frame torch flame;
+- engine-owned light, FOV, wall occlusion, and door recomputation;
+- distinct Tile disclosure and object disclosure;
+- engine execution running ahead of human-time presentation; and
+- fail-visible handling for every Event not yet represented.
+
+This cut does not draw actors or play the full scripted encounter. It completes
+V-0 and only the minimum V-1 needed to prove terrain, structures, light,
+continuous animation, and one ordinary runtime state transition on the same
+vertical seam.
 
 ## 2. Governing authority and verified starting point
 
 This plan is subordinate to:
 
-- `AGENTS.md`;
-- `HOW_TO_TEST.MD`;
-- `DND_IN_PROCESS_PYGAME_SYSTEM_ARCHITECTURE_ROADMAP_2026-09-02.md`;
-- `PYGAME_P0_NEUROCLIENT_SYSTEM_STUDY_2026-09-02.md`; and
-- `PYGAME_WORLD_ASSET_BRIDGE_NOTES_2026-09-02.md`.
+- AGENTS.md;
+- HOW_TO_TEST.MD;
+- DND_IN_PROCESS_PYGAME_SYSTEM_ARCHITECTURE_ROADMAP_2026-09-02.md;
+- PYGAME_P0_NEUROCLIENT_SYSTEM_STUDY_2026-09-02.md; and
+- PYGAME_WORLD_ASSET_BRIDGE_NOTES_2026-09-02.md.
 
-The current checkout has already proved the specific mechanics seams this cut
-uses:
+The current engine already owns the rules needed here:
 
-- `EventQueue.generation_id()`, `event_cursor()`, and
-  `iter_events_since()` expose one ordered in-process history;
-- `WorldInitializedEvent` contains the complete actor-free cold world;
-- `SensoryUpdateEvent` contains complete observer-owned sensory deltas;
-- `capture_senses_snapshot()` and `Senses.apply_sensory_update()` already
-  define the authoritative sensory replay semantics;
-- `project_combat_log()` already censors a `CombatLogEntry` using event-time
-  evidence without changing its model type;
-- direct premade characters and `Game.deploy_entity()` provide a real observer;
-- `battlefield.elevation_proving_ground` supplies current engine elevation
-  values for projection/picking proof; and
-- five focused existing proofs covering closed world intervals, cold world
-  materialization, sensory replay, and elevation round-trip passed on the
-  planning checkout.
+- EventQueue generation/cursor/ordered-history access;
+- WorldInitializedEvent as a complete actor-free cold world;
+- ItemLocationStateEvent as a complete post-commit item presentation fact;
+- SpatialChangeEvent with SPATIAL_OBJECT_CHANGED and complete door placement,
+  boundary contribution, blocked channels, and is_open after-values;
+- SensoryUpdateEvent with observer-owned visible/seen cells, effective light,
+  contacts, position, sense modes, and visual-access after-values;
+- GridMap-owned directional transition, optical, propagation, light, FOV, and
+  senses recomputation;
+- DirectionalWall and DirectionalDoor as tile-owned boundary objects;
+- the ordinary Open Door and Close Door actions;
+- WallTorch fixed-light lifecycle and authored-world post-initialization
+  settlement;
+- capture_senses_snapshot() and Senses.apply_sensory_update();
+- project_combat_log() for same-model subjective text; and
+- current elevation facts for projection and picking proof;
+- bootstrap_content_system() and SERVER_CONTENT_SYSTEM_RUNTIME as the existing
+  in-process engine content installation boundary required by direct character
+  and action materialization.
 
-The current uncommitted `WorldModifiedEvent` work is preserved but is neither a
-dependency nor a deliverable of this cut. No structural edit, door transition,
-torch transition, or incremental world mutation is required here.
+In particular, the existing door path already has the required causal order:
+the door publishes SPATIAL_OBJECT_CHANGED, GridMap recomputes light before that
+spatial cause completes, and observer SensoryUpdateEvent children carry the
+result. Pygame consumes those facts; it must not add a second light or
+visibility calculation.
 
-## 3. Exact scope
+The existing authored-world flow publishes a cold, unlit torch in
+WorldInitializedEvent, then lights it through its normal fixture lifecycle and
+publishes an ItemLocationStateEvent containing is_lit=true. No new torch-state
+Event is needed for this demo.
 
-### 3.1 Included
+## 3. Non-negotiable design laws
 
-1. Add `pygame-ce` to the ordinary Python application dependencies and include
-   `/game` in static type/dependency checking.
-2. Add one direct, actor-free battlefield whose Tiles truthfully use
-   `Material.EARTH`, bright light, height zero, and no world objects or
-   connectors.
-3. Compose that battlefield, one current direct fighter premade, one `Game`,
-   and one deployment in-process.
-4. Capture the whole startup as one closed EventQueue interval.
-5. Produce primitive objective rows for every stored Event version without
-   retaining unadmitted Events.
-6. Detach only completed `WorldInitializedEvent` and `SensoryUpdateEvent`
-   values.
-7. Extract the existing sensory replay calculation into one pure function and
-   make both the live `Senses` block and `/game` use that same calculation.
-8. Keep a minimal cold renderer target: the detached world Event, one detached
-   observer sensory snapshot, text rows, coverage, and reducer cursor.
-9. Load one exact copied NeuroMapEditor ground PNG through a tiny client-owned
-   JSON asset catalog and one exact `earth -> asset_id` binding.
-10. Draw observer-authorized macro128 ground in pygame-ce with visible,
-    remembered, and unseen display states driven only by engine sensory facts.
-11. Implement WASD pan, cursor-centered stepped zoom, four camera quadrants,
-    grid overlay, and height-aware mouse diagnostics.
-12. Maintain the engine/reducer/display clocks and return one deterministic
-    terminal when the interval is visibly settled or has failed.
-13. Show objective and subjective text rails plus unsupported/failure counts.
-14. Prove reset/generation fencing, exact event coverage, projection,
-    subjectivity, asset loading, and a headless pygame frame through observable
-    tests.
+1. **Mechanics remains the only world authority.** Renderer state is a reduced
+   copy of completed Events, never a second GridMap.
+2. **Use existing Event types.** Do not introduce render Events, cues,
+   transactions, receipts, journals, field masks, or a parallel event enum.
+3. **No presentation callback enters EventQueue.** Capture occurs after each
+   complete mechanics command returns.
+4. **The async boundary carries passive values only.** It never carries a live
+   Entity, component, item owner, handler, modifier, context, or registry.
+5. **Subjectivity is engine-owned.** Pygame consumes SensoryUpdateEvent and
+   existing combat-log projection. It does not recompute FOV, light,
+   invisibility, hidden state, darkvision, truesight, or magical darkness.
+6. **Tile visibility is not content visibility.** Terrain, boundary surfaces,
+   doors, and later actors use their own explicit disclosure rules.
+7. **Animation time is presentation state.** It never mutates mechanics,
+   advances EventQueue, or claims a gameplay revision.
+8. **Engine execution never waits for human animation time.** Presentation may
+   lag, but it may not complete or alter an engine Event.
+9. **Scale is observable.** Steady-frame work is bounded by the current
+   viewport/disclosure and visible animated pixels, not 4,096 world Tiles.
+10. **Assets are exact client data.** New authored content contains semantic
+    material, placement, direction, state, and item identity—not pygame PNG
+    paths, catalog IDs, pivots, poses, frames, or chunk metadata. The renderer
+    deliberately ignores retained legacy sprite_name/visual_item_name fields;
+    removing that older authority belongs to CR-8, not this plan.
+11. **No guessed art.** Missing assets fail visibly; no filename inference,
+    raster rotation, mirroring, procedural replacement, or auto-discovery.
+12. **Keep the Python graph acyclic.** dnd never imports game or pygame; imports
+    remain module-level; no TYPE_CHECKING, dynamic import, getattr, or type-test
+    escape hatch may hide a cycle or ownership mistake.
 
-### 3.2 Explicitly excluded
+## 4. Exact proving battlefield
 
-- walls, doors, water, torches, fire, and runtime world modification;
-- object or actor Sprite drawing;
-- full entity creation/movement/life reducers;
-- animation clips, actor rigs, attacks, reactions, spells, or VFX;
-- player action input, action discovery, targeting, or Encounter orchestration;
-- the two-character scripted encounter;
-- CR-6 through CR-10 content recovery;
-- exact decorated-map occurrence companions;
-- fine64 anchors, edge/corner Sprite picking, or alpha-mask narrow phase;
-- a general subjective projector for arbitrary Events;
-- server, SSE, SDK, transport, persistence, save/load, or replay frameworks;
-- threads, worker processes, networking, or a second event loop;
-- asset inference, filename guessing, auto-discovery, hot reload, streaming, or
-  an asynchronous loader;
-- a scene ECS, renderer component system, manager, service, controller,
-  command bus, event bus, callback chain, or dependency-injection container;
-- a new Event base class, presentation Event hierarchy, cue, journal,
-  transaction, receipt, acknowledgement-per-Event, or field-mask language; and
-- screenshot goldens or pixel-perfect claims about unreviewed art.
+### 4.1 Battlefield identity and geometry
 
-Any excluded feature discovered while implementing this plan is recorded as a
-visible unsupported coverage row. It is not pulled into this cut.
+Add one ordinary public battlefield through the existing battlefield catalog:
 
-## 4. The one startup scenario
+    battlefield.visual_vertical_seam
 
-### 4.1 A semantically honest battlefield
+Its authored facts are exact:
 
-Add one current public battlefield, `battlefield.open_ground_bright`, through
-the existing `dnd/scenarios/battlefield_catalog.py` owner.
-
-Its first definition is exact:
-
-- bounds `(0, 0)` through `(8, 8)`;
-- 81 ordinary support Tiles;
-- `TileSurface(base_material=Material.EARTH)` on every Tile;
-- ordinary movement costs;
-- `LightLevel.BRIGHT_LIGHT` as base light;
-- `elevation_steps == 0`;
-- no objects;
+- bounds: (0, 0) through (63, 63);
+- 4,096 unique support Tiles at elevation_steps=0;
+- base light: LightLevel.DARKNESS on every Tile;
+- ordinary Earth Tiles everywhere except the Water rectangle;
+- Water positions: x=29..34 and y=33..36, exactly 24 Tiles;
+- Water surface: TileSurface(base_material=Material.WATER);
+- Water movement: walking_cost=0, swimming_cost=1, with the existing ordinary
+  flying/burrowing defaults unless current validation requires their explicit
+  normal values;
+- Earth surface: TileSurface(base_material=Material.EARTH), walking_cost=1;
+- a continuous barrier between columns 31 and 32, owned by the Tiles at
+  (31, y) on their EAST side for y=26..37;
+- one closed DirectionalDoor at (31, 31), EAST boundary;
+- one DirectionalWall at every other barrier position, exactly 11 walls;
+- one fixed StandingTorch at center placement (29, 32), initially cold/unlit;
 - no connectors; and
 - no spatial conditions.
 
-It is a normal graphic-agnostic engine battlefield. It contains no asset ID,
-path, pivot, camera, tint, or renderer tag. It may later become the base of the
-small visual capability map, but this cut does not add future features to it.
-Adding it is not a CR-7 completion claim and does not add a generic scenario
-adapter.
+The Water patch deliberately crosses the x=31/32 16-cell chunk boundary. The
+barrier deliberately uses the real tile-owned side model: it is on one Tile's
+EAST boundary, not a synthetic between-cell object and not duplicated onto the
+neighbor.
 
-The existing `GridMap`/Tile APIs are sufficient. Do not expand
-`GridMap.create_rectangle()` merely to make this one builder shorter. The
-builder may use the existing `set_tile(..., surface=...)` operation while
-battlefield construction has already disabled event publication.
+The battlefield is graphic-agnostic. Every authored Tile leaves its retained
+legacy sprite_name field as None, and the battlefield writes no pygame catalog
+ID, path, pivot, tint, animation frame, camera, chunk size, or renderer
+metadata. ItemPresentationState may still carry the existing
+visual_item_name field; game ignores it and binds the standing fixture only by
+stable item_id. This plan neither removes nor repurposes either legacy field.
 
-### 4.2 One real observer
+### 4.2 An honest standing-torch backend object
 
-After the world is built, create the current direct fighter premade through
-`create_premade_character(FIGHTER_PREMADE_ID, faction="heroes",
-position=(4, 4))` and deploy it through one `Game` using the existing public
-deployment path.
+The selected art is a freestanding fixture, not a wall-mounted torch. Add one
+narrow StandingTorch domain subtype beside WallTorch and one direct
+build_standing_torch() content constructor with stable item_id
+environment.standing_torch.
 
-The observer is not drawn in this cut. Its purpose is to exercise the same
-Senses, light, FOV, contact, and sensory-event path that later actor rendering
-will consume.
+StandingTorch changes only truthful content identity/default presentation
+semantics (name and stable item_id). It reuses the current fixed-fixture light,
+exposed-flame, use-action, attached-light, authored settlement, and
+ItemLocationStateEvent behavior unchanged. It adds no new component, system,
+event, registry, manager, or duplicated light rule. Because it is a WallTorch
+specialization, the existing authored fixture settlement remains its sole
+ignition path.
 
-Immediately before deployment, record the EventQueue cursor and capture one
-`SensesSnapshot` from the newly composed observer without allowing either the
-generation or cursor to change. That cursor identifies the state boundary of
-the authorized bootstrap/recovery seed. It is not a per-frame poll. After
-deployment, every renderer-owned sensory change comes from detached
-`SensoryUpdateEvent` values at or after the seed cursor.
+Do not rename or generalize the entire torch hierarchy in this cut. Do not
+pretend the portable Torch is fixed world geometry. If review shows the narrow
+subtype cannot reuse settlement without special cases or dependency pressure,
+stop; do not create a new fixture framework.
 
-On this exact unobstructed 9 x 9 bright map, deployment must emit a completed
-selected-observer sensory update whose reduction discloses all 81 support
-Tiles and records bright effective-light after-values for all 81. This is the
-non-vacuous mechanics-to-pixels proof, not an incidental screenshot claim.
+### 4.3 Observer and named probes
 
-### 4.3 One closed source interval
+Create the current direct fighter premade at (29, 31). The factory returns an
+already-composed Entity; do not compose it a second time. Before seeding or
+deployment, find its exact inventory item with item_id
+equipment.portable_torch and execute its existing "Extinguish Torch" use
+action through execute_use_action(). The premade currently ignites this item
+during creation, so leaving it lit would introduce a second, undrawn light and
+make the standing-fixture proof false. Require that the action succeeds, that
+the portable torch is unlit with no attached source, and that the standing
+fixture is the sole active light before deployment. Then deploy the observer
+through Game. The observer is not drawn yet.
 
-Startup is one source interval:
+The engine proof uses named positions rather than a renderer-authored sight
+shape:
 
-1. reset the engine through the existing reset boundary;
-2. record the EventQueue generation and start cursor;
-3. build the battlefield;
-4. create the direct observer;
-5. record the observer seed cursor and capture the bootstrap snapshot, while
-   proving capture itself emitted no Event;
-6. deploy the observer;
-7. record the end cursor;
-8. inspect and detach the interval synchronously; and
-9. revalidate the generation before any async yield.
+- near probe: (30, 31), on the torch/observer side;
+- door-owner support: (31, 31);
+- far probe: (32, 31), immediately beyond the door; and
+- water probes on each side of the barrier.
 
-The interval intentionally includes unadmitted character/equipment/deployment
-Events. This proves that the bridge can report all objective history without
-copying live component-bearing Events. One interval enters the presentation
-queue and produces one terminal.
+Before pygame code is written, Slice 2 must characterize these probes through
+the live engine. The accepted behavior is:
+
+- the near side is disclosed and carries the torch's effective light;
+- the closed door blocks ordinary optical and propagation transitions across
+  (31, 31) -> (32, 31);
+- opening the door makes the far probe visible and gives it the exact
+  engine-resolved effective light category;
+- closing the door removes current visibility beyond it while preserving
+  already-seen terrain; and
+- the door remains perceivable to the observer throughout the scripted
+  transition.
+
+Tests compare the reduced renderer snapshot to the live Senses snapshot and
+assert these named facts. They do not copy a hard-coded renderer FOV mask. If
+the stated positions do not yield the expected current-engine geometry, adjust
+only the map's local observer/torch/barrier coordinates in this plan and rerun
+all three reviews; do not patch sight or light in game.
+
+### 4.4 Three mechanics commands and three closed intervals
+
+The exact producer script is:
+
+1. **Startup interval**
+   - install bootstrap_content_system() into SERVER_CONTENT_SYSTEM_RUNTIME once
+     through the existing dnd.content_system boundary before reset, world
+     construction, character materialization, or action lookup;
+   - reset through the existing runtime boundary;
+   - build the battlefield;
+   - allow ordinary authored fixture settlement to light StandingTorch;
+   - create the already-composed fighter;
+   - extinguish its exact equipment.portable_torch through the existing use
+     action and verify the standing fixture is now the only active light;
+   - capture the observer seed immediately before deployment without advancing
+     EventQueue;
+   - deploy the fighter; and
+   - close/capture the interval after deployment returns.
+2. **Open interval**
+   - execute the existing Open Door use action through execute_use_action();
+   - require successful completion and open authoritative door state; and
+   - close/capture the interval after the action returns.
+3. **Close interval**
+   - execute the existing Close Door use action through execute_use_action();
+   - require successful completion and closed authoritative door state; and
+   - close/capture the interval after the action returns.
+
+The content-runtime name is historical: SERVER_CONTENT_SYSTEM_RUNTIME lives in
+dnd.content_system and is the active in-process engine content boundary. No
+server/API/transport module participates. The portable-torch action Events
+remain ordinary objective startup rows and, because they are outside the four
+admitted presentation cases, finish visibly unsupported.
+
+The producer may enqueue all three intervals before the renderer displays the
+first. There is no Encounter, AI, turn loop, actor animation, or new command
+abstraction in this cut.
 
 ## 5. Event and information boundary
 
-### 5.1 No EventQueue callback
+### 5.1 Closed interval capture
 
-The application calls an ordinary capture function after the complete startup
-command returns. It must not register any presentation callback with:
+Capture is one synchronous read of already-committed EventQueue storage. It
+registers no callback or handler. Every interval validates:
 
-- `add_on_event_callback()`;
-- `add_on_event_sequence_callback()`;
-- `add_on_event_batch_callback()`;
-- pre-completion callbacks/systems; or
-- Encounter combat-log callbacks.
+    same generation before and after capture
+    0 <= start_cursor <= end_cursor <= EventQueue.event_cursor()
+    exact indexes start_cursor .. end_cursor - 1
+    storage order preserved
+    no missing or duplicate source index
 
-Engine event completion remains wholly independent of presentation. Capture is
-a synchronous read of the already-committed interval.
+The startup interval additionally requires:
 
-### 5.2 Interval validity
+    start_cursor <= observer_seed_cursor <= end_cursor
 
-The capture function requires:
+and rejects any selected-observer SensoryUpdateEvent before that seed. A reset,
+generation change, invalid cursor, missing index, duplicate index, or partial
+capture rejects the whole interval; no partial envelope is enqueued.
 
-```text
-same_generation_before_and_after
-0 <= start_cursor <= observer_seed_cursor <= end_cursor
-end_cursor <= EventQueue.event_cursor()
-exact indexes start_cursor ... end_cursor - 1
-storage order preserved
-```
+### 5.2 Exact admitted concrete Events
 
-`iter_events_since()` currently clamps a negative start. The presentation
-boundary must validate its own cursors first; it must not treat that clamping
-as protocol behavior.
+Only the following existing concrete completion values may cross async:
 
-A generation change, missing index, duplicate index, out-of-range cursor, or
-EventQueue reset during capture rejects the whole interval. No partial batch
-is enqueued.
-
-For this exact first startup, any selected-observer `SensoryUpdateEvent` at a
-source index before `observer_seed_cursor` also rejects the whole interval.
-The seed already describes observer state at that boundary, so replaying an
-earlier delta would be a causal double application. Later work may design a
-different recovery interval if a real producer requires it; this cut does not.
-
-### 5.3 Exact admitted Event families
-
-This cut admits only these exact concrete completion values:
-
-| Concrete Event | Why it is needed | Payload law |
+| Existing Event | Exact admission predicate | Renderer responsibility |
 |---|---|---|
-| `WorldInitializedEvent` | cold target world | tuples of current frozen/value world state models |
-| `SensoryUpdateEvent` | observer knowledge/light/contact delta | typed positions, primitive flags, enums, UUIDs, `SenseMode`, and frozen `PerceivedContact` values |
+| WorldInitializedEvent | exact class; COMPLETION; selected battlefield | materialize the cold 64 x 64 world and exact object identities |
+| ItemLocationStateEvent | exact class; COMPLETION; item_id environment.standing_torch; FLOOR; exact known fixture UUID | replace that object's complete post-ignition item presentation state |
+| SpatialChangeEvent | exact class; COMPLETION; SPATIAL_OBJECT_CHANGED; exact known door UUID | apply its placement/boundary/is_open after-values |
+| SensoryUpdateEvent | exact class; COMPLETION; exact selected observer UUID; source index at/after seed | reduce observer knowledge, effective light, and contacts |
 
-Admission is an explicit two-case branch over the existing `event_type` and
-completion phase, followed by validation that the object is the corresponding
-concrete class. It is not a registry, decorator, visitor, protocol, serializer,
-or extensible dispatch framework. Adding a third family requires a later
-bounded plan and its own payload audit.
+Admission is one explicit finite branch, not a registry, protocol, visitor,
+decorator, serializer, or extensible dispatch framework. The current declared
+fields and representative produced values of every admitted case receive a
+passivity test. The normal produced Event must have no arbitrary context,
+combat-log object, or effective presentation handler attachment. Any violation
+leaves the Event only in EventQueue and marks that source version unsupported.
 
-For either admitted family, the normal engine-produced instance must also have:
+The detached value is event.model_copy(deep=True). It remains the same Event
+subclass with the same UUID, lineage, parentage, phase, and payload. Copying
+must not register another Event. No Event is deleted or mutated.
 
-- `context is None`;
-- `combat_log is None`; and
-- no effective handler-presentation attachments.
+Spatial light children are intentionally not copied. The renderer's light
+authority is the selected observer's effective-light fields in
+SensoryUpdateEvent. ActionEvent and ExposedFlameEvent likewise remain objective
+diagnostic rows until their later visual families exist.
 
-Those inherited escape hatches are not needed by these facts and are not part
-of their admitted contract. A value that violates one of these requirements is
-left in the authoritative queue, recorded as unsupported, and is not copied.
+### 5.3 Primitive diagnostic rows and coverage
 
-The complete payload types of both families are enumerated by their current
-Pydantic fields. Tests audit their declared fields and representative normal
-values. Production code does **not** recursively walk arbitrary values, call
-`getattr`, import runtime owners, serialize arbitrary Events, or guess whether
-an unknown payload is safe.
+Every stored Event version receives one primitive objective row keyed by its
+source queue index and Event UUID. The row retains only current common scalar
+facts needed by the rail: UUID/lineage/parent identities, type, phase,
+source/target identities and captured names, execution UUID, status/outcome,
+canceled/modified flags, and already-produced display text when present.
 
-The detached copy is `event.model_copy(deep=True)`. It remains the same
-concrete Event subclass with the same UUID, lineage, parent, phase, and payload.
-Model copying does not register a new engine Event. No field is masked, no
-replacement Event is constructed, and no Event is deleted from the objective
-queue.
+It never retains an arbitrary subclass payload, context, Entity, item,
+component, handler, modifier, or condition. Unadmitted source versions start
+and finish as unsupported; their badge remains visible.
 
-### 5.4 Unsafe and unadmitted Events
+The selected subjective text rail uses project_combat_log() during synchronous
+capture and retains only its resulting text. This does not create a subjective
+Event class or general projector.
 
-Every other Event stays only in `EventQueue`. During the synchronous scan the
-application extracts a plain primitive diagnostic row containing only the
-current common Event facts needed by the objective rail:
+Final dispositions are:
 
-- source index;
-- UUID and lineage UUID;
-- parent Event and parent lineage UUID, if any;
-- Event type and phase;
-- source/target UUID and already-captured names;
-- turn execution UUID, if any;
-- status message, outcome code, canceled flag, and modified flag; and
-- the already-generated combat-log text, if present.
+- represented: an admitted world/item/door fact affected a matching displayed
+  frame;
+- state_only: a selected sensory fact correctly changed or reaffirmed the
+  target without requiring its own animation;
+- not_disclosed: an otherwise relevant state change was not authorized for the
+  selected observer;
+- unsupported: no admitted visual rule exists;
+- failed: admitted reduction/drawing/parity was impossible.
 
-The row contains strings, integers, booleans, and `None`. It is not a generic
-Event dump. It does not retain `context`, a condition, Entity, item, block,
-handler, modifier, or arbitrary subclass field.
+No Event is silently dropped and no false represented result is allowed.
+An unadmitted SensoryUpdateEvent for any observer other than the selected UUID
+is unsupported, just like every other unadmitted source version, and cannot
+mutate the target. not_disclosed is reserved for an admitted objective
+world/item/door fact whose current selected-observer disclosure forbids a
+draw; it is not a synonym for rejected admission.
 
-Unadmitted versions receive `unsupported` in the plain coverage map keyed by
-source queue index. The objective row retains that index and the Event UUID,
-so every stored phase version remains a separate coverage entry even when
-versions share a lineage. Their objective row and unsupported badge make the
-omission visible. They are not passed to subjective or Sprite code.
+### 5.4 One small interval envelope
 
-### 5.5 Subjective text
+One frozen plain Python value carries only:
 
-When a completed Event already has a `CombatLogEntry`, the privileged rail may
-read its already-generated display text synchronously. The observer rail calls
-the existing `project_combat_log()` during the same synchronous inspection and
-uses the returned same-model entry, or omits it when projection returns
-`None`. Only the chosen text string is retained by the pygame rail.
+- generation, start cursor, and exclusive end cursor;
+- selected observer UUID and, for startup, the seed cursor/snapshot;
+- exact scenario door/standing-torch UUIDs needed by the finite admission
+  predicates;
+- ordered primitive objective rows;
+- ordered already-projected subjective text rows;
+- source-index dispositions; and
+- ordered pairs of source index plus detached admitted Event.
 
-This does not create a general subjective Event conversion. Ordinary action
-Events remain unadmitted until the later surgical event-family plans required
-by V-2/V-3.
+The objective rows are the one source identity/order list; do not duplicate it
+as a second manifest. The envelope has no gameplay kind enum, mutation method,
+handler, callback, acknowledgement object, or replacement Event identity.
 
-### 5.6 The queue envelope is not another Event
+## 6. One sensory calculation
 
-One small frozen Python value may carry:
+Extract the current value calculation inside Senses.apply_sensory_update() into
+one pure function beside SensesSnapshot in dnd/blocks/sensory.py:
 
-- source generation UUID;
-- inclusive start cursor;
-- selected observer UUID, observer seed cursor, and detached seed
-  `SensesSnapshot`;
-- exclusive end cursor;
-- primitive objective diagnostic rows in source order;
-- already-projected subjective text rows in source order;
-- initial `source queue index -> unsupported` coverage entries for every
-  unadmitted source version; and
-- ordered `(source queue index, detached admitted concrete Event)` pairs.
+    reduce_senses_snapshot(expected_observer_uuid, previous, event)
+        -> next_snapshot
 
-The objective rows' `(queue index, Event UUID)` fields are the interval's one
-source-record identity/order list. Do not copy that list into a parallel field.
-Admitted indexes receive no provisional disposition: reduction either closes
-them directly or creates their exact pending display obligation.
+It preserves the current rules exactly:
 
-The source index attached to each detached Event is boundary metadata, not an
-Event field or replacement identity. It lets reduction close the disposition
-for the exact queue record without consulting `EventQueue` again.
+- validate selected observer identity;
+- visible removals before additions;
+- monotonic seen additions;
+- entity/object contact removals before changed after-values;
+- remove effective-light entries for cells no longer visible;
+- apply exact effective-light after-values;
+- apply position, perception, sense modes, and visual access only when their
+  changed flags say so;
+- derive the sense-mode hash from the reduced modes using the current formula;
+- preserve already-dirty paths and let the Event only assert dirtiness;
+- return fresh collections/deep-copied SenseMode values; and
+- perform no GridMap, Entity, registry, FOV, light, hidden, or condition query.
 
-The target starts from the carried seed snapshot and applies selected-observer
-sensory deltas only at source indexes greater than or equal to the carried seed
-cursor. The capture invariant above guarantees that no selected-observer delta
-was silently skipped before that boundary.
+The pure function does not own sense_mode_sources or the source visual-access
+ModifiableValue. The live Senses wrapper keeps its existing component-owned
+commit law: equal effective modes preserve sources; changed modes replace the
+direct after-value and clear sources; reduced visual access commits only to
+_last_visual_access. The recursive replay validator remains in the live
+wrapper, not in game as a generic payload scanner.
 
-The envelope and its rows carry no `kind`, gameplay payload union, handler,
-callback, or mutation method. They are merely ownership/boundary metadata and
-primitive diagnostics. They are never stored in `EventQueue` and never
-participate in mechanics.
+Both live Senses and the pygame target call the same pure calculation. Pygame
+never creates a Senses component and never reads the live observer after the
+startup seed.
 
-## 6. One sensory computation, not a renderer rewrite
+## 7. Target state and subjective drawing laws
 
-### 6.1 Extract the existing calculation
+### 7.1 Minimal target
 
-`Senses.apply_sensory_update()` currently performs two concerns together:
+The renderer target holds existing detached values, not duplicate Pydantic
+world models:
 
-1. calculate the next sensory snapshot from a prior snapshot plus one
-   `SensoryUpdateEvent`; and
-2. write that result into the live `Senses` block.
+- latest WorldInitializedEvent;
+- Tiles indexed by engine position for lookup only;
+- world objects indexed by UUID and placement for lookup only;
+- the exact current detached item state for StandingTorch;
+- the exact current door placement/boundary/is_open after-value;
+- selected observer UUID and detached SensesSnapshot;
+- objective/subjective rail rows, coverage, generation, and reducer cursor R.
 
-Extract concern 1 into one pure function beside the existing sensory snapshot
-code in `dnd/blocks/sensory.py`:
+Those dictionaries are read-optimized indexes over existing frozen values.
+They are not authoritative mechanics, a scene ECS, or a second schema.
 
-```text
-reduce_senses_snapshot(expected_observer_uuid, previous, sensory_event)
-    -> next_snapshot
-```
+### 7.2 Terrain disclosure
 
-The exact name may change if an existing local naming convention is clearer,
-but the ownership may not.
-
-The function:
-
-- validates that the event belongs to the snapshot's observer identity passed
-  by the caller;
-- applies visible removals before additions;
-- unions seen-cell additions monotonically;
-- applies entity/object contact removals before changed after-values;
-- removes effective-light values for cells that ceased to be visible;
-- applies exact effective-light after-values from the event;
-- applies observer position, passive perception, sense modes, and visual access
-  only when their corresponding changed flag says so;
-- derives the sense-mode hash directly from the reduced mode tuple using the
-  existing sorted `(sense_type.value, range_feet)` formula, without consulting
-  a live `Senses` block;
-- preserves an already-dirty path cache and allows the event only to assert
-  dirtiness: `next.paths_dirty = previous.paths_dirty or event.paths_dirty`;
-- returns fresh collections plus deep-copied effective `SenseMode` values, so
-  neither the prior snapshot nor Event-owned mutable values are aliased; and
-- performs no GridMap, Entity, registry, FOV, light, hidden, or condition query.
-
-The returned `sense_modes` and `visual_access` are reduced **effective cache
-facts** only. The pure function does not own, model, or mutate
-`sense_mode_sources`, the source-owned `visual_access` `ModifiableValue`, or
-any other live component channel.
-
-The pure reducer also does not call `SensoryUpdateEvent.validate_replay_payload()`
-or perform any recursive passivity/type walk. The existing validation call
-stays at the start of the live `Senses.apply_sensory_update()` wrapper to
-preserve that public behavior. `/game` instead relies on the exact
-two-concrete-family admission contract and its declared-field tests from
-Section 5.3; it must not reuse that recursive runtime walker as a generic
-presentation safety layer.
-
-Because `SensesSnapshot` currently has no observer UUID field, the caller
-passes the expected observer UUID explicitly. Do not broaden the snapshot type
-solely to avoid that argument.
-
-### 6.2 The live block remains the owner
-
-Refactor `Senses.apply_sensory_update()` to call the pure reducer and then
-commit the returned fields through its existing block state. Its observable
-behavior must remain byte/value equivalent to the current implementation.
-
-That wrapper retains three ownership details which are intentionally absent from
-`SensesSnapshot`:
-
-- when `sense_modes_changed` is true and the incoming effective modes already
-  equal `self.get_sense_modes()`, leave both `self.sense_modes` and
-  `self.sense_mode_sources` untouched;
-- only when the incoming effective modes differ, replace the direct
-  `self.sense_modes` after-value and clear `self.sense_mode_sources`, exactly
-  as the existing method does; and
-- commit reduced visual access only to `_last_visual_access`; never write or
-  replace the source-owned `self.visual_access` `ModifiableValue`.
-
-The wrapper may therefore inspect its own pre-commit effective mode tuple to
-choose the existing preserve-versus-clear branch. That is component-owned
-commit behavior, not a query performed by the pure reducer or by `/game`.
-
-The pygame target scene stores one detached `SensesSnapshot` and calls the
-same pure reducer. It never creates a second `Senses` block, never registers a
-component, and never calls the live observer after bootstrap.
-
-This is a two-consumer extraction of an existing rule, not a new observer
-service or projection hierarchy.
-
-### 6.3 Tile visibility is not content visibility
-
-The target keeps these facts separate exactly as the sensory Event does:
-
-| Fact | First-cut display use |
+| Observer fact | Terrain display |
 |---|---|
-| visible Tile positions | full current terrain and effective-light treatment |
-| seen but not visible positions | dim remembered terrain |
-| unseen positions | no terrain disclosure; fog/background only |
-| entity contacts | retained as subjective facts; not drawn yet |
-| object contacts | retained as subjective facts; not drawn yet |
+| currently visible position | draw exact Earth or animated Water with the engine-delivered effective LightLevel treatment |
+| seen but not visible | draw a fixed dim memory treatment; remembered Water is non-animated |
+| unseen | draw neither terrain nor grid and disclose no Tile identity/elevation |
 
-A visible Tile never implies that every Entity/object at that position is
-visible. Later object/actor drawing must consult its corresponding observer
-contact, not the Tile visibility set. This first map contains no world objects,
-which keeps that law explicit without pretending object rendering is finished.
+Missing effective light on a currently visible cell is an error, not a client
+default to Darkness.
 
-The renderer never computes ordinary sight, darkvision, truesight, magical
-darkness, invisibility, hidden detection, line of sight, or light propagation.
-It consumes the effective result already present in the sensory snapshot.
+The finite LightLevel-to-appearance mapping is client data in
+world_bindings.json and has exactly these treatment IDs and RGB multipliers:
 
-## 7. Minimal renderer target, displayed state, and coverage
+| Delivered value | Treatment ID | RGB multiplier |
+|---|---|---|
+| LightLevel.VERY_BRIGHT | light.very_bright | (1.08, 1.08, 1.04) |
+| LightLevel.BRIGHT_LIGHT | light.bright | (1.00, 1.00, 1.00) |
+| LightLevel.DIM_LIGHT | light.dim | (0.65, 0.68, 0.78) |
+| LightLevel.DARKNESS | light.darkness | (0.34, 0.38, 0.50) |
+| LightLevel.MAGICAL_DARKNESS | light.magical_darkness | (0.22, 0.15, 0.32) |
 
-### 7.1 Cold target state
+The fixed memory treatment is memory.seen with RGB multiplier
+(0.38, 0.40, 0.46); it never consults a current LightLevel. For Earth, apply
+the selected multiplier to canonical/scaled asset RGB immediately before the
+final blit and preserve alpha. For currently visible Water, evaluate the Water
+material at current T first, apply the selected multiplier to its RGB, preserve
+its material alpha, then perform the final blend. Remembered Water uses one
+cached material evaluation at T=0 followed by memory.seen, so it is
+deterministic and non-animated. Clamp multiplied RGB to the 8-bit range. No
+other tint, ambient value, or inferred client light exists.
 
-Do not build a scene ECS or duplicate the world schemas. The minimum target
-holds:
+### 7.3 Wall and door disclosure
 
-- the latest detached `WorldInitializedEvent`;
-- one observer UUID and its detached `SensesSnapshot` as plain fields, not a
-  multi-observer mapping;
-- source generation;
-- reducer cursor `R`;
-- objective and subjective text lines; and
-- the plain source-index disposition mapping.
+DirectionalWall is intentionally not an ordinary object contact. Treat a
+boundary surface as:
 
-The world Event's existing `WorldTileState` values remain the target Tile
-values. No `RenderTile`, `CanonicalTile`, or presentation-world Pydantic model
-is added.
+- current/full when either incident support Tile is currently visible;
+- remembered/dim when neither is visible but either is seen; and
+- hidden when neither incident Tile is disclosed.
 
-### 7.2 Displayed semantic state
+This is a finite renderer disclosure rule over engine-owned incident cells. It
+lets the wall itself remain visible while blocking the Tile behind it. It does
+not make the hidden Tile, or any object in it, visible.
 
-The displayed side owns only what is required to prove convergence:
+The DirectionalDoor frame follows the same boundary-surface rule. The leaf and
+its open/closed state require the door UUID in current observer object
+contacts. The reducer may update the detached objective door after-value while
+offscreen, but it must not draw that state until contact authorizes it. When
+contact is newly gained, the current detached after-value supplies the state
+the observer can now see. No generic subjective object projector is added.
 
-- Tile UUIDs actually drawn in the last presented frame;
-- their selected asset IDs and applied appearance keys;
-- camera state and hover diagnostics;
-- display cursor `D`; and
-- the last terminal/failure text.
+This exact script requires contact before, during, and after the transition.
+Failure to satisfy it is a scenario/test failure.
 
-It does not mirror traversal costs, blockers, occupancy, light sources, or any
-other mechanics.
+### 7.4 Standing torch and light
 
-The appearance key is one plain tuple derived only from already-reduced
-subjective facts:
+The torch body and flame require the StandingTorch UUID in current observer
+object contacts. Body selection uses its stable item_id. Flame is drawn only
+when the latest admitted ItemLocationStateEvent says is_lit=true.
 
-```text
-visible Tile:          ("visible", effective LightLevel value)
-seen, not visible:     ("memory", None)
-unseen:                no drawn-Tile evidence
-```
+The Sprite never illuminates pixels by rule. Tile and structure treatments use
+only effective LightLevel values already delivered by SensoryUpdateEvent. A
+current wall/frame/door leaf chooses the brightest delivered value—maximum
+LightLevel.value—among its currently visible incident support cells. A
+currently contacted standing-torch body uses the delivered value at its
+visible placement support. If the relevant supports are only remembered, the
+structure/body uses memory.seen; if none is disclosed, it is hidden. Apply the
+selected multiplier after static asset scaling and before the final blit,
+preserving alpha. The flame itself is emissive presentation art: it keeps its
+asset RGB/alpha, but is drawn only when the contacted body is drawable and the
+engine state says is_lit=true. None of these rules traces or propagates light.
 
-The client chooses a visual treatment for each finite key; it does not infer
-or simulate the light. Scaled/tinted Surface caching includes this appearance
-key so the semantic evidence records the treatment actually selected for the
-blit, rather than merely echoing target data beside an untreated image.
+Door opening must visibly reveal/re-light the far side from the sensory delta;
+closing must remove current far-side disclosure while retaining seen memory.
+The corresponding SPATIAL_LIGHT_CHANGED Events remain visibly unsupported in
+the objective rail because their subjective result is represented by the
+SensoryUpdateEvent, not re-read directly.
 
-### 7.3 Coverage dispositions in this cut
+## 8. Exact client asset subset
 
-- a fully bound and drawn `WorldInitializedEvent` becomes `represented`;
-- a successfully applied `SensoryUpdateEvent` becomes `state_only` because its
-  knowledge/light facts control the frame without a separate animation;
-- an Event version not admitted by this plan remains `unsupported`;
-- a sensory Event for another observer would be `not_disclosed` and would not
-  affect the selected target;
-- an Event that cannot be reduced or drawn becomes `failed`.
+### 8.1 Repository-owned copies only
 
-`diagnostic_only` is reserved for a later family explicitly admitted only for
-text. Do not use it to hide missing state-bearing visual work.
+Copy only the following reviewed source families into game/assets. Record
+source path and SHA-256 in assets.json; runtime never reads WSL repositories.
 
-Unsupported is a valid closed development outcome and is displayed loudly. It
-does not mean the corresponding mechanics failed. A false `represented` or a
-silent omission is a terminal failure.
+From /home/tommaso/Dev/NeuroMapEditor/public/assets/fantasy/environment:
 
-## 8. Asset boundary
+- ground-a1-e.png;
+- wall-d2-{e,n,s,w}.png;
+- wall-d6-{e,n,s,w}.png;
+- door-a1-{e,n,s,w}.png, closed leaf candidates; and
+- door-a2-{e,n,s,w}.png, open leaf candidates.
 
-### 8.1 Exact first asset
+From /home/tommaso/Dev/MapEditor/app/public/assets/unity-reference:
 
-Copy exactly this reviewed source asset into `/game`:
+- sprites/6ccb6893c0aa9974091d5318779c1e76.png, Water alpha mask;
+- effects/waterImage.png, repeating ripple texture;
+- effects/waterNormal.png, repeating normal texture;
+- sprites/fa27919a4e81577468f97c3b668cffa2.png, standing-torch body; and
+- the exact 16 flame Sprite PNGs listed below.
 
-```text
-/home/tommaso/Dev/NeuroMapEditor/public/assets/fantasy/environment/ground-a1-e.png
-```
+The four wall and doorway-frame poses are accepted source families. The door
+leaf set has weaker active-occurrence evidence for some views even though the
+catalog files exist. Slice 0 must visually verify that every copied A1/A2 pose
+is truly the same closed/open leaf family. A failed pose remains a visible
+missing-asset diagnostic for that camera view. It must never be synthesized by
+rotation or mirroring. The default R0 view uses the already high-evidence .s
+frame and leaves.
 
-The source is a 256 x 256 RGBA PNG. Record provenance in the client catalog,
-but the executable loads only the repository-owned copy. It must never depend
-on the external WSL repository at runtime.
+### 8.2 Two direct JSON files
 
-This asset is the reviewed ordinary dirt/Earth ground family. The selected
-battlefield therefore uses `Material.EARTH`; the renderer must not bind this
-image to a Stone Tile for convenience.
+Add only:
 
-The `e/n/s/w` Ground A1 files are visual variations, not current engine
-directions. This cut uses the exact high-evidence `e` occurrence in all camera
-quadrants and does not raster-rotate it. Direction-to-pose selection begins
-with the later wall family, where direction is semantic.
+1. game/data/assets.json — exact image resources, native dimensions, pivot,
+   scale, material/animation metadata, ordered flame frames/fps, and exact
+   Water constants/blend rule; and
+2. game/data/world_bindings.json — finite direct maps from Material.EARTH,
+   Material.WATER, the stone DirectionalWall boundary family, the
+   DirectionalDoor frame plus is_open leaf family, and item_id
+   environment.standing_torch to those catalog IDs, plus the six direct
+   current/memory treatment rows in Section 7.2.
 
-### 8.2 Two tiny JSON files
+They contain no Python class names, engine objects, predicates, tags,
+priorities, inheritance, regexes, filename rules, fallback chains, or asset
+inference. Engine objects never contain client asset IDs.
 
-Add:
+### 8.3 Direction-to-pose law
 
-1. an asset catalog with one exact record: stable asset ID, relative PNG path,
-   expected 256 x 256 size, pivot `(128, 208)`, scale `1`, and planar surface
-   role; and
-2. a Tile binding mapping the exact `earth` base material to that asset ID.
+The artist-space pose for an engine boundary depends on camera quadrant. At R0:
 
-The files are JSON-compatible and contain no Python class names or engine
-objects. The first binding file is a direct map, not a selector language. Do
-not add tags, priorities, predicates, inheritance, fallback chains, regexes,
-or variant algorithms before a real second case requires them.
+| Engine boundary | Asset pose |
+|---|---|
+| NORTH | w |
+| EAST | s |
+| SOUTH | e |
+| WEST | n |
 
-There is no exact battlefield occurrence companion in this cut. Its precedence
-law remains accepted for the later decorated map.
+Each quarter camera rotation rotates this mapping coherently. Local PNG pixels
+and pivots are never raster-rotated. Door painter order is frame, then leaf.
+Torch painter order is body, then flame.
 
-### 8.3 Loading and failure
+### 8.4 Loading and failure
 
-After `pygame.display.set_mode()`:
+After pygame.display.set_mode():
 
-- load the one PNG synchronously;
-- verify the catalog ID, relative-path containment, file existence, and native
-  dimensions;
-- call `convert_alpha()` once;
-- derive any light/fog variants from copies, never mutate the canonical
-  Surface; and
-- cache derived Surfaces only for the finite `(zoom level, appearance key)`
-  combinations.
+- validate relative-path containment, existence, SHA, native dimensions,
+  frame order, and direct bindings;
+- load synchronously and call convert_alpha() once;
+- keep immutable canonical Surfaces;
+- use nearest-neighbor scaling at the finite zoom levels;
+- cache scaled static images and flame frames;
+- configure Water ripple/normal sampling as repeat plus nearest in the software
+  sampler; and
+- surface any missing/malformed/unknown resource as a failed interval plus
+  readable diagnostic.
 
-A missing, malformed, escaping, wrongly sized, or undecodable asset is a
-visible startup failure and produces a failed terminal. There is no filename
-guess or procedural ground fallback. The grid/debug background may remain
-visible so the error can be read.
+No procedural ground, wall, door, Water, or torch fallback is permitted.
 
-`pygame-ce` is imported as `pygame`. Use the current stable 2.5 series in the
-project dependency/lock. The implementation follows the official pygame-ce
-display, Surface, transform, mouse, and Clock contracts: one display Surface,
-event pumping each frame, alpha-converted images, finite cached scaling, one
-`Clock.tick()` limiter, and one display update per frame. Do not combine a
-vsync wait with the Clock limiter in this first software renderer.
+## 9. One presentation clock and two continuous animations
 
-Official references consulted for this plan:
+### 9.1 Clock ownership
 
-- <https://pyga.me/docs/ref/display.html>
-- <https://pyga.me/docs/ref/surface.html>
-- <https://pyga.me/docs/ref/transform.html>
-- <https://pyga.me/docs/ref/mouse.html>
-- <https://pyga.me/docs/ref/time.html>
-- <https://pypi.org/project/pygame-ce/>
+The renderer owns one monotonic presentation_time_seconds. Runtime advances it
+from the one pygame Clock delta; tests inject exact deltas. The same time drives
+Water and flame.
 
-## 9. Projection, camera, painter order, and picking
+Camera pan, zoom, rotation, culling, remounting, sensory changes, and interval
+boundaries do not reset it. Continuous animation alone does not advance E, R,
+or D and does not create an Event or terminal.
 
-### 9.1 One pure projection owner
+### 9.2 Flame
 
-`game/projection.py` owns the complete forward/inverse relationship. No other
-module repeats it.
+Use this exact 16-frame order at 10 fps:
 
-For one macro128 Tile contact after camera-quarter rotation:
+1. f52dea0b72342b246a1216e289dc5168
+2. d0ad60029a0000444a7857492c6a6c8f
+3. 40f6c77eb5fc22a469128a41099f5290
+4. 2276e4f9d5b5375498378d15537db6bb
+5. 48ecf78b49001774082006e4def7022a
+6. 23ca28e336270bc458c4e3b626186ca6
+7. 284115ada2975f1409611751ae8743a7
+8. d5227bc3bac87004d8aae57741cc00ce
+9. 3ceb33c008cf91545b06eb6a6763b90d
+10. 3a911e83eaeb1714ea0a08180ec0c614
+11. 1dca70b6deec00a4ab47b04675c4d55f
+12. 730718fd0c474f54194c2fe0184ca24a
+13. e8b3e4d342784df4792e9d60d505de82
+14. d4eccfde5037d4d40986d61754bb33d4
+15. f09e44a4b6d53e9409a13272d4198c54
+16. 77c165966e3947c40a3d08440e7f9bf2
 
-```text
-world_x = (camera_x - camera_y) * 64
-world_y = (camera_x + camera_y) * 32 - elevation_steps * 64
-```
+The selected frame is:
 
-The `-64 px` vertical lift per current five-foot engine elevation step is the
-selected NeuroMapEditor macro128 Z-grid calibration. It changes only the
-display contact. Engine position remains `(x, y)`.
+    floor(max(0, presentation_time_seconds) * 10) % 16
 
-Keep the projection offset as a named function/value, not as a field added to
-Tile. A future exact presentation companion may supply a different calibrated
-Z-grid offset for a particular authored map, but this cut adds no general
-calibration schema.
+Body and flame use pivot (128, 209.92), scale 128/127, and the same projected
+contact. The orientation-neutral fixture is valid in all four views.
 
-### 9.2 Four camera quadrants
+### 9.3 Source-faithful Unity Water
 
-With x right and y south, rotate around the map-center pivot:
+Implement the existing Unity/TS material as one vectorized NumPy/pygame
+software kernel in game/water.py. Do not approximate it with a blue tint,
+per-Tile frame swap, Python pixel loop, GPU wrapper, ModernGL dependency, or
+new shader abstraction.
 
-```text
-R0   (x, y)
-R90  (-y, x)
-R180 (-x, -y)
-R270 (y, -x)
-```
+The immutable material values are:
 
-The inverse uses the opposite quarter turn. Rotation affects only client
-projection, picking, and later asset-pose selection. It never changes engine
-coordinates, wall ownership, light, perception, or Event facts.
+| Field | Value |
+|---|---|
+| shallowColor | [0.06878672, 0.40544975, 0.59119487, 0.6666667] |
+| deepColor | [0.07058824, 0.4039216, 0.5921569, 0.5529412] |
+| tint | [1, 1, 1, 1] |
+| depthBlendStrength | 1.554 |
+| uvScale | 1.37 |
+| detailPan | [0.005, 0.004] |
+| detailInfluence | 0.648 |
+| ripplePan | [0.1, 0.1] |
+| rippleTilingMultiplier | 1 |
+| rippleAmount | 0.2 |
+| uvWobbleAmount | 0.1 |
+| normalPanA | [0.1, 0.1] |
+| normalPanB | [1, -0.1] |
+| normalTilingMultiplier | 1 |
+| normalScale | 2 |
+| sheenStrength | 0.158 |
+| sheenSharpness | 3.46 |
+| overallAlpha | 0.812 |
+| alphaDepthStrength | 0.222 |
+| alphaCutoff | 0.493 |
+| premultiplyOutput | false |
 
-### 9.3 Camera transform and controls
+For each visible Water owner-chunk batch, reproduce the TS shader sequence
+exactly:
 
-The screen transform is one explicit composition:
+1. sample the composed Water mask alpha and discard below alphaCutoff;
+2. map input pixels into worldPosition;
+3. derive worldUv;
+4. sample ripple red, calculate wobble;
+5. sample both normal pans, combine, safe-normalize, and scale;
+6. evaluate the unassigned detail texture as white, matching the Unity sample;
+7. compute world-y depth interpolation and shallow/deep mix;
+8. add ripple color and screen-edge sheen;
+9. compute depth-adjusted alpha and overall alpha; and
+10. blit straight shader RGB using pygame.BLEND_PREMULTIPLIED without first
+    calling premul_alpha(), reproducing Unity's unusual One / OneMinusSrcAlpha
+    declaration with straight shader output.
 
-```text
-engine contact
-  -> rotate around map pivot
-  -> macro128 projection + support-height offset
-  -> finite zoom
-  -> pixel pan / viewport origin
-```
+World-space mapping follows the current TS reference:
 
-Controls:
+    origin = (source_origin_px.x / tile_width,
+              -source_origin_px.y / tile_width)
+    pixel_axis_x = (1 / (tile_width * render_scale), 0)
+    pixel_axis_y = (0, -1 / (tile_width * render_scale))
 
-- `W/A/S/D`: pan in screen space;
-- mouse wheel: select the next finite zoom level while preserving the world
-  pixel under the cursor;
-- `Q/E`: rotate one quarter turn and recenter on the same map pivot;
-- `G`: toggle grid overlay; and
-- `Escape` or window close: clean shutdown.
+Translation does not affect UVs. Support-height pixel lift does not affect
+UVs. Ripple and normal textures use repeat/nearest sampling. Default flow is
+(1, 1) at speed 1; any future flow rotation must rotate every pan vector
+coherently, but this cut adds no runtime flow control.
 
-Use a small fixed tuple of zoom levels covering useful overview and inspection
-scales. This bounds the scaled-Surface cache. Do not add smooth kinetic pan,
-camera animation, free rotation, controller input, or configurable bindings.
+### 9.4 Water chunking and fidelity oracle
 
-### 9.4 Ground painter order
+Use fixed 16 x 16 engine-coordinate owner chunks. A Water Tile belongs to one
+owner chunk. For each visible owner chunk, cache one stable painter-ordered
+packed batch of per-support alpha/sample-local geometry and stable projected
+offsets. Rebuild that geometry only when disclosed support membership, camera
+quadrant, or zoom changes. Each frame, intersect it with the current viewport
+clip and add the current pan/viewport origin to derive exact global framebuffer
+coordinates for the raw invocation. A pan therefore changes screen-edge sheen
+without rebuilding cached local geometry or changing world-space UV phase. A
+LightLevel change updates only its direct per-support treatment selection; it
+does not rebuild the raw material geometry.
 
-This cut has one planar surface role. Its deterministic order is derived from
-the camera-rotated, **unshifted** macro contact `(projected_y, projected_x)`,
-then stable Tile UUID. Z-grid identity, engine elevation, and its pixel lift do
-not enter painter rank; that is the retained NeuroMapEditor law. The lift only
-changes the rendered contact position.
+Invoke the vectorized raw Water kernel exactly once per visible clipped owner
+chunk per frame over that packed sample batch—never once per Tile and never
+once per treatment. Scatter its raw results back to the existing per-support
+slots, apply each support's own delivered LightLevel multiplier, and blit those
+support outputs at their ordinary painter positions. Overlapping support
+Sprites remain separate packed layers, so their order and alpha semantics are
+not flattened. This permits Water supports and boundary art to interleave under
+the same painter law without a whole-chunk Sprite, a second material
+evaluation, or a scene object. Clip packed vector work to the viewport plus
+exact Sprite overhang.
 
-The same painter rank is used when overlapping ground candidates must be
-resolved by picking. Do not use insertion order or a mutable arbitrary z-index.
+Before implementing the Python kernel, capture a tiny immutable fixed-time
+oracle from the existing unityWaterFilter.ts/Pixi reference using the exact
+ripple, normal, and synthetic mask inputs. The fixture freezes its source and
+output dimensions, complete material constants, source_origin_px, tile_width,
+render_scale, exact sample-local coordinates, exact global framebuffer origin,
+framebuffer dimensions, and a nonzero known destination RGBA. It records both
+raw shader RGBA and the expected final composited RGBA at t=0, 0.1, and 1.25
+seconds. Store only those small samples plus provenance/source and input-image
+SHAs in tests; production has no TS/Node runtime dependency.
 
-### 9.5 Height-aware support-cell picking
+Compare the Python raw output within at most one 8-bit channel step where
+GPU/CPU rounding differs. Separately blit the straight shader output over the
+fixture's known nonzero destination with the real pygame
+BLEND_PREMULTIPLIED path—without premul_alpha()—and compare final composited
+RGBA to the recorded reference. The chunk split/unsplit proof must render and
+compare identical global framebuffer coordinates with the same framebuffer
+size, destination pixels, source origin, tile width, scale, and T; changing a
+chunk-local origin is not an admissible equivalence proof.
 
-Build the candidate support set only from target Tiles whose positions occur
-in the selected observer's `visible` or `seen` facts. Objective world Tiles
-outside that disclosed set must not participate in player picking. For every
-distinct support elevation present in that disclosed support set:
+Additional mathematical tests must prove:
 
-1. remove viewport/pan and zoom;
-2. remove that candidate elevation's calibrated pixel offset;
+- fixed global coordinate/time output does not change when one pool is split
+  across the x=31/32 chunk boundary;
+- pan preserves world-space material phase while updating screen-edge sheen
+  from the new global framebuffer coordinates; camera remount and elevation
+  offset likewise do not shift world-space phase;
+- zoom changes sampling scale without resetting time;
+- two different times change visible Water pixels; and
+- remembered/not-visible Water does not continue animating.
+
+A real mixed-light proof must simultaneously render the current engine facts
+in owner chunk (1, 2), including Water supports (29, 33), (30, 33), and
+(31, 33), and show their distinct delivered treatments in one raw material
+invocation. The test groups the ordered support draw evidence by the owner
+chunk derived from each engine position; the raw chunk evidence carries no
+duplicated LightLevel/treatment field.
+
+The oracle is a narrow material test, not a full-scene screenshot golden.
+
+Official pygame-ce contracts used by this implementation are the display,
+Surface, transform, time, mouse, surfarray, special blend flag, and
+premultiplied-alpha references. Slice 0 resolves and locks the current stable
+pygame-ce 2.5.x release supported by Python 3.12; it must not guess a future
+version. NumPy is already a direct project dependency.
+
+## 10. Projection, painter order, camera, and picking
+
+### 10.1 One pure projection owner
+
+game/projection.py owns the forward/inverse relationship. For one macro128
+support after camera-quarter rotation:
+
+    world_x = (camera_x - camera_y) * 64
+    world_y = (camera_x + camera_y) * 32 - elevation_steps * 64
+
+The -64-pixel lift per five-foot engine support step is presentation geometry
+only. Engine position remains (x, y); no visual Z coordinate is written into
+Tile or Entity.
+
+### 10.2 Four camera quadrants and controls
+
+Rotate around the fixed map-center pivot (31.5, 31.5):
+
+| View | Rotated coordinates |
+|---|---|
+| R0 | (x, y) |
+| R90 | (-y, x) |
+| R180 | (-x, -y) |
+| R270 | (y, -x) |
+
+The inverse applies the opposite quarter turn. Controls are:
+
+- W/A/S/D: screen-space pan;
+- mouse wheel: cursor-centered next/previous finite zoom;
+- Q/E: one quarter camera rotation, preserving the focused engine contact;
+- G: disclosed-grid overlay;
+- Escape/window close: clean shutdown.
+
+The initial camera focuses the local proving scene, not the whole 64 x 64 map.
+Zoom levels are a small fixed tuple supporting local inspection and overview.
+
+### 10.3 Painter law
+
+Build one deterministic ordered draw list from disclosed current candidates.
+The key uses camera-transformed projected support contact, finite role band,
+and stable engine identity. Required local role order is:
+
+    Water/base support
+    Earth/base support
+    boundary wall or doorway frame
+    door leaf
+    standing-torch body
+    standing-torch flame
+    debug/grid/hover/UI overlays
+
+Water versus Earth never overlap on the same base Tile in this map. The role
+order exists to make cross-cell Sprite overlap deterministic, not to invent a
+second z-index API. Pan, zoom, insertion order, and animation frame do not
+change semantic painter order.
+
+An animated Water owner chunk is only a vector-work/cache owner; it never owns
+a painter key and is never blitted as one scene Sprite. Each scattered Water
+support output occupies the same support draw slot that static terrain would.
+Consequently the existing contact-first painter key may place wall/frame/leaf
+draws between Water supports where the view requires it. A real default-R0
+test uses the known Water/barrier crossing, composites actual Water and wall
+Surfaces in the prescribed order, and requires the final overlapping pixels to
+match that order and differ from the reversed composite. It also checks the
+recorded draw sequence, so a visually coincidental opaque result cannot hide a
+whole-chunk late blit.
+
+### 10.4 Height-aware picking
+
+Candidate supports come only from observer-visible or observer-seen positions
+within the current viewport candidate window. For each distinct disclosed
+support elevation:
+
+1. remove pan/viewport and zoom;
+2. remove that support's -64 * elevation_steps pixel lift;
 3. invert macro128 projection;
-4. apply the inverse camera-quarter rotation;
-5. round to the candidate owner cell;
-6. require that exact Tile to exist and have the candidate elevation;
-7. test the point against its projected 128 x 64 diamond; and
-8. choose the visually foremost valid candidate by the same deterministic
-   painter order.
+4. inverse-rotate around the map pivot;
+5. require an exact disclosed Tile at the candidate coordinate/elevation;
+6. test the projected 128 x 64 support diamond; and
+7. select the visually foremost valid support by the same painter law.
 
-The hover panel reports:
+Hover diagnostics report screen/world pixels, quadrant, zoom, raw plane
+estimate, every tested elevation, chosen engine (x,y), Tile UUID, material,
+height steps/feet, Z-grid pixel offset, projected contact, painter key, and
+diamond result. When no disclosed support matches, no objective Tile identity,
+material, height, or map membership may leak.
 
-- screen pixel;
-- unzoomed world pixel;
-- camera quadrant and zoom;
-- each candidate support elevation considered;
-- candidate and chosen engine `(x, y)`;
-- Tile UUID;
-- elevation steps and feet;
-- renderer Z-grid label and pixel offset;
-- projected contact;
-- painter rank; and
-- diamond containment result.
+This cut picks supports only. It does not implement wall/door/torch alpha-mask
+selection.
 
-When no disclosed support contains the pointer, the panel may still report
-screen pixel, unzoomed world pixel, camera, zoom, and the raw algebraic plane
-estimate. It reports no existing Tile, Tile UUID, support elevation, Z-grid
-identity, or objective-map membership. This cut adds no privileged/omniscient
-pick mode.
+## 11. 64 x 64 locality and caching contract
 
-This is ground/support picking only. There is no Sprite rectangle or alpha
-mask pick in this cut.
+The cold event necessarily contains 4,096 Tiles once. Startup may validate and
+index them once. No steady frame may scan all 4,096.
 
-## 10. Pygame and asyncio execution model
+For each frame:
 
-### 10.1 One thread and one event loop
+- derive an engine-coordinate candidate rectangle by inverse-projecting the
+  viewport and adding the exact maximum catalog overhang;
+- intersect that rectangle with observer disclosed positions, using set/dict
+  membership;
+- look up only candidate Tiles and world objects;
+- group only visible Water candidates into fixed owner-chunk vector batches
+  while retaining their individual painter slots;
+- draw only current candidates and visible animated chunks/objects; and
+- reuse canonical/scaled static Surfaces and cached Water masks.
 
-Pygame initialization, event pumping, drawing, and display update all remain
-on the process main thread. Use one `asyncio.run()` composition and no worker
-thread.
+Sensory deltas update disclosed membership directly. Door/item after-values
+invalidate only their owner placement and incident boundary cells. Camera
+rotation or zoom may rebuild finite presentation caches; pan changes the
+candidate window/blit positions and the per-frame global framebuffer
+coordinates supplied to Water sheen, but does not rebuild local Water geometry
+or alter its world UVs. No full-board string signature or rebuild is allowed.
 
-The startup engine work is synchronous and finishes before it is allowed to
-yield. It returns the one detached interval envelope, including its observer
-bootstrap snapshot and seed cursor.
-The authoritative EventQueue may therefore already be at `E` while reducer
-and display remain at their earlier cursors.
+The diagnostics expose at least:
 
-### 10.2 One input queue and one terminal queue
+- total world Tiles (4,096);
+- visible and seen support counts;
+- viewport candidate coordinates tested;
+- static candidates drawn;
+- Water chunks and Water pixels evaluated;
+- visible animated fixtures;
+- cache rebuild/hit counts;
+- presentation time and flame frame; and
+- E/R/D per interval.
 
-Use one `asyncio.Queue(maxsize=1)` for the one captured presentation interval
-and one `asyncio.Queue(maxsize=1)` for its terminal result. Enqueue with
-`put_nowait()` after successful capture so presentation can never make engine
-event completion await animation time. Overflow is a surfaced fatal
-presentation error, not a sleep or silent drop. Later encounter work may
-change capacity only from measured real accumulation.
+An automated locality proof renders the same local disclosed viewport in a 16
+x 16 and the 64 x 64 world and requires equal steady-frame candidate and
+animated-work counts. A real 64 x 64 SDL-dummy multi-frame smoke must also run.
+Manual profiling at 1280 x 720 with Water and flame visible records median and
+p95 frame time after warm-up; the automated correctness gate is the work-count
+invariant, not a machine-dependent millisecond threshold.
 
-These are ordinary scheduling queues, not buses. Nothing subscribes. There is
-no callback registered in mechanics and no future/promise map keyed per Event.
+## 12. Async execution, revisions, pacing, and terminals
 
-The pygame frame coroutine:
+### 12.1 One thread and one event loop
 
-1. drains available presentation intervals in storage order;
-2. reduces admitted Events into target state immediately;
-3. advances `R` after every source queue record has been processed into either
-   a closed non-display disposition or an exact pending display obligation;
-4. pumps pygame input;
-5. draws one frame from target state and current camera;
-6. updates displayed semantic evidence;
-7. flips/updates the display once;
-8. advances `D` and emits the interval terminal when parity is true; and
-9. calls one `Clock.tick(60)` plus an event-loop yield.
+Use one asyncio.run() composition. Pygame initialization, input pumping,
+drawing, display update, and Clock remain on the main thread. Mechanics
+commands are synchronous and each completes before its interval is captured.
+No worker, networking, server, or second event loop is introduced.
 
-No arbitrary sleep synchronizes tests or runtime.
+### 12.2 Two ordinary bounded queues
 
-### 10.3 Three clocks
+Use:
 
-- `E`: end cursor captured after mechanics committed;
-- `R`: end cursor of the last interval whose admitted facts were reduced and
-  whose full ordered source-record set was processed into either a closed
-  non-display disposition or an exact pending display obligation; and
-- `D`: end cursor of the last interval whose owned semantic target was present
-  in a displayed frame.
+- asyncio.Queue(maxsize=3) for exactly the startup/open/close envelopes; and
+- asyncio.Queue(maxsize=3) for their terminal values.
 
-The runtime asserts `E >= R >= D` within one generation. Camera-only frames do
-not advance these cursors. After target reduction and before the first matching
-frame, the world Event has a display obligation but not yet the final
-`represented` disposition; `E == R > D` is therefore lawful.
+The producer uses put_nowait() after valid capture and can finish all mechanics
+before pygame catches up. Overflow is a visible fatal presentation failure,
+not backpressure into Event completion and not a silent drop. These queues are
+not buses: nothing subscribes and no future/callback map is created.
 
-### 10.4 One terminal
+### 12.3 E, R, D, and ambient time
 
-The one startup interval has one small terminal value containing generation,
-cursor range, outcome (`settled`, `failed`, or `cancelled`), and a
-human-readable failure message when applicable. The tuple `(generation,
-start_cursor, end_cursor)` already identifies the interval; do not add a second
-boundary UUID.
+- E: authoritative exclusive EventQueue end cursor captured for an interval;
+- R: end cursor after every source version was either given a final
+  non-display disposition or reduced into an exact pending display obligation;
+- D: end cursor after a frame with exact target/display semantic parity was
+  published; and
+- T: renderer-local continuous presentation_time_seconds.
 
-It settles only when:
+Within one generation, E >= R >= D. T is not comparable to those revisions.
+Water/flame animation can advance T for any number of frames without changing
+E/R/D. represented does not become final at R: a world/item/door source with a
+pending display obligation becomes represented only after its matching
+successful parity frame advances D. This makes E=R>D both valid and directly
+observable without claiming that scheduled work was already displayed.
 
-- every original source queue index has exactly one closed disposition tied to
-  its recorded Event UUID;
-- the admitted world and sensory values reduced in order;
-- the one required asset loaded;
-- the expected disclosed `(Tile UUID, asset ID, appearance key)` triples equal
-  the triples actually drawn in one displayed frame;
-- the display frame was published; and
+### 12.4 Human-visible interval pacing
+
+The renderer consumes one interval at a time. After reducing it, it must
+publish at least one exact matching frame and keep that discrete state on
+screen for one small explicit display duration before consuming the next
+interval. Use one application constant (initially 0.75 seconds) driven by the
+same injected presentation clock; do not sleep in tests.
+
+Continuous Water/flame motion continues during the hold. The hold belongs only
+to this scripted demonstration and is not encoded in Events or gameplay. It
+exists so an already-enqueued open state is not coalesced immediately into the
+later close state.
+
+### 12.5 One terminal per source interval
+
+One terminal contains generation, cursor range, settled/failed/cancelled, and
+failure text. It settles only after:
+
+- every source index has one final disposition;
+- admitted values reduced in source order;
+- required assets/material output succeeded;
+- exact expected display evidence equals evidence appended only after each
+  corresponding real blit succeeded;
+- the matching frame was displayed;
+- the interval's visible hold elapsed; and
 - generation still matches.
 
-Publishing the matching frame closes the pending world display obligation as
-`represented` and advances `D`. Never label it represented merely because a
-draw was scheduled or target state exists.
+No per-Event, per-Tile, per-asset, per-animation, or per-frame terminal exists.
+Queue emptiness is not completion proof. Ambient animations never finish and
+therefore are not terminal obligations; one correct displayed frame at that
+interval's T proves their current materialization.
 
-There are no terminal objects for individual Events, Tiles, assets, or frames.
-Queue emptiness alone never settles the interval.
+Expected calculation evidence is an ordinary set of primitive tuples, and
+expected draw evidence is one ordinary ordered sequence of primitive tuples in
+the already-required painter order. Actual draw entries are appended only after
+their real blits succeed. These are fields of the existing per-interval
+presentation state, not new objects or a second rendering model. Their finite
+tuple forms are:
 
-### 10.5 Reset and shutdown
+- support: (Tile UUID, engine position, asset ID, current_or_memory, delivered
+  LightLevel or None, treatment ID);
+- wall/frame: (object UUID, owned side, asset ID, current_or_memory, selected
+  LightLevel or None, treatment ID);
+- door leaf: (door UUID, is_open, pose asset ID, current_or_memory, selected
+  LightLevel or None, treatment ID);
+- standing fixture: (fixture UUID, is_lit, body asset ID, current_or_memory,
+  body LightLevel or None, body treatment ID, exact flame asset ID or None,
+  exact flame frame index or None); and
+- raw animated Water batch: (owner chunk coordinates, clipped global
+  destination bounds, evaluated packed-sample count, exact T,
+  water.unity-material ID).
 
-A new EventQueue generation invalidates every old queued interval and target.
-Stale intervals are closed as cancelled and cannot change `R`, `D`, the scene,
-or coverage for the new generation. A fresh run constructs a fresh target from
-one new world Event and observer seed.
+The expected calculation set and draw sequence are derived from the reduced
+target, disclosure, and painter list at the captured frame T. The actual raw
+Water tuple is recorded only after its one chunk kernel invocation succeeds;
+each treated Water support row enters the actual draw sequence only after that
+support's scattered result is blitted in its painter slot. Grouping Water
+support rows by owner chunk and their engine position reconstructs the exact
+ordered mixed-treatment membership without duplicating LightLevel/treatment
+inside the raw-batch tuple. Door/torch/flame rows likewise cannot pass on target
+state alone. Equal calculation evidence and exact draw-sequence equality are
+checked before D advances or represented becomes final. The dedicated
+asset/Water tests own pixel fidelity; this frame evidence owns semantic
+materialization, treatment, ordering, and successful blit coverage without
+hashing the framebuffer each frame.
 
-Shutdown stops accepting intervals, closes pygame exactly once, and leaves
-engine registries to the existing reset boundary. It does not delete or mutate
-authoritative Events.
+A generation reset cancels all stale envelopes/targets and prevents them from
+changing the new generation's scene, coverage, R, or D. Shutdown stops new
+input, closes pending terminals once, quits pygame once, and uses the existing
+engine reset boundary rather than deleting authoritative Events.
 
-## 11. Minimal visible product
+## 13. Minimal visible product
 
-The first window contains only:
+The pygame window shows:
 
-- observer-authorized isometric Earth ground;
-- optional macro grid lines;
-- a hover diamond;
-- objective Event rows;
-- observer-subjective Event/log rows;
-- E/R/D and generation diagnostics;
-- camera/zoom/quadrant diagnostics;
-- mouse-to-grid/Z diagnostics; and
-- visible counts/messages for unsupported and failed representations.
+- observer-authorized Earth and animated Water;
+- the disclosed stone barrier and layered door;
+- the perceived standing-torch body and animated flame;
+- engine-resolved light treatments and seen-memory treatment;
+- optional disclosed grid and hover diamond;
+- objective Event rows and subjective log rows;
+- unsupported/failed/not-disclosed counts;
+- E/R/D/T, interval, queue depth, and generation;
+- locality/cache/animation counters;
+- camera quadrant, zoom, and pan; and
+- full mouse-to-grid/support-height diagnostics.
 
-Grid overlay diamonds are generated from the same visible-or-remembered
-support set used by picking. They never outline an unseen objective Tile.
+The exact UI colors, font sizes, rail geometry, and line wrapping are not stable
+contracts. The semantic data and its live update are.
 
-Visible ground uses the observer's effective light after-value in its applied
-appearance key. Seen but no longer visible ground uses one fixed memory
-treatment. Unseen ground is not blitted. This is client display policy over
-engine-authorized facts, not light simulation.
+## 14. Small module shape and dependency DAG
 
-The exact widget geometry, font sizes, colors, and line wrapping are not a
-stable contract. The stable contract is that each diagnostic value is readable
-and updates with its owning state.
+The intended maximum shape is:
 
-## 12. Planned modules and dependency DAG
-
-The intended small module shape is:
-
-```text
-game/__main__.py
-        |
-        v
-game/app.py ----------------------> pygame
-   |        |        |
-   v        v        v
-game/presentation.py  game/projection.py  game/assets.py
-   |                         |                 |
-   v                         |                 v
-dnd Events + sensory values  |          JSON + copied PNG
-   |                         |
-   +-------------------------+
-```
+    game/__main__.py
+            |
+            v
+    game/app.py ------------------------------> pygame
+       |          |           |          |
+       v          v           v          v
+    presentation  projection  assets     water
+       |
+       v
+    existing dnd Events and sensory values
 
 Responsibilities:
 
-- `game/presentation.py`: closed capture, exact two-family admission,
-  objective/subjective rows, cold target reduction, coverage, cursors, and the
-  one interval terminal value;
-- `game/projection.py`: pure camera rotation, forward/inverse macro128 math,
-  Z-grid offsets, painter key, and support-cell picking;
-- `game/assets.py`: exact JSON validation plus synchronous Surface loading and
-  finite zoom cache;
-- `game/app.py`: direct scenario composition, the two asyncio queues, pygame
-  frame/input/draw loop, and diagnostics layout; and
-- `game/__main__.py`: one tiny executable entry point.
+- game/presentation.py: interval capture/admission, primitive rails, pure
+  target reduction, coverage, E/R/D, and interval terminal;
+- game/projection.py: camera rotation, macro128 forward/inverse, height offset,
+  painter key, viewport bounds, and support picking;
+- game/assets.py: exact two-JSON validation, Surface loading, finite static and
+  flame-frame caches;
+- game/water.py: the one NumPy Unity-water material calculation;
+- game/app.py: direct scenario/observer/action script, two queues, one clock,
+  in-process content installation, frame/input/draw loop, pacing, culling, and
+  diagnostic layout; and
+- game/__main__.py: tiny executable entry.
 
-If one of these modules remains tiny, it may be merged into its direct caller.
-Do not split additional `managers`, `controllers`, `services`, `stores`,
-`repositories`, `systems`, `adapters`, or `interfaces` to mirror this diagram.
+If a module remains trivial, merge it into its only caller. Do not add manager,
+service, controller, store, repository, adapter, interface, scene graph, scene
+ECS, command bus, event bus, scheduler, animation graph, or DI container.
 
-Dependency laws:
+Dependency rules:
 
-- `/game` may import public `dnd` values/builders and pygame;
-- `dnd` must never import `/game`, pygame, or concrete `/game/assets` paths;
-- `/game` must not import `server`, `sdk`, `services`, `deprecated`, `ai`, or
-  the external MapEditor/NeuroClient repositories;
-- asset and projection modules do not import mechanics owners they do not use;
-- all imports are module-level;
-- no `TYPE_CHECKING`, dynamic import, `getattr`, or import-cycle workaround is
-  admitted; and
+- game may import public dnd values/builders, including the existing
+  dnd.content_system bootstrap/runtime boundary, NumPy, and pygame;
+- dnd must never import game, pygame, or client asset paths;
+- game must not import server, SDK, transport, services, deprecated, AI, or
+  external MapEditor/NeuroClient source;
+- water imports NumPy/pygame and client data only, never Entity/GridMap;
+- projection is pure and imports no mechanics owner;
+- all project imports are module-level; and
 - Entity remains a data aggregate/system composer, never a renderer object.
 
-## 13. Planned file envelope
+## 15. Planned file envelope
 
 Expected existing-file changes:
 
-- `pyproject.toml` — add pygame-ce, include `/game` in pyright;
-- `uv.lock` — lock the selected pygame-ce release;
-- `requirements.txt` — retain the repository's existing pip dependency entry
-  surface rather than making installation paths disagree;
-- `dnd/blocks/sensory.py` — pure sensory-snapshot reducer extraction and live
-  block reuse;
-- `dnd/scenarios/battlefield_catalog.py` — one direct Earth battlefield;
-- `tests/engine/test_senses_light_stealth.py` or the existing closest sensory
-  replay module — public value-equivalence proof;
-- `tests/engine/test_world_entity_initialization.py` — exact battlefield cold
-  fact proof; and
-- `tests/architecture/test_dependency_boundaries.py` — include `/game` in the
-  existing graph where that is the smaller honest change.
+- pyproject.toml — pygame-ce dependency and game type-check scope;
+- uv.lock and requirements.txt — keep supported install surfaces aligned;
+- dnd/blocks/sensory.py — pure sensory value extraction/live reuse;
+- dnd/items/torches.py — narrow StandingTorch subtype only;
+- dnd/content/items/environment_item_builders.py — direct standing-torch
+  constructor/export;
+- dnd/scenarios/battlefield_catalog.py — one 64 x 64 battlefield;
+- nearest existing engine tests for sensory, cold world, door light cascade,
+  and fixed torch facts; and
+- dependency architecture tests.
 
 Expected new files:
 
-- `game/__init__.py`;
-- `game/__main__.py`;
-- `game/app.py`;
-- `game/presentation.py`;
-- `game/projection.py`;
-- `game/assets.py`;
-- `game/data/assets.json`;
-- `game/data/tile_bindings.json`;
-- `game/assets/environment/ground-a1-e.png`;
-- `tests/game/test_presentation_boundary.py`;
-- `tests/game/test_projection.py`;
-- `tests/game/test_assets.py`; and
-- `tests/game/test_app_smoke.py`.
+- game/__init__.py;
+- game/__main__.py;
+- game/app.py;
+- game/presentation.py;
+- game/projection.py;
+- game/assets.py;
+- game/water.py;
+- game/data/assets.json;
+- game/data/world_bindings.json;
+- exact copied asset files under game/assets/;
+- tests/game/test_presentation_boundary.py;
+- tests/game/test_projection.py;
+- tests/game/test_assets.py;
+- tests/game/test_water.py;
+- tests/game/test_app_smoke.py; and
+- one tiny Water oracle fixture under tests/game/data/.
 
-A new architecture test file is allowed only if extending the current general
-dependency graph would make that test less clear. Do not touch server, SDK,
-transport, generated, renderer/editor TypeScript, NeuroClient, NeuroMapEditor,
-or unrelated content files.
+Do not touch server, SDK, transport, generated code, renderer/editor
+TypeScript, external repositories, CR-6 through CR-10, or unrelated content.
+No implementation ledger, manifest, or hash ritual is required.
 
-No implementation ledger, manifest, source hash ritual, compatibility file,
-or generated schema is required for this bounded cut. Test results, the exact
-diff, and independent reviews are sufficient evidence.
+## 16. Observable acceptance matrix
 
-## 14. Observable acceptance matrix
+### 16.1 Engine world and causal facts
 
-### 14.1 Battlefield and cold world
+1. Public battlefield construction yields exactly 4,096 unique support Tiles,
+   4,072 Earth and 24 Water, all at height zero and base Darkness.
+2. Exact barrier ownership is 11 walls plus one closed door on the listed EAST
+   sides, with no neighbor-side duplicate.
+3. StandingTorch has stable item_id, fixed-fixture behavior, center placement,
+   cold is_lit=false world state, then one complete lit floor
+   ItemLocationStateEvent through ordinary authored settlement.
+4. The premade's auto-lit equipment.portable_torch is extinguished through its
+   existing action before deployment; it has no attached source, and the
+   standing fixture owns the scenario's sole active light at its placement
+   after settlement. No renderer value participates.
+5. The normal Open Door action emits the expected SPATIAL_OBJECT_CHANGED,
+   light recomputation, and observer sensory cascade before its complete source
+   interval closes; Close Door reverses it.
+6. Live named probe facts match Section 4.3 and the reduced snapshot exactly.
+7. New battlefield/content authoring writes no pygame catalog ID/path/pivot/
+   pose/frame/chunk value; authored Tile.sprite_name stays None. The new game
+   bindings ignore rather than remove retained legacy sprite_name and
+   visual_item_name fields.
 
-1. Building `battlefield.open_ground_bright` through the public builder emits
-   exactly one first `WorldInitializedEvent` before any later dynamics.
-2. Its bounds, 81 unique Tile UUIDs/positions, Earth surfaces, bright resolved
-   light, height zero, and empty objects/connectors match the live world.
-3. No asset/path/pivot field appears in its engine state.
-4. Existing battlefield catalog and cold-world tests remain green.
+### 16.2 Sensory reducer
 
-### 14.2 Pure sensory reducer
+8. Pure reduction equals live Senses for visible/seen cells, contacts,
+   effective light, position, modes/hash, passive perception, access, and path
+   dirtiness across startup/open/close.
+9. Removals precede additions/changed after-values.
+10. Wrong observer identity is rejected without mutating prior state.
+11. Equal effective modes preserve live sense_mode_sources; changed modes clear
+    them; visual-access replay never replaces its source ModifiableValue.
+12. Pure reduction performs no live owner/registry/GridMap query and remains
+    stable after runtime reset.
 
-5. Given a named prior snapshot and one real/synthetic typed sensory delta, the
-   pure reducer returns the exact expected position, visible/seen, contacts,
-   effective light, modes, perception, access, and dirty state.
-6. Applying the same delta through live `Senses.apply_sensory_update()` yields
-   the exact same snapshot, while explicit live-owner proofs show that equal
-   incoming effective modes preserve `sense_mode_sources`, differing modes
-   clear sources and replace direct modes, and visual-access replay changes
-   only `_last_visual_access` rather than the source `ModifiableValue`.
-7. Removal-before-change behavior is proven for visible cells, entity contacts,
-   and object contacts.
-8. A different observer UUID is rejected without changing the prior snapshot.
-9. The reducer performs no live GridMap/Entity/registry lookup; an engine reset
-   after capture does not affect its result.
+### 16.3 Capture, passivity, and coverage
 
-### 14.3 Closed interval and passivity
+13. Three exact contiguous intervals preserve every source (index, Event UUID)
+    once and in order.
+14. Only the four cases in Section 5.2 cross async, retaining exact Event class,
+    identity, lineage, parentage, phase, and value payload.
+15. Arbitrary context/handler/live values reject admission.
+16. Action, flame, raw light, character/equipment, declaration/execution/effect,
+    and all other unadmitted versions remain objective and visibly unsupported.
+17. Invalid cursor/seed/generation/index rejects an entire interval without
+    partial enqueue.
+18. Reset after capture cannot change detached reduction.
+19. No presentation callback is registered and no authoritative Event is
+    deleted or modified.
 
-10. One real startup produces one valid interval containing world, direct
-    character, deployment, and sensory facts in exact source order; the seed
-    cursor is inside the interval, snapshot capture changes neither cursor nor
-    generation, and every selected-observer sensory update is at or after that
-    seed boundary.
-11. Objective rows and coverage jointly preserve every `(index, Event UUID)`
-    in `[start, end)` exactly once, including multiple phase versions sharing
-    one lineage.
-12. Only completed exact `WorldInitializedEvent` and `SensoryUpdateEvent`
-    instances are deep-copied and enqueued.
-13. Copied values preserve concrete class, UUID, lineage, parentage, cause UUID,
-    ordering, and payload.
-14. Resetting all engine runtime after capture does not change the detached
-    world or sensory reduction result.
-15. A `ConditionApplicationEvent`/`ConditionRemovalEvent`, Entity-bearing
-    Event, or arbitrary base Event is never copied and becomes visibly
-    unsupported.
-16. An otherwise admitted family with non-null arbitrary `context`, a combat
-    log, or an effective handler-presentation attachment is rejected from the
-    async payload.
-17. Negative start, seed outside `[start, end]`, end before start, end past
-    current cursor, a selected-observer sensory delta before the seed, missing
-    index, and generation change reject the whole interval with no partial
-    enqueue.
-18. The capture function registers no EventQueue callback.
+### 16.4 Subjective scene
 
-### 14.4 Subjective disclosure
+20. An objective 4,096-Tile world exists before observer disclosure, but unseen
+    Tiles draw no ground/grid and leak no hover identity.
+21. Visible Earth/Water use the exact delivered-LightLevel table and operation
+    order in Section 7.2; remembered supports use exact fixed memory; visible
+    missing-light is a failure.
+22. Tile visibility does not imply object visibility.
+23. A wall/frame may draw from an incident disclosed support while the blocked
+    support beyond remains hidden.
+24. Door leaf/state and torch layers require their exact current object contact.
+25. Opening displays the open leaf and newly disclosed/lit far side; closing
+    displays the closed leaf and memory beyond.
+26. A different observer's sensory Event is unsupported by admission and cannot
+    mutate the selected scene; admitted objective facts hidden from the selected
+    observer are not_disclosed.
 
-19. Before the first sensory delta, the detached objective world exists but no
-    Tile is disclosed to the observer map. The real deployment then emits a
-    completed selected-observer sensory update whose reduction yields exactly
-    81 visible Tiles and 81 `BRIGHT_LIGHT` effective-light after-values.
-20. Visible cells draw with their engine-resolved effective-light appearance
-    key. A value/draw-semantic test with at least two distinct effective
-    `LightLevel` after-values proves that the actual headless frame selects and
-    records distinct treatments; it uses neither a screenshot golden nor a
-    draw-call mock.
-21. Seen-but-not-visible cells draw only with the fixed memory treatment.
-22. Unseen cells draw neither the ground asset nor grid geometry and yield no
-    player pick, Tile UUID, support elevation, Z-grid identity, or objective
-    membership disclosure.
-23. Object/entity contacts remain separate from Tile visibility.
-24. A sensory Event for another observer cannot mutate this target and is
-    closed as `not_disclosed`.
-25. Existing combat-log projection can produce different objective and
-    subjective rail text without a new Event/log model.
+### 16.5 Assets, animation, and Water
 
-### 14.5 Projection and picking
+27. Every copied file passes exact path/SHA/dimension/catalog validation.
+28. Unknown binding, malformed JSON, escaping path, wrong SHA/dimension, missing
+    pose/frame, or decode failure is visible and terminal-failing.
+29. Four camera views choose explicit pose files without rotating/mirroring
+    pixels; any rejected door-leaf pose remains a visible missing-asset case.
+30. Flame frame selection is exact at boundary times and shares T with Water.
+31. Torch body remains stable; is_lit gates flame; camera/culling does not reset
+    its phase.
+32. The Python Water kernel matches the fully frozen TS oracle's raw output at
+    all sampled pixels/times within one 8-bit step, and its real straight-output
+    BLEND_PREMULTIPLIED blit matches the frozen nonzero-destination final RGBA.
+33. Chunk-split/unsplit output matches at identical global framebuffer
+    coordinates and complete frozen inputs; pan preserves world-material phase
+    while producing the correct new screen-edge sheen, elevation does not shift
+    phase, time changes pixels, and memory Water is static.
+34. Raw Water evaluates in one vector invocation per visible clipped owner
+    chunk, not per Tile or treatment; packed results scatter into per-support
+    painter slots with simultaneous mixed-light treatments and correct real
+    Water/wall overlap order.
 
-26. Forward/inverse round trips recover representative positive, negative,
-    boundary, and map-center cells in all four quadrants.
-27. Cursor-centered zoom preserves the same unzoomed world point within
-    floating-point tolerance.
-28. Camera pan and window origin do not change recovered engine coordinates.
-29. A current `battlefield.elevation_proving_ground` cold world projects every
-    support at `(0, -64 * elevation_steps)` relative to the same XY contact.
-30. Given an explicitly observer-disclosed support set from the current
-    `battlefield.elevation_proving_ground`, height-aware picking recovers the
-    exact engine position, Tile UUID, elevation steps/feet, and Z-grid offset
-    for real elevated cells in all four quadrants.
-31. An overlap chooses the visually foremost valid support by the same painter
-    rank used for drawing.
-32. Painter order is deterministic and independent of pan, zoom, input order,
-    z-grid identity, and elevation value.
+### 16.6 Projection, controls, and locality
 
-### 14.6 Assets and pygame
+35. Forward/inverse and cursor-centered zoom round-trip representative cells in
+    all four views.
+36. Real current elevated supports prove -64 pixels per step and height-aware
+    pick recovery without changing engine coordinates.
+37. Painter order is deterministic across input order, pan, zoom, and frames.
+38. WASD, wheel, Q/E, G, close/Escape, rails, and hover diagnostics work in the
+    real window.
+39. No steady frame scans 4,096 Tiles; locality counters match between equivalent
+    16 x 16 and 64 x 64 local views.
+40. SDL-dummy runs multiple real 64 x 64 frames with Water/flame visible and
+    reports bounded candidate/animated work.
 
-33. The catalog accepts the exact copied PNG and Earth binding.
-34. Missing file, `..`/absolute path escape, unknown binding, wrong dimensions,
-    duplicate asset ID, and malformed JSON fail visibly.
-35. The original alpha Surface is loaded once; derived variants are reused
-    only at finite `(zoom level, appearance key)` combinations.
-36. Under SDL's dummy video driver, the real pygame app initializes a display,
-    loads the PNG, consumes the real detached startup interval, draws all 81
-    observer-authorized Earth Tiles with bright appearance evidence in one
-    frame, updates diagnostics, and shuts down.
-37. The smoke test waits on the terminal/result queue, never a sleep.
+### 16.7 Async and terminal semantics
 
-### 14.7 Async, clocks, terminal, and reset
+41. Producer completes and enqueues all three mechanics intervals without
+    waiting for a frame or hold duration.
+42. E>R=D, E=R>D, and E=R=D are each observable at their proper boundary.
+43. Startup, open, and close are each displayed for their exact semantic state,
+    their finite expected/actual post-blit evidence sets match at captured T,
+    and they produce exactly one terminal in order.
+44. Continuous animation advances T without moving E/R/D or preventing a
+    terminal.
+45. Queue emptiness, scheduled drawing, or target existence alone cannot settle.
+46. Overflow, missing art, reducer failure, false represented state, or parity
+    mismatch fails visibly.
+47. Reset cancels stale work; shutdown closes once.
 
-38. Enqueuing returns without waiting for any frame or animation duration.
-39. Before presentation consumes the batch, `E > R == D` is observable.
-40. After reduction but before a matching display frame, `E == R > D` is
-    observable.
-41. After the frame, `E == R == D` and the one terminal is settled.
-42. Every source queue index has exactly one final disposition tied to its
-    Event UUID, including unsupported versions that never crossed the queue.
-43. Queue empty without displayed parity does not settle the terminal.
-44. Missing asset, reducer failure, false represented state, or parity mismatch
-    produces one failed terminal and visible diagnostics.
-45. Reset between capture and reduction/display cancels the old interval;
-    stale work changes neither scene nor new-generation clocks.
-46. There is exactly one terminal for the startup interval and no per-Event,
-    per-asset, per-Tile, or per-frame terminal collection.
+### 16.8 Architecture
 
-### 14.8 Architecture
+48. dnd imports neither game nor pygame.
+49. game imports no excluded server/SDK/transport/editor/client layer.
+50. The active graph has no cycle, function-local/late project import,
+    TYPE_CHECKING workaround, dynamic import, getattr, or reflection-based
+    passivity scanner.
+51. No new Event hierarchy, renderer ECS, callback path, manager/service/
+    controller, generic asset selector, or duplicated light/FOV calculation
+    appears.
 
-47. No `dnd` module imports `game` or pygame.
-48. No `game` module imports server/SDK/services/deprecated/AI or external
-    editor/client source.
-49. The active Python graph including `/game` has no cycle, function-local
-    import, `TYPE_CHECKING` workaround, or dynamic project import.
-50. Source scans find no new manager/service/controller, Event subclass,
-    callback registration, reflection-based passivity scanner, generic asset
-    inference, or live renderer polling.
+Tests assert stable values, causal ordering, displayed evidence, and work
+counts. They do not freeze arbitrary private call order, fonts, layout pixels,
+or mocked pygame draw calls.
 
-Tests must assert the stable value/visible boundary. They must not freeze
-private function call order, exact module-internal collection shape, arbitrary
-font pixels, or pygame draw-call mocks.
+## 17. Test lanes
 
-## 15. Test lanes and commands
+### 17.1 Focused value lane
 
-### 15.1 Fast value lane
+    uv run pytest -q \
+      tests/game/test_presentation_boundary.py \
+      tests/game/test_projection.py \
+      tests/game/test_assets.py \
+      tests/game/test_water.py \
+      tests/engine/test_world_entity_initialization.py \
+      tests/engine/test_world_geometry_contract.py \
+      tests/engine/test_senses_light_stealth.py \
+      tests/engine/test_subjective_combat_log_replay.py
 
-Run the new pure boundary/projection/assets tests plus the exact existing
-world/sensory contracts they extend:
+### 17.2 Real pygame smoke
 
-```bash
-uv run pytest -q \
-  tests/game/test_presentation_boundary.py \
-  tests/game/test_projection.py \
-  tests/game/test_assets.py \
-  tests/engine/test_world_entity_initialization.py \
-  tests/engine/test_subjective_combat_log_replay.py \
-  tests/engine/test_senses_light_stealth.py
-```
+    uv run pytest -q tests/game/test_app_smoke.py
 
-### 15.2 Pygame smoke lane
+The test sets SDL dummy video/audio before importing/initializing pygame, uses
+real copied assets and Surfaces, injects deterministic T deltas, waits on
+semantic terminals, and never sleeps or mocks pygame.
 
-The test itself sets SDL's dummy video/audio environment before pygame is
-initialized and waits on the semantic terminal:
+It also launches a fresh Python subprocess that cannot inherit pytest's autouse
+content installation. That subprocess imports and calls the same game.app.run()
+entry used by game.__main__, with only explicit finite frame deltas and a zero
+test display hold supplied as function arguments. It must install the existing
+dnd.content_system runtime itself, execute the portable-torch extinguish plus
+door open/close script, display all three parity frames under SDL dummy, print
+one final primitive E/R/D/terminal summary, and exit zero. This is the
+standalone bootstrap proof; it adds no server import, test-only event path, or
+second application entry.
 
-```bash
-uv run pytest -q tests/game/test_app_smoke.py
-```
+### 17.3 Architecture/type/compile
 
-It uses the real copied PNG and real software Surface. Mocking pygame, replacing
-the asset with an in-memory square, or sleeping until a guessed frame time does
-not prove the feature.
+    uv run pytest -q tests/architecture
+    uv run pyright game dnd/blocks/sensory.py dnd/items/torches.py \
+      dnd/content/items/environment_item_builders.py \
+      dnd/scenarios/battlefield_catalog.py
+    uv run python -m compileall -q game dnd tests/game
+    git diff --check
 
-### 15.3 Architecture and type lane
+### 17.4 Broad regression and manual proof
 
-```bash
-uv run pytest -q tests/architecture
-uv run pyright game dnd/blocks/sensory.py dnd/scenarios/battlefield_catalog.py
-uv run python -m compileall -q game dnd tests/game
-git diff --check
-```
+Run the active engine/content/progression/architecture lanes owning touched
+behavior, preserving governed excluded collection failures rather than adding
+stubs. Then run:
 
-### 15.4 Broad regression lane
+    uv run python -m game
 
-Run the active engine, progression, and architecture suites that own the
-touched public behavior. Preserve and report pre-existing governed exclusions;
-do not create stubs in excluded/deprecated/server areas to make unrelated
-collection green.
+Manually verify all four views, every zoom, pan, grid, hover/Z diagnostics,
+Water/flame continuity, closed-open-closed door/light behavior, rails,
+unsupported badges, queue lag, E/R/D/T, locality counters, and clean close.
 
-### 15.5 Human visual proof
+## 18. Ordered implementation slices and stop points
 
-After automated lanes pass:
+### Slice 0 — dependency, asset, and oracle preflight
 
-```bash
-uv run python -m game
-```
+- resolve/lock current stable pygame-ce 2.5.x on Python 3.12;
+- initialize real and SDL-dummy displays;
+- hash/dimension/visually inspect only the exact asset subset;
+- validate every door leaf pose or explicitly mark it unavailable;
+- capture the tiny TS Water oracle with provenance;
+- add dependency entries, game shell, and DAG gate.
 
-Manually verify pan, every zoom step, all four quadrants, grid toggle, hover
-diagnostics, both rails, unsupported count, E/R/D convergence, and clean close.
-Record the observed result; do not promote a screenshot to a general golden.
+Stop for a real missing/incorrect required source. Do not guess or broaden the
+asset search.
 
-## 16. Ordered implementation slices and stop points
+### Slice 1 — pure sensory reducer
 
-### Slice 0 — dependency and exact source preflight
+- write value-equivalence/ownership proofs;
+- extract one pure snapshot calculation;
+- make live Senses delegate to it;
+- run complete sensory/light/replay lanes.
 
-- confirm the pygame-ce release resolves on Python 3.12;
-- confirm the exact source PNG hash/dimensions and copy only that file;
-- add the dependency/lock and minimal `/game` package shell; and
-- add/extend the dependency-DAG gate before application modules grow.
+Stop on any live behavior difference; do not compensate in pygame.
 
-Stop if pygame-ce cannot initialize under both the real local display and SDL
-dummy driver, or if adding `/game` reveals a real pre-existing import cycle.
+### Slice 2 — 64 x 64 world and mechanics characterization
 
-### Slice 1 — pure sensory replay extraction
+- add StandingTorch and its direct builder;
+- add exact battlefield;
+- prove cold/lit fixture sequence, exact directional ownership, and that the
+  premade's portable torch is extinguished before deployment so the standing
+  fixture is the only active light;
+- deploy observer and verify named probes;
+- execute real open/close use actions and prove causal light/sensory order.
 
-- add value-equivalence tests first;
-- extract the one pure snapshot reducer;
-- delegate live `Senses.apply_sensory_update()` to it; and
-- run the complete existing sensory/light/replay lane.
+Stop and amend/re-review only if the exact local geometry needs coordinate
+adjustment. Do not change mechanics rules.
 
-Stop if any live Senses behavior differs. Do not patch pygame around an engine
-replay discrepancy.
+### Slice 3 — interval boundary and target
 
-### Slice 2 — authored world and V-0 capture
+- implement primitive rows and exact closed capture;
+- implement only four finite admission cases;
+- implement target reduction/disclosure/coverage;
+- prove reset independence, negative unsafe values, and all three intervals.
 
-- add the Earth battlefield and cold-world proof;
-- implement the primitive objective/subjective rail capture;
-- implement exact interval validation;
-- implement only the two admitted family cases and detached copies;
-- implement the cold target reducer and coverage; and
-- prove engine-reset independence and negative unsafe Events.
+Stop until every source version has one honest disposition and no unadmitted
+Event crossed async.
 
-Stop before pygame until every original interval source record has an exact
-disposition and no unadmitted Event survives outside the objective queue.
+### Slice 4 — projection, catalogs, and static scene
 
-### Slice 3 — projection and first asset
+- implement pure four-view projection/picking/viewport bounds;
+- add two direct JSON files and exact loader/cache;
+- draw Earth, static Water memory, walls, door frame/leaf, torch body, grid,
+  rails, and hover diagnostics;
+- prove subjective disclosure and 64 x 64 locality.
 
-- implement one pure projection/camera owner;
-- prove four-quadrant forward/inverse behavior;
-- prove real elevation-proving-world projection and support picking;
-- add the two minimal JSON files and exact asset loader; and
-- prove deterministic ground materialization and asset failures.
+Stop before animation if any asset requires inference or any frame scans the
+whole world.
 
-Stop if Earth cannot be bound without a fallback or if projection and picking
-do not share an exact inverse.
+### Slice 5 — shared clock, exact Water, and flame
 
-### Slice 4 — pygame/async vertical seam
+- implement vectorized oracle-matched Water;
+- implement exact flame frame order;
+- connect both to one injected presentation clock;
+- prove chunk seam, phase continuity, memory behavior, and animated-work counts.
 
-- compose the real startup interval and observer seed;
-- add the interval and terminal queues;
-- render terrain, grid, rails, and diagnostics;
-- implement controls and semantic displayed evidence;
-- close E/R/D and the one terminal; and
-- add the real SDL-dummy integrated smoke.
+Stop on fidelity drift; do not replace Water with a tint or GPU dependency.
 
-Stop before any actor marker, object Sprite, animation, door/torch reducer, or
-world-modification reducer.
+### Slice 6 — async playback and integration
 
-### Slice 5 — final acceptance
+- compose startup/open/close producer;
+- add exactly two capacity-three queues;
+- display one interval at a time with finite hold;
+- prove mechanics run-ahead, E/R/D/T, exact frame parity, and terminals;
+- add real multi-frame SDL-dummy, fresh-process content-bootstrap/action, and
+  manual window proof.
 
-- run every lane in Section 15;
-- perform the human visual proof;
-- inspect the exact diff for scope and unrelated dirty-work preservation;
+Stop before actors, movement, combat, spells, WorldModifiedEvent consumption,
+or a general animation scheduler.
+
+### Slice 7 — final acceptance
+
+- run every Section 17 lane;
+- inspect exact diff and unrelated-work preservation;
+- record manual profiling/counters and visual proof;
 - obtain correctness/information-boundary review;
-- obtain anti-slop review;
-- obtain anti-OOP/ECS/dependency-DAG review; and
-- repair only findings inside this plan, then rerun affected evidence and all
-  three reviews.
+- obtain anti-slop review; and
+- obtain anti-OOP/ECS/dependency-DAG review.
 
-No implementation slice is accepted merely because code compiles or the window
-opens.
+Any repair reruns affected evidence and all three final reviews.
 
-## 17. Rejected shortcuts
+## 19. Explicitly excluded and rejected shortcuts
 
-- copying all Events because Pydantic happens to deep-copy the happy path;
-- invoking `model_dump()` on arbitrary Events and treating the result as safe;
-- deleting or mutating objective Events after capture;
-- adding a `to_subjective()`, `to_render_event()`, or polymorphic render method
-  to the Event hierarchy;
-- adding a presentation-event enum or discriminated union;
-- instantiating `Senses` in the renderer;
-- reimplementing FOV/light/perceivability in `/game`;
-- importing the existing AI/server subjective frame hierarchy;
-- binding dirt art to the existing default Stone floor;
-- encoding asset IDs in Tile or battlefield mechanics;
-- reading the external NeuroMapEditor path at runtime;
-- loading every asset in either editor repository;
-- scanning directories or filenames to infer bindings;
-- using an EventQueue passive callback because it already exists;
-- waiting on queue emptiness or `sleep()` as presentation completion;
-- allowing a full queue to block engine execution;
-- advancing D before a frame with target/display parity was published;
-- deriving painter rank from elevation, z-grid identity, insertion order, pan,
-  or zoom;
-- using Sprite rectangles for ground picking;
-- using a procedural diamond when the required PNG fails;
-- adding a new GridMap rectangle API for one 9 x 9 builder;
-- refactoring existing battlefields/content beyond the one direct addition;
-- touching the unaccepted world-modification candidate to make this slice look
-  more complete; and
-- continuing into V-2 after this cut passes.
+Excluded from this plan:
 
-## 18. Completion boundary and immediate successor
+- actor Sprites, rigs, equipment layers, movement, attacks, reactions, death;
+- the two-player-character scripted encounter and enemy AI;
+- spells, projectiles, impacts, persistent VFX, and audio;
+- torch extinguish/reignite playback;
+- runtime structural authoring or WorldModifiedEvent consumption;
+- elevation art composition beyond projection/picking proof;
+- foam, shores, extra materials, props, windows, and broad asset catalog;
+- player command UI, action discovery UI, targeting, and Encounter controllers;
+- server, SSE, SDK, transport, save/load, persistence, and replay framework.
 
-This plan is complete when one command opens the minimal pygame scene and one
-automated semantic terminal proves:
+Rejected implementation shortcuts:
 
-- the current engine authored and committed the world/observer;
-- one exact interval was synchronously inspected;
-- only the two audited Event families crossed async ownership;
-- the existing sensory calculation produced the observer target;
-- Earth art and grid were drawn through exact four-quadrant projection;
-- mouse diagnostics recover engine coordinates and support height;
-- every source Event is visible in objective coverage;
-- subjective output reveals only authorized facts;
-- E/R/D converge without making mechanics wait for rendering; and
-- no second mechanics world, event ontology, callback chain, import cycle, or
-  asset inference system was introduced.
+- copy/serialize arbitrary Events;
+- delete objective Events after reduction;
+- add to_subjective(), to_render_event(), cues, or render methods to Events;
+- instantiate Senses or query GridMap from the renderer;
+- derive illumination from flame pixels;
+- read SPATIAL_LIGHT_CHANGED instead of effective observer light;
+- treat visible Tile as visible contents;
+- canonicalize or duplicate the tile-owned boundary;
+- model wall/door state in client-only fake classes;
+- put pygame asset IDs into engine state, repurpose legacy sprite_name/
+  visual_item_name for this client, or widen this cut into CR-8 cleanup;
+- read external asset repositories at runtime;
+- copy the whole asset library or run its generator;
+- infer assets from filenames/tags/selectors;
+- raster rotate/mirror missing views;
+- approximate Water with a blue overlay or per-Tile filter;
+- add a GPU/shader dependency for this software cut;
+- scan all 4,096 Tiles each frame;
+- add broad chunk/scene management abstractions;
+- use callbacks, futures per Event, sleeps, or queue emptiness as completion;
+- block mechanics on presentation queue consumption;
+- let continuous animation prevent terminal settlement; or
+- continue into actor/V-2 work because this seam passes.
 
-The next plan completes the rest of V-1 by extending the same proven seams to
-water, one directional wall family, the matching door frame/leaf, one honest
-light-bearing object, real ordinary after-value Events, incremental
-`WorldModifiedEvent` materialization after its own acceptance, and one displayed
-elevation composition case. It may not change the V-0 boundary merely to make
-those new families easier.
+## 20. Completion boundary and successor
 
-## 19. Plan validation protocol
+This plan is complete when one executable and its tests prove that:
 
-Before implementation, three independent reviewers must read this exact
-candidate against the current checkout and governing roadmap:
+- the current engine authored a 64 x 64 semantic world and real observer;
+- the ordinary torch, door, light, FOV, and sensory systems produced all state;
+- exact existing Event values crossed a passive async boundary;
+- the renderer stayed one observer-authorized reduction of those values;
+- Earth, exact animated Water, walls, door, and torch rendered from direct data;
+- Water and flame shared one continuous presentation clock;
+- closed-open-closed mechanics ran ahead but displayed in human order;
+- camera/picking/Z diagnostics worked in four views;
+- frame work was local rather than proportional to 4,096 Tiles;
+- every source Event had visible coverage; and
+- no second mechanics/event system, callback chain, OOP renderer hierarchy,
+  import cycle, asset inference layer, or server dependency was introduced.
 
-1. **correctness/information-boundary reviewer** — Event passivity, interval
-   closure, sensory replay reuse, subjectivity, clocks, reset, and testability;
-2. **anti-slop reviewer** — unnecessary types/modules/queues/records, premature
-   generality, excess gates, and inflated scope; and
-3. **anti-OOP/ECS/dependency-DAG reviewer** — Entity/component ownership,
-   sensory ownership, import direction, callback/reflection pressure, and
-   shadow state/ontology risks.
+The immediate successor is the V-2 actor/scripted-encounter plan: two
+player-controlled preset characters plus enemies, layered actor Sprites, and
+movement/attack/reaction animation driven by the same Event bridge and
+terminal semantics. The remaining V-1 extensions—WorldModifiedEvent-driven
+live authoring and a full elevated asset composition—stay separately bounded
+unless the actor plan first proves they are required.
 
-Any rejection requires a written correction to this file and a complete reread
-by all three reviewers. Approval authorizes only the bounded implementation
-described here.
+## 21. Validation protocol and review record
 
-## 20. Review record
+Before implementation, three independent reviewers must reread this entire
+amended candidate against the current checkout and governing documents:
 
-The final substantive candidate was independently approved on 2026-09-03 by:
+1. correctness/information-boundary reviewer — mechanics facts, Event
+   admission/passivity, subjectivity, door/light causality, Water fidelity,
+   reset, async clocks, terminal semantics, and testability;
+2. anti-slop reviewer — unnecessary types/modules/indexes/queues/caches,
+   premature generality, inflated asset/work scope, redundant tests, and
+   simpler exact alternatives; and
+3. anti-OOP/ECS/dependency-DAG reviewer — StandingTorch reuse, component/world
+   ownership, renderer shadow-state pressure, import direction, callback/
+   reflection pressure, and circularity.
 
-- the correctness/information-boundary reviewer;
-- the anti-slop reviewer; and
-- the anti-OOP/ECS/dependency-DAG reviewer.
+Any rejection requires correcting this file and a complete reread by all three
+reviewers. The earlier narrow-plan approvals do not authorize implementation of
+this amended candidate.
 
-Review corrections made before acceptance:
+Review record: **accepted**.
 
-- source-record coverage uses queue indexes and preserves Event UUID/lineage
-  evidence without collapsing phase versions;
-- the one envelope carries its sanitized rows, initial unsupported outcomes,
-  indexed admitted Events, and exact observer seed boundary without a side
-  channel;
-- `R` records completed reduction/classification while `D` and
-  `represented` require a matching published frame;
-- the pure sensory reducer preserves live source ownership, does not inherit
-  the recursive runtime validator, and cannot double-apply pre-seed deltas;
-- effective-light treatment participates in actual display parity and the
-  real startup must disclose and draw all 81 Tiles; and
-- player grid/picking considers only visible-or-remembered supports, never
-  unseen objective geometry.
-
-The reviewers found no remaining correctness, slop, OOP/ECS, dependency-DAG,
-or sequencing blocker. This review record changes no implementation contract;
-the accepted scope remains exactly Sections 1 through 19.
+- Substantive candidate reviewed: SHA-256
+  f10f8828ca1d85efa8e932209f519f99f3984883e04a681449de4c11d3d7569c.
+- Correctness/information-boundary: APPROVE after complete reread; no remaining
+  mechanics, Water/light, Event, async, or testability blocker.
+- Anti-slop: APPROVE after complete reread; every retained module, cache,
+  queue, evidence field, asset, and test serves the current vertical seam.
+- Anti-OOP/ECS/dependency-DAG: APPROVE after complete reread; no shadow
+  mechanics owner, scene hierarchy, callback chain, cycle, late import, or
+  dependency inversion.
+- The only post-review edit was this status/review record. All three reviewers
+  must reconfirm the final file bytes before implementation begins.

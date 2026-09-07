@@ -18,7 +18,7 @@ from typing import Iterable
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
-PRODUCTION_ROOT_NAMES = ("dnd", "server", "ai")
+PRODUCTION_ROOT_NAMES = ("dnd", "game", "server", "ai")
 SUPPLEMENTAL_SOURCE_ROOT_NAMES = ("tests", "devtools")
 PROJECT_PACKAGE_NAMES = frozenset(PRODUCTION_ROOT_NAMES)
 
@@ -955,7 +955,20 @@ def test_dependency_direction_is_respected() -> None:
     for reference in _import_references():
         importer_root = _project_root_name(reference.importer)
         target_root = _project_root_name(reference.target)
-        if importer_root == "dnd" and target_root in {"server", "ai"}:
+        target_top_level = reference.target.split(".", maxsplit=1)[0]
+        if importer_root == "dnd" and target_root in {"game", "server", "ai"}:
+            violations.append(reference)
+            continue
+        if importer_root == "dnd" and target_top_level == "pygame":
+            violations.append(reference)
+            continue
+        if importer_root == "game" and target_top_level in {
+            "ai",
+            "deprecated",
+            "sdk",
+            "server",
+            "services",
+        }:
             violations.append(reference)
             continue
         if importer_root == "server" and target_root == "ai":

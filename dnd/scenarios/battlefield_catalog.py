@@ -11,6 +11,7 @@ from dnd.content.items.environment_item_builders import (
     build_directional_door,
     build_directional_wall,
     build_fireball_cannon,
+    build_standing_torch,
     build_storage_chest,
     build_wall_torch,
 )
@@ -25,7 +26,7 @@ from dnd.core.content.battlefields import (
     LightLevelName,
 )
 from dnd.core.gridmap import GridMap, get_map
-from dnd.core.base_block import BaseBlock
+from dnd.core.base_block import BaseBlock, LightLevel
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.base_tiles import Tile
 from dnd.core.events import (
@@ -43,6 +44,7 @@ from dnd.core.traversal_connectors import (
 )
 from dnd.core.world_edges import ElevationSurfaceKind, SlopeAxis
 from dnd.types.world import CardinalDirection
+from dnd.types.materials import Material, TileSurface
 from dnd.items.consumables import build_healing_potion
 from dnd.items.environment import DirectionalDoor, DirectionalWall
 from dnd.items.environment_interactables import (
@@ -244,6 +246,73 @@ def _preview_for_battlefield(battlefield_id: str) -> BattlefieldPreview:
         })
     if builder_id == "elevation_proving_ground":
         return BattlefieldPreview()
+    if builder_id == "visual_vertical_seam":
+        objects: list[BattlefieldPreviewObject] = []
+        for x in range(24, 32):
+            objects.append(_preview_object(
+                (x, 26),
+                "wall",
+                "Dressed Stone Wall",
+                blocked_directions=("south",),
+            ))
+            objects.append(_preview_object(
+                (x, 37),
+                "wall",
+                "Dressed Stone Wall",
+                blocked_directions=("north",),
+            ))
+        for y in range(26, 38):
+            objects.append(_preview_object(
+                (24, y),
+                "wall",
+                "Dressed Stone Wall",
+                blocked_directions=("west",),
+            ))
+            objects.append(_preview_object(
+                (31, y),
+                "door" if y == 31 else "wall",
+                "Lodge Door" if y == 31 else "Dressed Stone Wall",
+                blocked_directions=("east",),
+                is_open=False if y == 31 else None,
+            ))
+        for x in range(35, 43):
+            objects.append(_preview_object(
+                (x, 44),
+                "wall",
+                "Wooden Storehouse Wall",
+                blocked_directions=("north",),
+            ))
+            if x not in {38, 39}:
+                objects.append(_preview_object(
+                    (x, 38),
+                    "wall",
+                    "Wooden Storehouse Wall",
+                    blocked_directions=("south",),
+                ))
+        for y in range(38, 45):
+            objects.append(_preview_object(
+                (35, y),
+                "wall",
+                "Wooden Storehouse Wall",
+                blocked_directions=("west",),
+            ))
+            objects.append(_preview_object(
+                (42, y),
+                "wall",
+                "Wooden Storehouse Wall",
+                blocked_directions=("east",),
+            ))
+        objects.append(
+            _preview_object((29, 32), "wall_torch", "Standing Torch")
+        )
+        return BattlefieldPreview(
+            cells=tuple(
+                _terrain_cell((x, y), "water", walkable=False)
+                for x in range(34, 42)
+                for y in range(27, 36)
+            ),
+            objects=tuple(objects),
+        )
     raise ValueError(f"Unknown battlefield preview builder: {builder_id}")
 
 
@@ -311,6 +380,13 @@ BATTLEFIELDS: tuple[BattlefieldDefinition, ...] = (
         "darkness",
         ("open-floor", "darkness"),
     ),
+    _battlefield(
+        "battlefield.visual_vertical_seam",
+        "Visual Vertical Seam",
+        ("darkness", "door", "water", "standing-torch", "large-map"),
+        "darkness",
+        ("closed-door", "water", "directional-barrier", "standing-torch"),
+    ),
 )
 
 _ELEVATION_PROVING_BATTLEFIELD = _battlefield(
@@ -357,6 +433,169 @@ def _build_open_floor_dark(definition: BattlefieldDefinition, grid: GridMap) -> 
     create_standard_arena_floor(grid)
     darken_arena(grid)
     return _empty_runtime(definition)
+
+
+def _build_visual_vertical_seam(
+    definition: BattlefieldDefinition,
+    grid: GridMap,
+) -> BuiltBattlefield:
+    """Build the coherent 64-by-64 pygame structural proving world."""
+    earth = TileSurface(base_material=Material.EARTH)
+    wood = TileSurface(base_material=Material.WOOD)
+    water = TileSurface(base_material=Material.WATER)
+    stair_heights = {(16, 24): 0, (16, 23): 1, (16, 22): 2}
+    for x in range(64):
+        for y in range(64):
+            is_lodge_floor = 24 <= x <= 31 and 26 <= y <= 37
+            is_storehouse_floor = 35 <= x <= 42 and 38 <= y <= 44
+            is_water = 34 <= x <= 41 and 27 <= y <= 35
+            is_terrace = 14 <= x <= 18 and 18 <= y <= 24
+            stair_height = stair_heights.get((x, y))
+            surface = (
+                water
+                if is_water
+                else wood
+                if is_lodge_floor or is_storehouse_floor or (is_terrace and stair_height is None)
+                else earth
+            )
+            grid.set_tile(
+                x,
+                y,
+                name=(
+                    "Water"
+                    if is_water
+                    else "Wooden Floor"
+                    if surface is wood
+                    else "Earth"
+                ),
+                surface=surface,
+                height=stair_height if stair_height is not None else 2 if is_terrace else 0,
+                elevation_surface_kind=(ElevationSurfaceKind.STAIRS
+                                        if stair_height is not None else ElevationSurfaceKind.ORDINARY),
+                slope_axis=SlopeAxis.NORTH_SOUTH if stair_height is not None else None,
+                walking_cost=0 if is_water else 1,
+                swimming_cost=1 if is_water else 0,
+                default_light=LightLevel.DARKNESS,
+                fire_event=False,
+            )
+
+    object_uuids: dict[str, UUID] = {}
+
+    def place_wall(
+        key: str,
+        display_name: str,
+        material: Material,
+        position: tuple[int, int],
+        direction: CardinalDirection,
+    ) -> None:
+        wall = build_directional_wall(
+            display_name=display_name,
+            blocked_channels=STANDARD_BLOCKING_CHANNELS,
+            material=material,
+        )
+        wall.place_on_grid(position, boundary_direction=direction)
+        object_uuids[key] = wall.uuid
+
+    for x in range(24, 32):
+        place_wall(
+            f"stone_south_{x}",
+            "Dressed Stone Lodge Wall",
+            Material.STONE,
+            (x, 26),
+            CardinalDirection.SOUTH,
+        )
+        place_wall(
+            f"stone_north_{x}",
+            "Dressed Stone Lodge Wall",
+            Material.STONE,
+            (x, 37),
+            CardinalDirection.NORTH,
+        )
+    for y in range(26, 38):
+        place_wall(
+            f"stone_west_{y}",
+            "Dressed Stone Lodge Wall",
+            Material.STONE,
+            (24, y),
+            CardinalDirection.WEST,
+        )
+        if y != 31:
+            place_wall(
+                f"stone_east_{y}",
+                "Dressed Stone Lodge Wall",
+                Material.STONE,
+                (31, y),
+                CardinalDirection.EAST,
+            )
+
+    door = build_directional_door(
+        display_name="Lodge Door",
+        blocked_channels=STANDARD_BLOCKING_CHANNELS,
+        is_open=False,
+    )
+    door.place_on_grid((31, 31), boundary_direction=CardinalDirection.EAST)
+    object_uuids["door"] = door.uuid
+
+    for x in range(35, 43):
+        place_wall(
+            f"wood_north_{x}",
+            "Wooden Storehouse Wall",
+            Material.WOOD,
+            (x, 44),
+            CardinalDirection.NORTH,
+        )
+        if x not in {38, 39}:
+            place_wall(
+                f"wood_south_{x}",
+                "Wooden Storehouse Wall",
+                Material.WOOD,
+                (x, 38),
+                CardinalDirection.SOUTH,
+            )
+    for y in range(38, 45):
+        place_wall(
+            f"wood_west_{y}",
+            "Wooden Storehouse Wall",
+            Material.WOOD,
+            (35, y),
+            CardinalDirection.WEST,
+        )
+        place_wall(
+            f"wood_east_{y}",
+            "Wooden Storehouse Wall",
+            Material.WOOD,
+            (42, y),
+            CardinalDirection.EAST,
+        )
+
+    standing_torch = build_standing_torch()
+    standing_torch.mount((29, 32), lit=False)
+    object_uuids["standing_torch"] = standing_torch.uuid
+    return BuiltBattlefield(
+        definition=definition,
+        environment=None,
+        notable_positions={
+            "observer": (29, 31),
+            "near_probe": (30, 31),
+            "door": (31, 31),
+            "far_probe": (32, 31),
+            "standing_torch": (29, 32),
+            "lodge_floor": (29, 31),
+            "pond_edge": (34, 31),
+            "lodge_southwest": (24, 26),
+            "lodge_northeast": (31, 37),
+            "stone_straight": (31, 30),
+            "storehouse_southwest": (35, 38),
+            "storehouse_northeast": (42, 44),
+            "storehouse_entrance": (38, 38),
+            "wood_straight": (35, 41),
+            "terrace": (16, 20),
+            "stair_lower": (16, 24),
+            "stair_middle": (16, 23),
+            "stair_upper": (16, 22),
+        },
+        object_uuids=object_uuids,
+    )
 
 
 def _build_standard_hazards(
@@ -714,6 +953,7 @@ _BUILDERS: dict[str, BattlefieldBuilder] = {
     "battlefield.field_cache_bright": _build_field_cache_bright,
     "battlefield.multi_object_dark": _build_multi_object_dark,
     "battlefield.open_floor_dark": _build_open_floor_dark,
+    "battlefield.visual_vertical_seam": _build_visual_vertical_seam,
     "battlefield.elevation_proving_ground": _build_elevation_proving_ground,
 }
 
@@ -766,7 +1006,7 @@ def _world_initialized_event(
     """Snapshot the complete actor-free cold world."""
     tiles = tuple(
         project_world_tile(tile)
-        for position, tile in sorted(grid.get_all_tiles().items())
+        for _, tile in sorted(grid.get_all_tiles().items())
     )
     objects: list[WorldObjectState] = []
     for placement in sorted(
@@ -831,9 +1071,13 @@ def _validate_cold_world(
         raise RuntimeError("cold world contains occupancy or conditions")
     if grid.get_spatial_conditions():
         raise RuntimeError("cold world owns a SpatialCondition")
-    if {row.placement for row in world_event.objects} != set(
-        grid.iter_object_placements()
-    ):
+    if {
+        row.placement.object_uuid: row.placement
+        for row in world_event.objects
+    } != {
+        placement.object_uuid: placement
+        for placement in grid.iter_object_placements()
+    }:
         raise RuntimeError("cold world object closure does not match GridMap")
     for row in world_event.objects:
         item = BaseBlock.get(row.item.item_uuid)
