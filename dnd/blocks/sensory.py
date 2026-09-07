@@ -14,7 +14,7 @@ from dnd.core.base_block import BaseBlock
 from dnd.core.gridmap import get_map
 from dnd.core.values import ModifiableValue
 from dnd.core.events import (
-    Event, EventType, EventPhase, SensesUpdateHint, SpatialChangeEvent,
+    Event, EventType, EventPhase, SpatialChangeEvent,
     SpatialEffectChangeEvent, DeathEvent, EventQueue, SensoryUpdateEvent,
     SensoryUpdateReason,
 )
@@ -256,71 +256,32 @@ class Senses(BaseBlock):
     def apply_sensory_update(self, event: SensoryUpdateEvent) -> None:
         """Apply one recorded observer delta without reading live world state."""
         event.validate_replay_payload()
-        if event.observer_uuid != self.source_entity_uuid:
-            raise ValueError("sensory update belongs to a different observer")
+        reduced = reduce_senses_snapshot(
+            self.source_entity_uuid,
+            capture_senses_snapshot(self),
+            event,
+        )
 
-        visible = dict(self.visible)
-        for position in event.visible_cells_removed:
-            visible.pop(position, None)
-        for position in event.visible_cells_added:
-            visible[position] = True
-
-        entities = dict(self.entities)
-        for entity_uuid in event.entity_contacts_removed:
-            entities.pop(entity_uuid, None)
-        entities.update(event.entity_contacts_changed)
-
-        objects = dict(self.objects)
-        for object_uuid in event.object_contacts_removed:
-            objects.pop(object_uuid, None)
-        objects.update(event.object_contacts_changed)
-
-        light_levels = dict(self.effective_light_levels)
-        for position in event.visible_cells_removed:
-            light_levels.pop(position, None)
-        for key, level in event.effective_light_levels_changed.items():
-            x_text, y_text = key.split(",", maxsplit=1)
-            light_levels[(int(x_text), int(y_text))] = LightLevel(level)
-
-        if event.sense_modes_changed and event.sense_modes is not None:
-            event_modes = [
-                mode.model_copy(deep=True) for mode in event.sense_modes
-            ]
-            if self.get_sense_modes() != event_modes:
-                self.sense_modes = event_modes
+        if event.sense_modes_changed:
+            reduced_modes = list(reduced.sense_modes)
+            if self.get_sense_modes() != reduced_modes:
+                self.sense_modes = [
+                    mode.model_copy(deep=True) for mode in reduced_modes
+                ]
                 self.sense_mode_sources.clear()
 
         self.replace_perception(
-            position=(
-                event.observer_position
-                if event.observer_position_changed
-                else self.position
-            ),
-            visible=visible,
-            seen=set(self.seen) | set(event.seen_cells_added),
-            entities=entities,
-            objects=objects,
-            effective_light_levels=light_levels,
-            passive_perception=(
-                event.passive_perception
-                if event.passive_perception_changed
-                and event.passive_perception is not None
-                else self._last_passive_perception
-            ),
-            sense_modes_hash=(
-                self.compute_sense_modes_hash()
-                if event.sense_modes_changed
-                else self._last_sense_modes_hash
-            ),
-            visual_access=(
-                event.visual_access
-                if event.visual_access_changed
-                and event.visual_access is not None
-                else self._last_visual_access
-            ),
+            position=reduced.position,
+            visible={position: True for position in reduced.visible},
+            seen=set(reduced.seen),
+            entities=dict(reduced.entities),
+            objects=dict(reduced.objects),
+            effective_light_levels=dict(reduced.effective_light_levels),
+            passive_perception=reduced.passive_perception,
+            sense_modes_hash=reduced.sense_modes_hash,
+            visual_access=reduced.visual_access,
         )
-        if event.paths_dirty:
-            self._paths_dirty = True
+        self._paths_dirty = reduced.paths_dirty
 
     def get_threathened_positions(self) -> List[Tuple[int, int]]:
         """Return neighboring positions threatened by this observer.
@@ -382,6 +343,91 @@ class SensesSnapshot:
     sense_modes_hash: int
     sense_modes: Tuple[SenseMode, ...]
     visual_access: int
+
+
+def reduce_senses_snapshot(
+    expected_observer_uuid: UUID,
+    previous: SensesSnapshot,
+    event: SensoryUpdateEvent,
+) -> SensesSnapshot:
+    """Reduce one observer Event into a fresh passive sensory snapshot."""
+    if event.observer_uuid != expected_observer_uuid:
+        raise ValueError("sensory update belongs to a different observer")
+
+    visible = set(previous.visible)
+    visible.difference_update(event.visible_cells_removed)
+    visible.update(event.visible_cells_added)
+
+    entities = dict(previous.entities)
+    for entity_uuid in event.entity_contacts_removed:
+        entities.pop(entity_uuid, None)
+    entities.update(
+        {
+            entity_uuid: contact.model_copy(deep=True)
+            for entity_uuid, contact in event.entity_contacts_changed.items()
+        }
+    )
+
+    objects = dict(previous.objects)
+    for object_uuid in event.object_contacts_removed:
+        objects.pop(object_uuid, None)
+    objects.update(
+        {
+            object_uuid: contact.model_copy(deep=True)
+            for object_uuid, contact in event.object_contacts_changed.items()
+        }
+    )
+
+    light_levels = dict(previous.effective_light_levels)
+    for position in event.visible_cells_removed:
+        light_levels.pop(position, None)
+    for key, level in event.effective_light_levels_changed.items():
+        x_text, y_text = key.split(",", maxsplit=1)
+        light_levels[(int(x_text), int(y_text))] = LightLevel(level)
+
+    sense_modes = tuple(
+        mode.model_copy(deep=True) for mode in previous.sense_modes
+    )
+    sense_modes_hash = previous.sense_modes_hash
+    if event.sense_modes_changed and event.sense_modes is not None:
+        sense_modes = tuple(
+            mode.model_copy(deep=True) for mode in event.sense_modes
+        )
+        sense_modes_hash = hash(
+            tuple(
+                sorted(
+                    (mode.sense_type.value, mode.range_feet)
+                    for mode in sense_modes
+                )
+            )
+        )
+
+    return SensesSnapshot(
+        position=(
+            event.observer_position
+            if event.observer_position_changed
+            else previous.position
+        ),
+        visible=visible,
+        seen=set(previous.seen) | set(event.seen_cells_added),
+        entities=entities,
+        objects=objects,
+        effective_light_levels=light_levels,
+        paths_dirty=previous.paths_dirty or event.paths_dirty,
+        passive_perception=(
+            event.passive_perception
+            if event.passive_perception_changed
+            and event.passive_perception is not None
+            else previous.passive_perception
+        ),
+        sense_modes_hash=sense_modes_hash,
+        sense_modes=sense_modes,
+        visual_access=(
+            event.visual_access
+            if event.visual_access_changed and event.visual_access is not None
+            else previous.visual_access
+        ),
+    )
 
 
 def _sorted_positions(positions: Set[Tuple[int, int]]) -> List[Tuple[int, int]]:

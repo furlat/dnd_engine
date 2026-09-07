@@ -1,5 +1,6 @@
 """Public chronology and ownership proofs for cold world/entity birth."""
 
+from collections import Counter
 from dataclasses import replace
 from uuid import uuid4
 
@@ -7,7 +8,9 @@ import pytest
 from pydantic import ValidationError
 
 from dnd.actions_functional import setup_standard_actions
-from dnd.blocks.base_item import BaseItem
+from dnd.actions import Move
+from dnd.core.world_edges import ElevationSurfaceKind, SlopeAxis
+from dnd.blocks.base_item import BaseItem, ItemLocationStateEvent
 from dnd.blocks.inventory import Inventory
 from dnd.content.characters.builds import create_character
 from dnd.content.characters.premades import (
@@ -34,7 +37,7 @@ from dnd.core.events import (
 from dnd.core.gridmap import get_map
 from dnd.core.modifiers import ResistanceStatus
 from dnd.core.values import BaseValue
-from dnd.types.world import MovementMode
+from dnd.types.world import CardinalDirection, LightLevel, MovementMode
 from dnd.content_system.creature_bindings import CREATURE_RUNTIME_BINDINGS
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
@@ -43,12 +46,187 @@ from dnd.scenarios.battlefield_catalog import BATTLEFIELDS, build_battlefield
 import dnd.scenarios.encounter_assembler as encounter_assembler
 from dnd.scenarios.encounter_assembler import prepare_encounter_recipe
 from dnd.scenarios.encounter_catalog import encounter_recipe
-from dnd.items.torches import WallTorch
+from dnd.items.environment import DirectionalDoor
+from dnd.items.torches import StandingTorch, WallTorch
+from dnd.types.materials import Material
+from dnd.types.senses import SenseMode, SensesType
+from dnd.types.world_placement import BoundaryStructureKind
 
 
 def _events():
     """Return the current objective stream through its indexed public read."""
     return tuple(event for _, event in EventQueue.iter_events_since(0))
+
+
+def test_visual_terrace_walks_up_and_down_the_stairs_not_through_cliff_edges() -> None:
+    reset_engine_runtime()
+    built = build_battlefield("battlefield.visual_vertical_seam")
+    grid = get_map()
+    lower = built.notable_positions["stair_lower"]
+    middle = built.notable_positions["stair_middle"]
+    upper = built.notable_positions["stair_upper"]
+    for height, position in enumerate((lower, middle, upper)):
+        tile = grid.get_tile(*position)
+        assert (tile.height, tile.elevation_surface_kind, tile.slope_axis) == (
+            height, ElevationSurfaceKind.STAIRS, SlopeAxis.NORTH_SOUTH)
+    for a, b in ((lower, middle), (middle, upper)):
+        assert grid.can_transition(a, b)
+        assert grid.can_transition(b, a)
+    for a, b in (((14, 22), (13, 22)), (middle, (15, 23)), (middle, (17, 23))):
+        assert not grid.can_transition(a, b)
+        assert not grid.can_transition(b, a)
+    assert grid.can_transition(upper, (15, 22))  # Same-height sideways remains legal.
+    actor = Entity.create(source_entity_uuid=uuid4(), name="Stair walker",
+                          config=EntityConfig(position=lower))
+    actor.compose_entity()
+    # The authored scene is dark. Give this walker a real perception mode,
+    # rather than injecting paths or changing the battlefield's lighting.
+    actor.senses.add_sense_mode_source(actor.uuid, SenseMode(
+        sense_type=SensesType.DARKVISION, range_feet=60))
+    Game().deploy_entity(actor, lower)
+    for destination in (middle, upper, lower):
+        actor.update_entity_senses(max_distance=20)
+        result = Move(source_entity_uuid=actor.uuid, end_position=destination).apply()
+        assert result is not None and not result.canceled, result.status_message
+        assert actor.position == destination
+        if destination == middle:
+            for bank in ((15, 23), (17, 23)):
+                movement_before = actor.action_economy.movement.normalized_score
+                result = Move(source_entity_uuid=actor.uuid, end_position=bank,
+                              path=[destination, bank]).apply()
+                assert result is not None
+                assert actor.position == destination
+                assert actor.action_economy.movement.normalized_score == movement_before
+
+
+def test_visual_vertical_seam_world_has_exact_cold_and_settled_facts() -> None:
+    """The public 64-by-64 demo is engine-authored and settles one light."""
+    reset_engine_runtime()
+    built = build_battlefield("battlefield.visual_vertical_seam")
+    events = _events()
+    world = next(event for event in events if type(event) is WorldInitializedEvent)
+
+    assert world.phase is EventPhase.COMPLETION
+    assert world.bounds == (0, 0, 63, 63)
+    assert world.width == world.height == 64
+    assert len(world.tiles) == 4096
+    assert len({tile.tile_uuid for tile in world.tiles}) == 4096
+    assert len({tile.position for tile in world.tiles}) == 4096
+    assert Counter(tile.surface.base_material for tile in world.tiles) == {
+        Material.EARTH: 3840,
+        Material.WOOD: 184,
+        Material.WATER: 72,
+    }
+    assert all(tile.default_light is LightLevel.DARKNESS for tile in world.tiles)
+    assert {tile.position: tile.elevation_steps for tile in world.tiles
+            if tile.elevation_steps != 0} == {
+        **{(x, y): 2 for x in range(14, 19) for y in range(18, 25)
+           if (x, y) not in ((16, 24), (16, 23))},
+        (16, 23): 1,
+    }
+    assert all(
+        (tile.walking_cost, tile.swimming_cost) == (
+            (0, 1)
+            if tile.surface.base_material is Material.WATER
+            else (1, 0)
+        )
+        for tile in world.tiles
+    )
+
+    barriers = tuple(
+        row
+        for row in world.objects
+        if row.item.boundary_structure is not None
+    )
+    structures = Counter(
+        row.item.boundary_structure.structure
+        for row in barriers
+        if row.item.boundary_structure is not None
+    )
+    assert structures == {
+        BoundaryStructureKind.WALL: 67,
+        BoundaryStructureKind.DOOR: 1,
+    }
+    assert Counter(
+        row.item.boundary_structure.material
+        for row in barriers
+        if row.item.boundary_structure is not None
+        and row.item.boundary_structure.structure is BoundaryStructureKind.WALL
+    ) == {Material.STONE: 39, Material.WOOD: 28}
+    assert {
+        row.item.boundary_structure.material
+        for row in barriers
+        if row.item.boundary_structure is not None
+        and row.item.boundary_structure.structure is BoundaryStructureKind.DOOR
+    } == {Material.WOOD}
+    assert {
+        (row.placement.position, row.placement.boundary_direction)
+        for row in barriers
+    } == {
+        *(((24, y), CardinalDirection.WEST) for y in range(26, 38)),
+        *(((31, y), CardinalDirection.EAST) for y in range(26, 38)),
+        *(((x, 26), CardinalDirection.SOUTH) for x in range(24, 32)),
+        *(((x, 37), CardinalDirection.NORTH) for x in range(24, 32)),
+        *(((35, y), CardinalDirection.WEST) for y in range(38, 45)),
+        *(((42, y), CardinalDirection.EAST) for y in range(38, 45)),
+        *(((x, 44), CardinalDirection.NORTH) for x in range(35, 43)),
+        *(
+            ((x, 38), CardinalDirection.SOUTH)
+            for x in range(35, 43)
+            if x not in {38, 39}
+        ),
+    }
+    by_position = {tile.position: tile for tile in world.tiles}
+    assert all(
+        by_position[(x, y)].surface.base_material is Material.WOOD
+        for x in range(24, 32)
+        for y in range(26, 38)
+    )
+    assert all(
+        by_position[(x, y)].surface.base_material is Material.WOOD
+        for x in range(35, 43)
+        for y in range(38, 45)
+    )
+    assert all(
+        by_position[(x, y)].surface.base_material is Material.WATER
+        for x in range(34, 42)
+        for y in range(27, 36)
+    )
+    assert built.notable_positions["storehouse_entrance"] == (38, 38)
+    assert not any(
+        row.placement.position in {(38, 38), (39, 38)}
+        and row.placement.boundary_direction is CardinalDirection.SOUTH
+        for row in barriers
+    )
+
+    door_uuid = built.object_uuids["door"]
+    standing_uuid = built.object_uuids["standing_torch"]
+    cold_door = next(row.item for row in world.objects if row.item.item_uuid == door_uuid)
+    cold_torch = next(row.item for row in world.objects if row.item.item_uuid == standing_uuid)
+    assert cold_door.is_open is False
+    assert cold_torch.item_id == "environment.standing_torch"
+    assert cold_torch.is_lit is False
+
+    fixture_updates = tuple(
+        event
+        for event in events
+        if type(event) is ItemLocationStateEvent
+        and event.item_state.item_uuid == standing_uuid
+        and event.phase is EventPhase.COMPLETION
+    )
+    assert len(fixture_updates) == 1
+    assert fixture_updates[0].position == (29, 32)
+    assert fixture_updates[0].item_state.is_lit is True
+
+    door = DirectionalDoor.get(door_uuid)
+    standing = StandingTorch.get(standing_uuid)
+    assert door is not None and door.is_open is False
+    assert standing is not None and standing.is_lit is True
+    assert len(standing.get_attached_light_sources()) == 1
+    assert all(
+        tile.sprite_name is None
+        for tile in get_map().get_all_tiles().values()
+    )
 
 
 def _skeleton_creature_encounter_recipe():

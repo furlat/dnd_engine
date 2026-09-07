@@ -252,6 +252,7 @@ def test_eb_12_003_light_sources_use_shared_optical_topology() -> None:
     grid = get_map()
     wall = DirectionalWall(
         source_entity_uuid=uuid4(),
+        item_id="test.directional_wall",
         blocked_channels=(WorldEdgeChannel.OPTICAL,),
     )
     wall.place_on_grid(
@@ -281,7 +282,10 @@ def test_eb_12_003a_optical_door_recomputes_existing_light_on_commit() -> None:
     """EB-12-003a: a committed door change immediately updates light reach."""
     reset_senses_state(width=6, height=1, default_light=LightLevel.DARKNESS)
     grid = get_map()
-    door = DirectionalDoor(source_entity_uuid=uuid4())
+    door = DirectionalDoor(
+        source_entity_uuid=uuid4(),
+        item_id="test.directional_door",
+    )
     door.place_on_grid(
         (1, 0),
         boundary_direction=CardinalDirection.EAST,
@@ -757,6 +761,7 @@ def test_eb_12_013_turn_start_clears_positional_and_directional_collision_memory
     other = create_skeleton(name="Other", position=(2, 1), faction="monsters")
     hidden_shutter = DirectionalWall(
         source_entity_uuid=uuid4(),
+        item_id="test.hidden_shutter",
         name="Hidden Shutter",
         blocked_channels=(WorldEdgeChannel.MOVEMENT,),
         stealth_dc=99,
@@ -1159,6 +1164,7 @@ def test_eb_12_021_movement_perception_matches_explicit_cold_recompute() -> None
     target = create_skeleton(name="Target", position=(4, 1), darkvision=False)
     marker = BaseItem(
         source_entity_uuid=uuid4(),
+        item_id="test.visible_marker",
         name="Visible Marker",
         is_pickable=False,
         include_in_senses_objects=True,
@@ -1346,6 +1352,7 @@ def test_eb_12_027_light_and_sight_share_one_optical_fov() -> None:
     observer = create_skeleton(name="Observer", position=(0, 0), darkvision=False)
     wall = DirectionalWall(
         source_entity_uuid=uuid4(),
+        item_id="test.directional_wall",
         blocked_channels=(WorldEdgeChannel.OPTICAL,),
     )
     wall.place_on_grid(
@@ -1371,6 +1378,7 @@ def test_eb_12_028_optical_revision_invalidates_public_fov() -> None:
 
     wall = DirectionalWall(
         source_entity_uuid=uuid4(),
+        item_id="test.directional_wall",
         blocked_channels=(WorldEdgeChannel.OPTICAL,),
     )
     wall.place_on_grid(
@@ -1402,6 +1410,7 @@ def test_eb_12_028a_near_side_wall_is_visible_without_far_tile_content() -> None
     grid = get_map()
     wall = DirectionalWall(
         source_entity_uuid=uuid4(),
+        item_id="test.directional_wall",
         include_in_senses_objects=True,
     )
     wall.place_on_grid(

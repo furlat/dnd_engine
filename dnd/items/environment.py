@@ -76,6 +76,10 @@ class DirectionalWall(BaseItem):
         default_factory=lambda: DIRECTIONAL_CHANNELS,
         description="Spatial channels blocked at the placed boundary side.",
     )
+    material: Material = Field(
+        default=Material.STONE,
+        description="Physical material of this authored wall.",
+    )
 
     def model_post_init(self, __context) -> None:
         """Validate the provider's structural channels."""
@@ -94,7 +98,7 @@ class DirectionalWall(BaseItem):
         """Return the wall's current structural contribution."""
         return BoundaryStructure(
             structure=BoundaryStructureKind.WALL,
-            material=Material.STONE,
+            material=self.material,
             blocked_channels=self.blocked_channels,
         )
 

@@ -1,5 +1,11 @@
 # D&D 5e Game Engine Architecture Guide
 
+For `codex/july-reconstruction`, start with the
+[current branch design guide](agent_docs/CURRENT_BRANCH_DESIGN_GUIDE.md).
+It records current ownership, the Pygame recovery sequence, superseded
+historical ideas, and known limits. The examples below span earlier designs;
+use the current guide and the applicable bounded plan when they disagree.
+
 ## 1. Core Architecture Overview
 
 This D&D 5e game engine is built on a sophisticated event-driven architecture with component-based entities. The system models D&D mechanics through several interacting subsystems:

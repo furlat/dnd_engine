@@ -1,0 +1,33 @@
+{
+  "provenance": {
+    "source": "/home/tommaso/Dev/MapEditor/app/src/unityWaterFilter.ts",
+    "reference": "Literal float32 evaluation of the existing TS GLSL sequence; final pixels use its declared straight RGB Blend One OneMinusSrcAlpha equation."
+  },
+  "source_dimensions": [128, 128],
+  "destination_dimensions": [320, 180],
+  "source_origin_px": [-256, 768],
+  "tile_width_px": 128,
+  "render_scale": 0.5,
+  "framebuffer_size": [320, 180],
+  "destination_rgba": [41, 67, 89, 177],
+  "input_pixels": [[0, 0], [31, 15], [63, 31], [95, 63], [127, 127]],
+  "global_framebuffer_pixels": [[20, 30], [51, 45], [83, 61], [115, 93], [147, 157]],
+  "mask_alpha": [1.0, 0.6, 0.49, 0.8, 1.0],
+  "times": [
+    {
+      "time": 0.0,
+      "raw_rgba": [[37, 123, 170, 184], [15, 101, 148, 101], [0, 0, 0, 0], [4, 90, 137, 143], [28, 114, 161, 184]],
+      "composited_rgba": [[48, 142, 195, 233], [40, 141, 202, 208], [41, 67, 89, 177], [22, 119, 176, 221], [39, 133, 186, 233]]
+    },
+    {
+      "time": 0.1,
+      "raw_rgba": [[43, 128, 176, 184], [19, 104, 152, 101], [0, 0, 0, 0], [8, 94, 142, 143], [33, 119, 166, 184]],
+      "composited_rgba": [[54, 147, 201, 233], [44, 144, 206, 208], [41, 67, 89, 177], [26, 123, 181, 221], [44, 138, 191, 233]]
+    },
+    {
+      "time": 1.25,
+      "raw_rgba": [[32, 117, 165, 184], [15, 101, 148, 101], [0, 0, 0, 0], [5, 91, 138, 143], [22, 108, 156, 184]],
+      "composited_rgba": [[43, 136, 190, 233], [40, 141, 202, 208], [41, 67, 89, 177], [23, 120, 177, 221], [33, 127, 181, 233]]
+    }
+  ]
+}

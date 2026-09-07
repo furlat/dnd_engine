@@ -20,6 +20,7 @@ from dnd.content.items.authored_item_builders import (
     build_authored_item,
 )
 from dnd.content.items.environment_item_builders import (
+    build_directional_wall,
     build_oil_barrel,
     build_storage_chest,
 )
@@ -59,6 +60,7 @@ from dnd.spells.conjuration import (
     build_guardian_of_faith_object,
 )
 from dnd.types.world import CardinalDirection
+from dnd.types.materials import Material
 from dnd.types.world_placement import WorldPlacementKind
 from dnd.entity import Entity, EntityConfig
 
@@ -71,6 +73,16 @@ def _fresh_direct_item_runtime() -> None:
 
 def _uncommitted_entity(name: str = "Direct item owner") -> Entity:
     return Entity.create(source_entity_uuid=uuid4(), name=name)
+
+
+def test_directional_wall_builder_preserves_stone_default_and_forwards_material() -> None:
+    default_wall = build_directional_wall()
+    wooden_wall = build_directional_wall(material=Material.WOOD)
+
+    assert default_wall.material is Material.STONE
+    assert default_wall.get_boundary_structure().material is Material.STONE
+    assert wooden_wall.material is Material.WOOD
+    assert wooden_wall.get_boundary_structure().material is Material.WOOD
 
 
 def _deployed_entity(
