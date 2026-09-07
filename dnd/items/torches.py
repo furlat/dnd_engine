@@ -27,7 +27,7 @@ from dnd.core.content.registration import (
     behavior_identity,
 )
 from dnd.core.content.runtime import RuntimeBehaviorKind
-from dnd.core.events import EventPhase, EventQueue, ExposedFlameEvent
+from dnd.core.events import Event, EventPhase, EventQueue, ExposedFlameEvent
 from dnd.core.gridmap import get_map
 from dnd.core.item_types import ItemPresentationState
 from dnd.entity import Entity
@@ -659,11 +659,21 @@ class WallTorch(UsableItem):
             self.light()
 
 
+class StandingTorch(WallTorch):
+    """A fixed freestanding torch using the ordinary fixture lifecycle."""
+
+    name: str = Field(
+        default="Standing Torch",
+        description="Display name for the freestanding fixed torch.",
+    )
+
+
 __all__ = [
     "ExtinguishTorchAction",
     "ExtinguishWallTorchAction",
     "IgniteTorchAction",
     "IgniteWallTorchAction",
+    "StandingTorch",
     "Torch",
     "build_torch",
     "WallTorch",

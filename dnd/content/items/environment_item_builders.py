@@ -4,7 +4,6 @@ from uuid import UUID, uuid4
 
 from dnd.actions import SpellAction
 from dnd.blocks.base_item import BaseItem, UsableItem
-from dnd.core.base_actions import BaseAction
 from dnd.core.creature_types import DamageType
 from dnd.core.events import (
     Event,
@@ -28,10 +27,11 @@ from dnd.items.environment_interactables import (
     TrapLever,
 )
 from dnd.items.spell_items import SpellGrantingItem
-from dnd.items.torches import WallTorch
+from dnd.items.torches import StandingTorch, WallTorch
 from dnd.spatial.environmental_conditions import OilSurface
 from dnd.spells.evocation import Fireball
 from dnd.spells.evocation import MagicMissile
+from dnd.types.materials import Material
 from dnd.types.world import WorldEdgeChannel
 from dnd.types.spatial_effects import (
     SpatialEffectInteractionIntensity,
@@ -91,6 +91,7 @@ def build_directional_wall(
     *,
     display_name: str = "Directional Wall",
     blocked_channels: tuple[WorldEdgeChannel, ...] = DIRECTIONAL_CHANNELS,
+    material: Material = Material.STONE,
 ) -> DirectionalWall:
     """Construct one fixed directional wall from direct topology facts."""
     return DirectionalWall(
@@ -98,6 +99,7 @@ def build_directional_wall(
         item_id="environment.directional_wall",
         name=display_name,
         blocked_channels=blocked_channels,
+        material=material,
     )
 
 
@@ -132,6 +134,14 @@ def build_wall_torch() -> WallTorch:
     return WallTorch(
         source_entity_uuid=uuid4(),
         item_id="environment.wall_torch",
+    )
+
+
+def build_standing_torch() -> StandingTorch:
+    """Construct one fixed freestanding light source."""
+    return StandingTorch(
+        source_entity_uuid=uuid4(),
+        item_id="environment.standing_torch",
     )
 
 
@@ -308,6 +318,7 @@ __all__ = [
     "build_fireball_cannon",
     "build_oil_barrel",
     "build_storage_chest",
+    "build_standing_torch",
     "build_trap_lever",
     "build_wall_torch",
 ]

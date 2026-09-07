@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "terrain_cliff": {
+    "role": "cliff",
+    "rise_steps": 2,
+    "bed_material": "earth",
+    "upper_support_offset": [0, 0],
+    "straight": {"e": "terrain.cliff.e", "n": "terrain.cliff.n", "s": "terrain.cliff.s", "w": "terrain.cliff.w"},
+    "corner": {"e": "terrain.cliff.corner.e", "n": "terrain.cliff.corner.n", "s": "terrain.cliff.corner.s", "w": "terrain.cliff.corner.w"},
+    "corner_faces": {"e": ["east", "south"], "s": ["north", "east"], "w": ["west", "north"], "n": ["south", "west"]}
+  },
+  "terrain_stairs": {
+    "role": "stairs",
+    "rise_steps": 2,
+    "support_offsets": [[0, 0, 0], [-1, 0, 1], [-2, 0, 2]],
+    "poses": {"e": "terrain.stairs.e", "n": "terrain.stairs.n", "s": "terrain.stairs.s", "w": "terrain.stairs.w"},
+    "contacts_px": {
+      "e": [[160, 224], [96, 128], [32, 32]],
+      "s": [[96, 224], [160, 128], [224, 32]],
+      "w": [[96, 192], [160, 160], [224, 128]],
+      "n": [[160, 192], [96, 160], [32, 128]]
+    }
+  },
+  "terrain": {
+    "earth": {"e": "terrain.earth.e", "n": "terrain.earth.n", "s": "terrain.earth.s", "w": "terrain.earth.w"},
+    "wood": {"e": "terrain.wood.e", "n": "terrain.wood.n", "s": "terrain.wood.s", "w": "terrain.wood.w"},
+    "water": "water.unity"
+  },
+  "stone_wall_straight": {"e": "stone.wall.straight.e", "n": "stone.wall.straight.n", "s": "stone.wall.straight.s", "w": "stone.wall.straight.w"},
+  "stone_wall_corner": {"e": "stone.wall.corner.e", "n": "stone.wall.corner.n", "s": "stone.wall.corner.s", "w": "stone.wall.corner.w"},
+  "wood_wall_straight": {"e": "wood.wall.straight.e", "n": "wood.wall.straight.n", "s": "wood.wall.straight.s", "w": "wood.wall.straight.w"},
+  "wood_wall_corner": {"e": "wood.wall.corner.e", "n": "wood.wall.corner.n", "s": "wood.wall.corner.s", "w": "wood.wall.corner.w"},
+  "stone_door_frame": {"e": "stone.door.frame.e", "n": "stone.door.frame.n", "s": "stone.door.frame.s", "w": "stone.door.frame.w"},
+  "wood_door_closed": {"e": "wood.door.closed.e", "n": "wood.door.closed.n", "s": "wood.door.closed.s", "w": "wood.door.closed.w"},
+  "wood_door_open": {"e": "wood.door.open.e", "n": "wood.door.open.n", "s": "wood.door.open.s", "w": "wood.door.open.w"},
+  "items": {"environment.standing_torch": "torch.body"},
+  "treatments": {
+    "4": {"id": "light.very_bright", "rgb": [1.08, 1.08, 1.04]},
+    "3": {"id": "light.bright", "rgb": [1.0, 1.0, 1.0]},
+    "2": {"id": "light.dim", "rgb": [0.65, 0.68, 0.78]},
+    "1": {"id": "light.darkness", "rgb": [0.34, 0.38, 0.50]},
+    "0": {"id": "light.magical_darkness", "rgb": [0.22, 0.15, 0.32]},
+    "memory": {"id": "memory.seen", "rgb": [0.62, 0.62, 0.62]},
+    "authored": {"id": "world.authored", "rgb": [0.62, 0.62, 0.62]}
+  }
+}
