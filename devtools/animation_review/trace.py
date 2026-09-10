@@ -50,6 +50,10 @@ def group_trace(group: BoundChoreography) -> dict[str, Any]:
                    )} for node in group.nodes],
         "conditions": CONDITIONS.dump_python(group.conditions, mode="json", warnings="error"),
         "healing": [{"event_uuid": str(cue.event.uuid), "start_ms": cue.start_ms} for cue in group.healing],
+        "lifecycle": [{"event_uuid": str(cue.event.uuid), "start_ms": cue.start_ms,
+                       "death_end_ms": cue.death_end_ms, "state_owned": cue.state_owned,
+                       "feedback": cue.feedback.model_dump(mode="json") if cue.feedback is not None else None}
+                      for cue in group.lifecycle],
         "gaps": [(str(identity), detail) for identity, detail in group.gaps],
     }
 

@@ -73,3 +73,32 @@ def test_recording_failure_remains_in_manifest_with_exportable_trace(tmp_path: P
     trace = json.loads((output / case["trace"]).read_text())
     assert "encoder unavailable" in trace["error"]
     assert trace["run"]["id"] == manifest["run"]["id"]
+
+
+def test_paused_death_pixels_remain_historical_while_latest_has_revived(tmp_path: Path) -> None:
+    assert review.main(["--case", "death-save-revival-paused", "--fps", "12", "--width", "640",
+                        "--height", "480", "--output", str(tmp_path)]) == 0
+    run = latest_run(tmp_path)
+    trace = json.loads((run / "cases/death-save-revival-paused/trace.json").read_text())
+    target, = (identity for identity in trace["latest"]["actors"] if identity != trace["latest"]["observer_uuid"])
+    assert (trace["latest"]["actors"][target]["life"], trace["latest"]["actors"][target]["hp"]) == ("alive", 3)
+    held = [frame for frame in trace["frames"] if frame["paused"]]
+    assert len(held) > 1 and len({frame["pixel_sha256"] for frame in held}) == 1
+    for frame in held:
+        assert frame["state"]["actors"][target]["life"] == "dead"
+        assert frame["state"]["actors"][target]["hp"] == 0
+        assert frame["state"]["cursor"] < frame["latest_cursor"]
+        assert frame["presentation_ms"] == held[0]["presentation_ms"]
+        assert frame["contacts"] == held[0]["contacts"] and frame["views"] == held[0]["views"]
+        assert [view["quadrant"] for view in frame["views"]] == [0, 1, 2, 3]
+        for view in frame["views"]:
+            body, = (draw["evidence"] for draw in view["draws"]
+                     if draw["evidence"][0] == target and draw["evidence"][6] == "actor")
+            assert body[8] == "Die" and body[9] > 0
+    last = trace["frames"][-1]
+    assert last["state"] == trace["latest"]
+    for view in last["views"]:
+        body, = (draw["evidence"] for draw in view["draws"]
+                 if draw["evidence"][0] == target and draw["evidence"][6] == "actor")
+        assert body[8] == "Idle"
+    assert trace["gaps"] == [] and all(check["passed"] for check in trace["checks"])

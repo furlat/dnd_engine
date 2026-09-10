@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Mapping
+from uuid import UUID
 
 from dnd.actions import AttackEvent, SpellEvent
 from dnd.blocks.base_item import ItemLocationStateEvent
@@ -25,6 +26,7 @@ class BoundCast:
     timeline: CastTimeline
     after: PresentationTarget
     appearances: Mapping[str, tuple[RigLayer, ...]]
+    owned_life_events: frozenset[UUID] = frozenset()
 
 
 @dataclass(frozen=True, slots=True)
@@ -110,6 +112,7 @@ def bind_cast(
     by_lineage = {event.lineage_uuid: event for event in lineage.events}
     actor_contacts = {caster.uuid: source_contact}
     applications: list[CastApplication] = []
+    owned_life_events: set[UUID] = set()
     for application in application_roots:
         recipient = target.actors.get(application.target_entity_uuid) if application.target_entity_uuid else None
         if recipient is None:
@@ -136,6 +139,8 @@ def bind_cast(
                    if isinstance(event, LifeStateChangeEvent) and event.entity_uuid == recipient.uuid]
         if len(changes) > 1:
             raise NotImplementedError("selected cast binding requires one final life transition per application")
+        if damage is not None:
+            owned_life_events.update(event.uuid for event in changes if event.new_state is LifeState.DEAD)
         applications.append(CastApplication(
             application_id=str(application.application_id) if application.application_id is not None else None,
             target=actor_contacts[recipient.uuid],
@@ -156,7 +161,7 @@ def bind_cast(
         )
         for actor_uuid, contact in actor_contacts.items()
     }
-    return BoundCast(timeline, reduce_lineage(target, lineage), MappingProxyType(appearances))
+    return BoundCast(timeline, reduce_lineage(target, lineage), MappingProxyType(appearances), frozenset(owned_life_events))
 
 
 def bind_equipment(

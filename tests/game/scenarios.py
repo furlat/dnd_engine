@@ -44,6 +44,7 @@ def attack_history(
     destination: tuple[int, int] = (2, 3), maximum_hp: int = 80,
     movement_behavior: str = "action.move", watcher_positions: tuple[tuple[int, int], ...] = ((4, 3),),
     weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN, goblin_source: bool = False,
+    uses_death_saves: bool = False,
 ) -> tuple[PresentationTarget, CompletedLineage]:
     """Execute the discovered attack/movement and detach its completed history."""
     previous = random.getstate()
@@ -52,7 +53,7 @@ def attack_history(
     game = Game()
     try:
         hero = Entity.create(uuid4(), "Hero", config=EntityConfig(
-            position=(3, 3), faction="heroes", appearance=AppearanceConfig(
+            position=(3, 3), faction="heroes", uses_death_saves=uses_death_saves, appearance=AppearanceConfig(
                 body_category="NakedBody", head_category="Head22", has_beard=False,
             ), health=HealthConfig(hit_dices=[HitDiceConfig(
                 hit_dice_value=10 if maximum_hp == 80 else 4,
@@ -192,7 +193,7 @@ def _condition_action(actor: Entity, behavior: str, position: tuple[int, int] | 
     return root
 
 
-def _capture_condition_operation(
+def _capture_operation(
     before: PresentationTarget, cursor: int, mover: Entity, observer: Entity, encounter: Encounter,
 ) -> tuple[PresentationTarget, tuple[CompletedLineage, ...]]:
     """Keep every real operation root, then compare its retained result to the engine."""
@@ -219,7 +220,7 @@ def _capture_condition_operation(
             contact = result.senses.entities.get(actor.uuid)
             if contact is not None and contact.visual:
                 assert contact.position == actor.position
-    # The mover starts without conditions. Compare its full non-internal
+    # The subject starts without conditions. Compare its full non-internal
     # membership, including the UUIDs of owned children; the reactor's static
     # pre-baseline trait is not a newly observed condition application.
     assert {fact.condition_uuid for fact in result.actors[mover.uuid].conditions} == {
@@ -241,7 +242,7 @@ def movement_with_paralysis(
         cursor = EventQueue.event_cursor()
         root = _condition_action(mover, movement_behavior, (2, 3))
         assert isinstance(root, (MovementEvent, JumpEvent))
-        _, roots = _capture_condition_operation(before, cursor, mover, reactor, encounter)
+        _, roots = _capture_operation(before, cursor, mover, reactor, encounter)
         lineage, = (lineage for lineage in roots if lineage.root.uuid == root.uuid)
         assert mover.position == root.end_position
         return before, lineage
@@ -258,7 +259,7 @@ def paralysis_lifecycle(
 
         def retain(cursor: int) -> None:
             nonlocal latest
-            latest, roots = _capture_condition_operation(latest, cursor, mover, reactor, encounter)
+            latest, roots = _capture_operation(latest, cursor, mover, reactor, encounter)
             history.extend(roots)
 
         random.seed(0)
@@ -305,7 +306,7 @@ def dodge_expiry_history() -> tuple[PresentationTarget, tuple[CompletedLineage, 
 
         def retain(cursor: int) -> None:
             nonlocal latest
-            latest, roots = _capture_condition_operation(latest, cursor, mover, reactor, encounter)
+            latest, roots = _capture_operation(latest, cursor, mover, reactor, encounter)
             history.extend(roots)
 
         cursor = EventQueue.event_cursor()
@@ -330,8 +331,9 @@ def dodge_expiry_history() -> tuple[PresentationTarget, tuple[CompletedLineage, 
         return before, tuple(history)
 
 
-def healing_history(*, dying: bool = False) -> tuple[PresentationTarget, CompletedLineage]:
-    """Heal a natively injured actor; only the engine changes HP and life state."""
+@contextmanager
+def _healing_encounter() -> Iterator[tuple[PresentationTarget, Entity, Entity, Encounter]]:
+    """Keep the native healing participants available for one bounded history."""
     previous = random.getstate()
     reset_engine_runtime()
     built = build_battlefield("battlefield.open_floor_bright")
@@ -372,6 +374,16 @@ def healing_history(*, dying: bool = False) -> tuple[PresentationTarget, Complet
         before = seed_actors(baseline, births, active_weapon_sets={
             actor.uuid: actor.equipment.active_weapon_set for actor in (observer, target)
         })
+        yield before, observer, target, encounter
+    finally:
+        game.close()
+        reset_engine_runtime()
+        random.setstate(previous)
+
+
+def healing_history(*, dying: bool = False) -> tuple[PresentationTarget, CompletedLineage]:
+    """Heal a natively injured actor; only the engine changes HP and life state."""
+    with _healing_encounter() as (before, observer, target, _encounter):
         # Establish the injured baseline from the real completed damage tree,
         # including the player's authoritative DYING transition when applicable.
         cursor = EventQueue.event_cursor()
@@ -403,7 +415,62 @@ def healing_history(*, dying: bool = False) -> tuple[PresentationTarget, Complet
             assert retained.located_entity_observer_uuids == original.located_entity_observer_uuids
             assert retained.located_position_observer_uuids == original.located_position_observer_uuids
         return before, lineage
-    finally:
-        game.close()
-        reset_engine_runtime()
-        random.setstate(previous)
+
+
+def lifecycle_history(
+    *, save_seeds: tuple[int, ...] = (0,), heal_after: bool = False, revive_after: bool = False,
+) -> tuple[PresentationTarget, tuple[CompletedLineage, ...]]:
+    """Retain actual turn-start death saves and native recovery of the same actor."""
+    assert save_seeds and not (heal_after and revive_after)
+    with _healing_encounter() as (latest, observer, target, encounter):
+        history: list[CompletedLineage] = []
+
+        def retain(cursor: int) -> None:
+            nonlocal latest
+            latest, roots = _capture_operation(latest, cursor, target, observer, encounter)
+            history.extend(roots)
+
+        cursor = EventQueue.event_cursor()
+        encounter.start_turn()
+        retain(cursor)
+        while encounter.get_current_entity() is not observer:
+            cursor = EventQueue.event_cursor()
+            encounter.next_turn()
+            retain(cursor)
+        cursor = EventQueue.event_cursor()
+        target.receive_damage(target.get_normal_hp(), DamageType.SLASHING, observer.uuid)
+        retain(cursor)
+        assert target.health.life_state is LifeState.DYING and target.get_normal_hp() == 0
+        # Direct damage establishes the native baseline. The selected clips
+        # begin with the ensuing real turns, not an unbound damage animation.
+        before = latest
+        history.clear()
+        for seed in save_seeds:
+            while encounter.get_current_entity() is not observer:
+                cursor = EventQueue.event_cursor()
+                encounter.next_turn()
+                retain(cursor)
+            assert target.is_dying
+            random.seed(seed)
+            cursor = EventQueue.event_cursor()
+            encounter.next_turn()
+            retain(cursor)
+            assert encounter.get_current_entity() is target
+        if heal_after or revive_after:
+            cursor = EventQueue.event_cursor()
+            encounter.next_turn()
+            retain(cursor)
+            assert encounter.get_current_entity() is observer
+        if heal_after:
+            assert target.health.life_state is LifeState.STABLE
+            cursor = EventQueue.event_cursor()
+            healed = target.receive_healing(5, observer.uuid, source_description="Native stable recovery")
+            assert healed == 5
+            retain(cursor)
+        if revive_after:
+            assert target.health.life_state is LifeState.DEAD
+            cursor = EventQueue.event_cursor()
+            revived = target.revive(hit_points=3)
+            assert revived
+            retain(cursor)
+        return before, tuple(history)

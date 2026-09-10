@@ -96,6 +96,12 @@ def choreography_feedback(bound: BoundChoreography, data: AnimationData, absolut
         style = condition.badge_style
         tracks.append(FeedbackTrack(contact, absolute_start_ms + condition.start_ms, style.durationMs,
             None, condition.feedback_text, condition.feedback_color, style, kind="badge"))
+    for cue in bound.lifecycle:
+        if cue.feedback is not None and cue.feedback.enabled:
+            style = data.badge_style
+            contact = group_contacts.get(cue.contact.actor_uuid, cue.contact)
+            tracks.append(FeedbackTrack(contact, absolute_start_ms + cue.start_ms, style.durationMs,
+                None, cue.feedback.text, cue.feedback.color, style, kind="badge"))
     return tuple(sorted(tracks, key=lambda track: track.start_ms))
 
 

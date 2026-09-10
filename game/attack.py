@@ -8,6 +8,7 @@ from dataclasses import dataclass, replace
 from math import hypot, isfinite
 from types import MappingProxyType
 from typing import Mapping
+from uuid import UUID
 
 from dnd.actions import AttackEvent, SpellEvent
 from dnd.core.dice import AttackOutcome
@@ -87,6 +88,7 @@ class BoundAttack:
     timeline: AttackTimeline
     after: PresentationTarget
     appearances: Mapping[str, tuple[RigLayer, ...]]
+    owned_life_events: frozenset[UUID] = frozenset()
 
 
 def select_attack_profile(recipe: AttackRecipe, event: AttackEvent) -> AttackVariant | None:
@@ -299,7 +301,10 @@ def bind_attack(before: PresentationTarget, lineage: CompletedLineage, data: Ani
         # causal join. The enclosing historical head owns overlay retirement.
         complete_ms=max(body_end, timing.end_ms if timing is not None else contact), layers=layers,
         damage=damage, damage_timing=timing, damage_total=fact.applied_damage if fact is not None else None,
-        resulting_hp=fact.resulting_normal_hp if fact is not None else None, resulting_life_state=life,
+        # The owned life commit may normalize the packet's intermediate HP
+        # (for example, entering DYING at zero). Present its HP/life together.
+        resulting_hp=changes[0].normal_hit_points if changes else fact.resulting_normal_hp if fact is not None else None,
+        resulting_life_state=life,
         feedback=recipe.attackFeedback[_OUTCOMES[root.attack_outcome]], missing_media=(*body_missing, *missing),
         projectile=projectile, authored_clip=profile.actor.clip,
         release_ms=release if projectile is not None else None,
@@ -311,7 +316,8 @@ def bind_attack(before: PresentationTarget, lineage: CompletedLineage, data: Ani
             if actor.uuid == source_actor.uuid else actor.active_weapon_set, rig_id=contact.rig_id,
         ) for actor, contact in ((source_actor, source), (target_actor, target))
     }
-    return BoundAttack(timeline, reduce_lineage(before, lineage), MappingProxyType(appearances))
+    return BoundAttack(timeline, reduce_lineage(before, lineage), MappingProxyType(appearances),
+                       frozenset(event.uuid for event in changes) if timing is not None else frozenset())
 
 
 def sample_attack(timeline: AttackTimeline, elapsed_ms: float) -> AttackSample:

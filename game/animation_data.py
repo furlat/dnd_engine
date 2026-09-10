@@ -18,7 +18,8 @@ from dnd.core.item_types import EquippedVisualPolicy, ItemPresentationState
 from dnd.items.authored_variant_inventory import AUTHORED_ITEM_VARIANT_CATEGORIES
 from game.animation_types import (
     AnimationData, AttackRecipe, AuthoredProjectileAsset, AuthoredRecord, BodyClip, BodyRig, BoltStyle, DamageContext, DartStyle,
-    DeathContext, EquipmentTransitionContext, FloatingFeedbackStyle, FrozenMap, HealingContext, Identifier, MovementReactionContext, RigLayer, RigTables,
+    DeathContext, DeathSaveContext, EquipmentTransitionContext, FloatingFeedbackStyle, FrozenMap, HealingContext,
+    Identifier, LifeStateContext, MovementReactionContext, RigLayer, RigTables,
     StudioDraftFile, StudioSpellDraft, VoluntaryMovementContext,
 )
 from game.condition_types import load_condition_recipes
@@ -343,8 +344,11 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
     try:
         vital = _object(contexts["vital_effect"], "vital_effect")
         feedback = _object(contexts["floating_feedback"], "floating_feedback")
+        lifecycle = _object(contexts["lifecycle"], "lifecycle")
         damage_context = DamageContext.model_validate_json(json.dumps(vital["damage"]))
         healing_context = HealingContext.model_validate_json(json.dumps(vital["healing"]))
+        death_save_context = DeathSaveContext.model_validate_json(json.dumps(lifecycle["deathSave"]))
+        life_state_context = LifeStateContext.model_validate_json(json.dumps(lifecycle["lifeState"]))
         death_context = DeathContext.model_validate_json(json.dumps(vital["death"]))
         equipment_context = EquipmentTransitionContext.model_validate_json(json.dumps(contexts["equipment_transition"]))
         movement_context = VoluntaryMovementContext.model_validate_json(json.dumps(contexts["voluntary_movement"]))
@@ -372,6 +376,8 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
         creature_rigs=MappingProxyType(creature_rigs),
         damage_context=damage_context,
         healing_context=healing_context,
+        death_save_context=death_save_context,
+        life_state_context=life_state_context,
         death_context=death_context,
         equipment_context=equipment_context,
         movement_context=movement_context,

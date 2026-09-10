@@ -872,7 +872,8 @@ def reduce_lineage(target: PresentationTarget, lineage: CompletedLineage) -> Pre
                 actor = result.actors.get(event.entity_uuid)
                 if actor is None:
                     raise ValueError("life transition requires the retained actor")
-                result.actors[actor.uuid] = replace(actor, life_state=event.new_state)
+                result.actors[actor.uuid] = replace(actor, life_state=event.new_state,
+                                                   normal_hp=event.normal_hit_points)
             case SensoryUpdateEvent():
                 if event.observer_uuid == result.observer_uuid:
                     if result.senses is None:

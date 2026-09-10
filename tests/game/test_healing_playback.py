@@ -43,9 +43,7 @@ def test_native_heal_changes_hp_at_entry_and_keeps_placed_feedback_after_complet
     if dying:
         life, = (row for row in lineage.events if isinstance(row, LifeStateChangeEvent))
         assert (life.previous_state, life.new_state) == (LifeState.DYING, LifeState.ALIVE)
-        assert any(identity == life.uuid and "Revived" in detail for identity, detail in group.gaps)
-    else:
-        assert group.gaps == ()
+    assert group.gaps == ()
     context = data.healing_context
     original = json.loads(data.context_source_json)["contexts"]["vital_effect"]["healing"]
     assert context.model_dump(mode="json") == original
@@ -55,7 +53,12 @@ def test_native_heal_changes_hp_at_entry_and_keeps_placed_feedback_after_complet
     placed = replace(legal, grid=(legal.grid[0] + .25, legal.grid[1]), body_lift_px=20)
     positions = {placed.actor_uuid: VisualPosition(legal.grid, placed.grid, placed.elevation_steps, placed.body_lift_px)}
     start = 5000.0
-    track, = choreography_feedback(group, data, start, contacts={placed.actor_uuid: placed})
+    tracks = choreography_feedback(group, data, start, contacts={placed.actor_uuid: placed})
+    track, = (row for row in tracks if row.kind == "number")
+    badges = tuple(row for row in tracks if row.kind == "badge")
+    assert len(badges) == int(dying)
+    if dying:
+        assert (badges[0].label, badges[0].contact) == ("Revived", placed)
     assert track.contact == placed
     assert (track.start_ms, track.duration_ms, track.value, track.label, track.color) == (
         start, 900, event.actual_healing, "Heal", 4521796)
@@ -141,4 +144,4 @@ def test_healing_gallery_records_native_entry_and_decorative_tail_in_all_corners
                               for command in frame["views"][0]["draws"]) for frame in tail)
         assert all([view["quadrant"] for view in frame["views"]] == [0, 1, 2, 3] for frame in tail)
         assert all(check["passed"] for check in trace["checks"])
-        assert bool(trace["gaps"]) is (case == "healing-dying")
+        assert trace["gaps"] == []

@@ -109,7 +109,15 @@ def sample_playback_frame(
         extra = choreography_draw_commands(group, group_sample, group_media, data,
             {actor.contact.actor_uuid: actor.contact for actor in actors},
             number_font, badge_font, camera, condition_appearances=condition_appearances)
-        bodies = tuple(body for entry in group_sample.clips for body in entry.sample.bodies)
+        lifecycle_actors = {body.actor_uuid for body in group_sample.bodies}
+        extra = tuple(command for command in extra if command[4][6] not in ("actor", "actor_shadow")
+                      or str(command[4][0]) not in lifecycle_actors)
+        for body in group_sample.bodies:
+            actor = next((row for row in actors if row.contact.actor_uuid == body.actor_uuid), None)
+            if actor is not None:
+                extra = (*extra, *actor_draw_commands(data, body, actor.contact, actor.layers, body_media,
+                    camera, condition=condition_appearances[body.actor_uuid]))
+        bodies = (*tuple(body for entry in group_sample.clips for body in entry.sample.bodies), *group_sample.bodies)
         excluded = frozenset(body.actor_uuid for body in bodies)
         resulting_facings.update((body.actor_uuid, body.facing) for body in bodies)
     if movement_sample is not None:

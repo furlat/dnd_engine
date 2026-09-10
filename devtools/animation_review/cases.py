@@ -10,7 +10,7 @@ from dnd.core.equipment_types import WeaponSlot
 from game.combat_demo import iter_combat_demo
 from game.presentation import CompletedLineage, PresentationTarget
 from tests.game.scenarios import (
-    attack_history, dodge_expiry_history, healing_history, movement_with_paralysis, paralysis_lifecycle,
+    attack_history, dodge_expiry_history, healing_history, lifecycle_history, movement_with_paralysis, paralysis_lifecycle,
 )
 
 
@@ -26,6 +26,7 @@ class AttackCase(BaseModel):
     watcher_positions: tuple[tuple[int, int], ...] = ((4, 3),)
     weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN
     goblin_source: bool = False
+    uses_death_saves: bool = False
 
 
 class ParalysisCase(BaseModel):
@@ -65,13 +66,21 @@ class HealingCase(BaseModel):
     dying: bool = False
 
 
+class LifecycleCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["lifecycle"]
+    save_seeds: tuple[int, ...] = (0,)
+    heal_after: bool = False
+    revive_after: bool = False
+
+
 class ReviewCase(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     id: str = Field(pattern=r"^[a-z0-9][a-z0-9-]*$")
     title: str
     tags: tuple[str, ...]
     description: str
-    scenario: Annotated[AttackCase | ParalysisCase | CastCase | ParalysisLifecycleCase | DodgeExpiryCase | HealingCase,
+    scenario: Annotated[AttackCase | ParalysisCase | CastCase | ParalysisLifecycleCase | DodgeExpiryCase | HealingCase | LifecycleCase,
                         Field(discriminator="kind")]
     pause_at_ms: float | None = Field(default=None, ge=0)
     pause_duration_ms: float = Field(default=750, gt=0)
@@ -99,7 +108,7 @@ def produce(case: ReviewCase) -> ReviewSequence:
                 whole_movement=scenario.opportunity, destination=scenario.destination,
                 maximum_hp=scenario.maximum_hp, movement_behavior=scenario.movement_behavior,
                 watcher_positions=scenario.watcher_positions, weapon_slot=scenario.weapon_slot,
-                goblin_source=scenario.goblin_source,
+                goblin_source=scenario.goblin_source, uses_death_saves=scenario.uses_death_saves,
             )
             return ReviewSequence(before, (lineage,))
         case ParalysisCase() as scenario:
@@ -119,6 +128,10 @@ def produce(case: ReviewCase) -> ReviewSequence:
         case HealingCase() as scenario:
             before, lineage = healing_history(dying=scenario.dying)
             return ReviewSequence(before, (lineage,))
+        case LifecycleCase() as scenario:
+            before, lineages = lifecycle_history(save_seeds=scenario.save_seeds,
+                heal_after=scenario.heal_after, revive_after=scenario.revive_after)
+            return ReviewSequence(before, lineages)
         case CastCase() as scenario:
             script = iter_combat_demo(
                 caster_position=scenario.caster_position, second_attack_seed=scenario.second_attack_seed,

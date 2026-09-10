@@ -23,16 +23,19 @@ then encoded as a synchronized 2×2 video: 0/1 above, 2/3 below. Defaults are
 fullscreen control to inspect the pixels. The state/condition rules stay in
 the engine; this recorder adds no animation rules or gameplay queue.
 
-The catalog covers 30 cases: melee profiles and outcomes, modular and
+The catalog covers 38 cases: melee profiles and outcomes, modular and
 fixed-rig ranged attacks, ordinary movement, walking/jumping opportunity attacks
 with save/miss/paralysis/death, paused retained playback, two-cast histories,
 repeated targets, height and equipment roots, plus six continuing condition
 histories: walking/jumping recovery, failed save, delayed recovery, Dodge expiry
 and paused history while latest has recovered. Two healing cases use the
 original standalone feedback context: capped living healing and a dying player
-restored by native healing. The latter explicitly reports the unported
-DYING/recovery body and `Revived` badge; its green number and state transition
-do not constitute a stand-up animation. The paralysis rider is the
+restored by native healing. Eight life-transition cases add real death-save
+outcomes, stabilization/healing, death/revival, paused death while latest is
+revived, and opportunity downing. Original badges accompany mechanical
+DYING/STABLE, whose body remains Idle. Actual death plays Die and holds its
+last frame until native revival restores Idle; the source has no stand-up clip.
+The paralysis rider is the
 existing configurable native mechanic, not a weapon-triggered Hold Person
 spell. The pause case freezes an offline presentation clock over already
 reduced history; live independent controller progression remains covered by

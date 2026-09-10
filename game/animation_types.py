@@ -525,6 +525,25 @@ class HealingContext(AuthoredRecord):
     media: tuple[MovementMediaTrack, ...]
 
 
+class LifecycleFeedback(AuthoredRecord):
+    enabled: bool
+    text: Identifier
+    color: Color
+
+
+class DeathSaveContext(AuthoredRecord):
+    success: LifecycleFeedback
+    failure: LifecycleFeedback
+    criticalSuccess: LifecycleFeedback
+    criticalFailure: LifecycleFeedback
+
+
+class LifeStateContext(AuthoredRecord):
+    dying: LifecycleFeedback
+    stable: LifecycleFeedback
+    revived: LifecycleFeedback
+
+
 class MovementReactionContext(AuthoredRecord):
     label: str
     feedbackEnabled: bool
@@ -689,6 +708,8 @@ class AnimationData:
     creature_rigs: Mapping[str, str]
     damage_context: DamageContext
     healing_context: HealingContext
+    death_save_context: DeathSaveContext
+    life_state_context: LifeStateContext
     death_context: DeathContext
     equipment_context: EquipmentTransitionContext
     movement_context: VoluntaryMovementContext

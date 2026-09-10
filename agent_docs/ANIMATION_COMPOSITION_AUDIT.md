@@ -5,6 +5,87 @@ the active recovery plan, not a replacement plan or a mechanics repair backlog.
 It compares the current Python code with the original source at
 `/home/tommaso/Dev/NeuroClient/app`.
 
+## Native life transitions and lifecycle feedback — September 10
+
+The next shared capability consumes the seven existing `lifecycle.deathSave`
+and `lifecycle.lifeState` JSON rows. Their typed fields remain enabled/text/color;
+actual natural rolls and committed life facts select the row. Ordinary
+FeedbackTracks supply their original badge style and independent lifetime.
+They add no wait to the lineage. Turn banners and encounter result UI remain
+unconsumed source context.
+
+The source distinction matters: `subjectivePresentationMapper.ts:2300`
+maps mechanical DYING/STABLE to badges only. `createProjectedAnimatedEntity`
+initializes those actors as Idle. The animation FSM's `Dying` instead means
+playing Die toward frozen Dead. `ReviveClip`/`reviveFromPresentedState` release
+that frozen state on a real ALIVE transition, with no authored stand-up clip.
+The earlier recovery-body concern below was an incorrect interpretation,
+corrected in the plan, tests and gallery description.
+
+An uncovered DEAD transition now contributes one imported Die interval to the
+existing choreography. It reuses body duration/sampling, scene media and actor
+drawing. Exact life-event UUIDs owned by bound Attack/Cast primitives prevent
+another body or join from being added to their existing lethal deliveries.
+Mechanical DYING still recovers from TakeDamage to Idle at the original time;
+its Dying badge follows the existing child anchor. A native explicit revival
+also exposed an actual reducer defect: `revive(hit_points=3)` ended at native
+ALIVE/3 but retained ALIVE/0. Consuming the life event's already committed
+`normal_hit_points` fixes this without modifying the engine.
+
+The first native recording/tests found a real ordering detail that static
+review had missed. `_transition_life_state` commits sensory removal before its
+life completion is registered. Reducing up to that completion can therefore
+leave the pre-DEAD actor without a current visual contact. Binding the life
+cue's geometry at its exact causal parent's entry retains the admitted pose;
+HP/life still come from the later pre-transition facts. The existing scene
+admission, witnessed-corpse contact and interrupted-movement overlay remain
+the owners. No visibility rule or backend ordering changed. Tests explicitly
+bind without an optional supplied contact, require a present cue and nonzero
+death interval, and check frames 0→1→last and changed death pixels.
+
+Four-corner visual inspection caught a second concrete omission: opportunity
+downing briefly displayed the damage packet's intermediate −2 HP, even though
+the owned DYING fact and reducer already said 0. BoundAttack now takes HP and
+life from that same exact selected life event, at its unchanged HP anchor.
+The packet still owns the damage number (6 in this native case). This is no
+clamp or whole-lineage final-state lookup. The regression fails on the old
+binding and checks HP before/at the authored callback, recovery, completion
+and idle, along with unchanged damage feedback. Independent review approved
+this value correction against the original mapper/TakeDamageClip contract.
+
+The finite native producer uses real injury, seeded turn-start saves, actual
+stabilization/healing and explicit revival, retaining every separate turn and
+round root. The eight catalog additions cover ordinary success/failure,
+critical failure/recovery, stabilization then healing, death then revival,
+paused death while latest is already revived, and opportunity downing. Tests
+check native HP/life, real ancestry/grants after teardown, absolute seeking,
+one body, four-camera corpse/placement/lift continuity, unchanged lethal
+Attack/Cast timing, and actual frozen encoded pixels while latest is ALIVE/3.
+Both anti-slop and anti-OOP reviewers approved the source meaning and final
+implementation; the final test review approved these acceptance boundaries.
+
+**Validation:** the regression group passes 159 tests in 180.75 s, including
+the live paused encounter, encounter completion and required import DAG/direction.
+The focused native/healing/paused-death group passes 19 tests in 70.06 s;
+after the final HP correction, 45 affected tests pass in 59.78 s. These groups
+overlap. Changed-file Pyright is clean. Final gallery
+`20260910T192249Z-2eb59a` passes 38/38 at 24 FPS and 1920×1280 (four corners
+per frame). Extracted death, corpse, revival, critical recovery and downing
+frames and the comparison proof are under the run's `inspection/` directory.
+All 679 captured source files match the final implementation. The previous 30
+cases retain 29 pixel-identical frame sequences; only healing-dying changes to
+include the original Revived badge and its independent tail. The verification
+also checks native zero against every shown DYING HP value in walk-downed.
+Final four-corner inspection confirmed the corrected 0/4 label, retained
+corpse pose and the actual revival's 3/20 result. Automatic passing and this
+inspection remain separate from the human's visual approval.
+
+**Remaining scope:** selected nonempty death hiddenSlots/media, healing
+body/media, nested healing HP timing and cast DYING/STABLE delivery are still
+explicit limits. This unit adds no mechanics, subjectivity rule, queue, clock,
+FSM or per-spell executor. The new opportunity fixture also exposes the
+existing Goblin slash asset gap; no replacement art is invented.
+
 ## Native continuing lifecycle checkpoint — September 10
 
 The six-case unit in `RECOVERY_PLAN.md` passed independent anti-slop and
@@ -57,8 +138,12 @@ geometry; healing does not relocate the actor.
 
 Original `HealClip.ts` patches HP at entry and `mapHeal` dispatches actual
 children. The source then maps DYING/STABLE→ALIVE to ReviveClip and the lifecycle
-`Revived` badge. Those visuals remain unported, and current DYING/STABLE idle
-sampling remains Idle. The corresponding gallery gap is explicit. A heal
+`Revived` badge. At this checkpoint the badge was unported. **Correction from
+the subsequent source review:** mechanical DYING/STABLE correctly sample Idle;
+the animation FSM's `Dying` plays Die toward Dead and describes a different
+state. ReviveClip releases frozen Dead; it has no authored get-up body. The
+old gallery's claimed recovery-body gap was mistaken. The following lifecycle
+unit connects the badge and actual dead-to-alive presentation. A heal
 inside a bound attack/cast also reports its missing HP-at-entry timing:
 anchoring its feedback is not equivalent to implementing nested vital changes.
 Nonempty selected healing body/media likewise report their own gaps. This is
@@ -85,8 +170,9 @@ and frame count in the previous 28 cases matches the primary checkpoint run
 `inspection/verification.json` within the final run. Four-corner healing frames
 before/at entry and during the decorative tail were inspected: capped amounts,
 committed HP and the original green label agree with the trace. The final
-gallery reports only the pre-existing Goblin ranged media gap and the explicit
-healing life-state recovery visual gap. Both reviewers approved the completed
+gallery reported the pre-existing Goblin ranged media gap and a healing
+life-state badge/body gap, whose body interpretation is corrected above.
+Both reviewers approved the completed
 implementation; automatic passing still leaves visual approval to the human.
 
 ## The answer to “is it data driven?”
@@ -183,8 +269,9 @@ Person spell.
 | Attack | Existing attack recipe/profile predicates, body clip/speed, contact or release frame, ranged speed/minimum duration/endpoints, trajectory/depth, outcome feedback | Ranged geometry currently implements the source bolt primitive. Body media and hidden-slot profiles are rejected. Attack VFX currently draw a supported slash layer; other selected layers produce media gaps. |
 | Per-rig mapping | Explicit body clip/frame/FPS, slots, resources and creature-content mappings in rig data | A missing ranged clip can retain the root rig's authored clock with Idle and an explicit missing-body gap. This is degraded art, not a claim that the creature has a ranged animation. |
 | Walk/Jump | Source clips, walk speed/duration, jump duration bounds/arc, pre-reaction lead and badge, actual retained Step endpoints | Walk/jump media and recovery fields are parsed but not executed. Enabled pre-reaction body/media/recovery rejects motion binding. The default imported media/recovery fields are empty/disabled. |
-| Damage/life | Retained direct packet HP/life after-values; authored hit/death body, palette, impact delay, flash and number frames | A primitive currently binds one direct damage packet per target application and a single final life transition. Standalone damage/revive/forced movement and broader packet composition still need their respective source primitives. Actual state reduction already retains their supported facts. |
-| Standalone healing | Original healing context, capped native amount, entry HP/life after-values and independent number lifetime | Default empty body/media work through the existing immediate head. Selected healing body/media, nested healing HP timing and DYING/STABLE recovery body/lifecycle badge remain explicit gaps. |
+| Damage/life | Retained direct packet HP/life after-values; authored hit/death body, palette, impact delay, flash and number frames | A primitive currently binds one direct damage packet per target application and a single final life transition. Standalone damage/forced movement and broader packet composition still need their respective source primitives. The cast compiler's DYING/STABLE outcome remains outside its selected coverage. |
+| Life transitions | Seven original save/life badges; uncovered DEAD plays the imported Die interval, actual revival restores Idle and committed HP | Exact Attack/Cast life UUID ownership preserves their existing timings. Mechanical DYING/STABLE add badges only. Selected nonempty standalone-death hiddenSlots/media remain explicit gaps; turn/result UI is not consumed. |
+| Standalone healing | Original healing context, capped native amount, entry HP/life after-values and independent number lifetime; original Revived badge on its real life child | Default empty body/media work through the existing immediate head. Selected healing body/media and nested healing HP timing remain explicit gaps. DYING/STABLE correctly use Idle. |
 | Conditions | All 141 original recipe rows, exact behavior identity, composition priority/exclusivity/group limits, alpha, body tint/saturation/brightness, badge text/color/style, application/removal delay | Persistent/transition strips, equipment modifiers and appearance replacements are not executed; nonempty selected fields produce explicit gaps. `state_only` is intentional neutral authoring. Missing rows preserve membership with a gap and no fabricated transition. |
 | Condition relationships | Trigger, immunity, suppression, grant and classification metadata remain losslessly parsed | These records do not become a second rules engine. Actual condition events remain authoritative. |
 

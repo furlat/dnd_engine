@@ -11,12 +11,15 @@ from uuid import UUID
 
 from dnd.actions import AttackEvent, SpellEvent
 from dnd.core.condition_types import ConditionCategory
-from dnd.core.events import Event, HealEvent, LifeStateChangeEvent, TakeDamageEvent
+from dnd.core.events import DeathSaveEvent, Event, HealEvent, LifeStateChangeEvent, TakeDamageEvent
 from dnd.core.life_types import LifeState
-from game.animation import ActorContact, CastSample, VitalsSample, body_clip, sample_cast
-from game.animation_types import AnimationData, Facing8, StudioCondition
+from game.animation import (
+    ActorContact, BodySample, CastSample, VitalsSample, body_clip, body_duration,
+    sample_cast, sample_damage_body,
+)
+from game.animation_types import AnimationData, Facing8, LifecycleFeedback, StudioCondition
 from game.attack import BoundAttack, AttackSample, bind_attack, sample_attack
-from game.combat import BoundCast, bind_cast
+from game.combat import BoundCast, actor_contact, bind_cast
 from game.condition_animation import ConditionTimeline, ConditionSample, compile_condition, sample_condition
 from game.presentation import (
     CompletedLineage, PresentationTarget, copy_target, lineage_branch, reduce_lineage,
@@ -43,6 +46,17 @@ class HealingCue:
 
 
 @dataclass(frozen=True, slots=True)
+class LifecycleCue:
+    event: DeathSaveEvent | LifeStateChangeEvent
+    start_ms: float
+    contact: ActorContact
+    feedback: LifecycleFeedback | None
+    state_owned: bool
+    death_end_ms: float | None
+    data: AnimationData
+
+
+@dataclass(frozen=True, slots=True)
 class BoundChoreography:
     root_uuid: UUID
     before: PresentationTarget
@@ -52,6 +66,7 @@ class BoundChoreography:
     complete_ms: float
     gaps: tuple[tuple[UUID, str], ...]
     healing: tuple[HealingCue, ...] = ()
+    lifecycle: tuple[LifecycleCue, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,6 +76,7 @@ class ChoreographySample:
     conditions: tuple[ConditionSample, ...]
     vitals: tuple[VitalsSample, ...]
     complete: bool
+    bodies: tuple[BodySample, ...] = ()
 
 
 def _before_event(before: PresentationTarget, lineage: CompletedLineage, event: Event) -> PresentationTarget:
@@ -82,6 +98,7 @@ def bind_choreography(before: PresentationTarget, lineage: CompletedLineage, dat
     nodes: list[ActionNode] = []
     pending_conditions: list[tuple[float, Event, StudioCondition | None]] = []
     healing: list[HealingCue] = []
+    lifecycle: list[LifecycleCue] = []
     gaps: list[tuple[UUID, str]] = []
 
     def visit(event: Event, at: float, owner: ActionNode | None = None,
@@ -130,10 +147,49 @@ def bind_choreography(before: PresentationTarget, lineage: CompletedLineage, dat
                 gaps.append((event.uuid, "Healing media tracks are not bound"))
             if owner is not None:
                 gaps.append((event.uuid, "Nested healing feedback is anchored; HP-at-entry timing is not bound"))
-        if (isinstance(event, LifeStateChangeEvent)
-                and event.previous_state in (LifeState.DYING, LifeState.STABLE)
-                and event.new_state is LifeState.ALIVE):
-            gaps.append((event.uuid, "Life-state recovery body/Revived badge are not bound; DYING/STABLE currently draw Idle"))
+        if isinstance(event, (DeathSaveEvent, LifeStateChangeEvent)):
+            prior = _before_event(before, lineage, event)
+            actor = prior.actors.get(event.entity_uuid)
+            if actor is not None:
+                try:
+                    # The native life commit emits sensory removal before its
+                    # completion fact. Its causal parent's entry still owns the
+                    # admitted visual pose from which this transition plays.
+                    contact_state = (_before_event(before, lineage, by_lineage[event.parent_lineage])
+                                     if isinstance(event, LifeStateChangeEvent)
+                                     and event.parent_lineage is not None
+                                     and event.parent_lineage in by_lineage else prior)
+                    contact = actor_contact(contact_state, contact_state.actors[actor.uuid], data,
+                                            (facings or {}).get(str(actor.uuid), "S"))
+                    contact = replace(contact, hp=actor.normal_hp, life_state=actor.life_state)
+                    placed = (contacts or {}).get(contact.actor_uuid)
+                    if placed is not None:
+                        contact = replace(contact, grid=placed.grid, elevation_steps=placed.elevation_steps,
+                                          body_lift_px=placed.body_lift_px, facing=placed.facing)
+                    feedback = None
+                    state_owned = owner is not None and event.uuid in owner.bound.owned_life_events
+                    death_end = None
+                    if isinstance(event, DeathSaveEvent):
+                        saves = data.death_save_context
+                        feedback = (saves.criticalSuccess if event.natural_roll == 20 else
+                                    saves.criticalFailure if event.natural_roll == 1 else
+                                    saves.success if event.succeeded else saves.failure)
+                    else:
+                        states = data.life_state_context
+                        feedback = {LifeState.DYING: states.dying, LifeState.STABLE: states.stable,
+                                    LifeState.ALIVE: states.revived}.get(event.new_state)
+                        if event.new_state is LifeState.ALIVE and event.previous_state is LifeState.ALIVE:
+                            feedback = None
+                        if not state_owned and event.new_state is LifeState.DEAD:
+                            death = data.death_context
+                            death_end = at + body_duration(body_clip(data, contact, death.bodyClip),
+                                                           death.bodyPlaybackSpeed)
+                            if death.hiddenSlots or death.media:
+                                gaps.append((event.uuid, "Standalone death hiddenSlots/media are not bound"))
+                    lifecycle.append(LifecycleCue(event, at, contact, feedback, state_owned, death_end, data))
+                    end = max(end, death_end if death_end is not None else at)
+                except (ValueError, NotImplementedError) as error:
+                    gaps.append((event.uuid, str(error)))
 
         # TakeDamage owns its nested condition callbacks. Direct on-hit riders
         # remain siblings at Attack's contact, exactly as in the source mapper.
@@ -194,6 +250,8 @@ def bind_choreography(before: PresentationTarget, lineage: CompletedLineage, dat
                       if owned_by(condition.event_uuid, node.event_uuid)]
         child_ends.extend(child.start_ms + child.bound.timeline.complete_ms for child in nodes[index + 1:]
                           if owned_by(child.event_uuid, node.event_uuid))
+        child_ends.extend(cue.death_end_ms for cue in lifecycle if cue.death_end_ms is not None
+                          and owned_by(cue.event.uuid, node.event_uuid))
         if not child_ends:
             continue
         child_end = max(child_ends) - node.start_ms
@@ -211,7 +269,7 @@ def bind_choreography(before: PresentationTarget, lineage: CompletedLineage, dat
             nodes[index] = replace(node, bound=replace(node.bound, timeline=timeline))
         complete = max(complete, node.start_ms + timeline.complete_ms)
     return BoundChoreography(lineage.root.uuid, before, reduce_lineage(before, lineage),
-                             tuple(nodes), tuple(conditions), complete, tuple(gaps), tuple(healing))
+                             tuple(nodes), tuple(conditions), complete, tuple(gaps), tuple(healing), tuple(lifecycle))
 
 
 def sample_choreography(bound: BoundChoreography, elapsed_ms: float) -> ChoreographySample:
@@ -219,6 +277,7 @@ def sample_choreography(bound: BoundChoreography, elapsed_ms: float) -> Choreogr
     displayed = copy_target(bound.before)
     clips: list[ActionSample] = []
     vitals: dict[str, VitalsSample] = {}
+    bodies: dict[str, BodySample] = {}
     for node in bound.nodes:
         if elapsed_ms < node.start_ms:
             continue
@@ -227,6 +286,15 @@ def sample_choreography(bound: BoundChoreography, elapsed_ms: float) -> Choreogr
                   else sample_cast(node.bound.timeline, local))
         clips.append(ActionSample(node, sample))
         vitals.update((value.actor_uuid, value) for value in sample.vitals)
+    for cue in bound.lifecycle:
+        if elapsed_ms < cue.start_ms or cue.state_owned or not isinstance(cue.event, LifeStateChangeEvent):
+            continue
+        event, contact = cue.event, cue.contact
+        vitals[contact.actor_uuid] = VitalsSample(contact.actor_uuid, event.normal_hit_points, event.new_state, None)
+        if cue.death_end_ms is not None:
+            bodies[contact.actor_uuid] = sample_damage_body(cue.data, contact, elapsed_ms, death_start_ms=cue.start_ms)
+        elif event.new_state is LifeState.ALIVE:
+            bodies.pop(contact.actor_uuid, None)
     conditions = tuple(sample_condition(row, elapsed_ms) for row in bound.conditions)
     for timeline, sample in zip(bound.conditions, conditions):
         if elapsed_ms >= timeline.start_ms:
@@ -236,4 +304,5 @@ def sample_choreography(bound: BoundChoreography, elapsed_ms: float) -> Choreogr
         actor = displayed.actors[UUID(identity)]
         displayed.actors[actor.uuid] = replace(actor,
             normal_hp=actor.normal_hp if value.hp is None else value.hp, life_state=value.life_state)
-    return ChoreographySample(displayed, tuple(clips), conditions, tuple(vitals.values()), elapsed_ms >= bound.complete_ms)
+    return ChoreographySample(displayed, tuple(clips), conditions, tuple(vitals.values()),
+                              elapsed_ms >= bound.complete_ms, tuple(bodies.values()))
