@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>D&D animation review</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="gallery.js" defer></script>
+</head>
+<body>
+  <main>
+    <header class="page-header">
+      <div><p class="eyebrow">D&D ENGINE · LOCAL REVIEW</p><h1>Animation review</h1>
+        <p id="subtitle" class="subtitle">Compare the clips. Mark a moment. Export the evidence.</p></div>
+      <div id="run-label" class="run-label">Loading run…</div>
+    </header>
+    <details class="run-details"><summary>Run &amp; reproduction</summary><dl id="run-details"></dl></details>
+    <section class="tools" aria-label="Review controls">
+      <div class="filter-row">
+        <label class="search">Find a case<input id="search" type="search" placeholder="Name, tag or description…"></label>
+        <label>Review<select id="verdict-filter"><option value="all">All reviews</option><option value="issue">Issues</option><option value="approved">Approved</option><option value="unreviewed">Unreviewed</option></select></label>
+        <label>Checks<select id="checks-filter"><option value="all">All checks</option><option value="failed">Failed checks</option><option value="passed">Passed checks</option><option value="gaps">Has gaps</option></select></label>
+        <button id="clear-filters" class="quiet" type="button">Clear filters</button>
+      </div>
+      <div id="tags" class="tag-filters" aria-label="Filter by tag; selected tags must all match"></div>
+      <div class="playback-row">
+        <div class="button-group"><button id="play-all" type="button">Play visible</button><button id="pause-all" type="button">Pause visible</button><button id="restart-all" type="button">Restart visible</button></div>
+        <label class="speed">Speed<select id="speed"><option value="0.25">¼×</option><option value="0.5">½×</option><option value="1" selected>1×</option><option value="1.5">1½×</option><option value="2">2×</option></select></label>
+        <span id="playback-hint" class="playback-hint">Clips loop independently. Use fullscreen to inspect, then pin a frame.</span>
+      </div>
+      <div class="selection-row">
+        <p id="counts">Loading cases…</p>
+        <div class="button-group"><button id="select-visible" class="quiet" type="button">Select visible</button><button id="clear-selection" class="quiet" type="button">Clear selection</button><button id="export" class="primary" type="button" disabled>Export selected traces</button></div>
+      </div>
+    </section>
+    <p id="message" class="message" role="status" aria-live="polite" hidden></p>
+    <p id="empty" class="empty" hidden>No cases match these filters.</p>
+    <section id="gallery" class="gallery" aria-label="Animation cases"></section>
+    <footer>Check results describe the generated run. Your review is separate and saved in this browser. Export includes the exact run, selected case metadata, pinned times, notes and complete traces.</footer>
+  </main>
+  <noscript><p class="message error">This local gallery needs JavaScript to load the manifest and export traces.</p></noscript>
+</body>
+</html>

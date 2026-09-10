@@ -1,0 +1,132 @@
+{
+  "schema": "neuroclient.ancestryVisualProfileBindings",
+  "version": 2,
+  "bindings": [
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "species",
+        "content_id": "species.dragonborn",
+        "content_version": 2,
+        "definition_contract_hash": "a95135d959eb1ef02a45b1fa8af2f83dbce073b7577329d5e944f506e51e80a6"
+      },
+      "profileId": "dragonborn",
+      "hairPolicy": "hidden",
+      "visualScaleMultiplier": 1.04,
+      "widthMultiplier": 1.06,
+      "backpackCategory": "Bag4"
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "species",
+        "content_id": "species.dwarf",
+        "content_version": 2,
+        "definition_contract_hash": "a95135d959eb1ef02a45b1fa8af2f83dbce073b7577329d5e944f506e51e80a6"
+      },
+      "profileId": "dwarf",
+      "hairPolicy": "available",
+      "visualScaleMultiplier": 0.9,
+      "widthMultiplier": 1.12,
+      "backpackCategory": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "species",
+        "content_id": "species.elf",
+        "content_version": 2,
+        "definition_contract_hash": "a95135d959eb1ef02a45b1fa8af2f83dbce073b7577329d5e944f506e51e80a6"
+      },
+      "profileId": "elf",
+      "hairPolicy": "available",
+      "visualScaleMultiplier": 1.02,
+      "widthMultiplier": 0.93,
+      "backpackCategory": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "species",
+        "content_id": "species.gnome",
+        "content_version": 2,
+        "definition_contract_hash": "a95135d959eb1ef02a45b1fa8af2f83dbce073b7577329d5e944f506e51e80a6"
+      },
+      "profileId": "gnome",
+      "hairPolicy": "available",
+      "visualScaleMultiplier": 0.82,
+      "widthMultiplier": 0.94,
+      "backpackCategory": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "species",
+        "content_id": "species.half_elf",
+        "content_version": 2,
+        "definition_contract_hash": "a95135d959eb1ef02a45b1fa8af2f83dbce073b7577329d5e944f506e51e80a6"
+      },
+      "profileId": "half-elf",
+      "hairPolicy": "available",
+      "visualScaleMultiplier": 1,
+      "widthMultiplier": 0.97,
+      "backpackCategory": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "species",
+        "content_id": "species.half_orc",
+        "content_version": 2,
+        "definition_contract_hash": "a95135d959eb1ef02a45b1fa8af2f83dbce073b7577329d5e944f506e51e80a6"
+      },
+      "profileId": "half-orc",
+      "hairPolicy": "available",
+      "visualScaleMultiplier": 1.06,
+      "widthMultiplier": 1.09,
+      "backpackCategory": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "species",
+        "content_id": "species.halfling",
+        "content_version": 2,
+        "definition_contract_hash": "a95135d959eb1ef02a45b1fa8af2f83dbce073b7577329d5e944f506e51e80a6"
+      },
+      "profileId": "halfling",
+      "hairPolicy": "available",
+      "visualScaleMultiplier": 0.78,
+      "widthMultiplier": 0.93,
+      "backpackCategory": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "species",
+        "content_id": "species.human",
+        "content_version": 2,
+        "definition_contract_hash": "a95135d959eb1ef02a45b1fa8af2f83dbce073b7577329d5e944f506e51e80a6"
+      },
+      "profileId": "human",
+      "hairPolicy": "available",
+      "visualScaleMultiplier": 1,
+      "widthMultiplier": 1,
+      "backpackCategory": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "species",
+        "content_id": "species.tiefling",
+        "content_version": 2,
+        "definition_contract_hash": "a95135d959eb1ef02a45b1fa8af2f83dbce073b7577329d5e944f506e51e80a6"
+      },
+      "profileId": "tiefling",
+      "hairPolicy": "available",
+      "visualScaleMultiplier": 1.01,
+      "widthMultiplier": 0.98,
+      "backpackCategory": null
+    }
+  ]
+}

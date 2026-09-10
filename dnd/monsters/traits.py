@@ -1490,7 +1490,7 @@ def _has_adjacent_ally(source: Entity, target: Entity) -> bool:
 def _has_sneak_attack_condition(source: Entity, target: Entity, event: DamageRollResultEvent) -> bool:
     """Return whether a damage event satisfies SRD Sneak Attack conditions."""
     attack_roll = None
-    parent = Event.get(event.parent_event) if event.parent_event else None
+    parent = EventQueue.get_event_by_uuid(event.parent_event) if event.parent_event else None
     if parent is not None:
         attack_roll = getattr(parent, "dice_roll", None)
     has_advantage = bool(attack_roll and attack_roll.advantage_status == AdvantageStatus.ADVANTAGE)

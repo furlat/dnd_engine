@@ -1,0 +1,26 @@
+{
+  "package": "/mnt/c/users/tommaso/documents/dev/CodexFX/vfx_pipeline/dist/lelu.magic-missile/rune-dart-lifecycle-256.godot-cie-lab-force-wine10-capture8-final-block2.temporal16-10-18.v1",
+  "spell_id": "spell.magic_missile",
+  "selection": "Existing exported media replaces generated geometry; original Studio choreography is retained.",
+  "inputs": {
+    "/mnt/c/users/tommaso/documents/dev/CodexFX/vfx_pipeline/dist/lelu.magic-missile/rune-dart-lifecycle-256.godot-cie-lab-force-wine10-capture8-final-block2.temporal16-10-18.v1/asset.json": "7372d2dfcc036e17ed4c5f77c296ea54230128c1047b8c6f4cc51d4a7809c5ff",
+    "/mnt/c/users/tommaso/documents/dev/CodexFX/vfx_pipeline/dist/lelu.magic-missile/rune-dart-lifecycle-256.godot-cie-lab-force-wine10-capture8-final-block2.temporal16-10-18.v1/build.json": "4f73070ede9ed6effc5349f198bdc09c8a0394b263387aca36f2dace31e14ee8",
+    "/mnt/c/users/tommaso/documents/dev/CodexFX/vfx_pipeline/dist/lelu.magic-missile/rune-dart-lifecycle-256.godot-cie-lab-force-wine10-capture8-final-block2.temporal16-10-18.v1/readiness.json": "c543ca05810b07e63b07d220ed3b7f15810d36d6c7f3f2f3e4543a875e79e397",
+    "/mnt/c/users/tommaso/documents/dev/CodexFX/vfx_pipeline/dist/lelu.magic-missile/rune-dart-lifecycle-256.godot-cie-lab-force-wine10-capture8-final-block2.temporal16-10-18.v1/profiles/palette.json": "a61b4ba1cb6d73b2a823db0482eed32d50c374625e5e90137cbe8628fa29bb01",
+    "/mnt/c/users/tommaso/documents/dev/CodexFX/vfx_pipeline/dist/lelu.magic-missile/rune-dart-lifecycle-256.godot-cie-lab-force-wine10-capture8-final-block2.temporal16-10-18.v1/validation.json": "efe40805ea20689dfd8a81d5b30ca0ce6b5315539ed18751995ca4e6102234ec",
+    "game/data/neuroclient/spell-studio-drafts.materialized.json": "a3b16a991b8b01524d4e8191b4fa1e2be151d617de96c226f5d1100a7b2f9602",
+    "/mnt/c/users/tommaso/documents/dev/CodexFX/vfx_pipeline/src/codexfx_vfx/model.py": "9fece6f8ce2cc426e7e09095d70f2ae62f944774457f7cab654f695a051e453b",
+    "/mnt/c/users/tommaso/documents/dev/CodexFX/vfx_pipeline/src/codexfx_vfx/neuroclient.py": "090a568a0e494527611c2c336e8e7d90cc7a2d12080be412cd9ab26e31f1107d"
+  },
+  "exporter_text_sha256": "8a54a3e56943d0253d69b5c084250cf410d4f717d714779d6ae32ce895722529",
+  "outputs": {
+    "game/data/codexfx/source/lelu.magic-missile.rune-dart-lifecycle-256.godot-cie-lab-force-wine10-capture8-final-block2.temporal16-10-18.v1/asset.json": "7372d2dfcc036e17ed4c5f77c296ea54230128c1047b8c6f4cc51d4a7809c5ff",
+    "game/data/codexfx/source/lelu.magic-missile.rune-dart-lifecycle-256.godot-cie-lab-force-wine10-capture8-final-block2.temporal16-10-18.v1/build.json": "4f73070ede9ed6effc5349f198bdc09c8a0394b263387aca36f2dace31e14ee8",
+    "game/data/codexfx/source/lelu.magic-missile.rune-dart-lifecycle-256.godot-cie-lab-force-wine10-capture8-final-block2.temporal16-10-18.v1/readiness.json": "c543ca05810b07e63b07d220ed3b7f15810d36d6c7f3f2f3e4543a875e79e397",
+    "game/data/codexfx/source/lelu.magic-missile.rune-dart-lifecycle-256.godot-cie-lab-force-wine10-capture8-final-block2.temporal16-10-18.v1/profiles/palette.json": "a61b4ba1cb6d73b2a823db0482eed32d50c374625e5e90137cbe8628fa29bb01",
+    "game/assets/codexfx/lelu.magic-missile.rune-dart-lifecycle-256.godot-cie-lab-force-wine10-capture8-final-block2.temporal16-10-18.v1/sheet.png": "c197efa42a929604e9ceef639ca0281ef0af52cff314e95765156a76e0c17d9a",
+    "game/data/codexfx/projectile-assets.json": "a4bdf5448e8c2379fea8269dd0fc7b463c2b8814d45a40c9ac248b9994f33164",
+    "game/data/codexfx/spell-studio-drafts.json": "52b51cfa1a9e042758adb83b6dcc82dffdbff8e22c41d78ae49b47444888b9d5",
+    "game/data/codexfx/bindings.json": "fb83bb6a532c8ffe24c18f972a296d5117d9f1d06d3943e276d3f0949dc3b42e"
+  }
+}

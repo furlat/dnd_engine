@@ -1,0 +1,389 @@
+{
+  "schema": "neuroclient.generatedSpellPresentationProfile",
+  "version": 8,
+  "palettes": {
+    "byDamageType": {
+      "Slashing": {
+        "primary": 13421772,
+        "secondary": 8947848,
+        "tertiary": 16777215
+      },
+      "Piercing": {
+        "primary": 13421772,
+        "secondary": 8947848,
+        "tertiary": 16777215
+      },
+      "Bludgeoning": {
+        "primary": 13421772,
+        "secondary": 8947848,
+        "tertiary": 16777215
+      },
+      "Fire": {
+        "primary": 16737792,
+        "secondary": 16719360,
+        "tertiary": 16763904
+      },
+      "Cold": {
+        "primary": 4499199,
+        "secondary": 2254540,
+        "tertiary": 8965327
+      },
+      "Lightning": {
+        "primary": 15658820,
+        "secondary": 10075904,
+        "tertiary": 13409279
+      },
+      "Thunder": {
+        "primary": 8947967,
+        "secondary": 4473036,
+        "tertiary": 12294143
+      },
+      "Acid": {
+        "primary": 4521796,
+        "secondary": 2271778,
+        "tertiary": 8978278
+      },
+      "Poison": {
+        "primary": 8978244,
+        "secondary": 4495650,
+        "tertiary": 13434692
+      },
+      "Radiant": {
+        "primary": 16764962,
+        "secondary": 13403153,
+        "tertiary": 16772778
+      },
+      "Necrotic": {
+        "primary": 6684842,
+        "secondary": 4456550,
+        "tertiary": 52292
+      },
+      "Psychic": {
+        "primary": 16729343,
+        "secondary": 11149994,
+        "tertiary": 16746717
+      },
+      "Force": {
+        "primary": 15610692,
+        "secondary": 11145506,
+        "tertiary": 16746666
+      }
+    },
+    "bySchool": {
+      "evocation": {
+        "primary": 16737792,
+        "secondary": 16719360,
+        "tertiary": 16763904
+      },
+      "necromancy": {
+        "primary": 6684842,
+        "secondary": 4456550,
+        "tertiary": 52292
+      },
+      "abjuration": {
+        "primary": 2254591,
+        "secondary": 1131724,
+        "tertiary": 8961983
+      },
+      "enchantment": {
+        "primary": 16737996,
+        "secondary": 11141375,
+        "tertiary": 16755421
+      },
+      "conjuration": {
+        "primary": 16763904,
+        "secondary": 6750020,
+        "tertiary": 16772744
+      },
+      "illusion": {
+        "primary": 11189213,
+        "secondary": 8948172,
+        "tertiary": 13426175
+      },
+      "transmutation": {
+        "primary": 16755234,
+        "secondary": 11166242,
+        "tertiary": 16764040
+      },
+      "divination": {
+        "primary": 16772778,
+        "secondary": 16768324,
+        "tertiary": 16768392
+      }
+    }
+  },
+  "cast": {
+    "bodyClip": "Special1",
+    "bodyPlaybackSpeed": 1,
+    "releaseFrame": 8,
+    "equipment": "hidden",
+    "recovery": {
+      "enabled": false,
+      "bodyClip": "Taunt",
+      "bodyPlaybackSpeed": 1
+    }
+  },
+  "projectile": {
+    "fps": 24,
+    "scale": 1,
+    "depthMode": "world",
+    "orientation": {
+      "rowSource": "targetVector",
+      "fineRotation": "isometricHybrid"
+    },
+    "sourceAnchor": {
+      "basis": "tileCenter",
+      "liftY": -16,
+      "forwardPx": 0,
+      "sidePx": 0,
+      "axisPx": 16
+    },
+    "targetAnchor": {
+      "basis": "tileCenter",
+      "liftY": -16,
+      "forwardPx": -16
+    },
+    "phases": {
+      "prepare": {
+        "enabled": false,
+        "assetPhase": "cast"
+      },
+      "travel": {
+        "enabled": true,
+        "assetPhase": "travel"
+      },
+      "impact": {
+        "enabled": true,
+        "assetPhase": "impact"
+      }
+    },
+    "geometryStyles": {
+      "bolt": {
+        "maximumLengthPx": 12,
+        "distanceLengthRatio": 0.15,
+        "strokeWidthPx": 2,
+        "strokeAlpha": 1,
+        "headRadiusPx": 2,
+        "headAlpha": 0.9
+      },
+      "areaProjectile": {
+        "trailPointLimit": 12,
+        "trailWidthPx": 4,
+        "trailAlpha": 0.5,
+        "headRadiusPx": 5,
+        "headAlpha": 0.9,
+        "coreRadiusPx": 2,
+        "coreAlpha": 1
+      },
+      "dart": {
+        "trailPointLimit": 8,
+        "trailWidthPx": 2,
+        "trailAlpha": 0.6,
+        "headRadiusPx": 3,
+        "headAlpha": 0.9
+      },
+      "orb": {
+        "trailPointLimit": 8,
+        "trailWidthPx": 3,
+        "trailAlpha": 0.5,
+        "headRadiusPx": 3,
+        "headAlpha": 0.9,
+        "coreRadiusPx": 1.5,
+        "coreAlpha": 1
+      },
+      "ray": {
+        "holdMs": 100,
+        "fadeMs": 200,
+        "outerWidthPx": 4,
+        "outerAlpha": 0.4,
+        "middleWidthPx": 2,
+        "middleAlpha": 0.8,
+        "coreWidthPx": 1,
+        "coreAlpha": 1,
+        "headRadiusPx": 3
+      },
+      "beam": {
+        "holdMs": 200,
+        "fadeMs": 200,
+        "outerWidthPx": 6,
+        "outerAlpha": 0.3,
+        "middleWidthPx": 4,
+        "middleAlpha": 0.6,
+        "coreWidthPx": 1.5,
+        "coreAlpha": 0.8,
+        "particleCount": 12,
+        "particleOffsetPx": 5,
+        "particleRadiusPx": 1.5,
+        "flickerFrequencyPerMs": 0.01,
+        "pulseBaseAlpha": 0.8,
+        "pulseAmplitude": 0.2,
+        "pulseFrequencyPerMs": 0.02
+      },
+      "spray": {
+        "coneHalfAngleRadians": 0.5235987755982988,
+        "baseParticleCount": 15,
+        "variableParticleCount": 10,
+        "speedMinimum": 0.6,
+        "speedVariance": 0.4,
+        "distanceMinimum": 0.8,
+        "distanceVariance": 0.4,
+        "radiusMinimumPx": 1,
+        "radiusVariancePx": 2,
+        "secondaryColorThreshold": 0.5,
+        "fadeStartProgress": 0.7,
+        "particleAlpha": 0.8
+      },
+      "radiance": {
+        "pillarHeightPx": 100,
+        "descendMs": 250,
+        "flashMs": 150,
+        "widthStartPx": 3,
+        "widthGrowthPx": 5,
+        "outerWidthMultiplier": 2,
+        "outerAlpha": 0.3,
+        "middleWidthMultiplier": 1.3,
+        "middleAlpha": 0.6,
+        "coreWidthMultiplier": 0.5,
+        "coreAlpha": 0.8,
+        "flashRadiusStartPx": 8,
+        "flashRadiusGrowthPx": 12,
+        "flashOuterRadiusMultiplier": 1.5,
+        "flashOuterAlpha": 0.3,
+        "flashMiddleAlpha": 0.6,
+        "flashCoreRadiusMultiplier": 0.4
+      },
+      "radianceArea": {
+        "durationMs": 600,
+        "baseParticleCount": 25,
+        "particlesPerRadius": 8,
+        "radialDistanceMinimum": 0.3,
+        "radialDistanceVariance": 0.7,
+        "startHeightPx": 80,
+        "startHeightVariancePx": 40,
+        "speedMinimum": 0.5,
+        "speedVariance": 0.5,
+        "radiusMinimumPx": 1.5,
+        "radiusVariancePx": 2,
+        "secondaryColorThreshold": 0.4,
+        "fadeStartProgress": 0.7,
+        "particleAlpha": 0.9,
+        "glowStartProgress": 0.4,
+        "glowFadeProgress": 0.7,
+        "glowOuterRadiusStartPx": 10,
+        "glowOuterRadiusGrowthPx": 8,
+        "glowOuterAlpha": 0.3,
+        "glowMiddleRadiusStartPx": 6,
+        "glowMiddleRadiusGrowthPx": 4,
+        "glowMiddleAlpha": 0.5,
+        "glowCoreRadiusPx": 3,
+        "glowCoreAlpha": 0.8
+      },
+      "rain": {
+        "durationMs": 500,
+        "baseParticleCount": 20,
+        "particlesPerRadius": 10,
+        "horizontalJitterPx": 10,
+        "startHeightPx": 80,
+        "startHeightVariancePx": 60,
+        "speedMinimum": 0.5,
+        "speedVariance": 0.5,
+        "radiusMinimumPx": 1,
+        "radiusVariancePx": 2,
+        "secondaryColorThreshold": 0.5,
+        "fadeStartProgress": 0.8,
+        "particleAlpha": 0.8
+      }
+    },
+    "byPrimitive": {
+      "bolt": {
+        "speedPxPerSecond": 500,
+        "missileStaggerMs": 0,
+        "minimumTravelDurationMs": 150,
+        "trajectory": { "type": "straight", "sameTargetSpread": false }
+      },
+      "ray": {
+        "speedPxPerSecond": 500,
+        "missileStaggerMs": 0,
+        "minimumTravelDurationMs": 150,
+        "trajectory": { "type": "straight", "sameTargetSpread": false }
+      },
+      "beam": {
+        "speedPxPerSecond": 500,
+        "missileStaggerMs": 0,
+        "minimumTravelDurationMs": 150,
+        "trajectory": { "type": "straight", "sameTargetSpread": false }
+      },
+      "orb": {
+        "speedPxPerSecond": 400,
+        "missileStaggerMs": 0,
+        "minimumTravelDurationMs": 150,
+        "trajectory": { "type": "straight", "sameTargetSpread": false }
+      },
+      "dart": {
+        "speedPxPerSecond": 800,
+        "missileStaggerMs": 80,
+        "minimumTravelDurationMs": 150,
+        "trajectory": {
+          "type": "bezier",
+          "curvature": 0.3,
+          "sameTargetSpread": true
+        }
+      },
+      "spray": {
+        "speedPxPerSecond": 500,
+        "missileStaggerMs": 0,
+        "minimumTravelDurationMs": 250,
+        "trajectory": { "type": "straight", "sameTargetSpread": false }
+      },
+      "radiance": {
+        "speedPxPerSecond": 500,
+        "missileStaggerMs": 0,
+        "minimumTravelDurationMs": 150,
+        "trajectory": { "type": "straight", "sameTargetSpread": false }
+      },
+      "rain": {
+        "speedPxPerSecond": 400,
+        "missileStaggerMs": 0,
+        "minimumTravelDurationMs": 150,
+        "trajectory": { "type": "straight", "sameTargetSpread": false }
+      }
+    }
+  },
+  "area": {
+    "shapeSource": "authoritative_cue",
+    "phases": {
+      "shape": {
+        "enabled": true,
+        "durationMs": 500,
+        "effectProgress": 0
+      },
+      "explosion": {
+        "enabled": false,
+        "durationMs": 180,
+        "effectProgress": 0,
+        "startScale": 1,
+        "endScale": 1.15,
+        "fillAlphaEnd": 0,
+        "strokeAlphaEnd": 0
+      }
+    },
+    "geometry": {
+      "renderer": "geometry_area",
+      "enabled": true,
+      "depthMode": "ground",
+      "startScale": 0.2,
+      "endScale": 1,
+      "fillAlphaStart": 0.35,
+      "fillAlphaEnd": 0.105,
+      "strokeAlphaStart": 1,
+      "strokeAlphaEnd": 0.3,
+      "strokeWidth": 3
+    },
+    "sprite": null
+  },
+  "condition": {
+    "anchor": "effect",
+    "delayMs": 0,
+    "feedbackEnabled": true
+  }
+}

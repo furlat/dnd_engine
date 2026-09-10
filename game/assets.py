@@ -94,9 +94,9 @@ def _validate_bindings(bindings: dict[str, object]) -> None:
     terrain = bindings.get("terrain")
     items = bindings.get("items")
     treatments = bindings.get("treatments")
-    if type(terrain) is not dict or set(terrain) != {"earth", "wood", "water"}:
-        raise ValueError("terrain bindings require exact earth, wood, and water rows")
-    for material in ("earth", "wood"):
+    if type(terrain) is not dict or set(terrain) != {"earth", "wood", "stone", "water"}:
+        raise ValueError("terrain bindings require exact earth, wood, stone, and water rows")
+    for material in ("earth", "wood", "stone"):
         table = terrain[material]
         if type(table) is not dict or set(table) != poses:
             raise ValueError(f"terrain {material} bindings require four exact poses")

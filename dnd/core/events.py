@@ -281,16 +281,45 @@ class EventPhase(str, Enum):
 ordered_event_phases = [EventPhase.DECLARATION, EventPhase.EXECUTION, EventPhase.EFFECT, EventPhase.COMPLETION]
 
 
-class Event(BaseObject):
+class Event(BaseModel):
     """Versioned state-transition record.
 
     Each call to `post()` or `phase_to()` creates a new UUID while preserving
     `lineage_uuid`, allowing the queue to store both the current phase and the
-    history of a logical event. Subclasses add domain-specific payload fields
-    and may override `generate_combat_log()`.
+    history of a logical event. EventQueue is the sole registry for these
+    versions. Subclasses add domain-specific payload fields and may override
+    `generate_combat_log()`.
     """
 
     name: str = Field(default="Event", description="Human-readable event label.")
+    uuid: UUID = Field(
+        default_factory=uuid4,
+        description="Unique identifier for the object. Automatically generated if not provided.",
+    )
+    source_entity_uuid: UUID = Field(
+        ...,
+        description="UUID of the entity that is the source of this object.",
+    )
+    source_entity_name: Optional[str] = Field(
+        default=None,
+        description="Display name of the acting entity, captured for log generation.",
+    )
+    target_entity_uuid: Optional[UUID] = Field(
+        default=None,
+        description="UUID of the entity this object targets, if any.",
+    )
+    target_entity_name: Optional[str] = Field(
+        default=None,
+        description="Display name of the target entity, captured for log generation.",
+    )
+    context: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Additional context information for this object.",
+    )
+    use_register: bool = Field(
+        default=True,
+        description="Whether to register this event version in EventQueue.",
+    )
     lineage_uuid: UUID = Field(
         default_factory=uuid4,
         description="Stable UUID shared by all phase versions of one logical event.",
@@ -303,14 +332,6 @@ class Event(BaseObject):
     phase: EventPhase = Field(
         default=EventPhase.DECLARATION,
         description="Current lifecycle phase for this event version.",
-    )
-    source_entity_name: Optional[str] = Field(
-        default=None,
-        description="Display name of the acting entity, captured for log generation.",
-    )
-    target_entity_name: Optional[str] = Field(
-        default=None,
-        description="Display name of the target entity, captured for log generation.",
     )
     modified: bool = Field(
         default=False,
@@ -470,7 +491,6 @@ class Event(BaseObject):
                 if parent is not None
                 else EventQueue.current_turn_execution_id()
             )
-        super().model_post_init(__context)
         if self.use_register:
             EventQueue.register(self)
 
@@ -3355,7 +3375,7 @@ class SensoryUpdateEvent(Event):
         ]
         while pending:
             value = pending.pop()
-            if isinstance(value, BaseObject) or callable(value):
+            if isinstance(value, (BaseObject, Event)) or callable(value):
                 raise ValueError(
                     "sensory replay payload contains a runtime value",
                 )

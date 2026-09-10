@@ -1,0 +1,1626 @@
+[
+  {
+    "assetId": "lelu_fire_strike_lifecycle_v001",
+    "displayName": "LeLu Fire Strike",
+    "kind": "projectile",
+    "sheet": "/authored-vfx/projectiles/fire_strike/lelu_fire_strike_lifecycle_v001.png",
+    "preview": "/authored-vfx/projectiles/fire_strike/lelu_fire_strike_lifecycle_v001.gif",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "cols": 36,
+      "rows": 8
+    },
+    "fps": 24,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "cast": {
+        "start": 0,
+        "frames": 12,
+        "loop": false
+      },
+      "travel": {
+        "start": 12,
+        "frames": 12,
+        "loop": true
+      },
+      "impact": {
+        "start": 24,
+        "frames": 12,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 1
+    },
+    "defaultScale": 0.5,
+    "tags": [
+      "fire",
+      "projectile",
+      "lifecycle",
+      "prepare",
+      "travel",
+      "impact"
+    ],
+    "source": {
+      "package": "CodexFX lelu_projectiles",
+      "manifest": "production/lelu_projectiles/assets/neuroclient/fire_strike/lelu_fire_strike_lifecycle_v001.json",
+      "notes": "Travel policy is stationary-in-cell; NeuroClient moves the projectile at runtime."
+    },
+    "validation": {
+      "emptyCells": 0,
+      "edgeContacts": 0,
+      "warnings": []
+    },
+    "palettePreview": {
+      "colors": [
+        16777094,
+        16777096,
+        16777093,
+        16777085,
+        16777089,
+        16777095,
+        16777091,
+        16760206,
+        16758665,
+        16754944
+      ]
+    }
+  },
+  {
+    "assetId": "lelu_fire_strike_lifecycle_8dir_toon_pixel4_v001",
+    "displayName": "LeLu Fire Strike Toon Pixel 4",
+    "kind": "projectile",
+    "sheet": "/authored-vfx/projectiles/fire_strike/lelu_fire_strike_lifecycle_8dir_toon_pixel4_v001.png",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "cols": 36,
+      "rows": 8
+    },
+    "fps": 24,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "cast": {
+        "start": 0,
+        "frames": 12,
+        "loop": false
+      },
+      "travel": {
+        "start": 12,
+        "frames": 12,
+        "loop": true
+      },
+      "impact": {
+        "start": 24,
+        "frames": 12,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 1
+    },
+    "defaultScale": 0.5,
+    "tags": [
+      "fire",
+      "projectile",
+      "lifecycle",
+      "pixel",
+      "toon",
+      "pixel4",
+      "prepare",
+      "travel",
+      "impact"
+    ],
+    "source": {
+      "package": "CodexFX lelu_projectiles",
+      "manifest": "production/lelu_projectiles/assets/neuroclient/fire_strike/pixel_experiments_8dir/phase_sheets/*_toon_pixel4_v001.json",
+      "notes": "Combined NeuroClient lifecycle sheet from provided pixel-experiment cast/travel/impact phase sheets; no pixelation performed in NeuroClient."
+    },
+    "validation": {
+      "emptyCells": 0,
+      "edgeContacts": 0,
+      "warnings": []
+    },
+    "palettePreview": {
+      "colors": [
+        16760719,
+        16777096,
+        16777098,
+        16777091,
+        16777097,
+        16763648,
+        16759296,
+        16760064,
+        16777093,
+        16777087
+      ]
+    }
+  },
+  {
+    "assetId": "lelu_fire_strike_lifecycle_8dir_toon_pixel8_v001",
+    "displayName": "LeLu Fire Strike Toon Pixel 8",
+    "kind": "projectile",
+    "sheet": "/authored-vfx/projectiles/fire_strike/lelu_fire_strike_lifecycle_8dir_toon_pixel8_v001.png",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "cols": 36,
+      "rows": 8
+    },
+    "fps": 24,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "cast": {
+        "start": 0,
+        "frames": 12,
+        "loop": false
+      },
+      "travel": {
+        "start": 12,
+        "frames": 12,
+        "loop": true
+      },
+      "impact": {
+        "start": 24,
+        "frames": 12,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 1
+    },
+    "defaultScale": 0.5,
+    "tags": [
+      "fire",
+      "projectile",
+      "lifecycle",
+      "pixel",
+      "toon",
+      "pixel8",
+      "prepare",
+      "travel",
+      "impact"
+    ],
+    "source": {
+      "package": "CodexFX lelu_projectiles",
+      "manifest": "production/lelu_projectiles/assets/neuroclient/fire_strike/pixel_experiments_8dir/phase_sheets/*_toon_pixel8_v001.json",
+      "notes": "Combined NeuroClient lifecycle sheet from provided pixel-experiment cast/travel/impact phase sheets; no pixelation performed in NeuroClient."
+    },
+    "validation": {
+      "emptyCells": 0,
+      "edgeContacts": 0,
+      "warnings": []
+    },
+    "palettePreview": {
+      "colors": [
+        16762880,
+        16760719,
+        16759950,
+        16777098,
+        16759949,
+        16777097,
+        16760832,
+        16757894,
+        16761600,
+        16777087
+      ]
+    }
+  },
+  {
+    "assetId": "lelu_fire_strike_lifecycle_8dir_cie_pixel4_v001",
+    "displayName": "LeLu Fire Strike CIE Pixel 4",
+    "kind": "projectile",
+    "sheet": "/authored-vfx/projectiles/fire_strike/lelu_fire_strike_lifecycle_8dir_cie_pixel4_v001.png",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "cols": 36,
+      "rows": 8
+    },
+    "fps": 24,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "cast": {
+        "start": 0,
+        "frames": 12,
+        "loop": false
+      },
+      "travel": {
+        "start": 12,
+        "frames": 12,
+        "loop": true
+      },
+      "impact": {
+        "start": 24,
+        "frames": 12,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 1
+    },
+    "defaultScale": 0.5,
+    "tags": [
+      "fire",
+      "projectile",
+      "lifecycle",
+      "pixel",
+      "cie",
+      "pixel4",
+      "prepare",
+      "travel",
+      "impact"
+    ],
+    "source": {
+      "package": "CodexFX lelu_projectiles",
+      "manifest": "production/lelu_projectiles/assets/neuroclient/fire_strike/pixel_experiments_8dir/phase_sheets/*_cie_pixel4_v001.json",
+      "notes": "Combined NeuroClient lifecycle sheet from provided pixel-experiment cast/travel/impact phase sheets; no pixelation performed in NeuroClient."
+    },
+    "validation": {
+      "emptyCells": 0,
+      "edgeContacts": 0,
+      "warnings": []
+    },
+    "palettePreview": {
+      "colors": [
+        16766292,
+        16759863,
+        16752676,
+        16771194,
+        14711352,
+        16745496,
+        15224332,
+        16541456,
+        16762494,
+        13384203
+      ]
+    }
+  },
+  {
+    "assetId": "lelu_fire_strike_lifecycle_8dir_cie_pixel8_v001",
+    "displayName": "LeLu Fire Strike CIE Pixel 8",
+    "kind": "projectile",
+    "sheet": "/authored-vfx/projectiles/fire_strike/lelu_fire_strike_lifecycle_8dir_cie_pixel8_v001.png",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "cols": 36,
+      "rows": 8
+    },
+    "fps": 24,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "cast": {
+        "start": 0,
+        "frames": 12,
+        "loop": false
+      },
+      "travel": {
+        "start": 12,
+        "frames": 12,
+        "loop": true
+      },
+      "impact": {
+        "start": 24,
+        "frames": 12,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 1
+    },
+    "defaultScale": 0.5,
+    "tags": [
+      "fire",
+      "projectile",
+      "lifecycle",
+      "pixel",
+      "cie",
+      "pixel8",
+      "prepare",
+      "travel",
+      "impact"
+    ],
+    "source": {
+      "package": "CodexFX lelu_projectiles",
+      "manifest": "production/lelu_projectiles/assets/neuroclient/fire_strike/pixel_experiments_8dir/phase_sheets/*_cie_pixel8_v001.json",
+      "notes": "Combined NeuroClient lifecycle sheet from provided pixel-experiment cast/travel/impact phase sheets; no pixelation performed in NeuroClient."
+    },
+    "validation": {
+      "emptyCells": 0,
+      "edgeContacts": 0,
+      "warnings": []
+    },
+    "palettePreview": {
+      "colors": [
+        16766292,
+        16759863,
+        16771194,
+        16752676,
+        14711352,
+        16745496,
+        16762494,
+        15224332,
+        16541456,
+        13384203
+      ]
+    }
+  },
+  {
+    "assetId": "lelu_fire_ball_standard_128_pixel_lab_fire24_px8",
+    "displayName": "LeLu Fire Ball Standard 128 Fire24 Pixel 8",
+    "kind": "projectile",
+    "sheet": "/authored-vfx/projectiles/neuroclient_128/lelu_fire_ball_standard_128_pixel_lab_fire24_px8/lelu_fire_ball_standard_128_pixel_lab_fire24_px8.png",
+    "frame": {
+      "width": 128,
+      "height": 128,
+      "cols": 45,
+      "rows": 8
+    },
+    "fps": 24,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "cast": {
+        "start": 0,
+        "frames": 15,
+        "loop": false
+      },
+      "travel": {
+        "start": 15,
+        "frames": 15,
+        "loop": true
+      },
+      "impact": {
+        "start": 30,
+        "frames": 15,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 1
+    },
+    "defaultScale": 1,
+    "tags": [
+      "lelu",
+      "fire",
+      "projectile",
+      "lifecycle",
+      "pixel",
+      "cie-lab",
+      "pixel8",
+      "128",
+      "prepare",
+      "travel",
+      "impact"
+    ],
+    "source": {
+      "package": "CodexFX projectile_factory",
+      "asset": "lelu_fire_ball_standard",
+      "mode": "pixel_lab_fire24_px8",
+      "sourceSheet": "/mnt/c/Users/tommaso/Documents/Dev/CodexFX/production/projectile_factory/exports/neuroclient/projectile_factory/lelu_fire_ball_standard/pixel_lab_fire24_px8.png",
+      "notes": "Factory-normalized 128x128 NeuroClient sheet; copied without re-rendering."
+    },
+    "validation": {
+      "emptyCells": 0,
+      "edgeContacts": 0,
+      "warnings": []
+    },
+    "palettePreview": {
+      "colors": [
+        16777184,
+        16772745,
+        16764748,
+        14695946,
+        16427839,
+        11675399,
+        15702123,
+        14383396,
+        11884094,
+        8664080
+      ],
+      "palette": "fire_24"
+    }
+  },
+  {
+    "assetId": "lelu_fire_strike_128_pixel_lab_fire24_px8",
+    "displayName": "LeLu Fire Strike 128 Fire24 Pixel 8",
+    "kind": "projectile",
+    "sheet": "/authored-vfx/projectiles/neuroclient_128/lelu_fire_strike_128_pixel_lab_fire24_px8/lelu_fire_strike_128_pixel_lab_fire24_px8.png",
+    "frame": {
+      "width": 128,
+      "height": 128,
+      "cols": 45,
+      "rows": 8
+    },
+    "fps": 24,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "cast": {
+        "start": 0,
+        "frames": 15,
+        "loop": false
+      },
+      "travel": {
+        "start": 15,
+        "frames": 15,
+        "loop": true
+      },
+      "impact": {
+        "start": 30,
+        "frames": 15,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 1
+    },
+    "defaultScale": 1,
+    "tags": [
+      "lelu",
+      "fire",
+      "projectile",
+      "lifecycle",
+      "pixel",
+      "cie-lab",
+      "pixel8",
+      "128",
+      "prepare",
+      "travel",
+      "impact"
+    ],
+    "source": {
+      "package": "CodexFX projectile_factory",
+      "asset": "lelu_fire_strike",
+      "mode": "pixel_lab_fire24_px8",
+      "sourceSheet": "/mnt/c/Users/tommaso/Documents/Dev/CodexFX/production/projectile_factory/exports/neuroclient/projectile_factory/lelu_fire_strike/pixel_lab_fire24_px8.png",
+      "notes": "Factory-normalized 128x128 NeuroClient sheet; copied without re-rendering."
+    },
+    "validation": {
+      "emptyCells": 0,
+      "edgeContacts": 0,
+      "warnings": []
+    },
+    "palettePreview": {
+      "colors": [
+        16407568,
+        11675399,
+        14695946,
+        16744472,
+        16764748,
+        16754726,
+        16772745,
+        15702123,
+        8664080,
+        11686424
+      ],
+      "palette": "fire_24"
+    }
+  },
+  {
+    "assetId": "lelu_electric_strike_128_pixel_lab_magic48_px8",
+    "displayName": "LeLu Electric Strike 128 Magic48 Pixel 8",
+    "kind": "projectile",
+    "sheet": "/authored-vfx/projectiles/neuroclient_128/lelu_electric_strike_128_pixel_lab_magic48_px8/lelu_electric_strike_128_pixel_lab_magic48_px8.png",
+    "frame": {
+      "width": 128,
+      "height": 128,
+      "cols": 45,
+      "rows": 8
+    },
+    "fps": 24,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "cast": {
+        "start": 0,
+        "frames": 15,
+        "loop": false
+      },
+      "travel": {
+        "start": 15,
+        "frames": 15,
+        "loop": true
+      },
+      "impact": {
+        "start": 30,
+        "frames": 15,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 1
+    },
+    "defaultScale": 1,
+    "tags": [
+      "lelu",
+      "electric",
+      "projectile",
+      "lifecycle",
+      "pixel",
+      "cie-lab",
+      "pixel8",
+      "128",
+      "prepare",
+      "travel",
+      "impact"
+    ],
+    "source": {
+      "package": "CodexFX projectile_factory",
+      "asset": "lelu_electric_strike",
+      "mode": "pixel_lab_magic48_px8",
+      "sourceSheet": "/mnt/c/Users/tommaso/Documents/Dev/CodexFX/production/projectile_factory/exports/neuroclient/projectile_factory/lelu_electric_strike/pixel_lab_magic48_px8.png",
+      "notes": "Factory-normalized 128x128 NeuroClient sheet; copied without re-rendering."
+    },
+    "validation": {
+      "emptyCells": 0,
+      "edgeContacts": 0,
+      "warnings": []
+    },
+    "palettePreview": {
+      "colors": [
+        16777184,
+        11884094
+      ],
+      "palette": "magic_48"
+    }
+  },
+  {
+    "assetId": "lelu_darkness_128_pixel_lab_magic48_px8",
+    "displayName": "LeLu Darkness 128 Magic48 Pixel 8",
+    "kind": "projectile",
+    "sheet": "/authored-vfx/projectiles/neuroclient_128/lelu_darkness_128_pixel_lab_magic48_px8/lelu_darkness_128_pixel_lab_magic48_px8.png",
+    "frame": {
+      "width": 128,
+      "height": 128,
+      "cols": 45,
+      "rows": 8
+    },
+    "fps": 24,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "cast": {
+        "start": 0,
+        "frames": 15,
+        "loop": false
+      },
+      "travel": {
+        "start": 15,
+        "frames": 15,
+        "loop": true
+      },
+      "impact": {
+        "start": 30,
+        "frames": 15,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 1
+    },
+    "defaultScale": 1,
+    "tags": [
+      "lelu",
+      "dark",
+      "projectile",
+      "lifecycle",
+      "pixel",
+      "cie-lab",
+      "pixel8",
+      "128",
+      "prepare",
+      "travel",
+      "impact"
+    ],
+    "source": {
+      "package": "CodexFX projectile_factory",
+      "asset": "lelu_darkness",
+      "mode": "pixel_lab_magic48_px8",
+      "sourceSheet": "/mnt/c/Users/tommaso/Documents/Dev/CodexFX/production/projectile_factory/exports/neuroclient/projectile_factory/lelu_darkness/pixel_lab_magic48_px8.png",
+      "notes": "Factory-normalized 128x128 NeuroClient sheet; copied without re-rendering."
+    },
+    "validation": {
+      "emptyCells": 0,
+      "edgeContacts": 0,
+      "warnings": []
+    },
+    "palettePreview": {
+      "colors": [
+        16777184,
+        11884094,
+        15702123
+      ],
+      "palette": "magic_48"
+    }
+  },
+  {
+    "assetId": "lelu_cube_128_pixel_lab_magic48_px8",
+    "displayName": "LeLu Cube 128 Magic48 Pixel 8",
+    "kind": "projectile",
+    "sheet": "/authored-vfx/projectiles/neuroclient_128/lelu_cube_128_pixel_lab_magic48_px8/lelu_cube_128_pixel_lab_magic48_px8.png",
+    "frame": {
+      "width": 128,
+      "height": 128,
+      "cols": 45,
+      "rows": 8
+    },
+    "fps": 24,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "cast": {
+        "start": 0,
+        "frames": 15,
+        "loop": false
+      },
+      "travel": {
+        "start": 15,
+        "frames": 15,
+        "loop": true
+      },
+      "impact": {
+        "start": 30,
+        "frames": 15,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 1
+    },
+    "defaultScale": 1,
+    "tags": [
+      "lelu",
+      "arcane",
+      "projectile",
+      "lifecycle",
+      "pixel",
+      "cie-lab",
+      "pixel8",
+      "128",
+      "prepare",
+      "travel",
+      "impact"
+    ],
+    "source": {
+      "package": "CodexFX projectile_factory",
+      "asset": "lelu_cube",
+      "mode": "pixel_lab_magic48_px8",
+      "sourceSheet": "/mnt/c/Users/tommaso/Documents/Dev/CodexFX/production/projectile_factory/exports/neuroclient/projectile_factory/lelu_cube/pixel_lab_magic48_px8.png",
+      "notes": "Factory-normalized 128x128 NeuroClient sheet; copied without re-rendering."
+    },
+    "validation": {
+      "emptyCells": 0,
+      "edgeContacts": 0,
+      "warnings": []
+    },
+    "palettePreview": {
+      "colors": [
+        16772745,
+        16777184,
+        16764748,
+        11884094
+      ],
+      "palette": "magic_48"
+    }
+  },
+  {
+    "assetId": "lelu_fire_ball_type_b_128_pixel_lab_fire24_px8",
+    "displayName": "LeLu Fire Ball Type B 128 Fire24 Pixel 8",
+    "kind": "projectile",
+    "sheet": "/authored-vfx/projectiles/neuroclient_128/lelu_fire_ball_type_b_128_pixel_lab_fire24_px8/lelu_fire_ball_type_b_128_pixel_lab_fire24_px8.png",
+    "frame": {
+      "width": 128,
+      "height": 128,
+      "cols": 45,
+      "rows": 8
+    },
+    "fps": 24,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "cast": {
+        "start": 0,
+        "frames": 15,
+        "loop": false
+      },
+      "travel": {
+        "start": 15,
+        "frames": 15,
+        "loop": true
+      },
+      "impact": {
+        "start": 30,
+        "frames": 15,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 1
+    },
+    "defaultScale": 1,
+    "tags": [
+      "lelu",
+      "fire",
+      "projectile",
+      "lifecycle",
+      "pixel",
+      "cie-lab",
+      "pixel8",
+      "128",
+      "prepare",
+      "travel",
+      "impact"
+    ],
+    "source": {
+      "package": "CodexFX projectile_factory",
+      "asset": "lelu_fire_ball_type_b",
+      "mode": "pixel_lab_fire24_px8",
+      "sourceSheet": "/mnt/c/Users/tommaso/Documents/Dev/CodexFX/production/projectile_factory/exports/neuroclient/projectile_factory/lelu_fire_ball_type_b/pixel_lab_fire24_px8.png",
+      "notes": "Factory-normalized 128x128 NeuroClient sheet; copied without re-rendering."
+    },
+    "validation": {
+      "emptyCells": 0,
+      "edgeContacts": 0,
+      "warnings": []
+    },
+    "palettePreview": {
+      "colors": [
+        15702123,
+        14695946,
+        11675399,
+        11884094,
+        14383396,
+        16777184,
+        16772745,
+        8664080,
+        16764748,
+        16427839
+      ],
+      "palette": "fire_24"
+    }
+  },
+  {
+    "assetId": "lelu_hadouken_128_pixel_lab_magic48_px8",
+    "displayName": "LeLu Hadouken 128 Magic48 Pixel 8",
+    "kind": "projectile",
+    "sheet": "/authored-vfx/projectiles/neuroclient_128/lelu_hadouken_128_pixel_lab_magic48_px8/lelu_hadouken_128_pixel_lab_magic48_px8.png",
+    "frame": {
+      "width": 128,
+      "height": 128,
+      "cols": 45,
+      "rows": 8
+    },
+    "fps": 24,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "cast": {
+        "start": 0,
+        "frames": 15,
+        "loop": false
+      },
+      "travel": {
+        "start": 15,
+        "frames": 15,
+        "loop": true
+      },
+      "impact": {
+        "start": 30,
+        "frames": 15,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 1
+    },
+    "defaultScale": 1,
+    "tags": [
+      "lelu",
+      "force",
+      "projectile",
+      "lifecycle",
+      "pixel",
+      "cie-lab",
+      "pixel8",
+      "128",
+      "prepare",
+      "travel",
+      "impact"
+    ],
+    "source": {
+      "package": "CodexFX projectile_factory",
+      "asset": "lelu_hadouken",
+      "mode": "pixel_lab_magic48_px8",
+      "sourceSheet": "/mnt/c/Users/tommaso/Documents/Dev/CodexFX/production/projectile_factory/exports/neuroclient/projectile_factory/lelu_hadouken/pixel_lab_magic48_px8.png",
+      "notes": "Factory-normalized 128x128 NeuroClient sheet; copied without re-rendering."
+    },
+    "validation": {
+      "emptyCells": 0,
+      "edgeContacts": 0,
+      "warnings": []
+    },
+    "palettePreview": {
+      "colors": [
+        16777184,
+        11884094,
+        16772745,
+        14695946,
+        16764748,
+        15702123,
+        11675399,
+        14383396,
+        11686424,
+        8664080
+      ],
+      "palette": "magic_48"
+    }
+  },
+  {
+    "assetId": "binbun_fire_projectile_01_impact_02_128_life_lab_px8",
+    "displayName": "Binbun Fire Projectile 01 + Impact 02 128 Lab Pixel 8",
+    "kind": "projectile",
+    "sheet": "/authored-vfx/projectiles/neuroclient_128/binbun_fire_projectile_01_impact_02_128_life_lab_px8/binbun_fire_projectile_01_impact_02_128_life_lab_px8.png",
+    "frame": {
+      "width": 128,
+      "height": 128,
+      "cols": 24,
+      "rows": 8
+    },
+    "fps": 24,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "travel": {
+        "start": 0,
+        "frames": 12,
+        "loop": true
+      },
+      "impact": {
+        "start": 12,
+        "frames": 12,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 1
+    },
+    "defaultScale": 1,
+    "tags": [
+      "binbun",
+      "fire",
+      "projectile",
+      "impact",
+      "pixel",
+      "cie-lab",
+      "pixel8",
+      "128",
+      "travel",
+      "impact",
+      "impact_02",
+      "fire_24"
+    ],
+    "source": {
+      "package": "CodexFX sandbox/binbun_elemental_magic_lab",
+      "asset": "fire_projectile_01",
+      "mode": "life_lab_px8",
+      "sourceMatrix": "/mnt/c/Users/tommaso/Documents/Dev/CodexFX/sandbox/binbun_elemental_magic_lab/exports/pi_life_lab_px8_v001/fire_projectile_01/life_lab_px8/_impact_iso8_grid/fire_projectile_01_life_lab_px8_8x8_24f_d12_256px.png",
+      "chosenImpact": "impact_02",
+      "palette": "fire_24",
+      "notes": "Accepted matched-color APNG matrix; chosen impact column extracted and nearest-neighbor normalized from 256x256 cells to 128x128 cells."
+    },
+    "validation": {
+      "emptyCells": 0,
+      "edgeContacts": 0,
+      "warnings": []
+    },
+    "palettePreview": {
+      "colors": [
+        16772745,
+        16777184,
+        16764748,
+        11686424,
+        16427839,
+        16744472,
+        14383396,
+        16407568,
+        16754726,
+        8664080
+      ],
+      "palette": "fire_24"
+    }
+  },
+  {
+    "assetId": "binbun_fire_projectile_02_impact_08_128_life_lab_px8",
+    "displayName": "Binbun Fire Projectile 02 + Impact 08 128 Lab Pixel 8",
+    "kind": "projectile",
+    "sheet": "/authored-vfx/projectiles/neuroclient_128/binbun_fire_projectile_02_impact_08_128_life_lab_px8/binbun_fire_projectile_02_impact_08_128_life_lab_px8.png",
+    "frame": {
+      "width": 128,
+      "height": 128,
+      "cols": 24,
+      "rows": 8
+    },
+    "fps": 24,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "travel": {
+        "start": 0,
+        "frames": 12,
+        "loop": true
+      },
+      "impact": {
+        "start": 12,
+        "frames": 12,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 1
+    },
+    "defaultScale": 1,
+    "tags": [
+      "binbun",
+      "fire",
+      "projectile",
+      "impact",
+      "pixel",
+      "cie-lab",
+      "pixel8",
+      "128",
+      "travel",
+      "impact",
+      "impact_08",
+      "fire_24"
+    ],
+    "source": {
+      "package": "CodexFX sandbox/binbun_elemental_magic_lab",
+      "asset": "fire_projectile_02",
+      "mode": "life_lab_px8",
+      "sourceMatrix": "/mnt/c/Users/tommaso/Documents/Dev/CodexFX/sandbox/binbun_elemental_magic_lab/exports/pi_life_lab_px8_v001/fire_projectile_02/life_lab_px8/_impact_iso8_grid/fire_projectile_02_life_lab_px8_8x8_24f_d12_256px.png",
+      "chosenImpact": "impact_08",
+      "palette": "fire_24",
+      "notes": "Accepted matched-color APNG matrix; chosen impact column extracted and nearest-neighbor normalized from 256x256 cells to 128x128 cells."
+    },
+    "validation": {
+      "emptyCells": 0,
+      "edgeContacts": 0,
+      "warnings": []
+    },
+    "palettePreview": {
+      "colors": [
+        16777184,
+        16772745,
+        11675399,
+        16407568,
+        16744472,
+        11686424,
+        16764748,
+        16427839,
+        14695946,
+        8664080
+      ],
+      "palette": "fire_24"
+    }
+  },
+  {
+    "assetId": "binbun_water_projectile_01_impact_03_128_life_lab_px8",
+    "displayName": "Binbun Water Projectile 01 + Impact 03 128 Lab Pixel 8",
+    "kind": "projectile",
+    "sheet": "/authored-vfx/projectiles/neuroclient_128/binbun_water_projectile_01_impact_03_128_life_lab_px8/binbun_water_projectile_01_impact_03_128_life_lab_px8.png",
+    "frame": {
+      "width": 128,
+      "height": 128,
+      "cols": 24,
+      "rows": 8
+    },
+    "fps": 24,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "travel": {
+        "start": 0,
+        "frames": 12,
+        "loop": true
+      },
+      "impact": {
+        "start": 12,
+        "frames": 12,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 1
+    },
+    "defaultScale": 1,
+    "tags": [
+      "binbun",
+      "water",
+      "projectile",
+      "impact",
+      "pixel",
+      "cie-lab",
+      "pixel8",
+      "128",
+      "travel",
+      "impact",
+      "impact_03",
+      "water_24"
+    ],
+    "source": {
+      "package": "CodexFX sandbox/binbun_elemental_magic_lab",
+      "asset": "water_projectile_01",
+      "mode": "life_lab_px8",
+      "sourceMatrix": "/mnt/c/Users/tommaso/Documents/Dev/CodexFX/sandbox/binbun_elemental_magic_lab/exports/pi_life_lab_px8_v001/water_projectile_01/life_lab_px8/_impact_iso8_grid/water_projectile_01_life_lab_px8_8x8_24f_d12_256px.png",
+      "chosenImpact": "impact_03",
+      "palette": "water_24",
+      "notes": "Accepted matched-color APNG matrix; chosen impact column extracted and nearest-neighbor normalized from 256x256 cells to 128x128 cells."
+    },
+    "validation": {
+      "emptyCells": 0,
+      "edgeContacts": 0,
+      "warnings": []
+    },
+    "palettePreview": {
+      "colors": [
+        8905446,
+        5814518,
+        2652038,
+        6671827,
+        3708320,
+        5026748,
+        10215679,
+        2984160,
+        1465272
+      ],
+      "palette": "water_24"
+    }
+  },
+  {
+    "assetId": "binbun_water_projectile_02_impact_06_128_life_lab_px8",
+    "displayName": "Binbun Water Projectile 02 + Impact 06 128 Lab Pixel 8",
+    "kind": "projectile",
+    "sheet": "/authored-vfx/projectiles/neuroclient_128/binbun_water_projectile_02_impact_06_128_life_lab_px8/binbun_water_projectile_02_impact_06_128_life_lab_px8.png",
+    "frame": {
+      "width": 128,
+      "height": 128,
+      "cols": 24,
+      "rows": 8
+    },
+    "fps": 24,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "travel": {
+        "start": 0,
+        "frames": 12,
+        "loop": true
+      },
+      "impact": {
+        "start": 12,
+        "frames": 12,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 1
+    },
+    "defaultScale": 1,
+    "tags": [
+      "binbun",
+      "water",
+      "projectile",
+      "impact",
+      "pixel",
+      "cie-lab",
+      "pixel8",
+      "128",
+      "travel",
+      "impact",
+      "impact_06",
+      "water_24"
+    ],
+    "source": {
+      "package": "CodexFX sandbox/binbun_elemental_magic_lab",
+      "asset": "water_projectile_02",
+      "mode": "life_lab_px8",
+      "sourceMatrix": "/mnt/c/Users/tommaso/Documents/Dev/CodexFX/sandbox/binbun_elemental_magic_lab/exports/pi_life_lab_px8_v001/water_projectile_02/life_lab_px8/_impact_iso8_grid/water_projectile_02_life_lab_px8_8x8_24f_d12_256px.png",
+      "chosenImpact": "impact_06",
+      "palette": "water_24",
+      "notes": "Accepted matched-color APNG matrix; chosen impact column extracted and nearest-neighbor normalized from 256x256 cells to 128x128 cells."
+    },
+    "validation": {
+      "emptyCells": 0,
+      "edgeContacts": 0,
+      "warnings": []
+    },
+    "palettePreview": {
+      "colors": [
+        8905446,
+        5814518,
+        6671827,
+        2652038,
+        3708320,
+        5026748,
+        10215679,
+        2984160,
+        1465272
+      ],
+      "palette": "water_24"
+    }
+  },
+  {
+    "assetId": "binbun_electric_projectile_01_impact_07_128_life_lab_px8",
+    "displayName": "Binbun Electric Projectile 01 + Impact 07 128 Lab Pixel 8",
+    "kind": "projectile",
+    "sheet": "/authored-vfx/projectiles/neuroclient_128/binbun_electric_projectile_01_impact_07_128_life_lab_px8/binbun_electric_projectile_01_impact_07_128_life_lab_px8.png",
+    "frame": {
+      "width": 128,
+      "height": 128,
+      "cols": 24,
+      "rows": 8
+    },
+    "fps": 24,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "travel": {
+        "start": 0,
+        "frames": 12,
+        "loop": true
+      },
+      "impact": {
+        "start": 12,
+        "frames": 12,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 1
+    },
+    "defaultScale": 1,
+    "tags": [
+      "binbun",
+      "electric",
+      "projectile",
+      "impact",
+      "pixel",
+      "cie-lab",
+      "pixel8",
+      "128",
+      "travel",
+      "impact",
+      "impact_07",
+      "electric_24"
+    ],
+    "source": {
+      "package": "CodexFX sandbox/binbun_elemental_magic_lab",
+      "asset": "electric_projectile_01",
+      "mode": "life_lab_px8",
+      "sourceMatrix": "/mnt/c/Users/tommaso/Documents/Dev/CodexFX/sandbox/binbun_elemental_magic_lab/exports/pi_life_lab_px8_v001/electric_projectile_01/life_lab_px8/_impact_iso8_grid/electric_projectile_01_life_lab_px8_8x8_24f_d12_256px.png",
+      "chosenImpact": "impact_07",
+      "palette": "electric_24",
+      "notes": "Accepted matched-color APNG matrix; chosen impact column extracted and nearest-neighbor normalized from 256x256 cells to 128x128 cells."
+    },
+    "validation": {
+      "emptyCells": 0,
+      "edgeContacts": 0,
+      "warnings": []
+    },
+    "palettePreview": {
+      "colors": [
+        16775568,
+        16777215,
+        16770378,
+        10548223,
+        1135230,
+        1866672,
+        6019071
+      ],
+      "palette": "electric_24"
+    }
+  },
+  {
+    "assetId": "binbun_electric_projectile_02_impact_05_128_life_lab_px8",
+    "displayName": "Binbun Electric Projectile 02 + Impact 05 128 Lab Pixel 8",
+    "kind": "projectile",
+    "sheet": "/authored-vfx/projectiles/neuroclient_128/binbun_electric_projectile_02_impact_05_128_life_lab_px8/binbun_electric_projectile_02_impact_05_128_life_lab_px8.png",
+    "frame": {
+      "width": 128,
+      "height": 128,
+      "cols": 24,
+      "rows": 8
+    },
+    "fps": 24,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "travel": {
+        "start": 0,
+        "frames": 12,
+        "loop": true
+      },
+      "impact": {
+        "start": 12,
+        "frames": 12,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 1
+    },
+    "defaultScale": 1,
+    "tags": [
+      "binbun",
+      "electric",
+      "projectile",
+      "impact",
+      "pixel",
+      "cie-lab",
+      "pixel8",
+      "128",
+      "travel",
+      "impact",
+      "impact_05",
+      "electric_24"
+    ],
+    "source": {
+      "package": "CodexFX sandbox/binbun_elemental_magic_lab",
+      "asset": "electric_projectile_02",
+      "mode": "life_lab_px8",
+      "sourceMatrix": "/mnt/c/Users/tommaso/Documents/Dev/CodexFX/sandbox/binbun_elemental_magic_lab/exports/pi_life_lab_px8_v001/electric_projectile_02/life_lab_px8/_impact_iso8_grid/electric_projectile_02_life_lab_px8_8x8_24f_d12_256px.png",
+      "chosenImpact": "impact_05",
+      "palette": "electric_24",
+      "notes": "Accepted matched-color APNG matrix; chosen impact column extracted and nearest-neighbor normalized from 256x256 cells to 128x128 cells."
+    },
+    "validation": {
+      "emptyCells": 0,
+      "edgeContacts": 0,
+      "warnings": []
+    },
+    "palettePreview": {
+      "colors": [
+        16775568,
+        16777215,
+        16770378,
+        10548223,
+        1135230,
+        1866672,
+        6019071
+      ],
+      "palette": "electric_24"
+    }
+  },
+  {
+    "assetId": "binbun_nature_projectile_01_impact_04_128_life_lab_px8",
+    "displayName": "Binbun Nature Projectile 01 + Impact 04 128 Lab Pixel 8",
+    "kind": "projectile",
+    "sheet": "/authored-vfx/projectiles/neuroclient_128/binbun_nature_projectile_01_impact_04_128_life_lab_px8/binbun_nature_projectile_01_impact_04_128_life_lab_px8.png",
+    "frame": {
+      "width": 128,
+      "height": 128,
+      "cols": 24,
+      "rows": 8
+    },
+    "fps": 24,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "travel": {
+        "start": 0,
+        "frames": 12,
+        "loop": true
+      },
+      "impact": {
+        "start": 12,
+        "frames": 12,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 1
+    },
+    "defaultScale": 1,
+    "tags": [
+      "binbun",
+      "nature",
+      "projectile",
+      "impact",
+      "pixel",
+      "cie-lab",
+      "pixel8",
+      "128",
+      "travel",
+      "impact",
+      "impact_04",
+      "acid_24"
+    ],
+    "source": {
+      "package": "CodexFX sandbox/binbun_elemental_magic_lab",
+      "asset": "nature_projectile_01",
+      "mode": "life_lab_px8",
+      "sourceMatrix": "/mnt/c/Users/tommaso/Documents/Dev/CodexFX/sandbox/binbun_elemental_magic_lab/exports/pi_life_lab_px8_v001/nature_projectile_01/life_lab_px8/_impact_iso8_grid/nature_projectile_01_life_lab_px8_8x8_24f_d12_256px.png",
+      "chosenImpact": "impact_04",
+      "palette": "acid_24",
+      "notes": "Accepted matched-color APNG matrix; chosen impact column extracted and nearest-neighbor normalized from 256x256 cells to 128x128 cells."
+    },
+    "validation": {
+      "emptyCells": 0,
+      "edgeContacts": 0,
+      "warnings": []
+    },
+    "palettePreview": {
+      "colors": [
+        14876534,
+        11861835,
+        8321845,
+        2069524,
+        3128347,
+        4972582,
+        3309374,
+        4826447
+      ],
+      "palette": "acid_24"
+    }
+  },
+  {
+    "assetId": "binbun_nature_projectile_02_impact_01_128_life_lab_px8",
+    "displayName": "Binbun Nature Projectile 02 + Impact 01 128 Lab Pixel 8",
+    "kind": "projectile",
+    "sheet": "/authored-vfx/projectiles/neuroclient_128/binbun_nature_projectile_02_impact_01_128_life_lab_px8/binbun_nature_projectile_02_impact_01_128_life_lab_px8.png",
+    "frame": {
+      "width": 128,
+      "height": 128,
+      "cols": 24,
+      "rows": 8
+    },
+    "fps": 24,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "travel": {
+        "start": 0,
+        "frames": 12,
+        "loop": true
+      },
+      "impact": {
+        "start": 12,
+        "frames": 12,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 1
+    },
+    "defaultScale": 1,
+    "tags": [
+      "binbun",
+      "nature",
+      "projectile",
+      "impact",
+      "pixel",
+      "cie-lab",
+      "pixel8",
+      "128",
+      "travel",
+      "impact",
+      "impact_01",
+      "acid_24"
+    ],
+    "source": {
+      "package": "CodexFX sandbox/binbun_elemental_magic_lab",
+      "asset": "nature_projectile_02",
+      "mode": "life_lab_px8",
+      "sourceMatrix": "/mnt/c/Users/tommaso/Documents/Dev/CodexFX/sandbox/binbun_elemental_magic_lab/exports/pi_life_lab_px8_v001/nature_projectile_02/life_lab_px8/_impact_iso8_grid/nature_projectile_02_life_lab_px8_8x8_24f_d12_256px.png",
+      "chosenImpact": "impact_01",
+      "palette": "acid_24",
+      "notes": "Accepted matched-color APNG matrix; chosen impact column extracted and nearest-neighbor normalized from 256x256 cells to 128x128 cells."
+    },
+    "validation": {
+      "emptyCells": 0,
+      "edgeContacts": 0,
+      "warnings": []
+    },
+    "palettePreview": {
+      "colors": [
+        14876534,
+        8321845,
+        11861835,
+        3128347,
+        2069524,
+        4972582,
+        3309374,
+        4826447
+      ],
+      "palette": "acid_24"
+    }
+  }
+]

@@ -28,13 +28,14 @@ def surface_cache() -> SurfaceCache:
 
 def test_catalog_loads_the_exact_finite_visual_set(surface_cache: SurfaceCache) -> None:
     catalog = surface_cache.catalog
-    assert len(catalog.resources) == 68
+    assert len(catalog.resources) == 72
     assert len(catalog.flame_frames) == 16
     assert catalog.flame_fps == 10
     assert all(surface_cache.canonical[key].get_size() == spec.native_size for key, spec in catalog.resources.items())
     assert catalog.bindings["terrain"] == {
         "earth": {pose: f"terrain.earth.{pose}" for pose in "ensw"},
         "wood": {pose: f"terrain.wood.{pose}" for pose in "ensw"},
+        "stone": {pose: f"terrain.stone.{pose}" for pose in "ensw"},
         "water": "water.unity",
     }
     assert {

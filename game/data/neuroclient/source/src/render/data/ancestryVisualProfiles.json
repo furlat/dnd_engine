@@ -1,0 +1,78 @@
+{
+  "schema": "neuroclient.ancestryVisualProfiles",
+  "version": 1,
+  "profiles": [
+    {
+      "profileId": "dragonborn",
+      "selector": { "packId": "content.srd_5_1_cc", "contentId": "species.dragonborn", "contentVersion": 2 },
+      "hairPolicy": "hidden",
+      "visualScaleMultiplier": 1.04,
+      "widthMultiplier": 1.06,
+      "backpackCategory": "Bag4"
+    },
+    {
+      "profileId": "dwarf",
+      "selector": { "packId": "content.srd_5_1_cc", "contentId": "species.dwarf", "contentVersion": 2 },
+      "hairPolicy": "available",
+      "visualScaleMultiplier": 0.9,
+      "widthMultiplier": 1.12,
+      "backpackCategory": null
+    },
+    {
+      "profileId": "elf",
+      "selector": { "packId": "content.srd_5_1_cc", "contentId": "species.elf", "contentVersion": 2 },
+      "hairPolicy": "available",
+      "visualScaleMultiplier": 1.02,
+      "widthMultiplier": 0.93,
+      "backpackCategory": null
+    },
+    {
+      "profileId": "gnome",
+      "selector": { "packId": "content.srd_5_1_cc", "contentId": "species.gnome", "contentVersion": 2 },
+      "hairPolicy": "available",
+      "visualScaleMultiplier": 0.82,
+      "widthMultiplier": 0.94,
+      "backpackCategory": null
+    },
+    {
+      "profileId": "half-elf",
+      "selector": { "packId": "content.srd_5_1_cc", "contentId": "species.half_elf", "contentVersion": 2 },
+      "hairPolicy": "available",
+      "visualScaleMultiplier": 1,
+      "widthMultiplier": 0.97,
+      "backpackCategory": null
+    },
+    {
+      "profileId": "half-orc",
+      "selector": { "packId": "content.srd_5_1_cc", "contentId": "species.half_orc", "contentVersion": 2 },
+      "hairPolicy": "available",
+      "visualScaleMultiplier": 1.06,
+      "widthMultiplier": 1.09,
+      "backpackCategory": null
+    },
+    {
+      "profileId": "halfling",
+      "selector": { "packId": "content.srd_5_1_cc", "contentId": "species.halfling", "contentVersion": 2 },
+      "hairPolicy": "available",
+      "visualScaleMultiplier": 0.78,
+      "widthMultiplier": 0.93,
+      "backpackCategory": null
+    },
+    {
+      "profileId": "human",
+      "selector": { "packId": "content.srd_5_1_cc", "contentId": "species.human", "contentVersion": 2 },
+      "hairPolicy": "available",
+      "visualScaleMultiplier": 1,
+      "widthMultiplier": 1,
+      "backpackCategory": null
+    },
+    {
+      "profileId": "tiefling",
+      "selector": { "packId": "content.srd_5_1_cc", "contentId": "species.tiefling", "contentVersion": 2 },
+      "hairPolicy": "available",
+      "visualScaleMultiplier": 1.01,
+      "widthMultiplier": 0.98,
+      "backpackCategory": null
+    }
+  ]
+}

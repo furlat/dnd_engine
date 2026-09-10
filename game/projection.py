@@ -124,7 +124,7 @@ def inverse_rotate_position(
 def project_world(
     position: tuple[float, float],
     *,
-    elevation_steps: int = 0,
+    elevation_steps: float = 0,
     quadrant: int = 0,
 ) -> tuple[float, float]:
     """Project one engine support contact into unscaled map pixels."""
@@ -146,7 +146,7 @@ def project_screen(
     position: tuple[float, float],
     camera: Camera,
     *,
-    elevation_steps: int = 0,
+    elevation_steps: float = 0,
 ) -> tuple[float, float]:
     """Project one engine support contact into framebuffer pixels."""
     world_x, world_y = project_world(
@@ -195,6 +195,10 @@ def contains_support_diamond(
 
 
 COMPOSITION_PHASES = {
+    "actor_shadow": 80,
+    "actor": 100,
+    "projectile": 120,
+    "ground_effect": 80,
     "water": 10,
     "terrain": 40,
     "terrain_bed": 40,
@@ -212,13 +216,14 @@ POSE_RANKS = {pose: rank for rank, pose in enumerate(("e", "s", "w", "n"))}
 
 
 def painter_key(
-    position: tuple[int, int],
+    position: tuple[float, float],
     *,
-    elevation_steps: int,
+    elevation_steps: float,
     quadrant: int,
     role: str,
     identity: UUID | str | tuple[str, ...],
     direction: str | None = None,
+    boundary_poses: tuple[str, ...] = (),
 ) -> tuple[int, float, float, int, tuple[str, ...]]:
     """Return the deterministic semantic painter key for one draw candidate."""
     projected = project_world(
@@ -226,6 +231,21 @@ def painter_key(
         elevation_steps=0,
         quadrant=quadrant,
     )
+    if boundary_poses:
+        # Boundary images keep their authored cell pivot. Their physical sort
+        # contact is the edge, so a front wall covers an actor inside its cell.
+        # A composite corner supplies both real edges, not its art pose.
+        offsets = {
+            "e": (TILE_WIDTH / 4, TILE_HEIGHT / 4),
+            "s": (-TILE_WIDTH / 4, TILE_HEIGHT / 4),
+            "w": (-TILE_WIDTH / 4, -TILE_HEIGHT / 4),
+            "n": (TILE_WIDTH / 4, -TILE_HEIGHT / 4),
+        }
+        projected = max(
+            ((projected[0] + offsets[pose][0], projected[1] + offsets[pose][1])
+             for pose in boundary_poses),
+            key=lambda point: (point[1], point[0]),
+        )
     stable_identity = (
         identity
         if type(identity) is tuple

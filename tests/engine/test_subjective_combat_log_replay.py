@@ -835,6 +835,7 @@ def test_sensory_replay_rejects_runtime_values_before_state_changes() -> None:
     bad_values = (
         lambda: None,
         Senses(source_entity_uuid=uuid4(), use_register=False),
+        event,
     )
 
     for bad_value in bad_values:

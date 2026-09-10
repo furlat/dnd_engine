@@ -1,0 +1,46 @@
+{
+  "$schema": "urn:codexfx:schema:vfx-readiness:1",
+  "assetId": "lelu.magic-missile",
+  "buildId": "787d86fed3328e385ac6",
+  "gates": {
+    "captureAttested": {
+      "evidenceUri": "evidence/captures",
+      "status": "pass"
+    },
+    "consumerCompatible": {
+      "reasons": [
+        "Current NeuroClient does not apply the package's required nearest texture sampling.",
+        "Current projectile records cannot preserve canonical render intent or phase-specific presentation."
+      ],
+      "status": "fail"
+    },
+    "gameplayScaleApproved": {
+      "evidenceUri": "review/game_scale_reference.png",
+      "reasons": [
+        "Export cell, visible alpha bounds, runtime footprint, and gameplay area require spell-role review."
+      ],
+      "status": "pending"
+    },
+    "licenseCleared": {
+      "reasons": [
+        "Source license status is local-use-review-required."
+      ],
+      "status": "pending"
+    },
+    "pixelValid": {
+      "evidenceUri": "validation.json",
+      "status": "pass"
+    },
+    "sourceLocked": {
+      "status": "pass"
+    },
+    "visualApproved": {
+      "reasons": [
+        "Human visual approval has not been recorded."
+      ],
+      "status": "pending"
+    }
+  },
+  "schemaVersion": 1,
+  "variantId": "rune-dart-lifecycle-256.godot-cie-lab-force-wine10-capture8-final-block2.temporal16-10-18.v1"
+}

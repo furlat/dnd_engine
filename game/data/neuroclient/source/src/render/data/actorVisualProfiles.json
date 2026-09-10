@@ -1,0 +1,448 @@
+{
+  "schema": "neuroclient.actorVisualProfiles",
+  "version": 1,
+  "profiles": [
+    {
+      "profileId": "goblin-skirmisher",
+      "selector": {
+        "packId": "content.neurodragon",
+        "contentId": "creature.goblin",
+        "contentVersion": 1
+      },
+      "bodyCategory": "NakedBody",
+      "skinTint": 7772730,
+      "headCategory": null,
+      "hairTint": 0,
+      "hasBeard": false,
+      "beardTint": 0,
+      "visualScaleMultiplier": 1,
+      "widthMultiplier": 0.9,
+      "notes": "Compact olive goblinoid silhouette; intentionally hairless."
+    },
+    {
+      "profileId": "goblin-archer",
+      "selector": {
+        "packId": "content.neurodragon",
+        "contentId": "creature.goblin_archer",
+        "contentVersion": 1
+      },
+      "bodyCategory": "NakedBody",
+      "skinTint": 8499531,
+      "headCategory": null,
+      "hairTint": 0,
+      "hasBeard": false,
+      "beardTint": 0,
+      "visualScaleMultiplier": 1,
+      "widthMultiplier": 0.88,
+      "notes": "Slightly brighter, narrow goblin archer; intentionally hairless."
+    },
+    {
+      "profileId": "goblin-hedge-caster",
+      "selector": {
+        "packId": "content.neurodragon",
+        "contentId": "creature.goblin_caster",
+        "contentVersion": 1
+      },
+      "bodyCategory": "NakedBody",
+      "skinTint": 7902279,
+      "headCategory": null,
+      "hairTint": 0,
+      "hasBeard": false,
+      "beardTint": 0,
+      "visualScaleMultiplier": 1,
+      "widthMultiplier": 0.9,
+      "notes": "Goblin caster identity remains hairless; wardrobe supplies the caster silhouette."
+    },
+    {
+      "profileId": "commoner",
+      "selector": {
+        "packId": "content.neurodragon",
+        "contentId": "creature.configured_srd.commoner",
+        "contentVersion": 1
+      },
+      "bodyCategory": "NakedBody",
+      "skinTint": 14527109,
+      "headCategory": "Head1",
+      "hairTint": 6445882,
+      "hasBeard": false,
+      "beardTint": 6445882,
+      "visualScaleMultiplier": 0.98,
+      "widthMultiplier": 0.96,
+      "notes": "Ordinary human baseline with visible cropped hair."
+    },
+    {
+      "profileId": "bandit",
+      "selector": {
+        "packId": "content.neurodragon",
+        "contentId": "creature.configured_srd.bandit",
+        "contentVersion": 1
+      },
+      "bodyCategory": "NakedBody",
+      "skinTint": 13210484,
+      "headCategory": "Head9",
+      "hairTint": 2762273,
+      "hasBeard": true,
+      "beardTint": 2762273,
+      "visualScaleMultiplier": 1,
+      "widthMultiplier": 0.98,
+      "notes": "Dark cropped hair and facial hair distinguish the bandit silhouette."
+    },
+    {
+      "profileId": "cultist",
+      "selector": {
+        "packId": "content.neurodragon",
+        "contentId": "creature.configured_srd.cultist",
+        "contentVersion": 1
+      },
+      "bodyCategory": "NakedBody",
+      "skinTint": 13875838,
+      "headCategory": "Head16",
+      "hairTint": 2298677,
+      "hasBeard": false,
+      "beardTint": 2298677,
+      "visualScaleMultiplier": 0.99,
+      "widthMultiplier": 0.95,
+      "notes": "Lean, dark-haired cultist profile; authored hoods may cover this layer."
+    },
+    {
+      "profileId": "guard",
+      "selector": {
+        "packId": "content.neurodragon",
+        "contentId": "creature.configured_srd.guard",
+        "contentVersion": 1
+      },
+      "bodyCategory": "NakedBody",
+      "skinTint": 14261367,
+      "headCategory": "Head10",
+      "hairTint": 5190690,
+      "hasBeard": true,
+      "beardTint": 5190690,
+      "visualScaleMultiplier": 1.01,
+      "widthMultiplier": 1,
+      "notes": "Sturdy brown-haired guard; helmets remain authoritative equipment layers."
+    },
+    {
+      "profileId": "tribal-warrior",
+      "selector": {
+        "packId": "content.neurodragon",
+        "contentId": "creature.configured_srd.tribal_warrior",
+        "contentVersion": 1
+      },
+      "bodyCategory": "NakedBody",
+      "skinTint": 11358584,
+      "headCategory": "Head17",
+      "hairTint": 2897727,
+      "hasBeard": false,
+      "beardTint": 2897727,
+      "visualScaleMultiplier": 1.02,
+      "widthMultiplier": 1.02,
+      "notes": "Long dark hair and a slightly broader frame."
+    },
+    {
+      "profileId": "kobold",
+      "selector": {
+        "packId": "content.neurodragon",
+        "contentId": "creature.configured_srd.kobold",
+        "contentVersion": 1
+      },
+      "bodyCategory": "NakedBody",
+      "skinTint": 11755330,
+      "headCategory": null,
+      "hairTint": 0,
+      "hasBeard": false,
+      "beardTint": 0,
+      "visualScaleMultiplier": 0.96,
+      "widthMultiplier": 0.8,
+      "notes": "Hairless rust-red small humanoid placeholder until dedicated kobold art lands."
+    },
+    {
+      "profileId": "acolyte",
+      "selector": {
+        "packId": "content.neurodragon",
+        "contentId": "creature.configured_srd.acolyte",
+        "contentVersion": 1
+      },
+      "bodyCategory": "NakedBody",
+      "skinTint": 14850418,
+      "headCategory": "Head9",
+      "hairTint": 7437108,
+      "hasBeard": false,
+      "beardTint": 7437108,
+      "visualScaleMultiplier": 0.99,
+      "widthMultiplier": 0.96,
+      "notes": "Young auburn-haired support caster."
+    },
+    {
+      "profileId": "scout",
+      "selector": {
+        "packId": "content.neurodragon",
+        "contentId": "creature.configured_srd.scout",
+        "contentVersion": 1
+      },
+      "bodyCategory": "NakedBody",
+      "skinTint": 12690555,
+      "headCategory": "Head22",
+      "hairTint": 5726049,
+      "hasBeard": false,
+      "beardTint": 5726049,
+      "visualScaleMultiplier": 0.99,
+      "widthMultiplier": 0.94,
+      "notes": "Lean woodland scout with medium brown hair."
+    },
+    {
+      "profileId": "thug",
+      "selector": {
+        "packId": "content.neurodragon",
+        "contentId": "creature.configured_srd.thug",
+        "contentVersion": 1
+      },
+      "bodyCategory": "NakedBody",
+      "skinTint": 12684637,
+      "headCategory": "Head1",
+      "hairTint": 2171169,
+      "hasBeard": true,
+      "beardTint": 2171169,
+      "visualScaleMultiplier": 1.04,
+      "widthMultiplier": 1.08,
+      "notes": "Broad dark-haired bruiser."
+    },
+    {
+      "profileId": "spy",
+      "selector": {
+        "packId": "content.neurodragon",
+        "contentId": "creature.configured_srd.spy",
+        "contentVersion": 1
+      },
+      "bodyCategory": "NakedBody",
+      "skinTint": 14394973,
+      "headCategory": "Head16",
+      "hairTint": 2631720,
+      "hasBeard": false,
+      "beardTint": 2631720,
+      "visualScaleMultiplier": 0.99,
+      "widthMultiplier": 0.92,
+      "notes": "Narrow, tidy dark-haired spy silhouette."
+    },
+    {
+      "profileId": "berserker",
+      "selector": {
+        "packId": "content.neurodragon",
+        "contentId": "creature.configured_srd.berserker",
+        "contentVersion": 1
+      },
+      "bodyCategory": "NakedBody",
+      "skinTint": 14467525,
+      "headCategory": "Head17",
+      "hairTint": 10381127,
+      "hasBeard": true,
+      "beardTint": 10381127,
+      "visualScaleMultiplier": 1.06,
+      "widthMultiplier": 1.1,
+      "notes": "Large blond-haired, bearded berserker."
+    },
+    {
+      "profileId": "bandit-captain",
+      "selector": {
+        "packId": "content.neurodragon",
+        "contentId": "creature.configured_srd.bandit_captain",
+        "contentVersion": 1
+      },
+      "bodyCategory": "NakedBody",
+      "skinTint": 13737712,
+      "headCategory": "Head10",
+      "hairTint": 3350282,
+      "hasBeard": true,
+      "beardTint": 3350282,
+      "visualScaleMultiplier": 1.02,
+      "widthMultiplier": 1,
+      "notes": "Dark-haired veteran duelist with a trimmed beard."
+    },
+    {
+      "profileId": "priest",
+      "selector": {
+        "packId": "content.neurodragon",
+        "contentId": "creature.configured_srd.priest",
+        "contentVersion": 1
+      },
+      "bodyCategory": "NakedBody",
+      "skinTint": 14528401,
+      "headCategory": "Head1",
+      "hairTint": 8355711,
+      "hasBeard": true,
+      "beardTint": 8355711,
+      "visualScaleMultiplier": 1,
+      "widthMultiplier": 0.98,
+      "notes": "Grey-haired, bearded priest."
+    },
+    {
+      "profileId": "cult-fanatic",
+      "selector": {
+        "packId": "content.neurodragon",
+        "contentId": "creature.configured_srd.cult_fanatic",
+        "contentVersion": 1
+      },
+      "bodyCategory": "NakedBody",
+      "skinTint": 13347925,
+      "headCategory": "Head22",
+      "hairTint": 1709584,
+      "hasBeard": false,
+      "beardTint": 1709584,
+      "visualScaleMultiplier": 1,
+      "widthMultiplier": 0.96,
+      "notes": "Severe black-haired fanatic; authored hoods may cover the hair."
+    },
+    {
+      "profileId": "knight",
+      "selector": {
+        "packId": "content.neurodragon",
+        "contentId": "creature.configured_srd.knight",
+        "contentVersion": 1
+      },
+      "bodyCategory": "NakedBody",
+      "skinTint": 14329691,
+      "headCategory": "Head10",
+      "hairTint": 4931643,
+      "hasBeard": false,
+      "beardTint": 4931643,
+      "visualScaleMultiplier": 1.04,
+      "widthMultiplier": 1.06,
+      "notes": "Broad elite humanoid; armor and helmet remain equipment-authored."
+    },
+    {
+      "profileId": "veteran",
+      "selector": {
+        "packId": "content.neurodragon",
+        "contentId": "creature.configured_srd.veteran",
+        "contentVersion": 1
+      },
+      "bodyCategory": "NakedBody",
+      "skinTint": 13475945,
+      "headCategory": "Head9",
+      "hairTint": 6908265,
+      "hasBeard": true,
+      "beardTint": 6908265,
+      "visualScaleMultiplier": 1.03,
+      "widthMultiplier": 1.04,
+      "notes": "Stocky grey-haired, bearded veteran."
+    },
+    {
+      "profileId": "mage",
+      "selector": {
+        "packId": "content.neurodragon",
+        "contentId": "creature.configured_srd.mage",
+        "contentVersion": 1
+      },
+      "bodyCategory": "NakedBody",
+      "skinTint": 14463722,
+      "headCategory": "Head16",
+      "hairTint": 7566195,
+      "hasBeard": false,
+      "beardTint": 7566195,
+      "visualScaleMultiplier": 1,
+      "widthMultiplier": 0.94,
+      "notes": "Lean grey-haired arcane caster."
+    },
+    {
+      "profileId": "orc",
+      "selector": {
+        "packId": "content.neurodragon",
+        "contentId": "creature.configured_srd.orc",
+        "contentVersion": 1
+      },
+      "bodyCategory": "NakedBody",
+      "skinTint": 7307095,
+      "headCategory": "Head10",
+      "hairTint": 1644563,
+      "hasBeard": true,
+      "beardTint": 1644563,
+      "visualScaleMultiplier": 1.04,
+      "widthMultiplier": 1.1,
+      "notes": "Broad green-grey orc with black hair and facial hair."
+    },
+    {
+      "profileId": "hobgoblin",
+      "selector": {
+        "packId": "content.neurodragon",
+        "contentId": "creature.configured_srd.hobgoblin",
+        "contentVersion": 1
+      },
+      "bodyCategory": "NakedBody",
+      "skinTint": 11164223,
+      "headCategory": "Head16",
+      "hairTint": 1774350,
+      "hasBeard": false,
+      "beardTint": 1774350,
+      "visualScaleMultiplier": 1.01,
+      "widthMultiplier": 0.98,
+      "notes": "Burnt-orange disciplined goblinoid with dark tied hair."
+    },
+    {
+      "profileId": "bugbear",
+      "selector": {
+        "packId": "content.neurodragon",
+        "contentId": "creature.configured_srd.bugbear",
+        "contentVersion": 1
+      },
+      "bodyCategory": "NakedBody",
+      "skinTint": 9135428,
+      "headCategory": "Head17",
+      "hairTint": 4407609,
+      "hasBeard": true,
+      "beardTint": 4407609,
+      "visualScaleMultiplier": 1.08,
+      "widthMultiplier": 1.14,
+      "notes": "Large, broad brown-furred goblinoid approximation using hair and beard layers."
+    },
+    {
+      "profileId": "gnoll",
+      "selector": {
+        "packId": "content.neurodragon",
+        "contentId": "creature.configured_srd.gnoll",
+        "contentVersion": 1
+      },
+      "bodyCategory": "NakedBody",
+      "skinTint": 11962961,
+      "headCategory": "Head22",
+      "hairTint": 5129776,
+      "hasBeard": true,
+      "beardTint": 5129776,
+      "visualScaleMultiplier": 1.04,
+      "widthMultiplier": 1.02,
+      "notes": "Tawny, dark-maned humanoid approximation until dedicated gnoll art lands."
+    },
+    {
+      "profileId": "generic-caster",
+      "selector": {
+        "packId": "content.neurodragon",
+        "contentId": "creature.generic_caster",
+        "contentVersion": 1
+      },
+      "bodyCategory": "NakedBody",
+      "skinTint": 13942942,
+      "headCategory": "Head16",
+      "hairTint": 3617315,
+      "hasBeard": false,
+      "beardTint": 3617315,
+      "visualScaleMultiplier": 1,
+      "widthMultiplier": 0.96,
+      "notes": "Warm-skinned dark-haired humanoid caster used by generic caster configurations."
+    },
+    {
+      "profileId": "ogre",
+      "selector": {
+        "packId": "content.srd_5_1_cc",
+        "contentId": "creature.ogre",
+        "contentVersion": 1
+      },
+      "bodyCategory": "NakedBody",
+      "skinTint": 10517662,
+      "headCategory": "Head1",
+      "hairTint": 4336416,
+      "hasBeard": true,
+      "beardTint": 4336416,
+      "visualScaleMultiplier": 1.16,
+      "widthMultiplier": 1.18,
+      "notes": "Large ochre giant approximation with sparse dark hair until dedicated ogre art lands."
+    }
+  ]
+}

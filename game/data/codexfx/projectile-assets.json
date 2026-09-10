@@ -1,0 +1,94 @@
+[
+  {
+    "assetId": "lelu.magic-missile.rune-dart-lifecycle-256.godot-cie-lab-force-wine10-capture8-final-block2.temporal16-10-18.v1",
+    "displayName": "Magic Missile A · Rune Dart · Canonical Force — rune-dart-lifecycle-256.godot-cie-lab-force-wine10-capture8-final-block2.temporal16-10-18.v1",
+    "kind": "projectile",
+    "sheet": "/authored-vfx/projectiles/codexfx/lelu.magic-missile.rune-dart-lifecycle-256.godot-cie-lab-force-wine10-capture8-final-block2.temporal16-10-18.v1/sheet.png",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "cols": 44,
+      "rows": 8
+    },
+    "fps": 24.0,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "travel": {
+        "start": 16,
+        "frames": 10,
+        "fps": 24.0,
+        "loop": true
+      },
+      "cast": {
+        "start": 0,
+        "frames": 16,
+        "fps": 24.0,
+        "loop": false
+      },
+      "impact": {
+        "start": 26,
+        "frames": 18,
+        "fps": 24.0,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 1.0
+    },
+    "defaultScale": 0.5,
+    "tags": [
+      "projectile",
+      "force",
+      "magic-missile",
+      "directional",
+      "pixel",
+      "godot-postprocess",
+      "cell-256",
+      "block-2",
+      "short-wake",
+      "firebolt-resolution",
+      "constrained-palette",
+      "no-white",
+      "clip-frames-16-10-18",
+      "shape-alternative",
+      "rune-dart",
+      "canonical-force-palette",
+      "wine-purple"
+    ],
+    "source": {
+      "package": "codexfx-vfx-pipeline",
+      "manifest": "game/data/codexfx/source/lelu.magic-missile.rune-dart-lifecycle-256.godot-cie-lab-force-wine10-capture8-final-block2.temporal16-10-18.v1/asset.json",
+      "notes": "Generated compatibility record. asset.json/build.json remain authoritative."
+    },
+    "validation": {
+      "emptyCells": 0,
+      "edgeContacts": 0,
+      "warnings": []
+    },
+    "palettePreview": {
+      "palette": "eldritch-wine10.v1",
+      "colors": [
+        1246486,
+        2229802,
+        3409984,
+        4721232,
+        6163803,
+        7803494,
+        9509492,
+        11217541,
+        12927895,
+        14442667
+      ]
+    }
+  }
+]

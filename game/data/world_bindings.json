@@ -23,6 +23,7 @@
   },
   "terrain": {
     "earth": {"e": "terrain.earth.e", "n": "terrain.earth.n", "s": "terrain.earth.s", "w": "terrain.earth.w"},
+    "stone": {"e": "terrain.stone.e", "n": "terrain.stone.n", "s": "terrain.stone.s", "w": "terrain.stone.w"},
     "wood": {"e": "terrain.wood.e", "n": "terrain.wood.n", "s": "terrain.wood.s", "w": "terrain.wood.w"},
     "water": "water.unity"
   },

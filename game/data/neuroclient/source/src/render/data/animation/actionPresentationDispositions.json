@@ -1,0 +1,48 @@
+{
+  "schema": "neuroclient.actionPresentationDispositions",
+  "version": 4,
+  "entries": [
+    {
+      "definitionRef": {
+        "pack_id": "core.rules",
+        "definition_kind": "action",
+        "content_id": "action.jump",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "disposition": "context_authored",
+      "compatibleCueKinds": [
+        "movement"
+      ],
+      "contextId": "voluntary_movement"
+    },
+    {
+      "definitionRef": {
+        "pack_id": "core.rules",
+        "definition_kind": "action",
+        "content_id": "action.move",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "disposition": "context_authored",
+      "compatibleCueKinds": [
+        "movement"
+      ],
+      "contextId": "voluntary_movement"
+    },
+    {
+      "definitionRef": {
+        "pack_id": "core.rules",
+        "definition_kind": "action",
+        "content_id": "action.traverse_connector",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "disposition": "context_authored",
+      "compatibleCueKinds": [
+        "movement"
+      ],
+      "contextId": "voluntary_movement"
+    }
+  ]
+}

@@ -1,0 +1,147 @@
+[
+  {
+    "name": "Fire Bolt",
+    "school": "evocation",
+    "level": 0,
+    "source": "wotc.srd_5_1_cc",
+    "contentRef": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.fire_bolt",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "metadata": {
+      "catalog_id": "fire_bolt",
+      "description": "Hurl a mote of fire at a target",
+      "target_type": "entity",
+      "range_type": "ranged",
+      "range_ft": 120,
+      "delivery": "single_projectile",
+      "projectile_type": "bolt",
+      "aoe": null,
+      "damage_types": [
+        "Fire"
+      ],
+      "healing": false,
+      "attack_roll": true,
+      "saving_throws": [],
+      "concentration": false,
+      "ritual": false,
+      "verbal": true,
+      "somatic": null,
+      "material": null,
+      "classes": [
+        "wizard",
+        "sorcerer",
+        "warlock"
+      ],
+      "subclasses": [],
+      "multi_target": null,
+      "recommended_asset_tags": [
+        "fire",
+        "bolt"
+      ]
+    }
+  },
+  {
+    "name": "Acid Splash",
+    "school": "conjuration",
+    "level": 0,
+    "source": "wotc.srd_5_1_cc",
+    "contentRef": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.acid_splash",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "metadata": {
+      "catalog_id": "acid_splash",
+      "description": "1-2 targets within 5ft of each other, DEX save or 1d6 acid",
+      "target_type": "multi_entity",
+      "range_type": "ranged",
+      "range_ft": 60,
+      "delivery": "missile_volley",
+      "projectile_type": "orb",
+      "aoe": null,
+      "damage_types": [
+        "Acid"
+      ],
+      "healing": false,
+      "attack_roll": false,
+      "saving_throws": [
+        {
+          "ability": "dexterity",
+          "dc_source": "caster_spell_save_dc"
+        }
+      ],
+      "concentration": false,
+      "ritual": false,
+      "verbal": true,
+      "somatic": null,
+      "material": null,
+      "classes": [],
+      "subclasses": [],
+      "multi_target": {
+        "min_targets": 1,
+        "max_targets": 2,
+        "allow_same_target": false,
+        "projectiles_per_cast": 2
+      },
+      "recommended_asset_tags": [
+        "acid",
+        "orb"
+      ]
+    }
+  },
+  {
+    "name": "Magic Missile",
+    "school": "evocation",
+    "level": 1,
+    "source": "wotc.srd_5_1_cc",
+    "contentRef": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.magic_missile",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "metadata": {
+      "catalog_id": "magic_missile",
+      "description": "Three darts of force that automatically hit",
+      "target_type": "multi_entity",
+      "range_type": "ranged",
+      "range_ft": 120,
+      "delivery": "missile_volley",
+      "projectile_type": "dart",
+      "aoe": null,
+      "damage_types": [
+        "Force"
+      ],
+      "healing": false,
+      "attack_roll": false,
+      "saving_throws": [],
+      "concentration": false,
+      "ritual": false,
+      "verbal": true,
+      "somatic": null,
+      "material": null,
+      "classes": [
+        "wizard",
+        "sorcerer"
+      ],
+      "subclasses": [],
+      "multi_target": {
+        "min_targets": 1,
+        "max_targets": 3,
+        "allow_same_target": true,
+        "projectiles_per_cast": 3
+      },
+      "recommended_asset_tags": [
+        "force",
+        "dart"
+      ]
+    }
+  }
+]
