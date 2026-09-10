@@ -1,0 +1,2588 @@
+{
+  "schema": "dnd.neuroclient-magic-missile-timing-oracle",
+  "version": 1,
+  "source": {
+    "revision": "d274f2d62ca9c1c5ed62a77841cacf6cc0347491",
+    "owners": {
+      "src/render/AnimatedEntity.ts": "9c411a9efbd5f1260c36f968b56ac3ca4e3edab89de6f73b4ffc1bfc331e1756",
+      "src/render/AnimationFSM.ts": "bb0471601e5bf1253d685299167f9ae1825e4d89b2ed5fb7428dcfbeeee05958",
+      "src/render/clips/CastClip.ts": "b24fc7e0535bedf7c217174a85aa5f2274ca9128a8d1b7a517abafe40eb92127",
+      "src/render/clips/TakeDamageClip.ts": "5be9610b58438c21c5d5e29a97a5ca059b8ad4f77e4004f40c636c7039854487",
+      "src/render/clips/DeathClip.ts": "6711cf96d69272a1ec1621ab07c009c49990d1f428c8514bd82a35eee3c01cf9",
+      "src/render/clips/HitFlashFx.ts": "a0c05bfa4dd736db67cece6f10be31dd0d8c57bcec7d039ddcd6ccdf42546907",
+      "src/render/clips/FloatingText.ts": "a7cb7472c5877f953f9c18c87b46c1cfd925d920b775aeccb1e5862125cc35dd",
+      "src/render/spellAuthoring/runtimeResolver.ts": "70c5380fa9518400df0db121bb6d7c35d529aa72132c95ac16be884f16cd9001",
+      "src/render/spellAuthoring/phaseGraph.ts": "44aed4396ba950cd4cd000df4979c98d1b9831f84381ea7a75a6b5f6646926a4",
+      "src/render/spellAuthoring/SpriteProjectileFx.ts": "7442332428cf356aebbd937f0ede801ae3e3f88d4690b259637390ac29f13f7f",
+      "src/ui/spellStudio/timelineBuild.ts": "925424ca4e0e07a40238f39863bd9ac9e170f72bffcc9cbdfcbb26475239faf2",
+      "src/render/clipQueue.ts": "dd891b5f9ee11cbcde433b5a49d944c05b4cfc8ddaaeba1b497e3027be065c8f",
+      "src/render/dispatcher.ts": "de8825f402596b13aa22eee3a930b619eeb095433de9d5527f134b94bc9606c2",
+      "src/render/presentationRuntimeHost.ts": "4bf3f0870461bdfee3d61273891bb090a8a43940380d1de0a05b13a0281f1d95",
+      "src/render/clips/ProjectileFx.ts": "bd3ebbf789810316ca2f5a4ef4f6fd3b1b65e7dab93bb5f1d8105ba2b60ce05d",
+      "src/render/clips/MovementRecovery.ts": "1007bcd6e3de7157462fc1f57968b2abe404b34f1f246d226cacb58d6f3c3485",
+      "src/render/controllers/ActionVfxController.ts": "8e5907211a564705b4ce995e8b8b7df0759ac7add93e216c7538d5ff71d9f134",
+      "src/render/projectileEndpoints.ts": "7b6087d0f97fa411c72466395e54dc369ee00742ff6c0c971a3c36088620c23f",
+      "src/render/visualAnchors.ts": "7dd05cd0e24a219b920629708c6ce04f200f8c3c73f775792f1202cc33bdb5ad",
+      "src/render/types.ts": "1f47dd5b08a3db428d58b3e2bf5ac22137a08d1e12cf6418218730dc71cd32cc",
+      "src/render/SpriteAssetRegistry.ts": "8b35df73cef924aa1d9d7ee1e26db12bd5b469174322454cc74b00a26122e071",
+      "src/render/data/animation/actionContextPresentation.json": "5c137956a299b07f920a483dce6fb626cd9d68547ea998952db8264ccc82b965"
+    }
+  },
+  "dataInputs": {
+    "rig-tables.json": "19047cc84685a9cc2c96c6ffd18059cc8371a3a7763bd57fb642693f97fd99fe",
+    "spell-studio-drafts.materialized.json": "a3b16a991b8b01524d4e8191b4fa1e2be151d617de96c226f5d1100a7b2f9602",
+    "catalog-input.json": "9f4594e633073a5443f97b87de0729847fbdb6d10e73ef3f301fd2732e30a3ad"
+  },
+  "pumpOwner": "createFrameDrivenPresentationClock",
+  "pumpOrdering": "actor updates, queued frame callbacks, drain microtasks",
+  "substitutions": [
+    "Diagnostic sinks replace SDK/ledger imports.",
+    "PNG-checked frame metadata supplies inert Pixi textures; no GPU rasterization.",
+    "Font rasterization supplies a Pixi sprite with the original label.",
+    "No WebGL context.",
+    "Frame callbacks are delivered by the controlled pump.",
+    "Queue watchdog timeout is inert."
+  ],
+  "limitations": [
+    "Detached original CastIntent fixture; no event mapper/SDK proof.",
+    "Real Pixi objects with inert texture resources and no font/GPU rasterizer.",
+    "Original frame-driven clock has a deterministic 1ms pump; frame-zero damage callbacks run on the next actor update.",
+    "Queue watchdog timer is inert; no deadline/reset/network proof.",
+    "No source formula is reimplemented to generate expected runtime times.",
+    "TakeDamage inputs use the original global damage context and Force palette because the spell has no authored damage override.",
+    "Application indices label actual launch Graphics and original onHit intent objects; source missile entries have no application ID.",
+    "Graphics lifetime is observed; geometry coordinates and frame-count-dependent trail rasterization are outside this timing fixture."
+  ],
+  "cases": [
+    {
+      "id": "queue-magic-missile-aba",
+      "input": {
+        "draftContentId": "spell.magic_missile",
+        "sourceGrid": [
+          0,
+          0
+        ],
+        "visualScale": 0.5,
+        "targets": [
+          {
+            "uuid": "A",
+            "grid": [
+              3,
+              -3
+            ],
+            "initialHp": 80
+          },
+          {
+            "uuid": "B",
+            "grid": [
+              4,
+              -2
+            ],
+            "initialHp": 80
+          }
+        ],
+        "applications": [
+          {
+            "applicationId": "missile-0",
+            "targetUuid": "A",
+            "damage": 5,
+            "resultingHp": 75
+          },
+          {
+            "applicationId": "missile-1",
+            "targetUuid": "B",
+            "damage": 5,
+            "resultingHp": 75
+          },
+          {
+            "applicationId": "missile-2",
+            "targetUuid": "A",
+            "damage": 2,
+            "resultingHp": 73
+          }
+        ]
+      },
+      "pump": {
+        "stepMs": 1
+      },
+      "events": [
+        {
+          "kind": "intent-started",
+          "timeMs": 0,
+          "type": "cast",
+          "applicationIndex": null
+        },
+        {
+          "kind": "body-state",
+          "timeMs": 0,
+          "uuid": "caster",
+          "from": "Idle",
+          "to": "Casting",
+          "trigger": "cast",
+          "clip": "Special1"
+        },
+        {
+          "kind": "body-anchor",
+          "timeMs": 667,
+          "uuid": "caster",
+          "frame": 8,
+          "mode": "fire"
+        },
+        {
+          "kind": "projectile-launch",
+          "timeMs": 667,
+          "applicationIndex": 0
+        },
+        {
+          "kind": "projectile-launch",
+          "timeMs": 747,
+          "applicationIndex": 1
+        },
+        {
+          "kind": "projectile-launch",
+          "timeMs": 827,
+          "applicationIndex": 2
+        },
+        {
+          "kind": "projectile-arrival",
+          "timeMs": 867,
+          "applicationIndex": 0
+        },
+        {
+          "kind": "intent-started",
+          "timeMs": 867,
+          "type": "takeDamage",
+          "targetUuid": "A",
+          "applicationIndex": 0
+        },
+        {
+          "kind": "body-state",
+          "timeMs": 867,
+          "uuid": "A",
+          "from": "Idle",
+          "to": "TakingHit",
+          "trigger": "takeHit",
+          "clip": "TakeDamage"
+        },
+        {
+          "kind": "body-anchor",
+          "timeMs": 868,
+          "uuid": "A",
+          "frame": 0,
+          "mode": "fire"
+        },
+        {
+          "kind": "vitals",
+          "timeMs": 868,
+          "uuid": "A",
+          "hp": 75
+        },
+        {
+          "kind": "intent-started",
+          "timeMs": 868,
+          "type": "hitFlash",
+          "targetUuid": "A",
+          "applicationIndex": null
+        },
+        {
+          "kind": "intent-started",
+          "timeMs": 868,
+          "type": "floatingNumber",
+          "targetUuid": "A",
+          "applicationIndex": null,
+          "value": 5,
+          "label": "Force"
+        },
+        {
+          "kind": "number-visible",
+          "timeMs": 868,
+          "value": "5 Force"
+        },
+        {
+          "kind": "intent-completed",
+          "timeMs": 868,
+          "type": "hitFlash",
+          "targetUuid": "A",
+          "applicationIndex": null
+        },
+        {
+          "kind": "intent-completed",
+          "timeMs": 868,
+          "type": "floatingNumber",
+          "targetUuid": "A",
+          "applicationIndex": null,
+          "value": 5,
+          "label": "Force"
+        },
+        {
+          "kind": "projectile-arrival",
+          "timeMs": 951,
+          "applicationIndex": 1
+        },
+        {
+          "kind": "intent-started",
+          "timeMs": 951,
+          "type": "takeDamage",
+          "targetUuid": "B",
+          "applicationIndex": 1
+        },
+        {
+          "kind": "body-state",
+          "timeMs": 951,
+          "uuid": "B",
+          "from": "Idle",
+          "to": "TakingHit",
+          "trigger": "takeHit",
+          "clip": "TakeDamage"
+        },
+        {
+          "kind": "body-anchor",
+          "timeMs": 952,
+          "uuid": "B",
+          "frame": 0,
+          "mode": "fire"
+        },
+        {
+          "kind": "vitals",
+          "timeMs": 952,
+          "uuid": "B",
+          "hp": 75
+        },
+        {
+          "kind": "intent-started",
+          "timeMs": 952,
+          "type": "hitFlash",
+          "targetUuid": "B",
+          "applicationIndex": null
+        },
+        {
+          "kind": "intent-started",
+          "timeMs": 952,
+          "type": "floatingNumber",
+          "targetUuid": "B",
+          "applicationIndex": null,
+          "value": 5,
+          "label": "Force"
+        },
+        {
+          "kind": "number-visible",
+          "timeMs": 952,
+          "value": "5 Force"
+        },
+        {
+          "kind": "intent-completed",
+          "timeMs": 952,
+          "type": "hitFlash",
+          "targetUuid": "B",
+          "applicationIndex": null
+        },
+        {
+          "kind": "intent-completed",
+          "timeMs": 952,
+          "type": "floatingNumber",
+          "targetUuid": "B",
+          "applicationIndex": null,
+          "value": 5,
+          "label": "Force"
+        },
+        {
+          "kind": "projectile-arrival",
+          "timeMs": 1027,
+          "applicationIndex": 2
+        },
+        {
+          "kind": "intent-started",
+          "timeMs": 1027,
+          "type": "takeDamage",
+          "targetUuid": "A",
+          "applicationIndex": 2
+        },
+        {
+          "kind": "body-state",
+          "timeMs": 1027,
+          "uuid": "A",
+          "from": "TakingHit",
+          "to": "TakingHit",
+          "trigger": "takeHit",
+          "clip": "TakeDamage"
+        },
+        {
+          "kind": "body-anchor",
+          "timeMs": 1028,
+          "uuid": "A",
+          "frame": 0,
+          "mode": "fire"
+        },
+        {
+          "kind": "vitals",
+          "timeMs": 1028,
+          "uuid": "A",
+          "hp": 73
+        },
+        {
+          "kind": "intent-started",
+          "timeMs": 1028,
+          "type": "hitFlash",
+          "targetUuid": "A",
+          "applicationIndex": null
+        },
+        {
+          "kind": "intent-started",
+          "timeMs": 1028,
+          "type": "floatingNumber",
+          "targetUuid": "A",
+          "applicationIndex": null,
+          "value": 2,
+          "label": "Force"
+        },
+        {
+          "kind": "number-visible",
+          "timeMs": 1028,
+          "value": "2 Force"
+        },
+        {
+          "kind": "intent-completed",
+          "timeMs": 1028,
+          "type": "hitFlash",
+          "targetUuid": "A",
+          "applicationIndex": null
+        },
+        {
+          "kind": "intent-completed",
+          "timeMs": 1028,
+          "type": "floatingNumber",
+          "targetUuid": "A",
+          "applicationIndex": null,
+          "value": 2,
+          "label": "Force"
+        },
+        {
+          "kind": "body-state",
+          "timeMs": 1167,
+          "uuid": "caster",
+          "from": "Casting",
+          "to": "Idle",
+          "clip": "Idle"
+        },
+        {
+          "kind": "number-removed",
+          "timeMs": 1768,
+          "value": "5 Force"
+        },
+        {
+          "kind": "number-removed",
+          "timeMs": 1852,
+          "value": "5 Force"
+        },
+        {
+          "kind": "number-removed",
+          "timeMs": 1928,
+          "value": "2 Force"
+        },
+        {
+          "kind": "body-state",
+          "timeMs": 2118,
+          "uuid": "B",
+          "from": "TakingHit",
+          "to": "Idle",
+          "clip": "Idle"
+        },
+        {
+          "kind": "intent-completed",
+          "timeMs": 2118,
+          "type": "takeDamage",
+          "targetUuid": "B",
+          "applicationIndex": 1
+        },
+        {
+          "kind": "body-state",
+          "timeMs": 2194,
+          "uuid": "A",
+          "from": "TakingHit",
+          "to": "Idle",
+          "clip": "Idle"
+        },
+        {
+          "kind": "intent-completed",
+          "timeMs": 2194,
+          "type": "takeDamage",
+          "targetUuid": "A",
+          "applicationIndex": 0
+        },
+        {
+          "kind": "intent-completed",
+          "timeMs": 2194,
+          "type": "takeDamage",
+          "targetUuid": "A",
+          "applicationIndex": 2
+        },
+        {
+          "kind": "intent-completed",
+          "timeMs": 2194,
+          "type": "cast",
+          "applicationIndex": null
+        },
+        {
+          "kind": "queue-settled",
+          "timeMs": 2194
+        }
+      ],
+      "frames": [
+        {
+          "timeMs": 0,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Casting",
+              "clip": "Special1",
+              "frame": 0
+            },
+            {
+              "uuid": "A",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 0
+            },
+            {
+              "uuid": "B",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 0
+            }
+          ],
+          "hp": {
+            "A": 80,
+            "B": 80
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": []
+        },
+        {
+          "timeMs": 84,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Casting",
+              "clip": "Special1",
+              "frame": 1
+            },
+            {
+              "uuid": "A",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 1
+            },
+            {
+              "uuid": "B",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 1
+            }
+          ],
+          "hp": {
+            "A": 80,
+            "B": 80
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": []
+        },
+        {
+          "timeMs": 167,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Casting",
+              "clip": "Special1",
+              "frame": 2
+            },
+            {
+              "uuid": "A",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 2
+            },
+            {
+              "uuid": "B",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 2
+            }
+          ],
+          "hp": {
+            "A": 80,
+            "B": 80
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": []
+        },
+        {
+          "timeMs": 250,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Casting",
+              "clip": "Special1",
+              "frame": 3
+            },
+            {
+              "uuid": "A",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 3
+            },
+            {
+              "uuid": "B",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 3
+            }
+          ],
+          "hp": {
+            "A": 80,
+            "B": 80
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": []
+        },
+        {
+          "timeMs": 334,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Casting",
+              "clip": "Special1",
+              "frame": 4
+            },
+            {
+              "uuid": "A",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 4
+            },
+            {
+              "uuid": "B",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 4
+            }
+          ],
+          "hp": {
+            "A": 80,
+            "B": 80
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": []
+        },
+        {
+          "timeMs": 417,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Casting",
+              "clip": "Special1",
+              "frame": 5
+            },
+            {
+              "uuid": "A",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 5
+            },
+            {
+              "uuid": "B",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 5
+            }
+          ],
+          "hp": {
+            "A": 80,
+            "B": 80
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": []
+        },
+        {
+          "timeMs": 501,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Casting",
+              "clip": "Special1",
+              "frame": 6
+            },
+            {
+              "uuid": "A",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 6
+            },
+            {
+              "uuid": "B",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 6
+            }
+          ],
+          "hp": {
+            "A": 80,
+            "B": 80
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": []
+        },
+        {
+          "timeMs": 584,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Casting",
+              "clip": "Special1",
+              "frame": 7
+            },
+            {
+              "uuid": "A",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 7
+            },
+            {
+              "uuid": "B",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 7
+            }
+          ],
+          "hp": {
+            "A": 80,
+            "B": 80
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": []
+        },
+        {
+          "timeMs": 667,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Casting",
+              "clip": "Special1",
+              "frame": 8
+            },
+            {
+              "uuid": "A",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 8
+            },
+            {
+              "uuid": "B",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 8
+            }
+          ],
+          "hp": {
+            "A": 80,
+            "B": 80
+          },
+          "done": false,
+          "projectiles": [
+            0
+          ],
+          "numbers": []
+        },
+        {
+          "timeMs": 747,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Casting",
+              "clip": "Special1",
+              "frame": 8
+            },
+            {
+              "uuid": "A",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 8
+            },
+            {
+              "uuid": "B",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 8
+            }
+          ],
+          "hp": {
+            "A": 80,
+            "B": 80
+          },
+          "done": false,
+          "projectiles": [
+            0,
+            1
+          ],
+          "numbers": []
+        },
+        {
+          "timeMs": 751,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Casting",
+              "clip": "Special1",
+              "frame": 9
+            },
+            {
+              "uuid": "A",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 9
+            },
+            {
+              "uuid": "B",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 9
+            }
+          ],
+          "hp": {
+            "A": 80,
+            "B": 80
+          },
+          "done": false,
+          "projectiles": [
+            0,
+            1
+          ],
+          "numbers": []
+        },
+        {
+          "timeMs": 827,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Casting",
+              "clip": "Special1",
+              "frame": 9
+            },
+            {
+              "uuid": "A",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 9
+            },
+            {
+              "uuid": "B",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 9
+            }
+          ],
+          "hp": {
+            "A": 80,
+            "B": 80
+          },
+          "done": false,
+          "projectiles": [
+            0,
+            1,
+            2
+          ],
+          "numbers": []
+        },
+        {
+          "timeMs": 834,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Casting",
+              "clip": "Special1",
+              "frame": 10
+            },
+            {
+              "uuid": "A",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 10
+            },
+            {
+              "uuid": "B",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 10
+            }
+          ],
+          "hp": {
+            "A": 80,
+            "B": 80
+          },
+          "done": false,
+          "projectiles": [
+            0,
+            1,
+            2
+          ],
+          "numbers": []
+        },
+        {
+          "timeMs": 867,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Casting",
+              "clip": "Special1",
+              "frame": 10
+            },
+            {
+              "uuid": "A",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 0
+            },
+            {
+              "uuid": "B",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 10
+            }
+          ],
+          "hp": {
+            "A": 80,
+            "B": 80
+          },
+          "done": false,
+          "projectiles": [
+            1,
+            2
+          ],
+          "numbers": []
+        },
+        {
+          "timeMs": 868,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Casting",
+              "clip": "Special1",
+              "frame": 10
+            },
+            {
+              "uuid": "A",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 0
+            },
+            {
+              "uuid": "B",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 10
+            }
+          ],
+          "hp": {
+            "A": 75,
+            "B": 80
+          },
+          "done": false,
+          "projectiles": [
+            1,
+            2
+          ],
+          "numbers": [
+            "5 Force"
+          ]
+        },
+        {
+          "timeMs": 917,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Casting",
+              "clip": "Special1",
+              "frame": 11
+            },
+            {
+              "uuid": "A",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 0
+            },
+            {
+              "uuid": "B",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 11
+            }
+          ],
+          "hp": {
+            "A": 75,
+            "B": 80
+          },
+          "done": false,
+          "projectiles": [
+            1,
+            2
+          ],
+          "numbers": [
+            "5 Force"
+          ]
+        },
+        {
+          "timeMs": 951,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Casting",
+              "clip": "Special1",
+              "frame": 11
+            },
+            {
+              "uuid": "A",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 1
+            },
+            {
+              "uuid": "B",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 0
+            }
+          ],
+          "hp": {
+            "A": 75,
+            "B": 80
+          },
+          "done": false,
+          "projectiles": [
+            2
+          ],
+          "numbers": [
+            "5 Force"
+          ]
+        },
+        {
+          "timeMs": 952,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Casting",
+              "clip": "Special1",
+              "frame": 11
+            },
+            {
+              "uuid": "A",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 1
+            },
+            {
+              "uuid": "B",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 0
+            }
+          ],
+          "hp": {
+            "A": 75,
+            "B": 75
+          },
+          "done": false,
+          "projectiles": [
+            2
+          ],
+          "numbers": [
+            "5 Force",
+            "5 Force"
+          ]
+        },
+        {
+          "timeMs": 1000,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Casting",
+              "clip": "Special1",
+              "frame": 12
+            },
+            {
+              "uuid": "A",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 1
+            },
+            {
+              "uuid": "B",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 0
+            }
+          ],
+          "hp": {
+            "A": 75,
+            "B": 75
+          },
+          "done": false,
+          "projectiles": [
+            2
+          ],
+          "numbers": [
+            "5 Force",
+            "5 Force"
+          ]
+        },
+        {
+          "timeMs": 1027,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Casting",
+              "clip": "Special1",
+              "frame": 12
+            },
+            {
+              "uuid": "A",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 0
+            },
+            {
+              "uuid": "B",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 0
+            }
+          ],
+          "hp": {
+            "A": 75,
+            "B": 75
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": [
+            "5 Force",
+            "5 Force"
+          ]
+        },
+        {
+          "timeMs": 1028,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Casting",
+              "clip": "Special1",
+              "frame": 12
+            },
+            {
+              "uuid": "A",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 0
+            },
+            {
+              "uuid": "B",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 0
+            }
+          ],
+          "hp": {
+            "A": 73,
+            "B": 75
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": [
+            "5 Force",
+            "5 Force",
+            "2 Force"
+          ]
+        },
+        {
+          "timeMs": 1035,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Casting",
+              "clip": "Special1",
+              "frame": 12
+            },
+            {
+              "uuid": "A",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 0
+            },
+            {
+              "uuid": "B",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 1
+            }
+          ],
+          "hp": {
+            "A": 73,
+            "B": 75
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": [
+            "5 Force",
+            "5 Force",
+            "2 Force"
+          ]
+        },
+        {
+          "timeMs": 1084,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Casting",
+              "clip": "Special1",
+              "frame": 13
+            },
+            {
+              "uuid": "A",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 0
+            },
+            {
+              "uuid": "B",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 1
+            }
+          ],
+          "hp": {
+            "A": 73,
+            "B": 75
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": [
+            "5 Force",
+            "5 Force",
+            "2 Force"
+          ]
+        },
+        {
+          "timeMs": 1111,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Casting",
+              "clip": "Special1",
+              "frame": 13
+            },
+            {
+              "uuid": "A",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 1
+            },
+            {
+              "uuid": "B",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 1
+            }
+          ],
+          "hp": {
+            "A": 73,
+            "B": 75
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": [
+            "5 Force",
+            "5 Force",
+            "2 Force"
+          ]
+        },
+        {
+          "timeMs": 1118,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Casting",
+              "clip": "Special1",
+              "frame": 13
+            },
+            {
+              "uuid": "A",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 1
+            },
+            {
+              "uuid": "B",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 2
+            }
+          ],
+          "hp": {
+            "A": 73,
+            "B": 75
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": [
+            "5 Force",
+            "5 Force",
+            "2 Force"
+          ]
+        },
+        {
+          "timeMs": 1167,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 0
+            },
+            {
+              "uuid": "A",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 1
+            },
+            {
+              "uuid": "B",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 2
+            }
+          ],
+          "hp": {
+            "A": 73,
+            "B": 75
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": [
+            "5 Force",
+            "5 Force",
+            "2 Force"
+          ]
+        },
+        {
+          "timeMs": 1194,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 0
+            },
+            {
+              "uuid": "A",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 2
+            },
+            {
+              "uuid": "B",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 2
+            }
+          ],
+          "hp": {
+            "A": 73,
+            "B": 75
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": [
+            "5 Force",
+            "5 Force",
+            "2 Force"
+          ]
+        },
+        {
+          "timeMs": 1201,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 0
+            },
+            {
+              "uuid": "A",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 2
+            },
+            {
+              "uuid": "B",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 3
+            }
+          ],
+          "hp": {
+            "A": 73,
+            "B": 75
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": [
+            "5 Force",
+            "5 Force",
+            "2 Force"
+          ]
+        },
+        {
+          "timeMs": 1251,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 1
+            },
+            {
+              "uuid": "A",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 2
+            },
+            {
+              "uuid": "B",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 3
+            }
+          ],
+          "hp": {
+            "A": 73,
+            "B": 75
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": [
+            "5 Force",
+            "5 Force",
+            "2 Force"
+          ]
+        },
+        {
+          "timeMs": 1277,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 1
+            },
+            {
+              "uuid": "A",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 3
+            },
+            {
+              "uuid": "B",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 3
+            }
+          ],
+          "hp": {
+            "A": 73,
+            "B": 75
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": [
+            "5 Force",
+            "5 Force",
+            "2 Force"
+          ]
+        },
+        {
+          "timeMs": 1285,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 1
+            },
+            {
+              "uuid": "A",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 3
+            },
+            {
+              "uuid": "B",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 4
+            }
+          ],
+          "hp": {
+            "A": 73,
+            "B": 75
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": [
+            "5 Force",
+            "5 Force",
+            "2 Force"
+          ]
+        },
+        {
+          "timeMs": 1334,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 2
+            },
+            {
+              "uuid": "A",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 3
+            },
+            {
+              "uuid": "B",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 4
+            }
+          ],
+          "hp": {
+            "A": 73,
+            "B": 75
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": [
+            "5 Force",
+            "5 Force",
+            "2 Force"
+          ]
+        },
+        {
+          "timeMs": 1361,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 2
+            },
+            {
+              "uuid": "A",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 4
+            },
+            {
+              "uuid": "B",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 4
+            }
+          ],
+          "hp": {
+            "A": 73,
+            "B": 75
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": [
+            "5 Force",
+            "5 Force",
+            "2 Force"
+          ]
+        },
+        {
+          "timeMs": 1368,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 2
+            },
+            {
+              "uuid": "A",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 4
+            },
+            {
+              "uuid": "B",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 5
+            }
+          ],
+          "hp": {
+            "A": 73,
+            "B": 75
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": [
+            "5 Force",
+            "5 Force",
+            "2 Force"
+          ]
+        },
+        {
+          "timeMs": 1417,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 3
+            },
+            {
+              "uuid": "A",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 4
+            },
+            {
+              "uuid": "B",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 5
+            }
+          ],
+          "hp": {
+            "A": 73,
+            "B": 75
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": [
+            "5 Force",
+            "5 Force",
+            "2 Force"
+          ]
+        },
+        {
+          "timeMs": 1444,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 3
+            },
+            {
+              "uuid": "A",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 5
+            },
+            {
+              "uuid": "B",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 5
+            }
+          ],
+          "hp": {
+            "A": 73,
+            "B": 75
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": [
+            "5 Force",
+            "5 Force",
+            "2 Force"
+          ]
+        },
+        {
+          "timeMs": 1452,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 3
+            },
+            {
+              "uuid": "A",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 5
+            },
+            {
+              "uuid": "B",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 6
+            }
+          ],
+          "hp": {
+            "A": 73,
+            "B": 75
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": [
+            "5 Force",
+            "5 Force",
+            "2 Force"
+          ]
+        },
+        {
+          "timeMs": 1501,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 4
+            },
+            {
+              "uuid": "A",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 5
+            },
+            {
+              "uuid": "B",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 6
+            }
+          ],
+          "hp": {
+            "A": 73,
+            "B": 75
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": [
+            "5 Force",
+            "5 Force",
+            "2 Force"
+          ]
+        },
+        {
+          "timeMs": 1528,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 4
+            },
+            {
+              "uuid": "A",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 6
+            },
+            {
+              "uuid": "B",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 6
+            }
+          ],
+          "hp": {
+            "A": 73,
+            "B": 75
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": [
+            "5 Force",
+            "5 Force",
+            "2 Force"
+          ]
+        },
+        {
+          "timeMs": 1535,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 4
+            },
+            {
+              "uuid": "A",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 6
+            },
+            {
+              "uuid": "B",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 7
+            }
+          ],
+          "hp": {
+            "A": 73,
+            "B": 75
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": [
+            "5 Force",
+            "5 Force",
+            "2 Force"
+          ]
+        },
+        {
+          "timeMs": 1584,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 5
+            },
+            {
+              "uuid": "A",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 6
+            },
+            {
+              "uuid": "B",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 7
+            }
+          ],
+          "hp": {
+            "A": 73,
+            "B": 75
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": [
+            "5 Force",
+            "5 Force",
+            "2 Force"
+          ]
+        },
+        {
+          "timeMs": 1611,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 5
+            },
+            {
+              "uuid": "A",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 7
+            },
+            {
+              "uuid": "B",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 7
+            }
+          ],
+          "hp": {
+            "A": 73,
+            "B": 75
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": [
+            "5 Force",
+            "5 Force",
+            "2 Force"
+          ]
+        },
+        {
+          "timeMs": 1618,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 5
+            },
+            {
+              "uuid": "A",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 7
+            },
+            {
+              "uuid": "B",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 8
+            }
+          ],
+          "hp": {
+            "A": 73,
+            "B": 75
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": [
+            "5 Force",
+            "5 Force",
+            "2 Force"
+          ]
+        },
+        {
+          "timeMs": 1668,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 6
+            },
+            {
+              "uuid": "A",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 7
+            },
+            {
+              "uuid": "B",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 8
+            }
+          ],
+          "hp": {
+            "A": 73,
+            "B": 75
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": [
+            "5 Force",
+            "5 Force",
+            "2 Force"
+          ]
+        },
+        {
+          "timeMs": 1694,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 6
+            },
+            {
+              "uuid": "A",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 8
+            },
+            {
+              "uuid": "B",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 8
+            }
+          ],
+          "hp": {
+            "A": 73,
+            "B": 75
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": [
+            "5 Force",
+            "5 Force",
+            "2 Force"
+          ]
+        },
+        {
+          "timeMs": 1702,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 6
+            },
+            {
+              "uuid": "A",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 8
+            },
+            {
+              "uuid": "B",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 9
+            }
+          ],
+          "hp": {
+            "A": 73,
+            "B": 75
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": [
+            "5 Force",
+            "5 Force",
+            "2 Force"
+          ]
+        },
+        {
+          "timeMs": 1751,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 7
+            },
+            {
+              "uuid": "A",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 8
+            },
+            {
+              "uuid": "B",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 9
+            }
+          ],
+          "hp": {
+            "A": 73,
+            "B": 75
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": [
+            "5 Force",
+            "5 Force",
+            "2 Force"
+          ]
+        },
+        {
+          "timeMs": 1768,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 7
+            },
+            {
+              "uuid": "A",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 8
+            },
+            {
+              "uuid": "B",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 9
+            }
+          ],
+          "hp": {
+            "A": 73,
+            "B": 75
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": [
+            "5 Force",
+            "2 Force"
+          ]
+        },
+        {
+          "timeMs": 1778,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 7
+            },
+            {
+              "uuid": "A",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 9
+            },
+            {
+              "uuid": "B",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 9
+            }
+          ],
+          "hp": {
+            "A": 73,
+            "B": 75
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": [
+            "5 Force",
+            "2 Force"
+          ]
+        },
+        {
+          "timeMs": 1785,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 7
+            },
+            {
+              "uuid": "A",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 9
+            },
+            {
+              "uuid": "B",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 10
+            }
+          ],
+          "hp": {
+            "A": 73,
+            "B": 75
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": [
+            "5 Force",
+            "2 Force"
+          ]
+        },
+        {
+          "timeMs": 1834,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 8
+            },
+            {
+              "uuid": "A",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 9
+            },
+            {
+              "uuid": "B",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 10
+            }
+          ],
+          "hp": {
+            "A": 73,
+            "B": 75
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": [
+            "5 Force",
+            "2 Force"
+          ]
+        },
+        {
+          "timeMs": 1852,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 8
+            },
+            {
+              "uuid": "A",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 9
+            },
+            {
+              "uuid": "B",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 10
+            }
+          ],
+          "hp": {
+            "A": 73,
+            "B": 75
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": [
+            "2 Force"
+          ]
+        },
+        {
+          "timeMs": 1861,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 8
+            },
+            {
+              "uuid": "A",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 10
+            },
+            {
+              "uuid": "B",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 10
+            }
+          ],
+          "hp": {
+            "A": 73,
+            "B": 75
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": [
+            "2 Force"
+          ]
+        },
+        {
+          "timeMs": 1868,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 8
+            },
+            {
+              "uuid": "A",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 10
+            },
+            {
+              "uuid": "B",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 11
+            }
+          ],
+          "hp": {
+            "A": 73,
+            "B": 75
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": [
+            "2 Force"
+          ]
+        },
+        {
+          "timeMs": 1918,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 9
+            },
+            {
+              "uuid": "A",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 10
+            },
+            {
+              "uuid": "B",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 11
+            }
+          ],
+          "hp": {
+            "A": 73,
+            "B": 75
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": [
+            "2 Force"
+          ]
+        },
+        {
+          "timeMs": 1928,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 9
+            },
+            {
+              "uuid": "A",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 10
+            },
+            {
+              "uuid": "B",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 11
+            }
+          ],
+          "hp": {
+            "A": 73,
+            "B": 75
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": []
+        },
+        {
+          "timeMs": 1944,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 9
+            },
+            {
+              "uuid": "A",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 11
+            },
+            {
+              "uuid": "B",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 11
+            }
+          ],
+          "hp": {
+            "A": 73,
+            "B": 75
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": []
+        },
+        {
+          "timeMs": 1951,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 9
+            },
+            {
+              "uuid": "A",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 11
+            },
+            {
+              "uuid": "B",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 12
+            }
+          ],
+          "hp": {
+            "A": 73,
+            "B": 75
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": []
+        },
+        {
+          "timeMs": 2001,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 10
+            },
+            {
+              "uuid": "A",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 11
+            },
+            {
+              "uuid": "B",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 12
+            }
+          ],
+          "hp": {
+            "A": 73,
+            "B": 75
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": []
+        },
+        {
+          "timeMs": 2027,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 10
+            },
+            {
+              "uuid": "A",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 12
+            },
+            {
+              "uuid": "B",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 12
+            }
+          ],
+          "hp": {
+            "A": 73,
+            "B": 75
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": []
+        },
+        {
+          "timeMs": 2035,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 10
+            },
+            {
+              "uuid": "A",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 12
+            },
+            {
+              "uuid": "B",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 13
+            }
+          ],
+          "hp": {
+            "A": 73,
+            "B": 75
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": []
+        },
+        {
+          "timeMs": 2084,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 11
+            },
+            {
+              "uuid": "A",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 12
+            },
+            {
+              "uuid": "B",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 13
+            }
+          ],
+          "hp": {
+            "A": 73,
+            "B": 75
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": []
+        },
+        {
+          "timeMs": 2111,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 11
+            },
+            {
+              "uuid": "A",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 13
+            },
+            {
+              "uuid": "B",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 13
+            }
+          ],
+          "hp": {
+            "A": 73,
+            "B": 75
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": []
+        },
+        {
+          "timeMs": 2118,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 11
+            },
+            {
+              "uuid": "A",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 13
+            },
+            {
+              "uuid": "B",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 0
+            }
+          ],
+          "hp": {
+            "A": 73,
+            "B": 75
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": []
+        },
+        {
+          "timeMs": 2167,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 12
+            },
+            {
+              "uuid": "A",
+              "state": "TakingHit",
+              "clip": "TakeDamage",
+              "frame": 13
+            },
+            {
+              "uuid": "B",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 0
+            }
+          ],
+          "hp": {
+            "A": 73,
+            "B": 75
+          },
+          "done": false,
+          "projectiles": [],
+          "numbers": []
+        },
+        {
+          "timeMs": 2194,
+          "bodies": [
+            {
+              "uuid": "caster",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 12
+            },
+            {
+              "uuid": "A",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 0
+            },
+            {
+              "uuid": "B",
+              "state": "Idle",
+              "clip": "Idle",
+              "frame": 0
+            }
+          ],
+          "hp": {
+            "A": 73,
+            "B": 75
+          },
+          "done": true,
+          "projectiles": [],
+          "numbers": []
+        }
+      ]
+    }
+  ]
+}

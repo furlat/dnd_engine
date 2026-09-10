@@ -1,10 +1,63 @@
 # D&D 5e Game Engine Architecture Guide
 
-For `codex/july-reconstruction`, start with the
-[current branch design guide](agent_docs/CURRENT_BRANCH_DESIGN_GUIDE.md).
-It records current ownership, the Pygame recovery sequence, superseded
-historical ideas, and known limits. The examples below span earlier designs;
-use the current guide and the applicable bounded plan when they disagree.
+For `codex/recovery-design`, start with the [recovery plan](RECOVERY_PLAN.md).
+It contains the forward objective, design constraints and ordered work.
+[HISTORY_BEFORE_ME.md](HISTORY_BEFORE_ME.md) separately studies the original
+engine, failed experiments, reconstruction and overnight work. Use the
+[current design guide](agent_docs/CURRENT_BRANCH_DESIGN_GUIDE.md) to locate owners.
+The [current codebase study](agent_docs/CURRENT_CODEBASE_STUDY.md) records detailed
+ownership, lifecycle traces, source coverage and evidence for this branch.
+The examples below span earlier designs; the recovery plan and the applicable
+bounded contract govern when those historical examples disagree.
+
+`python -m game` starts the playable Goblin skirmish: the existing fighter and
+sorcerer premades, canonical Goblins and native enemy controller on a flat,
+bright map. Choose discovered actions with Up/Down, choose targets with Tab
+and Enter or click their map cells, and end a turn with N. Multi-target actions
+collect the engine-declared number of selections, including repeated targets
+where allowed. Backspace clears the allocation. Costs, unavailable reasons,
+movement and conditions come from the current engine and retained history.
+
+Space pauses historical playback; enemy progression remains independent.
+Q/E rotate, WASD pan, the wheel zooms, G toggles the grid, F3 shows diagnostics,
+and Esc closes. `--headless --frames 120` is a bounded SDL run; `--capture-dir`
+saves displayed frames. The gameplay tests submit commands through the same
+boundary and exercise complete rounds while playback is paused.
+
+For the current clip-extraction checkpoint, run
+`python -m devtools.animation_review` and
+`python -m devtools.animation_review.serve`, then open
+<http://127.0.0.1:8767/>. Each standardized sequence is captured once from all
+four corners in a synchronized 2×2 video. The gallery supports parallel review,
+frame/time selection, notes and complete debug-trace export. See the
+[review workflow](devtools/animation_review/README.md) and its maintained
+[case catalog](devtools/animation_review/catalog.json).
+
+`python -m game --reference` opens the earlier two-cast terrace reference.
+`--miss-second`, `--goblin` and `--lethal` select its existing outcome cases.
+These remain explicit regression references alongside the playable encounter.
+
+`python -m game --replace-weapon` equips a dagger at startup, replaces it with
+a carried shortsword between the casts, and plays the original NeuroStudio
+equipment gesture. Latest gear and HP can advance while an earlier cast is
+paused; historical gear changes only when its gesture completes. This option
+also combines with `--goblin`, `--lethal`, `--quadrant` and `--headless`.
+
+`python -m game --magic-missile` runs two legal three-dart volleys against
+two targets in A/B/A order. Each volley retains one cast body and three distinct
+applications, including both hit reactions and damage numbers on A. This option
+combines with `--replace-weapon`, `--quadrant` and `--headless`.
+
+The terrace scene's projectiles arc upward using retained presentation geometry
+while keeping the original authored cast timing.
+
+The authored-animation reference remains available with `python -m game.animation_preview`.
+It uses local NeuroStudio JSON and original sprites through Python and Pygame;
+`--recovery`, `--cast-speed 2`, pause and timeline seeking exercise the same evaluator.
+`--target-height-steps 1` and Q/E exercise support height and camera rotation.
+`--target-rig smallscale.goblin01` selects the fixed recipient rig.
+This is the detached authoring reference. For a deterministic reference capture, use
+`python -m game.animation_preview --headless --at-ms 900 --capture /tmp/fire.png`.
 
 ## 1. Core Architecture Overview
 
@@ -147,10 +200,12 @@ The event system is the nervous system of the game engine, enabling decoupled co
 
 ### 5.1 Events
 
-Events are self-contained objects that represent something happening in the game:
+Events are typed records of something happening in the game. EventQueue alone
+registers their versions and owns their history; they do not share BaseObject's
+live-object registry.
 
 ```python
-class Event(BaseObject):
+class Event(BaseModel):
     name: str
     event_type: EventType  # ATTACK, MOVEMENT, DAMAGE, etc.
     phase: EventPhase      # DECLARATION, EXECUTION, EFFECT, COMPLETION

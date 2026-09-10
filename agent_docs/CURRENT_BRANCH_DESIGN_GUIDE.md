@@ -1,8 +1,16 @@
 # Working in the D&D engine recovery branch
 
-Studied: 2026-09-07. Branch: `codex/july-reconstruction`, HEAD `24f293d`.
-This is a contributor reference and evidence map, not a new implementation
-plan or authorization to expand an existing slice.
+Current branch: `codex/recovery-design`, based on `codex/july-reconstruction`
+at `16a6bfe`. Start with [RECOVERY_PLAN.md](../RECOVERY_PLAN.md) for the objective,
+NeuroStudio/async/height framing, ordered work and design gates. Historical
+analysis is separate in [HISTORY_BEFORE_ME.md](../HISTORY_BEFORE_ME.md).
+This guide is an owner and evidence map, not permission to expand a task.
+For the detailed 2026-09-08 reread, use [CURRENT_CODEBASE_STUDY.md](CURRENT_CODEBASE_STUDY.md).
+It records interception, condition/handler ownership, complete lineages, spatial
+consequences and NeuroStudio playback, with exact coverage and validation limits.
+Before proposing another implementation cut, follow its [next-change guard](CURRENT_CODEBASE_STUDY.md#cross-owner-conclusions-and-the-next-change-guard).
+Its original study was made on 2026-09-07 at `24f293d` plus the working candidate;
+that candidate was subsequently committed in the `16a6bfe` baseline.
 
 ## 1. Read the right authority
 
@@ -10,11 +18,11 @@ Start with [AGENTS.md](../AGENTS.md), the bounded plan for the requested work,
 its applicable amendments, and the current owner code. Read
 [HOW_TO_TEST.MD](../HOW_TO_TEST.MD) before writing tests. Keep AGENTS.md small.
 
-This checkout contains pre-existing modified engine/dependency/test files,
-an untracked `game/` package and `tests/game/`, and untracked Pygame amendments.
-Those are part of the working candidate studied here. HEAD alone does not
-describe that candidate. Do not reset, overwrite, or certify them merely from
-a commit message or an old plan's status line.
+The earlier study's modified files and untracked Pygame candidate are now
+part of the committed baseline. The overnight experiment is preserved separately
+on `astra_gogogo`; its combat playback is not present on this branch. Historical
+verification records describe their own candidates, not fresh acceptance of
+future changes. Consult Git and the recovery plan for current work status.
 
 Historical precedence, adapted from the accepted recovery audit:
 
@@ -34,51 +42,13 @@ README.md contains mixed-age examples: its generic advice to implement
 conditions through subconditions and its cleanup description must not override
 the current direct condition ownership and prepared removal graph.
 
-## 2. What failed, and what survives
+## 2. Historical context
 
-The earlier backend/frontend work sought a sound separation: the engine owns
-rules, committed facts and information authorization; the frontend owns assets,
-choreography and human-time display. The responsibility-leak audit found
-concrete art identities, presentation metadata and animation graphs coupled to
-backend content identity, persistence and replication. Retain the separation
-principle. Its proposed server/protocol machinery is not this milestone.
-
-The reduction experiment tried to support observer censorship, remembered
-world facts, late disclosure, causal replay and presentation lag. These remain
-real requirements. Its generic machinery is rejected:
-
-- `CanonicalEventView`, `Known`/`Unknown` paths and exhaustive knowledge masks;
-- generic Event cloning, archives, deliveries and consumer receipt protocols;
-- `dnd/event_reduction.py` and the broken branch's event-knowledge router;
-- Event-owned `resolve_sub_events` / `finalize_terminal` mechanics;
-- global condition cleanup replacing the actual runtime owners;
-- late imports and architecture allowlists used to conceal reverse edges.
-
-There is direct source evidence: at `broken`,
-`dnd/core/events/world_events.py:621` defines `resolve_sub_events`, imports
-GridMap and sensory code inside the method, and calls both mechanics owners.
-`broken:dnd/event_reduction.py` imports the knowledge/archive/delivery types
-and maintains field-path policies. The historical recovery study reports nine
-local imports and a seven-module dependency cycle in that experiment. These
-are historical findings, not a fresh count for today's checkout.
-
-Do not overcorrect by banning all methods, authored hooks or live synchronous
-payloads. This is a D&D-adapted ECS. Blocks and actions legitimately have
-methods; concrete conditions legitimately implement `_apply()` and cleanup.
-`ConditionApplicationEvent.condition` legitimately carries a live condition
-during synchronous mechanics. The error is moving ownership into event records
-or copying that live graph into detached presentation.
-
-Historical documents can be inspected without switching branches:
-
-```bash
-git show broken:BACKEND_FRONTEND_RESPONSIBILITY_LEAK_AUDIT_2026-08-15.md
-git show broken:DND_EVENT_REDUCTION_FIRST_PRINCIPLES_STUDY_2026-08-27.md
-git show broken:DND_JULY_EVENT_ARCHITECTURE_RECOVERY_STUDY_2026-08-29.md
-```
-
-Those texts explain the failure; their proposed replacement architectures
-must not be copied into new work.
+[HISTORY_BEFORE_ME.md](../HISTORY_BEFORE_ME.md) contains the broader source-backed
+study of the original engine, hosting/content/reduction failures, NeuroClient,
+July reconstruction, height work and the overnight experiment. Its reference
+map distinguishes accepted capabilities from rejected machinery. The current
+forward decisions and stages are in [RECOVERY_PLAN.md](../RECOVERY_PLAN.md).
 
 ## 3. Mechanics ownership
 
@@ -326,6 +296,10 @@ Current limitations requiring honest handoff:
   produced misleading performance evidence.
 
 ## 7. How to make the next change
+
+First locate the current stage and apply the design gate in
+[RECOVERY_PLAN.md](../RECOVERY_PLAN.md). Observed implementation is not itself
+an accepted behavior contract, especially when reading the overnight branch.
 
 Stay inside the user request and existing bounded plan. Identify the current
 owner, observable input/output, allowed files, relevant amendment and stop gate

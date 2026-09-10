@@ -1,0 +1,5478 @@
+{
+  "schema": "neuroclient.contentActionPresentationRecipes",
+  "version": 13,
+  "recipes": [
+    {
+      "definitionRef": {
+        "pack_id": "content.neurodragon",
+        "definition_kind": "action",
+        "content_id": "action.creature.skeleton_archer.mark_target",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [
+        "condition"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.neurodragon",
+        "definition_kind": "action",
+        "content_id": "action.environment.arcane_device.activate",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.neurodragon",
+        "definition_kind": "action",
+        "content_id": "action.environment.campfire.cook",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.neurodragon",
+        "definition_kind": "action",
+        "content_id": "action.environment.campfire.rest",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.neurodragon",
+        "definition_kind": "action",
+        "content_id": "action.environment.directional_door.close",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.neurodragon",
+        "definition_kind": "action",
+        "content_id": "action.environment.directional_door.open",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.neurodragon",
+        "definition_kind": "action",
+        "content_id": "action.environment.door.close",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.neurodragon",
+        "definition_kind": "action",
+        "content_id": "action.environment.door.open",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.neurodragon",
+        "definition_kind": "action",
+        "content_id": "action.environment.storage_chest.loot_all",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.neurodragon",
+        "definition_kind": "action",
+        "content_id": "action.environment.trap_lever.pull",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.neurodragon",
+        "definition_kind": "action",
+        "content_id": "action.environment.wall_torch.extinguish",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.neurodragon",
+        "definition_kind": "action",
+        "content_id": "action.environment.wall_torch.ignite",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.neurodragon",
+        "definition_kind": "action",
+        "content_id": "action.item.field_kit.deploy",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [
+        "condition"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.neurodragon",
+        "definition_kind": "action",
+        "content_id": "action.item.potion_greater_invisibility.drink",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "item_action"
+      ],
+      "previewChildCueKinds": [
+        "condition"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "clip": "Taunt",
+        "playbackSpeed": 1,
+        "hiddenSlots": [
+          "weapon",
+          "weaponGlow",
+          "offhand"
+        ],
+        "media": [
+          {
+            "id": "greater-invisibility-potion-release",
+            "role": "source_vfx",
+            "assetId": "strip.effect2.special1.phase1",
+            "anchor": "effect",
+            "attachment": "body",
+            "colors": {
+              "primary": 12550143,
+              "secondary": 16777215
+            },
+            "fps": 12,
+            "loop": false,
+            "reversed": false,
+            "scale": 1,
+            "offsetX": 0,
+            "offsetY": -8
+          }
+        ],
+        "enabled": true
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 8
+        },
+        {
+          "name": "recover",
+          "frame": 10
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": {
+        "text": "Greater Invisibility Potion",
+        "color": 12550143
+      }
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.neurodragon",
+        "definition_kind": "action",
+        "content_id": "action.item.potion_haste.drink",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "item_action"
+      ],
+      "previewChildCueKinds": [
+        "condition"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "clip": "Taunt",
+        "playbackSpeed": 1,
+        "hiddenSlots": [
+          "weapon",
+          "weaponGlow",
+          "offhand"
+        ],
+        "media": [
+          {
+            "id": "haste-potion-release",
+            "role": "source_vfx",
+            "assetId": "strip.effect2.special1.phase1",
+            "anchor": "effect",
+            "attachment": "body",
+            "colors": {
+              "primary": 16769071,
+              "secondary": 16777215
+            },
+            "fps": 12,
+            "loop": false,
+            "reversed": false,
+            "scale": 1,
+            "offsetX": 0,
+            "offsetY": -8
+          }
+        ],
+        "enabled": true
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 8
+        },
+        {
+          "name": "recover",
+          "frame": 10
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": {
+        "text": "Haste Potion",
+        "color": 16769071
+      }
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.neurodragon",
+        "definition_kind": "action",
+        "content_id": "action.item.potion_healing.drink",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "item_action"
+      ],
+      "previewChildCueKinds": [
+        "heal"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "clip": "Taunt",
+        "playbackSpeed": 1,
+        "hiddenSlots": [
+          "weapon",
+          "weaponGlow",
+          "offhand"
+        ],
+        "media": [
+          {
+            "id": "healing-potion-release",
+            "role": "source_vfx",
+            "assetId": "strip.effect2.special1.phase1",
+            "anchor": "effect",
+            "attachment": "body",
+            "colors": {
+              "primary": 5238625,
+              "secondary": 16777215
+            },
+            "fps": 12,
+            "loop": false,
+            "reversed": false,
+            "scale": 1,
+            "offsetX": 0,
+            "offsetY": -8
+          }
+        ],
+        "enabled": true
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 8
+        },
+        {
+          "name": "recover",
+          "frame": 10
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": {
+        "text": "Healing Potion",
+        "color": 5238625
+      }
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.neurodragon",
+        "definition_kind": "action",
+        "content_id": "action.item.torch.extinguish",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.neurodragon",
+        "definition_kind": "action",
+        "content_id": "action.item.torch.ignite",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.neurodragon",
+        "definition_kind": "action",
+        "content_id": "action.item.weapon_coat.apply",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [
+        "condition"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "action",
+        "content_id": "action.class.barbarian.end_rage",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [
+        "condition"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "action",
+        "content_id": "action.class.barbarian.extend_intimidating_presence",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "action",
+        "content_id": "action.class.barbarian.frenzied_strike",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "attack"
+      ],
+      "previewChildCueKinds": [
+        "damage"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "clip": "Attack6",
+        "playbackSpeed": 1.15,
+        "hiddenSlots": [],
+        "media": [],
+        "enabled": true
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "contact",
+          "frame": 7
+        },
+        {
+          "name": "recover",
+          "frame": 10
+        }
+      ],
+      "attackFeedback": {
+        "hit": null,
+        "miss": {
+          "text": "Miss",
+          "color": 8947848
+        },
+        "critical": {
+          "text": "Critical!!",
+          "color": 16763904
+        },
+        "critical_miss": {
+          "text": "Critical miss",
+          "color": 8947848
+        }
+      },
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "action",
+        "content_id": "action.class.barbarian.frenzy",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [
+        "condition"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "action",
+        "content_id": "action.class.barbarian.intimidating_presence",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [
+        "condition"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "action",
+        "content_id": "action.class.barbarian.rage",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [
+        "condition"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "action",
+        "content_id": "action.class.barbarian.reckless_attack",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [
+        "condition"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "action",
+        "content_id": "action.class.fighter.action_surge",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "action",
+        "content_id": "action.class.fighter.second_wind",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "action",
+        "content_id": "action.class.sorcerer.convert_slot_to_sorcery_points",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "action",
+        "content_id": "action.class.sorcerer.convert_sorcery_points_to_slot",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "action",
+        "content_id": "action.class.sorcerer.distant_spell",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [
+        "condition"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "action",
+        "content_id": "action.class.sorcerer.draconic_presence",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [
+        "condition"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "action",
+        "content_id": "action.class.sorcerer.dragon_wings.fly",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "action",
+        "content_id": "action.class.sorcerer.dragon_wings.toggle",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [
+        "condition"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "action",
+        "content_id": "action.class.sorcerer.elemental_affinity.resistance",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [
+        "condition"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "action",
+        "content_id": "action.class.sorcerer.quickened_spell",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [
+        "condition"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "action",
+        "content_id": "action.class.sorcerer.twinned_spell",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [
+        "condition"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "action",
+        "content_id": "action.core.drop_prone",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [
+        "condition"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "action",
+        "content_id": "action.core.drop",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "action",
+        "content_id": "action.core.stand_up",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [
+        "condition"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "action",
+        "content_id": "action.environment.heroes_feast.eat",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [
+        "condition"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "action",
+        "content_id": "action.feature.extra_attack",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "attack"
+      ],
+      "previewChildCueKinds": [
+        "damage"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "clip": "Attack1",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": [],
+        "enabled": true
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "contact",
+          "frame": 8
+        },
+        {
+          "name": "recover",
+          "frame": 10
+        }
+      ],
+      "attackFeedback": {
+        "hit": null,
+        "miss": {
+          "text": "Miss",
+          "color": 8947848
+        },
+        "critical": {
+          "text": "Critical!!",
+          "color": 16763904
+        },
+        "critical_miss": {
+          "text": "Critical miss",
+          "color": 8947848
+        }
+      },
+      "counterspellFeedback": null,
+      "variants": [
+        {
+          "id": "melee-offhand",
+          "match": {
+            "kind": "attack",
+            "delivery": "melee",
+            "weaponSlots": [
+              "MELEE_OFF"
+            ],
+            "outcomes": null,
+            "primaryDamageTypes": null,
+            "elemental": null,
+            "sourceItemRefs": null
+          },
+          "actor": {
+            "clip": "Attack5",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": [],
+            "enabled": true
+          },
+          "anchors": [
+            {
+              "name": "action_start",
+              "frame": 0
+            },
+            {
+              "name": "contact",
+              "frame": 8
+            },
+            {
+              "name": "recover",
+              "frame": 10
+            }
+          ],
+          "attackVfx": {
+            "onHit": {},
+            "onMiss": {}
+          },
+          "projectile": null,
+          "precedence": 100
+        },
+        {
+          "id": "melee-elemental",
+          "match": {
+            "kind": "attack",
+            "delivery": "melee",
+            "weaponSlots": [
+              "MELEE_MAIN"
+            ],
+            "outcomes": null,
+            "primaryDamageTypes": null,
+            "elemental": true,
+            "sourceItemRefs": null
+          },
+          "actor": {
+            "clip": "Attack4",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": [],
+            "enabled": true
+          },
+          "anchors": [
+            {
+              "name": "action_start",
+              "frame": 0
+            },
+            {
+              "name": "contact",
+              "frame": 8
+            },
+            {
+              "name": "recover",
+              "frame": 10
+            }
+          ],
+          "attackVfx": {
+            "onHit": {
+              "slash": {
+                "category": "Slash2",
+                "tint": "$element.primary"
+              }
+            },
+            "onMiss": {
+              "slash": {
+                "category": "Slash1",
+                "tint": "white"
+              }
+            }
+          },
+          "projectile": null,
+          "precedence": 700
+        },
+        {
+          "id": "melee-critical",
+          "match": {
+            "kind": "attack",
+            "delivery": "melee",
+            "weaponSlots": [
+              "MELEE_MAIN"
+            ],
+            "outcomes": [
+              "critical"
+            ],
+            "primaryDamageTypes": null,
+            "elemental": null,
+            "sourceItemRefs": null
+          },
+          "actor": {
+            "clip": "Attack2",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": [],
+            "enabled": true
+          },
+          "anchors": [
+            {
+              "name": "action_start",
+              "frame": 0
+            },
+            {
+              "name": "contact",
+              "frame": 8
+            },
+            {
+              "name": "recover",
+              "frame": 10
+            }
+          ],
+          "attackVfx": {
+            "onHit": {
+              "slash": {
+                "category": "Slash1",
+                "tint": "white"
+              }
+            },
+            "onMiss": {
+              "slash": {
+                "category": "Slash1",
+                "tint": "white"
+              }
+            },
+            "onCrit": {
+              "slash": {
+                "category": "Slash2",
+                "tint": "white"
+              }
+            }
+          },
+          "projectile": null,
+          "precedence": 600
+        },
+        {
+          "id": "melee-heavy-cleave",
+          "precedence": 500,
+          "match": {
+            "kind": "attack",
+            "sourceItemRefs": [
+              {
+                "pack_id": "content.srd_5_1_cc",
+                "definition_kind": "item",
+                "content_id": "weapon.battleaxe",
+                "content_version": 1,
+                "definition_contract_hash": "14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1"
+              },
+              {
+                "pack_id": "content.srd_5_1_cc",
+                "definition_kind": "item",
+                "content_id": "weapon.greataxe",
+                "content_version": 1,
+                "definition_contract_hash": "14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1"
+              },
+              {
+                "pack_id": "content.srd_5_1_cc",
+                "definition_kind": "item",
+                "content_id": "weapon.greatsword",
+                "content_version": 1,
+                "definition_contract_hash": "14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1"
+              },
+              {
+                "pack_id": "content.neurodragon",
+                "definition_kind": "item",
+                "content_id": "weapon.double_bladed_sword",
+                "content_version": 1,
+                "definition_contract_hash": "14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1"
+              }
+            ],
+            "delivery": "melee",
+            "weaponSlots": [
+              "MELEE_MAIN"
+            ],
+            "outcomes": null,
+            "primaryDamageTypes": null,
+            "elemental": false
+          },
+          "actor": {
+            "enabled": true,
+            "clip": "Attack4",
+            "playbackSpeed": 0.95,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "anchors": [
+            {
+              "name": "action_start",
+              "frame": 0
+            },
+            {
+              "name": "prepare",
+              "frame": 3
+            },
+            {
+              "name": "contact",
+              "frame": 8
+            },
+            {
+              "name": "recover",
+              "frame": 10
+            }
+          ],
+          "attackVfx": {
+            "onHit": {
+              "slash": {
+                "category": "Slash1",
+                "tint": "white"
+              }
+            },
+            "onMiss": {
+              "slash": {
+                "category": "Slash1",
+                "tint": "white"
+              }
+            },
+            "onCrit": {
+              "slash": {
+                "category": "Slash2",
+                "tint": "white"
+              }
+            }
+          },
+          "projectile": null
+        },
+        {
+          "id": "melee-blunt-swing",
+          "precedence": 500,
+          "match": {
+            "kind": "attack",
+            "sourceItemRefs": [
+              {
+                "pack_id": "content.srd_5_1_cc",
+                "definition_kind": "item",
+                "content_id": "weapon.club",
+                "content_version": 1,
+                "definition_contract_hash": "f65db9f725391b9c350400a2fc1789c14ab864a63f4a6be263cfcb9c8fa398f4"
+              },
+              {
+                "pack_id": "content.srd_5_1_cc",
+                "definition_kind": "item",
+                "content_id": "weapon.mace",
+                "content_version": 1,
+                "definition_contract_hash": "14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1"
+              },
+              {
+                "pack_id": "content.srd_5_1_cc",
+                "definition_kind": "item",
+                "content_id": "weapon.morningstar",
+                "content_version": 1,
+                "definition_contract_hash": "14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1"
+              },
+              {
+                "pack_id": "content.srd_5_1_cc",
+                "definition_kind": "item",
+                "content_id": "weapon.quarterstaff",
+                "content_version": 1,
+                "definition_contract_hash": "14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1"
+              },
+              {
+                "pack_id": "content.srd_5_1_cc",
+                "definition_kind": "item",
+                "content_id": "weapon.warhammer",
+                "content_version": 1,
+                "definition_contract_hash": "14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1"
+              },
+              {
+                "pack_id": "content.neurodragon",
+                "definition_kind": "item",
+                "content_id": "weapon.circus.soul_draining_morningstar",
+                "content_version": 1,
+                "definition_contract_hash": "404246a3a1d8ea4b5ce6159a6c2c37cacb4a0ab5be77194b3747257b7e15ba9c"
+              }
+            ],
+            "delivery": "melee",
+            "weaponSlots": [
+              "MELEE_MAIN"
+            ],
+            "outcomes": null,
+            "primaryDamageTypes": null,
+            "elemental": false
+          },
+          "actor": {
+            "enabled": true,
+            "clip": "Attack2",
+            "playbackSpeed": 1.05,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "anchors": [
+            {
+              "name": "action_start",
+              "frame": 0
+            },
+            {
+              "name": "prepare",
+              "frame": 3
+            },
+            {
+              "name": "contact",
+              "frame": 8
+            },
+            {
+              "name": "recover",
+              "frame": 10
+            }
+          ],
+          "attackVfx": {
+            "onHit": {
+              "slash": {
+                "category": "Slash1",
+                "tint": "white"
+              }
+            },
+            "onMiss": {
+              "slash": {
+                "category": "Slash1",
+                "tint": "white"
+              }
+            },
+            "onCrit": {
+              "slash": {
+                "category": "Slash2",
+                "tint": "white"
+              }
+            }
+          },
+          "projectile": null
+        },
+        {
+          "id": "melee-piercing",
+          "match": {
+            "kind": "attack",
+            "delivery": "melee",
+            "weaponSlots": [
+              "MELEE_MAIN"
+            ],
+            "outcomes": null,
+            "primaryDamageTypes": [
+              "Piercing"
+            ],
+            "elemental": null,
+            "sourceItemRefs": null
+          },
+          "actor": {
+            "clip": "Attack6",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": [],
+            "enabled": true
+          },
+          "anchors": [
+            {
+              "name": "action_start",
+              "frame": 0
+            },
+            {
+              "name": "contact",
+              "frame": 7
+            },
+            {
+              "name": "recover",
+              "frame": 10
+            }
+          ],
+          "attackVfx": {
+            "onHit": {
+              "slash": {
+                "category": "Slash1",
+                "tint": "white"
+              }
+            },
+            "onMiss": {
+              "slash": {
+                "category": "Slash1",
+                "tint": "white"
+              }
+            },
+            "onCrit": {
+              "slash": {
+                "category": "Slash2",
+                "tint": "white"
+              }
+            }
+          },
+          "projectile": null,
+          "precedence": 400
+        },
+        {
+          "id": "melee-main",
+          "match": {
+            "kind": "attack",
+            "delivery": "melee",
+            "weaponSlots": [
+              "MELEE_MAIN"
+            ],
+            "outcomes": null,
+            "primaryDamageTypes": null,
+            "elemental": null,
+            "sourceItemRefs": null
+          },
+          "actor": {
+            "clip": "Attack1",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": [],
+            "enabled": true
+          },
+          "anchors": [
+            {
+              "name": "action_start",
+              "frame": 0
+            },
+            {
+              "name": "contact",
+              "frame": 8
+            },
+            {
+              "name": "recover",
+              "frame": 10
+            }
+          ],
+          "attackVfx": {
+            "onHit": {
+              "slash": {
+                "category": "Slash1",
+                "tint": "white"
+              }
+            },
+            "onMiss": {
+              "slash": {
+                "category": "Slash1",
+                "tint": "white"
+              }
+            },
+            "onCrit": {
+              "slash": {
+                "category": "Slash2",
+                "tint": "white"
+              }
+            }
+          },
+          "projectile": null,
+          "precedence": 100
+        },
+        {
+          "id": "ranged",
+          "match": {
+            "kind": "attack",
+            "delivery": "projectile",
+            "weaponSlots": null,
+            "outcomes": null,
+            "primaryDamageTypes": null,
+            "elemental": null,
+            "sourceItemRefs": null
+          },
+          "actor": {
+            "clip": "Attack3",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": [],
+            "enabled": true
+          },
+          "anchors": [
+            {
+              "name": "action_start",
+              "frame": 0
+            },
+            {
+              "name": "release",
+              "frame": 8
+            },
+            {
+              "name": "recover",
+              "frame": 10
+            }
+          ],
+          "attackVfx": {
+            "onHit": {
+              "slash": {
+                "category": "Slash1",
+                "tint": "white"
+              }
+            },
+            "onMiss": {}
+          },
+          "projectile": {
+            "geometry": {
+              "renderer": "geometry_projectile",
+              "enabled": true,
+              "primitive": "bolt"
+            },
+            "speedPxPerSecond": 500,
+            "minimumTravelDurationMs": 150,
+            "trajectory": {
+              "type": "straight",
+              "sameTargetSpread": false
+            },
+            "originX": 0,
+            "originY": -16,
+            "sourceForwardPx": 0,
+            "targetY": -16,
+            "targetForwardPx": 0,
+            "depthMode": "world",
+            "debugAnchor": false
+          },
+          "precedence": 100
+        }
+      ],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "action",
+        "content_id": "action.monster.multiattack.bandit_captain.melee",
+        "content_version": 1,
+        "definition_contract_hash": "55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [
+        "attack"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "action",
+        "content_id": "action.monster.multiattack.bandit_captain.ranged",
+        "content_version": 1,
+        "definition_contract_hash": "55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [
+        "attack"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "action",
+        "content_id": "action.monster.multiattack.cult_fanatic",
+        "content_version": 1,
+        "definition_contract_hash": "55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [
+        "attack"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "action",
+        "content_id": "action.monster.multiattack.knight",
+        "content_version": 1,
+        "definition_contract_hash": "55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [
+        "attack"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "action",
+        "content_id": "action.monster.multiattack.scout.longbow",
+        "content_version": 1,
+        "definition_contract_hash": "55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [
+        "attack"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "action",
+        "content_id": "action.monster.multiattack.scout.shortsword",
+        "content_version": 1,
+        "definition_contract_hash": "55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [
+        "attack"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "action",
+        "content_id": "action.monster.multiattack.spy",
+        "content_version": 1,
+        "definition_contract_hash": "55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [
+        "attack"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "action",
+        "content_id": "action.monster.multiattack.thug",
+        "content_version": 1,
+        "definition_contract_hash": "55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [
+        "attack"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "action",
+        "content_id": "action.monster.multiattack.veteran.melee",
+        "content_version": 1,
+        "definition_contract_hash": "55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [
+        "attack"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "action",
+        "content_id": "action.monster.multiattack.veteran.ranged",
+        "content_version": 1,
+        "definition_contract_hash": "55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [
+        "attack"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "action",
+        "content_id": "action.monster.natural_attack",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "attack"
+      ],
+      "previewChildCueKinds": [
+        "damage"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "clip": "Attack2",
+        "playbackSpeed": 1.05,
+        "hiddenSlots": [],
+        "media": [],
+        "enabled": true
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "contact",
+          "frame": 8
+        },
+        {
+          "name": "recover",
+          "frame": 10
+        }
+      ],
+      "attackFeedback": {
+        "hit": null,
+        "miss": {
+          "text": "Miss",
+          "color": 8947848
+        },
+        "critical": {
+          "text": "Critical!!",
+          "color": 16763904
+        },
+        "critical_miss": {
+          "text": "Critical miss",
+          "color": 8947848
+        }
+      },
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "action",
+        "content_id": "action.origin.dragonborn.breath_weapon",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "actionFeedback": null,
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "action",
+        "content_id": "action.spell.call_lightning.strike",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "action",
+        "content_id": "action.spell.entangle.escape",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [
+        "condition"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "action",
+        "content_id": "action.spell.evards_black_tentacles.escape_dexterity",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [
+        "condition"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "action",
+        "content_id": "action.spell.evards_black_tentacles.escape_strength",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [
+        "condition"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "action",
+        "content_id": "action.spell.expeditious_retreat.dash",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [
+        "condition"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "action",
+        "content_id": "action.spell.eyebite.strike",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [
+        "condition"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "action",
+        "content_id": "action.spell.freedom_of_movement.escape",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [
+        "condition"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "action",
+        "content_id": "action.spell.sunbeam.strike",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [
+        "condition"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "action",
+        "content_id": "action.spell.telekinesis.grab",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "action",
+        "content_id": "action.spell.telekinesis.move",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "action",
+        "content_id": "action.spell.telekinesis.restrain",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [
+        "condition"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "action",
+        "content_id": "action.spell.web.escape",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [
+        "condition"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "action",
+        "content_id": "action.trait.aggressive",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "action",
+        "content_id": "action.trait.divine_eminence",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [
+        "condition"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "action",
+        "content_id": "action.trait.leadership",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [
+        "condition"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "reaction",
+        "content_id": "reaction.class_feature.barbarian.retaliation",
+        "content_version": 1,
+        "definition_contract_hash": "636ffe03ecf4e9d65b406137f0b2812c3a667e4641a56b912c67453ce0790d4b"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "actionFeedback": {
+        "text": "Retaliation",
+        "color": 14202110
+      },
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "reaction",
+        "content_id": "reaction.class_feature.fighter.protection",
+        "content_version": 1,
+        "definition_contract_hash": "636ffe03ecf4e9d65b406137f0b2812c3a667e4641a56b912c67453ce0790d4b"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "actionFeedback": {
+        "text": "Protection",
+        "color": 14202110
+      },
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "reaction",
+        "content_id": "reaction.class_feature.paladin.divine_smite",
+        "content_version": 1,
+        "definition_contract_hash": "636ffe03ecf4e9d65b406137f0b2812c3a667e4641a56b912c67453ce0790d4b"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": {
+        "text": "Divine Smite",
+        "color": 14202110
+      }
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "reaction",
+        "content_id": "reaction.monster.parry",
+        "content_version": 1,
+        "definition_contract_hash": "636ffe03ecf4e9d65b406137f0b2812c3a667e4641a56b912c67453ce0790d4b"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "actionFeedback": {
+        "text": "Parry",
+        "color": 14202110
+      },
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "reaction",
+        "content_id": "reaction.spell.counterspell",
+        "content_version": 1,
+        "definition_contract_hash": "636ffe03ecf4e9d65b406137f0b2812c3a667e4641a56b912c67453ce0790d4b"
+      },
+      "compatibleCueKinds": [
+        "counterspell"
+      ],
+      "previewChildCueKinds": [],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "clip": "Special1",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": [],
+        "enabled": true
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "release",
+          "frame": 8
+        },
+        {
+          "name": "recover",
+          "frame": 10
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": {
+        "automatic_success": {
+          "text": "Counterspelled",
+          "color": 9163775
+        },
+        "check_success": {
+          "text": "Counterspelled",
+          "color": 9163775
+        },
+        "check_failure": {
+          "text": "Counterspell failed",
+          "color": 16751473
+        }
+      },
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "reaction",
+        "content_id": "reaction.spell.hellish_rebuke",
+        "content_version": 1,
+        "definition_contract_hash": "636ffe03ecf4e9d65b406137f0b2812c3a667e4641a56b912c67453ce0790d4b"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "actionFeedback": {
+        "text": "Hellish Rebuke",
+        "color": 14202110
+      },
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "reaction",
+        "content_id": "reaction.spell.shield",
+        "content_version": 1,
+        "definition_contract_hash": "636ffe03ecf4e9d65b406137f0b2812c3a667e4641a56b912c67453ce0790d4b"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [
+        "condition"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": {
+        "text": "Shield",
+        "color": 14202110
+      }
+    },
+    {
+      "definitionRef": {
+        "pack_id": "core.rules",
+        "definition_kind": "action",
+        "content_id": "action.attack_object",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "core.rules",
+        "definition_kind": "action",
+        "content_id": "action.attack",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "attack"
+      ],
+      "previewChildCueKinds": [
+        "damage"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "clip": "Attack1",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": [],
+        "enabled": true
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "contact",
+          "frame": 8
+        },
+        {
+          "name": "recover",
+          "frame": 10
+        }
+      ],
+      "attackFeedback": {
+        "hit": null,
+        "miss": {
+          "text": "Miss",
+          "color": 8947848
+        },
+        "critical": {
+          "text": "Critical!!",
+          "color": 16763904
+        },
+        "critical_miss": {
+          "text": "Critical miss",
+          "color": 8947848
+        }
+      },
+      "counterspellFeedback": null,
+      "variants": [
+        {
+          "id": "melee-offhand",
+          "match": {
+            "kind": "attack",
+            "delivery": "melee",
+            "weaponSlots": [
+              "MELEE_OFF"
+            ],
+            "outcomes": null,
+            "primaryDamageTypes": null,
+            "elemental": null,
+            "sourceItemRefs": null
+          },
+          "actor": {
+            "clip": "Attack5",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": [],
+            "enabled": true
+          },
+          "anchors": [
+            {
+              "name": "action_start",
+              "frame": 0
+            },
+            {
+              "name": "contact",
+              "frame": 8
+            },
+            {
+              "name": "recover",
+              "frame": 10
+            }
+          ],
+          "attackVfx": {
+            "onHit": {},
+            "onMiss": {}
+          },
+          "projectile": null,
+          "precedence": 100
+        },
+        {
+          "id": "melee-elemental",
+          "match": {
+            "kind": "attack",
+            "delivery": "melee",
+            "weaponSlots": [
+              "MELEE_MAIN"
+            ],
+            "outcomes": null,
+            "primaryDamageTypes": null,
+            "elemental": true,
+            "sourceItemRefs": null
+          },
+          "actor": {
+            "clip": "Attack4",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": [],
+            "enabled": true
+          },
+          "anchors": [
+            {
+              "name": "action_start",
+              "frame": 0
+            },
+            {
+              "name": "contact",
+              "frame": 8
+            },
+            {
+              "name": "recover",
+              "frame": 10
+            }
+          ],
+          "attackVfx": {
+            "onHit": {
+              "slash": {
+                "category": "Slash2",
+                "tint": "$element.primary"
+              }
+            },
+            "onMiss": {
+              "slash": {
+                "category": "Slash1",
+                "tint": "white"
+              }
+            }
+          },
+          "projectile": null,
+          "precedence": 700
+        },
+        {
+          "id": "melee-critical",
+          "match": {
+            "kind": "attack",
+            "delivery": "melee",
+            "weaponSlots": [
+              "MELEE_MAIN"
+            ],
+            "outcomes": [
+              "critical"
+            ],
+            "primaryDamageTypes": null,
+            "elemental": null,
+            "sourceItemRefs": null
+          },
+          "actor": {
+            "clip": "Attack2",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": [],
+            "enabled": true
+          },
+          "anchors": [
+            {
+              "name": "action_start",
+              "frame": 0
+            },
+            {
+              "name": "contact",
+              "frame": 8
+            },
+            {
+              "name": "recover",
+              "frame": 10
+            }
+          ],
+          "attackVfx": {
+            "onHit": {
+              "slash": {
+                "category": "Slash1",
+                "tint": "white"
+              }
+            },
+            "onMiss": {
+              "slash": {
+                "category": "Slash1",
+                "tint": "white"
+              }
+            },
+            "onCrit": {
+              "slash": {
+                "category": "Slash2",
+                "tint": "white"
+              }
+            }
+          },
+          "projectile": null,
+          "precedence": 600
+        },
+        {
+          "id": "melee-heavy-cleave",
+          "precedence": 500,
+          "match": {
+            "kind": "attack",
+            "sourceItemRefs": [
+              {
+                "pack_id": "content.srd_5_1_cc",
+                "definition_kind": "item",
+                "content_id": "weapon.battleaxe",
+                "content_version": 1,
+                "definition_contract_hash": "14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1"
+              },
+              {
+                "pack_id": "content.srd_5_1_cc",
+                "definition_kind": "item",
+                "content_id": "weapon.greataxe",
+                "content_version": 1,
+                "definition_contract_hash": "14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1"
+              },
+              {
+                "pack_id": "content.srd_5_1_cc",
+                "definition_kind": "item",
+                "content_id": "weapon.greatsword",
+                "content_version": 1,
+                "definition_contract_hash": "14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1"
+              },
+              {
+                "pack_id": "content.neurodragon",
+                "definition_kind": "item",
+                "content_id": "weapon.double_bladed_sword",
+                "content_version": 1,
+                "definition_contract_hash": "14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1"
+              }
+            ],
+            "delivery": "melee",
+            "weaponSlots": [
+              "MELEE_MAIN"
+            ],
+            "outcomes": null,
+            "primaryDamageTypes": null,
+            "elemental": false
+          },
+          "actor": {
+            "enabled": true,
+            "clip": "Attack4",
+            "playbackSpeed": 0.95,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "anchors": [
+            {
+              "name": "action_start",
+              "frame": 0
+            },
+            {
+              "name": "prepare",
+              "frame": 3
+            },
+            {
+              "name": "contact",
+              "frame": 8
+            },
+            {
+              "name": "recover",
+              "frame": 10
+            }
+          ],
+          "attackVfx": {
+            "onHit": {
+              "slash": {
+                "category": "Slash1",
+                "tint": "white"
+              }
+            },
+            "onMiss": {
+              "slash": {
+                "category": "Slash1",
+                "tint": "white"
+              }
+            },
+            "onCrit": {
+              "slash": {
+                "category": "Slash2",
+                "tint": "white"
+              }
+            }
+          },
+          "projectile": null
+        },
+        {
+          "id": "melee-blunt-swing",
+          "precedence": 500,
+          "match": {
+            "kind": "attack",
+            "sourceItemRefs": [
+              {
+                "pack_id": "content.srd_5_1_cc",
+                "definition_kind": "item",
+                "content_id": "weapon.club",
+                "content_version": 1,
+                "definition_contract_hash": "f65db9f725391b9c350400a2fc1789c14ab864a63f4a6be263cfcb9c8fa398f4"
+              },
+              {
+                "pack_id": "content.srd_5_1_cc",
+                "definition_kind": "item",
+                "content_id": "weapon.mace",
+                "content_version": 1,
+                "definition_contract_hash": "14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1"
+              },
+              {
+                "pack_id": "content.srd_5_1_cc",
+                "definition_kind": "item",
+                "content_id": "weapon.morningstar",
+                "content_version": 1,
+                "definition_contract_hash": "14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1"
+              },
+              {
+                "pack_id": "content.srd_5_1_cc",
+                "definition_kind": "item",
+                "content_id": "weapon.quarterstaff",
+                "content_version": 1,
+                "definition_contract_hash": "14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1"
+              },
+              {
+                "pack_id": "content.srd_5_1_cc",
+                "definition_kind": "item",
+                "content_id": "weapon.warhammer",
+                "content_version": 1,
+                "definition_contract_hash": "14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1"
+              },
+              {
+                "pack_id": "content.neurodragon",
+                "definition_kind": "item",
+                "content_id": "weapon.circus.soul_draining_morningstar",
+                "content_version": 1,
+                "definition_contract_hash": "404246a3a1d8ea4b5ce6159a6c2c37cacb4a0ab5be77194b3747257b7e15ba9c"
+              }
+            ],
+            "delivery": "melee",
+            "weaponSlots": [
+              "MELEE_MAIN"
+            ],
+            "outcomes": null,
+            "primaryDamageTypes": null,
+            "elemental": false
+          },
+          "actor": {
+            "enabled": true,
+            "clip": "Attack2",
+            "playbackSpeed": 1.05,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "anchors": [
+            {
+              "name": "action_start",
+              "frame": 0
+            },
+            {
+              "name": "prepare",
+              "frame": 3
+            },
+            {
+              "name": "contact",
+              "frame": 8
+            },
+            {
+              "name": "recover",
+              "frame": 10
+            }
+          ],
+          "attackVfx": {
+            "onHit": {
+              "slash": {
+                "category": "Slash1",
+                "tint": "white"
+              }
+            },
+            "onMiss": {
+              "slash": {
+                "category": "Slash1",
+                "tint": "white"
+              }
+            },
+            "onCrit": {
+              "slash": {
+                "category": "Slash2",
+                "tint": "white"
+              }
+            }
+          },
+          "projectile": null
+        },
+        {
+          "id": "melee-piercing",
+          "match": {
+            "kind": "attack",
+            "delivery": "melee",
+            "weaponSlots": [
+              "MELEE_MAIN"
+            ],
+            "outcomes": null,
+            "primaryDamageTypes": [
+              "Piercing"
+            ],
+            "elemental": null,
+            "sourceItemRefs": null
+          },
+          "actor": {
+            "clip": "Attack6",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": [],
+            "enabled": true
+          },
+          "anchors": [
+            {
+              "name": "action_start",
+              "frame": 0
+            },
+            {
+              "name": "contact",
+              "frame": 7
+            },
+            {
+              "name": "recover",
+              "frame": 10
+            }
+          ],
+          "attackVfx": {
+            "onHit": {
+              "slash": {
+                "category": "Slash1",
+                "tint": "white"
+              }
+            },
+            "onMiss": {
+              "slash": {
+                "category": "Slash1",
+                "tint": "white"
+              }
+            },
+            "onCrit": {
+              "slash": {
+                "category": "Slash2",
+                "tint": "white"
+              }
+            }
+          },
+          "projectile": null,
+          "precedence": 400
+        },
+        {
+          "id": "melee-main",
+          "match": {
+            "kind": "attack",
+            "delivery": "melee",
+            "weaponSlots": [
+              "MELEE_MAIN"
+            ],
+            "outcomes": null,
+            "primaryDamageTypes": null,
+            "elemental": null,
+            "sourceItemRefs": null
+          },
+          "actor": {
+            "clip": "Attack1",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": [],
+            "enabled": true
+          },
+          "anchors": [
+            {
+              "name": "action_start",
+              "frame": 0
+            },
+            {
+              "name": "contact",
+              "frame": 8
+            },
+            {
+              "name": "recover",
+              "frame": 10
+            }
+          ],
+          "attackVfx": {
+            "onHit": {
+              "slash": {
+                "category": "Slash1",
+                "tint": "white"
+              }
+            },
+            "onMiss": {
+              "slash": {
+                "category": "Slash1",
+                "tint": "white"
+              }
+            },
+            "onCrit": {
+              "slash": {
+                "category": "Slash2",
+                "tint": "white"
+              }
+            }
+          },
+          "projectile": null,
+          "precedence": 100
+        },
+        {
+          "id": "ranged",
+          "match": {
+            "kind": "attack",
+            "delivery": "projectile",
+            "weaponSlots": null,
+            "outcomes": null,
+            "primaryDamageTypes": null,
+            "elemental": null,
+            "sourceItemRefs": null
+          },
+          "actor": {
+            "clip": "Attack3",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": [],
+            "enabled": true
+          },
+          "anchors": [
+            {
+              "name": "action_start",
+              "frame": 0
+            },
+            {
+              "name": "release",
+              "frame": 8
+            },
+            {
+              "name": "recover",
+              "frame": 10
+            }
+          ],
+          "attackVfx": {
+            "onHit": {
+              "slash": {
+                "category": "Slash1",
+                "tint": "white"
+              }
+            },
+            "onMiss": {}
+          },
+          "projectile": {
+            "geometry": {
+              "renderer": "geometry_projectile",
+              "enabled": true,
+              "primitive": "bolt"
+            },
+            "speedPxPerSecond": 500,
+            "minimumTravelDurationMs": 150,
+            "trajectory": {
+              "type": "straight",
+              "sameTargetSpread": false
+            },
+            "originX": 0,
+            "originY": -16,
+            "sourceForwardPx": 0,
+            "targetY": -16,
+            "targetForwardPx": 0,
+            "depthMode": "world",
+            "debugAnchor": false
+          },
+          "precedence": 100
+        }
+      ],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "core.rules",
+        "definition_kind": "action",
+        "content_id": "action.dash",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [
+        "condition"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "core.rules",
+        "definition_kind": "action",
+        "content_id": "action.disengage",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [
+        "condition"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "core.rules",
+        "definition_kind": "action",
+        "content_id": "action.dodge",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [
+        "condition"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "core.rules",
+        "definition_kind": "action",
+        "content_id": "action.drop_concentration",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [
+        "condition"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "core.rules",
+        "definition_kind": "action",
+        "content_id": "action.hide",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [
+        "condition"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "core.rules",
+        "definition_kind": "action",
+        "content_id": "action.pick_up",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "core.rules",
+        "definition_kind": "action",
+        "content_id": "action.shake_awake",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [
+        "condition"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "core.rules",
+        "definition_kind": "action",
+        "content_id": "action.shove",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "shove"
+      ],
+      "previewChildCueKinds": [
+        "forced_movement",
+        "condition"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "clip": "Kick",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": [],
+        "enabled": true
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "prepare",
+          "frame": 3
+        },
+        {
+          "name": "contact",
+          "frame": 7
+        },
+        {
+          "name": "recover",
+          "frame": 10
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "core.rules",
+        "definition_kind": "action",
+        "content_id": "action.swim",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+      },
+      "compatibleCueKinds": [
+        "action"
+      ],
+      "previewChildCueKinds": [],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "enabled": false,
+        "clip": "Idle",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "effect",
+          "frame": 0
+        },
+        {
+          "name": "recover",
+          "frame": 0
+        }
+      ],
+      "attackFeedback": null,
+      "counterspellFeedback": null,
+      "variants": [],
+      "projectile": null,
+      "actionFeedback": null
+    },
+    {
+      "definitionRef": {
+        "pack_id": "core.rules",
+        "definition_kind": "reaction",
+        "content_id": "reaction.opportunity_attack",
+        "content_version": 1,
+        "definition_contract_hash": "636ffe03ecf4e9d65b406137f0b2812c3a667e4641a56b912c67453ce0790d4b"
+      },
+      "compatibleCueKinds": [
+        "attack"
+      ],
+      "previewChildCueKinds": [
+        "damage"
+      ],
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "actor": {
+        "clip": "Attack1",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": [],
+        "enabled": true
+      },
+      "anchors": [
+        {
+          "name": "action_start",
+          "frame": 0
+        },
+        {
+          "name": "contact",
+          "frame": 8
+        },
+        {
+          "name": "recover",
+          "frame": 10
+        }
+      ],
+      "attackFeedback": {
+        "hit": null,
+        "miss": {
+          "text": "Miss",
+          "color": 8947848
+        },
+        "critical": {
+          "text": "Critical!!",
+          "color": 16763904
+        },
+        "critical_miss": {
+          "text": "Critical miss",
+          "color": 8947848
+        }
+      },
+      "counterspellFeedback": null,
+      "variants": [
+        {
+          "id": "melee-offhand",
+          "match": {
+            "kind": "attack",
+            "delivery": "melee",
+            "weaponSlots": [
+              "MELEE_OFF"
+            ],
+            "outcomes": null,
+            "primaryDamageTypes": null,
+            "elemental": null,
+            "sourceItemRefs": null
+          },
+          "actor": {
+            "clip": "Attack5",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": [],
+            "enabled": true
+          },
+          "anchors": [
+            {
+              "name": "action_start",
+              "frame": 0
+            },
+            {
+              "name": "contact",
+              "frame": 8
+            },
+            {
+              "name": "recover",
+              "frame": 10
+            }
+          ],
+          "attackVfx": {
+            "onHit": {},
+            "onMiss": {}
+          },
+          "projectile": null,
+          "precedence": 100
+        },
+        {
+          "id": "melee-elemental",
+          "match": {
+            "kind": "attack",
+            "delivery": "melee",
+            "weaponSlots": [
+              "MELEE_MAIN"
+            ],
+            "outcomes": null,
+            "primaryDamageTypes": null,
+            "elemental": true,
+            "sourceItemRefs": null
+          },
+          "actor": {
+            "clip": "Attack4",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": [],
+            "enabled": true
+          },
+          "anchors": [
+            {
+              "name": "action_start",
+              "frame": 0
+            },
+            {
+              "name": "contact",
+              "frame": 8
+            },
+            {
+              "name": "recover",
+              "frame": 10
+            }
+          ],
+          "attackVfx": {
+            "onHit": {
+              "slash": {
+                "category": "Slash2",
+                "tint": "$element.primary"
+              }
+            },
+            "onMiss": {
+              "slash": {
+                "category": "Slash1",
+                "tint": "white"
+              }
+            }
+          },
+          "projectile": null,
+          "precedence": 700
+        },
+        {
+          "id": "melee-critical",
+          "match": {
+            "kind": "attack",
+            "delivery": "melee",
+            "weaponSlots": [
+              "MELEE_MAIN"
+            ],
+            "outcomes": [
+              "critical"
+            ],
+            "primaryDamageTypes": null,
+            "elemental": null,
+            "sourceItemRefs": null
+          },
+          "actor": {
+            "clip": "Attack2",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": [],
+            "enabled": true
+          },
+          "anchors": [
+            {
+              "name": "action_start",
+              "frame": 0
+            },
+            {
+              "name": "contact",
+              "frame": 8
+            },
+            {
+              "name": "recover",
+              "frame": 10
+            }
+          ],
+          "attackVfx": {
+            "onHit": {
+              "slash": {
+                "category": "Slash1",
+                "tint": "white"
+              }
+            },
+            "onMiss": {
+              "slash": {
+                "category": "Slash1",
+                "tint": "white"
+              }
+            },
+            "onCrit": {
+              "slash": {
+                "category": "Slash2",
+                "tint": "white"
+              }
+            }
+          },
+          "projectile": null,
+          "precedence": 600
+        },
+        {
+          "id": "melee-heavy-cleave",
+          "precedence": 500,
+          "match": {
+            "kind": "attack",
+            "sourceItemRefs": [
+              {
+                "pack_id": "content.srd_5_1_cc",
+                "definition_kind": "item",
+                "content_id": "weapon.battleaxe",
+                "content_version": 1,
+                "definition_contract_hash": "14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1"
+              },
+              {
+                "pack_id": "content.srd_5_1_cc",
+                "definition_kind": "item",
+                "content_id": "weapon.greataxe",
+                "content_version": 1,
+                "definition_contract_hash": "14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1"
+              },
+              {
+                "pack_id": "content.srd_5_1_cc",
+                "definition_kind": "item",
+                "content_id": "weapon.greatsword",
+                "content_version": 1,
+                "definition_contract_hash": "14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1"
+              },
+              {
+                "pack_id": "content.neurodragon",
+                "definition_kind": "item",
+                "content_id": "weapon.double_bladed_sword",
+                "content_version": 1,
+                "definition_contract_hash": "14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1"
+              }
+            ],
+            "delivery": "melee",
+            "weaponSlots": [
+              "MELEE_MAIN"
+            ],
+            "outcomes": null,
+            "primaryDamageTypes": null,
+            "elemental": false
+          },
+          "actor": {
+            "enabled": true,
+            "clip": "Attack4",
+            "playbackSpeed": 0.95,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "anchors": [
+            {
+              "name": "action_start",
+              "frame": 0
+            },
+            {
+              "name": "prepare",
+              "frame": 3
+            },
+            {
+              "name": "contact",
+              "frame": 8
+            },
+            {
+              "name": "recover",
+              "frame": 10
+            }
+          ],
+          "attackVfx": {
+            "onHit": {
+              "slash": {
+                "category": "Slash1",
+                "tint": "white"
+              }
+            },
+            "onMiss": {
+              "slash": {
+                "category": "Slash1",
+                "tint": "white"
+              }
+            },
+            "onCrit": {
+              "slash": {
+                "category": "Slash2",
+                "tint": "white"
+              }
+            }
+          },
+          "projectile": null
+        },
+        {
+          "id": "melee-blunt-swing",
+          "precedence": 500,
+          "match": {
+            "kind": "attack",
+            "sourceItemRefs": [
+              {
+                "pack_id": "content.srd_5_1_cc",
+                "definition_kind": "item",
+                "content_id": "weapon.club",
+                "content_version": 1,
+                "definition_contract_hash": "f65db9f725391b9c350400a2fc1789c14ab864a63f4a6be263cfcb9c8fa398f4"
+              },
+              {
+                "pack_id": "content.srd_5_1_cc",
+                "definition_kind": "item",
+                "content_id": "weapon.mace",
+                "content_version": 1,
+                "definition_contract_hash": "14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1"
+              },
+              {
+                "pack_id": "content.srd_5_1_cc",
+                "definition_kind": "item",
+                "content_id": "weapon.morningstar",
+                "content_version": 1,
+                "definition_contract_hash": "14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1"
+              },
+              {
+                "pack_id": "content.srd_5_1_cc",
+                "definition_kind": "item",
+                "content_id": "weapon.quarterstaff",
+                "content_version": 1,
+                "definition_contract_hash": "14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1"
+              },
+              {
+                "pack_id": "content.srd_5_1_cc",
+                "definition_kind": "item",
+                "content_id": "weapon.warhammer",
+                "content_version": 1,
+                "definition_contract_hash": "14f877a21664b98e998fa0990c8f8382c77b81851f2ca4c81cad76b1215e8fe1"
+              },
+              {
+                "pack_id": "content.neurodragon",
+                "definition_kind": "item",
+                "content_id": "weapon.circus.soul_draining_morningstar",
+                "content_version": 1,
+                "definition_contract_hash": "404246a3a1d8ea4b5ce6159a6c2c37cacb4a0ab5be77194b3747257b7e15ba9c"
+              }
+            ],
+            "delivery": "melee",
+            "weaponSlots": [
+              "MELEE_MAIN"
+            ],
+            "outcomes": null,
+            "primaryDamageTypes": null,
+            "elemental": false
+          },
+          "actor": {
+            "enabled": true,
+            "clip": "Attack2",
+            "playbackSpeed": 1.05,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "anchors": [
+            {
+              "name": "action_start",
+              "frame": 0
+            },
+            {
+              "name": "prepare",
+              "frame": 3
+            },
+            {
+              "name": "contact",
+              "frame": 8
+            },
+            {
+              "name": "recover",
+              "frame": 10
+            }
+          ],
+          "attackVfx": {
+            "onHit": {
+              "slash": {
+                "category": "Slash1",
+                "tint": "white"
+              }
+            },
+            "onMiss": {
+              "slash": {
+                "category": "Slash1",
+                "tint": "white"
+              }
+            },
+            "onCrit": {
+              "slash": {
+                "category": "Slash2",
+                "tint": "white"
+              }
+            }
+          },
+          "projectile": null
+        },
+        {
+          "id": "melee-piercing",
+          "match": {
+            "kind": "attack",
+            "delivery": "melee",
+            "weaponSlots": [
+              "MELEE_MAIN"
+            ],
+            "outcomes": null,
+            "primaryDamageTypes": [
+              "Piercing"
+            ],
+            "elemental": null,
+            "sourceItemRefs": null
+          },
+          "actor": {
+            "clip": "Attack6",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": [],
+            "enabled": true
+          },
+          "anchors": [
+            {
+              "name": "action_start",
+              "frame": 0
+            },
+            {
+              "name": "contact",
+              "frame": 7
+            },
+            {
+              "name": "recover",
+              "frame": 10
+            }
+          ],
+          "attackVfx": {
+            "onHit": {
+              "slash": {
+                "category": "Slash1",
+                "tint": "white"
+              }
+            },
+            "onMiss": {
+              "slash": {
+                "category": "Slash1",
+                "tint": "white"
+              }
+            },
+            "onCrit": {
+              "slash": {
+                "category": "Slash2",
+                "tint": "white"
+              }
+            }
+          },
+          "projectile": null,
+          "precedence": 400
+        },
+        {
+          "id": "melee-main",
+          "match": {
+            "kind": "attack",
+            "delivery": "melee",
+            "weaponSlots": [
+              "MELEE_MAIN"
+            ],
+            "outcomes": null,
+            "primaryDamageTypes": null,
+            "elemental": null,
+            "sourceItemRefs": null
+          },
+          "actor": {
+            "clip": "Attack1",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": [],
+            "enabled": true
+          },
+          "anchors": [
+            {
+              "name": "action_start",
+              "frame": 0
+            },
+            {
+              "name": "contact",
+              "frame": 8
+            },
+            {
+              "name": "recover",
+              "frame": 10
+            }
+          ],
+          "attackVfx": {
+            "onHit": {
+              "slash": {
+                "category": "Slash1",
+                "tint": "white"
+              }
+            },
+            "onMiss": {
+              "slash": {
+                "category": "Slash1",
+                "tint": "white"
+              }
+            },
+            "onCrit": {
+              "slash": {
+                "category": "Slash2",
+                "tint": "white"
+              }
+            }
+          },
+          "projectile": null,
+          "precedence": 100
+        },
+        {
+          "id": "ranged",
+          "match": {
+            "kind": "attack",
+            "delivery": "projectile",
+            "weaponSlots": null,
+            "outcomes": null,
+            "primaryDamageTypes": null,
+            "elemental": null,
+            "sourceItemRefs": null
+          },
+          "actor": {
+            "clip": "Attack3",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": [],
+            "enabled": true
+          },
+          "anchors": [
+            {
+              "name": "action_start",
+              "frame": 0
+            },
+            {
+              "name": "release",
+              "frame": 8
+            },
+            {
+              "name": "recover",
+              "frame": 10
+            }
+          ],
+          "attackVfx": {
+            "onHit": {
+              "slash": {
+                "category": "Slash1",
+                "tint": "white"
+              }
+            },
+            "onMiss": {}
+          },
+          "projectile": {
+            "geometry": {
+              "renderer": "geometry_projectile",
+              "enabled": true,
+              "primitive": "bolt"
+            },
+            "speedPxPerSecond": 500,
+            "minimumTravelDurationMs": 150,
+            "trajectory": {
+              "type": "straight",
+              "sameTargetSpread": false
+            },
+            "originX": 0,
+            "originY": -16,
+            "sourceForwardPx": 0,
+            "targetY": -16,
+            "targetForwardPx": 0,
+            "depthMode": "world",
+            "debugAnchor": false
+          },
+          "precedence": 100
+        }
+      ],
+      "projectile": null,
+      "actionFeedback": null
+    }
+  ]
+}

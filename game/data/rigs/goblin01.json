@@ -1,0 +1,192 @@
+{
+  "rig_id": "smallscale.goblin01",
+  "creature_content_refs": ["content.neurodragon:creature:creature.goblin@1"],
+  "rig": {
+    "cell_width": 128,
+    "cell_height": 128,
+    "origin_y_from_ground": 41,
+    "facing_rows": {
+      "E": 0,
+      "SE": 1,
+      "S": 2,
+      "SW": 3,
+      "W": 4,
+      "NW": 5,
+      "N": 6,
+      "NE": 7
+    },
+    "slot_order": [
+      "shadow",
+      "body"
+    ],
+    "slot_categories": {
+      "shadow": [
+        "Goblin01Shadow"
+      ],
+      "body": [
+        "Goblin01"
+      ]
+    },
+    "clips": {
+      "Idle": {
+        "source_clip": "Idle",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "Goblin01": "/rigs/goblin01/body/Idle.png",
+          "Goblin01Shadow": "/rigs/goblin01/shadow/Idle.png"
+        }
+      },
+      "TakeDamage": {
+        "source_clip": "TakeDamage 1",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "Goblin01": "/rigs/goblin01/body/TakeDamage 1.png",
+          "Goblin01Shadow": "/rigs/goblin01/shadow/TakeDamage 1.png"
+        }
+      },
+      "Die": {
+        "source_clip": "Die 1",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "Goblin01": "/rigs/goblin01/body/Die 1.png",
+          "Goblin01Shadow": "/rigs/goblin01/shadow/Die 1.png"
+        }
+      },
+      "Run": {
+        "source_clip": "Run",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "Goblin01": "/rigs/goblin01/body/Run.png",
+          "Goblin01Shadow": "/rigs/goblin01/shadow/Run.png"
+        }
+      },
+      "Rolling": {
+        "source_clip": "Roll 1",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "Goblin01": "/rigs/goblin01/body/Roll 1.png",
+          "Goblin01Shadow": "/rigs/goblin01/shadow/Roll 1.png"
+        }
+      },
+      "Attack1": {
+        "source_clip": "Attack 1",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "Goblin01": "/rigs/goblin01/body/Attack 1.png",
+          "Goblin01Shadow": "/rigs/goblin01/shadow/Attack 1.png"
+        }
+      },
+      "Attack2": {
+        "source_clip": "Attack 2",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "Goblin01": "/rigs/goblin01/body/Attack 2.png",
+          "Goblin01Shadow": "/rigs/goblin01/shadow/Attack 2.png"
+        }
+      }
+    }
+  },
+  "resources": {
+    "/rigs/goblin01/body/Idle.png": "game/assets/rigs/goblin01/body/Idle.png",
+    "/rigs/goblin01/shadow/Idle.png": "game/assets/rigs/goblin01/shadow/Idle.png",
+    "/rigs/goblin01/body/TakeDamage 1.png": "game/assets/rigs/goblin01/body/TakeDamage 1.png",
+    "/rigs/goblin01/shadow/TakeDamage 1.png": "game/assets/rigs/goblin01/shadow/TakeDamage 1.png",
+    "/rigs/goblin01/body/Die 1.png": "game/assets/rigs/goblin01/body/Die 1.png",
+    "/rigs/goblin01/shadow/Die 1.png": "game/assets/rigs/goblin01/shadow/Die 1.png",
+    "/rigs/goblin01/body/Run.png": "game/assets/rigs/goblin01/body/Run.png",
+    "/rigs/goblin01/shadow/Run.png": "game/assets/rigs/goblin01/shadow/Run.png",
+    "/rigs/goblin01/body/Roll 1.png": "game/assets/rigs/goblin01/body/Roll 1.png",
+    "/rigs/goblin01/shadow/Roll 1.png": "game/assets/rigs/goblin01/shadow/Roll 1.png",
+    "/rigs/goblin01/body/Attack 1.png": "game/assets/rigs/goblin01/body/Attack 1.png",
+    "/rigs/goblin01/shadow/Attack 1.png": "game/assets/rigs/goblin01/shadow/Attack 1.png",
+    "/rigs/goblin01/body/Attack 2.png": "game/assets/rigs/goblin01/body/Attack 2.png",
+    "/rigs/goblin01/shadow/Attack 2.png": "game/assets/rigs/goblin01/shadow/Attack 2.png"
+  },
+  "provenance": {
+    "archive": {
+      "name": "2D Orcs and Goblins - TopDown - V1.0.zip",
+      "bytes": 348119526,
+      "sha256": "8dac87acaeb1cde338d7b9c00727d4fa106e2f98de26bd6ec095ed49cc0e05ea"
+    },
+    "files": {
+      "/rigs/goblin01/body/Idle.png": {
+        "archive_member": "2D Orcs and Goblins - TopDown - V1.0/Seperate shadows and effects/Goblin 01/Idle.png",
+        "bytes": 110438,
+        "sha256": "cded39f7b3d85cbf441a3c7f078dcbce39bae9beb1f9a9ff15e45d113cd4a0ac"
+      },
+      "/rigs/goblin01/shadow/Idle.png": {
+        "archive_member": "2D Orcs and Goblins - TopDown - V1.0/Seperate shadows and effects/Goblin 01/Shadows/Idle.png",
+        "bytes": 88253,
+        "sha256": "eca5c6ef065d63a83b37155509cce11066f6133cea5eedadb37396886b6d4ff0"
+      },
+      "/rigs/goblin01/body/TakeDamage 1.png": {
+        "archive_member": "2D Orcs and Goblins - TopDown - V1.0/Seperate shadows and effects/Goblin 01/TakeDamage 1.png",
+        "bytes": 152173,
+        "sha256": "f2899fbcf5b4001e761b33017d9e30ea2d26a7012a2689d71b0625ed62b815b2"
+      },
+      "/rigs/goblin01/shadow/TakeDamage 1.png": {
+        "archive_member": "2D Orcs and Goblins - TopDown - V1.0/Seperate shadows and effects/Goblin 01/Shadows/TakeDamage 1.png",
+        "bytes": 105639,
+        "sha256": "1c83b7ef0130e2ae7cedee935c534f4279e2fb29083a26d8f73bca4e45089b8e"
+      },
+      "/rigs/goblin01/body/Die 1.png": {
+        "archive_member": "2D Orcs and Goblins - TopDown - V1.0/Seperate shadows and effects/Goblin 01/Die 1.png",
+        "bytes": 147350,
+        "sha256": "f64820ac222002308976bb56209338051ce13bc582f569f1e2e9dffa927b5e8d"
+      },
+      "/rigs/goblin01/shadow/Die 1.png": {
+        "archive_member": "2D Orcs and Goblins - TopDown - V1.0/Seperate shadows and effects/Goblin 01/Shadows/Die 1.png",
+        "bytes": 91565,
+        "sha256": "07dc7d082074acb688073c6f01bbf21f5301f57f6d66f960a2bf45ff0404a688"
+      },
+      "/rigs/goblin01/body/Run.png": {
+        "archive_member": "2D Orcs and Goblins - TopDown - V1.0/Seperate shadows and effects/Goblin 01/Run.png",
+        "bytes": 155906,
+        "sha256": "baf0d1e9df49d4354d7ce4d1c970179ad62aadaf4aa1df97cc0c31b8e185d5c1"
+      },
+      "/rigs/goblin01/shadow/Run.png": {
+        "archive_member": "2D Orcs and Goblins - TopDown - V1.0/Seperate shadows and effects/Goblin 01/Shadows/Run.png",
+        "bytes": 105675,
+        "sha256": "3b4f48f6d4ac2b31310a22d65b45714ed54cb2589c792d2ad6fc8103d39502dd"
+      },
+      "/rigs/goblin01/body/Roll 1.png": {
+        "archive_member": "2D Orcs and Goblins - TopDown - V1.0/Seperate shadows and effects/Goblin 01/Roll 1.png",
+        "bytes": 164303,
+        "sha256": "9c60a791e406463fbdbfe8df09a3af852219941f2e685a3935a79eed7dfef1f8"
+      },
+      "/rigs/goblin01/shadow/Roll 1.png": {
+        "archive_member": "2D Orcs and Goblins - TopDown - V1.0/Seperate shadows and effects/Goblin 01/Shadows/Roll 1.png",
+        "bytes": 113680,
+        "sha256": "809a27c8523260d88d654256674640c878f6d98c418c77de354051f0380262d2"
+      },
+      "/rigs/goblin01/body/Attack 1.png": {
+        "archive_member": "2D Orcs and Goblins - TopDown - V1.0/Seperate shadows and effects/Goblin 01/Attack 1.png",
+        "bytes": 164061,
+        "sha256": "b69440f7749bc889f8bdca8d7aca7cb565a00da452ae40268f19112ae7330f3f"
+      },
+      "/rigs/goblin01/shadow/Attack 1.png": {
+        "archive_member": "2D Orcs and Goblins - TopDown - V1.0/Seperate shadows and effects/Goblin 01/Shadows/Attack 1.png",
+        "bytes": 115432,
+        "sha256": "1eb8038d96502fd6c37c802872ebb8f3803aca4f5ce9a0ca6789ed4abff3f6c6"
+      },
+      "/rigs/goblin01/body/Attack 2.png": {
+        "archive_member": "2D Orcs and Goblins - TopDown - V1.0/Seperate shadows and effects/Goblin 01/Attack 2.png",
+        "bytes": 158064,
+        "sha256": "99e4116831bb9cea7b60d14d0d9e55e1f4fc67c728d9f823b6e88abd3a9c87bd"
+      },
+      "/rigs/goblin01/shadow/Attack 2.png": {
+        "archive_member": "2D Orcs and Goblins - TopDown - V1.0/Seperate shadows and effects/Goblin 01/Shadows/Attack 2.png",
+        "bytes": 109821,
+        "sha256": "79e82f6c3f212c9303e5a3cf53ddae7afe3517a0b7fa12cc48d62585d554201c"
+      }
+    },
+    "adaptation": "Body mapping to the NeuroClient root vocabulary. All selected original sheets contain fifteen meaningful 128 px frames in eight visually verified E, SE, S, SW, W, NW, N, NE rows. The PNG-only archive declares no FPS or pivot. 12 fps, frame 14 settlement and fixed support pixel (64, 87), equivalent to origin_y_from_ground 41, are reviewed execution choices. Separate shadow opacity 0.5 is a caller appearance choice supported by comparison to vendor Combined sprites, which are not an exact flattening of these separate sheets. Original PNG bytes, including alpha 1 corner export marks, are preserved. Normal and critical scimitar attacks bind the vendor Attack 1 and Attack 2 body/shadow sheets respectively; removable modular slash media is not added to this fixed rig."
+  }
+}

@@ -1,0 +1,297 @@
+{
+  "schema": "neuroclient.spellStudioDrafts",
+  "version": 6,
+  "spells": [
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "spell",
+        "content_id": "spell.fire_bolt",
+        "content_version": 1,
+        "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+      },
+      "elementColors": {
+        "primary": 16737792,
+        "secondary": 16719360,
+        "tertiary": 16763904
+      },
+      "cast": {
+        "actionClip": "Attack5",
+        "releaseFrame": 7,
+        "equipment": {
+          "kind": "hidden"
+        },
+        "effects": [
+          {
+            "id": "cast-effect",
+            "slot": "effect",
+            "enabled": false,
+            "hidden": true,
+            "category": "Effect1",
+            "colors": {
+              "source": "override",
+              "primary": 11223315,
+              "secondary": 16777055,
+              "mode": "multiTint"
+            }
+          }
+        ],
+        "weaponGlow": {
+          "id": "cast-weaponGlow",
+          "slot": "weaponGlow",
+          "enabled": true,
+          "hidden": false,
+          "category": "Magic2",
+          "colors": {
+            "source": "override",
+            "primary": 11223315,
+            "secondary": 16777055,
+            "mode": "multiTint"
+          }
+        },
+        "recovery": {
+          "enabled": false,
+          "bodyClip": "Taunt",
+          "bodyPlaybackSpeed": 1
+        }
+      },
+      "projectile": {
+        "geometry": {
+          "renderer": "geometry_projectile",
+          "enabled": false,
+          "primitive": "bolt"
+        },
+        "sprite": {
+          "renderer": "sprite_projectile",
+          "assetId": "lelu_fire_strike_128_pixel_lab_fire24_px8",
+          "alpha": 1,
+          "tint": 16777215,
+          "blendMode": "add",
+          "offsetX": 0,
+          "offsetY": 0,
+          "geometryComposition": "replace_geometry",
+          "mediaFailurePolicy": "fail_transaction"
+        },
+        "prepare": {
+          "enabled": true,
+          "assetId": "lelu_fire_strike_128_pixel_lab_fire24_px8",
+          "assetPhase": "cast",
+          "startFrame": 1,
+          "fps": 24
+        },
+        "travel": {
+          "enabled": true,
+          "assetId": "lelu_fire_strike_128_pixel_lab_fire24_px8",
+          "assetPhase": "travel"
+        },
+        "impact": {
+          "enabled": true,
+          "assetId": "lelu_fire_strike_128_pixel_lab_fire24_px8",
+          "assetPhase": "impact"
+        },
+        "trajectory": {
+          "type": "straight",
+          "sameTargetSpread": true
+        },
+        "speedPxPerSecond": 180,
+        "minimumTravelDurationMs": 150,
+        "fps": 24,
+        "scale": 1,
+        "depthMode": "world",
+        "orientation": {
+          "rowSource": "targetVector",
+          "fineRotation": "isometricHybrid",
+          "directionSource": "target_vector",
+          "rotationOffsetDeg": 0
+        },
+        "sourceAnchor": {
+          "basis": "tileCenter",
+          "liftY": 0,
+          "forwardPx": 0,
+          "sidePx": 0,
+          "axisPx": 24
+        },
+        "targetAnchor": {
+          "basis": "tileCenter",
+          "liftY": 0,
+          "forwardPx": -16
+        },
+        "sourceAnchorsByFacing": {
+          "S": {
+            "basis": "tileCenter",
+            "liftY": 0,
+            "forwardPx": 0,
+            "sidePx": 0,
+            "axisPx": 24
+          }
+        },
+        "missileStaggerMs": 150
+      },
+      "damage": {
+        "impactDelayMs": 15,
+        "hitFlash": {
+          "enabled": true,
+          "frame": 5,
+          "durationMs": 90,
+          "color": 15610692
+        },
+        "floatingNumber": {
+          "enabled": true,
+          "frame": 7,
+          "durationMs": 1000,
+          "label": "Fire",
+          "color": 15610692
+        },
+        "death": {
+          "enabled": true,
+          "frame": 12
+        }
+      }
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "spell",
+        "content_id": "spell.acid_splash",
+        "content_version": 1,
+        "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+      },
+      "elementColors": {
+        "primary": 4521796,
+        "secondary": 2271778,
+        "tertiary": 8978278
+      },
+      "cast": {
+        "actionClip": "Special1",
+        "releaseFrame": 7,
+        "equipment": {
+          "kind": "hidden"
+        },
+        "effects": [
+          {
+            "id": "cast-effect",
+            "slot": "effect",
+            "enabled": true,
+            "hidden": false,
+            "category": "Effect1",
+            "colors": {
+              "source": "auto",
+              "primary": 4521796,
+              "mode": "multiTint"
+            }
+          }
+        ],
+        "weaponGlow": {
+          "id": "cast-weaponGlow",
+          "slot": "weaponGlow",
+          "enabled": true,
+          "hidden": false,
+          "category": "Magic3",
+          "colors": {
+            "source": "auto",
+            "primary": 4521796,
+            "secondary": 8978278,
+            "mode": "multiTint"
+          }
+        },
+        "recovery": {
+          "enabled": false,
+          "bodyClip": "Taunt",
+          "bodyPlaybackSpeed": 1
+        }
+      },
+      "projectile": {
+        "geometry": {
+          "renderer": "geometry_projectile",
+          "enabled": false,
+          "primitive": "orb"
+        },
+        "sprite": {
+          "renderer": "sprite_projectile",
+          "assetId": "binbun_nature_projectile_01_impact_04_128_life_lab_px8",
+          "alpha": 1,
+          "tint": 16777215,
+          "blendMode": "add",
+          "offsetX": 0,
+          "offsetY": 0,
+          "geometryComposition": "replace_geometry",
+          "mediaFailurePolicy": "omit_optional_track"
+        },
+        "prepare": {
+          "enabled": false,
+          "assetId": "binbun_nature_projectile_01_impact_04_128_life_lab_px8",
+          "assetPhase": "cast",
+          "startFrame": 0,
+          "fps": 24
+        },
+        "travel": {
+          "enabled": true,
+          "assetId": "binbun_nature_projectile_01_impact_04_128_life_lab_px8",
+          "assetPhase": "travel"
+        },
+        "impact": {
+          "enabled": true,
+          "assetId": "binbun_nature_projectile_01_impact_04_128_life_lab_px8",
+          "assetPhase": "impact"
+        },
+        "trajectory": {
+          "type": "straight",
+          "sameTargetSpread": true
+        },
+        "speedPxPerSecond": 320,
+        "minimumTravelDurationMs": 150,
+        "fps": 24,
+        "scale": 1,
+        "depthMode": "world",
+        "orientation": {
+          "rowSource": "targetVector",
+          "fineRotation": "isometricHybrid",
+          "directionSource": "target_vector",
+          "rotationOffsetDeg": 0
+        },
+        "sourceAnchor": {
+          "basis": "tileCenter",
+          "liftY": 0,
+          "forwardPx": 0,
+          "sidePx": 0,
+          "axisPx": 16
+        },
+        "targetAnchor": {
+          "basis": "tileCenter",
+          "liftY": 0,
+          "forwardPx": -16
+        },
+        "sourceAnchorsByFacing": {
+          "S": {
+            "basis": "tileCenter",
+            "liftY": 0,
+            "forwardPx": 0,
+            "sidePx": 0,
+            "axisPx": 16
+          }
+        },
+        "missileStaggerMs": 150
+      },
+      "damage": {
+        "impactDelayMs": 0,
+        "hitFlash": {
+          "enabled": true,
+          "frame": 5,
+          "durationMs": 90,
+          "color": 15610692
+        },
+        "floatingNumber": {
+          "enabled": true,
+          "frame": 7,
+          "durationMs": 1000,
+          "label": "Acid",
+          "color": 15610692
+        },
+        "death": {
+          "enabled": true,
+          "frame": 12
+        }
+      }
+    }
+  ]
+}

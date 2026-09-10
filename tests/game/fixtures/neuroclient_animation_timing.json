@@ -1,0 +1,5932 @@
+{
+  "schema": "dnd.neuroclient-animation-timing-oracle",
+  "version": 1,
+  "source": {
+    "revision": "d274f2d62ca9c1c5ed62a77841cacf6cc0347491",
+    "owners": {
+      "src/render/AnimatedEntity.ts": "9c411a9efbd5f1260c36f968b56ac3ca4e3edab89de6f73b4ffc1bfc331e1756",
+      "src/render/AnimationFSM.ts": "bb0471601e5bf1253d685299167f9ae1825e4d89b2ed5fb7428dcfbeeee05958",
+      "src/render/clips/CastClip.ts": "b24fc7e0535bedf7c217174a85aa5f2274ca9128a8d1b7a517abafe40eb92127",
+      "src/render/clips/TakeDamageClip.ts": "5be9610b58438c21c5d5e29a97a5ca059b8ad4f77e4004f40c636c7039854487",
+      "src/render/clips/DeathClip.ts": "6711cf96d69272a1ec1621ab07c009c49990d1f428c8514bd82a35eee3c01cf9",
+      "src/render/clips/HitFlashFx.ts": "a0c05bfa4dd736db67cece6f10be31dd0d8c57bcec7d039ddcd6ccdf42546907",
+      "src/render/clips/FloatingText.ts": "a7cb7472c5877f953f9c18c87b46c1cfd925d920b775aeccb1e5862125cc35dd",
+      "src/render/spellAuthoring/runtimeResolver.ts": "70c5380fa9518400df0db121bb6d7c35d529aa72132c95ac16be884f16cd9001",
+      "src/render/spellAuthoring/phaseGraph.ts": "44aed4396ba950cd4cd000df4979c98d1b9831f84381ea7a75a6b5f6646926a4",
+      "src/render/spellAuthoring/SpriteProjectileFx.ts": "7442332428cf356aebbd937f0ede801ae3e3f88d4690b259637390ac29f13f7f",
+      "src/ui/spellStudio/timelineBuild.ts": "925424ca4e0e07a40238f39863bd9ac9e170f72bffcc9cbdfcbb26475239faf2",
+      "src/render/clipQueue.ts": "dd891b5f9ee11cbcde433b5a49d944c05b4cfc8ddaaeba1b497e3027be065c8f",
+      "src/render/dispatcher.ts": "de8825f402596b13aa22eee3a930b619eeb095433de9d5527f134b94bc9606c2",
+      "src/render/presentationRuntimeHost.ts": "4bf3f0870461bdfee3d61273891bb090a8a43940380d1de0a05b13a0281f1d95",
+      "src/render/clips/ProjectileFx.ts": "bd3ebbf789810316ca2f5a4ef4f6fd3b1b65e7dab93bb5f1d8105ba2b60ce05d",
+      "src/render/clips/MovementRecovery.ts": "1007bcd6e3de7157462fc1f57968b2abe404b34f1f246d226cacb58d6f3c3485",
+      "src/render/controllers/ActionVfxController.ts": "8e5907211a564705b4ce995e8b8b7df0759ac7add93e216c7538d5ff71d9f134",
+      "src/render/projectileEndpoints.ts": "7b6087d0f97fa411c72466395e54dc369ee00742ff6c0c971a3c36088620c23f",
+      "src/render/visualAnchors.ts": "7dd05cd0e24a219b920629708c6ce04f200f8c3c73f775792f1202cc33bdb5ad",
+      "src/render/types.ts": "1f47dd5b08a3db428d58b3e2bf5ac22137a08d1e12cf6418218730dc71cd32cc",
+      "src/render/SpriteAssetRegistry.ts": "8b35df73cef924aa1d9d7ee1e26db12bd5b469174322454cc74b00a26122e071"
+    }
+  },
+  "dataInputs": {
+    "rig-tables.json": "19047cc84685a9cc2c96c6ffd18059cc8371a3a7763bd57fb642693f97fd99fe",
+    "spell-studio-drafts.materialized.json": "a3b16a991b8b01524d4e8191b4fa1e2be151d617de96c226f5d1100a7b2f9602",
+    "catalog-input.json": "9f4594e633073a5443f97b87de0729847fbdb6d10e73ef3f301fd2732e30a3ad"
+  },
+  "pumpOwner": "createFrameDrivenPresentationClock",
+  "pumpOrdering": "actor updates, queued frame callbacks, drain microtasks",
+  "substitutions": [
+    "Diagnostic sinks replace SDK/ledger imports.",
+    "PNG-checked frame metadata supplies inert Pixi textures; no GPU rasterization.",
+    "Font rasterization supplies a Pixi sprite with the original label.",
+    "No WebGL context.",
+    "Frame callbacks are delivered by the controlled pump.",
+    "Queue watchdog timeout is inert."
+  ],
+  "limitations": [
+    "Detached original CastIntent fixture; no event mapper/SDK proof.",
+    "Real Pixi objects with inert texture resources and no font/GPU rasterizer.",
+    "Original frame-driven clock has a deterministic supplied pump; 1ms quantization is retained except the named initial-hitch case.",
+    "Queue watchdog timer is inert; no deadline/reset/network proof.",
+    "No source formula is reimplemented to generate expected runtime times.",
+    "Repeated-hit flush and initial-hitch cases record source behavior; they do not define the accepted Python correction.",
+    "Enabled recovery is source evidence; it does not assert Taunt media is imported into the game."
+  ],
+  "cases": [
+    {
+      "id": "saved-speed1",
+      "boundary": "direct_clip",
+      "input": {
+        "draftContentId": "spell.fire_bolt",
+        "sourceGrid": [
+          0,
+          0
+        ],
+        "targetGrid": [
+          3,
+          -3
+        ],
+        "visualScale": 0.5,
+        "castSpeed": 1,
+        "damageSpeed": 1,
+        "initialHp": 20,
+        "resultingHp": 13,
+        "damageAmount": 7,
+        "lethal": false,
+        "terminal": false,
+        "numberEnabled": true,
+        "recoveryEnabled": false,
+        "repeatDamageAfterMs": null,
+        "repeatResultingHp": null
+      },
+      "pump": {
+        "stepMs": 1,
+        "initialStepMs": 1
+      },
+      "timing": {
+        "prepareStartMs": 84,
+        "releaseAnchorMs": 584,
+        "travelStartMs": 584,
+        "impactMs": 1429,
+        "impactEndMs": 2054,
+        "bodyEndMs": 1167,
+        "damageStartMs": [
+          1444
+        ],
+        "vitals": [
+          {
+            "timeMs": 2028,
+            "hp": 13
+          }
+        ],
+        "recoveryStartMs": null,
+        "settledMs": 2611,
+        "numberVisibleMs": [
+          2028
+        ],
+        "numberRemovedMs": [
+          3028
+        ]
+      },
+      "bodyTransitions": [
+        {
+          "timeMs": 0,
+          "uuid": "caster",
+          "from": "Idle",
+          "to": "Casting",
+          "trigger": "cast",
+          "clip": "Attack5"
+        },
+        {
+          "timeMs": 1167,
+          "uuid": "caster",
+          "from": "Casting",
+          "to": "Idle",
+          "clip": "Idle"
+        },
+        {
+          "timeMs": 1444,
+          "uuid": "target",
+          "from": "Idle",
+          "to": "TakingHit",
+          "trigger": "takeHit",
+          "clip": "TakeDamage"
+        },
+        {
+          "timeMs": 2611,
+          "uuid": "target",
+          "from": "TakingHit",
+          "to": "Idle",
+          "clip": "Idle"
+        }
+      ],
+      "frameAnchors": [
+        {
+          "timeMs": 84,
+          "uuid": "caster",
+          "frame": 1,
+          "mode": "fire"
+        },
+        {
+          "timeMs": 584,
+          "uuid": "caster",
+          "frame": 7,
+          "mode": "fire"
+        },
+        {
+          "timeMs": 1861,
+          "uuid": "target",
+          "frame": 5,
+          "mode": "fire"
+        },
+        {
+          "timeMs": 2028,
+          "uuid": "target",
+          "frame": 7,
+          "mode": "fire"
+        }
+      ],
+      "selectedFrames": [
+        {
+          "timeMs": 0,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 0,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 0
+          },
+          "hp": 20,
+          "projectiles": [],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 84,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 1,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 1
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "cast",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                24,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 584,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 7,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 7
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "travel",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                24,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 876,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 10,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 10
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "travel",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 7,
+              "root": [
+                76.56,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1126,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 13,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 13
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "travel",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 13,
+              "root": [
+                121.56,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1167,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 0,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 14
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "travel",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 13,
+              "root": [
+                128.94,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1429,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 3,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 2
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "impact",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                176,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1444,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 3,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "TakingHit",
+            "clip": "TakeDamage",
+            "frame": 0
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "impact",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                176,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 2028,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 10,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "TakingHit",
+            "clip": "TakeDamage",
+            "frame": 7
+          },
+          "hp": 13,
+          "projectiles": [
+            {
+              "phase": "impact",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 14,
+              "root": [
+                176,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": true
+        },
+        {
+          "timeMs": 2054,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 10,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "TakingHit",
+            "clip": "TakeDamage",
+            "frame": 7
+          },
+          "hp": 13,
+          "projectiles": [],
+          "numberVisible": true
+        },
+        {
+          "timeMs": 2611,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 2,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 0
+          },
+          "hp": 13,
+          "projectiles": [],
+          "numberVisible": true
+        }
+      ],
+      "editor": {
+        "bodyEndMs": 1250,
+        "releaseMs": 583.3333333333334,
+        "impactMs": 1427.7777777777778,
+        "recoveryStartMs": 3026.1111111111113
+      }
+    },
+    {
+      "id": "cast-speed2",
+      "boundary": "direct_clip",
+      "input": {
+        "draftContentId": "spell.fire_bolt",
+        "sourceGrid": [
+          0,
+          0
+        ],
+        "targetGrid": [
+          3,
+          -3
+        ],
+        "visualScale": 0.5,
+        "castSpeed": 2,
+        "damageSpeed": 1,
+        "initialHp": 20,
+        "resultingHp": 13,
+        "damageAmount": 7,
+        "lethal": false,
+        "terminal": false,
+        "numberEnabled": true,
+        "recoveryEnabled": false,
+        "repeatDamageAfterMs": null,
+        "repeatResultingHp": null
+      },
+      "pump": {
+        "stepMs": 1,
+        "initialStepMs": 1
+      },
+      "timing": {
+        "prepareStartMs": 42,
+        "releaseAnchorMs": 292,
+        "travelStartMs": 542,
+        "impactMs": 1387,
+        "impactEndMs": 2012,
+        "bodyEndMs": 584,
+        "damageStartMs": [
+          1402
+        ],
+        "vitals": [
+          {
+            "timeMs": 1986,
+            "hp": 13
+          }
+        ],
+        "recoveryStartMs": null,
+        "settledMs": 2569,
+        "numberVisibleMs": [
+          1986
+        ],
+        "numberRemovedMs": [
+          2986
+        ]
+      },
+      "bodyTransitions": [
+        {
+          "timeMs": 0,
+          "uuid": "caster",
+          "from": "Idle",
+          "to": "Casting",
+          "trigger": "cast",
+          "clip": "Attack5"
+        },
+        {
+          "timeMs": 584,
+          "uuid": "caster",
+          "from": "Casting",
+          "to": "Idle",
+          "clip": "Idle"
+        },
+        {
+          "timeMs": 1402,
+          "uuid": "target",
+          "from": "Idle",
+          "to": "TakingHit",
+          "trigger": "takeHit",
+          "clip": "TakeDamage"
+        },
+        {
+          "timeMs": 2569,
+          "uuid": "target",
+          "from": "TakingHit",
+          "to": "Idle",
+          "clip": "Idle"
+        }
+      ],
+      "frameAnchors": [
+        {
+          "timeMs": 42,
+          "uuid": "caster",
+          "frame": 1,
+          "mode": "fire"
+        },
+        {
+          "timeMs": 292,
+          "uuid": "caster",
+          "frame": 7,
+          "mode": "fire"
+        },
+        {
+          "timeMs": 1819,
+          "uuid": "target",
+          "frame": 5,
+          "mode": "fire"
+        },
+        {
+          "timeMs": 1986,
+          "uuid": "target",
+          "frame": 7,
+          "mode": "fire"
+        }
+      ],
+      "selectedFrames": [
+        {
+          "timeMs": 0,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 0,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 0
+          },
+          "hp": 20,
+          "projectiles": [],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 42,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 1,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 0
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "cast",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                24,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 542,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 13,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 6
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "travel",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                24,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 584,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 0,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 7
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "travel",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 1,
+              "root": [
+                31.56,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 834,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 3,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 10
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "travel",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 7,
+              "root": [
+                76.56,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1387,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 9,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 1
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "impact",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                176,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1402,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 9,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "TakingHit",
+            "clip": "TakeDamage",
+            "frame": 0
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "impact",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                176,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1986,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 1,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "TakingHit",
+            "clip": "TakeDamage",
+            "frame": 7
+          },
+          "hp": 13,
+          "projectiles": [
+            {
+              "phase": "impact",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 14,
+              "root": [
+                176,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": true
+        },
+        {
+          "timeMs": 2012,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 2,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "TakingHit",
+            "clip": "TakeDamage",
+            "frame": 7
+          },
+          "hp": 13,
+          "projectiles": [],
+          "numberVisible": true
+        },
+        {
+          "timeMs": 2569,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 8,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 0
+          },
+          "hp": 13,
+          "projectiles": [],
+          "numberVisible": true
+        }
+      ],
+      "editor": {
+        "bodyEndMs": 625,
+        "releaseMs": 291.6666666666667,
+        "impactMs": 1136.111111111111,
+        "recoveryStartMs": 2734.4444444444443
+      }
+    },
+    {
+      "id": "damage-speed2",
+      "boundary": "direct_clip",
+      "input": {
+        "draftContentId": "spell.fire_bolt",
+        "sourceGrid": [
+          0,
+          0
+        ],
+        "targetGrid": [
+          3,
+          -3
+        ],
+        "visualScale": 0.5,
+        "castSpeed": 1,
+        "damageSpeed": 2,
+        "initialHp": 20,
+        "resultingHp": 13,
+        "damageAmount": 7,
+        "lethal": false,
+        "terminal": false,
+        "numberEnabled": true,
+        "recoveryEnabled": false,
+        "repeatDamageAfterMs": null,
+        "repeatResultingHp": null
+      },
+      "pump": {
+        "stepMs": 1,
+        "initialStepMs": 1
+      },
+      "timing": {
+        "prepareStartMs": 84,
+        "releaseAnchorMs": 584,
+        "travelStartMs": 584,
+        "impactMs": 1429,
+        "impactEndMs": 2054,
+        "bodyEndMs": 1167,
+        "damageStartMs": [
+          1444
+        ],
+        "vitals": [
+          {
+            "timeMs": 1736,
+            "hp": 13
+          }
+        ],
+        "recoveryStartMs": null,
+        "settledMs": 2054,
+        "numberVisibleMs": [
+          1736
+        ],
+        "numberRemovedMs": [
+          2736
+        ]
+      },
+      "bodyTransitions": [
+        {
+          "timeMs": 0,
+          "uuid": "caster",
+          "from": "Idle",
+          "to": "Casting",
+          "trigger": "cast",
+          "clip": "Attack5"
+        },
+        {
+          "timeMs": 1167,
+          "uuid": "caster",
+          "from": "Casting",
+          "to": "Idle",
+          "clip": "Idle"
+        },
+        {
+          "timeMs": 1444,
+          "uuid": "target",
+          "from": "Idle",
+          "to": "TakingHit",
+          "trigger": "takeHit",
+          "clip": "TakeDamage"
+        },
+        {
+          "timeMs": 2028,
+          "uuid": "target",
+          "from": "TakingHit",
+          "to": "Idle",
+          "clip": "Idle"
+        }
+      ],
+      "frameAnchors": [
+        {
+          "timeMs": 84,
+          "uuid": "caster",
+          "frame": 1,
+          "mode": "fire"
+        },
+        {
+          "timeMs": 584,
+          "uuid": "caster",
+          "frame": 7,
+          "mode": "fire"
+        },
+        {
+          "timeMs": 1653,
+          "uuid": "target",
+          "frame": 5,
+          "mode": "fire"
+        },
+        {
+          "timeMs": 1736,
+          "uuid": "target",
+          "frame": 7,
+          "mode": "fire"
+        }
+      ],
+      "selectedFrames": [
+        {
+          "timeMs": 0,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 0,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 0
+          },
+          "hp": 20,
+          "projectiles": [],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 84,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 1,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 1
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "cast",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                24,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 584,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 7,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 7
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "travel",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                24,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 876,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 10,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 10
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "travel",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 7,
+              "root": [
+                76.56,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1126,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 13,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 13
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "travel",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 13,
+              "root": [
+                121.56,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1167,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 0,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 14
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "travel",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 13,
+              "root": [
+                128.94,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1429,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 3,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 2
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "impact",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                176,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1444,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 3,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "TakingHit",
+            "clip": "TakeDamage",
+            "frame": 0
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "impact",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                176,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1736,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 6,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "TakingHit",
+            "clip": "TakeDamage",
+            "frame": 7
+          },
+          "hp": 13,
+          "projectiles": [
+            {
+              "phase": "impact",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 7,
+              "root": [
+                176,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": true
+        },
+        {
+          "timeMs": 2054,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 10,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 0
+          },
+          "hp": 13,
+          "projectiles": [],
+          "numberVisible": true
+        }
+      ],
+      "editor": {
+        "bodyEndMs": 1250,
+        "releaseMs": 583.3333333333334,
+        "impactMs": 1427.7777777777778,
+        "recoveryStartMs": 2734.4444444444443
+      }
+    },
+    {
+      "id": "lethal",
+      "boundary": "direct_clip",
+      "input": {
+        "draftContentId": "spell.fire_bolt",
+        "sourceGrid": [
+          0,
+          0
+        ],
+        "targetGrid": [
+          3,
+          -3
+        ],
+        "visualScale": 0.5,
+        "castSpeed": 1,
+        "damageSpeed": 1,
+        "initialHp": 20,
+        "resultingHp": 0,
+        "damageAmount": 7,
+        "lethal": true,
+        "terminal": false,
+        "numberEnabled": true,
+        "recoveryEnabled": false,
+        "repeatDamageAfterMs": null,
+        "repeatResultingHp": null
+      },
+      "pump": {
+        "stepMs": 1,
+        "initialStepMs": 1
+      },
+      "timing": {
+        "prepareStartMs": 84,
+        "releaseAnchorMs": 584,
+        "travelStartMs": 584,
+        "impactMs": 1429,
+        "impactEndMs": 2054,
+        "bodyEndMs": 1167,
+        "damageStartMs": [
+          1444
+        ],
+        "vitals": [
+          {
+            "timeMs": 1444,
+            "hp": 0
+          },
+          {
+            "timeMs": 1444,
+            "hp": 0,
+            "is_dead": true
+          }
+        ],
+        "recoveryStartMs": null,
+        "settledMs": 2611,
+        "numberVisibleMs": [
+          1444
+        ],
+        "numberRemovedMs": [
+          2444
+        ]
+      },
+      "bodyTransitions": [
+        {
+          "timeMs": 0,
+          "uuid": "caster",
+          "from": "Idle",
+          "to": "Casting",
+          "trigger": "cast",
+          "clip": "Attack5"
+        },
+        {
+          "timeMs": 1167,
+          "uuid": "caster",
+          "from": "Casting",
+          "to": "Idle",
+          "clip": "Idle"
+        },
+        {
+          "timeMs": 1444,
+          "uuid": "target",
+          "from": "Idle",
+          "to": "Dying",
+          "trigger": "die",
+          "clip": "Die"
+        },
+        {
+          "timeMs": 2611,
+          "uuid": "target",
+          "from": "Dying",
+          "to": "Dead",
+          "clip": "Die"
+        }
+      ],
+      "frameAnchors": [
+        {
+          "timeMs": 84,
+          "uuid": "caster",
+          "frame": 1,
+          "mode": "fire"
+        },
+        {
+          "timeMs": 584,
+          "uuid": "caster",
+          "frame": 7,
+          "mode": "fire"
+        },
+        {
+          "timeMs": 2278,
+          "uuid": "target",
+          "frame": 10,
+          "mode": "fire"
+        }
+      ],
+      "selectedFrames": [
+        {
+          "timeMs": 0,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 0,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 0
+          },
+          "hp": 20,
+          "projectiles": [],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 84,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 1,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 1
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "cast",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                24,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 584,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 7,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 7
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "travel",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                24,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 876,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 10,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 10
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "travel",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 7,
+              "root": [
+                76.56,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1126,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 13,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 13
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "travel",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 13,
+              "root": [
+                121.56,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1167,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 0,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 14
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "travel",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 13,
+              "root": [
+                128.94,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1429,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 3,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 2
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "impact",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                176,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1444,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 3,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "Dying",
+            "clip": "Die",
+            "frame": 0
+          },
+          "hp": 0,
+          "projectiles": [
+            {
+              "phase": "impact",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                176,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": true
+        },
+        {
+          "timeMs": 2054,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 10,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "Dying",
+            "clip": "Die",
+            "frame": 7
+          },
+          "hp": 0,
+          "projectiles": [],
+          "numberVisible": true
+        },
+        {
+          "timeMs": 2611,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 2,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "Dead",
+            "clip": "Die",
+            "frame": 14
+          },
+          "hp": 0,
+          "projectiles": [],
+          "numberVisible": false
+        }
+      ],
+      "editor": {
+        "bodyEndMs": 1250,
+        "releaseMs": 583.3333333333334,
+        "impactMs": 1427.7777777777778,
+        "recoveryStartMs": 3692.777777777778
+      }
+    },
+    {
+      "id": "terminal",
+      "boundary": "direct_clip",
+      "input": {
+        "draftContentId": "spell.fire_bolt",
+        "sourceGrid": [
+          0,
+          0
+        ],
+        "targetGrid": [
+          3,
+          -3
+        ],
+        "visualScale": 0.5,
+        "castSpeed": 1,
+        "damageSpeed": 1,
+        "initialHp": 0,
+        "resultingHp": 0,
+        "damageAmount": 7,
+        "lethal": false,
+        "terminal": true,
+        "numberEnabled": true,
+        "recoveryEnabled": false,
+        "repeatDamageAfterMs": null,
+        "repeatResultingHp": null
+      },
+      "pump": {
+        "stepMs": 1,
+        "initialStepMs": 1
+      },
+      "timing": {
+        "prepareStartMs": 84,
+        "releaseAnchorMs": 584,
+        "travelStartMs": 584,
+        "impactMs": 1429,
+        "impactEndMs": 2054,
+        "bodyEndMs": 1167,
+        "damageStartMs": [
+          1444
+        ],
+        "vitals": [
+          {
+            "timeMs": 1444,
+            "hp": 0
+          }
+        ],
+        "recoveryStartMs": null,
+        "settledMs": 2054,
+        "numberVisibleMs": [
+          1444
+        ],
+        "numberRemovedMs": [
+          2444
+        ]
+      },
+      "bodyTransitions": [
+        {
+          "timeMs": 0,
+          "uuid": "caster",
+          "from": "Idle",
+          "to": "Casting",
+          "trigger": "cast",
+          "clip": "Attack5"
+        },
+        {
+          "timeMs": 1167,
+          "uuid": "caster",
+          "from": "Casting",
+          "to": "Idle",
+          "clip": "Idle"
+        }
+      ],
+      "frameAnchors": [
+        {
+          "timeMs": 84,
+          "uuid": "caster",
+          "frame": 1,
+          "mode": "fire"
+        },
+        {
+          "timeMs": 584,
+          "uuid": "caster",
+          "frame": 7,
+          "mode": "fire"
+        }
+      ],
+      "selectedFrames": [
+        {
+          "timeMs": 0,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 0,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Dead",
+            "clip": "Die",
+            "frame": 14
+          },
+          "hp": 0,
+          "projectiles": [],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 84,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 1,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Dead",
+            "clip": "Die",
+            "frame": 14
+          },
+          "hp": 0,
+          "projectiles": [
+            {
+              "phase": "cast",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                24,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 584,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 7,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Dead",
+            "clip": "Die",
+            "frame": 14
+          },
+          "hp": 0,
+          "projectiles": [
+            {
+              "phase": "travel",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                24,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 876,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 10,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Dead",
+            "clip": "Die",
+            "frame": 14
+          },
+          "hp": 0,
+          "projectiles": [
+            {
+              "phase": "travel",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 7,
+              "root": [
+                76.56,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1126,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 13,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Dead",
+            "clip": "Die",
+            "frame": 14
+          },
+          "hp": 0,
+          "projectiles": [
+            {
+              "phase": "travel",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 13,
+              "root": [
+                121.56,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1167,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 0,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "Dead",
+            "clip": "Die",
+            "frame": 14
+          },
+          "hp": 0,
+          "projectiles": [
+            {
+              "phase": "travel",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 13,
+              "root": [
+                128.94,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1429,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 3,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "Dead",
+            "clip": "Die",
+            "frame": 14
+          },
+          "hp": 0,
+          "projectiles": [
+            {
+              "phase": "impact",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                176,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1444,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 3,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "Dead",
+            "clip": "Die",
+            "frame": 14
+          },
+          "hp": 0,
+          "projectiles": [
+            {
+              "phase": "impact",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                176,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": true
+        },
+        {
+          "timeMs": 2054,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 10,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "Dead",
+            "clip": "Die",
+            "frame": 14
+          },
+          "hp": 0,
+          "projectiles": [],
+          "numberVisible": true
+        }
+      ],
+      "editor": {
+        "bodyEndMs": 1250,
+        "releaseMs": 583.3333333333334,
+        "impactMs": 1427.7777777777778,
+        "recoveryStartMs": 3026.1111111111113
+      }
+    },
+    {
+      "id": "number-disabled",
+      "boundary": "direct_clip",
+      "input": {
+        "draftContentId": "spell.fire_bolt",
+        "sourceGrid": [
+          0,
+          0
+        ],
+        "targetGrid": [
+          3,
+          -3
+        ],
+        "visualScale": 0.5,
+        "castSpeed": 1,
+        "damageSpeed": 1,
+        "initialHp": 20,
+        "resultingHp": 13,
+        "damageAmount": 7,
+        "lethal": false,
+        "terminal": false,
+        "numberEnabled": false,
+        "recoveryEnabled": false,
+        "repeatDamageAfterMs": null,
+        "repeatResultingHp": null
+      },
+      "pump": {
+        "stepMs": 1,
+        "initialStepMs": 1
+      },
+      "timing": {
+        "prepareStartMs": 84,
+        "releaseAnchorMs": 584,
+        "travelStartMs": 584,
+        "impactMs": 1429,
+        "impactEndMs": 2054,
+        "bodyEndMs": 1167,
+        "damageStartMs": [
+          1444
+        ],
+        "vitals": [
+          {
+            "timeMs": 2028,
+            "hp": 13
+          }
+        ],
+        "recoveryStartMs": null,
+        "settledMs": 2611,
+        "numberVisibleMs": [],
+        "numberRemovedMs": []
+      },
+      "bodyTransitions": [
+        {
+          "timeMs": 0,
+          "uuid": "caster",
+          "from": "Idle",
+          "to": "Casting",
+          "trigger": "cast",
+          "clip": "Attack5"
+        },
+        {
+          "timeMs": 1167,
+          "uuid": "caster",
+          "from": "Casting",
+          "to": "Idle",
+          "clip": "Idle"
+        },
+        {
+          "timeMs": 1444,
+          "uuid": "target",
+          "from": "Idle",
+          "to": "TakingHit",
+          "trigger": "takeHit",
+          "clip": "TakeDamage"
+        },
+        {
+          "timeMs": 2611,
+          "uuid": "target",
+          "from": "TakingHit",
+          "to": "Idle",
+          "clip": "Idle"
+        }
+      ],
+      "frameAnchors": [
+        {
+          "timeMs": 84,
+          "uuid": "caster",
+          "frame": 1,
+          "mode": "fire"
+        },
+        {
+          "timeMs": 584,
+          "uuid": "caster",
+          "frame": 7,
+          "mode": "fire"
+        },
+        {
+          "timeMs": 1861,
+          "uuid": "target",
+          "frame": 5,
+          "mode": "fire"
+        },
+        {
+          "timeMs": 2028,
+          "uuid": "target",
+          "frame": 7,
+          "mode": "fire"
+        }
+      ],
+      "selectedFrames": [
+        {
+          "timeMs": 0,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 0,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 0
+          },
+          "hp": 20,
+          "projectiles": [],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 84,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 1,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 1
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "cast",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                24,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 584,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 7,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 7
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "travel",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                24,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 876,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 10,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 10
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "travel",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 7,
+              "root": [
+                76.56,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1126,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 13,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 13
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "travel",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 13,
+              "root": [
+                121.56,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1167,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 0,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 14
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "travel",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 13,
+              "root": [
+                128.94,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1429,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 3,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 2
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "impact",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                176,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1444,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 3,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "TakingHit",
+            "clip": "TakeDamage",
+            "frame": 0
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "impact",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                176,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 2028,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 10,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "TakingHit",
+            "clip": "TakeDamage",
+            "frame": 7
+          },
+          "hp": 13,
+          "projectiles": [
+            {
+              "phase": "impact",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 14,
+              "root": [
+                176,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 2054,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 10,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "TakingHit",
+            "clip": "TakeDamage",
+            "frame": 7
+          },
+          "hp": 13,
+          "projectiles": [],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 2611,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 2,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 0
+          },
+          "hp": 13,
+          "projectiles": [],
+          "numberVisible": false
+        }
+      ],
+      "editor": {
+        "bodyEndMs": 1250,
+        "releaseMs": 583.3333333333334,
+        "impactMs": 1427.7777777777778,
+        "recoveryStartMs": 2692.777777777778
+      }
+    },
+    {
+      "id": "recovery-enabled",
+      "boundary": "direct_clip",
+      "input": {
+        "draftContentId": "spell.fire_bolt",
+        "sourceGrid": [
+          0,
+          0
+        ],
+        "targetGrid": [
+          3,
+          -3
+        ],
+        "visualScale": 0.5,
+        "castSpeed": 1,
+        "damageSpeed": 1,
+        "initialHp": 20,
+        "resultingHp": 13,
+        "damageAmount": 7,
+        "lethal": false,
+        "terminal": false,
+        "numberEnabled": true,
+        "recoveryEnabled": true,
+        "repeatDamageAfterMs": null,
+        "repeatResultingHp": null
+      },
+      "pump": {
+        "stepMs": 1,
+        "initialStepMs": 1
+      },
+      "timing": {
+        "prepareStartMs": 84,
+        "releaseAnchorMs": 584,
+        "travelStartMs": 584,
+        "impactMs": 1429,
+        "impactEndMs": 2054,
+        "bodyEndMs": 1167,
+        "damageStartMs": [
+          1444
+        ],
+        "vitals": [
+          {
+            "timeMs": 2028,
+            "hp": 13
+          }
+        ],
+        "recoveryStartMs": 2611,
+        "settledMs": 3778,
+        "numberVisibleMs": [
+          2028
+        ],
+        "numberRemovedMs": [
+          3028
+        ]
+      },
+      "bodyTransitions": [
+        {
+          "timeMs": 0,
+          "uuid": "caster",
+          "from": "Idle",
+          "to": "Casting",
+          "trigger": "cast",
+          "clip": "Attack5"
+        },
+        {
+          "timeMs": 1167,
+          "uuid": "caster",
+          "from": "Casting",
+          "to": "Idle",
+          "clip": "Idle"
+        },
+        {
+          "timeMs": 1444,
+          "uuid": "target",
+          "from": "Idle",
+          "to": "TakingHit",
+          "trigger": "takeHit",
+          "clip": "TakeDamage"
+        },
+        {
+          "timeMs": 2611,
+          "uuid": "target",
+          "from": "TakingHit",
+          "to": "Idle",
+          "clip": "Idle"
+        },
+        {
+          "timeMs": 2611,
+          "uuid": "caster",
+          "from": "Idle",
+          "to": "Acting",
+          "trigger": "act",
+          "clip": "Taunt"
+        },
+        {
+          "timeMs": 3778,
+          "uuid": "caster",
+          "from": "Acting",
+          "to": "Idle",
+          "clip": "Idle"
+        }
+      ],
+      "frameAnchors": [
+        {
+          "timeMs": 84,
+          "uuid": "caster",
+          "frame": 1,
+          "mode": "fire"
+        },
+        {
+          "timeMs": 584,
+          "uuid": "caster",
+          "frame": 7,
+          "mode": "fire"
+        },
+        {
+          "timeMs": 1861,
+          "uuid": "target",
+          "frame": 5,
+          "mode": "fire"
+        },
+        {
+          "timeMs": 2028,
+          "uuid": "target",
+          "frame": 7,
+          "mode": "fire"
+        }
+      ],
+      "selectedFrames": [
+        {
+          "timeMs": 0,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 0,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 0
+          },
+          "hp": 20,
+          "projectiles": [],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 84,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 1,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 1
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "cast",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                24,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 584,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 7,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 7
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "travel",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                24,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 876,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 10,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 10
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "travel",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 7,
+              "root": [
+                76.56,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1126,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 13,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 13
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "travel",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 13,
+              "root": [
+                121.56,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1167,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 0,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 14
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "travel",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 13,
+              "root": [
+                128.94,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1429,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 3,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 2
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "impact",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                176,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1444,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 3,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "TakingHit",
+            "clip": "TakeDamage",
+            "frame": 0
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "impact",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                176,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 2028,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 10,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "TakingHit",
+            "clip": "TakeDamage",
+            "frame": 7
+          },
+          "hp": 13,
+          "projectiles": [
+            {
+              "phase": "impact",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 14,
+              "root": [
+                176,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": true
+        },
+        {
+          "timeMs": 2054,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 10,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "TakingHit",
+            "clip": "TakeDamage",
+            "frame": 7
+          },
+          "hp": 13,
+          "projectiles": [],
+          "numberVisible": true
+        },
+        {
+          "timeMs": 3778,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 0,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 14
+          },
+          "hp": 13,
+          "projectiles": [],
+          "numberVisible": false
+        }
+      ],
+      "editor": {
+        "bodyEndMs": 1250,
+        "releaseMs": 583.3333333333334,
+        "impactMs": 1427.7777777777778,
+        "recoveryStartMs": 3026.1111111111113
+      }
+    },
+    {
+      "id": "queue-saved-speed1",
+      "boundary": "queue",
+      "input": {
+        "draftContentId": "spell.fire_bolt",
+        "sourceGrid": [
+          0,
+          0
+        ],
+        "targetGrid": [
+          3,
+          -3
+        ],
+        "visualScale": 0.5,
+        "castSpeed": 1,
+        "damageSpeed": 1,
+        "initialHp": 20,
+        "resultingHp": 13,
+        "damageAmount": 7,
+        "lethal": false,
+        "terminal": false,
+        "numberEnabled": true,
+        "recoveryEnabled": false,
+        "repeatDamageAfterMs": null,
+        "repeatResultingHp": null
+      },
+      "pump": {
+        "stepMs": 1,
+        "initialStepMs": 1
+      },
+      "timing": {
+        "prepareStartMs": 84,
+        "releaseAnchorMs": 584,
+        "travelStartMs": 584,
+        "impactMs": 1429,
+        "impactEndMs": 2054,
+        "bodyEndMs": 1167,
+        "damageStartMs": [
+          1444
+        ],
+        "vitals": [
+          {
+            "timeMs": 2028,
+            "hp": 13
+          }
+        ],
+        "recoveryStartMs": null,
+        "settledMs": 2611,
+        "numberVisibleMs": [
+          2028
+        ],
+        "numberRemovedMs": [
+          2611
+        ]
+      },
+      "bodyTransitions": [
+        {
+          "timeMs": 0,
+          "uuid": "caster",
+          "from": "Idle",
+          "to": "Casting",
+          "trigger": "cast",
+          "clip": "Attack5"
+        },
+        {
+          "timeMs": 1167,
+          "uuid": "caster",
+          "from": "Casting",
+          "to": "Idle",
+          "clip": "Idle"
+        },
+        {
+          "timeMs": 1444,
+          "uuid": "target",
+          "from": "Idle",
+          "to": "TakingHit",
+          "trigger": "takeHit",
+          "clip": "TakeDamage"
+        },
+        {
+          "timeMs": 2611,
+          "uuid": "target",
+          "from": "TakingHit",
+          "to": "Idle",
+          "clip": "Idle"
+        }
+      ],
+      "frameAnchors": [
+        {
+          "timeMs": 84,
+          "uuid": "caster",
+          "frame": 1,
+          "mode": "fire"
+        },
+        {
+          "timeMs": 584,
+          "uuid": "caster",
+          "frame": 7,
+          "mode": "fire"
+        },
+        {
+          "timeMs": 1861,
+          "uuid": "target",
+          "frame": 5,
+          "mode": "fire"
+        },
+        {
+          "timeMs": 2028,
+          "uuid": "target",
+          "frame": 7,
+          "mode": "fire"
+        }
+      ],
+      "selectedFrames": [
+        {
+          "timeMs": 0,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 0,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 0
+          },
+          "hp": 20,
+          "projectiles": [],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 84,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 1,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 1
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "cast",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                24,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 584,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 7,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 7
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "travel",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                24,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 876,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 10,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 10
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "travel",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 7,
+              "root": [
+                76.56,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1126,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 13,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 13
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "travel",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 13,
+              "root": [
+                121.56,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1167,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 0,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 14
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "travel",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 13,
+              "root": [
+                128.94,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1429,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 3,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 2
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "impact",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                176,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1444,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 3,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "TakingHit",
+            "clip": "TakeDamage",
+            "frame": 0
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "impact",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                176,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 2028,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 10,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "TakingHit",
+            "clip": "TakeDamage",
+            "frame": 7
+          },
+          "hp": 13,
+          "projectiles": [
+            {
+              "phase": "impact",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 14,
+              "root": [
+                176,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": true
+        },
+        {
+          "timeMs": 2054,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 10,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "TakingHit",
+            "clip": "TakeDamage",
+            "frame": 7
+          },
+          "hp": 13,
+          "projectiles": [],
+          "numberVisible": true
+        },
+        {
+          "timeMs": 2611,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 2,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 0
+          },
+          "hp": 13,
+          "projectiles": [],
+          "numberVisible": false
+        }
+      ],
+      "editor": {
+        "bodyEndMs": 1250,
+        "releaseMs": 583.3333333333334,
+        "impactMs": 1427.7777777777778,
+        "recoveryStartMs": 3026.1111111111113
+      }
+    },
+    {
+      "id": "queue-cast-speed2",
+      "boundary": "queue",
+      "input": {
+        "draftContentId": "spell.fire_bolt",
+        "sourceGrid": [
+          0,
+          0
+        ],
+        "targetGrid": [
+          3,
+          -3
+        ],
+        "visualScale": 0.5,
+        "castSpeed": 2,
+        "damageSpeed": 1,
+        "initialHp": 20,
+        "resultingHp": 13,
+        "damageAmount": 7,
+        "lethal": false,
+        "terminal": false,
+        "numberEnabled": true,
+        "recoveryEnabled": false,
+        "repeatDamageAfterMs": null,
+        "repeatResultingHp": null
+      },
+      "pump": {
+        "stepMs": 1,
+        "initialStepMs": 1
+      },
+      "timing": {
+        "prepareStartMs": 42,
+        "releaseAnchorMs": 292,
+        "travelStartMs": 542,
+        "impactMs": 1387,
+        "impactEndMs": 2012,
+        "bodyEndMs": 584,
+        "damageStartMs": [
+          1402
+        ],
+        "vitals": [
+          {
+            "timeMs": 1986,
+            "hp": 13
+          }
+        ],
+        "recoveryStartMs": null,
+        "settledMs": 2569,
+        "numberVisibleMs": [
+          1986
+        ],
+        "numberRemovedMs": [
+          2569
+        ]
+      },
+      "bodyTransitions": [
+        {
+          "timeMs": 0,
+          "uuid": "caster",
+          "from": "Idle",
+          "to": "Casting",
+          "trigger": "cast",
+          "clip": "Attack5"
+        },
+        {
+          "timeMs": 584,
+          "uuid": "caster",
+          "from": "Casting",
+          "to": "Idle",
+          "clip": "Idle"
+        },
+        {
+          "timeMs": 1402,
+          "uuid": "target",
+          "from": "Idle",
+          "to": "TakingHit",
+          "trigger": "takeHit",
+          "clip": "TakeDamage"
+        },
+        {
+          "timeMs": 2569,
+          "uuid": "target",
+          "from": "TakingHit",
+          "to": "Idle",
+          "clip": "Idle"
+        }
+      ],
+      "frameAnchors": [
+        {
+          "timeMs": 42,
+          "uuid": "caster",
+          "frame": 1,
+          "mode": "fire"
+        },
+        {
+          "timeMs": 292,
+          "uuid": "caster",
+          "frame": 7,
+          "mode": "fire"
+        },
+        {
+          "timeMs": 1819,
+          "uuid": "target",
+          "frame": 5,
+          "mode": "fire"
+        },
+        {
+          "timeMs": 1986,
+          "uuid": "target",
+          "frame": 7,
+          "mode": "fire"
+        }
+      ],
+      "selectedFrames": [
+        {
+          "timeMs": 0,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 0,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 0
+          },
+          "hp": 20,
+          "projectiles": [],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 42,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 1,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 0
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "cast",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                24,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 542,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 13,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 6
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "travel",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                24,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 584,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 0,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 7
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "travel",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 1,
+              "root": [
+                31.56,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 834,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 3,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 10
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "travel",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 7,
+              "root": [
+                76.56,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1387,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 9,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 1
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "impact",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                176,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1402,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 9,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "TakingHit",
+            "clip": "TakeDamage",
+            "frame": 0
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "impact",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                176,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1986,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 1,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "TakingHit",
+            "clip": "TakeDamage",
+            "frame": 7
+          },
+          "hp": 13,
+          "projectiles": [
+            {
+              "phase": "impact",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 14,
+              "root": [
+                176,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": true
+        },
+        {
+          "timeMs": 2012,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 2,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "TakingHit",
+            "clip": "TakeDamage",
+            "frame": 7
+          },
+          "hp": 13,
+          "projectiles": [],
+          "numberVisible": true
+        },
+        {
+          "timeMs": 2569,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 8,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 0
+          },
+          "hp": 13,
+          "projectiles": [],
+          "numberVisible": false
+        }
+      ],
+      "editor": {
+        "bodyEndMs": 625,
+        "releaseMs": 291.6666666666667,
+        "impactMs": 1136.111111111111,
+        "recoveryStartMs": 2734.4444444444443
+      }
+    },
+    {
+      "id": "queue-damage-speed2",
+      "boundary": "queue",
+      "input": {
+        "draftContentId": "spell.fire_bolt",
+        "sourceGrid": [
+          0,
+          0
+        ],
+        "targetGrid": [
+          3,
+          -3
+        ],
+        "visualScale": 0.5,
+        "castSpeed": 1,
+        "damageSpeed": 2,
+        "initialHp": 20,
+        "resultingHp": 13,
+        "damageAmount": 7,
+        "lethal": false,
+        "terminal": false,
+        "numberEnabled": true,
+        "recoveryEnabled": false,
+        "repeatDamageAfterMs": null,
+        "repeatResultingHp": null
+      },
+      "pump": {
+        "stepMs": 1,
+        "initialStepMs": 1
+      },
+      "timing": {
+        "prepareStartMs": 84,
+        "releaseAnchorMs": 584,
+        "travelStartMs": 584,
+        "impactMs": 1429,
+        "impactEndMs": 2054,
+        "bodyEndMs": 1167,
+        "damageStartMs": [
+          1444
+        ],
+        "vitals": [
+          {
+            "timeMs": 1736,
+            "hp": 13
+          }
+        ],
+        "recoveryStartMs": null,
+        "settledMs": 2054,
+        "numberVisibleMs": [
+          1736
+        ],
+        "numberRemovedMs": [
+          2054
+        ]
+      },
+      "bodyTransitions": [
+        {
+          "timeMs": 0,
+          "uuid": "caster",
+          "from": "Idle",
+          "to": "Casting",
+          "trigger": "cast",
+          "clip": "Attack5"
+        },
+        {
+          "timeMs": 1167,
+          "uuid": "caster",
+          "from": "Casting",
+          "to": "Idle",
+          "clip": "Idle"
+        },
+        {
+          "timeMs": 1444,
+          "uuid": "target",
+          "from": "Idle",
+          "to": "TakingHit",
+          "trigger": "takeHit",
+          "clip": "TakeDamage"
+        },
+        {
+          "timeMs": 2028,
+          "uuid": "target",
+          "from": "TakingHit",
+          "to": "Idle",
+          "clip": "Idle"
+        }
+      ],
+      "frameAnchors": [
+        {
+          "timeMs": 84,
+          "uuid": "caster",
+          "frame": 1,
+          "mode": "fire"
+        },
+        {
+          "timeMs": 584,
+          "uuid": "caster",
+          "frame": 7,
+          "mode": "fire"
+        },
+        {
+          "timeMs": 1653,
+          "uuid": "target",
+          "frame": 5,
+          "mode": "fire"
+        },
+        {
+          "timeMs": 1736,
+          "uuid": "target",
+          "frame": 7,
+          "mode": "fire"
+        }
+      ],
+      "selectedFrames": [
+        {
+          "timeMs": 0,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 0,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 0
+          },
+          "hp": 20,
+          "projectiles": [],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 84,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 1,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 1
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "cast",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                24,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 584,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 7,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 7
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "travel",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                24,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 876,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 10,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 10
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "travel",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 7,
+              "root": [
+                76.56,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1126,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 13,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 13
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "travel",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 13,
+              "root": [
+                121.56,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1167,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 0,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 14
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "travel",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 13,
+              "root": [
+                128.94,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1429,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 3,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 2
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "impact",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                176,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1444,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 3,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "TakingHit",
+            "clip": "TakeDamage",
+            "frame": 0
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "impact",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                176,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1736,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 6,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "TakingHit",
+            "clip": "TakeDamage",
+            "frame": 7
+          },
+          "hp": 13,
+          "projectiles": [
+            {
+              "phase": "impact",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 7,
+              "root": [
+                176,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": true
+        },
+        {
+          "timeMs": 2054,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 10,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 0
+          },
+          "hp": 13,
+          "projectiles": [],
+          "numberVisible": false
+        }
+      ],
+      "editor": {
+        "bodyEndMs": 1250,
+        "releaseMs": 583.3333333333334,
+        "impactMs": 1427.7777777777778,
+        "recoveryStartMs": 2734.4444444444443
+      }
+    },
+    {
+      "id": "queue-lethal",
+      "boundary": "queue",
+      "input": {
+        "draftContentId": "spell.fire_bolt",
+        "sourceGrid": [
+          0,
+          0
+        ],
+        "targetGrid": [
+          3,
+          -3
+        ],
+        "visualScale": 0.5,
+        "castSpeed": 1,
+        "damageSpeed": 1,
+        "initialHp": 20,
+        "resultingHp": 0,
+        "damageAmount": 7,
+        "lethal": true,
+        "terminal": false,
+        "numberEnabled": true,
+        "recoveryEnabled": false,
+        "repeatDamageAfterMs": null,
+        "repeatResultingHp": null
+      },
+      "pump": {
+        "stepMs": 1,
+        "initialStepMs": 1
+      },
+      "timing": {
+        "prepareStartMs": 84,
+        "releaseAnchorMs": 584,
+        "travelStartMs": 584,
+        "impactMs": 1429,
+        "impactEndMs": 2054,
+        "bodyEndMs": 1167,
+        "damageStartMs": [
+          1444
+        ],
+        "vitals": [
+          {
+            "timeMs": 1444,
+            "hp": 0
+          },
+          {
+            "timeMs": 1444,
+            "hp": 0,
+            "is_dead": true
+          }
+        ],
+        "recoveryStartMs": null,
+        "settledMs": 2611,
+        "numberVisibleMs": [
+          1444
+        ],
+        "numberRemovedMs": [
+          2444
+        ]
+      },
+      "bodyTransitions": [
+        {
+          "timeMs": 0,
+          "uuid": "caster",
+          "from": "Idle",
+          "to": "Casting",
+          "trigger": "cast",
+          "clip": "Attack5"
+        },
+        {
+          "timeMs": 1167,
+          "uuid": "caster",
+          "from": "Casting",
+          "to": "Idle",
+          "clip": "Idle"
+        },
+        {
+          "timeMs": 1444,
+          "uuid": "target",
+          "from": "Idle",
+          "to": "Dying",
+          "trigger": "die",
+          "clip": "Die"
+        },
+        {
+          "timeMs": 2611,
+          "uuid": "target",
+          "from": "Dying",
+          "to": "Dead",
+          "clip": "Die"
+        }
+      ],
+      "frameAnchors": [
+        {
+          "timeMs": 84,
+          "uuid": "caster",
+          "frame": 1,
+          "mode": "fire"
+        },
+        {
+          "timeMs": 584,
+          "uuid": "caster",
+          "frame": 7,
+          "mode": "fire"
+        },
+        {
+          "timeMs": 2278,
+          "uuid": "target",
+          "frame": 10,
+          "mode": "fire"
+        }
+      ],
+      "selectedFrames": [
+        {
+          "timeMs": 0,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 0,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 0
+          },
+          "hp": 20,
+          "projectiles": [],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 84,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 1,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 1
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "cast",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                24,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 584,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 7,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 7
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "travel",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                24,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 876,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 10,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 10
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "travel",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 7,
+              "root": [
+                76.56,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1126,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 13,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 13
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "travel",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 13,
+              "root": [
+                121.56,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1167,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 0,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 14
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "travel",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 13,
+              "root": [
+                128.94,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1429,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 3,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 2
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "impact",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                176,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1444,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 3,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "Dying",
+            "clip": "Die",
+            "frame": 0
+          },
+          "hp": 0,
+          "projectiles": [
+            {
+              "phase": "impact",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                176,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": true
+        },
+        {
+          "timeMs": 2054,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 10,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "Dying",
+            "clip": "Die",
+            "frame": 7
+          },
+          "hp": 0,
+          "projectiles": [],
+          "numberVisible": true
+        },
+        {
+          "timeMs": 2611,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 2,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "Dead",
+            "clip": "Die",
+            "frame": 14
+          },
+          "hp": 0,
+          "projectiles": [],
+          "numberVisible": false
+        }
+      ],
+      "editor": {
+        "bodyEndMs": 1250,
+        "releaseMs": 583.3333333333334,
+        "impactMs": 1427.7777777777778,
+        "recoveryStartMs": 3692.777777777778
+      }
+    },
+    {
+      "id": "queue-recovery-enabled",
+      "boundary": "queue",
+      "input": {
+        "draftContentId": "spell.fire_bolt",
+        "sourceGrid": [
+          0,
+          0
+        ],
+        "targetGrid": [
+          3,
+          -3
+        ],
+        "visualScale": 0.5,
+        "castSpeed": 1,
+        "damageSpeed": 1,
+        "initialHp": 20,
+        "resultingHp": 13,
+        "damageAmount": 7,
+        "lethal": false,
+        "terminal": false,
+        "numberEnabled": true,
+        "recoveryEnabled": true,
+        "repeatDamageAfterMs": null,
+        "repeatResultingHp": null
+      },
+      "pump": {
+        "stepMs": 1,
+        "initialStepMs": 1
+      },
+      "timing": {
+        "prepareStartMs": 84,
+        "releaseAnchorMs": 584,
+        "travelStartMs": 584,
+        "impactMs": 1429,
+        "impactEndMs": 2054,
+        "bodyEndMs": 1167,
+        "damageStartMs": [
+          1444
+        ],
+        "vitals": [
+          {
+            "timeMs": 2028,
+            "hp": 13
+          }
+        ],
+        "recoveryStartMs": 2611,
+        "settledMs": 3778,
+        "numberVisibleMs": [
+          2028
+        ],
+        "numberRemovedMs": [
+          3028
+        ]
+      },
+      "bodyTransitions": [
+        {
+          "timeMs": 0,
+          "uuid": "caster",
+          "from": "Idle",
+          "to": "Casting",
+          "trigger": "cast",
+          "clip": "Attack5"
+        },
+        {
+          "timeMs": 1167,
+          "uuid": "caster",
+          "from": "Casting",
+          "to": "Idle",
+          "clip": "Idle"
+        },
+        {
+          "timeMs": 1444,
+          "uuid": "target",
+          "from": "Idle",
+          "to": "TakingHit",
+          "trigger": "takeHit",
+          "clip": "TakeDamage"
+        },
+        {
+          "timeMs": 2611,
+          "uuid": "target",
+          "from": "TakingHit",
+          "to": "Idle",
+          "clip": "Idle"
+        },
+        {
+          "timeMs": 2611,
+          "uuid": "caster",
+          "from": "Idle",
+          "to": "Acting",
+          "trigger": "act",
+          "clip": "Taunt"
+        },
+        {
+          "timeMs": 3778,
+          "uuid": "caster",
+          "from": "Acting",
+          "to": "Idle",
+          "clip": "Idle"
+        }
+      ],
+      "frameAnchors": [
+        {
+          "timeMs": 84,
+          "uuid": "caster",
+          "frame": 1,
+          "mode": "fire"
+        },
+        {
+          "timeMs": 584,
+          "uuid": "caster",
+          "frame": 7,
+          "mode": "fire"
+        },
+        {
+          "timeMs": 1861,
+          "uuid": "target",
+          "frame": 5,
+          "mode": "fire"
+        },
+        {
+          "timeMs": 2028,
+          "uuid": "target",
+          "frame": 7,
+          "mode": "fire"
+        }
+      ],
+      "selectedFrames": [
+        {
+          "timeMs": 0,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 0,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 0
+          },
+          "hp": 20,
+          "projectiles": [],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 84,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 1,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 1
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "cast",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                24,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 584,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 7,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 7
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "travel",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                24,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 876,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 10,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 10
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "travel",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 7,
+              "root": [
+                76.56,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1126,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 13,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 13
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "travel",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 13,
+              "root": [
+                121.56,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1167,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 0,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 14
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "travel",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 13,
+              "root": [
+                128.94,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1429,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 3,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 2
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "impact",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                176,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1444,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 3,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "TakingHit",
+            "clip": "TakeDamage",
+            "frame": 0
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "impact",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                176,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 2028,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 10,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "TakingHit",
+            "clip": "TakeDamage",
+            "frame": 7
+          },
+          "hp": 13,
+          "projectiles": [
+            {
+              "phase": "impact",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 14,
+              "root": [
+                176,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": true
+        },
+        {
+          "timeMs": 2054,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 10,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "TakingHit",
+            "clip": "TakeDamage",
+            "frame": 7
+          },
+          "hp": 13,
+          "projectiles": [],
+          "numberVisible": true
+        },
+        {
+          "timeMs": 3778,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 0,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 14
+          },
+          "hp": 13,
+          "projectiles": [],
+          "numberVisible": false
+        }
+      ],
+      "editor": {
+        "bodyEndMs": 1250,
+        "releaseMs": 583.3333333333334,
+        "impactMs": 1427.7777777777778,
+        "recoveryStartMs": 3026.1111111111113
+      }
+    },
+    {
+      "id": "queue-near",
+      "boundary": "queue",
+      "input": {
+        "draftContentId": "spell.fire_bolt",
+        "sourceGrid": [
+          0,
+          0
+        ],
+        "targetGrid": [
+          1,
+          -1
+        ],
+        "visualScale": 0.5,
+        "castSpeed": 1,
+        "damageSpeed": 1,
+        "initialHp": 20,
+        "resultingHp": 13,
+        "damageAmount": 7,
+        "lethal": false,
+        "terminal": false,
+        "numberEnabled": true,
+        "recoveryEnabled": false,
+        "repeatDamageAfterMs": null,
+        "repeatResultingHp": null
+      },
+      "pump": {
+        "stepMs": 1,
+        "initialStepMs": 1
+      },
+      "timing": {
+        "prepareStartMs": 84,
+        "releaseAnchorMs": 584,
+        "travelStartMs": 584,
+        "impactMs": 734,
+        "impactEndMs": 1359,
+        "bodyEndMs": 1167,
+        "damageStartMs": [
+          749
+        ],
+        "vitals": [
+          {
+            "timeMs": 1333,
+            "hp": 13
+          }
+        ],
+        "recoveryStartMs": null,
+        "settledMs": 1916,
+        "numberVisibleMs": [
+          1333
+        ],
+        "numberRemovedMs": [
+          1916
+        ]
+      },
+      "bodyTransitions": [
+        {
+          "timeMs": 0,
+          "uuid": "caster",
+          "from": "Idle",
+          "to": "Casting",
+          "trigger": "cast",
+          "clip": "Attack5"
+        },
+        {
+          "timeMs": 749,
+          "uuid": "target",
+          "from": "Idle",
+          "to": "TakingHit",
+          "trigger": "takeHit",
+          "clip": "TakeDamage"
+        },
+        {
+          "timeMs": 1167,
+          "uuid": "caster",
+          "from": "Casting",
+          "to": "Idle",
+          "clip": "Idle"
+        },
+        {
+          "timeMs": 1916,
+          "uuid": "target",
+          "from": "TakingHit",
+          "to": "Idle",
+          "clip": "Idle"
+        }
+      ],
+      "frameAnchors": [
+        {
+          "timeMs": 84,
+          "uuid": "caster",
+          "frame": 1,
+          "mode": "fire"
+        },
+        {
+          "timeMs": 584,
+          "uuid": "caster",
+          "frame": 7,
+          "mode": "fire"
+        },
+        {
+          "timeMs": 1166,
+          "uuid": "target",
+          "frame": 5,
+          "mode": "fire"
+        },
+        {
+          "timeMs": 1333,
+          "uuid": "target",
+          "frame": 7,
+          "mode": "fire"
+        }
+      ],
+      "selectedFrames": [
+        {
+          "timeMs": 0,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 0,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 0
+          },
+          "hp": 20,
+          "projectiles": [],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 84,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 1,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 1
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "cast",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                24,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 584,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 7,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 7
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "travel",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                24,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 734,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 8,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 8
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "impact",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                48,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 749,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 8,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "TakingHit",
+            "clip": "TakeDamage",
+            "frame": 0
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "impact",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                48,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1166,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 13,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "TakingHit",
+            "clip": "TakeDamage",
+            "frame": 5
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "impact",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 10,
+              "root": [
+                48,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1167,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 0,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "TakingHit",
+            "clip": "TakeDamage",
+            "frame": 5
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "impact",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 10,
+              "root": [
+                48,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1333,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 1,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "TakingHit",
+            "clip": "TakeDamage",
+            "frame": 7
+          },
+          "hp": 13,
+          "projectiles": [
+            {
+              "phase": "impact",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 14,
+              "root": [
+                48,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": true
+        },
+        {
+          "timeMs": 1359,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 2,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "TakingHit",
+            "clip": "TakeDamage",
+            "frame": 7
+          },
+          "hp": 13,
+          "projectiles": [],
+          "numberVisible": true
+        },
+        {
+          "timeMs": 1916,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 8,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 0
+          },
+          "hp": 13,
+          "projectiles": [],
+          "numberVisible": false
+        }
+      ],
+      "editor": {
+        "bodyEndMs": 1250,
+        "releaseMs": 583.3333333333334,
+        "impactMs": 733.3333333333334,
+        "recoveryStartMs": 2331.666666666667
+      }
+    },
+    {
+      "id": "queue-repeat-hit",
+      "boundary": "queue",
+      "input": {
+        "draftContentId": "spell.fire_bolt",
+        "sourceGrid": [
+          0,
+          0
+        ],
+        "targetGrid": [
+          3,
+          -3
+        ],
+        "visualScale": 0.5,
+        "castSpeed": 1,
+        "damageSpeed": 1,
+        "initialHp": 20,
+        "resultingHp": 13,
+        "damageAmount": 7,
+        "lethal": false,
+        "terminal": false,
+        "numberEnabled": true,
+        "recoveryEnabled": false,
+        "repeatDamageAfterMs": 100,
+        "repeatResultingHp": 6
+      },
+      "pump": {
+        "stepMs": 1,
+        "initialStepMs": 1
+      },
+      "timing": {
+        "prepareStartMs": 84,
+        "releaseAnchorMs": 584,
+        "travelStartMs": 584,
+        "impactMs": 1429,
+        "impactEndMs": 2054,
+        "bodyEndMs": 1167,
+        "damageStartMs": [
+          1444,
+          1544
+        ],
+        "vitals": [
+          {
+            "timeMs": 1544,
+            "hp": 13
+          },
+          {
+            "timeMs": 2128,
+            "hp": 6
+          }
+        ],
+        "recoveryStartMs": null,
+        "settledMs": 2711,
+        "numberVisibleMs": [
+          1544,
+          2128
+        ],
+        "numberRemovedMs": [
+          2544,
+          2711
+        ]
+      },
+      "bodyTransitions": [
+        {
+          "timeMs": 0,
+          "uuid": "caster",
+          "from": "Idle",
+          "to": "Casting",
+          "trigger": "cast",
+          "clip": "Attack5"
+        },
+        {
+          "timeMs": 1167,
+          "uuid": "caster",
+          "from": "Casting",
+          "to": "Idle",
+          "clip": "Idle"
+        },
+        {
+          "timeMs": 1444,
+          "uuid": "target",
+          "from": "Idle",
+          "to": "TakingHit",
+          "trigger": "takeHit",
+          "clip": "TakeDamage"
+        },
+        {
+          "timeMs": 1544,
+          "uuid": "target",
+          "from": "TakingHit",
+          "to": "TakingHit",
+          "trigger": "takeHit",
+          "clip": "TakeDamage"
+        },
+        {
+          "timeMs": 2711,
+          "uuid": "target",
+          "from": "TakingHit",
+          "to": "Idle",
+          "clip": "Idle"
+        }
+      ],
+      "frameAnchors": [
+        {
+          "timeMs": 84,
+          "uuid": "caster",
+          "frame": 1,
+          "mode": "fire"
+        },
+        {
+          "timeMs": 584,
+          "uuid": "caster",
+          "frame": 7,
+          "mode": "fire"
+        },
+        {
+          "timeMs": 1544,
+          "uuid": "target",
+          "frame": 5,
+          "mode": "flush-on-exit"
+        },
+        {
+          "timeMs": 1544,
+          "uuid": "target",
+          "frame": 7,
+          "mode": "flush-on-exit"
+        },
+        {
+          "timeMs": 1961,
+          "uuid": "target",
+          "frame": 5,
+          "mode": "fire"
+        },
+        {
+          "timeMs": 2128,
+          "uuid": "target",
+          "frame": 7,
+          "mode": "fire"
+        }
+      ],
+      "selectedFrames": [
+        {
+          "timeMs": 0,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 0,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 0
+          },
+          "hp": 20,
+          "projectiles": [],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 84,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 1,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 1
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "cast",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                24,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 584,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 7,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 7
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "travel",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                24,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 876,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 10,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 10
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "travel",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 7,
+              "root": [
+                76.56,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1126,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 13,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 13
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "travel",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 13,
+              "root": [
+                121.56,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1167,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 0,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 14
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "travel",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 13,
+              "root": [
+                128.94,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1429,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 3,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 2
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "impact",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                176,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1444,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 3,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "TakingHit",
+            "clip": "TakeDamage",
+            "frame": 0
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "impact",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                176,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1544,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 4,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "TakingHit",
+            "clip": "TakeDamage",
+            "frame": 0
+          },
+          "hp": 13,
+          "projectiles": [
+            {
+              "phase": "impact",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 2,
+              "root": [
+                176,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": true
+        },
+        {
+          "timeMs": 2054,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 10,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "TakingHit",
+            "clip": "TakeDamage",
+            "frame": 6
+          },
+          "hp": 13,
+          "projectiles": [],
+          "numberVisible": true
+        },
+        {
+          "timeMs": 2128,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 11,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "TakingHit",
+            "clip": "TakeDamage",
+            "frame": 7
+          },
+          "hp": 6,
+          "projectiles": [],
+          "numberVisible": true
+        },
+        {
+          "timeMs": 2711,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 3,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 0
+          },
+          "hp": 6,
+          "projectiles": [],
+          "numberVisible": false
+        }
+      ],
+      "editor": {
+        "bodyEndMs": 1250,
+        "releaseMs": 583.3333333333334,
+        "impactMs": 1427.7777777777778,
+        "recoveryStartMs": 3126.1111111111113
+      }
+    },
+    {
+      "id": "queue-large-initial-delta",
+      "boundary": "queue",
+      "input": {
+        "draftContentId": "spell.fire_bolt",
+        "sourceGrid": [
+          0,
+          0
+        ],
+        "targetGrid": [
+          3,
+          -3
+        ],
+        "visualScale": 0.5,
+        "castSpeed": 1,
+        "damageSpeed": 1,
+        "initialHp": 20,
+        "resultingHp": 13,
+        "damageAmount": 7,
+        "lethal": false,
+        "terminal": false,
+        "numberEnabled": true,
+        "recoveryEnabled": false,
+        "repeatDamageAfterMs": null,
+        "repeatResultingHp": null
+      },
+      "pump": {
+        "stepMs": 1,
+        "initialStepMs": 1500
+      },
+      "timing": {
+        "prepareStartMs": 1500,
+        "releaseAnchorMs": 1500,
+        "travelStartMs": 2000,
+        "impactMs": 2845,
+        "impactEndMs": 3470,
+        "bodyEndMs": 1500,
+        "damageStartMs": [
+          2860
+        ],
+        "vitals": [
+          {
+            "timeMs": 3444,
+            "hp": 13
+          }
+        ],
+        "recoveryStartMs": null,
+        "settledMs": 4027,
+        "numberVisibleMs": [
+          3444
+        ],
+        "numberRemovedMs": [
+          4027
+        ]
+      },
+      "bodyTransitions": [
+        {
+          "timeMs": 0,
+          "uuid": "caster",
+          "from": "Idle",
+          "to": "Casting",
+          "trigger": "cast",
+          "clip": "Attack5"
+        },
+        {
+          "timeMs": 1500,
+          "uuid": "caster",
+          "from": "Casting",
+          "to": "Idle",
+          "clip": "Idle"
+        },
+        {
+          "timeMs": 2860,
+          "uuid": "target",
+          "from": "Idle",
+          "to": "TakingHit",
+          "trigger": "takeHit",
+          "clip": "TakeDamage"
+        },
+        {
+          "timeMs": 4027,
+          "uuid": "target",
+          "from": "TakingHit",
+          "to": "Idle",
+          "clip": "Idle"
+        }
+      ],
+      "frameAnchors": [
+        {
+          "timeMs": 1500,
+          "uuid": "caster",
+          "frame": 1,
+          "mode": "fire"
+        },
+        {
+          "timeMs": 1500,
+          "uuid": "caster",
+          "frame": 7,
+          "mode": "fire"
+        },
+        {
+          "timeMs": 3277,
+          "uuid": "target",
+          "frame": 5,
+          "mode": "fire"
+        },
+        {
+          "timeMs": 3444,
+          "uuid": "target",
+          "frame": 7,
+          "mode": "fire"
+        }
+      ],
+      "selectedFrames": [
+        {
+          "timeMs": 0,
+          "caster": {
+            "state": "Casting",
+            "clip": "Attack5",
+            "frame": 0,
+            "weapon": null,
+            "glow": "Magic2"
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 0
+          },
+          "hp": 20,
+          "projectiles": [],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 1500,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 0,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 3
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "cast",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                24,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 2000,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 5,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 8
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "travel",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                24,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 2292,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 9,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 12
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "travel",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 7,
+              "root": [
+                76.56,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 2845,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 1,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 4
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "impact",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                176,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 2860,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 1,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "TakingHit",
+            "clip": "TakeDamage",
+            "frame": 0
+          },
+          "hp": 20,
+          "projectiles": [
+            {
+              "phase": "impact",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 0,
+              "root": [
+                176,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": false
+        },
+        {
+          "timeMs": 3444,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 8,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "TakingHit",
+            "clip": "TakeDamage",
+            "frame": 7
+          },
+          "hp": 13,
+          "projectiles": [
+            {
+              "phase": "impact",
+              "facing": "E",
+              "rotation": 0,
+              "frame": 14,
+              "root": [
+                176,
+                20.5
+              ]
+            }
+          ],
+          "numberVisible": true
+        },
+        {
+          "timeMs": 3470,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 8,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "TakingHit",
+            "clip": "TakeDamage",
+            "frame": 7
+          },
+          "hp": 13,
+          "projectiles": [],
+          "numberVisible": true
+        },
+        {
+          "timeMs": 4027,
+          "caster": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 0,
+            "weapon": "Melee1",
+            "glow": null
+          },
+          "target": {
+            "state": "Idle",
+            "clip": "Idle",
+            "frame": 0
+          },
+          "hp": 13,
+          "projectiles": [],
+          "numberVisible": false
+        }
+      ],
+      "editor": {
+        "bodyEndMs": 1250,
+        "releaseMs": 583.3333333333334,
+        "impactMs": 1427.7777777777778,
+        "recoveryStartMs": 3026.1111111111113
+      }
+    }
+  ]
+}

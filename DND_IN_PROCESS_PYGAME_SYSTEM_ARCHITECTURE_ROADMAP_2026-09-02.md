@@ -3,6 +3,11 @@
 Date: 2026-09-02  
 Status: **accepted high-level architecture; implementation requires bounded practical plans**
 
+For current branch ordering and the subsequent NeuroStudio/timeline framing,
+start with [RECOVERY_PLAN.md](RECOVERY_PLAN.md). The broader retrospective is
+[HISTORY_BEFORE_ME.md](HISTORY_BEFORE_ME.md). Checkpoint descriptions below retain
+their historical context; the ownership laws remain the foundation.
+
 ## 1. Purpose
 
 This document reconnects the current D&D reconstruction and content-recovery

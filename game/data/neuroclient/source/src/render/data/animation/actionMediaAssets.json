@@ -1,0 +1,213 @@
+{
+  "schema": "neuroclient.actionMediaAssets",
+  "version": 1,
+  "assets": [
+    {
+      "assetId": "strip.buff2.fade-down",
+      "displayName": "Buff 2 · Fade Down",
+      "source": "sub/Buff2_fade-down",
+      "directional": false,
+      "frames": 4,
+      "defaultFps": 12,
+      "tags": ["buff", "condition", "recover"]
+    },
+    {
+      "assetId": "strip.buff2.fade-up",
+      "displayName": "Buff 2 · Fade Up",
+      "source": "sub/Buff2_fade-up",
+      "directional": false,
+      "frames": 2,
+      "defaultFps": 12,
+      "tags": ["buff", "condition", "prepare"]
+    },
+    {
+      "assetId": "strip.buff2.loop",
+      "displayName": "Buff 2 · Loop",
+      "source": "sub/Buff2_loop",
+      "directional": false,
+      "frames": 7,
+      "defaultFps": 12,
+      "tags": ["buff", "condition", "loop"]
+    },
+    {
+      "assetId": "strip.buff5.loop",
+      "displayName": "Buff 5 · Loop",
+      "source": "sub/Buff5_loop",
+      "directional": false,
+      "frames": 12,
+      "defaultFps": 12,
+      "tags": ["buff", "condition", "loop"]
+    },
+    {
+      "assetId": "strip.buff7.fade-down",
+      "displayName": "Buff 7 · Fade Down",
+      "source": "sub/Buff7_fade-down",
+      "directional": false,
+      "frames": 2,
+      "defaultFps": 12,
+      "tags": ["buff", "condition", "recover"]
+    },
+    {
+      "assetId": "strip.buff7.loop",
+      "displayName": "Buff 7 · Loop",
+      "source": "sub/Buff7_loop",
+      "directional": false,
+      "frames": 12,
+      "defaultFps": 12,
+      "tags": ["buff", "condition", "loop"]
+    },
+    {
+      "assetId": "strip.effect1.attack4.phase1",
+      "displayName": "Effect 1 · Attack 4 · Phase 1",
+      "source": "sub/Effect1_Attack4_phase-1",
+      "directional": false,
+      "frames": 7,
+      "defaultFps": 12,
+      "tags": ["attack", "prepare", "effect"]
+    },
+    {
+      "assetId": "strip.effect1.attack4.phase3",
+      "displayName": "Effect 1 · Attack 4 · Phase 3",
+      "source": "sub/Effect1_Attack4_phase-3",
+      "directional": false,
+      "frames": 5,
+      "defaultFps": 12,
+      "tags": ["attack", "impact", "effect"]
+    },
+    {
+      "assetId": "directional.effect1.attack5.phase1",
+      "displayName": "Effect 1 · Attack 5 · Phase 1",
+      "source": "sub/Effect1_Attack5_phase-1",
+      "directional": true,
+      "frames": 10,
+      "defaultFps": 12,
+      "tags": ["attack", "directional", "prepare"]
+    },
+    {
+      "assetId": "directional.effect1.attack5.phase2",
+      "displayName": "Effect 1 · Attack 5 · Phase 2",
+      "source": "sub/Effect1_Attack5_phase-2",
+      "directional": true,
+      "frames": 5,
+      "defaultFps": 12,
+      "tags": ["attack", "directional", "impact"]
+    },
+    {
+      "assetId": "strip.effect2.attack4.phase1",
+      "displayName": "Effect 2 · Attack 4 · Phase 1",
+      "source": "sub/Effect2_Attack4_phase-1",
+      "directional": false,
+      "frames": 5,
+      "defaultFps": 12,
+      "tags": ["attack", "contact", "effect"]
+    },
+    {
+      "assetId": "strip.effect2.attack4.phase2",
+      "displayName": "Effect 2 · Attack 4 · Phase 2",
+      "source": "sub/Effect2_Attack4_phase-2",
+      "directional": false,
+      "frames": 4,
+      "defaultFps": 12,
+      "tags": ["attack", "impact", "effect"]
+    },
+    {
+      "assetId": "strip.effect2.attack4.phase3",
+      "displayName": "Effect 2 · Attack 4 · Phase 3",
+      "source": "sub/Effect2_Attack4_phase-3",
+      "directional": false,
+      "frames": 4,
+      "defaultFps": 12,
+      "tags": ["attack", "recover", "effect"]
+    },
+    {
+      "assetId": "strip.effect2.attack5.phase1",
+      "displayName": "Effect 2 · Attack 5 · Phase 1",
+      "source": "sub/Effect2_Attack5_phase-1",
+      "directional": false,
+      "frames": 6,
+      "defaultFps": 12,
+      "tags": ["attack", "prepare", "effect"]
+    },
+    {
+      "assetId": "strip.effect2.attack5.phase2",
+      "displayName": "Effect 2 · Attack 5 · Phase 2",
+      "source": "sub/Effect2_Attack5_phase-2",
+      "directional": false,
+      "frames": 4,
+      "defaultFps": 12,
+      "tags": ["attack", "contact", "effect"]
+    },
+    {
+      "assetId": "strip.effect2.attack5.phase3",
+      "displayName": "Effect 2 · Attack 5 · Phase 3",
+      "source": "sub/Effect2_Attack5_phase-3",
+      "directional": false,
+      "frames": 2,
+      "defaultFps": 12,
+      "tags": ["attack", "recover", "effect"]
+    },
+    {
+      "assetId": "strip.effect2.special1.phase1",
+      "displayName": "Effect 2 · Special 1 · Phase 1",
+      "source": "sub/Effect2_Special1_phase-1",
+      "directional": false,
+      "frames": 9,
+      "defaultFps": 12,
+      "tags": ["item", "reaction", "release"]
+    },
+    {
+      "assetId": "strip.effect2.special1.phase2",
+      "displayName": "Effect 2 · Special 1 · Phase 2",
+      "source": "sub/Effect2_Special1_phase-2",
+      "directional": false,
+      "frames": 3,
+      "defaultFps": 12,
+      "tags": ["item", "reaction", "effect"]
+    },
+    {
+      "assetId": "strip.effect3.attack4.phase2",
+      "displayName": "Effect 3 · Attack 4 · Phase 2",
+      "source": "sub/Effect3_Attack4_phase-2",
+      "directional": false,
+      "frames": 7,
+      "defaultFps": 12,
+      "tags": ["attack", "contact", "effect"]
+    },
+    {
+      "assetId": "strip.effect3.special1.phase1",
+      "displayName": "Effect 3 · Special 1 · Phase 1",
+      "source": "sub/Effect3_Special1_phase-1",
+      "directional": false,
+      "frames": 10,
+      "defaultFps": 12,
+      "tags": ["spell", "reaction", "release"]
+    },
+    {
+      "assetId": "strip.level-up.phase1",
+      "displayName": "Level Up · Phase 1",
+      "source": "sub/LevelUp_phase-1",
+      "directional": false,
+      "frames": 8,
+      "defaultFps": 12,
+      "tags": ["effect", "item", "release"]
+    },
+    {
+      "assetId": "strip.level-up.phase2",
+      "displayName": "Level Up · Phase 2",
+      "source": "sub/LevelUp_phase-2",
+      "directional": false,
+      "frames": 4,
+      "defaultFps": 12,
+      "tags": ["effect", "item", "recover"]
+    },
+    {
+      "assetId": "directional.effect2.attack4",
+      "displayName": "Effect 2 · Attack 4 · Directional",
+      "source": "Effect2/Attack4",
+      "directional": true,
+      "frames": 15,
+      "defaultFps": 12,
+      "tags": ["attack", "directional", "actor"]
+    }
+  ]
+}

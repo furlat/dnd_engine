@@ -75,6 +75,51 @@ def test_eb_04_001_phase_to_creates_versions_with_one_lineage() -> None:
     assert EventQueue.get_events_by_target(target_uuid) == versions
 
 
+def test_event_history_uses_only_the_queue_and_resets_without_removing_objects() -> None:
+    """Every Event version has one history owner, independent of live objects."""
+    reset_event_state()
+    owner = BaseObject(source_entity_uuid=uuid4())
+    declaration = Event(
+        source_entity_uuid=owner.source_entity_uuid,
+        event_type=EventType.BASE_ACTION,
+    )
+    execution = declaration.phase_to(EventPhase.EXECUTION)
+    completion = execution.phase_to(EventPhase.COMPLETION)
+    versions = [declaration, execution, completion]
+
+    assert EventQueue.get_event_history(completion.uuid) == versions
+    assert all(EventQueue.get_event_by_uuid(event.uuid) is event for event in versions)
+    assert all(BaseObject.get(event.uuid) is None for event in versions)
+
+    EventQueue.reset()
+
+    assert list(EventQueue.iter_events_since(0)) == []
+    assert all(EventQueue.get_event_by_uuid(event.uuid) is None for event in versions)
+    assert all(BaseObject.get(event.uuid) is None for event in versions)
+    assert BaseObject.get(owner.uuid) is owner
+
+
+def test_event_registration_opt_out_applies_to_constructed_and_posted_versions() -> None:
+    """A caller can create and phase an Event without retaining its history."""
+    reset_event_state()
+    declaration = Event(
+        source_entity_uuid=uuid4(),
+        event_type=EventType.BASE_ACTION,
+        context={"reason": "preview"},
+        use_register=False,
+    )
+    execution = declaration.phase_to(EventPhase.EXECUTION)
+
+    assert execution.uuid != declaration.uuid
+    assert execution.lineage_uuid == declaration.lineage_uuid
+    assert execution.source_entity_uuid == declaration.source_entity_uuid
+    assert execution.context == {"reason": "preview"}
+    assert list(EventQueue.iter_events_since(0)) == []
+    for event in (declaration, execution):
+        assert EventQueue.get_event_by_uuid(event.uuid) is None
+        assert BaseObject.get(event.uuid) is None
+
+
 def test_eb_04_002_handlers_match_exact_phase_source_and_target() -> None:
     """EB-04-002: handlers dispatch by exact trigger and chain mutations."""
     reset_event_state()

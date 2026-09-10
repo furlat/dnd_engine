@@ -1,0 +1,474 @@
+{
+  "schema": "neuroclient.actorVisualProfileBindings",
+  "version": 2,
+  "bindings": [
+    {
+      "definitionRef": {
+        "pack_id": "content.neurodragon",
+        "definition_kind": "creature",
+        "content_id": "creature.configured_srd.acolyte",
+        "content_version": 1,
+        "definition_contract_hash": "0f2b7ae7ed1196af472765e419a838b24e9b8868e6676ee0f7ae12bce3f1b4c1"
+      },
+      "profileId": "acolyte",
+      "bodyCategory": "NakedBody",
+      "skinTint": 14850418,
+      "headCategory": "Head9",
+      "hairTint": 7437108,
+      "hasBeard": false,
+      "beardTint": 7437108,
+      "visualScaleMultiplier": 0.99,
+      "widthMultiplier": 0.96
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.neurodragon",
+        "definition_kind": "creature",
+        "content_id": "creature.configured_srd.bandit_captain",
+        "content_version": 1,
+        "definition_contract_hash": "0f2b7ae7ed1196af472765e419a838b24e9b8868e6676ee0f7ae12bce3f1b4c1"
+      },
+      "profileId": "bandit-captain",
+      "bodyCategory": "NakedBody",
+      "skinTint": 13737712,
+      "headCategory": "Head10",
+      "hairTint": 3350282,
+      "hasBeard": true,
+      "beardTint": 3350282,
+      "visualScaleMultiplier": 1.02,
+      "widthMultiplier": 1
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.neurodragon",
+        "definition_kind": "creature",
+        "content_id": "creature.configured_srd.bandit",
+        "content_version": 1,
+        "definition_contract_hash": "0f2b7ae7ed1196af472765e419a838b24e9b8868e6676ee0f7ae12bce3f1b4c1"
+      },
+      "profileId": "bandit",
+      "bodyCategory": "NakedBody",
+      "skinTint": 13210484,
+      "headCategory": "Head9",
+      "hairTint": 2762273,
+      "hasBeard": true,
+      "beardTint": 2762273,
+      "visualScaleMultiplier": 1,
+      "widthMultiplier": 0.98
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.neurodragon",
+        "definition_kind": "creature",
+        "content_id": "creature.configured_srd.berserker",
+        "content_version": 1,
+        "definition_contract_hash": "0f2b7ae7ed1196af472765e419a838b24e9b8868e6676ee0f7ae12bce3f1b4c1"
+      },
+      "profileId": "berserker",
+      "bodyCategory": "NakedBody",
+      "skinTint": 14467525,
+      "headCategory": "Head17",
+      "hairTint": 10381127,
+      "hasBeard": true,
+      "beardTint": 10381127,
+      "visualScaleMultiplier": 1.06,
+      "widthMultiplier": 1.1
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.neurodragon",
+        "definition_kind": "creature",
+        "content_id": "creature.configured_srd.bugbear",
+        "content_version": 1,
+        "definition_contract_hash": "0f2b7ae7ed1196af472765e419a838b24e9b8868e6676ee0f7ae12bce3f1b4c1"
+      },
+      "profileId": "bugbear",
+      "bodyCategory": "NakedBody",
+      "skinTint": 9135428,
+      "headCategory": "Head17",
+      "hairTint": 4407609,
+      "hasBeard": true,
+      "beardTint": 4407609,
+      "visualScaleMultiplier": 1.08,
+      "widthMultiplier": 1.14
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.neurodragon",
+        "definition_kind": "creature",
+        "content_id": "creature.configured_srd.commoner",
+        "content_version": 1,
+        "definition_contract_hash": "0f2b7ae7ed1196af472765e419a838b24e9b8868e6676ee0f7ae12bce3f1b4c1"
+      },
+      "profileId": "commoner",
+      "bodyCategory": "NakedBody",
+      "skinTint": 14527109,
+      "headCategory": "Head1",
+      "hairTint": 6445882,
+      "hasBeard": false,
+      "beardTint": 6445882,
+      "visualScaleMultiplier": 0.98,
+      "widthMultiplier": 0.96
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.neurodragon",
+        "definition_kind": "creature",
+        "content_id": "creature.configured_srd.cult_fanatic",
+        "content_version": 1,
+        "definition_contract_hash": "0f2b7ae7ed1196af472765e419a838b24e9b8868e6676ee0f7ae12bce3f1b4c1"
+      },
+      "profileId": "cult-fanatic",
+      "bodyCategory": "NakedBody",
+      "skinTint": 13347925,
+      "headCategory": "Head22",
+      "hairTint": 1709584,
+      "hasBeard": false,
+      "beardTint": 1709584,
+      "visualScaleMultiplier": 1,
+      "widthMultiplier": 0.96
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.neurodragon",
+        "definition_kind": "creature",
+        "content_id": "creature.configured_srd.cultist",
+        "content_version": 1,
+        "definition_contract_hash": "0f2b7ae7ed1196af472765e419a838b24e9b8868e6676ee0f7ae12bce3f1b4c1"
+      },
+      "profileId": "cultist",
+      "bodyCategory": "NakedBody",
+      "skinTint": 13875838,
+      "headCategory": "Head16",
+      "hairTint": 2298677,
+      "hasBeard": false,
+      "beardTint": 2298677,
+      "visualScaleMultiplier": 0.99,
+      "widthMultiplier": 0.95
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.neurodragon",
+        "definition_kind": "creature",
+        "content_id": "creature.configured_srd.gnoll",
+        "content_version": 1,
+        "definition_contract_hash": "0f2b7ae7ed1196af472765e419a838b24e9b8868e6676ee0f7ae12bce3f1b4c1"
+      },
+      "profileId": "gnoll",
+      "bodyCategory": "NakedBody",
+      "skinTint": 11962961,
+      "headCategory": "Head22",
+      "hairTint": 5129776,
+      "hasBeard": true,
+      "beardTint": 5129776,
+      "visualScaleMultiplier": 1.04,
+      "widthMultiplier": 1.02
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.neurodragon",
+        "definition_kind": "creature",
+        "content_id": "creature.configured_srd.guard",
+        "content_version": 1,
+        "definition_contract_hash": "0f2b7ae7ed1196af472765e419a838b24e9b8868e6676ee0f7ae12bce3f1b4c1"
+      },
+      "profileId": "guard",
+      "bodyCategory": "NakedBody",
+      "skinTint": 14261367,
+      "headCategory": "Head10",
+      "hairTint": 5190690,
+      "hasBeard": true,
+      "beardTint": 5190690,
+      "visualScaleMultiplier": 1.01,
+      "widthMultiplier": 1
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.neurodragon",
+        "definition_kind": "creature",
+        "content_id": "creature.configured_srd.hobgoblin",
+        "content_version": 1,
+        "definition_contract_hash": "0f2b7ae7ed1196af472765e419a838b24e9b8868e6676ee0f7ae12bce3f1b4c1"
+      },
+      "profileId": "hobgoblin",
+      "bodyCategory": "NakedBody",
+      "skinTint": 11164223,
+      "headCategory": "Head16",
+      "hairTint": 1774350,
+      "hasBeard": false,
+      "beardTint": 1774350,
+      "visualScaleMultiplier": 1.01,
+      "widthMultiplier": 0.98
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.neurodragon",
+        "definition_kind": "creature",
+        "content_id": "creature.configured_srd.knight",
+        "content_version": 1,
+        "definition_contract_hash": "0f2b7ae7ed1196af472765e419a838b24e9b8868e6676ee0f7ae12bce3f1b4c1"
+      },
+      "profileId": "knight",
+      "bodyCategory": "NakedBody",
+      "skinTint": 14329691,
+      "headCategory": "Head10",
+      "hairTint": 4931643,
+      "hasBeard": false,
+      "beardTint": 4931643,
+      "visualScaleMultiplier": 1.04,
+      "widthMultiplier": 1.06
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.neurodragon",
+        "definition_kind": "creature",
+        "content_id": "creature.configured_srd.kobold",
+        "content_version": 1,
+        "definition_contract_hash": "0f2b7ae7ed1196af472765e419a838b24e9b8868e6676ee0f7ae12bce3f1b4c1"
+      },
+      "profileId": "kobold",
+      "bodyCategory": "NakedBody",
+      "skinTint": 11755330,
+      "headCategory": null,
+      "hairTint": 0,
+      "hasBeard": false,
+      "beardTint": 0,
+      "visualScaleMultiplier": 0.96,
+      "widthMultiplier": 0.8
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.neurodragon",
+        "definition_kind": "creature",
+        "content_id": "creature.configured_srd.mage",
+        "content_version": 1,
+        "definition_contract_hash": "0f2b7ae7ed1196af472765e419a838b24e9b8868e6676ee0f7ae12bce3f1b4c1"
+      },
+      "profileId": "mage",
+      "bodyCategory": "NakedBody",
+      "skinTint": 14463722,
+      "headCategory": "Head16",
+      "hairTint": 7566195,
+      "hasBeard": false,
+      "beardTint": 7566195,
+      "visualScaleMultiplier": 1,
+      "widthMultiplier": 0.94
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.neurodragon",
+        "definition_kind": "creature",
+        "content_id": "creature.configured_srd.orc",
+        "content_version": 1,
+        "definition_contract_hash": "0f2b7ae7ed1196af472765e419a838b24e9b8868e6676ee0f7ae12bce3f1b4c1"
+      },
+      "profileId": "orc",
+      "bodyCategory": "NakedBody",
+      "skinTint": 7307095,
+      "headCategory": "Head10",
+      "hairTint": 1644563,
+      "hasBeard": true,
+      "beardTint": 1644563,
+      "visualScaleMultiplier": 1.04,
+      "widthMultiplier": 1.1
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.neurodragon",
+        "definition_kind": "creature",
+        "content_id": "creature.configured_srd.priest",
+        "content_version": 1,
+        "definition_contract_hash": "0f2b7ae7ed1196af472765e419a838b24e9b8868e6676ee0f7ae12bce3f1b4c1"
+      },
+      "profileId": "priest",
+      "bodyCategory": "NakedBody",
+      "skinTint": 14528401,
+      "headCategory": "Head1",
+      "hairTint": 8355711,
+      "hasBeard": true,
+      "beardTint": 8355711,
+      "visualScaleMultiplier": 1,
+      "widthMultiplier": 0.98
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.neurodragon",
+        "definition_kind": "creature",
+        "content_id": "creature.configured_srd.scout",
+        "content_version": 1,
+        "definition_contract_hash": "0f2b7ae7ed1196af472765e419a838b24e9b8868e6676ee0f7ae12bce3f1b4c1"
+      },
+      "profileId": "scout",
+      "bodyCategory": "NakedBody",
+      "skinTint": 12690555,
+      "headCategory": "Head22",
+      "hairTint": 5726049,
+      "hasBeard": false,
+      "beardTint": 5726049,
+      "visualScaleMultiplier": 0.99,
+      "widthMultiplier": 0.94
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.neurodragon",
+        "definition_kind": "creature",
+        "content_id": "creature.configured_srd.spy",
+        "content_version": 1,
+        "definition_contract_hash": "0f2b7ae7ed1196af472765e419a838b24e9b8868e6676ee0f7ae12bce3f1b4c1"
+      },
+      "profileId": "spy",
+      "bodyCategory": "NakedBody",
+      "skinTint": 14394973,
+      "headCategory": "Head16",
+      "hairTint": 2631720,
+      "hasBeard": false,
+      "beardTint": 2631720,
+      "visualScaleMultiplier": 0.99,
+      "widthMultiplier": 0.92
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.neurodragon",
+        "definition_kind": "creature",
+        "content_id": "creature.configured_srd.thug",
+        "content_version": 1,
+        "definition_contract_hash": "0f2b7ae7ed1196af472765e419a838b24e9b8868e6676ee0f7ae12bce3f1b4c1"
+      },
+      "profileId": "thug",
+      "bodyCategory": "NakedBody",
+      "skinTint": 12684637,
+      "headCategory": "Head1",
+      "hairTint": 2171169,
+      "hasBeard": true,
+      "beardTint": 2171169,
+      "visualScaleMultiplier": 1.04,
+      "widthMultiplier": 1.08
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.neurodragon",
+        "definition_kind": "creature",
+        "content_id": "creature.configured_srd.tribal_warrior",
+        "content_version": 1,
+        "definition_contract_hash": "0f2b7ae7ed1196af472765e419a838b24e9b8868e6676ee0f7ae12bce3f1b4c1"
+      },
+      "profileId": "tribal-warrior",
+      "bodyCategory": "NakedBody",
+      "skinTint": 11358584,
+      "headCategory": "Head17",
+      "hairTint": 2897727,
+      "hasBeard": false,
+      "beardTint": 2897727,
+      "visualScaleMultiplier": 1.02,
+      "widthMultiplier": 1.02
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.neurodragon",
+        "definition_kind": "creature",
+        "content_id": "creature.configured_srd.veteran",
+        "content_version": 1,
+        "definition_contract_hash": "0f2b7ae7ed1196af472765e419a838b24e9b8868e6676ee0f7ae12bce3f1b4c1"
+      },
+      "profileId": "veteran",
+      "bodyCategory": "NakedBody",
+      "skinTint": 13475945,
+      "headCategory": "Head9",
+      "hairTint": 6908265,
+      "hasBeard": true,
+      "beardTint": 6908265,
+      "visualScaleMultiplier": 1.03,
+      "widthMultiplier": 1.04
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.neurodragon",
+        "definition_kind": "creature",
+        "content_id": "creature.generic_caster",
+        "content_version": 1,
+        "definition_contract_hash": "d1d32fb568ea5bb5923b978c88b4e6847db869607d71c6cd70145ece1a6604d8"
+      },
+      "profileId": "generic-caster",
+      "bodyCategory": "NakedBody",
+      "skinTint": 13942942,
+      "headCategory": "Head16",
+      "hairTint": 3617315,
+      "hasBeard": false,
+      "beardTint": 3617315,
+      "visualScaleMultiplier": 1,
+      "widthMultiplier": 0.96
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.neurodragon",
+        "definition_kind": "creature",
+        "content_id": "creature.goblin_archer",
+        "content_version": 1,
+        "definition_contract_hash": "59f083e677a50ed93313e007bc0c8a8a87cf28b23b6982bd7b76b04236796f39"
+      },
+      "profileId": "goblin-archer",
+      "bodyCategory": "NakedBody",
+      "skinTint": 8499531,
+      "headCategory": null,
+      "hairTint": 0,
+      "hasBeard": false,
+      "beardTint": 0,
+      "visualScaleMultiplier": 1,
+      "widthMultiplier": 0.88
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.neurodragon",
+        "definition_kind": "creature",
+        "content_id": "creature.goblin_caster",
+        "content_version": 1,
+        "definition_contract_hash": "1b72578e6081772d3232f3861d4f23c9baf909dc3abb237d4d74b36ee07a3dd2"
+      },
+      "profileId": "goblin-hedge-caster",
+      "bodyCategory": "NakedBody",
+      "skinTint": 7902279,
+      "headCategory": null,
+      "hairTint": 0,
+      "hasBeard": false,
+      "beardTint": 0,
+      "visualScaleMultiplier": 1,
+      "widthMultiplier": 0.9
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.neurodragon",
+        "definition_kind": "creature",
+        "content_id": "creature.goblin",
+        "content_version": 1,
+        "definition_contract_hash": "2f93d97aff126395c7fbb59e7acfdc5e355041a40c296b48959c222bf02aa3d3"
+      },
+      "profileId": "goblin-skirmisher",
+      "bodyCategory": "NakedBody",
+      "skinTint": 7772730,
+      "headCategory": null,
+      "hairTint": 0,
+      "hasBeard": false,
+      "beardTint": 0,
+      "visualScaleMultiplier": 1,
+      "widthMultiplier": 0.9
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "creature",
+        "content_id": "creature.ogre",
+        "content_version": 1,
+        "definition_contract_hash": "9014e1a5dc325535b66c757f22cd984dd4f8f8caae914b2664c15f03d65f9fa2"
+      },
+      "profileId": "ogre",
+      "bodyCategory": "NakedBody",
+      "skinTint": 10517662,
+      "headCategory": "Head1",
+      "hairTint": 4336416,
+      "hasBeard": true,
+      "beardTint": 4336416,
+      "visualScaleMultiplier": 1.16,
+      "widthMultiplier": 1.18
+    }
+  ]
+}

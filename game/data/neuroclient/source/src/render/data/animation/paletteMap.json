@@ -1,0 +1,1453 @@
+{
+  "schemaVersion": 1,
+  "entries": [
+    {
+      "category": "Bag1",
+      "colors": [
+        7960953,
+        6447714,
+        5395026
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Bag2",
+      "colors": [
+        11974326,
+        9539985,
+        6381921
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Bag3",
+      "colors": [
+        11842740,
+        10066329,
+        6184542
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Bag4",
+      "colors": [
+        2344,
+        3843,
+        28
+      ],
+      "isGray": [
+        false,
+        false,
+        false
+      ]
+    },
+    {
+      "category": "Bag5",
+      "colors": [
+        10921638,
+        9737364,
+        6184542
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Bag6",
+      "colors": [
+        10460316,
+        5722960,
+        4208420
+      ],
+      "isGray": [
+        true,
+        true,
+        false
+      ]
+    },
+    {
+      "category": "Bag8",
+      "colors": [
+        10921638,
+        9737364
+      ],
+      "isGray": [
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Belt1",
+      "colors": [
+        11842741,
+        10658467
+      ],
+      "isGray": [
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Belt2",
+      "colors": [
+        10395294,
+        8882055,
+        5395026
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Chest1",
+      "colors": [
+        11842997,
+        10592674
+      ],
+      "isGray": [
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Chest10",
+      "colors": [
+        11842741,
+        10592674
+      ],
+      "isGray": [
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Chest11",
+      "colors": [
+        11842741,
+        10527137
+      ],
+      "isGray": [
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Chest12",
+      "colors": [
+        11842997,
+        10592674
+      ],
+      "isGray": [
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Chest13",
+      "colors": [
+        11908534,
+        10658466,
+        5921370
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Chest14",
+      "colors": [
+        11908533,
+        10658466,
+        5987164
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Chest15",
+      "colors": [
+        11908534,
+        10658466,
+        5987164
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Chest16",
+      "colors": [
+        10592673,
+        9408399,
+        5987164
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Chest17",
+      "colors": [
+        9605778,
+        7237230,
+        4210752
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Chest18",
+      "colors": [
+        10329501,
+        9145227,
+        5395026
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Chest19",
+      "colors": [
+        10592673,
+        9408399
+      ],
+      "isGray": [
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Chest2",
+      "colors": [
+        11842997,
+        10658467
+      ],
+      "isGray": [
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Chest3",
+      "colors": [
+        11842741,
+        10658466
+      ],
+      "isGray": [
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Chest4",
+      "colors": [
+        11908533,
+        10658466,
+        5921370
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Chest5",
+      "colors": [
+        11842740,
+        10526881,
+        5723992
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Chest6",
+      "colors": [
+        10658466,
+        9474192,
+        5855578
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Chest7",
+      "colors": [
+        11908533,
+        10658466,
+        5987163
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Chest8",
+      "colors": [
+        11842740,
+        10526881,
+        5526612
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Chest9",
+      "colors": [
+        11842741,
+        10527137
+      ],
+      "isGray": [
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Hands1",
+      "colors": [
+        11842997,
+        10592673
+      ],
+      "isGray": [
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Hands2",
+      "colors": [
+        10592673,
+        9408399
+      ],
+      "isGray": [
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Hands3",
+      "colors": [
+        11842997,
+        10592673
+      ],
+      "isGray": [
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Hands4",
+      "colors": [
+        11842997,
+        10527137
+      ],
+      "isGray": [
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Head1",
+      "colors": [
+        13421772,
+        11842997,
+        10592673
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Head10",
+      "colors": [
+        13487565,
+        11842740,
+        10526881
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Head12",
+      "colors": [
+        11842740,
+        10526881
+      ],
+      "isGray": [
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Head13",
+      "colors": [
+        11908533,
+        10658466,
+        5987164
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Head14",
+      "colors": [
+        11842740,
+        5987164,
+        5197647
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Head15",
+      "colors": [
+        13355979,
+        11776947,
+        5921371
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Head16",
+      "colors": [
+        12105912,
+        10855845
+      ],
+      "isGray": [
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Head17",
+      "colors": [
+        13487565,
+        12105912,
+        10855845
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Head18",
+      "colors": [
+        11908533,
+        10658466
+      ],
+      "isGray": [
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Head19",
+      "colors": [
+        11842740,
+        6184542,
+        5197647
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Head2",
+      "colors": [
+        11842997,
+        10724259
+      ],
+      "isGray": [
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Head20",
+      "colors": [
+        11842740,
+        7829367,
+        5921370
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Head21",
+      "colors": [
+        11842740,
+        6316128,
+        5131855
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Head22",
+      "colors": [
+        12895428,
+        9342606,
+        5921370
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Head23",
+      "colors": [
+        10658466,
+        9474192
+      ],
+      "isGray": [
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Head24",
+      "colors": [
+        10592673,
+        9408399
+      ],
+      "isGray": [
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Head3",
+      "colors": [
+        11842740,
+        10592930
+      ],
+      "isGray": [
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Head4",
+      "colors": [
+        11908534,
+        10658467
+      ],
+      "isGray": [
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Head5",
+      "colors": [
+        11842740,
+        10526881
+      ],
+      "isGray": [
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Head6",
+      "colors": [
+        13421772,
+        11842740,
+        10526881
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Head7",
+      "colors": [
+        13355979,
+        11842740,
+        10526881
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Head8",
+      "colors": [
+        11842740,
+        10526881
+      ],
+      "isGray": [
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Head9",
+      "colors": [
+        11842740,
+        10592673
+      ],
+      "isGray": [
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Legs1",
+      "colors": [
+        11842741,
+        10592930
+      ],
+      "isGray": [
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Legs2",
+      "colors": [
+        11842741,
+        10527137
+      ],
+      "isGray": [
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Legs3",
+      "colors": [
+        11842741,
+        10527137
+      ],
+      "isGray": [
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Legs4",
+      "colors": [
+        11842741,
+        10527137
+      ],
+      "isGray": [
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Legs5",
+      "colors": [
+        11842741,
+        10329758,
+        5789785
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Legs6",
+      "colors": [
+        11974326,
+        10658467
+      ],
+      "isGray": [
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Legs7",
+      "colors": [
+        11908533,
+        10658466,
+        5855577
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Legs8",
+      "colors": [
+        11842740,
+        10526881,
+        5723992
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Legs9",
+      "colors": [
+        10987431,
+        10000536,
+        6184542
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Melee1",
+      "colors": [
+        11908533,
+        10658466,
+        5855578
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Melee10",
+      "colors": [
+        11908533,
+        10658466,
+        5921370
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Melee11",
+      "colors": [
+        11776947,
+        6052956,
+        5131855
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Melee12",
+      "colors": [
+        11908533,
+        10658466,
+        5855578
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Melee13",
+      "colors": [
+        11908533,
+        10658466,
+        5855578
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Melee14",
+      "colors": [
+        10790052,
+        9474193,
+        5855578
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Melee15",
+      "colors": [
+        11908533,
+        10658466,
+        5921370
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Melee16",
+      "colors": [
+        11908533,
+        10658466,
+        5855578
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Melee17",
+      "colors": [
+        11776947,
+        5987163,
+        5131855
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Melee18",
+      "colors": [
+        11908533,
+        10658466,
+        5855578
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Melee19",
+      "colors": [
+        11908533,
+        10658466
+      ],
+      "isGray": [
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Melee2",
+      "colors": [
+        11908533,
+        10658466,
+        5855577
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Melee20",
+      "colors": [
+        11908533,
+        10329501,
+        5921370
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Melee21",
+      "colors": [
+        10724259,
+        9539985,
+        5987164
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Melee22",
+      "colors": [
+        11908533,
+        10658466
+      ],
+      "isGray": [
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Melee23",
+      "colors": [
+        11908533,
+        10658466
+      ],
+      "isGray": [
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Melee24",
+      "colors": [
+        11908533,
+        10658466
+      ],
+      "isGray": [
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Melee25",
+      "colors": [
+        12105912,
+        10395294,
+        6052956
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Melee3",
+      "colors": [
+        11908533,
+        10658466,
+        5855578
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Melee4",
+      "colors": [
+        11908533,
+        10658466,
+        5855577
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Melee5",
+      "colors": [
+        11908533,
+        10658466,
+        5855578
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Melee6",
+      "colors": [
+        11908533,
+        10658466,
+        8092540
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Melee7",
+      "colors": [
+        10132122,
+        6908265,
+        5197647
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Melee8",
+      "colors": [
+        10658466,
+        9474193,
+        5987163
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Melee9",
+      "colors": [
+        11908533,
+        10658466,
+        5921371
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Mount1",
+      "colors": [
+        10526624,
+        9276298,
+        460035
+      ],
+      "isGray": [
+        true,
+        true,
+        false
+      ]
+    },
+    {
+      "category": "Mount2",
+      "colors": [
+        10790053,
+        9605779,
+        3286299
+      ],
+      "isGray": [
+        true,
+        true,
+        false
+      ]
+    },
+    {
+      "category": "Mount3",
+      "colors": [
+        10592674,
+        9474192,
+        7434609
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Mount4",
+      "colors": [
+        10592673,
+        9539986,
+        8816262
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Mount5",
+      "colors": [
+        10000536,
+        8816262,
+        5460819
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "NakedBody",
+      "colors": [
+        11842741,
+        10527137
+      ],
+      "isGray": [
+        true,
+        true
+      ]
+    },
+    {
+      "category": "NakedBody2",
+      "colors": [
+        10658467,
+        9474193,
+        6118750
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "NakedBody3",
+      "colors": [
+        15330538,
+        15001574,
+        14212314
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Offhand1",
+      "colors": [
+        11908533,
+        10658466,
+        5855578
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Offhand2",
+      "colors": [
+        11908533,
+        10658466,
+        5855577
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Ranged1",
+      "colors": [
+        11908533,
+        10658466
+      ],
+      "isGray": [
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Ranged2",
+      "colors": [
+        11908533,
+        10658466
+      ],
+      "isGray": [
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Ranged3",
+      "colors": [
+        11842740,
+        10526881
+      ],
+      "isGray": [
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Ranged4",
+      "colors": [
+        13092807,
+        8882055,
+        4671303
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Ranged5",
+      "colors": [
+        11645362,
+        6176293,
+        5124637
+      ],
+      "isGray": [
+        true,
+        false,
+        false
+      ]
+    },
+    {
+      "category": "Ranged6",
+      "colors": [
+        11842740,
+        10526881
+      ],
+      "isGray": [
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Ranged7",
+      "colors": [
+        10592673,
+        9408399,
+        6044708
+      ],
+      "isGray": [
+        true,
+        true,
+        false
+      ]
+    },
+    {
+      "category": "Shield1",
+      "colors": [
+        11908534,
+        10658466,
+        5855577
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Shield2",
+      "colors": [
+        10592673,
+        9211020,
+        1250324
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Shield3",
+      "colors": [
+        11908533,
+        10658466,
+        5921371
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Shield4",
+      "colors": [
+        10329245,
+        7762032,
+        1379596
+      ],
+      "isGray": [
+        true,
+        true,
+        false
+      ]
+    },
+    {
+      "category": "Shield5",
+      "colors": [
+        10658466,
+        9474192,
+        5921370
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Shield6",
+      "colors": [
+        10592673,
+        9408400,
+        1315861
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Shield7",
+      "colors": [
+        12303291,
+        11711154,
+        5000268
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Shoes1",
+      "colors": [
+        11842741,
+        10527137
+      ],
+      "isGray": [
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Shoes2",
+      "colors": [
+        11908533,
+        10658466
+      ],
+      "isGray": [
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Shoes3",
+      "colors": [
+        11908533,
+        10658466
+      ],
+      "isGray": [
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Shoes4",
+      "colors": [
+        10658466,
+        9474192
+      ],
+      "isGray": [
+        true,
+        true
+      ]
+    },
+    {
+      "category": "Shoes5",
+      "colors": [
+        11119017,
+        9342606,
+        4276545
+      ],
+      "isGray": [
+        true,
+        true,
+        true
+      ]
+    }
+  ]
+}

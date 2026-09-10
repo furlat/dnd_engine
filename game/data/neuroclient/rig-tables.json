@@ -1,0 +1,252 @@
+{
+  "FACING_ROW": {
+    "E": 0,
+    "SE": 1,
+    "S": 2,
+    "SW": 3,
+    "W": 4,
+    "NW": 5,
+    "N": 6,
+    "NE": 7
+  },
+  "FACING_CYCLE": [
+    "N",
+    "NE",
+    "E",
+    "SE",
+    "S",
+    "SW",
+    "W",
+    "NW"
+  ],
+  "SHEET_COLS": 15,
+  "CELL_W": 128,
+  "CELL_H": 128,
+  "ANIM_FPS": 12,
+  "SLOT_RENDER_ORDER": [
+    "shadow",
+    "body",
+    "legs",
+    "shoes",
+    "mount",
+    "chest",
+    "belt",
+    "hands",
+    "offhand",
+    "weapon",
+    "weaponGlow",
+    "backpack",
+    "beard",
+    "head",
+    "helmet",
+    "aura",
+    "slash",
+    "effect",
+    "effect2",
+    "effect3"
+  ],
+  "SLOT_CATEGORIES": {
+    "shadow": [
+      "Shadow"
+    ],
+    "body": [
+      "NakedBody",
+      "NakedBody2",
+      "NakedBody3"
+    ],
+    "shoes": [
+      "Shoes1",
+      "Shoes2",
+      "Shoes3",
+      "Shoes4",
+      "Shoes5"
+    ],
+    "legs": [
+      "Legs1",
+      "Legs2",
+      "Legs3",
+      "Legs4",
+      "Legs5",
+      "Legs6",
+      "Legs7",
+      "Legs8",
+      "Legs9"
+    ],
+    "mount": [
+      "Mount1",
+      "Mount2",
+      "Mount3",
+      "Mount4",
+      "Mount5"
+    ],
+    "chest": [
+      "Chest1",
+      "Chest2",
+      "Chest3",
+      "Chest4",
+      "Chest5",
+      "Chest6",
+      "Chest7",
+      "Chest8",
+      "Chest9",
+      "Chest10",
+      "Chest11",
+      "Chest12",
+      "Chest13",
+      "Chest14",
+      "Chest15",
+      "Chest16",
+      "Chest17",
+      "Chest18",
+      "Chest19"
+    ],
+    "belt": [
+      "Belt1",
+      "Belt2"
+    ],
+    "hands": [
+      "Hands1",
+      "Hands2",
+      "Hands3",
+      "Hands4"
+    ],
+    "offhand": [
+      "Shield1",
+      "Shield2",
+      "Shield3",
+      "Shield4",
+      "Shield5",
+      "Shield6",
+      "Shield7",
+      "Offhand1",
+      "Offhand2"
+    ],
+    "weapon": [
+      "Melee1",
+      "Melee2",
+      "Melee3",
+      "Melee4",
+      "Melee5",
+      "Melee6",
+      "Melee7",
+      "Melee8",
+      "Melee9",
+      "Melee10",
+      "Melee11",
+      "Melee12",
+      "Melee13",
+      "Melee14",
+      "Melee15",
+      "Melee16",
+      "Melee17",
+      "Melee18",
+      "Melee19",
+      "Melee20",
+      "Melee21",
+      "Melee22",
+      "Melee23",
+      "Melee24",
+      "Melee25",
+      "Ranged1",
+      "Ranged2",
+      "Ranged3",
+      "Ranged4",
+      "Ranged5",
+      "Ranged6",
+      "Ranged7",
+      "Magic1",
+      "Magic2",
+      "Magic3"
+    ],
+    "weaponGlow": [
+      "Magic1",
+      "Magic2",
+      "Magic3"
+    ],
+    "backpack": [
+      "Bag1",
+      "Bag2",
+      "Bag3",
+      "Bag4",
+      "Bag5",
+      "Bag6",
+      "Bag8"
+    ],
+    "head": [
+      "Head1",
+      "Head9",
+      "Head10",
+      "Head16",
+      "Head17",
+      "Head22"
+    ],
+    "beard": [
+      "Head2"
+    ],
+    "helmet": [
+      "Head3",
+      "Head4",
+      "Head5",
+      "Head6",
+      "Head7",
+      "Head8",
+      "Head10",
+      "Head11",
+      "Head12",
+      "Head13",
+      "Head14",
+      "Head15",
+      "Head18",
+      "Head19",
+      "Head20",
+      "Head21",
+      "Head22",
+      "Head23",
+      "Head24"
+    ],
+    "slash": [
+      "Slash1",
+      "Slash2"
+    ],
+    "effect": [
+      "Effect1",
+      "Effect2",
+      "Effect3"
+    ],
+    "effect2": [
+      "Effect1",
+      "Effect2",
+      "Effect3"
+    ],
+    "effect3": [
+      "Effect1",
+      "Effect2",
+      "Effect3"
+    ],
+    "aura": [
+      "Effect4",
+      "Effect5"
+    ]
+  },
+  "HAIR_CATEGORIES": [
+    "Head1",
+    "Head9",
+    "Head10",
+    "Head16",
+    "Head17",
+    "Head22"
+  ],
+  "AUTHORED_PROJECTILE_ROW_ORDER": [
+    "E",
+    "SE",
+    "S",
+    "SW",
+    "W",
+    "NW",
+    "N",
+    "NE"
+  ],
+  "RIG_ORIGIN_Y_FROM_GROUND": 41,
+  "TILE_W": 64,
+  "TILE_H": 32
+}

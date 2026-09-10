@@ -1,0 +1,418 @@
+{
+  "schema": "neuroclient.actionContextPresentationRecipes",
+  "version": 17,
+  "contexts": {
+    "pre_motion_reaction": {
+      "label": "Reaction",
+      "feedbackEnabled": true,
+      "feedbackColor": 16436245,
+      "movementLeadInMs": 140,
+      "bodyEnabled": false,
+      "bodyClip": "Special1",
+      "bodyPlaybackSpeed": 4,
+      "media": [],
+      "recovery": {
+        "enabled": false,
+        "bodyClip": "Taunt",
+        "bodyPlaybackSpeed": 2,
+        "media": []
+      }
+    },
+    "outcome_feedback": {
+      "shove": {
+        "resisted": {
+          "enabled": true,
+          "text": "Resisted",
+          "color": 11184810
+        },
+        "succeeded_push": {
+          "enabled": false,
+          "text": "Pushed",
+          "color": 14136170
+        },
+        "succeeded_prone": {
+          "enabled": false,
+          "text": "Knocked prone",
+          "color": 14136170
+        },
+        "succeeded_blocked": {
+          "enabled": true,
+          "text": "Blocked",
+          "color": 14136170
+        }
+      },
+      "spell": {
+        "automatic": {
+          "enabled": false,
+          "text": "Applied",
+          "color": 16777215
+        },
+        "hit": {
+          "enabled": false,
+          "text": "Hit",
+          "color": 16777215
+        },
+        "miss": {
+          "enabled": true,
+          "text": "Miss",
+          "color": 8947848
+        },
+        "critical": {
+          "enabled": true,
+          "text": "Critical!!",
+          "color": 16763904
+        },
+        "save_succeeded": {
+          "enabled": true,
+          "text": "Saved",
+          "color": 9163775
+        },
+        "save_failed": {
+          "enabled": true,
+          "text": "Save failed",
+          "color": 16757355
+        },
+        "resisted": {
+          "enabled": true,
+          "text": "Resisted",
+          "color": 11184810
+        },
+        "immune": {
+          "enabled": true,
+          "text": "Immune",
+          "color": 12101631
+        }
+      }
+    },
+    "forced_movement": {
+      "label": "Forced movement",
+      "feedbackEnabled": false,
+      "feedbackColor": 14136170,
+      "motionCurve": "ease_out_quad",
+      "facingPolicy": "source_or_opposite_travel",
+      "durationScale": 1,
+      "playbackSpeedScale": 1,
+      "media": [],
+      "recovery": {
+        "enabled": false,
+        "bodyClip": "Taunt",
+        "bodyPlaybackSpeed": 1,
+        "media": []
+      }
+    },
+    "voluntary_movement": {
+      "walkClip": "Run",
+      "walkPlaybackSpeed": 1,
+      "walkStepDurationMs": 416.6666666666667,
+      "jumpClip": "Rolling",
+      "jumpBaseDurationMs": 650,
+      "jumpPerCellDurationMs": 100,
+      "jumpMinDurationMs": 700,
+      "jumpMaxDurationMs": 3000,
+      "jumpArcBasePx": 24,
+      "jumpArcPerCellPx": 8,
+      "jumpArcMaxPx": 56,
+      "walkMedia": [],
+      "walkRecovery": {
+        "enabled": false,
+        "bodyClip": "Taunt",
+        "bodyPlaybackSpeed": 1,
+        "media": []
+      },
+      "jumpBodyFrames": 15,
+      "jumpSourceFps": 12,
+      "jumpMedia": [],
+      "jumpRecovery": {
+        "enabled": false,
+        "bodyClip": "Taunt",
+        "bodyPlaybackSpeed": 1,
+        "media": []
+      }
+    },
+    "vital_effect": {
+      "damage": {
+        "palette": {
+          "untyped": {
+            "label": "Damage",
+            "elementColors": {
+              "primary": 15610692,
+              "secondary": 11145506,
+              "tertiary": 16746666
+            },
+            "impactColor": 16729156
+          },
+          "byDamageType": {
+            "Slashing": {
+              "elementColors": {
+                "primary": 13421772,
+                "secondary": 8947848,
+                "tertiary": 16777215
+              },
+              "impactColor": 16728132
+            },
+            "Piercing": {
+              "elementColors": {
+                "primary": 13421772,
+                "secondary": 8947848,
+                "tertiary": 16777215
+              },
+              "impactColor": 16737860
+            },
+            "Bludgeoning": {
+              "elementColors": {
+                "primary": 13421772,
+                "secondary": 8947848,
+                "tertiary": 16777215
+              },
+              "impactColor": 16747588
+            },
+            "Fire": {
+              "elementColors": {
+                "primary": 16737792,
+                "secondary": 16719360,
+                "tertiary": 16763904
+              },
+              "impactColor": 16728064
+            },
+            "Cold": {
+              "elementColors": {
+                "primary": 4499199,
+                "secondary": 2254540,
+                "tertiary": 8965327
+              },
+              "impactColor": 4499199
+            },
+            "Lightning": {
+              "elementColors": {
+                "primary": 15658820,
+                "secondary": 10075904,
+                "tertiary": 13409279
+              },
+              "impactColor": 16776004
+            },
+            "Thunder": {
+              "elementColors": {
+                "primary": 8947967,
+                "secondary": 4473036,
+                "tertiary": 12294143
+              },
+              "impactColor": 8947967
+            },
+            "Acid": {
+              "elementColors": {
+                "primary": 4521796,
+                "secondary": 2271778,
+                "tertiary": 8978278
+              },
+              "impactColor": 4521796
+            },
+            "Poison": {
+              "elementColors": {
+                "primary": 8978244,
+                "secondary": 4495650,
+                "tertiary": 13434692
+              },
+              "impactColor": 8978244
+            },
+            "Radiant": {
+              "elementColors": {
+                "primary": 16764962,
+                "secondary": 13403153,
+                "tertiary": 16772778
+              },
+              "impactColor": 16764962
+            },
+            "Necrotic": {
+              "elementColors": {
+                "primary": 6684842,
+                "secondary": 4456550,
+                "tertiary": 52292
+              },
+              "impactColor": 11162794
+            },
+            "Psychic": {
+              "elementColors": {
+                "primary": 16729343,
+                "secondary": 11149994,
+                "tertiary": 16746717
+              },
+              "impactColor": 16729343
+            },
+            "Force": {
+              "elementColors": {
+                "primary": 15610692,
+                "secondary": 11145506,
+                "tertiary": 16746666
+              },
+              "impactColor": 15610692
+            }
+          }
+        },
+        "bodyClip": "TakeDamage",
+        "bodyPlaybackSpeed": 1,
+        "impactDelayMs": 0,
+        "flashEnabled": true,
+        "flashFrame": 0,
+        "flashColorMode": "damage_type",
+        "flashColor": 16711680,
+        "criticalFlashColor": 16777215,
+        "flashDurationMs": 150,
+        "numberEnabled": true,
+        "numberFrame": 0,
+        "numberDurationMs": 900,
+        "conditionFrame": 2,
+        "deathFrame": 14
+      },
+      "healing": {
+        "bodyClip": "none",
+        "bodyPlaybackSpeed": 1,
+        "feedbackEnabled": true,
+        "feedbackColor": 4521796,
+        "feedbackLabel": "Heal",
+        "feedbackDurationMs": 900,
+        "media": []
+      },
+      "death": {
+        "bodyClip": "Die",
+        "bodyPlaybackSpeed": 1,
+        "equipmentHideFrame": 10,
+        "hiddenSlots": [],
+        "media": []
+      }
+    },
+    "floating_feedback": {
+      "number": {
+        "fontFamily": "monospace",
+        "fontSizePx": 20,
+        "fontWeight": "bold",
+        "strokeColor": 0,
+        "strokeWidthPx": 3,
+        "anchorLiftPx": 50,
+        "risePx": 50,
+        "fadeStartFraction": 0.5,
+        "durationMs": 1000
+      },
+      "badge": {
+        "fontFamily": "monospace",
+        "fontSizePx": 16,
+        "fontWeight": "bold",
+        "strokeColor": 0,
+        "strokeWidthPx": 3,
+        "anchorLiftPx": 60,
+        "risePx": 40,
+        "fadeStartFraction": 0.7,
+        "durationMs": 1400
+      }
+    },
+    "lifecycle": {
+      "deathSave": {
+        "success": {
+          "enabled": true,
+          "text": "Death save",
+          "color": 7722652
+        },
+        "failure": {
+          "enabled": true,
+          "text": "Death save failed",
+          "color": 14974333
+        },
+        "criticalSuccess": {
+          "enabled": true,
+          "text": "Critical death save!",
+          "color": 8388546
+        },
+        "criticalFailure": {
+          "enabled": true,
+          "text": "Critical failure",
+          "color": 16736866
+        }
+      },
+      "lifeState": {
+        "dying": {
+          "enabled": true,
+          "text": "Dying",
+          "color": 14974333
+        },
+        "stable": {
+          "enabled": true,
+          "text": "Stable",
+          "color": 7722652
+        },
+        "revived": {
+          "enabled": true,
+          "text": "Revived",
+          "color": 7722652
+        }
+      },
+      "turn": {
+        "enabled": true,
+        "durationMs": 1800,
+        "includeRoundNumber": true,
+        "unknownActorLabel": "Unknown",
+        "actionLabel": "BEGINS TURN",
+        "actorText": {
+          "fontFamily": "monospace",
+          "fontSizePx": 28,
+          "fontWeight": "bold",
+          "color": 16763972,
+          "strokeColor": 0,
+          "strokeWidthPx": 4,
+          "letterSpacingPx": 0
+        },
+        "actionText": {
+          "fontFamily": "monospace",
+          "fontSizePx": 11,
+          "fontWeight": "bold",
+          "color": 16777215,
+          "strokeColor": 0,
+          "strokeWidthPx": 3,
+          "letterSpacingPx": 2
+        },
+        "roundText": {
+          "fontFamily": "monospace",
+          "fontSizePx": 10,
+          "fontWeight": "bold",
+          "color": 11184810,
+          "strokeColor": 0,
+          "strokeWidthPx": 2,
+          "letterSpacingPx": 0
+        },
+        "actionOffsetYPx": 24,
+        "roundOffsetYPx": 39,
+        "underline": {
+          "color": 16763972,
+          "alpha": 0.85,
+          "minWidthPx": 110,
+          "maxWidthPx": 220,
+          "horizontalPaddingPx": 24,
+          "offsetYPx": 16,
+          "thicknessPx": 1.5
+        },
+        "placement": {
+          "viewportYFraction": 0.36,
+          "minYPx": 190,
+          "maxYPx": 330
+        },
+        "motion": {
+          "slideInMs": 220,
+          "fadeOutMs": 500,
+          "slideInPx": 40
+        }
+      },
+      "encounterResult": {
+        "enabled": true,
+        "title": "Encounter complete",
+        "includeReason": true,
+        "reasonFallback": "The encounter has ended",
+        "durationMs": 2200
+      }
+    },
+    "equipment_transition": {
+      "bodyEnabled": true,
+      "bodyClip": "Taunt",
+      "bodyPlaybackSpeed": 3,
+      "commitFrame": 4,
+      "media": []
+    }
+  }
+}

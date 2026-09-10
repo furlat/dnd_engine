@@ -1,0 +1,130 @@
+{
+  "$schema": "urn:codexfx:schema:vfx-asset:1",
+  "assetId": "lelu.magic-missile",
+  "atlas": {
+    "cellHeight": 256,
+    "cellWidth": 256,
+    "columns": 44,
+    "directionAxis": "y",
+    "frameAxis": "x",
+    "rows": 8
+  },
+  "clips": {
+    "cast": {
+      "allowedEmptyTailFrames": 0,
+      "edgePolicy": "forbid",
+      "emptyPolicy": "forbid",
+      "frameCount": 16,
+      "loop": false,
+      "playbackFps": 24.0,
+      "startFrame": 0
+    },
+    "impact": {
+      "allowedEmptyTailFrames": 0,
+      "edgePolicy": "forbid",
+      "emptyPolicy": "forbid",
+      "frameCount": 18,
+      "loop": false,
+      "playbackFps": 24.0,
+      "startFrame": 26
+    },
+    "travel": {
+      "allowedEmptyTailFrames": 0,
+      "edgePolicy": "forbid",
+      "emptyPolicy": "forbid",
+      "frameCount": 10,
+      "loop": true,
+      "playbackFps": 24.0,
+      "startFrame": 16
+    }
+  },
+  "directions": [
+    {
+      "captureYawDegrees": -45.0,
+      "name": "E",
+      "row": 0
+    },
+    {
+      "captureYawDegrees": -80.26,
+      "name": "SE",
+      "row": 1
+    },
+    {
+      "captureYawDegrees": -135.0,
+      "name": "S",
+      "row": 2
+    },
+    {
+      "captureYawDegrees": 170.26,
+      "name": "SW",
+      "row": 3
+    },
+    {
+      "captureYawDegrees": 135.0,
+      "name": "W",
+      "row": 4
+    },
+    {
+      "captureYawDegrees": 99.74,
+      "name": "NW",
+      "row": 5
+    },
+    {
+      "captureYawDegrees": 45.0,
+      "name": "N",
+      "row": 6
+    },
+    {
+      "captureYawDegrees": -9.74,
+      "name": "NE",
+      "row": 7
+    }
+  ],
+  "displayName": "Magic Missile A \u00b7 Rune Dart \u00b7 Canonical Force",
+  "kind": "projectile_lifecycle",
+  "presentation": {
+    "anchorX": 0.5,
+    "anchorY": 1.0,
+    "defaultScale": 0.5,
+    "offsetX": 0.0,
+    "offsetY": 0.0
+  },
+  "schemaVersion": 1,
+  "sheet": {
+    "alphaMode": "straight",
+    "blend": "add",
+    "colorSpace": "srgb",
+    "format": "png",
+    "height": 2048,
+    "sampling": "nearest",
+    "sha256": "c197efa42a929604e9ceef639ca0281ef0af52cff314e95765156a76e0c17d9a",
+    "uri": "sheet.png",
+    "width": 11264
+  },
+  "tags": [
+    "projectile",
+    "force",
+    "magic-missile",
+    "directional",
+    "pixel",
+    "godot-postprocess",
+    "cell-256",
+    "block-2",
+    "short-wake",
+    "firebolt-resolution",
+    "constrained-palette",
+    "no-white",
+    "clip-frames-16-10-18",
+    "shape-alternative",
+    "rune-dart",
+    "canonical-force-palette",
+    "wine-purple"
+  ],
+  "validation": {
+    "profile": "neuroclient.firebolt-godot-256-strict-rgb-block2-fine-alpha.v1",
+    "profileUri": "profiles/validation.json",
+    "reportUri": "validation.json",
+    "status": "pass"
+  },
+  "variantId": "rune-dart-lifecycle-256.godot-cie-lab-force-wine10-capture8-final-block2.temporal16-10-18.v1"
+}

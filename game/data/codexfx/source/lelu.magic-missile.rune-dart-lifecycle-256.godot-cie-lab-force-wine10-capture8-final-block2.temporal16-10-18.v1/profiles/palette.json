@@ -1,0 +1,67 @@
+{
+  "$schema": "urn:codexfx:schema:palette:1",
+  "colorCount": 10,
+  "colors": [
+    [
+      19,
+      5,
+      22
+    ],
+    [
+      34,
+      6,
+      42
+    ],
+    [
+      52,
+      8,
+      64
+    ],
+    [
+      72,
+      10,
+      80
+    ],
+    [
+      94,
+      13,
+      91
+    ],
+    [
+      119,
+      18,
+      102
+    ],
+    [
+      145,
+      26,
+      116
+    ],
+    [
+      171,
+      42,
+      133
+    ],
+    [
+      197,
+      67,
+      151
+    ],
+    [
+      220,
+      96,
+      171
+    ]
+  ],
+  "encoding": "srgb8",
+  "paletteId": "eldritch-wine10.v1",
+  "rendererBinding": "eldritch_wine_10",
+  "schemaVersion": 1,
+  "semanticSlots": {
+    "body": 5,
+    "bodyHigh": 7,
+    "bodyLow": 3,
+    "core": 9,
+    "shadow": 1
+  }
+}

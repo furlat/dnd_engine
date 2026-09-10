@@ -1,0 +1,25 @@
+{
+  "archive": "/mnt/c/Users/tommaso/Downloads/Fantasy tileset - 2D Isometric V1.1.zip",
+  "assets": [
+    {
+      "member": "Fantasy tileset - 2D Isometric/Environment/Ground D1_E.png",
+      "path": "game/assets/environment/ground-d1-e.png",
+      "sha256": "bb69689aea6abdee70ed77edf839f985d2cdc126b700ba32a5c34896fc5baeca"
+    },
+    {
+      "member": "Fantasy tileset - 2D Isometric/Environment/Ground D1_N.png",
+      "path": "game/assets/environment/ground-d1-n.png",
+      "sha256": "182e27e774289320f5144469756f2df81f60cc58083d8ef453fdc9a804fe5eb1"
+    },
+    {
+      "member": "Fantasy tileset - 2D Isometric/Environment/Ground D1_S.png",
+      "path": "game/assets/environment/ground-d1-s.png",
+      "sha256": "4963fb651c86e4d59aa4bef4c631ab8ae8439226a2519e02ae89b725866d7b53"
+    },
+    {
+      "member": "Fantasy tileset - 2D Isometric/Environment/Ground D1_W.png",
+      "path": "game/assets/environment/ground-d1-w.png",
+      "sha256": "2a2925fedb3d0a8d2d9b03e0f64feadad9bcddf69a8f6268a0c52d139182d197"
+    }
+  ]
+}

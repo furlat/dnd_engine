@@ -1,0 +1,104 @@
+{
+  "schema": "neuroclient.spellStudioDrafts",
+  "version": 6,
+  "spells": [
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "spell",
+        "content_id": "spell.magic_missile",
+        "content_version": 1,
+        "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+      },
+      "elementColors": {
+        "primary": 15610692,
+        "secondary": 11145506,
+        "tertiary": 16746666
+      },
+      "cast": {
+        "actionClip": "Special1",
+        "bodyPlaybackSpeed": 1,
+        "releaseFrame": 8,
+        "equipment": {
+          "kind": "hidden"
+        },
+        "effects": [],
+        "recovery": {
+          "enabled": false,
+          "bodyClip": "Taunt",
+          "bodyPlaybackSpeed": 1
+        }
+      },
+      "projectile": {
+        "geometry": {
+          "renderer": "geometry_projectile",
+          "enabled": false,
+          "primitive": "dart"
+        },
+        "sprite": {
+          "renderer": "sprite_projectile",
+          "assetId": "lelu.magic-missile.rune-dart-lifecycle-256.godot-cie-lab-force-wine10-capture8-final-block2.temporal16-10-18.v1",
+          "alpha": 1,
+          "tint": 16777215,
+          "blendMode": "add",
+          "offsetX": 0.0,
+          "offsetY": 0.0,
+          "anchor": {
+            "x": 0.5,
+            "y": 1.0
+          },
+          "geometryComposition": "replace_geometry",
+          "mediaFailurePolicy": "fail_transaction"
+        },
+        "prepare": {
+          "enabled": false,
+          "assetPhase": "cast"
+        },
+        "travel": {
+          "enabled": true,
+          "assetPhase": "travel",
+          "assetId": "lelu.magic-missile.rune-dart-lifecycle-256.godot-cie-lab-force-wine10-capture8-final-block2.temporal16-10-18.v1"
+        },
+        "impact": {
+          "enabled": true,
+          "assetPhase": "impact",
+          "assetId": "lelu.magic-missile.rune-dart-lifecycle-256.godot-cie-lab-force-wine10-capture8-final-block2.temporal16-10-18.v1"
+        },
+        "trajectory": {
+          "type": "bezier",
+          "curvature": 0.3,
+          "sameTargetSpread": true
+        },
+        "speedPxPerSecond": 800,
+        "minimumTravelDurationMs": 150,
+        "fps": 24,
+        "scale": 0.5,
+        "depthMode": "world",
+        "orientation": {
+          "rowSource": "targetVector",
+          "fineRotation": "isometricHybrid",
+          "directionSource": "target_vector",
+          "rotationOffsetDeg": 0
+        },
+        "sourceAnchor": {
+          "basis": "tileCenter",
+          "liftY": -16,
+          "forwardPx": 0,
+          "sidePx": 0,
+          "axisPx": 16
+        },
+        "targetAnchor": {
+          "basis": "tileCenter",
+          "liftY": -16,
+          "forwardPx": -16
+        },
+        "missileStaggerMs": 80
+      },
+      "condition": {
+        "anchor": "effect",
+        "delayMs": 0,
+        "feedbackEnabled": true
+      }
+    }
+  ]
+}

@@ -72,6 +72,11 @@ CAMERA_LABELS = (
     ("NW", "SE"),
 )
 
+DrawCommand = tuple[
+    tuple[int, float, float, int, tuple[str, ...]],
+    pygame.Surface, tuple[int, int], int, tuple[object, ...],
+]
+
 
 @dataclass(frozen=True, slots=True)
 class FrameEvidence:
@@ -285,6 +290,8 @@ def draw_frame(
     objective_lines: Sequence[str] = (),
     subjective_lines: Sequence[str] = (),
     revisions: tuple[int, int, int] = (0, 0, 0),
+    extra_commands: Sequence[DrawCommand] = (),
+    show_debug: bool = True,
 ) -> FrameEvidence:
     """Draw one full structural frame plus subjectively disclosed state."""
     screen.fill(BACKGROUND)
@@ -296,15 +303,7 @@ def draw_frame(
     screen_rect = screen.get_rect()
     authored_treatment_id, authored_multiplier = _authored_treatment(catalog)
 
-    commands: list[
-        tuple[
-            tuple[int, float, float, int, tuple[str, ...]],
-            pygame.Surface,
-            tuple[int, int],
-            int,
-            tuple[object, ...],
-        ]
-    ] = []
+    commands: list[DrawCommand] = list(extra_commands)
     expected_calculations: set[tuple[object, ...]] = set()
     actual_calculations: set[tuple[object, ...]] = set()
     water_rows: dict[
@@ -336,7 +335,7 @@ def draw_frame(
         Material,
         tuple[str, tuple[int, int], tuple[int, int, int, int]],
     ] = {}
-    for material in (Material.EARTH, Material.WOOD):
+    for material in (Material.EARTH, Material.WOOD, Material.STONE):
         material_bindings = cast(Mapping[str, str], terrain_bindings[material.value])
         material_asset_id = material_bindings[terrain_pose]
         raster_terrain[material] = (
@@ -709,6 +708,7 @@ def draw_frame(
                         role="frame",
                         identity=object_uuid,
                         direction=pose,
+                        boundary_poses=(pose,),
                     ),
                     frame,
                     frame_destination,
@@ -747,6 +747,7 @@ def draw_frame(
                         role="leaf",
                         identity=object_uuid,
                         direction=pose,
+                        boundary_poses=(pose,),
                     ),
                     leaf,
                     leaf_destination,
@@ -828,6 +829,7 @@ def draw_frame(
                         role="wall",
                         identity=source_ids,
                         direction=pose,
+                        boundary_poses=tuple(camera_pose(row[2].value, camera.quadrant) for row in rows),
                     ),
                     surface,
                     destination,
@@ -864,6 +866,7 @@ def draw_frame(
                     role="wall",
                     identity=object_uuid,
                     direction=pose,
+                    boundary_poses=(pose,),
                 ),
                 surface,
                 destination,
@@ -999,6 +1002,23 @@ def draw_frame(
             )
             grid_draws += 1
 
+    frame_evidence = FrameEvidence(
+        expected_calculations=frozenset(expected_calculations),
+        actual_calculations=frozenset(actual_calculations),
+        expected_draws=expected_draws,
+        actual_draws=tuple(actual_draws),
+        candidate_coordinates=candidate_count,
+        static_draws=static_draws,
+        water_chunks=water_chunk_count,
+        water_pixels=water_pixel_count,
+        grid_candidates=grid_candidates,
+        grid_draws=grid_draws,
+        animated_fixtures=animated_fixtures,
+        flame_frame=flame_index,
+    )
+    if not show_debug:
+        return frame_evidence
+
     hover_text = "hover: outside world"
     boundary_text = "boundaries=none"
     if mouse_position is not None:
@@ -1110,20 +1130,7 @@ def draw_frame(
         screen.blit(font.render(text[:72], True, (210, 215, 225)), (rail_x, y))
         y += 17
 
-    return FrameEvidence(
-        expected_calculations=frozenset(expected_calculations),
-        actual_calculations=frozenset(actual_calculations),
-        expected_draws=expected_draws,
-        actual_draws=tuple(actual_draws),
-        candidate_coordinates=candidate_count,
-        static_draws=static_draws,
-        water_chunks=water_chunk_count,
-        water_pixels=water_pixel_count,
-        grid_candidates=grid_candidates,
-        grid_draws=grid_draws,
-        animated_fixtures=animated_fixtures,
-        flame_frame=flame_index,
-    )
+    return frame_evidence
 
 
 def _successful(event: Event | None, action: str) -> Event:
