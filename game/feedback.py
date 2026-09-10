@@ -75,6 +75,17 @@ def choreography_feedback(bound: BoundChoreography, data: AnimationData, absolut
                     number = damage.floatingNumber
                     tracks.append(FeedbackTrack(source.target, start + application.number_ms, number.durationMs,
                         source.damage_total, number.label, number.color, cast.data.number_style, source.application_id))
+    healing = data.healing_context
+    if healing.feedbackEnabled:
+        for cue in bound.healing:
+            event = cue.event
+            assert event.target_entity_uuid is not None
+            identity = str(event.target_entity_uuid)
+            contact = group_contacts.get(identity)
+            if contact is None:
+                contact = actor_contact(bound.before, bound.before.actors[event.target_entity_uuid], data)
+            tracks.append(FeedbackTrack(contact, absolute_start_ms + cue.start_ms, healing.feedbackDurationMs,
+                event.actual_healing, healing.feedbackLabel, healing.feedbackColor, data.number_style))
     for condition in bound.conditions:
         if condition.feedback_text is None:
             continue

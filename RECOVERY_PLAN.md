@@ -23,7 +23,8 @@ is now imported through the original Studio schema, independently of gameplay.
 
 ### Bounded session — native condition lifecycle and recovery
 
-**Status:** the six primary cases are implemented and validated. Execution was
+**Status:** the six primary cases and bounded standalone healing extension are
+implemented, externally reviewed and validated. Execution was
 authorized after independent external review of the
 written plan at `43b4ca0`. Both fresh reviewers approved its native producers,
 scope and ownership. They required assertions for the exact applied-versus-
@@ -36,7 +37,7 @@ work unit suitable for a few hours without interactive supervision. Target
 roughly 2–3 hours of useful work, finishing when the acceptance cases pass;
 time is a planning estimate, not a reason to add more systems or code.
 
-**Primary result:** full gallery `20260910T175626Z-4e0063` passes **28/28**,
+**Primary result (committed as `20f58db`):** full gallery `20260910T175626Z-4e0063` passes **28/28**,
 retaining the previous 22 cases. The existing mechanics, reducer, choreography
 and placement owners already handle the continuing lifecycle; no production
 gameplay changes were needed. New native producers retain all separate roots,
@@ -159,6 +160,30 @@ cap and a dying player restored by native healing. A dead actor's revival is
 a different native contract; healing must not invent it. This extension is
 conditional on completing the six primary cases and their reviews, and must
 not become individual spell/VFX work.
+
+The extension completed after the primary checkpoint and independent review
+of the selected healing contract. Original `mapHeal` also
+maps the actual life-state child to ReviveClip/`Revived`; that separate visual
+context is unported, and DYING/STABLE currently draw Idle. Keep this gap visible
+in the dying-player case. This cut adds the original healing feedback context
+and native entry state through the existing zero-duration head. Feedback can
+retain an inherited child anchor, but nested healing's HP-at-entry timing is
+not yet implemented by the attack/cast sampler; report that selected gap
+without claiming this standalone proof covers it. Neither gap calls for an
+invented animation or a new timing system in this unit.
+
+**Final gallery:** `20260910T181136Z-be08be` passes **30/30**. All 28 clips from
+the primary checkpoint have identical frame counts and RGB pixel hashes after
+the healing connection. The two new healing clips were inspected in all four
+views at entry and after head release. Their original green number, capped
+amount and retained native HP/life results agree. The run's
+`inspection/verification.json` records the comparison; captures/traces and
+known gaps remain in the normal review/export interface. Healing native tests
+plus lifecycle history: **7 passed**; healing playback/capture: **4 passed**;
+existing animation/movement/equipment/feedback: **120 passed**. Changed-file
+Pyright is clean. The broader architecture module passes 19 checks, including
+DAG/direction, with three failures in unchanged checkpoint server/schema code;
+the composition audit records the exact findings without expanding this unit.
 
 **Autonomy boundary:** proceed through these checkpoints without interactive
 milestones. Ordinary integration defects stay inside this unit and get solved.

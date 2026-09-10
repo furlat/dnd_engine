@@ -36,6 +36,59 @@ Changed-file Pyright: zero errors. Import direction and DAG: two passed.
 Only the existing Goblin ranged body/slash gaps occur in the full gallery;
 automatic checks and this inspection do not replace the human's visual review.
 
+## Bounded standalone healing extension — September 10
+
+Native `receive_healing` supplies the amount actually restored after the cap,
+committed normal/temporary HP and any real life-state child. The new producer
+first creates a real injury, then captures the heal in an ordinary encounter
+whose startup installs the existing observer computers. It preserves those
+grants and closes/resets the engine before playback. The living case requests
+20 HP at 13/20 and restores 7; the dying player receives 5 HP and retains the
+actual DYING→ALIVE child. No condition-removal tree is invented for healing.
+
+The existing `vital_effect.healing` JSON now has its original typed fields in
+Python, including the source-valid zero-duration feedback setting. A passive
+HealEvent/anchor record joins the current choreography traversal. The shared
+feedback lane reads its capped amount and original `Heal` label, green color
+4521796 and 900 ms duration. Default body `none` and empty media add no wait;
+the existing immediate head exposes native HP/life after-values at entry, and
+the number continues independently. Placement and body lift remain playback
+geometry; healing does not relocate the actor.
+
+Original `HealClip.ts` patches HP at entry and `mapHeal` dispatches actual
+children. The source then maps DYING/STABLE→ALIVE to ReviveClip and the lifecycle
+`Revived` badge. Those visuals remain unported, and current DYING/STABLE idle
+sampling remains Idle. The corresponding gallery gap is explicit. A heal
+inside a bound attack/cast also reports its missing HP-at-entry timing:
+anchoring its feedback is not equivalent to implementing nested vital changes.
+Nonempty selected healing body/media likewise report their own gaps. This is
+standalone healing feedback coverage, not healing-spell delivery or revival of
+the dead.
+
+The anti-slop and anti-OOP reviewers approved this bounded connection. The
+architecture reviewer corrected three field constraints against the source
+validator before acceptance. Native healing plus lifecycle tests: 7 passed in
+3.67 s; four healing playback/capture tests passed in 28.70 s. Existing
+attack/cast/movement/equipment/feedback group: 120 passed in 54.72 s.
+Changed-file Pyright reports zero errors. The broader dependency test module
+passes 19 checks, including the required DAG and import direction, and reports
+three failures in unchanged checkpoint code: the legacy server imports missing
+`dnd.core.senses`, the same import fails the world-contract leaf check, and
+the neutral-symbol assertion also matches Studio's `EquipmentSlot` alias in
+`game.condition_types`. The relevant test/source files are unchanged from the
+human's `58b0946`; this work does not modify those unrelated owners or turn the
+legacy server into a Pygame requirement.
+
+Final gallery `20260910T181136Z-be08be` passes **30/30**. Every RGB frame hash
+and frame count in the previous 28 cases matches the primary checkpoint run
+`20260910T175626Z-4e0063`. The comparison is retained at
+`inspection/verification.json` within the final run. Four-corner healing frames
+before/at entry and during the decorative tail were inspected: capped amounts,
+committed HP and the original green label agree with the trace. The final
+gallery reports only the pre-existing Goblin ranged media gap and the explicit
+healing life-state recovery visual gap. Both reviewers approved the completed
+implementation; automatic passing still leaves visual approval to the human.
+
 ## The answer to “is it data driven?”
 
 Partly, and the distinction matters. Authored recipes select clips, source
@@ -130,7 +183,8 @@ Person spell.
 | Attack | Existing attack recipe/profile predicates, body clip/speed, contact or release frame, ranged speed/minimum duration/endpoints, trajectory/depth, outcome feedback | Ranged geometry currently implements the source bolt primitive. Body media and hidden-slot profiles are rejected. Attack VFX currently draw a supported slash layer; other selected layers produce media gaps. |
 | Per-rig mapping | Explicit body clip/frame/FPS, slots, resources and creature-content mappings in rig data | A missing ranged clip can retain the root rig's authored clock with Idle and an explicit missing-body gap. This is degraded art, not a claim that the creature has a ranged animation. |
 | Walk/Jump | Source clips, walk speed/duration, jump duration bounds/arc, pre-reaction lead and badge, actual retained Step endpoints | Walk/jump media and recovery fields are parsed but not executed. Enabled pre-reaction body/media/recovery rejects motion binding. The default imported media/recovery fields are empty/disabled. |
-| Damage/life | Retained direct packet HP/life after-values; authored hit/death body, palette, impact delay, flash and number frames | A primitive currently binds one direct damage packet per target application and a single final life transition. Standalone damage/heal/revive/forced movement and broader packet composition still need their respective source primitives. Actual state reduction already retains their supported facts. |
+| Damage/life | Retained direct packet HP/life after-values; authored hit/death body, palette, impact delay, flash and number frames | A primitive currently binds one direct damage packet per target application and a single final life transition. Standalone damage/revive/forced movement and broader packet composition still need their respective source primitives. Actual state reduction already retains their supported facts. |
+| Standalone healing | Original healing context, capped native amount, entry HP/life after-values and independent number lifetime | Default empty body/media work through the existing immediate head. Selected healing body/media, nested healing HP timing and DYING/STABLE recovery body/lifecycle badge remain explicit gaps. |
 | Conditions | All 141 original recipe rows, exact behavior identity, composition priority/exclusivity/group limits, alpha, body tint/saturation/brightness, badge text/color/style, application/removal delay | Persistent/transition strips, equipment modifiers and appearance replacements are not executed; nonempty selected fields produce explicit gaps. `state_only` is intentional neutral authoring. Missing rows preserve membership with a gap and no fabricated transition. |
 | Condition relationships | Trigger, immunity, suppression, grant and classification metadata remain losslessly parsed | These records do not become a second rules engine. Actual condition events remain authoritative. |
 

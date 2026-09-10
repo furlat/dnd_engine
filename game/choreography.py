@@ -11,7 +11,7 @@ from uuid import UUID
 
 from dnd.actions import AttackEvent, SpellEvent
 from dnd.core.condition_types import ConditionCategory
-from dnd.core.events import Event, TakeDamageEvent
+from dnd.core.events import Event, HealEvent, LifeStateChangeEvent, TakeDamageEvent
 from dnd.core.life_types import LifeState
 from game.animation import ActorContact, CastSample, VitalsSample, body_clip, sample_cast
 from game.animation_types import AnimationData, Facing8, StudioCondition
@@ -37,6 +37,12 @@ class ActionSample:
 
 
 @dataclass(frozen=True, slots=True)
+class HealingCue:
+    event: HealEvent
+    start_ms: float
+
+
+@dataclass(frozen=True, slots=True)
 class BoundChoreography:
     root_uuid: UUID
     before: PresentationTarget
@@ -45,6 +51,7 @@ class BoundChoreography:
     conditions: tuple[ConditionTimeline, ...]
     complete_ms: float
     gaps: tuple[tuple[UUID, str], ...]
+    healing: tuple[HealingCue, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,6 +81,7 @@ def bind_choreography(before: PresentationTarget, lineage: CompletedLineage, dat
     order = {event.uuid: index for index, event in enumerate(lineage.events)}
     nodes: list[ActionNode] = []
     pending_conditions: list[tuple[float, Event, StudioCondition | None]] = []
+    healing: list[HealingCue] = []
     gaps: list[tuple[UUID, str]] = []
 
     def visit(event: Event, at: float, owner: ActionNode | None = None,
@@ -113,6 +121,19 @@ def bind_choreography(before: PresentationTarget, lineage: CompletedLineage, dat
             at = owner.start_ms + delivery.travel_end_ms
         if event.uuid in facts and facts[event.uuid].category != ConditionCategory.INTERNAL:
             pending_conditions.append((at, event, override))
+        if isinstance(event, HealEvent) and not event.was_blocked:
+            healing.append(HealingCue(event, at))
+            context = data.healing_context
+            if context.bodyClip != "none":
+                gaps.append((event.uuid, f"Healing bodyClip {context.bodyClip!r} is not bound"))
+            if context.media:
+                gaps.append((event.uuid, "Healing media tracks are not bound"))
+            if owner is not None:
+                gaps.append((event.uuid, "Nested healing feedback is anchored; HP-at-entry timing is not bound"))
+        if (isinstance(event, LifeStateChangeEvent)
+                and event.previous_state in (LifeState.DYING, LifeState.STABLE)
+                and event.new_state is LifeState.ALIVE):
+            gaps.append((event.uuid, "Life-state recovery body/Revived badge are not bound; DYING/STABLE currently draw Idle"))
 
         # TakeDamage owns its nested condition callbacks. Direct on-hit riders
         # remain siblings at Attack's contact, exactly as in the source mapper.
@@ -189,7 +210,8 @@ def bind_choreography(before: PresentationTarget, lineage: CompletedLineage, dat
             timeline = replace(node.bound.timeline, complete_ms=max(node.bound.timeline.complete_ms, child_end))
             nodes[index] = replace(node, bound=replace(node.bound, timeline=timeline))
         complete = max(complete, node.start_ms + timeline.complete_ms)
-    return BoundChoreography(lineage.root.uuid, before, reduce_lineage(before, lineage), tuple(nodes), tuple(conditions), complete, tuple(gaps))
+    return BoundChoreography(lineage.root.uuid, before, reduce_lineage(before, lineage),
+                             tuple(nodes), tuple(conditions), complete, tuple(gaps), tuple(healing))
 
 
 def sample_choreography(bound: BoundChoreography, elapsed_ms: float) -> ChoreographySample:

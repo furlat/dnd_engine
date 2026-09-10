@@ -21,8 +21,10 @@ from dnd.content_system.creature_materialization import materialize_creature
 from dnd.controller import HumanController
 from dnd.core.condition_types import ConditionCategory
 from dnd.core.content.materialization import CreatureDeploymentRole, CreaturePossessionMode
+from dnd.core.creature_types import DamageType
 from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import Event, EventPhase, EventQueue
+from dnd.core.events import Event, EventPhase, EventQueue, HealEvent
+from dnd.core.life_types import LifeState
 from dnd.encounter import Encounter
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
@@ -326,3 +328,82 @@ def dodge_expiry_history() -> tuple[PresentationTarget, tuple[CompletedLineage, 
         assert any(row.behavior_id == "action.dodge" and row.valid_targets
                    for row in get_available_actions(mover).all_actions)
         return before, tuple(history)
+
+
+def healing_history(*, dying: bool = False) -> tuple[PresentationTarget, CompletedLineage]:
+    """Heal a natively injured actor; only the engine changes HP and life state."""
+    previous = random.getstate()
+    reset_engine_runtime()
+    built = build_battlefield("battlefield.open_floor_bright")
+    game = Game()
+    try:
+        observer = Entity.create(uuid4(), "Healer", config=EntityConfig(
+            position=(3, 3), faction="heroes", appearance=AppearanceConfig(
+                body_category="NakedBody", head_category="Head10", has_beard=False,
+            ), health=HealthConfig(hit_dices=[HitDiceConfig(
+                hit_dice_value=10, hit_dice_count=2, mode="maximums",
+            )]),
+        ))
+        target = Entity.create(uuid4(), "Recipient", config=EntityConfig(
+            position=(4, 3), faction="heroes", uses_death_saves=True,
+            appearance=AppearanceConfig(body_category="NakedBody", head_category="Head22", has_beard=False),
+            health=HealthConfig(hit_dices=[HitDiceConfig(
+                hit_dice_value=10, hit_dice_count=2, mode="maximums",
+            )]),
+        ))
+        births = observer.compose_entity(), target.compose_entity()
+        for actor in (observer, target):
+            game.deploy_entity(actor, actor.position)
+        Entity.update_all_entities_senses()
+        # Ordinary encounter startup installs the engine's event observer
+        # computers. Direct HP operations need no turn progression here.
+        encounter = Encounter(name="Healing review", source_entity_uuid=uuid4())
+        for actor in (observer, target):
+            encounter.add_combatant(actor, HumanController(source_entity_uuid=actor.uuid))
+        random.seed(0)
+        encounter.start_encounter()
+        cursor = EventQueue.event_cursor()
+        startup = capture_interval(
+            name="healing startup", start_cursor=0, end_cursor=cursor,
+            observer_uuid=observer.uuid, battlefield_id=built.definition.battlefield_id,
+            seed_cursor=cursor, seed_snapshot=capture_senses_snapshot(observer.senses),
+        )
+        baseline, _ = reduce_interval(None, startup)
+        before = seed_actors(baseline, births, active_weapon_sets={
+            actor.uuid: actor.equipment.active_weapon_set for actor in (observer, target)
+        })
+        # Establish the injured baseline from the real completed damage tree,
+        # including the player's authoritative DYING transition when applicable.
+        cursor = EventQueue.event_cursor()
+        target.receive_damage(20 if dying else 7, DamageType.SLASHING, observer.uuid)
+        for _, event in EventQueue.iter_events_since(cursor):
+            if event.parent_lineage is None and event.phase in (EventPhase.COMPLETION, EventPhase.CANCEL):
+                before = reduce_lineage(before, capture_lineage(event, observer_uuid=observer.uuid))
+        injured = before.actors[target.uuid]
+        assert injured.normal_hp == target.get_normal_hp() == (0 if dying else 13)
+        assert injured.life_state is target.health.life_state is (LifeState.DYING if dying else LifeState.ALIVE)
+
+        cursor = EventQueue.event_cursor()
+        actual = target.receive_healing(5 if dying else 20, observer.uuid, source_description="Native healing review")
+        root, = (event for _, event in EventQueue.iter_events_since(cursor)
+                 if event.parent_lineage is None and event.phase in (EventPhase.COMPLETION, EventPhase.CANCEL))
+        assert isinstance(root, HealEvent) and root.actual_healing == actual
+        lineage = capture_lineage(root, observer_uuid=observer.uuid)
+        after = reduce_lineage(before, lineage)
+        healed = after.actors[target.uuid]
+        assert healed.normal_hp == target.get_normal_hp() == (5 if dying else 20)
+        assert healed.life_state is target.health.life_state is LifeState.ALIVE
+        assert after.senses is not None and after.senses.entities[target.uuid].position == target.position == (4, 3)
+        for retained in lineage.events:
+            original = EventQueue.get_event_by_uuid(retained.uuid)
+            assert original is not None
+            assert (retained.parent_event, retained.parent_lineage, retained.children_lineages) == (
+                original.parent_event, original.parent_lineage, original.children_lineages)
+            assert retained.identified_entity_observer_uuids == original.identified_entity_observer_uuids
+            assert retained.located_entity_observer_uuids == original.located_entity_observer_uuids
+            assert retained.located_position_observer_uuids == original.located_position_observer_uuids
+        return before, lineage
+    finally:
+        game.close()
+        reset_engine_runtime()
+        random.setstate(previous)

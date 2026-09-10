@@ -515,6 +515,16 @@ class MovementRecovery(AuthoredRecord):
     media: tuple[MovementMediaTrack, ...]
 
 
+class HealingContext(AuthoredRecord):
+    bodyClip: Literal["none", "Taunt", "Special1"]
+    bodyPlaybackSpeed: BodySpeed
+    feedbackEnabled: bool
+    feedbackColor: Color
+    feedbackLabel: Identifier
+    feedbackDurationMs: Annotated[float, Field(ge=0, le=5000)]
+    media: tuple[MovementMediaTrack, ...]
+
+
 class MovementReactionContext(AuthoredRecord):
     label: str
     feedbackEnabled: bool
@@ -678,6 +688,7 @@ class AnimationData:
     rigs: Mapping[str, BodyRig]
     creature_rigs: Mapping[str, str]
     damage_context: DamageContext
+    healing_context: HealingContext
     death_context: DeathContext
     equipment_context: EquipmentTransitionContext
     movement_context: VoluntaryMovementContext

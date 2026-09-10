@@ -10,7 +10,7 @@ from dnd.core.equipment_types import WeaponSlot
 from game.combat_demo import iter_combat_demo
 from game.presentation import CompletedLineage, PresentationTarget
 from tests.game.scenarios import (
-    attack_history, dodge_expiry_history, movement_with_paralysis, paralysis_lifecycle,
+    attack_history, dodge_expiry_history, healing_history, movement_with_paralysis, paralysis_lifecycle,
 )
 
 
@@ -59,13 +59,19 @@ class DodgeExpiryCase(BaseModel):
     kind: Literal["dodge-expiry"]
 
 
+class HealingCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["healing"]
+    dying: bool = False
+
+
 class ReviewCase(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     id: str = Field(pattern=r"^[a-z0-9][a-z0-9-]*$")
     title: str
     tags: tuple[str, ...]
     description: str
-    scenario: Annotated[AttackCase | ParalysisCase | CastCase | ParalysisLifecycleCase | DodgeExpiryCase,
+    scenario: Annotated[AttackCase | ParalysisCase | CastCase | ParalysisLifecycleCase | DodgeExpiryCase | HealingCase,
                         Field(discriminator="kind")]
     pause_at_ms: float | None = Field(default=None, ge=0)
     pause_duration_ms: float = Field(default=750, gt=0)
@@ -110,6 +116,9 @@ def produce(case: ReviewCase) -> ReviewSequence:
         case DodgeExpiryCase():
             before, lineages = dodge_expiry_history()
             return ReviewSequence(before, lineages)
+        case HealingCase() as scenario:
+            before, lineage = healing_history(dying=scenario.dying)
+            return ReviewSequence(before, (lineage,))
         case CastCase() as scenario:
             script = iter_combat_demo(
                 caster_position=scenario.caster_position, second_attack_seed=scenario.second_attack_seed,

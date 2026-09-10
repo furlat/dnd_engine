@@ -49,6 +49,7 @@ def group_trace(group: BoundChoreography) -> dict[str, Any]:
                        warnings="error",
                    )} for node in group.nodes],
         "conditions": CONDITIONS.dump_python(group.conditions, mode="json", warnings="error"),
+        "healing": [{"event_uuid": str(cue.event.uuid), "start_ms": cue.start_ms} for cue in group.healing],
         "gaps": [(str(identity), detail) for identity, detail in group.gaps],
     }
 
