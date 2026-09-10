@@ -1,0 +1,127 @@
+{
+  "rig_id": "smallscale.skeletonarcher05",
+  "creature_content_refs": [
+    "content.neurodragon:creature:creature.skeleton_archer@1"
+  ],
+  "rig": {
+    "cell_width": 128,
+    "cell_height": 128,
+    "origin_y_from_ground": 36,
+    "facing_rows": {
+      "E": 0,
+      "SE": 1,
+      "S": 2,
+      "SW": 3,
+      "W": 4,
+      "NW": 5,
+      "N": 6,
+      "NE": 7
+    },
+    "slot_order": [
+      "body"
+    ],
+    "slot_categories": {
+      "body": [
+        "SkeletonArcher05"
+      ]
+    },
+    "clips": {
+      "Idle": {
+        "source_clip": "Idle",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "SkeletonArcher05": "/rigs/skeletonarcher05/body/Idle.png"
+        }
+      },
+      "Run": {
+        "source_clip": "Run",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "SkeletonArcher05": "/rigs/skeletonarcher05/body/Run.png"
+        }
+      },
+      "TakeDamage": {
+        "source_clip": "TakeDamage",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "SkeletonArcher05": "/rigs/skeletonarcher05/body/TakeDamage.png"
+        }
+      },
+      "Die": {
+        "source_clip": "Die",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "SkeletonArcher05": "/rigs/skeletonarcher05/body/Die.png"
+        }
+      },
+      "Rolling": {
+        "source_clip": "Rolling",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "SkeletonArcher05": "/rigs/skeletonarcher05/body/Rolling.png"
+        }
+      },
+      "Attack3": {
+        "source_clip": "QuickShot",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "SkeletonArcher05": "/rigs/skeletonarcher05/body/QuickShot.png"
+        }
+      }
+    }
+  },
+  "resources": {
+    "/rigs/skeletonarcher05/body/Idle.png": "game/assets/rigs/skeletonarcher05/body/Idle.png",
+    "/rigs/skeletonarcher05/body/Run.png": "game/assets/rigs/skeletonarcher05/body/Run.png",
+    "/rigs/skeletonarcher05/body/TakeDamage.png": "game/assets/rigs/skeletonarcher05/body/TakeDamage.png",
+    "/rigs/skeletonarcher05/body/Die.png": "game/assets/rigs/skeletonarcher05/body/Die.png",
+    "/rigs/skeletonarcher05/body/Rolling.png": "game/assets/rigs/skeletonarcher05/body/Rolling.png",
+    "/rigs/skeletonarcher05/body/QuickShot.png": "game/assets/rigs/skeletonarcher05/body/QuickShot.png"
+  },
+  "provenance": {
+    "archive": {
+      "name": "2D HD Undead pack 1.zip",
+      "bytes": 761566647,
+      "sha256": "b93897c8373e3dde606b4b81880cd52176ace9bb1d4f95d141ea8fef8414d9c7"
+    },
+    "files": {
+      "/rigs/skeletonarcher05/body/Idle.png": {
+        "archive_member": "2D HD Undead pack 1/Spritesheets/Shadowless/5Archer/Idle_Shadowless.png",
+        "bytes": 66647,
+        "sha256": "5fae15f6e303592d8842fc6e70516f0ec912aef232deb38e0fd398e5041fd9c4"
+      },
+      "/rigs/skeletonarcher05/body/Run.png": {
+        "archive_member": "2D HD Undead pack 1/Spritesheets/Shadowless/5Archer/Run_Shadowless.png",
+        "bytes": 152235,
+        "sha256": "2c74455908d99c3398ad55f22d7c63395a5f0eb2fe7225312c2ce59764e851a8"
+      },
+      "/rigs/skeletonarcher05/body/TakeDamage.png": {
+        "archive_member": "2D HD Undead pack 1/Spritesheets/Shadowless/5Archer/TakeDamage_Shadowless.png",
+        "bytes": 151941,
+        "sha256": "ff9296ea99cd49971454b7e2ea895719e82108cc19f79982782dbafe819bb797"
+      },
+      "/rigs/skeletonarcher05/body/Die.png": {
+        "archive_member": "2D HD Undead pack 1/Spritesheets/Shadowless/5Archer/Die_Shadowless.png",
+        "bytes": 176380,
+        "sha256": "c8697a14f665c0711d5422c0a32df27036754bcb387bb7537f1f04eb5a8fb182"
+      },
+      "/rigs/skeletonarcher05/body/Rolling.png": {
+        "archive_member": "2D HD Undead pack 1/Spritesheets/Shadowless/5Archer/Rolling_Shadowless.png",
+        "bytes": 177706,
+        "sha256": "5b9b5244ea7f7477950ab4413c4d6bdcef7bb0ef87eaa171773b636c62a6a091"
+      },
+      "/rigs/skeletonarcher05/body/QuickShot.png": {
+        "archive_member": "2D HD Undead pack 1/Spritesheets/Shadowless/5Archer/QuickShot_Shadowless.png",
+        "bytes": 58340,
+        "sha256": "86ec593e443e82f469f1a9af899809665a6d92e0f52e3d6f3ac185774e6d6bae"
+      }
+    },
+    "adaptation": "5Archer is a fixed skeleton carrying its authored bow. Attack3 maps only the ranged profile to QuickShot; no invented melee/weapon-swap compatibility. Fifteen meaningful 128 px columns in each selected sheet. E, SE, S, SW, W, NW, N, NE rows were verified byte-for-byte against the named direction Idle PNGs in the matching With shadow sheet. 12 fps and support pixel (64,92), origin_y_from_ground 36, are reviewed execution choices; the archive declares no timing/pivot metadata. Shadowless body is retained unchanged because the package supplies no separate shadow layer. Only selected clips imported; no Special1 or 6Warrior assets."
+  }
+}

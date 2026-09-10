@@ -1,0 +1,135 @@
+{
+  "rig_id": "smallscale.greywolf",
+  "creature_content_refs": [
+    "content.srd_5_1_cc:creature:creature.wolf@1"
+  ],
+  "rig": {
+    "cell_width": 64,
+    "cell_height": 64,
+    "origin_y_from_ground": 22,
+    "facing_rows": {
+      "E": 0,
+      "SE": 1,
+      "S": 2,
+      "SW": 3,
+      "W": 4,
+      "NW": 5,
+      "N": 6,
+      "NE": 7
+    },
+    "slot_order": [
+      "body"
+    ],
+    "slot_categories": {
+      "body": [
+        "GreyWolf"
+      ]
+    },
+    "clips": {
+      "Idle": {
+        "source_clip": "Idle",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "GreyWolf": "/rigs/greywolf/body/Idle.png"
+        }
+      },
+      "Run": {
+        "source_clip": "Run",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "GreyWolf": "/rigs/greywolf/body/Run.png"
+        }
+      },
+      "TakeDamage": {
+        "source_clip": "TakeDamage",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "GreyWolf": "/rigs/greywolf/body/TakeDamage.png"
+        }
+      },
+      "Die": {
+        "source_clip": "Die",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "GreyWolf": "/rigs/greywolf/body/Die.png"
+        }
+      },
+      "Attack1": {
+        "source_clip": "Attack1",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "GreyWolf": "/rigs/greywolf/body/Attack1.png"
+        }
+      },
+      "Attack2": {
+        "source_clip": "Attack2",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "GreyWolf": "/rigs/greywolf/body/Attack2.png"
+        }
+      },
+      "Attack6": {
+        "source_clip": "Attack1",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "GreyWolf": "/rigs/greywolf/body/Attack1.png"
+        }
+      }
+    }
+  },
+  "resources": {
+    "/rigs/greywolf/body/Idle.png": "game/assets/rigs/greywolf/body/Idle.png",
+    "/rigs/greywolf/body/Run.png": "game/assets/rigs/greywolf/body/Run.png",
+    "/rigs/greywolf/body/TakeDamage.png": "game/assets/rigs/greywolf/body/TakeDamage.png",
+    "/rigs/greywolf/body/Die.png": "game/assets/rigs/greywolf/body/Die.png",
+    "/rigs/greywolf/body/Attack1.png": "game/assets/rigs/greywolf/body/Attack1.png",
+    "/rigs/greywolf/body/Attack2.png": "game/assets/rigs/greywolf/body/Attack2.png"
+  },
+  "provenance": {
+    "archive": {
+      "name": "2D Animals mega Pack 1 V2.zip",
+      "bytes": 422875110,
+      "sha256": "459cc2a196d2c8f45432b017c19f132eeb228246f1a0cb8ca49fef169576aa5a"
+    },
+    "files": {
+      "/rigs/greywolf/body/Idle.png": {
+        "archive_member": "2D Animals mega Pack 1/Spritesheets/Shadowless/Grey Wolf/Idle_Shadowless.png",
+        "bytes": 17554,
+        "sha256": "e4689d67fa140307393df75f747c1022b46e1ece42ed537449157613c2bea5cd"
+      },
+      "/rigs/greywolf/body/Run.png": {
+        "archive_member": "2D Animals mega Pack 1/Spritesheets/Shadowless/Grey Wolf/Run_Shadowless.png",
+        "bytes": 38047,
+        "sha256": "24cf3fe7fc84b7971d9b5b85a26f9b954b9b1016cd54941e2618e85c0d9e30eb"
+      },
+      "/rigs/greywolf/body/TakeDamage.png": {
+        "archive_member": "2D Animals mega Pack 1/Spritesheets/Shadowless/Grey Wolf/TakeDamage_Shadowless.png",
+        "bytes": 50651,
+        "sha256": "82f54ba4cbe48ee597a9b7086b5d487094f6f9d2b3e91c95a0d7535f02a834d5"
+      },
+      "/rigs/greywolf/body/Die.png": {
+        "archive_member": "2D Animals mega Pack 1/Spritesheets/Shadowless/Grey Wolf/Die_Shadowless.png",
+        "bytes": 56658,
+        "sha256": "609a0457964d76ca3ffc33fa7badc321ae75dc91adf6a9ca06f9bd9cbba7fa8d"
+      },
+      "/rigs/greywolf/body/Attack1.png": {
+        "archive_member": "2D Animals mega Pack 1/Spritesheets/Shadowless/Grey Wolf/Attack1_Shadowless.png",
+        "bytes": 55035,
+        "sha256": "0e9ba298bf2246ec355c69f402938247c96b7c7df90da83a347abba7d96165c9"
+      },
+      "/rigs/greywolf/body/Attack2.png": {
+        "archive_member": "2D Animals mega Pack 1/Spritesheets/Shadowless/Grey Wolf/Attack2_Shadowless.png",
+        "bytes": 56049,
+        "sha256": "00db2535c78b0b328412dba31d57f00910fc0ab2c96f79715b900e7a0e847b32"
+      }
+    },
+    "adaptation": "Grey Wolf maps to the exact native Wolf content identity. Root piercing Attack6 and ordinary Attack1 use the authored bite Attack1; critical Attack2 uses Attack2. No ranged/casting/jump mapping is invented. Fifteen meaningful 64 px columns per selected sheet; named direction Idle PNGs match the corresponding With shadow atlas rows byte-for-byte in E, SE, S, SW, W, NW, N, NE order. 12 fps and support pixel (32,42), origin_y_from_ground 22, are reviewed execution choices, not vendor metadata. Shadowless body remains unchanged; no separate shadow media is supplied. Smaller sheet cells remain rig geometry, independent of native creature size."
+  }
+}

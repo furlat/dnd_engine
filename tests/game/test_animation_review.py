@@ -75,6 +75,17 @@ def test_recording_failure_remains_in_manifest_with_exportable_trace(tmp_path: P
     assert trace["run"]["id"] == manifest["run"]["id"]
 
 
+def test_four_camera_framing_keeps_the_airborne_body_below_the_header(tmp_path: Path) -> None:
+    assert review.main(["--case", "jump-midflight-continue", "--fps", "12", "--width", "640",
+                        "--height", "480", "--output", str(tmp_path)]) == 0
+    run = latest_run(tmp_path)
+    trace = json.loads((run / "cases/jump-midflight-continue/trace.json").read_text())
+    framed, = (check for check in trace["checks"] if check["name"] == "visible-bodies-in-frame")
+    assert framed["passed"]
+    assert any(contact["body_lift_px"] > 0 for frame in trace["frames"] for contact in frame["contacts"])
+    assert len(trace["cameras"]) == 4 and len({camera["zoom"] for camera in trace["cameras"]}) == 1
+
+
 def test_paused_death_pixels_remain_historical_while_latest_has_revived(tmp_path: Path) -> None:
     assert review.main(["--case", "death-save-revival-paused", "--fps", "12", "--width", "640",
                         "--height", "480", "--output", str(tmp_path)]) == 0

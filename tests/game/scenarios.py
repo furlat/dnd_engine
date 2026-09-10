@@ -22,7 +22,7 @@ from dnd.controller import HumanController
 from dnd.core.condition_types import ConditionCategory
 from dnd.core.content.materialization import CreatureDeploymentRole, CreaturePossessionMode
 from dnd.core.creature_types import DamageType
-from dnd.core.equipment_types import WeaponSlot
+from dnd.core.equipment_types import BodyPart, WeaponSlot
 from dnd.core.events import Event, EventPhase, EventQueue, HealEvent
 from dnd.core.life_types import LifeState
 from dnd.encounter import Encounter
@@ -60,7 +60,11 @@ def attack_history(
                 hit_dice_count=8 if maximum_hp == 80 else 1, mode="maximums",
             )]),
         ))
-        hero.install_initial_items(((build_authored_item(weapon, hero.uuid), weapon_slot),))
+        hero.install_initial_items((
+            (build_authored_item(weapon, hero.uuid), weapon_slot),
+            (build_authored_item("apparel.robes.red_mage", hero.uuid), BodyPart.BODY),
+            (build_authored_item("apparel.cloth_shoes.red", hero.uuid), BodyPart.FEET),
+        ))
         hero_birth = hero.compose_entity()
         setup_standard_actions(hero)
         watchers = tuple(materialize_creature(
@@ -144,7 +148,15 @@ def _condition_encounter(
                 hit_dice_value=10, hit_dice_count=8, mode="maximums",
             )]),
         ))
-        reactor.install_initial_items(((build_authored_item("weapon.longsword", reactor.uuid), WeaponSlot.MELEE_MAIN),))
+        reactor.install_initial_items((
+            (build_authored_item("weapon.longsword", reactor.uuid), WeaponSlot.MELEE_MAIN),
+            (build_authored_item("apparel.robes.red_mage", reactor.uuid), BodyPart.BODY),
+            (build_authored_item("apparel.cloth_shoes.red", reactor.uuid), BodyPart.FEET),
+        ))
+        mover.install_initial_items((
+            (build_authored_item("apparel.robes.red_mage", mover.uuid), BodyPart.BODY),
+            (build_authored_item("apparel.cloth_shoes.red", mover.uuid), BodyPart.FEET),
+        ))
         for actor in (mover, reactor):
             setup_standard_actions(actor)
         if paralysis_rider:
@@ -353,6 +365,11 @@ def _healing_encounter() -> Iterator[tuple[PresentationTarget, Entity, Entity, E
                 hit_dice_value=10, hit_dice_count=2, mode="maximums",
             )]),
         ))
+        for actor in (observer, target):
+            actor.install_initial_items((
+                (build_authored_item("apparel.robes.red_mage", actor.uuid), BodyPart.BODY),
+                (build_authored_item("apparel.cloth_shoes.red", actor.uuid), BodyPart.FEET),
+            ))
         births = observer.compose_entity(), target.compose_entity()
         for actor in (observer, target):
             game.deploy_entity(actor, actor.position)

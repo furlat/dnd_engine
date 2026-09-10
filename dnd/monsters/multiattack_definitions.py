@@ -143,6 +143,14 @@ SRD_MULTIATTACK_CONFIGURATION_DECLARATIONS: tuple[
     ...,
 ] = (
     _declaration(
+        content_id="action.monster.multiattack.dretch",
+        display_name="Dretch Multiattack",
+        icon_key="ui.filter-attacks",
+        source_anchor="SRD 5.1 (CC-BY-4.0), p. 270, Dretch Multiattack",
+        steps=((WeaponSlot.MELEE_MAIN, 1), (WeaponSlot.MELEE_OFF, 1)),
+        sort_order=11,
+    ),
+    _declaration(
         content_id="action.monster.multiattack.scout.shortsword",
         display_name="Scout Multiattack: Shortsword",
         icon_key="action.scout-multiattack-shortsword",

@@ -87,6 +87,13 @@ def bind_motion(target: PresentationTarget, lineage: CompletedLineage,
     actor = contacts.get(actor.actor_uuid, actor)
     context = data.movement_context
     jumping = isinstance(lineage.root, JumpEvent)
+    jump_end = lineage.root.requested_end_position or lineage.root.end_position
+    jump_distance = hypot(jump_end[0] - lineage.root.start_position[0],
+                          jump_end[1] - lineage.root.start_position[1])
+    jump_duration = min(context.jumpMaxDurationMs, max(context.jumpMinDurationMs,
+                        context.jumpBaseDurationMs + jump_distance * context.jumpPerCellDurationMs))
+    jump_arc = min(context.jumpArcMaxPx, context.jumpArcBasePx + jump_distance * context.jumpArcPerCellPx)
+    jump_edges = steps[0].total_path_length - 1
     legs: list[MotionLeg] = []
     reactions: list[MotionReaction] = []
     elapsed = body_start = 0.0
@@ -102,15 +109,28 @@ def bind_motion(target: PresentationTarget, lineage: CompletedLineage,
         height, end_height = step.from_elevation_feet / 5, step.to_elevation_feet / 5
         delta = end[0] - start[0], end[1] - start[1]
         distance = hypot(*delta)
-        duration = (min(context.jumpMaxDurationMs, max(context.jumpMinDurationMs,
-                    context.jumpBaseDurationMs + distance * context.jumpPerCellDurationMs))
-                    if jumping else context.walkStepDurationMs * distance)
-        arc = min(context.jumpArcMaxPx, context.jumpArcBasePx + distance * context.jumpArcPerCellPx) if jumping else 0
+        duration = context.walkStepDurationMs * distance
+        arc = 0.0
+        curve_from, curve_to = 0.0, 1.0
         initial_lift = actor.body_lift_px if step_index == 0 else 0
-        if step_index == 0:
+        if jumping:
+            # Steps retain their native reaction/commit ownership inside one
+            # authored flight. Tile crossings do not restart its arc or clock.
+            curve_from, curve_to = (step.path_index - 1) / jump_edges, step.path_index / jump_edges
+            flight_delta = jump_end[0] - actor.grid[0], jump_end[1] - actor.grid[1]
+            height_delta = target.tiles[jump_end].elevation_steps - actor.elevation_steps
+            start = actor.grid[0] + flight_delta[0] * curve_from, actor.grid[1] + flight_delta[1] * curve_from
+            end = actor.grid[0] + flight_delta[0] * curve_to, actor.grid[1] + flight_delta[1] * curve_to
+            height = actor.elevation_steps + height_delta * curve_from
+            end_height = actor.elevation_steps + height_delta * curve_to
+            delta = end[0] - start[0], end[1] - start[1]
+            duration, arc = jump_duration * (curve_to - curve_from), jump_arc
+            initial_lift = actor.body_lift_px
+        elif step_index == 0:
             start, height = actor.grid, actor.elevation_steps
             delta = end[0] - start[0], end[1] - start[1]
         fraction = 0.0
+        continuation_curve = curve_from
         continuation: tuple[float, float] = start
         continuation_height = height
         if attacks:
@@ -120,21 +140,23 @@ def bind_motion(target: PresentationTarget, lineage: CompletedLineage,
                                    (duration if jumping else context.walkStepDurationMs)))
             continuation = start[0] + delta[0] * fraction, start[1] + delta[1] * fraction
             continuation_height = height + (end_height - height) * fraction
+            continuation_curve = curve_from + (curve_to - curve_from) * fraction
             lead_end = elapsed + (duration * fraction if jumping else reaction_context.movementLeadInMs)
             legs.append(MotionLeg(start, continuation, height, continuation_height,
-                                  elapsed, lead_end, body_start, arc, 0, fraction, initial_lift))
+                                  elapsed, lead_end, body_start, arc, curve_from, continuation_curve, initial_lift))
             elapsed = lead_end
             facing = facing_for_delta(delta, data)
             for attack_event in attacks:
                 held = replace(actor_contact(working, working.actors[step.source_entity_uuid], data), grid=continuation,
                                elevation_steps=continuation_height, facing=facing,
-                               body_lift_px=4 * arc * fraction * (1 - fraction) + initial_lift * (1 - fraction))
+                               body_lift_px=4 * arc * continuation_curve * (1 - continuation_curve)
+                               + initial_lift * (1 - continuation_curve))
                 group = bind_choreography(working, lineage_branch(lineage, attack_event), data,
                     facings={actor.actor_uuid: facing}, contacts={**contacts, actor.actor_uuid: held})
                 source = contacts.get(str(attack_event.source_entity_uuid)) or actor_contact(
                     working, working.actors[attack_event.source_entity_uuid], data)
                 reactions.append(MotionReaction(group, held, source, elapsed, elapsed + group.complete_ms,
-                                                4 * arc * fraction * (1 - fraction) + initial_lift * (1 - fraction),
+                                                held.body_lift_px,
                                                 attack_event.name))
                 elapsed += group.complete_ms
                 working = group.after
@@ -142,7 +164,7 @@ def bind_motion(target: PresentationTarget, lineage: CompletedLineage,
             duration *= 1 - fraction
         if step.committed:
             legs.append(MotionLeg(continuation, end, continuation_height, end_height,
-                                  elapsed, elapsed + duration, body_start, arc, fraction, 1, initial_lift))
+                                  elapsed, elapsed + duration, body_start, arc, continuation_curve, curve_to, initial_lift))
             elapsed += duration
         # Step results update the working retained contact for the next edge.
         # Its attack after-values are idempotent facts, not repeated mechanics.
@@ -151,7 +173,7 @@ def bind_motion(target: PresentationTarget, lineage: CompletedLineage,
         if not step.committed:
             # The legal Step stays at its origin. Playback keeps the position
             # where its reaction stopped; completion is not a return animation.
-            settled_lift = 4 * arc * fraction * (1 - fraction) + initial_lift * (1 - fraction)
+            settled_lift = 4 * arc * continuation_curve * (1 - continuation_curve) + initial_lift * (1 - continuation_curve)
             settled = replace(settled, grid=continuation, elevation_steps=continuation_height,
                               body_lift_px=settled_lift)
             break

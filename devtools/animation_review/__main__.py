@@ -29,7 +29,7 @@ def write_json(path: Path, value: object) -> None:
 def source_identity() -> dict:
     def git(*args: str) -> str:
         return subprocess.run(["git", *args], cwd=REPO, capture_output=True, text=True, check=True).stdout.strip()
-    files = git("ls-files", "--cached", "--others", "--exclude-standard", "--", "game", "dnd", "content_data", "devtools", "tests/game/scenarios.py")
+    files = git("ls-files", "--cached", "--others", "--exclude-standard", "--", "game", "dnd", "content_data", "devtools", "tests/game")
     hashes = {name: hashlib.sha256((REPO / name).read_bytes()).hexdigest()
               for name in sorted(set(files.splitlines())) if (REPO / name).is_file()}
     return {"branch": git("branch", "--show-current"), "commit": git("rev-parse", "HEAD"),

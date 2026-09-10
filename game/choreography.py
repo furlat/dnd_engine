@@ -10,16 +10,17 @@ from typing import Mapping
 from uuid import UUID
 
 from dnd.actions import AttackEvent, SpellEvent
+from dnd.blocks.base_item import ItemLocationStateEvent
 from dnd.core.condition_types import ConditionCategory
 from dnd.core.events import DeathSaveEvent, Event, HealEvent, LifeStateChangeEvent, TakeDamageEvent
 from dnd.core.life_types import LifeState
 from game.animation import (
     ActorContact, BodySample, CastSample, VitalsSample, body_clip, body_duration,
-    sample_cast, sample_damage_body,
+    sample_cast, sample_damage_body, sample_equipment,
 )
 from game.animation_types import AnimationData, Facing8, LifecycleFeedback, StudioCondition
 from game.attack import BoundAttack, AttackSample, bind_attack, sample_attack
-from game.combat import BoundCast, actor_contact, bind_cast
+from game.combat import BoundCast, BoundEquipment, actor_contact, bind_cast, bind_equipment
 from game.condition_animation import ConditionTimeline, ConditionSample, compile_condition, sample_condition
 from game.presentation import (
     CompletedLineage, PresentationTarget, copy_target, lineage_branch, reduce_lineage,
@@ -46,6 +47,13 @@ class HealingCue:
 
 
 @dataclass(frozen=True, slots=True)
+class EquipmentCue:
+    event_uuid: UUID
+    start_ms: float
+    bound: BoundEquipment
+
+
+@dataclass(frozen=True, slots=True)
 class LifecycleCue:
     event: DeathSaveEvent | LifeStateChangeEvent
     start_ms: float
@@ -67,6 +75,7 @@ class BoundChoreography:
     gaps: tuple[tuple[UUID, str], ...]
     healing: tuple[HealingCue, ...] = ()
     lifecycle: tuple[LifecycleCue, ...] = ()
+    equipment: tuple[EquipmentCue, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,6 +108,7 @@ def bind_choreography(before: PresentationTarget, lineage: CompletedLineage, dat
     pending_conditions: list[tuple[float, Event, StudioCondition | None]] = []
     healing: list[HealingCue] = []
     lifecycle: list[LifecycleCue] = []
+    equipment: list[EquipmentCue] = []
     gaps: list[tuple[UUID, str]] = []
 
     def visit(event: Event, at: float, owner: ActionNode | None = None,
@@ -136,6 +146,15 @@ def bind_choreography(before: PresentationTarget, lineage: CompletedLineage, dat
             delivery = next(row for row in owner.bound.timeline.applications
                             if row.source.application_id == identity)
             at = owner.start_ms + delivery.travel_end_ms
+        if isinstance(event, ItemLocationStateEvent) and event.owner_uuid is not None:
+            try:
+                bound_equipment = bind_equipment(_before_event(before, lineage, event),
+                    lineage_branch(lineage, event), data, facings or {}, contacts=contacts)
+                if bound_equipment is not None:
+                    equipment.append(EquipmentCue(event.uuid, at, bound_equipment))
+                    end = max(end, at + bound_equipment.timeline.complete_ms)
+            except (ValueError, NotImplementedError) as error:
+                gaps.append((event.uuid, str(error)))
         if event.uuid in facts and facts[event.uuid].category != ConditionCategory.INTERNAL:
             pending_conditions.append((at, event, override))
         if isinstance(event, HealEvent) and not event.was_blocked:
@@ -252,6 +271,8 @@ def bind_choreography(before: PresentationTarget, lineage: CompletedLineage, dat
                           if owned_by(child.event_uuid, node.event_uuid))
         child_ends.extend(cue.death_end_ms for cue in lifecycle if cue.death_end_ms is not None
                           and owned_by(cue.event.uuid, node.event_uuid))
+        child_ends.extend(cue.start_ms + cue.bound.timeline.complete_ms for cue in equipment
+                          if owned_by(cue.event_uuid, node.event_uuid))
         if not child_ends:
             continue
         child_end = max(child_ends) - node.start_ms
@@ -269,7 +290,8 @@ def bind_choreography(before: PresentationTarget, lineage: CompletedLineage, dat
             nodes[index] = replace(node, bound=replace(node.bound, timeline=timeline))
         complete = max(complete, node.start_ms + timeline.complete_ms)
     return BoundChoreography(lineage.root.uuid, before, reduce_lineage(before, lineage),
-                             tuple(nodes), tuple(conditions), complete, tuple(gaps), tuple(healing), tuple(lifecycle))
+                             tuple(nodes), tuple(conditions), complete, tuple(gaps), tuple(healing),
+                             tuple(lifecycle), tuple(equipment))
 
 
 def sample_choreography(bound: BoundChoreography, elapsed_ms: float) -> ChoreographySample:
@@ -286,6 +308,21 @@ def sample_choreography(bound: BoundChoreography, elapsed_ms: float) -> Choreogr
                   else sample_cast(node.bound.timeline, local))
         clips.append(ActionSample(node, sample))
         vitals.update((value.actor_uuid, value) for value in sample.vitals)
+    for cue in bound.equipment:
+        if elapsed_ms < cue.start_ms:
+            continue
+        sample = sample_equipment(cue.bound.timeline, elapsed_ms - cue.start_ms)
+        identity = UUID(cue.bound.timeline.actor.actor_uuid)
+        if sample.complete:
+            # SwitchWeaponClip commits stance at commitFrame; item identity
+            # belongs to the completed frame's loadout patch. This gesture
+            # replaces items within an unchanged stance.
+            successor = cue.bound.after.actors[identity]
+            displayed.actors[identity] = replace(displayed.actors[identity],
+                items=successor.items, equipment=successor.equipment,
+                active_weapon_set=successor.active_weapon_set, armor_class=successor.armor_class)
+        else:
+            bodies[sample.body.actor_uuid] = sample.body
     for cue in bound.lifecycle:
         if elapsed_ms < cue.start_ms or cue.state_owned or not isinstance(cue.event, LifeStateChangeEvent):
             continue

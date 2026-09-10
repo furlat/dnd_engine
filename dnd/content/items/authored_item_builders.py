@@ -716,8 +716,8 @@ DIRECT_ITEM_BUILDERS: Mapping[str, ItemBuilder] = MappingProxyType({
     ),
 })
 
-if len(DIRECT_ITEM_BUILDERS) != 147:
-    raise ValueError("direct item builder table must contain exactly 147 IDs")
+if len(DIRECT_ITEM_BUILDERS) != 150:
+    raise ValueError("direct item builder table must contain exactly 150 IDs")
 
 
 def build_authored_item(

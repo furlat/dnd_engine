@@ -21,6 +21,192 @@ is now imported through the original Studio schema, independently of gameplay.
 
 ## Active work — playable encounter through shared capabilities
 
+### Current position — read this before the checkpoint details
+
+**Previous code checkpoint:** `ebff88c` on `codex/recovery-design` completed
+lifecycle work. The creature/equipment/movement implementation below is now
+validated through native histories and the shared renderer, with a completed
+53-case gallery. Raised-terrace jump occlusion remains an explicit visual
+exception; an inadequate renderer prototype was rejected.
+
+**Where we are:** the in-process encounter and independent historical playback
+work. We are expanding the shared presentation capabilities consumed by that
+encounter. The 53 gallery scenarios validate selected behavior; they do not
+mean that the full NeuroStudio vocabulary or the full game is implemented.
+
+| Plan area | Current status | Evidence and practical boundary |
+| --- | --- | --- |
+| Existing engine → retained subjective lineages → independent playback | Established for connected event families | Original ancestry/grants, one reducer used for latest/history, one historical queue/head; native work advances while rendering is paused. Backend mechanics remain authoritative. |
+| Playable Pygame encounter | Working bounded encounter | Discovered actions/targets, movement, attacks, player turns, native enemy decisions, resources and encounter completion. One player viewpoint and an initially known actor set. |
+| Shared authored animation composition | Working, incomplete vocabulary | Original Studio data drives the connected attack/cast/movement/condition/equipment primitives. Complete reactions interrupt movement and join before continuation; authored fields outside those primitives remain explicit limits. |
+| Repeatable visual validation | Implemented | 53 named native histories, four cameras per clip, selection/pinned-time trace export and actual pixel checks. Game and recorder share the frame compositor. Passing recording checks do not approve every pixel. |
+| Continuing condition and life histories | Completed prior unit | Native paralysis recovery/persistence, Dodge expiry, capped healing, death saves, stabilization, death/revival and correct retained placement/HP. |
+| Creatures, equipment and movement | Implemented with a terrain visual exception | Three exact rig identities; real wardrobe/item replacement; same-turn melee → longbow; turning routes with native Haste/Dash; one flight across water/elevation and mid-flight reactions. Rear-view terrace overlap is documented below. |
+| Broader gameplay presentation and content | Still partial | Self/touch/direct/area/persistent delivery, broader condition media, forced movement, additional rigs and roster/map/inventory UI remain pending. |
+
+**What changed after the human's `58b0946` checkpoint:**
+
+- `20f58db`: six continuing condition histories and stronger visual validation;
+  existing production owners already handled those sequences.
+- `80be2bd`: the original standalone healing feedback and two native cases.
+- `ebff88c`: the original lifecycle badges, standalone death/revival playback,
+  exact life-event ownership/HP corrections and eight further native cases.
+
+These three commits deepen one shared area. They do not add general area/self/
+touch casting, a full weapon-triggered Hold Person cast, or the demon/undead/
+animal catalog. The tested sword rider applies native paralysis; its real
+reaction/condition lineage is what the clip demonstrates.
+
+**Completed lane:** the human-requested creatures/equipment/movement unit
+has its four-view gallery and explicit visual exception. Broader spell delivery
+remains the next pending shared-capability area. New creature recipes and equipment media are used by
+the live/recorded shared path; these clips do not add an inventory or roster UI.
+The terrain finding is recorded for a bounded follow-up design investigation;
+it does not authorize a renderer rewrite or displace the gameplay plan.
+
+**Progress reporting:** at each unit boundary, state the parent plan area,
+concrete outcome, what remains partial, and the next unit. During work, report
+which acceptance check is being resolved and any scope change. At completion,
+update this section as well as the detailed audit. Test/clip counts support the
+status; they are not substitutes for explaining progress through the plan.
+
+The sections below retain detailed checkpoint evidence. Completed sequences
+and their earlier instructions are not the next work queue.
+
+### Latest unit — creatures, equipment and movement
+
+**Requested outcome:** review actual demon, undead and animal actors; clothed
+modular characters; actual equipment changes and melee then ranged attacks in
+one legal turn; ordinary movement around corners; movement after Haste and
+bonus-action Dash; jumps across water, uphill and downhill. Every case uses the
+same retained-history renderer as the game and records all four camera views
+in one pass. Existing reaction/death/condition cases remain regressions.
+
+**Result:** the completed gallery is
+`20260910T211349Z-a5d2b1` at
+<http://127.0.0.1:8767/runs/20260910T211349Z-a5d2b1/index.html>.
+All **53 recording cases pass**, including 15 new gameplay histories; 4,973
+four-camera frames were encoded. All 53 videos and input pixel sequences are
+byte-identical to the independently inspected full run `20260910T205130Z-d61669`.
+All 785 captured source-file hashes match the final working implementation
+(source hash `9e79e49e3d5d187439f82c2815c1fa7ffadd52124157abc405a53961e8c1f6f9`).
+The run's `inspection/verification.json` records those checks and names the
+known hill-jump visual exceptions. Relevant native, presentation, recorder and
+import tests pass; the terrain pixel matrix has 12 passing controls and four
+strict expected failures. Detailed overlapping test groups, partial Dretch
+support, frozen historical audit failures and unchanged type errors are recorded
+in `agent_docs/ANIMATION_COMPOSITION_AUDIT.md`. This is a bounded gameplay
+checkpoint, not a claim that the entire game or repository suite is complete.
+
+**Portable-data boundary:** original Studio JSON owns recipes, body frames,
+anchors and timeline contexts. Pack-specific names, sheet geometry, identity
+bindings and clip compatibility belong in fixed-rig JSON. These resources can
+be consumed by a later TypeScript implementation. Python owns today's native
+mechanics and presentation reducer, event-to-timeline binding and evaluator;
+these functions are not automatically importable into TS. A TS frontend can
+keep the Python engine as its authoritative event producer. Do not claim a
+completed TS consumer or invent another timeline schema/export platform in this
+unit. Retained event
+and compiled-timeline JSON in traces provide concrete inputs/results to port
+and compare. Gameplay scenarios are native producers, not replacement rules.
+
+**Source findings at entry:**
+
+- Existing equipment binding and the original Taunt/commit-frame context work
+  in the old finite playback path but are absent from normal encounter/gallery
+  composition. Connect that primitive to the shared path.
+- Original AttackClip activates the selected weapon type at attack entry.
+  Native accepted attacks also activate their slot. An automatic ranged attack
+  does not justify manufacturing a SwitchWeapon root or extra Taunt delay.
+- Native Haste doubles speed and Cunning Action Dash spends the bonus action
+  to add current-speed movement. Original movement presentation uses authored
+  travel timing independently. Validate extra legal travel/resources; do not
+  invent a Haste/Dash animation-rate multiplier.
+- Current motion binding creates a fresh jump arc per native Step. Compare a
+  real multi-cell jump with NeuroClient's contiguous jump leg/arc before any
+  correction. Keep the engine's Step facts and reaction ancestry intact.
+- Goblin is the only installed fixed rig. The purchased demon/undead/animal
+  packages need exact selections and mappings. Native undead and wolf owners
+  exist; the active roster has no implemented fiend. A demon must have an
+  explicit canonical composition and honest capability metadata, never be an
+  unrelated creature renamed for its sprite.
+
+**Implementation sequence:**
+
+1. Three independent source studies cover equipment/action economy, native
+   movement/terrain and purchased rigs/native creature identities. The
+   **anti-slop reviewer** checks these findings, finite scope, original source
+   reuse and actual game coverage. The **anti-OOP reviewer** checks ECS
+   ownership, existing event ancestry, single queue/clock, portable data and
+   shared rendering before the production connections are changed.
+2. Add a finite rig selection through the existing importer, preserving PNG
+   bytes and provenance. Bind exact canonical creature refs in JSON. Reuse
+   the existing canonical creature composition for native attacks/movement;
+   any new fiend entry uses existing mechanics owners and explicitly records
+   unimplemented special traits. Do not bulk-import purchased archives.
+3. Give modular scenario actors real equipped apparel before their birth
+   capture. Select already available authored layers where possible. Add
+   native equipment/clothing replacement histories plus a same-turn melee →
+   ranged sequence with the real Extra Attack/action-economy owner. Preserve
+   the independent equipment roots and their real commit semantics. Connect
+   the existing equipment primitive through shared composition/media/drawing
+   so normal play and recording agree; do not add another playback queue.
+4. Produce native movement cases on a real published battlefield: a turning
+   route; a longer Haste route; bonus-action Dash followed by travel; one jump
+   over water with level banks; one ascending jump and one descending jump.
+   Use discovered actions/targets and record committed positions, heights,
+   costs and condition/resource results. If the reproduced multi-Step jump
+   differs from the original single arc, correct only that shared geometry/
+   timing compilation and preserve mid-flight reaction holds and canceled
+   endpoints. No per-case trajectory patches.
+5. Add the cases to the existing JSON gallery catalog and shared producers.
+   Preload actual retained outfits/rigs. Camera framing must include the route
+   and elevations in every quadrant. Export selected equip/body samples and
+   native histories with existing trace conventions. The same JSON recipes
+   and rig maps must drive every view, with no renderer species/spell cases.
+6. Verify at public native and sampled-frame boundaries: legal same-turn
+   actions/resources; original loadout identity at settlement and weapon-set
+   selection at its authored cue/attack anchor; active attack weapon;
+   mapped fixed-rig bodies; actual travel route/elevation/landing; reaction
+   interruption and paused-history independence. Inspect affected four-view
+   clips, run relevant regressions, changed-file types and import checks.
+   Complete anti-slop/anti-OOP code review, then regenerate the catalog once
+   the implementation is stable, update this dashboard/audit and commit.
+
+**Acceptance boundaries:** more native travel is evidence of Haste/Dash;
+animation speed stays at its authored rate. Equipment identity is native
+state and visual layer selection is data-driven. A multi-cell jump visibly
+leaves its source once and lands at its actual destination once, including
+support-height differences; reactions still interrupt at their actual causal
+edge. Fixed creatures use their own packaged sheets in all four views and
+retain their own native creature identities/defenses/actions. Missing optional
+media or special traits must be named, not covered by invented assets/rules.
+
+**Visual acceptance exception:** ascending/descending jumps expose terrain
+painting over airborne body pixels in cameras 0 and 1. Native travel/height and
+the contiguous authored arc are correct. Testing a depth-varying flat-floor
+raster changed an established rear-wall overlap and still left uphill clipping,
+so the prototype was removed. Actual last-writer instrumentation traced the
+remaining uphill pixels to `terrain.cliff.w` / `terrain.cliff.n` for native tile
+(14,20): the structural cliff sprite participates in the overlap too. This is
+an existing shared terrain composition limit, not a jump timing defect.
+
+The regression only protects authored pixels demonstrably above the floor
+plane; Rolling artwork can extend below its rig pivot, so requiring the entire
+sprite to remain visible would be an invented rule. Lower-ground hiding and
+clear front views remain ordinary passing controls. Confirmed rear-view losses
+are strict expected failures, and the two gallery cards carry `known-occlusion`
+and a visible description. The anti-slop and anti-OOP reviewers approve the
+gameplay changes with this exception and reject the insufficient terrain patch.
+A later correction must model the actual flat/vertical authored surfaces while
+preserving accepted wall/cliff overlap. Do not restart by assigning a height
+bonus to every actor or drawing jump bodies above the world.
+
+**Deferred:** new spell VFX, broad spell delivery, campaign/inventory/map-editor
+UI, generalized scripting/rig inference, event registry redesign, old server
+repair and unrelated legacy test failures. Nothing in this unit makes those
+prerequisites to the requested gameplay clips.
+
 ### Completed unit — native life transitions and original lifecycle feedback
 
 **Authorization:** the human asked to continue after `80be2bd`. This unit

@@ -101,14 +101,14 @@ async def _run(
         latest = historical = seed_actors(baseline, session.births, active_weapon_sets={
             actor.uuid: actor.equipment.active_weapon_set for actor in session.game.entities.values()
         })
-        data = load_animation_data(rig_files=(Path(__file__).parent / "data/rigs/goblin01.json",))
+        data = load_animation_data(rig_files=tuple(sorted((Path(__file__).parent / "data/rigs").glob("*.json"))))
         number_font, badge_font = (pygame.font.SysFont(style.fontFamily, round(style.fontSizePx),
                                                        bold=style.fontWeight == "bold")
                                    for style in (data.number_style, data.badge_style))
         facings: dict[str, Facing8] = {}
         positions: dict[str, VisualPosition] = {}
         actors = scene_actors(historical, data, facings)
-        body_media = load_scene_media(actors, data)
+        body_media = dict(load_scene_media(actors, data))
         catalog = load_catalog()
         cache = SurfaceCache(catalog)
         panel_rect = pygame.Rect(0, 0, 345, window_size[1] - 145)
@@ -252,6 +252,8 @@ async def _run(
                     ):
                         gaps.append((active.root.uuid, "Movement reaction choreography is not bound"))
                     choreography = bind_choreography(historical, active, data, facings=facings, contacts=contacts)
+                    if choreography.equipment:
+                        body_media.update(load_scene_media(scene_actors(after, data, facings), data))
                     choreography_media = load_choreography_media(choreography)
                     gaps.extend(choreography.gaps)
                     feedback.extend(choreography_feedback(choreography, data, presentation_ms, contacts=contacts))

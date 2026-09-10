@@ -1053,6 +1053,27 @@ def _configure_ghoul(context: CreatureBuildContext) -> Entity:
     return entity
 
 
+def _configure_dretch(context: CreatureBuildContext) -> Entity:
+    """Compose Dretch combat facts; Fetid Cloud and telepathy remain absent."""
+    entity = _create_srd_entity(
+        context=context,
+        description="A small demon with bite, claws and elemental defenses; Fetid Cloud and telepathy are not implemented.",
+        abilities=(11, 11, 12, 5, 8, 3),
+        hit_die_value=6,
+        hit_die_count=4,
+        proficiency_bonus=2,
+        creature_type=CreatureType.FIEND,
+        size=Size.SMALL,
+        movement=20,
+        darkvision=True,
+        immunities=(DamageType.POISON,),
+        resistances=(DamageType.COLD, DamageType.FIRE, DamageType.LIGHTNING),
+    )
+    entity.add_condition_immunity("Poisoned", immunity_name="Dretch")
+    _register_configured_multiattack(entity, "action.monster.multiattack.dretch")
+    return entity
+
+
 _SRD_CREATURE_FACTS: tuple[_SrdCreatureFacts, ...] = (
     _SrdCreatureFacts(creature_id="commoner", display_name="Commoner", description="A noncombatant pressed into danger.", challenge_rating="0", source_anchor="SRD 5.1 (CC-BY-4.0), p. 398, Appendix MM-B: Commoner", role_tags=("civilian", "melee"), sort_order=10),
     _SrdCreatureFacts(creature_id="bandit", display_name="Bandit", description="A lightly armored raider with melee and crossbow pressure.", challenge_rating="1/8", source_anchor="SRD 5.1 (CC-BY-4.0), p. 396, Appendix MM-B: Bandit", role_tags=("humanoid", "melee", "ranged"), sort_order=20),
@@ -1081,6 +1102,7 @@ _SRD_CREATURE_FACTS: tuple[_SrdCreatureFacts, ...] = (
     _SrdCreatureFacts(creature_id="zombie", display_name="Zombie", description="A slow undead body that stresses pursuit and poison immunity.", challenge_rating="1/4", source_anchor="SRD 5.1 (CC-BY-4.0), p. 356, Monsters A-Z: Zombie", role_tags=("melee", "slow", "undead"), represented_traits=("Poison immunity", "Undead Fortitude"), sort_order=250),
     _SrdCreatureFacts(creature_id="ogre_zombie", display_name="Ogre Zombie", description="A large undead bruiser with huge HP and slow cognition.", challenge_rating="2", source_anchor="SRD 5.1 (CC-BY-4.0), p. 357, Monsters A-Z: Ogre Zombie", role_tags=("bruiser", "large", "undead"), represented_traits=("Poison immunity", "Undead Fortitude"), sort_order=260),
     _SrdCreatureFacts(creature_id="ghoul", display_name="Ghoul", description="A fast undead attacker with bite and claw modes.", challenge_rating="1", source_anchor="SRD 5.1 (CC-BY-4.0), p. 312, Monsters A-Z: Ghoul", role_tags=("condition-threat", "melee", "undead"), represented_traits=("Poison immunity", "condition immunities", "Claws paralysis rider"), sort_order=270),
+    _SrdCreatureFacts(creature_id="dretch", display_name="Dretch", description="A small demon with native bite/claw Multiattack, elemental resistance and poison immunity. Shared hit-dice policy gives 22 HP instead of the SRD average 18; LIGHT claws also expose the native off-hand bonus attack. Fetid Cloud and telepathy are not implemented.", challenge_rating="1/4", source_anchor="SRD 5.1 (CC-BY-4.0), p. 270, Monsters A-Z: Dretch", role_tags=("demon", "fiend", "melee", "small"), represented_traits=("Multiattack", "Cold/fire/lightning resistance", "Poison immunity"), sort_order=280),
 )
 
 _CONFIGURE_SRD_CREATURE_BY_ID = MappingProxyType({
@@ -1111,6 +1133,7 @@ _CONFIGURE_SRD_CREATURE_BY_ID = MappingProxyType({
     "zombie": _configure_zombie,
     "ogre_zombie": _configure_ogre_zombie,
     "ghoul": _configure_ghoul,
+    "dretch": _configure_dretch,
 })
 
 
@@ -1307,6 +1330,11 @@ SRD_CREATURE_POSSESSION_GRANTS_BY_ID = MappingProxyType({
             WeaponSlot.MELEE_OFF,
         ),
     ),
+    "dretch": (
+        _intrinsic("armor.creature.dretch_natural", BodyPart.BODY),
+        _intrinsic("weapon.creature.dretch_bite", WeaponSlot.MELEE_MAIN),
+        _intrinsic("weapon.creature.dretch_claws", WeaponSlot.MELEE_OFF),
+    ),
 })
 
 
@@ -1339,6 +1367,7 @@ def construct_srd_creature(
     return entity
 
 _ROOT_OWNED_ACTION_TYPES_BY_CREATURE_ID = MappingProxyType({
+    "dretch": (MultiattackAction,),
     "bandit_captain": (MultiattackAction,),
     "berserker": (RecklessAttack,),
     "cult_fanatic": (MultiattackAction,),
@@ -1352,6 +1381,7 @@ _ROOT_OWNED_ACTION_TYPES_BY_CREATURE_ID = MappingProxyType({
     "veteran": (MultiattackAction,),
 })
 _MULTIATTACK_CONFIGURATION_IDS_BY_CREATURE_ID = MappingProxyType({
+    "dretch": ("action.monster.multiattack.dretch",),
     "bandit_captain": (
         "action.monster.multiattack.bandit_captain.melee",
         "action.monster.multiattack.bandit_captain.ranged",
@@ -1476,14 +1506,14 @@ def _build_srd_creature_declarations() -> tuple[ContentDeclaration, ...]:
     displays = tuple(facts.display_name for facts in _SRD_CREATURE_FACTS)
     orders = tuple(facts.sort_order for facts in _SRD_CREATURE_FACTS)
     if (
-        len(ids) != 27
+        len(ids) != 28
         or len(ids) != len(set(ids))
         or len(displays) != len(set(displays))
         or len(orders) != len(set(orders))
         or set(ids) != set(_CONFIGURE_SRD_CREATURE_BY_ID)
     ):
         raise RuntimeError(
-            "SRD creature declarations require 27 unique identities, display "
+            "SRD creature declarations require 28 unique identities, display "
             "names, order values, and matching private configuration helpers",
         )
     return tuple(
@@ -1517,15 +1547,16 @@ def _create_srd_entity(
     hit_die_value: HitDieValue,
     hit_die_count: int,
     proficiency_bonus: int,
-    skills: Optional[dict[str, bool]] = None,
-    spellcasting_ability: Optional[AbilityName] = None,
-    spell_slots: Optional[dict[int, int]] = None,
+    skills: dict[str, bool] | None = None,
+    spellcasting_ability: AbilityName | None = None,
+    spell_slots: dict[int, int] | None = None,
     creature_type: CreatureType = CreatureType.HUMANOID,
     size: Size = Size.MEDIUM,
     weight: int = 150,
     movement: int = 30,
     darkvision: bool = False,
     immunities: tuple[DamageType, ...] = (),
+    resistances: tuple[DamageType, ...] = (),
 ) -> Entity:
     """Create a configured entity using shared SRD roster defaults."""
     entity_uuid = context.runtime_entity_uuid
@@ -1559,6 +1590,7 @@ def _create_srd_entity(
                     )
                 ],
                 immunities=list(immunities),
+                resistances=list(resistances),
             ),
             action_economy=ActionEconomyConfig(
                 movement=movement,

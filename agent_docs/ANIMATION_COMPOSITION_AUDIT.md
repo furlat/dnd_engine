@@ -5,6 +5,121 @@ the active recovery plan, not a replacement plan or a mechanics repair backlog.
 It compares the current Python code with the original source at
 `/home/tommaso/Dev/NeuroClient/app`.
 
+## Creatures, equipment and movement — September 10
+
+This unit implements the human's gameplay coverage request. It adds 15 native
+histories to the four-camera catalog and connects the existing equipment
+primitive to normal encounter/gallery composition. It adds no spell effects.
+Final run `20260910T211349Z-a5d2b1` passes all 53 recording cases and contains
+4,973 four-view frames. Its 53 encoded videos/input pixel sequences match the
+inspected full run exactly, and all 785 source-file hashes match. The plan links
+the gallery; `inspection/verification.json` within the run records comparison
+and review scope. Hill-jump visual completion remains explicitly excluded.
+
+**What remains portable:** original Studio action/context JSON, exact fixed-rig
+JSON, selected sprite bytes and the existing
+`content_data/ledgers/neuroclient_authored_item_visuals.json` equipment layers.
+The latter already contains render layer, sprite key and tint; Python does not
+own another authored wardrobe table. Traces serialize retained native histories
+and compiled attack/cast/equipment/movement values. A future TypeScript client
+can import those data resources, but must implement/adapt the generic evaluator
+and presentation reduction/event binding. Native engine mechanics may remain
+in Python behind that frontend. This unit does not create a TS runtime or
+replacement schema.
+
+| Coverage | Existing owners used and resulting behavior |
+| --- | --- |
+| Equipment and wardrobe | Real equip/unequip notifications remain passive. ItemLocation supplies committed membership and native armor class. Existing EquipmentTimeline/NeuroClient context supplies the gesture inside the shared choreography. |
+| Same-turn melee then ranged | A real level-5 Fighter spends its action on melee and its granted Extra Attack on the longbow. Original AttackClip activates the selected weapon set on entry; no synthetic switch root or extra delay. |
+| Actual item replacement | Original SwitchWeaponClip's frame 4 callback changes stance, not item identity. Same-stance replacement retains old item layers until the gesture/frame settles. Both old/new gear, subsequent Idle and actual longbow pixels are checked in all four views. |
+| Ordinary/Haste/bonus Dash movement | Native discovered routes spend 30 or 50 feet. Haste's actual cast establishes the movement baseline; Cunning Action Dash remains a real returned action/condition tree. Extra native distance does not change Studio's authored walk rate. |
+| Multi-cell jumps | One original flight duration/arc spans existing Step children. MotionLeg fractions preserve each step's native reaction/commit ancestry. A reaction can pause the second step after the first committed; survival continues and death retains its airborne visual pose. |
+| New creatures | Native Dretch, Skeleton Archer and Wolf move/attack/receive hits/die using their own canonical content refs and purchased rigs. The same shared attack/damage/death primitives interpret their rig maps. |
+
+**Asset selection:** 28 original PNGs (2,197,697 bytes) for
+`smallscale.demonbeast01`, `smallscale.skeletonarcher05` and
+`smallscale.greywolf`. The unchanged fixed-rig importer verifies their archive
+members and provenance. Demon/undead cells are 128 px; wolf cells 64 px; all use
+15 frames and 8 directions. Only the demon package supplies separate shadow sheets.
+The other two bindings are body-only. Vendor named-direction images confirm
+undead/wolf row order; demon row order was visually reviewed. FPS/pivots are
+explicit adaptations. No empty/truncated selected body frames are accepted.
+Thirteen original Ranged4 sheets supply the Fighter's actual longbow; the
+existing NeuroClient importer reproduces all 305 outputs. No new art was authored.
+
+**Terrain actually shown:** the legacy mechanical hazard map has water costs
+on stone surfaces; the generic elevation proving map has stone stairs outside
+the renderer's selected earth stair assembly. Those fixtures do not establish
+the requested rendered terrain. Gallery jumps therefore use the existing
+`battlefield.visual_vertical_seam`: dry banks (33,28)→(35,26) over actual WATER
+at (34,27); lower ground (13,20)↔terrace (14,20); full stairs (16,25)→(16,22).
+Native darkvision supplies the existing dark world's visibility. Healthy
+clothed actors, actual material/support heights and legal landing are asserted.
+Neither the world renderer nor terrain mechanics were changed for these cases.
+
+**Known terrain visual exception:** cameras 0/1 in the hill jumps can lose body
+pixels that are physically above the terrace. An attempted flat-floor depth
+split was rejected: it altered an established rear-wall pixel result and did
+not fix the uphill case. Last-writer instrumentation identified cliff tile
+(14,20), `terrain.cliff.w` in camera 0 and `terrain.cliff.n` in camera 1, covering
+114/147 protected uphill pixels after the floor-only prototype. The final world
+renderer remains unchanged. The focused regression exempts authored pixels
+below the floor plane, keeps legitimate lower-ground hiding/front-view controls,
+and marks only confirmed rear-view losses as strict expected failures. On the
+unchanged renderer, protected losses are 299/324 uphill and 12/1 downhill in
+cameras 0/1; cameras 2/3 lose none. The 16-sample regression yields 12 passing
+controls and 4 strict expected failures. Eight established wall/cliff pixel
+controls also pass after removing the prototype. The hill cards are tagged
+`known-occlusion`. Native jump/timeline correctness and passing
+recording checks do not claim visual completion of this terrain case.
+
+**Recording correction:** a second-step jump exposed 26 opaque body pixels under
+camera 0's header in the small 640×480 review view. Framing now uses the existing
+compiled motion envelope plus rig cell/pivot/scale values before recording.
+All four cameras retain one fixed focus/zoom. Every recorded frame checks actual
+opaque body bounds against the viewport excluding the header. The regression
+passes 49 frames, and independent visual review confirms the corrected body.
+Retained outfits are acquired in one existing media-loader call. Live encounter
+play acquires newly equipped layers at its equipment head using the same cache.
+
+**Dretch scope is partial and explicit:** it composes existing native fiend
+facts, elemental resistance, poison/Poisoned immunity, Bite/Claws and configured
+Multiattack. The established roster hit-die policy yields 22 HP versus the printed
+18. As with the existing Ghoul, LIGHT on the secondary natural weapon permits
+the engine's off-hand slot and exposes its bonus attack. Fetid Cloud and
+telepathy are absent. Demon Beast 1 is a chosen visual adaptation, not a vendor
+claim that the art depicts a Dretch. Gallery attacks are ordinary discovered
+attacks; Multiattack mechanics are tested separately and its presentation
+sequencing is not claimed here. None of these limits justifies a parallel
+monster/equipment rules system in this unit.
+
+**Validation:** dedicated movement 19, equipment 4 and creature-history 3 tests
+pass. Existing affected encounter/history/lifecycle/placement regressions pass 96;
+equipment/source/rig/lifecycle/import-direction regression group passes 56;
+recorder/server/import checks pass 9, plus the new framing regression 1. These
+groups overlap. Current content/rig checks pass 67 across the batch and corrected
+reruns, including native Dretch 8. The broad changed-file Pyright run reports
+three existing `authored_item_builders.py` errors (unused local and two dice
+Literal annotations); the exact same three were reproduced against its `ebff88c`
+file. Other checked changed Python files report no errors. A separate check of
+the unchanged world renderer reports its existing `app.py:629` water-evidence
+type error; no renderer edits remain. Anti-slop and
+anti-OOP reviews approve the bounded ownership and data reuse, excluding
+raised-terrace jump visual completion.
+
+**Historical test boundary:** three CR-0/CR-I audit checks still require frozen
+pre-Dretch ledger hashes/669 icon rows or an old importer allowlist. Their
+historical artifacts remain unchanged. Current native/materialization/icon and
+direct-item boundaries pass after the explicit new content additions. An old
+source-coverage test cannot collect because it imports deleted
+`dnd.items.armors`; it was not repaired as part of this unit. These results are
+not a claim that the entire repository suite is green.
+
+**Still outside coverage:** full nonprojectile spell delivery, forced movement,
+general inventory/roster UI and additional optional Studio fields remain the
+prior plan's work. Fixed-rig slash media gaps are explicit; unavailable
+decorative slash layers do not block native creature body/damage playback.
+
 ## Native life transitions and lifecycle feedback — September 10
 
 The next shared capability consumes the seven existing `lifecycle.deathSave`

@@ -152,9 +152,9 @@ def test_all_maintained_holders_materialize_exact_direct_item_plans() -> None:
 
 
 def test_all_public_item_ids_construct_directly_with_independent_state() -> None:
-    """All 147 public IDs build fresh state without recipes or runtime factories."""
+    """All 150 public IDs build fresh state without recipes or runtime factories."""
     owner_uuid = uuid4()
-    assert len(DIRECT_ITEM_BUILDERS) == 147
+    assert len(DIRECT_ITEM_BUILDERS) == 150
 
     for item_id in DIRECT_ITEM_BUILDERS:
         first = build_authored_item(item_id, owner_uuid)
@@ -435,7 +435,7 @@ def test_oil_barrel_destruction_preserves_direct_material_transition() -> None:
 
 
 def test_private_guardian_item_is_direct_but_not_publicly_buildable() -> None:
-    """The private Guardian is a direct BaseItem outside the 147-ID public catalog."""
+    """The private Guardian is a direct BaseItem outside the 150-ID public catalog."""
     private_id = "environment.spell_object.guardian_of_faith"
     guardian = build_guardian_of_faith_object(uuid4())
 

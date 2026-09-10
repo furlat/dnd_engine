@@ -3258,4 +3258,16 @@ BUILT_IN_CONTENT_ICON_BINDINGS: dict[
         'reaction.opportunity-attack-handler',
         '39ea72afb62cfbd7e14a4a2da47224c00c30db1152ee16bdc16b19c1f9c64abd',
     ),
+    'content.srd_5_1_cc:action:action.monster.multiattack.dretch@1#55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e': (
+        '55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e',
+        'bind',
+        'ui.filter-attacks',
+        '00b85f45f2ecb784e0fb1c79b00a01fee95bbc537fe1689260d29ac862f61bbc',
+    ),
+    'content.srd_5_1_cc:creature:creature.dretch@1#9014e1a5dc325535b66c757f22cd984dd4f8f8caae914b2664c15f03d65f9fa2': (
+        '9014e1a5dc325535b66c757f22cd984dd4f8f8caae914b2664c15f03d65f9fa2',
+        'intentional_null',
+        None,
+        None,
+    ),
 }

@@ -9,6 +9,9 @@ from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 from dnd.core.equipment_types import WeaponSlot
 from game.combat_demo import iter_combat_demo
 from game.presentation import CompletedLineage, PresentationTarget
+from tests.game.creature_scenarios import creature_history
+from tests.game.equipment_scenarios import equipment_sequence_history
+from tests.game.movement_scenarios import movement_history
 from tests.game.scenarios import (
     attack_history, dodge_expiry_history, healing_history, lifecycle_history, movement_with_paralysis, paralysis_lifecycle,
 )
@@ -74,13 +77,38 @@ class LifecycleCase(BaseModel):
     revive_after: bool = False
 
 
+class CreatureCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["creature"]
+    creature_identity: str
+    weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN
+    seed: int = 17
+
+
+class EquipmentCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["equipment"]
+    replacement: Literal["weapon", "wardrobe"] = "weapon"
+    attacks: bool = True
+
+
+class MovementCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["movement"]
+    route: tuple[tuple[int, int], ...]
+    battlefield_id: str = "battlefield.open_floor_bright"
+    behavior: Literal["action.move", "action.jump"] = "action.move"
+    boost: Literal["none", "haste", "bonus-dash"] = "none"
+
+
 class ReviewCase(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     id: str = Field(pattern=r"^[a-z0-9][a-z0-9-]*$")
     title: str
     tags: tuple[str, ...]
     description: str
-    scenario: Annotated[AttackCase | ParalysisCase | CastCase | ParalysisLifecycleCase | DodgeExpiryCase | HealingCase | LifecycleCase,
+    scenario: Annotated[AttackCase | ParalysisCase | CastCase | ParalysisLifecycleCase | DodgeExpiryCase | HealingCase | LifecycleCase
+                        | CreatureCase | EquipmentCase | MovementCase,
                         Field(discriminator="kind")]
     pause_at_ms: float | None = Field(default=None, ge=0)
     pause_duration_ms: float = Field(default=750, gt=0)
@@ -102,6 +130,17 @@ def load_cases(path: Path = Path(__file__).with_name("catalog.json")) -> tuple[R
 def produce(case: ReviewCase) -> ReviewSequence:
     """Run real rules once, then hand only retained values to the recorder."""
     match case.scenario:
+        case CreatureCase() as scenario:
+            before, lineages = creature_history(scenario.creature_identity, weapon_slot=scenario.weapon_slot,
+                                                seed=scenario.seed)
+            return ReviewSequence(before, lineages)
+        case EquipmentCase() as scenario:
+            before, lineages = equipment_sequence_history(replacement=scenario.replacement, attacks=scenario.attacks)
+            return ReviewSequence(before, lineages)
+        case MovementCase() as scenario:
+            before, lineages = movement_history(route=scenario.route, battlefield_id=scenario.battlefield_id,
+                                                behavior=scenario.behavior, boost=scenario.boost)
+            return ReviewSequence(before, lineages)
         case AttackCase() as scenario:
             before, lineage = attack_history(
                 scenario.weapon, scenario.seed, opportunity=scenario.opportunity,

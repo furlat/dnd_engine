@@ -19,7 +19,7 @@ from tests.architecture import test_content_recovery_cr0_evidence as cr0
 
 
 _PUBLIC_ITEM_ID_HASH = (
-    "04966a28ddf9fae4b413f0d101b61a262e26f76395475d54a4029874b583436d"
+    "5e131e9f4d9f6c6e969c418a89e578b41f68596529f15402adf781a91b6463ba"
 )
 _ITEM_OVERLAY_ID_HASH = (
     "b28bdc07d4683d1ccd9dce416234daa241c989c8ba59551e8235cb290b6bfb3d"
@@ -532,7 +532,7 @@ def test_cri_direct_item_visual_values_match_frozen_cr0_rows() -> None:
 
 
 def test_cri_live_authority_and_importer_delta_is_exact() -> None:
-    """Direct-item authority remains exact after the later character cut."""
+    """Direct-item authority plus the explicit later Dretch addition is exact."""
     manifest = cr0._manifest()
     authorities: dict[str, set[str]] = defaultdict(set)
     for row in manifest["legacy_authorities"]:
@@ -545,7 +545,9 @@ def test_cri_live_authority_and_importer_delta_is_exact() -> None:
     assert len(removed_declarations) == 128
     post_item_declarations = authorities["declaration"] - removed_declarations
     current_declarations = set(cr0._declarations())
-    assert current_declarations <= post_item_declarations
+    dretch = "content.srd_5_1_cc:creature:creature.dretch@1"
+    dretch_multiattack = "content.srd_5_1_cc:action:action.monster.multiattack.dretch@1"
+    assert current_declarations - post_item_declarations == {dretch, dretch_multiattack}
     later_character_declarations = post_item_declarations - current_declarations
     assert len(later_character_declarations) == 168
     assert _normalized_hash(later_character_declarations) == (
@@ -563,7 +565,7 @@ def test_cri_live_authority_and_importer_delta_is_exact() -> None:
         authorities["materializable_root"]
         - removed_declarations
         - later_character_declarations
-    )
+    ) | {dretch}
     assert {
         identity
         for identity, declaration in cr0._declarations().items()
@@ -573,7 +575,7 @@ def test_cri_live_authority_and_importer_delta_is_exact() -> None:
         identity
         for identity, declaration in cr0._declarations().items()
         if declaration.mode.value == "typed_definition"
-    } == authorities["structural_definition"] - later_character_declarations
+    } == (authorities["structural_definition"] - later_character_declarations) | {dretch_multiattack}
 
     old_importers = {
         (row["path"], row["import_category"])
@@ -628,9 +630,9 @@ def test_cri_non_item_visual_overlay_still_matches_current_owners() -> None:
 
 
 def test_cri_public_item_inventory_is_exact_and_direct() -> None:
-    """The direct public surface is exactly 147 independent item species."""
+    """The direct public surface is exactly 150 independent item species."""
     public_ids = set(DIRECT_ITEM_BUILDERS)
-    assert len(public_ids) == 147
+    assert len(public_ids) == 150
     assert _normalized_hash(public_ids) == _PUBLIC_ITEM_ID_HASH
     assert "environment.door" not in public_ids
     assert "environment.directional_door" in public_ids
@@ -656,7 +658,7 @@ def test_cri_remaining_legacy_and_direct_item_construction_owners_are_exact() ->
         for declaration in declarations.values()
         if declaration.mode.value == "factory"
     }
-    assert len(factory_ids) == 56
+    assert len(factory_ids) == 57
     assert all(item_id.startswith("creature.") for item_id in factory_ids)
     assert set(cr0._static_factory_owners()) == factory_ids
     assert not any(
@@ -664,7 +666,7 @@ def test_cri_remaining_legacy_and_direct_item_construction_owners_are_exact() ->
         for declaration in declarations.values()
     )
     assert cr0._presets() == {}
-    assert len(DIRECT_ITEM_BUILDERS) == 147
+    assert len(DIRECT_ITEM_BUILDERS) == 150
 
 
 def test_cri_remaining_legacy_and_migrated_direct_behavior_owners_are_exact() -> None:
@@ -679,7 +681,7 @@ def test_cri_remaining_legacy_and_migrated_direct_behavior_owners_are_exact() ->
     assert set(cr0._static_behavior_owners()) == behavior_ids
 
     assert len(_DIRECT_SPECIAL_IDS) == 39
-    assert len(set(DIRECT_ITEM_BUILDERS) - _DIRECT_SPECIAL_IDS) == 108
+    assert len(set(DIRECT_ITEM_BUILDERS) - _DIRECT_SPECIAL_IDS) == 111
     legacy_content_ids = {
         declaration.ref.content_id for declaration in declarations.values()
     }

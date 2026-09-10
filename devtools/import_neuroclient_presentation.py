@@ -57,7 +57,7 @@ RIG_CATEGORIES = (
     "NakedBody", "Head22", "Head15", "Chest14", "Legs1", "Belt2",
     "Shoes1", "Shadow", "Melee1", "Melee3",
     "Legs7", "Shoes2", "Chest7", "Belt1", "Shield5", "Melee2", "Head2", "Head10", "Head13",
-    "Ranged1",
+    "Ranged1", "Ranged4",
 )
 MELEE_CLIPS = ("Attack1", "Attack2", "Attack4", "Attack5", "Attack6")
 RIG_CLIPS = ("Idle", *MELEE_CLIPS, "Attack3", "TakeDamage", "Die", "Taunt", "Special1", "Run", "Rolling")

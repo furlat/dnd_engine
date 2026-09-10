@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from types import MappingProxyType
 from typing import Mapping
 from uuid import UUID
@@ -169,6 +169,7 @@ def bind_equipment(
     lineage: CompletedLineage,
     data: AnimationData,
     facings: Mapping[str, Facing8],
+    *, contacts: Mapping[str, ActorContact] | None = None,
 ) -> BoundEquipment | None:
     """Animate an actual visible item replacement, retaining its old layers.
 
@@ -182,6 +183,10 @@ def bind_equipment(
     after = reduce_lineage(target, lineage)
     actor = target.actors[root.owner_uuid]
     contact = actor_contact(target, actor, data, facings.get(str(actor.uuid), "S"))
+    placed = (contacts or {}).get(contact.actor_uuid)
+    if placed is not None:
+        contact = replace(contact, grid=placed.grid, elevation_steps=placed.elevation_steps,
+                          body_lift_px=placed.body_lift_px, facing=placed.facing)
     previous = resolve_actor_layers(
         data, actor.appearance, actor.items, actor.equipment,
         actor.active_weapon_set, rig_id=contact.rig_id,
@@ -195,18 +200,19 @@ def bind_equipment(
         return None
     if successor.active_weapon_set != actor.active_weapon_set:
         raise NotImplementedError("this binding consumes item replacement within the same active set")
-    contacts = {
+    actor_contacts = dict(contacts) if contacts is not None else {
         str(row.uuid): actor_contact(target, row, data, facings.get(str(row.uuid), "S"))
         for row in target.actors.values()
     }
+    actor_contacts[contact.actor_uuid] = contact
     appearances = {
         str(row.uuid): resolve_actor_layers(
             data, row.appearance, row.items, row.equipment,
-            row.active_weapon_set, rig_id=contacts[str(row.uuid)].rig_id,
+            row.active_weapon_set, rig_id=actor_contacts[str(row.uuid)].rig_id,
         )
-        for row in target.actors.values()
+        for row in target.actors.values() if str(row.uuid) in actor_contacts
     }
     return BoundEquipment(
         compile_equipment(data, str(root.uuid), contact), after,
-        MappingProxyType(contacts), MappingProxyType(appearances), replacement,
+        MappingProxyType(actor_contacts), MappingProxyType(appearances), replacement,
     )

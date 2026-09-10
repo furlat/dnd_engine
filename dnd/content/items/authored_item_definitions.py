@@ -664,6 +664,22 @@ _AUTHORED_WEAPONS = (
         damage_type=DamageType.PIERCING,
         properties=(WeaponProperty.LIGHT,),
     ),
+    WeaponDefinition(
+        "weapon.creature.dretch_bite", "Bite",
+        "The intrinsic bite of an SRD dretch.",
+        ("creature_possession", "intrinsic", "natural", "srd", "weapon"),
+        damage_die=6,
+        damage_type=DamageType.PIERCING,
+    ),
+    WeaponDefinition(
+        "weapon.creature.dretch_claws", "Claws",
+        "The intrinsic claws of an SRD dretch.",
+        ("creature_possession", "intrinsic", "natural", "srd", "weapon"),
+        damage_die=4,
+        damage_dice_count=2,
+        damage_type=DamageType.SLASHING,
+        properties=(WeaponProperty.LIGHT,),
+    ),
 )
 
 AUTHORED_WEAPON_DEFINITIONS: Mapping[str, WeaponDefinition] = MappingProxyType({
@@ -1096,6 +1112,14 @@ _AUTHORED_WEARABLES = (
         ("armor", "creature_possession", "intrinsic", "natural", "srd"),
         armor_type=ArmorType.LIGHT,
         armor_class=14,
+        maximum_dexterity_bonus=0,
+    ),
+    WearableDefinition(
+        "armor.creature.dretch_natural", "Natural Armor",
+        "The dretch's intrinsic hide provides fixed Armor Class 11.",
+        ("armor", "creature_possession", "intrinsic", "natural", "srd"),
+        armor_type=ArmorType.LIGHT,
+        armor_class=11,
         maximum_dexterity_bonus=0,
     ),
 )

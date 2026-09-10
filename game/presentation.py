@@ -10,7 +10,7 @@ from uuid import UUID
 from dnd.actions import AttackEvent, JumpEvent, MovementEvent, ShoveEvent, SpellEvent
 from dnd.blocks.appearance import AppearanceConfig
 from dnd.blocks.base_item import ItemLocationStateEvent
-from dnd.blocks.equipment import WeaponEquipEvent, WeaponUnequipEvent
+from dnd.blocks.equipment import EquipmentEvent
 from dnd.blocks.sensory import SensesSnapshot, reduce_senses_snapshot
 from dnd.core.base_actions import ActionEvent
 from dnd.core.base_conditions import ConditionApplicationEvent, ConditionRemovalEvent
@@ -644,7 +644,7 @@ def _retained_event(event: Event, observer_uuid: UUID) -> Event:
             copied = event.model_copy(update=common)
         case ActionEvent() if type(event) is ActionEvent:
             copied = event.model_copy(update=common)
-        case WeaponEquipEvent() | WeaponUnequipEvent():
+        case EquipmentEvent():
             copied = event.model_copy(update=common)
         case ItemLocationStateEvent(location=ItemLocation.INVENTORY | ItemLocation.EQUIPMENT):
             copied = event.model_copy(update=common)
@@ -901,6 +901,8 @@ def reduce_lineage(target: PresentationTarget, lineage: CompletedLineage) -> Pre
                     equipment[event.equipment_slot.value] = item.item_uuid
                 result.actors[actor.uuid] = replace(
                     actor, items=tuple(items.values()), equipment=tuple(equipment.items()),
+                    armor_class=(actor.armor_class if event.entity_armor_class_after is None
+                                 else event.entity_armor_class_after),
                 )
             case ActionEvent() | TakeDamageEvent() | D20RollResultEvent() | DamageRollResultEvent() | HealRollResultEvent() | D20Event():
                 # These facts explain causality. Only the committed applied
@@ -916,7 +918,7 @@ def reduce_lineage(target: PresentationTarget, lineage: CompletedLineage) -> Pre
                 # Senses supplies committed positions. Turn/round facts retain
                 # the real engine clock; presentation does not tick conditions.
                 pass
-            case WeaponEquipEvent() | WeaponUnequipEvent():
+            case EquipmentEvent():
                 # These real roots precede the aggregate membership facts.
                 # Hooks and slot operations are not replayed by presentation.
                 pass

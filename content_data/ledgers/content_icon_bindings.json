@@ -1,6 +1,6 @@
 {
   "asset_index_digest": "3bd799f4ad12eb9d097f1a9c44790a2d0d0e75a8ee8b83e85ababce79aada632",
-  "binding_digest": "a4f2ae22f0df05ac60db40884a3911d3f65a23cdd333f9582d1091d1f177b8ea",
+  "binding_digest": "1fa198aea36b8fbd84b7d29fc6c3d5b2d9f7442773d48838de51a522f6bb8107",
   "definitions": [
     {
       "asset_sha256": "540da9d7cb94419501c0c8c47d73ca05d826d8d70e2f18c6adae5e13e4c92892",
@@ -9367,6 +9367,34 @@
       "evidence_kind": "authored_presentation",
       "evidence_token": "catalog:core.rules:reaction:reaction.opportunity_attack@1",
       "icon_key": "reaction.opportunity-attack-handler"
+    },
+    {
+      "asset_sha256": "00b85f45f2ecb784e0fb1c79b00a01fee95bbc537fe1689260d29ac862f61bbc",
+      "content_ref": {
+        "content_id": "action.monster.multiattack.dretch",
+        "content_version": 1,
+        "definition_contract_hash": "55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e",
+        "definition_kind": "action",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "bind",
+      "evidence_kind": "authored_presentation",
+      "evidence_token": "Dretch Multiattack deliberately reuses the generic attack-filter glyph; no dedicated Dretch icon is claimed.",
+      "icon_key": "ui.filter-attacks"
+    },
+    {
+      "asset_sha256": null,
+      "content_ref": {
+        "content_id": "creature.dretch",
+        "content_version": 1,
+        "definition_contract_hash": "9014e1a5dc325535b66c757f22cd984dd4f8f8caae914b2664c15f03d65f9fa2",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "decision": "intentional_null",
+      "evidence_kind": "intentional_non_icon_presentation",
+      "evidence_token": "portrait_sprite_owned_presentation:content.srd_5_1_cc:creature:creature.dretch@1",
+      "icon_key": null
     }
   ],
   "recipe_presets": [

@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+from dataclasses import replace
 from math import ceil
 from pathlib import Path
 import subprocess
@@ -13,6 +14,7 @@ import pygame
 from dnd.actions import AttackEvent, JumpEvent, MovementEvent
 from dnd.core.events import EventPhase, StepMovementEvent
 from game.animation_data import load_animation_data
+from game.animation_draw import actor_screen_bounds
 from game.animation_types import Facing8
 from game.app import draw_frame
 from game.assets import SurfaceCache, load_catalog
@@ -23,7 +25,7 @@ from game.feedback import FeedbackTrack, choreography_feedback, motion_feedback
 from game.motion import MotionTimeline, bind_motion
 from game.playback_frame import PlaybackFrame, sample_playback_frame
 from game.presentation import PresentationTarget, reduce_lineage
-from game.projection import Camera
+from game.projection import Camera, TILE_WIDTH, ZOOM_LEVELS, project_screen
 from game.scene import draw_actor_labels, load_scene_media, scene_actors
 from game.visual_position import VisualPosition
 from devtools.animation_review.cases import ReviewCase, produce
@@ -62,7 +64,7 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
     screen = pygame.display.set_mode(video_size)
     view = pygame.Surface(size)
     pygame.display.set_caption(f"Animation review · {case.id}")
-    data = load_animation_data(rig_files=(Path("game/data/rigs/goblin01.json"),))
+    data = load_animation_data(rig_files=tuple(sorted(Path("game/data/rigs").glob("*.json"))))
     fonts = tuple(pygame.font.SysFont(style.fontFamily, round(style.fontSizePx), bold=style.fontWeight == "bold")
                   for style in (data.number_style, data.badge_style))
     number_font, badge_font = fonts
@@ -79,15 +81,54 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
     height = round(sum(row.contact.elevation_steps for row in actors) / len(actors))
     cameras = tuple(Camera(quadrant=quadrant, zoom=1.0, viewport=size).with_focus(focus, elevation_steps=height)
                     for quadrant in range(4))
+    # Gear may change between roots; preload every actual retained loadout.
+    appearances = list(actors)
+    framing_contacts = [actor.contact for actor in actors]
+    for root in sequence.lineages:
+        flight = bind_motion(before, root, data)
+        if flight is not None:
+            # Reuse compiled geometry for a conservative flight envelope. The
+            # full sprite cell at each leg endpoint and its maximum lift also
+            # covers in-between frames; this preflight never advances playback.
+            framing_contacts.extend(replace(flight.actor, grid=grid, elevation_steps=elevation,
+                body_lift_px=leg.arc_height_px + leg.initial_lift_px)
+                for leg in flight.legs for grid, elevation in (
+                    (leg.start, leg.start_height), (leg.end, leg.end_height)))
+        before = reduce_lineage(before, root)
+        retained_actors = scene_actors(before, data, facings)
+        appearances.extend(retained_actors)
+        framing_contacts.extend(actor.contact for actor in retained_actors)
+    body_media = load_scene_media(tuple(appearances), data)
+    # Keep the old framing when it already covers the history. Longer routes
+    # use one fixed focus/zoom for all four views, never a moving-camera patch.
+    def fits(views: tuple[Camera, ...]) -> bool:
+        for camera in views:
+            factor = TILE_WIDTH / data.rig.TILE_W * camera.zoom
+            for contact in framing_contacts:
+                rig = data.rigs[contact.rig_id]
+                x, y = project_screen(contact.grid, camera, elevation_steps=contact.elevation_steps)
+                width = rig.cell_width * contact.visual_scale * contact.visual_scale_x * factor
+                top = y + ((rig.origin_y_from_ground - rig.cell_height) * contact.visual_scale
+                           - contact.body_lift_px) * factor
+                bottom = y + (rig.origin_y_from_ground * contact.visual_scale - contact.body_lift_px) * factor
+                if x - width / 2 < 12 or x + width / 2 > size[0] - 12 or top < 56 or bottom > size[1] - 12:
+                    return False
+        return True
+
+    if not fits(cameras):
+        focus = tuple((min(contact.grid[axis] for contact in framing_contacts)
+                       + max(contact.grid[axis] for contact in framing_contacts)) / 2 for axis in (0, 1))
+        height = round((min(contact.elevation_steps for contact in framing_contacts)
+                        + max(contact.elevation_steps for contact in framing_contacts)) / 2)
+        for zoom in reversed(ZOOM_LEVELS):
+            cameras = tuple(Camera(quadrant=quadrant, zoom=zoom, viewport=size).with_focus(
+                (focus[0], focus[1]), elevation_steps=height) for quadrant in range(4))
+            if fits(cameras):
+                break
     trace["cameras"] = [{"quadrant": camera.quadrant, "focus": focus, "elevation_steps": height,
                          "zoom": camera.zoom, "viewport": size,
                          "video_offset": ((camera.quadrant % 2) * size[0], (camera.quadrant // 2) * size[1])}
                         for camera in cameras]
-    # Gear may change between roots; preload every actual retained loadout.
-    body_media = dict(load_scene_media(actors, data))
-    for root in sequence.lineages:
-        before = reduce_lineage(before, root)
-        body_media.update(load_scene_media(scene_actors(before, data, facings), data))
     before = sequence.before
     feedback: list[FeedbackTrack] = []
     presentation_ms = 0.0
@@ -95,6 +136,7 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
     interval = 1000 / fps
     poster_written = False
     camera_state_parity = True
+    bodies_in_view = True
     video = directory / "clip.mp4"
     with (directory / "encoder.log").open("wb") as encoder_log:
         encoder = subprocess.Popen([
@@ -110,7 +152,7 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
                     root_uuid: UUID | None = None, choreography: BoundChoreography | None = None,
                     choreography_media: ChoreographyMedia | None = None, motion: MotionTimeline | None = None,
                     reaction_media: dict[UUID, ChoreographyMedia] | None = None, paused: bool = False) -> PlaybackFrame:
-            nonlocal frame_index, facings, positions, poster_written, camera_state_parity
+            nonlocal frame_index, facings, positions, poster_written, camera_state_parity, bodies_in_view
             views = []
             samples = []
             for camera in cameras:
@@ -122,6 +164,8 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
                     positions=positions, feedback_viewport=feedback_viewport,
                 )
                 samples.append(sample)
+                bodies_in_view &= all(feedback_viewport.contains(bounds)
+                                      for bounds in actor_screen_bounds(sample.commands).values())
                 draw_frame(view, sample.displayed, catalog, cache, camera, presentation_ms / 1000,
                            show_grid=False, show_debug=False, mouse_position=None, extra_commands=sample.commands)
                 draw_actor_labels(view, cache.debug_font, sample.actors, sample.displayed, camera,
@@ -243,6 +287,8 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
             check("history-equals-latest", before == latest, "All complete roots reduce to the same final history/latest values.")
             check("four-camera-state-parity", camera_state_parity,
                   "All four views sample the same retained state and presentation time in one recording pass.")
+            check("visible-bodies-in-frame", bodies_in_view,
+                  "Opaque actor pixels stay below the header and inside all four camera viewports, including jump lift.")
             if case.pause_at_ms is not None:
                 held = [row for row in trace["frames"] if row["paused"]]
                 check("frozen-presentation", len(held) > 1 and all(

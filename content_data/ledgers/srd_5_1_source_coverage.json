@@ -331,15 +331,26 @@
       "source_name": "Balor"
     },
     {
-      "content_ref": null,
+      "content_ref": {
+        "content_id": "creature.dretch",
+        "content_version": 1,
+        "definition_contract_hash": "9014e1a5dc325535b66c757f22cd984dd4f8f8caae914b2664c15f03d65f9fa2",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      },
       "definition_kind": "creature",
       "dependency_refs": [],
-      "implementation_status": "missing",
-      "legacy_locators": [],
-      "measuring_test_nodeids": [
-        "tests/manual/test_158_srd_5_1_source_coverage_ledger.py::test_srd_5_1_ledger_is_exhaustive_and_measured"
+      "implementation_status": "playable",
+      "legacy_locators": [
+        "dnd/monsters/srd_roster.py:_build_dretch"
       ],
-      "mechanical_notes": "",
+      "measuring_test_nodeids": [
+        "tests/manual/test_158_srd_5_1_source_coverage_ledger.py::test_srd_5_1_ledger_is_exhaustive_and_measured",
+        "tests/engine/test_dretch_content.py::test_dretch_keeps_native_fiend_facts_and_intrinsic_equipment",
+        "tests/engine/test_dretch_content.py::test_dretch_native_damage_and_condition_defenses",
+        "tests/engine/test_dretch_content.py::test_discovered_dretch_multiattack_spends_one_action_for_bite_then_claws"
+      ],
+      "mechanical_notes": "Partial native composition: Small fiend, AC 11, speed 20, ability scores, darkvision 60, cold/fire/lightning resistance, poison damage/condition immunity, Bite 1d6 piercing, Claws 2d4 slashing, and single-target Bite-then-Claws Multiattack. Shared roster HP conversion gives 22 HP from 4d6+4 rather than the book average 18. Claws use the established LIGHT off-hand adaptation, which also exposes a native bonus-action off-hand Attack. Fetid Cloud and telepathy are not implemented. Gallery coverage uses ordinary Attack, not Multiattack animation sequencing.",
       "section": "creature_stat_blocks",
       "source_anchor": "SRD 5.1 (CC-BY-4.0), p. 270, Monsters A-Z: Dretch",
       "source_entry_id": "srd_5_1.creature.dretch",

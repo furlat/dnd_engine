@@ -4,8 +4,9 @@ from typing import Any
 
 from pydantic import TypeAdapter
 
-from game.animation import CastTimeline
+from game.animation import CastTimeline, EquipmentTimeline
 from game.attack import AttackTimeline, BoundAttack
+from game.animation_types import RigLayer
 from game.choreography import BoundChoreography
 from game.condition_animation import ConditionTimeline
 from game.motion import MotionLeg, MotionTimeline
@@ -18,6 +19,8 @@ LINEAGE = TypeAdapter(CompletedLineage)
 TIMELINE = TypeAdapter(AttackTimeline | CastTimeline)
 CONDITIONS = TypeAdapter(tuple[ConditionTimeline, ...])
 LEGS = TypeAdapter(tuple[MotionLeg, ...])
+EQUIPMENT = TypeAdapter(EquipmentTimeline)
+LAYERS = TypeAdapter(tuple[RigLayer, ...])
 
 
 def state_summary(state: PresentationTarget) -> dict[str, Any]:
@@ -54,6 +57,10 @@ def group_trace(group: BoundChoreography) -> dict[str, Any]:
                        "death_end_ms": cue.death_end_ms, "state_owned": cue.state_owned,
                        "feedback": cue.feedback.model_dump(mode="json") if cue.feedback is not None else None}
                       for cue in group.lifecycle],
+        "equipment": [{"event_uuid": str(cue.event_uuid), "start_ms": cue.start_ms,
+                       "timeline": EQUIPMENT.dump_python(cue.bound.timeline, mode="json", exclude={"data"}, warnings="error"),
+                       "replacement": LAYERS.dump_python(cue.bound.replacement, mode="json", warnings="error")}
+                      for cue in group.equipment],
         "gaps": [(str(identity), detail) for identity, detail in group.gaps],
     }
 

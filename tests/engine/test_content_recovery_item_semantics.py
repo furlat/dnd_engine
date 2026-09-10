@@ -186,7 +186,7 @@ def test_spell_item_declarations_and_recipes_use_current_public_boundary() -> No
 def test_all_recipe_presets_resolve_and_materialize_exact_authored_variants() -> None:
     """Every public direct catalog entry constructs its exact identity."""
     owner_uuid = uuid4()
-    assert len(DIRECT_ITEM_BUILDERS) == 147
+    assert len(DIRECT_ITEM_BUILDERS) == 150
     for item_id in DIRECT_ITEM_BUILDERS:
         item = build_authored_item(item_id, owner_uuid)
         assert item.item_id == item_id
