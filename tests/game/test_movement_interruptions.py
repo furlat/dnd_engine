@@ -153,15 +153,16 @@ def test_real_opportunity_rider_joins_before_the_step_commits_or_stops(
         duration = min(context.jumpMaxDurationMs, max(context.jumpMinDurationMs,
             context.jumpBaseDurationMs + context.jumpPerCellDurationMs))
         arc = min(context.jumpArcMaxPx, context.jumpArcBasePx + context.jumpArcPerCellPx)
-        fraction = min(.35, max(.12, data.movement_reaction_context.movementLeadInMs / duration))
-        assert reaction.start_ms == pytest.approx(duration * fraction)
-        assert held.contact.grid == pytest.approx((3 - fraction, 3))
-        assert held.lift_px == pytest.approx(4 * arc * fraction * (1 - fraction))
+        assert reaction.start_ms == 0
+        assert held.contact.grid == root.start_position
+        assert held.lift_px == held.contact.body_lift_px == 0
         if committed:
-            middle = sample_motion(motion, data, reaction.end_ms + duration * (.5 - fraction))
+            middle = sample_motion(motion, data, reaction.end_ms + duration / 2)
             assert middle.contact.grid == pytest.approx((2.5, 3))
             assert middle.lift_px == pytest.approx(arc)
             assert motion.complete_ms == pytest.approx(duration + reaction.choreography.complete_ms)
+        else:
+            assert not motion.legs
     assert sample_choreography(reaction.choreography, contact_ms - .001) == prior
     assert sample_motion(motion, data, reaction.start_ms) == held
     assert reduce_lineage(before, lineage) == latest

@@ -1,9 +1,98 @@
 # Animation composition audit
 
-2026-09-10, `codex/recovery-design` working tree. This is a coverage record for
+2026-09-11, `codex/recovery-design` working tree. This is a coverage record for
 the active recovery plan, not a replacement plan or a mechanics repair backlog.
 It compares the current Python code with the original source at
 `/home/tommaso/Dev/NeuroClient/app`.
+
+## Jump correction — September 11
+
+The human rejected the airborne opportunity-reaction hold and requested one
+jump animation traversal lasting the whole airtime, including short/reversed
+jumps and landing. This supersedes the earlier airborne behavior described in
+the historical checkpoints below. The original Studio JSON, body assets,
+duration/arc parameters, event ancestry and native mechanics remain the source.
+
+The reproduced defect was a body substitution during flight: Rolling →
+Idle/TakeDamage → late Rolling. In an identical actual second-Step history,
+the previous code began its reaction at 565ms, grid (3, 1.6706), lift 35.66px.
+The corrected timeline begins that complete subtree at 0ms, grid (3, 3), lift
+0. Surviving reactions join before a single flight leg; native death/paralysis
+produces no flight leg. The sampler accepts the resulting reaction-only head
+and keeps its grounded body through release into idle playback.
+
+The uninterrupted water-jump video already traversed frames 0–14 once; no
+separate plain-flight wrap was reproduced. Explicit non-looping motion data
+now ties the selected rig's frame index to normalized flight progress, keeping
+the complete clip within the airtime regardless of distance, camera or Step
+count. Four-view checks sample every authored pose from the shared compositor,
+inspect the actual distinct layered surfaces, and verify last-frame/landing/
+idle boundaries for short, long, reversed, diagonal and elevated jumps.
+
+The native engine still resolves reactions within Steps. A lethal second-Step
+reaction can leave the first Step legally committed, so legal (3, 2) and
+grounded visual (3, 3) intentionally differ. Existing VisualPosition carries
+that presentation pose across head release and subsequent state changes; no
+backend rollback or new placement system was introduced. Complete subtrees
+retain identities, grants, HP, conditions and action results. Two actual OAs
+join sequentially before one flight.
+
+There is a concrete spatial limit: on jump (3, 3)→(1, 1), a reactor at (1, 3)
+is in native reach only at the later Step. Playing that subtree at visual launch
+puts it beyond melee reach. The `jump-later-reach` card is explicitly tagged
+`known-reach-presentation`. It exposes the result without altering native OA
+eligibility, relocating the reactor or silently committing a new rules policy.
+The previously recorded rear-view hill occlusion remains a separate known
+visual exception; the world renderer was not changed.
+
+The anti-OOP reviewer approved existing ECS/data ownership. Its focused
+movement/interruption/placement group passed 39 tests (73s), with changed-file
+Pyright clean. Review also removed a temporary eager Rolling lookup from the
+binder, preserving the established missing-media Idle path for rigs without
+that clip. Reaction-context admission still applies only to actual reactions.
+The anti-slop reviewer independently approved actual Step ancestry, native
+committed prefixes, complete reaction order and the explicit spatial limits.
+It performed source/diff review, not a duplicate test run.
+
+Further validation passed 86 checks across attack/motion, condition playback,
+body lift, recording and architecture controls, with four strict expected
+terrain failures. Three legacy architecture checks failed: the old server
+imports missing `dnd.core.senses`, its world contracts violate the cold-leaf
+rule, and EquipmentSlot has two reported owners. The implicated source/test
+files are byte-equivalent after newline normalization to `7365184`; the
+referenced missing module is absent at that commit too. This is source-confirmed
+existing debt, not a new baseline-suite run or authorization to revive the old
+server. Another 17 encounter/gameplay/condition/life history checks passed.
+Combined with the focused 39, these non-overlapping groups contain 142 passing
+tests, four expected terrain failures and three unrelated architecture failures.
+
+Encoded video inspection confirms one contiguous Rolling 0–14 sequence for
+short/long forward/reverse flights and the one-/two-reaction continuations. The
+lethal case has no Rolling frame. Six selected encoded moments per case were
+cropped from each of the four camera views to inspect takeoff, rotation, the
+final pose, landing or grounded death. These artifacts and the full frame-order
+report live in the new run's `inspection/` directory. The independent visual
+reviewer also inspected all four views of six encoded contact sheets and found
+no new issue within that bounded review. Grounded paralysis pixels were
+separately inspected in the final recording.
+
+Final run `20260910T215953Z-b06297` passes all **58 recording cases**, with
+5,341 four-view frames. Its 46 unchanged pre-existing videos and input pixel
+sequences match `20260910T211349Z-a5d2b1` byte-for-byte. Only the seven intended
+jump-reaction/recovery videos differ; five new cards cover short-forward,
+long-forward/reverse, two reactions and the explicitly limited later reactor.
+All 18 jump heads pass trace checks for grounded prefixes and one contiguous
+Rolling 0–14 traversal or no flight when stopped. The complete manifest and
+`inspection/verification.json` retain the comparison, test results and visual
+limits. The gallery and MP4 byte-range requests return HTTP 200/206.
+
+The capture's source hash is
+`bf945f0102d5f5f52cd624f0f6d901acdf23c3acf05875edf6a3c4fcfe36f2c1`
+over 785 files. Runtime, data, catalog and test hashes match the final working
+implementation. A single README sentence was clarified after capture to say
+the gameplay tag **includes the initial** 15 cases; capture provenance is
+preserved and that documentation-only difference is explicit in verification.
+Plan/audit completion notes are outside the recorder's source hash scope.
 
 ## Creatures, equipment and movement — September 10
 

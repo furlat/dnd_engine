@@ -1,6 +1,6 @@
 # D&D recovery: plan of action
 
-Updated 2026-09-10 after the user's correction: **develop the game, not a
+Updated 2026-09-11 after the user's correction: **develop the game, not a
 sequence of spell demonstrations.** Working branch: **codex/recovery-design**,
 based on **codex/july-reconstruction at 16a6bfe**. The human committed the
 validated recovery implementation as **58b0946** (`visio nextraction working`).
@@ -23,25 +23,26 @@ is now imported through the original Studio schema, independently of gameplay.
 
 ### Current position — read this before the checkpoint details
 
-**Previous code checkpoint:** `ebff88c` on `codex/recovery-design` completed
-lifecycle work. The creature/equipment/movement implementation below is now
-validated through native histories and the shared renderer, with a completed
-53-case gallery. Raised-terrace jump occlusion remains an explicit visual
-exception; an inadequate renderer prototype was rejected.
+**Previous code checkpoint:** `7365184` on `codex/recovery-design` completed
+the creature/equipment/movement unit with a 53-case gallery. The current
+correction moves jump reactions before takeoff and keeps one body traversal
+across the entire flight. Focused native/pixel tests and independent ownership
+reviews pass; the expanded 58-case gallery is complete. Raised-terrace
+jump occlusion remains an explicit visual exception.
 
 **Where we are:** the in-process encounter and independent historical playback
 work. We are expanding the shared presentation capabilities consumed by that
-encounter. The 53 gallery scenarios validate selected behavior; they do not
+encounter. The gallery scenarios validate selected behavior; they do not
 mean that the full NeuroStudio vocabulary or the full game is implemented.
 
 | Plan area | Current status | Evidence and practical boundary |
 | --- | --- | --- |
 | Existing engine → retained subjective lineages → independent playback | Established for connected event families | Original ancestry/grants, one reducer used for latest/history, one historical queue/head; native work advances while rendering is paused. Backend mechanics remain authoritative. |
 | Playable Pygame encounter | Working bounded encounter | Discovered actions/targets, movement, attacks, player turns, native enemy decisions, resources and encounter completion. One player viewpoint and an initially known actor set. |
-| Shared authored animation composition | Working, incomplete vocabulary | Original Studio data drives the connected attack/cast/movement/condition/equipment primitives. Complete reactions interrupt movement and join before continuation; authored fields outside those primitives remain explicit limits. |
-| Repeatable visual validation | Implemented | 53 named native histories, four cameras per clip, selection/pinned-time trace export and actual pixel checks. Game and recorder share the frame compositor. Passing recording checks do not approve every pixel. |
+| Shared authored animation composition | Working, incomplete vocabulary | Original Studio data drives the connected attack/cast/movement/condition/equipment primitives. Complete walking reactions interrupt at their edge; jump reactions join at launch before one flight. Authored fields outside those primitives remain explicit limits. |
+| Repeatable visual validation | Implemented | 58 catalog histories, four cameras per clip, selection/pinned-time trace export and actual pixel checks. Game and recorder share the frame compositor. Passing recording checks do not approve every pixel. |
 | Continuing condition and life histories | Completed prior unit | Native paralysis recovery/persistence, Dodge expiry, capped healing, death saves, stabilization, death/revival and correct retained placement/HP. |
-| Creatures, equipment and movement | Implemented with a terrain visual exception | Three exact rig identities; real wardrobe/item replacement; same-turn melee → longbow; turning routes with native Haste/Dash; one flight across water/elevation and mid-flight reactions. Rear-view terrace overlap is documented below. |
+| Creatures, equipment and movement | Implemented with explicit visual limits | Three exact rig identities; real wardrobe/item replacement; same-turn melee → longbow; turning routes with native Haste/Dash; grounded jump reactions followed by one flight across water/elevation. Rear-view terrace overlap and later-Step launch reach are documented below. |
 | Broader gameplay presentation and content | Still partial | Self/touch/direct/area/persistent delivery, broader condition media, forced movement, additional rigs and roster/map/inventory UI remain pending. |
 
 **What changed after the human's `58b0946` checkpoint:**
@@ -58,7 +59,8 @@ animal catalog. The tested sword rider applies native paralysis; its real
 reaction/condition lineage is what the clip demonstrates.
 
 **Completed lane:** the human-requested creatures/equipment/movement unit
-has its four-view gallery and explicit visual exception. Broader spell delivery
+has its four-view gallery and explicit visual exception. The completed bounded
+correction below addresses the human's jump review. Broader spell delivery
 remains the next pending shared-capability area. New creature recipes and equipment media are used by
 the live/recorded shared path; these clips do not add an inventory or roster UI.
 The terrain finding is recorded for a bounded follow-up design investigation;
@@ -72,6 +74,78 @@ status; they are not substitutes for explaining progress through the plan.
 
 The sections below retain detailed checkpoint evidence. Completed sequences
 and their earlier instructions are not the next work queue.
+
+### Completed correction — grounded jump reactions and one flight traversal
+
+The human reviewed the gallery and rejected frozen airborne reactions. For a
+jump, play its complete opportunity-reaction subtrees at the grounded visual
+launch contact before takeoff. If the native result permits continuation, play
+one uninterrupted jump; if stopped by paralysis/death, keep the body grounded.
+The human also requires exactly one body-clip traversal spanning the full air
+time, in both directions and for short/long/elevated jumps.
+
+**Source evidence:** original NeuroClient JumpClip also advances 12–35% into
+its arc before pausing for pre-motion groups. That behavior is superseded by
+this correction, while its JSON, clips and duration/arc parameters remain the
+authoring source. Actual current water-jump video pixels already traverse
+Rolling frames 0–14 once. The reproduced OA discontinuity switches Rolling to
+Idle/TakeDamage mid-air, then resumes at a late Rolling pose. Do not claim a
+separate plain-flight frame-wrap defect without evidence.
+
+**Bounded implementation:** compile jump reactions in native order into the
+existing MotionTimeline before one flight leg. Keep complete children, event
+identities, grants, native commit positions and all reducer after-values.
+Reaction-only timelines may contain no flight legs; sample their settled body
+directly. One explicit body-loop flag in the detached timeline distinguishes
+continuous walking playback from a single jump traversal; normalized flight
+progress selects the selected rig's frame once, independently of camera, Step
+boundaries and reaction duration. No new queue, FSM, spell rules or art.
+
+**Legal versus visual:** a Step-2 lethal OA can leave a committed native prefix
+while the body is still visually at launch. Preserve that legal endpoint and
+use the existing VisualPosition override for the grounded visual origin.
+The verified later-only reactor at (1,3), jump (3,3)→(1,1), is outside launch
+reach but legally reacts at Step 2. Preflight visualization has a spatial limit
+there; this correction does not silently change native OA eligibility, move
+the reactor or undo committed Steps. Exact native reach policies remain engine
+work if the human later chooses to change them.
+
+**Validation and reviewers:** the anti-OOP reviewer verified original source,
+existing passive timeline ownership and actual encoded Rolling traversal. The
+anti-slop reviewer independently verified native first/later-Step outcomes and
+the legal/visual distinction. Rework the old airborne expectations to grounded
+ones, keep walking regressions, check stopped-head release and later condition
+recovery, and assert actual four-view jump body frames progress once from
+launch to landing. Include short/long, reversed/elevated and multiple-reaction
+histories, paused playback, native state parity and the existing terrain visual
+exception. Regenerate affected clips for human review, update this dashboard
+and record the code/test review before committing the correction.
+
+**Implementation review:** the independent anti-OOP reviewer approved the
+existing passive timeline/reducer ownership and verified 39 focused tests,
+including actual layered body pixels for all 15 poses in four cameras. A
+concrete compatibility regression found during review was removed: binding a
+jump must not demand a Rolling resource before the shared renderer can choose
+the established missing-clip fallback. No new rig alias or artwork was added.
+Short/long forward and reverse gallery entries use separately discovered native
+jumps; Jump spends a bonus action, so the recorder does not fabricate two jumps
+in one turn. The anti-slop reviewer independently approved actual event
+ancestry, complete reactions and preserved native committed prefixes. Encoded
+four-camera sheets received an additional independent visual review.
+
+**Final result:** [58-case gallery](http://127.0.0.1:8767/runs/20260910T215953Z-b06297/index.html),
+run `20260910T215953Z-b06297`: 58 recording checks pass, 5,341 four-view frames.
+The seven corrected jump-reaction histories changed; all other 46 pre-existing
+videos and input pixel sequences are byte-identical to the previous gallery.
+Five new cards provide duration/direction, multiple-OA and later-reach evidence.
+All 18 jump heads were checked for grounded reaction prefixes and either one
+contiguous body traversal or no takeoff. Relevant test groups contain 142
+passes, four known terrain expected failures and three source-confirmed legacy
+architecture failures; changed-file Pyright is clean. Runtime, data, catalog
+and test source hashes match the capture. Only a README wording clarification
+followed capture; the run's `inspection/verification.json` records that
+distinction and the two explicit visual limits. This completes the jump
+correction without changing native mechanics or the world renderer.
 
 ### Latest unit — creatures, equipment and movement
 
@@ -157,8 +231,9 @@ and compare. Gameplay scenarios are native producers, not replacement rules.
    Use discovered actions/targets and record committed positions, heights,
    costs and condition/resource results. If the reproduced multi-Step jump
    differs from the original single arc, correct only that shared geometry/
-   timing compilation and preserve mid-flight reaction holds and canceled
-   endpoints. No per-case trajectory patches.
+   timing compilation and preserve canceled native endpoints. The original
+   mid-flight hold requirement from this checkpoint was superseded by the
+   grounded-reaction correction above. No per-case trajectory patches.
 5. Add the cases to the existing JSON gallery catalog and shared producers.
    Preload actual retained outfits/rigs. Camera framing must include the route
    and elevations in every quadrant. Export selected equip/body samples and

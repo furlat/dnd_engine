@@ -68,7 +68,8 @@ def group_trace(group: BoundChoreography) -> dict[str, Any]:
 def motion_trace(motion: MotionTimeline) -> dict[str, Any]:
     return {
         "actor_uuid": motion.actor.actor_uuid, "clip": motion.clip,
-        "playback_speed": motion.playback_speed, "complete_ms": motion.complete_ms,
+        "playback_speed": motion.playback_speed, "body_loops": motion.body_loops,
+        "complete_ms": motion.complete_ms,
         "legs": LEGS.dump_python(motion.legs, mode="json", warnings="error"),
         "reactions": [{"start_ms": row.start_ms, "end_ms": row.end_ms,
                        "held_grid": row.contact.grid, "lift_px": row.lift_px,

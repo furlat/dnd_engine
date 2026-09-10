@@ -6,6 +6,7 @@ exposed, including all four cameras and a living paralyzed target.
 """
 
 from dataclasses import replace
+from pathlib import Path
 
 import pygame
 import pytest
@@ -21,20 +22,27 @@ from game.presentation import reduce_lineage
 from game.projection import Camera
 from game.scene import load_scene_media, scene_actors
 from game.visual_position import VisualPosition, placed_contact
-from tests.game.scenarios import movement_with_paralysis
+from tests.game.scenarios import attack_history, movement_with_paralysis
 
 
 @pytest.fixture(scope="module")
 def data() -> AnimationData:
-    return load_animation_data()
+    return load_animation_data(rig_files=(Path("game/data/rigs/goblin01.json"),))
 
 
-@pytest.mark.parametrize("behavior", ["action.move", "action.jump"])
-@pytest.mark.parametrize(("seed", "maximum_hp"), [(0, 80), (5, 4)])
+@pytest.mark.parametrize(("behavior", "seed", "maximum_hp", "later_step"), [
+    ("action.move", 0, 80, False), ("action.move", 5, 4, False),
+    ("action.jump", 0, 80, False), ("action.jump", 5, 4, False),
+    ("action.jump", 5, 4, True),
+])
 def test_interrupted_pose_survives_completion_and_idle_in_every_camera(
-    data: AnimationData, behavior: str, seed: int, maximum_hp: int,
+    data: AnimationData, behavior: str, seed: int, maximum_hp: int, later_step: bool,
 ) -> None:
-    before, lineage = movement_with_paralysis(seed, maximum_hp, movement_behavior=behavior)
+    if later_step:
+        before, lineage = attack_history("weapon.longsword", seed, opportunity=True, whole_movement=True,
+            maximum_hp=maximum_hp, movement_behavior=behavior, destination=(3, 1))
+    else:
+        before, lineage = movement_with_paralysis(seed, maximum_hp, movement_behavior=behavior)
     after = reduce_lineage(before, lineage)
     motion = bind_motion(before, lineage, data)
     assert motion is not None
@@ -57,9 +65,19 @@ def test_interrupted_pose_survives_completion_and_idle_in_every_camera(
                 camera, completed.facings, media, font, badge, positions=completed.positions)
             later = sample_playback_frame(after, None, data, 0, 4000,
                 camera, idle.facings, media, font, badge, positions=idle.positions)
+            if later_step:
+                retained = after.actors[lineage.root.source_entity_uuid].last_visual_position
+                assert retained == (3, 2)
+                for frame in (completed, idle, later):
+                    assert frame.positions[identity].legal_grid == retained
+                    assert frame.positions[identity].grid == (3, 3)
             for frame in (completed, idle, later):
                 contact = next(actor.contact for actor in frame.actors if actor.contact.actor_uuid == identity)
-                assert contact.grid == held.contact.grid != motion.actor.grid
+                assert contact.grid == held.contact.grid
+                if behavior == "action.jump":
+                    assert contact.grid == motion.actor.grid and contact.body_lift_px == 0
+                else:
+                    assert contact.grid != motion.actor.grid
                 assert contact.elevation_steps == held.contact.elevation_steps
                 assert contact.body_lift_px == held.lift_px
                 assert contact.hp == after.actors[lineage.root.source_entity_uuid].normal_hp
@@ -75,7 +93,7 @@ def test_interrupted_pose_survives_completion_and_idle_in_every_camera(
                 assert command[2:] == next_command[2:]
                 assert pygame.image.tobytes(command[1], "RGBA") == pygame.image.tobytes(next_command[1], "RGBA")
         legal = actor_contact(after, after.actors[lineage.root.source_entity_uuid], data)
-        assert legal.grid == (3, 3) and legal.body_lift_px == 0
+        assert legal.grid == ((3, 2) if later_step else (3, 3)) and legal.body_lift_px == 0
         assert reduce_lineage(before, lineage) == after
     finally:
         pygame.quit()

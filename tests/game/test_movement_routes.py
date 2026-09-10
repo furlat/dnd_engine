@@ -7,10 +7,11 @@ import random
 import pygame
 import pytest
 
-from dnd.actions import JumpEvent, MovementEvent
+from dnd.actions import AttackEvent, JumpEvent, MovementEvent
 from dnd.core.base_actions import ActionEvent
 from dnd.core.events import EventPhase, EventQueue, StepMovementEvent
 from dnd.core.life_types import LifeState
+from game.animation import body_clip
 from game.animation_data import load_animation_data
 from game.animation_types import AnimationData
 from game.motion import bind_motion, sample_motion
@@ -122,7 +123,7 @@ def test_native_routes_keep_actual_costs_conditions_terrain_and_replayable_steps
 
 @pytest.mark.parametrize(("seed", "maximum_hp", "survives"), [(17, 80, True), (5, 4, False)])
 @pytest.mark.parametrize("destination", [(3, 1), (1, 3)])
-def test_multicell_jump_keeps_one_flight_through_real_reaction_pause_and_stop(
+def test_multicell_jump_resolves_its_actual_reaction_before_takeoff_or_stops_grounded(
     data: AnimationData, seed: int, maximum_hp: int, survives: bool, destination: tuple[int, int],
 ) -> None:
     before, lineage = attack_history("weapon.longsword", seed, opportunity=True, whole_movement=True,
@@ -134,10 +135,9 @@ def test_multicell_jump_keeps_one_flight_through_real_reaction_pause_and_stop(
     duration = data.movement_context.jumpBaseDurationMs + 2 * data.movement_context.jumpPerCellDurationMs
     arc = data.movement_context.jumpArcBasePx + 2 * data.movement_context.jumpArcPerCellPx
     held = sample_motion(motion, data, reaction.start_ms)
-    progress = reaction.start_ms / duration
-    assert held.contact.grid == pytest.approx(tuple(3 + (end - 3) * progress for end in destination))
-    assert held.lift_px == pytest.approx(4 * arc * progress * (1 - progress))
-    assert held.lift_px > 0
+    assert reaction.start_ms == 0
+    assert held.contact.grid == lineage.root.start_position
+    assert held.lift_px == held.contact.body_lift_px == 0
     during = sample_motion(motion, data, (reaction.start_ms + reaction.end_ms) / 2)
     assert (during.contact.grid, during.lift_px) == (held.contact.grid, held.lift_px)
     final = sample_motion(motion, data, motion.complete_ms)
@@ -146,12 +146,15 @@ def test_multicell_jump_keeps_one_flight_through_real_reaction_pause_and_stop(
         assert motion.complete_ms == pytest.approx(duration + reaction.end_ms - reaction.start_ms)
         resumed = sample_motion(motion, data, reaction.end_ms)
         assert resumed.contact.grid == held.contact.grid and resumed.lift_px == held.lift_px
-        midpoint_ms = duration / 2
-        if reaction.start_ms < midpoint_ms:
-            midpoint_ms += reaction.end_ms - reaction.start_ms
+        midpoint_ms = reaction.end_ms + duration / 2
         midpoint = sample_motion(motion, data, midpoint_ms)
         assert midpoint.contact.grid == tuple((3 + end) / 2 for end in destination) and midpoint.lift_px == arc
         assert final.contact.grid == destination and final.contact.body_lift_px == 0
+        count = body_clip(data, motion.actor, motion.clip).frames
+        samples = [sample_motion(motion, data, reaction.end_ms + duration * (index + .5) / count)
+                   for index in range(count)]
+        assert [sample.body.frame for sample in samples] == list(range(count))
+        assert all(sample.body.clip == motion.clip and sample.reaction is None for sample in samples)
     else:
         assert motion.complete_ms == reaction.end_ms
         assert final.contact.life_state is LifeState.DEAD
@@ -160,15 +163,49 @@ def test_multicell_jump_keeps_one_flight_through_real_reaction_pause_and_stop(
         stopped_step, = (event for event in lineage.events
                          if isinstance(event, StepMovementEvent) and not event.committed)
         assert after.actors[lineage.root.source_entity_uuid].last_visual_position == stopped_step.from_position
+        assert not motion.legs
+        if stopped_step.path_index > 1:
+            assert stopped_step.from_position != final.contact.grid
+            assert any(event.committed and event.path_index < stopped_step.path_index
+                       for event in lineage.events if isinstance(event, StepMovementEvent))
     assert sample_motion(motion, data, reaction.start_ms) == held
 
 
+def test_multiple_native_opportunity_attacks_join_on_the_ground_before_one_jump(data: AnimationData) -> None:
+    before, lineage = attack_history("weapon.longsword", 17, opportunity=True, whole_movement=True,
+        movement_behavior="action.jump", destination=(3, 1), watcher_positions=((4, 3), (2, 3)))
+    assert isinstance(lineage.root, JumpEvent)
+    native = tuple(event for event in lineage.events if isinstance(event, AttackEvent))
+    assert len(native) == 2
+    motion = bind_motion(before, lineage, data)
+    assert motion is not None and len(motion.reactions) == len(native)
+    assert [row.choreography.root_uuid for row in motion.reactions] == [event.uuid for event in native]
+    elapsed = 0.0
+    for reaction in motion.reactions:
+        assert reaction.start_ms == elapsed
+        for time in (reaction.start_ms, (reaction.start_ms + reaction.end_ms) / 2, reaction.end_ms - .001):
+            sample = sample_motion(motion, data, time)
+            assert sample.reaction is reaction.choreography
+            assert sample.contact.grid == lineage.root.start_position
+            assert sample.lift_px == sample.contact.body_lift_px == 0
+            assert sample.body.clip != data.movement_context.jumpClip
+        elapsed = reaction.end_ms
+    takeoff = sample_motion(motion, data, elapsed)
+    assert takeoff.reaction is None and takeoff.body.frame == 0
+    assert takeoff.contact.grid == lineage.root.start_position and takeoff.lift_px == 0
+    landed = sample_motion(motion, data, motion.complete_ms)
+    assert landed.complete and landed.contact.grid == lineage.root.end_position and landed.lift_px == 0
+    assert landed.contact.hp == reduce_lineage(before, lineage).actors[lineage.root.source_entity_uuid].normal_hp
+
+
 @pytest.mark.parametrize(("battlefield", "route"), [
+    ("battlefield.open_floor_bright", ((3, 3), (2, 3))),
+    ("battlefield.open_floor_bright", ((3, 3), (6, 3))),
     ("battlefield.visual_vertical_seam", ((33, 28), (35, 26))),
     ("battlefield.visual_vertical_seam", ((13, 20), (14, 20))),
     ("battlefield.visual_vertical_seam", ((14, 20), (13, 20))),
 ])
-def test_terrain_jump_draws_one_airborne_body_and_lands_without_a_camera_snap(
+def test_jump_draws_one_complete_clip_over_its_airtime_and_lands_without_a_camera_snap(
     data: AnimationData, battlefield: str, route: tuple[tuple[int, int], ...],
 ) -> None:
     before, roots = movement_history(route=route, battlefield_id=battlefield, behavior="action.jump")
@@ -185,6 +222,24 @@ def test_terrain_jump_draws_one_airborne_body_and_lands_without_a_camera_snap(
                          for style in (data.number_style, data.badge_style))
         for quadrant in range(4):
             camera = Camera(quadrant=quadrant, viewport=(960, 640)).with_focus(route[0])
+            count = body_clip(data, motion.actor, motion.clip).frames
+            pixels = []
+            for index in range(count):
+                time = motion.complete_ms * (index + .5) / count
+                sampled = sample_motion(motion, data, time)
+                frame = sample_playback_frame(before, after, data, time, 5000 + time,
+                    camera, {}, media, number, badge, motion=motion)
+                command, = (row for row in frame.commands if row[4][0] == identity and row[4][6] == "actor")
+                assert sampled.body.clip == motion.clip and sampled.body.frame == index
+                assert command[4][8:] == (motion.clip, index)
+                assert sampled.lift_px > 0 and not frame.complete
+                assert pygame.mask.from_surface(command[1]).count() > 0
+                pixels.append(pygame.image.tobytes(command[1], "RGBA"))
+            # Read the actual layered draw surfaces, not only a reported frame
+            # counter: a restarted/modulo clip repeats these rendered poses.
+            assert len(set(pixels)) == count
+            assert sample_motion(motion, data, 0).body.frame == 0
+            assert sample_motion(motion, data, motion.complete_ms - .001).body.frame == count - 1
             for time in (0, motion.complete_ms / 2, motion.complete_ms):
                 sampled = sample_motion(motion, data, time)
                 frame = sample_playback_frame(before, after, data, time, 5000 + time,

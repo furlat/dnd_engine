@@ -23,7 +23,7 @@ then encoded as a synchronized 2×2 video: 0/1 above, 2/3 below. Defaults are
 fullscreen control to inspect the pixels. The state/condition rules stay in
 the engine; this recorder adds no animation rules or gameplay queue.
 
-The catalog covers 53 cases: melee profiles and outcomes, modular and
+The catalog covers 58 cases: melee profiles and outcomes, modular and
 fixed-rig ranged attacks, ordinary movement, walking/jumping opportunity attacks
 with save/miss/paralysis/death, paused retained playback, two-cast histories,
 repeated targets, height and equipment roots, plus six continuing condition
@@ -41,11 +41,11 @@ spell. The pause case freezes an offline presentation clock over already
 reduced history; live independent controller progression remains covered by
 the encounter integration tests.
 
-The `gameplay` tag selects the 15 creature/equipment/movement additions:
+The `gameplay` tag includes the initial 15 creature/equipment/movement additions:
 Dretch, Skeleton Archer and Wolf histories; actual weapon/wardrobe replacement;
 melee then ranged through native Extra Attack in the same turn; turning routes
 with ordinary movement, Haste and bonus-action Dash; multi-cell jumps over real
-water, uphill, downhill and over the stair span; and a second-step airborne
+water, uphill, downhill and over the stair span; and a second-step native
 reaction with continuation/death. Characters receive actual native apparel.
 Haste/Dash allow extra legal distance at the existing authored animation rate.
 Selected packaged rig JSON maps each native content identity and authored clip
@@ -53,6 +53,19 @@ name. Equipment and movement traces retain their original Studio contexts.
 The two hill cards carry `known-occlusion`: rear-view terrace/cliff pixels still
 cut through part of the airborne body. Their native/timeline checks pass, but
 this is an explicit visual exception awaiting a shared terrain correction.
+
+Jump reactions now play as complete subtrees at the grounded visual launch
+contact. A surviving jump then traverses its selected body clip once over the
+entire flight; death/paralysis prevents takeoff. Walking retains its existing
+edge interruption. The stable `jump-midflight-*` case IDs refer to the original
+regressions; their titles and current playback describe the corrected behavior.
+Five additional cards extend short/long direction comparisons, two
+sequential reactions before takeoff, and a later-Step reactor. That last card is
+tagged `known-reach-presentation`: native reach can become valid only at a later
+Step, outside melee reach of the visual launch. The clip exposes this spatial
+limit while preserving native eligibility, ancestry and committed endpoints.
+If a later Step stops, legal and visual positions can differ; the existing
+placement override keeps the grounded body stable across head completion.
 
 The authored recipes, rig maps and trace JSON are usable by a later TypeScript
 frontend. That frontend still needs presentation reduction/sampling and its

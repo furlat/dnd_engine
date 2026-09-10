@@ -1,4 +1,4 @@
-"""Retained movement with original pre-edge reaction/body timing.
+"""Retained movement with walking edge reactions and grounded jump reactions.
 
 One motion head contains its actual Step children and their attack subtrees.
 The engine owns committed endpoints; subcell lead-in exists only in playback.
@@ -58,6 +58,7 @@ class MotionTimeline:
     settled_contact: ActorContact
     before: PresentationTarget
     settled_lift_px: float = 0
+    body_loops: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,9 +73,60 @@ class MotionSample:
     displayed: PresentationTarget | None = None
 
 
+def _bind_jump(target: PresentationTarget, lineage: CompletedLineage, jump: JumpEvent,
+               steps: tuple[StepMovementEvent, ...], data: AnimationData,
+               actor: ActorContact, contacts: Mapping[str, ActorContact]) -> MotionTimeline | None:
+    """Resolve retained reactions at launch, then traverse one authored flight."""
+    requested = jump.requested_end_position or jump.end_position
+    facing = facing_for_delta((requested[0] - actor.grid[0], requested[1] - actor.grid[1]), data)
+    launch = replace(actor, facing=facing)
+    working = target
+    elapsed = 0.0
+    reactions: list[MotionReaction] = []
+    for step in steps:
+        branch = lineage_branch(lineage, step)
+        for event in branch.events:
+            if not isinstance(event, (AttackEvent, SpellEvent)) or event.parent_lineage != step.lineage_uuid:
+                continue
+            reaction_context = data.movement_reaction_context
+            if reaction_context.bodyEnabled or reaction_context.media or reaction_context.recovery.enabled:
+                return None
+            current = working.actors[step.source_entity_uuid]
+            held = replace(launch, hp=current.normal_hp, life_state=current.life_state)
+            group = bind_choreography(working, lineage_branch(lineage, event), data,
+                facings={actor.actor_uuid: facing}, contacts={**contacts, actor.actor_uuid: held})
+            source = contacts.get(str(event.source_entity_uuid)) or actor_contact(
+                working, working.actors[event.source_entity_uuid], data)
+            reactions.append(MotionReaction(group, held, source, elapsed, elapsed + group.complete_ms,
+                                            held.body_lift_px, event.name))
+            elapsed += group.complete_ms
+            working = group.after
+        working = reduce_lineage(working, branch)
+        if not step.committed:
+            break
+    settled = actor_contact(working, working.actors[jump.source_entity_uuid], data, facing)
+    context = data.movement_context
+    if not steps[-1].committed:
+        # Native earlier Steps may have committed. Preserve their legal facts;
+        # the existing placement layer retains this unlaunched visual body.
+        settled = replace(settled, grid=launch.grid, elevation_steps=launch.elevation_steps,
+                          body_lift_px=launch.body_lift_px)
+        return MotionTimeline(launch, (), context.jumpClip, 1, 0, elapsed, tuple(reactions),
+                              settled, target, launch.body_lift_px, body_loops=False)
+    distance = hypot(jump.end_position[0] - jump.start_position[0],
+                     jump.end_position[1] - jump.start_position[1])
+    duration = min(context.jumpMaxDurationMs, max(context.jumpMinDurationMs,
+                   context.jumpBaseDurationMs + distance * context.jumpPerCellDurationMs))
+    arc = min(context.jumpArcMaxPx, context.jumpArcBasePx + distance * context.jumpArcPerCellPx)
+    leg = MotionLeg(launch.grid, settled.grid, launch.elevation_steps, settled.elevation_steps,
+                    elapsed, elapsed + duration, elapsed, arc, initial_lift_px=launch.body_lift_px)
+    return MotionTimeline(launch, (leg,), context.jumpClip, 1, arc, elapsed + duration,
+                          tuple(reactions), settled, target, body_loops=False)
+
+
 def bind_motion(target: PresentationTarget, lineage: CompletedLineage,
                 data: AnimationData, *, contacts: Mapping[str, ActorContact] | None = None) -> MotionTimeline | None:
-    """Use actual committed steps and complete melee subtrees on their edge."""
+    """Use native Step results and complete reaction subtrees for visual travel."""
     if not isinstance(lineage.root, (MovementEvent, JumpEvent)):
         return None
     steps = tuple(event for event in lineage.events if isinstance(event, StepMovementEvent)
@@ -86,21 +138,15 @@ def bind_motion(target: PresentationTarget, lineage: CompletedLineage,
     contacts = contacts or {}
     actor = contacts.get(actor.actor_uuid, actor)
     context = data.movement_context
-    jumping = isinstance(lineage.root, JumpEvent)
-    jump_end = lineage.root.requested_end_position or lineage.root.end_position
-    jump_distance = hypot(jump_end[0] - lineage.root.start_position[0],
-                          jump_end[1] - lineage.root.start_position[1])
-    jump_duration = min(context.jumpMaxDurationMs, max(context.jumpMinDurationMs,
-                        context.jumpBaseDurationMs + jump_distance * context.jumpPerCellDurationMs))
-    jump_arc = min(context.jumpArcMaxPx, context.jumpArcBasePx + jump_distance * context.jumpArcPerCellPx)
-    jump_edges = steps[0].total_path_length - 1
+    reaction_context = data.movement_reaction_context
+    if isinstance(lineage.root, JumpEvent):
+        return _bind_jump(target, lineage, lineage.root, steps, data, actor, contacts)
     legs: list[MotionLeg] = []
     reactions: list[MotionReaction] = []
     elapsed = body_start = 0.0
     working = target
     settled = actor
     settled_lift = 0.0
-    reaction_context = data.movement_reaction_context
     for step_index, step in enumerate(steps):
         branch = lineage_branch(lineage, step)
         attacks = tuple(event for event in branch.events if isinstance(event, (AttackEvent, SpellEvent))
@@ -113,20 +159,7 @@ def bind_motion(target: PresentationTarget, lineage: CompletedLineage,
         arc = 0.0
         curve_from, curve_to = 0.0, 1.0
         initial_lift = actor.body_lift_px if step_index == 0 else 0
-        if jumping:
-            # Steps retain their native reaction/commit ownership inside one
-            # authored flight. Tile crossings do not restart its arc or clock.
-            curve_from, curve_to = (step.path_index - 1) / jump_edges, step.path_index / jump_edges
-            flight_delta = jump_end[0] - actor.grid[0], jump_end[1] - actor.grid[1]
-            height_delta = target.tiles[jump_end].elevation_steps - actor.elevation_steps
-            start = actor.grid[0] + flight_delta[0] * curve_from, actor.grid[1] + flight_delta[1] * curve_from
-            end = actor.grid[0] + flight_delta[0] * curve_to, actor.grid[1] + flight_delta[1] * curve_to
-            height = actor.elevation_steps + height_delta * curve_from
-            end_height = actor.elevation_steps + height_delta * curve_to
-            delta = end[0] - start[0], end[1] - start[1]
-            duration, arc = jump_duration * (curve_to - curve_from), jump_arc
-            initial_lift = actor.body_lift_px
-        elif step_index == 0:
+        if step_index == 0:
             start, height = actor.grid, actor.elevation_steps
             delta = end[0] - start[0], end[1] - start[1]
         fraction = 0.0
@@ -136,12 +169,11 @@ def bind_motion(target: PresentationTarget, lineage: CompletedLineage,
         if attacks:
             if (reaction_context.bodyEnabled or reaction_context.media or reaction_context.recovery.enabled):
                 return None
-            fraction = min(0.35, max(0.12, reaction_context.movementLeadInMs /
-                                   (duration if jumping else context.walkStepDurationMs)))
+            fraction = min(0.35, max(0.12, reaction_context.movementLeadInMs / context.walkStepDurationMs))
             continuation = start[0] + delta[0] * fraction, start[1] + delta[1] * fraction
             continuation_height = height + (end_height - height) * fraction
             continuation_curve = curve_from + (curve_to - curve_from) * fraction
-            lead_end = elapsed + (duration * fraction if jumping else reaction_context.movementLeadInMs)
+            lead_end = elapsed + reaction_context.movementLeadInMs
             legs.append(MotionLeg(start, continuation, height, continuation_height,
                                   elapsed, lead_end, body_start, arc, curve_from, continuation_curve, initial_lift))
             elapsed = lead_end
@@ -179,8 +211,7 @@ def bind_motion(target: PresentationTarget, lineage: CompletedLineage,
             break
     if not legs:
         return None
-    return MotionTimeline(actor, tuple(legs), context.jumpClip if jumping else context.walkClip,
-                          1 if jumping else context.walkPlaybackSpeed,
+    return MotionTimeline(actor, tuple(legs), context.walkClip, context.walkPlaybackSpeed,
                           max(leg.arc_height_px for leg in legs), elapsed, tuple(reactions), settled, target, settled_lift)
 
 
@@ -209,6 +240,10 @@ def sample_motion(timeline: MotionTimeline, data: AnimationData, elapsed_ms: flo
         body = bodies[-1] if bodies else sample_idle_body(data, contact, elapsed)
         return MotionSample(contact, body, active.lift_px, False, active.choreography,
                             elapsed - active.start_ms, tuple(vitals.values()), displayed)
+    if not timeline.legs:
+        contact = timeline.settled_contact
+        return MotionSample(contact, sample_idle_body(data, contact, elapsed), contact.body_lift_px, complete,
+                            displayed_vitals=tuple(vitals.values()), displayed=displayed)
     leg = next((leg for leg in timeline.legs if elapsed < leg.end_ms), timeline.legs[-1])
     progress = min(1.0, max(0.0, (elapsed - leg.start_ms) / (leg.end_ms - leg.start_ms)))
     delta = leg.end[0] - leg.start[0], leg.end[1] - leg.start[1]
@@ -229,9 +264,10 @@ def sample_motion(timeline: MotionTimeline, data: AnimationData, elapsed_ms: flo
                                 displayed_vitals=tuple(vitals.values()), displayed=displayed)
     selected = clip or timeline.clip
     metadata = body_clip(data, contact, selected)
-    frame = body_frame(elapsed - leg.body_start_ms, metadata.fps * timeline.playback_speed,
-                       metadata.frames, loop=True)
-    if leg.arc_height_px and selected == timeline.clip:
-        frame = min(metadata.frames - 1, int(curve * metadata.frames))
+    if not timeline.body_loops and selected == timeline.clip:
+        frame = min(metadata.frames - 1, int(progress * metadata.frames))
+    else:
+        frame = body_frame(elapsed - leg.body_start_ms, metadata.fps * timeline.playback_speed,
+                           metadata.frames, loop=True)
     return MotionSample(contact, BodySample(contact.actor_uuid, selected, frame, facing),
                         lift, complete, displayed_vitals=tuple(vitals.values()), displayed=displayed)
