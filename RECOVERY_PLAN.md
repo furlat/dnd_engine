@@ -2,8 +2,8 @@
 
 Updated 2026-09-10 after the user's correction: **develop the game, not a
 sequence of spell demonstrations.** Working branch: **codex/recovery-design**,
-based on **codex/july-reconstruction at 16a6bfe**. The existing working tree
-contains the implementation; HEAD alone is not its full state.
+based on **codex/july-reconstruction at 16a6bfe**. The human committed the
+validated recovery implementation as **58b0946** (`visio nextraction working`).
 
 **Objective:** a playable in-process D&D encounter using the existing engine and
 NeuroStudio data through Python/Pygame. Complete subjective lineages reduce
@@ -21,8 +21,134 @@ is now imported through the original Studio schema, independently of gameplay.
 
 ## Active work — playable encounter through shared capabilities
 
-**Current gallery feedback — interrupted poses and legible feedback.** The
-human observed a lethal opportunity attack snapping the corpse back to the
+### Next bounded session — native condition lifecycle and recovery
+
+**Status:** ready to execute from checkpoint `58b0946`. The human requested a
+work unit suitable for a few hours without interactive supervision. Target
+roughly 2–3 hours of useful work, finishing when the acceptance cases pass;
+time is a planning estimate, not a reason to add more systems or code.
+
+**Outcome:** the same real character is interrupted, remains restricted while
+paralyzed, recovers through the engine's own later save/removal, and resumes a
+discovered legal action from the retained visible pose. Produce reviewable
+four-corner videos for the whole sequence, including intervening real turns.
+This closes the gap between isolated reaction clips and a continuing game.
+
+**Known owners to reuse.** `GhoulParalysisEffect._repeat_save` in
+`dnd/monsters/traits.py` already reacts to TURN_END/EFFECT and creates a native
+CON10 save. Success calls existing condition-tree removal, including its
+Paralyzed child. `Encounter` owns turn progression. `game/presentation.py`
+already retains/removes exact condition UUIDs; `game/choreography.py` already
+binds condition descendants under technical roots. Original Studio condition
+records own appearance/removal/feedback. `game/visual_position.py` and the
+shared frame compositor own the stopped visual pose. `ReviewSequence` and the
+recorder already accept multiple complete roots.
+
+The current `movement_with_paralysis` producer closes the encounter after its
+first movement. Existing placement tests supply a passive prior pose to a
+separately generated move. Extend that proof with an actual native sequence;
+do not assume a new condition lifecycle implementation is needed.
+
+| Catalog case | Native sequence and observable result |
+| --- | --- |
+| Walking recovery | Move → opportunity paralysis → successful end-turn repeat save → owned condition-tree removal → mover's next turn → Disengage → Move. The new motion begins at the held visual contact and reaches its committed tile. |
+| Jumping recovery | The same lifecycle with Jump. Retain body lift through intervening roots and begin the next authored movement from that pose. |
+| Paralysis persists | Initial paralysis → failed repeat save → next turn. Exact condition memberships and real action restrictions remain; there is no invented visual recovery. |
+| Delayed recovery | Failed repeat save, then successful save on a later native turn → next turn → Disengage and movement. Distinct saves, removals and turn roots remain distinct. |
+| Natural expiry control | Discovered Dodge → another participant's real turn/action → owner's next turn → native expiry. Reuse the existing expiry scenario in `test_gameplay_history.py`. |
+| History behind latest | Pause historical playback during the walking recovery sequence while latest already contains removal and resumed movement. Historical membership, placement and pixels remain tied to the paused point. |
+
+Use public action discovery/execution and actual turn progression. Discover
+Disengage before the recovered movement so a refreshed opportunity reaction
+does not obscure this case's purpose. Preserve the real Disengaging condition
+and its roots. Select deterministic seeds by observing native save outcomes;
+do not replace handlers or force completed event values. Parameterize the
+existing finite scenario/catalog data instead of adding one executor per case.
+
+**Execution checkpoints:**
+
+1. **Trace the concrete sequence and review ownership (20–30 minutes).** Read
+   the native repeat-save/removal/turn owners, existing expiry test and relevant
+   NeuroClient ConditionClip/MoveClip/JumpClip behavior. Record the actual root
+   order, child relations and observed conditions at each boundary. The
+   anti-slop reviewer checks that this is an integration gap with a real
+   observable outcome. The anti-OOP reviewer checks the selected owners before
+   shared production contracts change.
+2. **Produce and retain native histories (35–50 minutes).** Keep the encounter
+   alive through the selected operations. Capture each operation before the
+   next runs, including separately completed turn/expiry roots. Reuse existing
+   public capture patterns and `ReviewSequence`. Save an initial retained
+   baseline and actual lineages, then close/reset the engine. Keep independent
+   roots separate; use their original parent/child identities within each root.
+3. **Connect only demonstrated gaps (30–45 minutes).** Replay through the
+   existing reducer, bindings, feedback tracks and frame sampler. If a concrete
+   case fails, use `bug-fix`, identify the actual owner and correct that shared
+   contract. An already-working owner needs evidence, not a replacement.
+   Check fresh HP/gear/conditions with retained placement, source removal timing
+   and the next movement's start. Clearing a condition adds no new landing or
+   gravity rule. Run the affected behavioral checks after a correction.
+4. **Validate and capture the unit (30–45 minutes).** Run the six cases through
+   the shared recorder in all four corners. Validate actual state/UUIDs,
+   head transitions and legal versus rendered positions. Inspect the pixels
+   around application, failed save, removal and resumed movement. Retain the
+   current gallery cases and regenerate the full catalog at completion. Run
+   the existing live paused-encounter regression as the separate proof of
+   independent intake; the offline pause clip does not replace that proof.
+5. **Review and close the checkpoint (15–20 minutes).** Anti-slop review checks
+   the actual source/trace/pixel evidence, honest coverage and absence of
+   condition-name patches. Anti-OOP review checks passive histories, ECS/public
+   producers, the import DAG and one owner each for queue/clock/placement.
+   Resolve concrete findings, update this plan/audit with results and limits,
+   and commit the validated unit separately from `58b0946`.
+
+**Acceptance:**
+
+- Every save and removal is earned by a native operation. The exact wrapper
+  and child UUIDs remain after failure and are removed by the successful tree
+  removal; final retained state agrees with captured native after-values.
+- Discovered choices reflect actual restriction and recovery. Mechanics are
+  not inferred from sprite color, HP labels, recipe names or playback time.
+- Historical color, badges and membership remain correct while latest is
+  ahead. Pausing/seeking uses retained values after the engine has been reset.
+- The rendered stop contact/support/body lift survives intervening turn and
+  condition roots. The next movement starts there, retains its authored timing,
+  and finishes at the actual committed endpoint. Legal positions remain engine
+  facts throughout.
+- All six new cases produce four-corner MP4s and exportable traces with source
+  identity, native root ancestry and frame evidence. Existing cases remain
+  present; automatic success and human visual approval remain distinct.
+- Relevant lifecycle/placement/feedback/encounter regressions, changed-file
+  type checks and dependency checks pass. Fix a demonstrated failure at its
+  shared owner; do not turn observations into a speculative repair backlog.
+
+**Bounded extension if the core unit finishes early:** connect the original
+standalone healing feedback context as one shared capability. The native
+`receive_healing` producer already provides capped `actual_healing`, committed
+HP and authoritative life-state children; the reducer consumes those facts.
+The original `actionContextPresentation.json` healing context specifies no
+body clip or media and a green number with a 900 ms decorative lifetime. That
+lifetime does not delay the lineage: original HealClip patches HP at entry,
+and the default empty body/media add no wait. Preserve any actual life-state
+children. Study and consume that context through the existing schema/feedback
+lane, reporting any selected
+unsupported field honestly. Validate an injured living actor healed to its
+cap and a dying player restored by native healing. A dead actor's revival is
+a different native contract; healing must not invent it. This extension is
+conditional on completing the six primary cases and their reviews, and must
+not become individual spell/VFX work.
+
+**Autonomy boundary:** proceed through these checkpoints without interactive
+milestones. Ordinary integration defects stay inside this unit and get solved.
+If a new rule/design decision is actually required, record the concrete trace
+and decision, continue the other independent cases, and leave that disputed
+case explicitly incomplete. Do not rewrite subjectivity, handlers, event
+progression or authored timing to make a scenario convenient. Do not add a
+second lifecycle controller, condition timer, queue, serializer framework or
+per-spell executor. Additional art and map authoring are outside this unit.
+
+### Completed gallery feedback — interrupted poses and legible feedback
+
+The human observed a lethal opportunity attack snapping the corpse back to the
 legal tile center. Keep authoritative positions and Step results intact;
 preserve the rendered stop/death contact through head completion and later
 idle frames. Study the equivalent walking/jumping/paralysis boundaries and
@@ -66,8 +192,8 @@ the old run visibly changed those coordinates. Evidence is in
 feedback frame at `.runtime/animation-review/paralyzed-feedback-four-corners.png`.
 Movement, placement, text layout, recorder, encounter, geometry and original
 timing regressions pass, as do import-direction/DAG checks and changed-file
-Pyright. Anti-slop/anti-OOP review found no blocking issue. The captured source
-hash matches the current game/devtool files. Review the new run at
+Pyright. Anti-slop/anti-OOP review found no blocking issue. The capture records
+the exact game/devtool source hash used for those frames. Review the new run at
 `http://127.0.0.1:8767/runs/20260910T164415Z-666bea/index.html`.
 
 **Visual review checkpoint — requested 2026-09-10.** Maintain a named catalog
