@@ -21,12 +21,35 @@ is now imported through the original Studio schema, independently of gameplay.
 
 ## Active work — playable encounter through shared capabilities
 
-### Next bounded session — native condition lifecycle and recovery
+### Bounded session — native condition lifecycle and recovery
 
-**Status:** ready to execute from checkpoint `58b0946`. The human requested a
+**Status:** the six primary cases are implemented and validated. Execution was
+authorized after independent external review of the
+written plan at `43b4ca0`. Both fresh reviewers approved its native producers,
+scope and ownership. They required assertions for the exact applied-versus-
+removed memberships while paused, placement at every intervening root and
+resumed movement entry, and real separate expiry roots in completion order.
+Native removal targets identify the recovering actor even when the event's
+source is the original reactor. Instant equal-alpha transitions stay instant.
+The implementation starts from the human's checkpoint `58b0946`. The human requested a
 work unit suitable for a few hours without interactive supervision. Target
 roughly 2–3 hours of useful work, finishing when the acceptance cases pass;
 time is a planning estimate, not a reason to add more systems or code.
+
+**Primary result:** full gallery `20260910T175626Z-4e0063` passes **28/28**,
+retaining the previous 22 cases. The existing mechanics, reducer, choreography
+and placement owners already handle the continuing lifecycle; no production
+gameplay changes were needed. New native producers retain all separate roots,
+and regression coverage checks every boundary, actual body color and resumed
+motion timing. Paused capture now compares a hash of the RGB bytes actually
+encoded. Both external reviewers approved the implementation after those
+assertions were strengthened. The focused lifecycle/placement/feedback/live
+encounter group passes **28 tests**, native history/attack/movement coverage
+passes **32 tests** (overlapping groups), changed-file Pyright reports no errors,
+and both import-direction/DAG checks pass. Four-corner boundary pixels were
+inspected for held jump lift, failed-save color, instant removal and Dodge
+expiry. The only gallery media gaps remain the previously reported Goblin
+ranged body/slash. Details are in the composition audit.
 
 **Outcome:** the same real character is interrupted, remains restricted while
 paralyzed, recovers through the engine's own later save/removal, and resumes a

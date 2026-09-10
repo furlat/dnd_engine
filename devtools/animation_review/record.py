@@ -1,5 +1,6 @@
 """Record finite retained sequences with the game's actual frame compositor."""
 
+import hashlib
 import json
 from math import ceil
 from pathlib import Path
@@ -141,12 +142,14 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
             positions = dict(sample.positions)
             pygame.event.pump()
             pygame.display.flip()
-            sink.write(pygame.image.tobytes(screen, "RGB"))
+            pixels = pygame.image.tobytes(screen, "RGB")
+            sink.write(pixels)
             if not poster_written and presentation_ms >= 900:
                 pygame.image.save(screen, directory / "poster.png")
                 poster_written = True
             trace["frames"].append({
                 "index": frame_index, "video_ms": frame_index * interval,
+                "pixel_sha256": hashlib.sha256(pixels).hexdigest(),
                 "presentation_ms": presentation_ms, "elapsed_ms": elapsed_ms,
                 "root_uuid": str(root_uuid) if root_uuid else None, "paused": paused,
                 "latest_cursor": latest.reducer_cursor, "views": views, **frame_trace(sample),
@@ -244,8 +247,9 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
                 held = [row for row in trace["frames"] if row["paused"]]
                 check("frozen-presentation", len(held) > 1 and all(
                     row["presentation_ms"] == held[0]["presentation_ms"] and row["state"] == held[0]["state"]
-                    and row["contacts"] == held[0]["contacts"] and row["views"] == held[0]["views"] for row in held),
-                    "Video time advances while retained presentation time, state and draw samples remain frozen.")
+                    and row["contacts"] == held[0]["contacts"] and row["views"] == held[0]["views"]
+                    and row["pixel_sha256"] == held[0]["pixel_sha256"] for row in held),
+                    "Video time advances while retained time, state, draw samples and rendered RGB pixels remain frozen.")
         finally:
             encoder.stdin.close()
             encoder.wait(timeout=60)

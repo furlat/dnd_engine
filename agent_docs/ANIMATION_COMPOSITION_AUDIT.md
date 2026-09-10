@@ -5,6 +5,37 @@ the active recovery plan, not a replacement plan or a mechanics repair backlog.
 It compares the current Python code with the original source at
 `/home/tommaso/Dev/NeuroClient/app`.
 
+## Native continuing lifecycle checkpoint — September 10
+
+The six-case unit in `RECOVERY_PLAN.md` passed independent anti-slop and
+anti-OOP reviews before implementation and again after implementation. Actual
+native histories now continue through initial opportunity paralysis, successful
+or failed repeat saves, separate turn/round/expiry roots and a discovered
+Disengage followed by Move/Jump. A Dodge control expires on the next native turn.
+The exact applied condition UUID tree survives failed saves and is removed by
+its real successful-save owner. No mechanics or game renderer changes were
+necessary for these cases.
+
+`test_condition_lifecycle_history.py` checks native ancestry, results and
+choices after engine reset. `test_condition_lifecycle_playback.py` checks every
+root boundary in all four cameras: held contact/support/lift, unchanged body
+pixels through unchanged membership, neutral body pixels at removal, original
+next-motion duration and legal endpoint. The paused clip asserts both original
+memberships while latest has removed them and moved on. Recorder frames now
+hash the actual RGB bytes passed to the encoder, so frozen metadata cannot
+conceal changing pixels. The existing live paused-encounter test remains the
+separate proof that event intake continues independently.
+
+Full run `20260910T175626Z-4e0063` passes 28/28 and preserves every previous case.
+Extracted boundary frames are under that run's `inspection/` directory. Visual
+inspection confirmed the failed-save gray body, instant original color on
+removal, held jump elevation through turns, resumed motion and Dodge expiry.
+Focused lifecycle/placement/feedback/live encounter tests: 28 passed in 126.14 s.
+Native history/attack/movement group: 32 passed in 20.47 s (overlapping coverage).
+Changed-file Pyright: zero errors. Import direction and DAG: two passed.
+Only the existing Goblin ranged body/slash gaps occur in the full gallery;
+automatic checks and this inspection do not replace the human's visual review.
+
 ## The answer to “is it data driven?”
 
 Partly, and the distinction matters. Authored recipes select clips, source

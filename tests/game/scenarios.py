@@ -7,6 +7,8 @@ The configurable longsword rider is CON10 Ghoul paralysis, not Hold Person.
 """
 
 import random
+from contextlib import contextmanager
+from typing import Iterator
 from uuid import uuid4
 
 from dnd.actions import AttackEvent, JumpEvent, MovementEvent
@@ -20,7 +22,7 @@ from dnd.controller import HumanController
 from dnd.core.condition_types import ConditionCategory
 from dnd.core.content.materialization import CreatureDeploymentRole, CreaturePossessionMode
 from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import EventPhase, EventQueue
+from dnd.core.events import Event, EventPhase, EventQueue
 from dnd.encounter import Encounter
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
@@ -114,10 +116,11 @@ def attack_history(
         random.setstate(previous)
 
 
-def movement_with_paralysis(
-    seed: int, maximum_hp: int = 80, *, movement_behavior: str = "action.move",
-) -> tuple[PresentationTarget, CompletedLineage]:
-    """Compose existing ECS values and execute the discovered Move or Jump."""
+@contextmanager
+def _condition_encounter(
+    *, maximum_hp: int = 80, paralysis_rider: bool = True,
+) -> Iterator[tuple[PresentationTarget, Entity, Entity, Encounter]]:
+    """The same two native participants, kept alive for a bounded sequence."""
     previous = random.getstate()
     reset_engine_runtime()
     built = build_battlefield("battlefield.open_floor_bright")
@@ -141,10 +144,11 @@ def movement_with_paralysis(
         reactor.install_initial_items(((build_authored_item("weapon.longsword", reactor.uuid), WeaponSlot.MELEE_MAIN),))
         for actor in (mover, reactor):
             setup_standard_actions(actor)
-        reactor.add_condition(GhoulClawsParalysisFeature(
-            source_entity_uuid=reactor.uuid, target_entity_uuid=reactor.uuid,
-            weapon_names=("Longsword",),
-        ))
+        if paralysis_rider:
+            reactor.add_condition(GhoulClawsParalysisFeature(
+                source_entity_uuid=reactor.uuid, target_entity_uuid=reactor.uuid,
+                weapon_names=("Longsword",),
+            ))
         add_opportunity_attack_handler(reactor)
         births = mover.compose_entity(), reactor.compose_entity()
         for actor in (mover, reactor):
@@ -168,23 +172,157 @@ def movement_with_paralysis(
         before = seed_actors(baseline, births, active_weapon_sets={
             actor.uuid: actor.equipment.active_weapon_set for actor in (mover, reactor)
         })
-        random.seed(seed)
-        available = get_available_actions(mover)
-        action = next(row for row in available.all_actions if row.behavior_id == movement_behavior and row.valid_targets)
-        destination = next(option for option in action.valid_targets if option.position == (2, 3))
-        root = execute_by_index(mover, action.template_name, destination.index, available=available)
-        assert isinstance(root, (MovementEvent, JumpEvent)) and root.phase is EventPhase.COMPLETION
-        lineage = capture_lineage(root, observer_uuid=reactor.uuid)
-        after = reduce_lineage(before, lineage)
-        actual = after.actors[mover.uuid]
-        assert actual.normal_hp == mover.get_hp() and actual.life_state is mover.health.life_state
-        assert mover.position == root.end_position
-        assert {fact.name for fact in actual.conditions} == {
-            condition.name for condition in mover.active_conditions.values()
-            if condition.condition_category is not ConditionCategory.INTERNAL
-        }
-        return before, lineage
+        yield before, mover, reactor, encounter
     finally:
         game.close()
         reset_engine_runtime()
         random.setstate(previous)
+
+
+def _condition_action(actor: Entity, behavior: str, position: tuple[int, int] | None = None) -> Event:
+    """Submit an actual currently discovered choice while this actor owns its turn."""
+    assert actor.is_my_turn
+    available = get_available_actions(actor)
+    action = next(row for row in available.all_actions if row.behavior_id == behavior and row.valid_targets)
+    target = next(option for option in action.valid_targets if position is None or option.position == position)
+    root = execute_by_index(actor, action.template_name, target.index, available=available)
+    assert root is not None and root.phase is EventPhase.COMPLETION
+    return root
+
+
+def _capture_condition_operation(
+    before: PresentationTarget, cursor: int, mover: Entity, observer: Entity, encounter: Encounter,
+) -> tuple[PresentationTarget, tuple[CompletedLineage, ...]]:
+    """Keep every real operation root, then compare its retained result to the engine."""
+    roots = tuple(capture_lineage(event, observer_uuid=observer.uuid)
+                  for _, event in EventQueue.iter_events_since(cursor)
+                  if event.parent_lineage is None and event.phase in (EventPhase.COMPLETION, EventPhase.CANCEL))
+    result = before
+    for lineage in roots:
+        result = reduce_lineage(result, lineage)
+        for retained in lineage.events:
+            original = EventQueue.get_event_by_uuid(retained.uuid)
+            assert original is not None
+            assert (retained.parent_event, retained.parent_lineage, retained.children_lineages) == (
+                original.parent_event, original.parent_lineage, original.children_lineages)
+            assert retained.identified_entity_observer_uuids == original.identified_entity_observer_uuids
+            assert retained.located_entity_observer_uuids == original.located_entity_observer_uuids
+            assert retained.located_position_observer_uuids == original.located_position_observer_uuids
+    assert result.senses is not None and result.senses.position == observer.position
+    for actor in (mover, observer):
+        retained_actor = result.actors[actor.uuid]
+        assert retained_actor.normal_hp == actor.get_normal_hp()
+        assert retained_actor.life_state is actor.health.life_state
+        if actor is not observer:
+            contact = result.senses.entities.get(actor.uuid)
+            if contact is not None and contact.visual:
+                assert contact.position == actor.position
+    # The mover starts without conditions. Compare its full non-internal
+    # membership, including the UUIDs of owned children; the reactor's static
+    # pre-baseline trait is not a newly observed condition application.
+    assert {fact.condition_uuid for fact in result.actors[mover.uuid].conditions} == {
+        condition.uuid for condition in mover.active_conditions.values()
+        if condition.condition_category is not ConditionCategory.INTERNAL
+    }
+    assert result.round_number == encounter.round_number
+    current = encounter.get_current_entity()
+    assert current is not None and result.current_actor_uuid == current.uuid
+    return result, roots
+
+
+def movement_with_paralysis(
+    seed: int, maximum_hp: int = 80, *, movement_behavior: str = "action.move",
+) -> tuple[PresentationTarget, CompletedLineage]:
+    """Compatibility case: detach just the original complete Move or Jump."""
+    with _condition_encounter(maximum_hp=maximum_hp) as (before, mover, reactor, encounter):
+        random.seed(seed)
+        cursor = EventQueue.event_cursor()
+        root = _condition_action(mover, movement_behavior, (2, 3))
+        assert isinstance(root, (MovementEvent, JumpEvent))
+        _, roots = _capture_condition_operation(before, cursor, mover, reactor, encounter)
+        lineage, = (lineage for lineage in roots if lineage.root.uuid == root.uuid)
+        assert mover.position == root.end_position
+        return before, lineage
+
+
+def paralysis_lifecycle(
+    *, repeat_save_seeds: tuple[int, ...] = (0,), movement_behavior: str = "action.move",
+    resume: bool = True,
+) -> tuple[PresentationTarget, tuple[CompletedLineage, ...]]:
+    """Native repeat saves/removal across turns, optionally followed by actual movement."""
+    with _condition_encounter() as (before, mover, reactor, encounter):
+        latest = before
+        history: list[CompletedLineage] = []
+
+        def retain(cursor: int) -> None:
+            nonlocal latest
+            latest, roots = _capture_condition_operation(latest, cursor, mover, reactor, encounter)
+            history.extend(roots)
+
+        random.seed(0)
+        cursor = EventQueue.event_cursor()
+        _condition_action(mover, movement_behavior, (2, 3))
+        retain(cursor)
+        assert "Paralyzed" in mover.active_conditions
+        for save_seed in repeat_save_seeds:
+            # Discovery is checked while the restricted mover owns its turn;
+            # no renderer decides whether paralysis permits another action.
+            assert encounter.get_current_entity() is mover
+            if "Paralyzed" in mover.active_conditions:
+                assert not any(row.valid_targets for row in get_available_actions(mover).all_actions)
+            random.seed(save_seed)
+            cursor = EventQueue.event_cursor()
+            encounter.next_turn()
+            retain(cursor)
+            assert encounter.get_current_entity() is reactor
+            cursor = EventQueue.event_cursor()
+            encounter.next_turn()
+            retain(cursor)
+            assert encounter.get_current_entity() is mover
+        if resume:
+            assert "Paralyzed" not in mover.active_conditions
+            choices = get_available_actions(mover).all_actions
+            assert any(row.behavior_id == movement_behavior and row.valid_targets for row in choices)
+            cursor = EventQueue.event_cursor()
+            _condition_action(mover, "action.disengage")
+            retain(cursor)
+            cursor = EventQueue.event_cursor()
+            resumed = _condition_action(mover, movement_behavior, (2, 3))
+            retain(cursor)
+            assert isinstance(resumed, (MovementEvent, JumpEvent)) and resumed.end_position == (2, 3)
+        elif "Paralyzed" in mover.active_conditions:
+            assert not any(row.valid_targets for row in get_available_actions(mover).all_actions)
+        return before, tuple(history)
+
+
+def dodge_expiry_history() -> tuple[PresentationTarget, tuple[CompletedLineage, ...]]:
+    """Dodge, a real opposing sword attack, and natural next-turn expiration."""
+    with _condition_encounter(paralysis_rider=False) as (before, mover, reactor, encounter):
+        latest = before
+        history: list[CompletedLineage] = []
+
+        def retain(cursor: int) -> None:
+            nonlocal latest
+            latest, roots = _capture_condition_operation(latest, cursor, mover, reactor, encounter)
+            history.extend(roots)
+
+        cursor = EventQueue.event_cursor()
+        _condition_action(mover, "action.dodge")
+        retain(cursor)
+        assert "Dodging" in mover.active_conditions
+        cursor = EventQueue.event_cursor()
+        encounter.next_turn()
+        retain(cursor)
+        assert encounter.get_current_entity() is reactor
+        random.seed(17)
+        cursor = EventQueue.event_cursor()
+        _condition_action(reactor, "action.attack", mover.position)
+        retain(cursor)
+        assert "Dodging" in mover.active_conditions
+        cursor = EventQueue.event_cursor()
+        encounter.next_turn()
+        retain(cursor)
+        assert encounter.get_current_entity() is mover and "Dodging" not in mover.active_conditions
+        assert any(row.behavior_id == "action.dodge" and row.valid_targets
+                   for row in get_available_actions(mover).all_actions)
+        return before, tuple(history)

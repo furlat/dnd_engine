@@ -9,7 +9,9 @@ from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 from dnd.core.equipment_types import WeaponSlot
 from game.combat_demo import iter_combat_demo
 from game.presentation import CompletedLineage, PresentationTarget
-from tests.game.scenarios import attack_history, movement_with_paralysis
+from tests.game.scenarios import (
+    attack_history, dodge_expiry_history, movement_with_paralysis, paralysis_lifecycle,
+)
 
 
 class AttackCase(BaseModel):
@@ -44,13 +46,27 @@ class CastCase(BaseModel):
     magic_missile: bool = False
 
 
+class ParalysisLifecycleCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["paralysis-lifecycle"]
+    repeat_save_seeds: tuple[int, ...] = (0,)
+    movement_behavior: Literal["action.move", "action.jump"] = "action.move"
+    resume: bool = True
+
+
+class DodgeExpiryCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["dodge-expiry"]
+
+
 class ReviewCase(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     id: str = Field(pattern=r"^[a-z0-9][a-z0-9-]*$")
     title: str
     tags: tuple[str, ...]
     description: str
-    scenario: Annotated[AttackCase | ParalysisCase | CastCase, Field(discriminator="kind")]
+    scenario: Annotated[AttackCase | ParalysisCase | CastCase | ParalysisLifecycleCase | DodgeExpiryCase,
+                        Field(discriminator="kind")]
     pause_at_ms: float | None = Field(default=None, ge=0)
     pause_duration_ms: float = Field(default=750, gt=0)
 
@@ -85,6 +101,15 @@ def produce(case: ReviewCase) -> ReviewSequence:
                 scenario.seed, scenario.maximum_hp, movement_behavior=scenario.movement_behavior,
             )
             return ReviewSequence(before, (lineage,))
+        case ParalysisLifecycleCase() as scenario:
+            before, lineages = paralysis_lifecycle(
+                repeat_save_seeds=scenario.repeat_save_seeds,
+                movement_behavior=scenario.movement_behavior, resume=scenario.resume,
+            )
+            return ReviewSequence(before, lineages)
+        case DodgeExpiryCase():
+            before, lineages = dodge_expiry_history()
+            return ReviewSequence(before, lineages)
         case CastCase() as scenario:
             script = iter_combat_demo(
                 caster_position=scenario.caster_position, second_attack_seed=scenario.second_attack_seed,

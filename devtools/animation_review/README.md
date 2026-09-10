@@ -23,10 +23,12 @@ then encoded as a synchronized 2×2 video: 0/1 above, 2/3 below. Defaults are
 fullscreen control to inspect the pixels. The state/condition rules stay in
 the engine; this recorder adds no animation rules or gameplay queue.
 
-The initial catalog covers 22 cases: melee profiles and outcomes, modular and
+The catalog covers 28 cases: melee profiles and outcomes, modular and
 fixed-rig ranged attacks, ordinary movement, walking/jumping opportunity attacks
 with save/miss/paralysis/death, paused retained playback, two-cast histories,
-repeated targets, height and equipment roots. The paralysis rider is the
+repeated targets, height and equipment roots, plus six continuing condition
+histories: walking/jumping recovery, failed save, delayed recovery, Dodge expiry
+and paused history while latest has recovered. The paralysis rider is the
 existing configurable native mechanic, not a weapon-triggered Hold Person
 spell. The pause case freezes an offline presentation clock over already
 reduced history; live independent controller progression remains covered by
@@ -62,6 +64,9 @@ Each contact records `body_lift_px` separately from support elevation. Capture
 checks legal endpoints, visual stop continuity and placement after releasing
 the final head. All four views use the same placement state. Floating feedback
 and name/HP labels share body-aware placement within the view below its header.
+Every frame also records the SHA-256 of the actual RGB pixels sent to the
+encoder. The paused check compares those pixels as well as retained state and
+draw metadata; stable command coordinates alone do not prove a frozen image.
 
 ## Repeat a focused step
 
