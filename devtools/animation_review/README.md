@@ -26,22 +26,23 @@ mechanics. Use `--capture` again when intentionally changing a scenario or its
 native mechanics. Each run copies its input alongside the video so replacing
 the shared input does not alter older evidence.
 
-The version-2 saved sequence contains `initialization` and later complete
-`lineages`. Initialization retains the actual native setup events, including
-any setup actions before the reviewed clip, and the observed actor admissions
-computed from their recorded history. Loading it rebuilds world, actors and
-senses through the ordinary reducer; a precomputed `before` snapshot is not
-an additional input. Event decoding validates the existing concrete schemas in
-passive mode: it neither registers events/entities/dice nor executes native
-rules or inherits an ambient turn.
+New captures run each experiment once and record every explicitly named native
+participant before its runtime closes. Each perspective has the same experiment
+and native generation, its actual observer UUID and initialization cursor, and an
+independent subjective sequence. `perspectives.json` lists its ordinary saved
+input files. The original observer keeps the case ID; companion cards append
+`--<role>`. Experiments with one actual participant have one perspective.
 
-Private actor history is folded during capture. The initializer includes the
-observer's composition, observed actor admissions and permitted actor
-after-values; an unseen actor's full birth, gear and damage history are not
-additional initialization payloads. The internal archive still contains
-objective diagnostic rows and world data, and later lineages can retain foreign
-sensory facts. It therefore is not a player-safe transmission format; the
-existing subjectivity projection remains the outgoing boundary.
+`input.json` now contains the public `PlayerSequence` packet. Its causal nodes
+retain original identities and ancestry, with optional authorized facts; it does
+not include objective diagnostic rows, foreign sensory payloads or other actors'
+private inventory. The player reducer builds initial state from the packet's
+recorded initialization. Both first capture and repeat playback decode these
+saved public bytes before rendering. The private native version-2 archive is
+saved separately as `native.json` for local debugging. Existing historical
+native inputs remain unchanged; replay projects them into a run-local public
+packet without rerunning mechanics. Source manifests and review metadata remain
+local development artifacts rather than part of the player protocol.
 
 Complete retained lineages are reduced and sampled through the same
 `game/playback_frame.py` function used by the game.
@@ -51,7 +52,7 @@ then encoded as a synchronized 2×2 video: 0/1 above, 2/3 below. Defaults are
 fullscreen control to inspect the pixels. The state/condition rules stay in
 the engine; this recorder adds no animation rules or gameplay queue.
 
-The catalog covers 72 cases: melee profiles and outcomes, modular and
+The original 72 experiments cover: melee profiles and outcomes, modular and
 fixed-rig ranged attacks, ordinary movement, walking/jumping opportunity attacks
 with save/miss/paralysis/death, paused retained playback, two-cast histories,
 repeated targets, height and equipment roots, plus six continuing condition
@@ -68,6 +69,45 @@ existing configurable native mechanic, not a weapon-triggered Hold Person
 spell. The pause case freezes an offline presentation clock over already
 reduced history; live independent controller progression remains covered by
 the encounter integration tests.
+
+Fifteen visibility experiments add thirty subjective clips. They cover range
+entry/exit/re-entry, crossing an actual open doorway in either direction,
+observer motion, a closed-door control, stopping at the first visible point,
+leaving the last point, equipment/HP changes while hidden and later
+reacquisition, and paused historical playback. A real Dash enables one long
+Move across two apertures, producing two separated visible runs inside the same
+complete movement lineage. Native sensory facts and endpoint authority select
+what each observer receives. A perspective with no perceived changes renders
+its actual idle state for the normal lead/tail duration, without a synthetic
+event.
+
+The open-field fixtures use a 26×7 native map and cross the existing observer
+radius: contact appears at 20 tiles and is absent at 22. They do not override
+perception to manufacture an edge. The native acceptance matrix checks every
+visibility row's initial contact, acquisition/loss order, moving participant,
+and the two-aperture case's single movement root before clip review.
+
+Paired cards have **Show paired views** and **Export paired views** controls.
+Each card still contains four synchronized camera corners. The two observers'
+presentation durations can differ because they receive different parts of the
+same native history; compare root identities and disclosure transitions rather
+than treating equal video milliseconds as the same event.
+
+September 11 validation: `runs/20260911T212148Z-a25e65` contains all thirty
+visibility clips, 2,255 four-corner frames and 65 public history heads, with no
+reported presentation gaps. A fresh process replayed saved player packets with
+native production and content bootstrap unavailable. All thirty inputs, local
+native diagnostics and MP4s matched their captures byte for byte; historical
+states, heads and frame traces matched exactly. The inspection report preserves
+the only raw trace difference: three subsequently added optional content
+attribution fields now serialize as `null`. The original 72 inputs remained
+unchanged. Source manifests retain the actual capture/render revisions; the
+private native baseline fix made during rendering did not affect these inputs.
+The fifteen-row native contact matrix passes, as do all seven gallery tests and
+the existing lifecycle/healing gallery checks. A separate six-clip regression
+run, `qa-player-boundary/runs/20260911T212720Z-acfe0a`, shows both participants'
+walking/jumping lethal reactions and lethal displacement into the first spike
+cell without replacing the historical inputs.
 
 The `gameplay` tag includes the initial 15 creature/equipment/movement additions:
 Dretch, Skeleton Archer and Wolf histories; actual weapon/wardrobe replacement;
@@ -173,6 +213,8 @@ draw metadata; stable command coordinates alone do not prove a frozen image.
 .venv/bin/python -m devtools.animation_review --tag ranged
 .venv/bin/python -m devtools.animation_review --tag gameplay
 .venv/bin/python -m devtools.animation_review --tag forced-movement
+.venv/bin/python -m devtools.animation_review --capture --tag visibility
+.venv/bin/python -m devtools.animation_review --tag visibility
 .venv/bin/python -m devtools.animation_review --review /path/to/downloaded-review.json
 ```
 

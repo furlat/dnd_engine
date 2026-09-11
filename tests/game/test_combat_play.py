@@ -93,7 +93,8 @@ def test_canonical_goblin_uses_fixed_rig_and_actual_gear_health_on_the_map(
     assert second.source.applications[0].damage_applied is lethal
     actor = summary.latest.actors[UUID(first.source.applications[0].target.actor_uuid)]
     assert actor.creature_content_ref == "content.neurodragon:creature:creature.goblin@1"
-    assert actor.items and actor.equipment
+    assert actor.visual_loadout.layers
+    assert actor.controlled_items is None
     assert actor.normal_hp == final_hp and actor.life_state is final_life
     assert any(frame.cast_number == 1 and frame.sample.bodies[1].clip == "TakeDamage"
                for frame in summary.frames)

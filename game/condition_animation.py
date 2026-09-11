@@ -10,11 +10,12 @@ from typing import Mapping
 from uuid import UUID
 
 from dnd.core.condition_types import ConditionCategory
-from dnd.core.events import Event, EventType
+from dnd.core.events import EventType
 from game.animation import NumberSample
 from game.animation_types import FloatingFeedbackStyle, StudioCondition
 from game.condition_types import ConditionBodyColor, ConditionRecipe
-from game.presentation import ConditionFact
+from game.actor_facts import ConditionFact
+from game.player_facts import ConditionChangeFact, PlayerNode
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,18 +94,19 @@ def resolve_condition_appearance(
 
 
 def compile_condition(
-    recipes: Mapping[str, ConditionRecipe], event: Event, fact: ConditionFact,
+    recipes: Mapping[str, ConditionRecipe], event: PlayerNode, fact: ConditionFact,
     before: tuple[ConditionFact, ...], *, start_ms: float,
     badge_style: FloatingFeedbackStyle, override: StudioCondition | None = None,
 ) -> ConditionTimeline:
     """Attach one actual condition transition at its parent's authored anchor."""
     if not isfinite(start_ms) or start_ms < 0:
         raise ValueError("condition start requires finite nonnegative time")
-    if (event.uuid != fact.event_uuid or event.target_entity_uuid is None
-            or event.event_type not in (EventType.CONDITION_APPLICATION, EventType.CONDITION_REMOVAL)):
+    change = event.fact
+    if (event.uuid != fact.event_uuid or not isinstance(change, ConditionChangeFact)
+            or change.event_type not in (EventType.CONDITION_APPLICATION, EventType.CONDITION_REMOVAL)):
         raise ValueError("condition timeline requires its exact retained header and target")
     recipe = recipes.get(fact.behavior_id) if fact.behavior_id is not None else None
-    applied = event.event_type is EventType.CONDITION_APPLICATION
+    applied = change.event_type is EventType.CONDITION_APPLICATION
     members = {member.condition_uuid: member for member in before}
     if applied and fact.category is not ConditionCategory.INTERNAL:
         members[fact.condition_uuid] = fact
@@ -119,7 +121,7 @@ def compile_condition(
         unsupported = tuple(dict.fromkeys((*old_appearance.unsupported, *new_appearance.unsupported,
                                             f"Missing condition recipe: {fact.behavior_id}")))
         return ConditionTimeline(
-            event.uuid, event.target_entity_uuid, start_ms, start_ms,
+            event.uuid, change.target_entity_uuid, start_ms, start_ms,
             before, after, old_appearance, new_appearance, None, 0xFFFFFF, badge_style, unsupported,
         )
     transition = recipe.application if applied else recipe.removal
@@ -135,7 +137,7 @@ def compile_condition(
           for effect in transition.effects),
     )))
     return ConditionTimeline(
-        event.uuid, event.target_entity_uuid, start, start + alpha_duration,
+        event.uuid, change.target_entity_uuid, start, start + alpha_duration,
         before, after, old_appearance, new_appearance,
         ("+" if applied else "−") + fact.name if feedback else None,
         transition.feedbackColor, badge_style, unsupported,

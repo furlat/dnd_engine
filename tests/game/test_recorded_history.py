@@ -15,6 +15,8 @@ from game.choreography import bind_choreography, sample_choreography
 from game.motion import bind_motion, sample_motion
 from game.presentation import reduce_lineage
 from game.replay import decode_sequence, encode_sequence
+from game.player_projection import reduce_lineage as reduce_player_lineage
+from tests.game.player_helpers import player_inputs
 
 
 @pytest.mark.parametrize("case_id", (
@@ -32,17 +34,19 @@ def test_saved_bytes_preserve_every_successor_and_concrete_lineage(case_id: str)
     before, lineages = decode_sequence(payload)
     assert before == source.before
     assert lineages == source.lineages
+    player, public_lineages = player_inputs(source.initialization, lineages)
     data = load_animation_data()
-    for index, lineage in enumerate(lineages, start=1):
+    for index, (lineage, public) in enumerate(zip(lineages, public_lineages, strict=True), start=1):
         after = reduce_lineage(before, lineage)
         assert after == expected[index]
-        motion = bind_motion(before, lineage, data)
+        motion = bind_motion(player, public, data)
         if motion is not None:
             assert sample_motion(motion, data, motion.complete_ms).complete
         else:
-            group = bind_choreography(before, lineage, data)
+            group = bind_choreography(player, public, data)
             assert sample_choreography(group, group.complete_ms).complete
         before = after
+        player = reduce_player_lineage(player, public)
     assert EventQueue.event_cursor() == 0
     assert BaseObject._registry == {}
     assert DiceRoll._registry == existing_rolls

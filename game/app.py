@@ -45,6 +45,7 @@ from game.presentation import (
     reduce_interval,
     settle_dispositions,
 )
+from game.player_facts import PlayerObject, PlayerState
 from game.projection import (
     Camera,
     TILE_HEIGHT,
@@ -151,7 +152,7 @@ def _authored_treatment(
 
 
 def _disclosure(
-    target: PresentationTarget,
+    target: PresentationTarget | PlayerState,
     positions: tuple[tuple[int, int], ...],
 ) -> tuple[str, LightLevel | None] | None:
     senses = target.senses
@@ -172,7 +173,7 @@ def _disclosure(
 
 
 def _boundary_disclosure(
-    target: PresentationTarget,
+    target: PresentationTarget | PlayerState,
     position: tuple[int, int],
     direction: CardinalDirection,
 ) -> str | None:
@@ -189,7 +190,7 @@ def _boundary_disclosure(
 
 
 def _stair_runs(
-    target: PresentationTarget,
+    target: PresentationTarget | PlayerState,
     profile: Mapping[str, object],
 ) -> tuple[tuple[WorldTileState, WorldTileState, WorldTileState, CardinalDirection], ...]:
     """Match only the supported whole-flight shape in detached support facts."""
@@ -227,7 +228,7 @@ def _stair_runs(
     return tuple(runs)
 
 
-def _support_evidence(target: PresentationTarget, tile: WorldTileState) -> tuple[object, ...]:
+def _support_evidence(target: PresentationTarget | PlayerState, tile: WorldTileState) -> tuple[object, ...]:
     """Keep a composite sprite's individual support knowledge unmerged."""
     state, level = _disclosure(target, (tile.position,)) or ("authored", None)
     return tile.tile_uuid, tile.position, tile.elevation_steps, state, level.value if level is not None else None
@@ -278,7 +279,7 @@ def _static_blit(
 
 def draw_frame(
     screen: pygame.Surface,
-    target: PresentationTarget,
+    target: PresentationTarget | PlayerState,
     catalog: AssetCatalog,
     cache: SurfaceCache,
     camera: Camera,
@@ -546,7 +547,10 @@ def draw_frame(
     )
     for (owner_chunk, water_state), rows in sorted(water_rows.items()):
         packed: list[WaterSupportInput] = []
-        retained_rows: list[tuple[object, ...]] = []
+        retained_rows: list[tuple[
+            tuple[int, int], object, str, LightLevel | None, str,
+            tuple[int, float, float, int, tuple[str, ...]],
+        ]] = []
         for position, identity, state, level, treatment_id, multiplier, key in rows:
             tile = target.tiles[position]
             source_origin = water_source_origin(
@@ -618,8 +622,7 @@ def draw_frame(
             retained_rows,
             strict=True,
         ):
-            position, identity, state, raw_level, treatment_id, key = row
-            level = raw_level
+            position, identity, state, level, treatment_id, key = row
             evidence = (
                 identity,
                 position,
@@ -629,7 +632,7 @@ def draw_frame(
                 treatment_id,
             )
             commands.append((
-                cast(tuple[int, float, float, int, tuple[str, ...]], key),
+                key,
                 surface,
                 destination,
                 pygame.BLEND_PREMULTIPLIED,
@@ -656,7 +659,7 @@ def draw_frame(
         list[
             tuple[
                 UUID,
-                WorldObjectState,
+                WorldObjectState | PlayerObject,
                 CardinalDirection,
                 str,
                 LightLevel | None,
@@ -725,11 +728,7 @@ def draw_frame(
                 ))
             if object_uuid not in senses.objects:
                 continue
-            is_open = (
-                target.door_is_open
-                if object_uuid == target.door_uuid
-                else world_object.item.is_open
-            )
+            is_open = world_object.item.is_open
             if is_open is None:
                 raise RuntimeError("disclosed DirectionalDoor has no state")
             leaf_id = (open_bindings if is_open else closed_bindings)[pose]
@@ -883,15 +882,10 @@ def draw_frame(
             ))
     animated_fixtures = 0
     flame_index: int | None = None
-    fixture_uuid = target.standing_torch_uuid
-    fixture_state = target.standing_torch_state
-    fixture = target.objects.get(fixture_uuid) if fixture_uuid is not None else None
-    if (
-        fixture_uuid is not None
-        and fixture_state is not None
-        and fixture is not None
-        and fixture_uuid in senses.objects
-    ):
+    for fixture_uuid, fixture in target.objects.items():
+        if fixture.item.item_id != "environment.standing_torch" or fixture_uuid not in senses.objects:
+            continue
+        fixture_state = fixture.item
         position = fixture.placement.position
         disclosure = _disclosure(target, (position,))
         if disclosure is not None:
@@ -958,7 +952,7 @@ def draw_frame(
                         0,
                         flame_evidence,
                     ))
-                    animated_fixtures = 1
+                    animated_fixtures += 1
 
     commands.sort(key=lambda row: row[0])
     expected_draws = tuple(command[4] for command in commands)

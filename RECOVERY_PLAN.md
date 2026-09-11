@@ -27,21 +27,123 @@ is now imported through the original Studio schema, independently of gameplay.
 
 ### Current position — read this before the checkpoint details
 
+**Completed visibility unit, September 11:** after the validated `12ae1eb` replay
+checkpoint, the user requested extensive entering/leaving-sight and doorway
+experiments, recorded from both entities' subjective viewpoints. Capture each
+native experiment once, retain each observer's actual received history, and
+render all four camera corners for every viewpoint. Observer identity and camera
+angle are different dimensions. Opposite viewpoints must share native event
+identities rather than independently rerunning the scenario.
+
+**Implementation sequence:**
+
+1. Review the existing Step identity/endpoint grants and original projection
+   against complete-lineage playback. Preserve state discovery when hidden
+   geometry is withheld, timed loss/reacquisition of contact, and multiple
+   disclosed portions of one movement. Keep one causal root/history head.
+2. Connect the outgoing projection from recorded facts: own sensory data,
+   admitted actor state/visual loadouts, observed/remembered world facts and
+   required causal version metadata. Keep objective diagnostics and private
+   inventory local. Preserve the original disclosure rules and Studio timing.
+3. Extend recording to all participant viewpoints from the same native capture.
+   Pair the clips by experiment and observer, with four corners per clip and
+   independent subjective playback. Review export must retain the selected
+   observer's saved input and the experiment link. Preserve prior recordings.
+4. Exercise a data matrix: entering and leaving open sight; a brief doorway
+   glimpse during one walk; leave/reenter and multiple glimpses; walking an
+   observer into/out of a view across the door; swapped participants/directions;
+   an actual open/closed-door control; current gear/HP upon reacquisition; and
+   paused historical playback while latest has advanced past the visible span.
+   Both perspectives belong to every experiment, including future additions.
+5. Validate native perception against recorded projection and rendered frames,
+   replay saved inputs with native production unavailable, inspect the videos,
+   and update this plan before returning to broader gameplay capabilities.
+
+**Design review:** the anti-OOP reviewer owns the check for existing timeline/
+version metadata, shared binding primitives and import direction. The anti-slop
+reviewer checks actual native visibility/after-values, outgoing projection and
+the finite experiment matrix. Review concrete proposals before shared-contract
+edits, then review the resulting native histories and clips. This unit connects
+existing game rules; VFX authoring and reinstating the old server are outside it.
+
+**Implemented behavior:** the capture gate is removed and the
+outgoing player projection is connected to live encounter playback, the finite
+cast regression, and gallery replay. Each public node preserves causal identity
+and ordering; its optional payload contains only the permitted fact. Private
+native recordings remain available locally. The renderer consumes public actor
+loadouts, own sensory deltas and observed/remembered world values. It receives no
+objective rows or foreign inventory. Complete movement heads now support first
+contact, contact loss and separate visible portions without connecting hidden
+geometry. Both views use the original authored step duration independently.
+
+**Reviewable result:** [30 visibility clips](http://127.0.0.1:8767/runs/20260911T212148Z-a25e65/index.html)
+cover 15 experiments from both participants, with all four corners in each clip.
+They contain 2,255 frames and 65 public playback heads, with no reported gaps.
+Native assertions verify each experiment's actual acquisition/removal pattern;
+this includes two separately visible spans inside one complete Move. The
+closed-door observer receives an idle sequence when nothing is perceived.
+
+A fresh process replayed every saved public input with native generation and
+bootstrap disabled. All 30 videos, public inputs and separate native diagnostic
+files are byte-identical to their captures. Initial states, heads, latest states
+and sampled frames match exactly. Older trace serialization omits three newly
+optional null content-attribution fields; the report preserves that raw
+difference and its explicit normalization. The final private capture correction
+for unselected doors occurred during replay; public rendering source was stable.
+The run's `inspection/replay-verification.json` records this provenance instead
+of claiming an unchanged whole checkout.
+
+[Six paired lethal-reaction/displacement clips](http://127.0.0.1:8767/qa-player-boundary/runs/20260911T212720Z-acfe0a/index.html)
+also pass using the final capture code. The controlled mover retains its walking
+corpse offset, jump reactions stay grounded, and forced movement settles at the
+actual reached cell. The spectator's permitted origin-only observation is tested
+separately from the controlled mover's authorized attempted edge. No native
+mechanic changed to make these views agree.
+
+All 72 prior saved inputs remain unchanged and project, serialize, reduce and
+bind through the public boundary. That compatibility check is not a new visual
+approval of all 72 older clips. The eight projection regressions cover disclosure,
+world memory, a changed second door with/without a selected fixture, and unnamed
+wall-torch initialization. Native perception and original Studio data remain
+their existing owners. Anti-slop and anti-OOP reviewers approved these boundaries.
+
+**Final validation:** the broad `tests/game` run passed 684 tests, with two
+existing terrain expectations, 11 failures and 16 fixture errors. That process
+had imported the reaction code before its final historical-contact correction;
+ten failures were that already-corrected path. Sixteen errors came from the
+terrain fixture still passing native records directly to the public binder.
+After migrating that caller, all 27 reported failures/errors were rerun together
+against final source: 22 passed, four retained terrain expectations, and the
+single older startup timing failure remained. The diagnostic door/light app
+exited successfully in 9.06 seconds against its eight-second budget. Earlier
+checkpoint evidence below records the same timing failure at 8.596 seconds;
+the threshold and functional expectations were not changed. This result is
+not an all-green full-suite claim. All functional failures introduced by this
+integration are resolved, and six existing terrain expectations remain.
+
+The later-added door/torch projection tests pass in their full eight-case group.
+The 17-case native visibility/public-wire group, seven gallery tests, 57-case
+attack/movement/placement group, six live encounter checks and nine finite
+cast/equipment/volley checks also pass. These overlap the broad run and each
+other; their counts are not additive. Production presentation/review modules
+and changed caller tests pass Pyright. The current visibility unit is complete;
+the startup budget and prior terrain limits remain documented separately.
+
 **Event-recording correction, September 11 — validated replay checkpoint:** at
 `f6a0a1a`, gallery playback used original Python objects and `--review` reran
-native scenarios. The working tree now decodes saved concrete events and
+native scenarios. The `12ae1eb` checkpoint decodes saved concrete events and
 replays them without native generation, records active-weapon after-values,
 and admits later actors from their recorded history. Native initial sensory
 facts replace the live snapshot handoff. Version 2 stores initialization events
 and complete lineages; the ordinary reducer derives the starting state from
 those events. The live encounter uses the same initialization path.
 The [source audit](agent_docs/ANIMATION_COMPOSITION_AUDIT.md#event-recording-contract-correction--september-11)
-preserves the original failures and attribution. Full player transmission still
-needs its existing subjectivity boundary; a local archive containing objective
+preserves the original failures and attribution. That checkpoint still needed
+the player projection connected above; a local archive containing objective
 diagnostics is not that payload. Documentation and status questions accompany
 this active work rather than ending it.
 
-### Active unit — recorded inputs drive the game presentation
+### Validated checkpoint — recorded inputs drive the game presentation
 
 **Required behavior:** generate native histories once, save their complete
 presentation inputs, then load those bytes for subsequent reduction, binding,
@@ -119,10 +221,10 @@ alias. Full engine-suite collection also encounters unchanged old-server and
 `dnd.content_system.item_bindings` imports. Those failures are not evidence of
 this change, and restoring retired server code is outside the recovery plan.
 
-**Remaining part of this contract:** C03/C04 in the complaint record remain
-partial. Observer movement can discover a previously unseen actor, and an actor
-can be deployed into view with its current recorded equipment and HP. An unseen
-actor moving into view is still rejected by the existing capture gate. The
+**Boundary at the previous checkpoint:** C03/C04 in the complaint record were
+partial. Observer movement could discover a previously unseen actor, and an actor
+could be deployed into view with its current recorded equipment and HP. An unseen
+actor moving into view was still rejected by the capture gate. The
 original endpoint authority permits state discovery there without revealing
 the hidden origin as an animation. Connect that existing rule within complete
 lineages; do not restore the failed server's per-Step queues. The actual player
@@ -148,10 +250,10 @@ mean that the full NeuroStudio vocabulary or the full game is implemented.
 
 | Plan area | Current status | Evidence and practical boundary |
 | --- | --- | --- |
-| Existing engine → retained lineages → independent playback | Event initialization and saved replay implemented | Original ancestry/grants, one reducer for latest/history and one historical queue/head. Passive concrete decoding runs without a live engine. Local diagnostics still require separation at the player transmission boundary. |
-| Playable Pygame encounter | Working bounded encounter | Discovered actions/targets, movement, attacks, player turns, native enemy decisions, resources and encounter completion. One player viewpoint; later actor admission is connected for observer movement and deployment. Moving into view remains partial. |
+| Existing engine → retained lineages → independent playback | Recorded native input and public player projection connected | Original ancestry/grants, one public reducer for latest/history and one historical queue/head. Public bytes replay without live engine generation; objective diagnostics, foreign sensory data and private inventory stay in the separate native archive. |
+| Playable Pygame encounter | Working bounded encounter | Discovered actions/targets, movement, attacks, player turns, native enemy decisions, resources and encounter completion. Live playback consumes the public projection, including movement into sight, contact loss and reacquisition. Paired viewpoints are available in the recorder; the encounter UI still controls one viewpoint. |
 | Shared authored animation composition | Working, incomplete vocabulary | Original Studio data drives the connected attack/cast/movement/condition/equipment primitives, now including shove contact and forced brace/travel/release. Complete walking reactions interrupt at their edge; jump reactions join at launch before one flight. Authored fields outside those primitives remain explicit limits. |
-| Repeatable visual validation | 72 saved-input replays validated | Four cameras per clip, selection/pinned-time trace export, shared frame compositor and actual pixel checks. All 72 videos match their capture bytes. Generation requires explicit `--capture`; default and exported review replay saved initialization events and lineages. |
+| Repeatable visual validation | Paired public replay validated | Thirty visibility clips from 15 shared native histories, four cameras per viewpoint, plus six paired lethal/displacement clips. The 30 saved replays match capture videos byte for byte. Original 72 recordings are preserved. Selection/export retains the observer input and experiment link; capture is explicit. |
 | Continuing condition and life histories | Completed prior unit | Native paralysis recovery/persistence, Dodge expiry, capped healing, death saves, stabilization, death/revival and correct retained placement/HP. |
 | Creatures, equipment and movement | Implemented with explicit visual limits | Three exact rig identities; real wardrobe/item replacement; same-turn melee → longbow; turning routes with native Haste/Dash; grounded jump reactions followed by one flight across water/elevation. Rear-view terrace overlap and later-Step launch reach are documented below. |
 | Forced movement | Completed bounded unit | Exact Shove contact, native actual path, original recipient brace/ease/release, reached-cell spatial damage/death and retained corpse placement. Telekinesis's granted displacement uses the same primitive. Stair terrain occlusion remains visible and tagged. |
@@ -171,8 +273,12 @@ animal catalog. The tested sword rider applies native paralysis; its real
 reaction/condition lineage is what the clip demonstrates.
 
 **Completed lane:** forced movement extends the shared movement/action area after
-the creature/equipment unit and jump correction. Broader spell
-delivery remains the next pending shared-capability area. New creature recipes and equipment media are used by
+the creature/equipment unit and jump correction. Event replay and the subsequent
+visibility/player-projection unit connect that same gameplay to saved subjective
+histories. Broader spell delivery remains the next pending shared-capability
+area: reuse the original Studio vocabulary for self/touch/direct/area/persistent
+delivery, with both participants' saved views in each applicable experiment.
+New creature recipes and equipment media are used by
 the live/recorded shared path; these clips do not add an inventory or roster UI.
 The terrain finding is recorded for a bounded follow-up design investigation;
 it does not authorize a renderer rewrite or displace the gameplay plan.

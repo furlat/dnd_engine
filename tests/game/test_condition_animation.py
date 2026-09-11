@@ -8,13 +8,14 @@ from uuid import uuid4
 import pytest
 
 from dnd.core.condition_types import ConditionCategory
-from dnd.core.events import Event, EventPhase, EventType
+from dnd.core.events import EventPhase, EventType
 from game.animation_types import FloatingFeedbackStyle, StudioCondition
 from game.condition_animation import (
     compile_condition, condition_transition_appearances, resolve_condition_appearance, sample_condition,
 )
 from game.condition_types import load_condition_recipes
-from game.presentation import ConditionFact
+from game.actor_facts import ConditionFact
+from game.player_facts import ConditionChangeFact, PlayerNode
 
 
 SOURCE = Path("game/data/neuroclient/source/src/render/data/animation")
@@ -35,13 +36,11 @@ def condition_fact(identity: str, name: str) -> ConditionFact:
     return ConditionFact(uuid4(), uuid4(), name, ConditionCategory.STATUS, identity, None, None)
 
 
-def header(fact: ConditionFact, *, applied: bool = True) -> Event:
-    actor = uuid4()
-    return Event(
-        uuid=fact.event_uuid, source_entity_uuid=actor, target_entity_uuid=actor,
-        event_type=EventType.CONDITION_APPLICATION if applied else EventType.CONDITION_REMOVAL,
-        phase=EventPhase.COMPLETION, use_register=False,
-    )
+def header(fact: ConditionFact, *, applied: bool = True) -> PlayerNode:
+    return PlayerNode(uuid=fact.event_uuid, lineage_uuid=uuid4(), parent_event=None,
+        parent_lineage=None, children_lineages=(), phase=EventPhase.COMPLETION, canceled=False,
+        fact=ConditionChangeFact(target_entity_uuid=uuid4(), condition=fact,
+            event_type=EventType.CONDITION_APPLICATION if applied else EventType.CONDITION_REMOVAL))
 
 
 def test_entire_original_condition_document_remains_available_and_immutable(recipes) -> None:
@@ -144,9 +143,10 @@ def test_late_neutral_wrapper_keeps_active_alpha_and_current_aggregate_color(rec
     invisible = condition_fact("condition.invisible", "Invisible")
     fade = compile_condition(recipes, header(invisible), invisible, (), start_ms=0, badge_style=badge_style)
     wrapper = condition_fact("trait.ghoul_paralysis", "Ghoul Paralysis")
-    event = Event(uuid=wrapper.event_uuid, source_entity_uuid=fade.target_uuid,
-                  target_entity_uuid=fade.target_uuid, event_type=EventType.CONDITION_APPLICATION,
-                  phase=EventPhase.COMPLETION, use_register=False)
+    event = PlayerNode(uuid=wrapper.event_uuid, lineage_uuid=uuid4(), parent_event=None,
+        parent_lineage=None, children_lineages=(), phase=EventPhase.COMPLETION, canceled=False,
+        fact=ConditionChangeFact(target_entity_uuid=fade.target_uuid, condition=wrapper,
+                                 event_type=EventType.CONDITION_APPLICATION))
     leaf = compile_condition(recipes, event, wrapper, (invisible,), start_ms=60, badge_style=badge_style)
     assert leaf.start_ms == leaf.complete_ms
     actor = str(fade.target_uuid)

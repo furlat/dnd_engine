@@ -13,7 +13,9 @@ from game.animation_data import load_animation_data
 from game.animation_types import AnimationData
 from game.combat import actor_contact
 from game.damage import bind_damage, sample_damage
-from game.presentation import lineage_branch, reduce_lineage
+from game.presentation import lineage_branch as native_branch
+from game.player_projection import lineage_branch, reduce_lineage
+from tests.game.player_helpers import player_history
 from tests.game.forced_movement_scenarios import forced_movement_history
 from tests.game.scenarios import attack_history
 
@@ -33,8 +35,10 @@ def test_actual_damage_keeps_packet_and_normalized_life_facts_while_seeking(
         maximum_hp=maximum_hp, uses_death_saves=death_saves)
     before, lineage = captured.before, captured.lineages[0]
     event, = (row for row in lineage.events if isinstance(row, TakeDamageEvent))
-    branch = lineage_branch(lineage, event)
-    packet, = (row for row in branch.events if isinstance(row, DamageAppliedEvent))
+    native = native_branch(lineage, event)
+    packet, = (row for row in native.events if isinstance(row, DamageAppliedEvent))
+    before, (lineage,) = player_history(captured)
+    branch = lineage_branch(lineage, next(node for node in lineage.events if node.uuid == event.uuid))
     assert event.target_entity_uuid is not None
     prior = actor_contact(before, before.actors[event.target_entity_uuid], data, "NW")
     placed = replace(prior, grid=(3.25, 3), elevation_steps=2, body_lift_px=11)
@@ -47,7 +51,7 @@ def test_actual_damage_keeps_packet_and_normalized_life_facts_while_seeking(
     assert cue.applied_damage == packet.applied_damage
     assert cue.resulting_hp == expected.normal_hp
     assert cue.resulting_life_state is expected.life_state is life
-    changes = tuple(row for row in branch.events if isinstance(row, LifeStateChangeEvent))
+    changes = tuple(row for row in native.events if isinstance(row, LifeStateChangeEvent))
     assert cue.owned_life_events == frozenset(row.uuid for row in changes)
     if life is LifeState.DYING:
         assert packet.resulting_normal_hp < 0 and cue.resulting_hp == 0
@@ -77,7 +81,8 @@ def test_source_damage_frames_control_delayed_hp_flash_and_release(data: Animati
     captured = attack_history("weapon.longsword", 17, opportunity=True)
     before, lineage = captured.before, captured.lineages[0]
     event, = (row for row in lineage.events if isinstance(row, TakeDamageEvent))
-    branch = lineage_branch(lineage, event)
+    before, (lineage,) = player_history(captured)
+    branch = lineage_branch(lineage, next(node for node in lineage.events if node.uuid == event.uuid))
     authored = replace(data, damage_context=data.damage_context.model_copy(update={
         "impactDelayMs": 125.0, "numberFrame": 2, "flashFrame": 1, "bodyPlaybackSpeed": 2.0,
     }))
@@ -111,6 +116,7 @@ def test_actual_spike_entries_keep_separate_damage_and_reached_contacts(
     target_uuid = damages[0].target_entity_uuid
     assert target_uuid is not None
     by_lineage = {row.lineage_uuid: row for row in lineage.events}
+    before, (lineage,) = player_history(captured)
     working = before
     placements = []
     for index, event in enumerate(damages):
@@ -121,7 +127,7 @@ def test_actual_spike_entries_keep_separate_damage_and_reached_contacts(
         actor = working.actors[event.target_entity_uuid]
         contact = replace(actor_contact(working, actor, data), grid=entry.position,
                           elevation_steps=working.tiles[entry.position].elevation_steps)
-        branch = lineage_branch(lineage, event)
+        branch = lineage_branch(lineage, next(node for node in lineage.events if node.uuid == event.uuid))
         cue = bind_damage(working, branch, data, start_ms=500 + index * 2000, contact=contact)
         assert cue is not None
         placements.append(cue.contact.grid)

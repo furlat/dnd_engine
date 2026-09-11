@@ -20,6 +20,8 @@ from dnd.world_authoring import project_world_tile
 from game.animation import sample_cast
 from game.animation_data import load_animation_data, resolve_actor_layers
 from game.combat import bind_cast
+from game.player_projection import reduce_lineage as reduce_player_lineage
+from tests.game.player_helpers import player_inputs
 from game.combat_demo import iter_combat_demo
 from game.presentation import CompletedLineage, PresentationTarget, capture_lineage, reduce_lineage, seed_actors, IntervalEnvelope, reduce_interval
 
@@ -147,7 +149,8 @@ def test_public_mixed_history_keeps_first_cast_dagger_while_latest_reaches_short
         first_lineage = next(script)
         assert isinstance(seed, PresentationTarget)
         assert isinstance(first_lineage, CompletedLineage)
-        first = bind_cast(seed, first_lineage, data, travel_apex_steps=1.0)
+        seed, (public_first,) = player_inputs(initialization, (first_lineage,))
+        first = bind_cast(seed, public_first, data, travel_apex_steps=1.0)
         sample_times = (0, first.timeline.release_ms, first.timeline.complete_ms)
         original_samples = tuple(sample_cast(first.timeline, elapsed) for elapsed in sample_times)
         remaining: list[CompletedLineage] = []
@@ -160,24 +163,26 @@ def test_public_mixed_history_keeps_first_cast_dagger_while_latest_reaches_short
     assert tuple(type(lineage.root) for lineage in remaining) == (
         WeaponUnequipEvent, WeaponEquipEvent, ItemLocationStateEvent, ItemLocationStateEvent, SpellEvent,
     )
-    equipment, second_lineage = remaining[:4], remaining[4]
-    latest = reduce_lineage(seed, first_lineage)
-    for lineage in remaining:
-        latest = reduce_lineage(latest, lineage)
+    seed, public_roots = player_inputs(initialization, (first_lineage, *remaining))
+    public_first, *public_remaining = public_roots
+    equipment, public_second = public_remaining[:4], public_remaining[4]
+    latest = reduce_player_lineage(seed, public_first)
+    for lineage in public_remaining:
+        latest = reduce_player_lineage(latest, lineage)
     caster_uuid = seed.observer_uuid
     first_actor, latest_actor = seed.actors[caster_uuid], latest.actors[caster_uuid]
-    dagger = next(item for item in first_actor.items if item.item_id == "weapon.dagger")
-    shortsword = next(item for item in first_actor.items if item.item_id == "weapon.shortsword")
-    assert dict(first_actor.equipment) == {WeaponSlot.MELEE_MAIN.value: dagger.item_uuid}
-    assert dict(latest_actor.equipment) == {WeaponSlot.MELEE_MAIN.value: shortsword.item_uuid}
-    assert first_actor.active_weapon_set is latest_actor.active_weapon_set is WeaponSet.MELEE
+    dagger = next(item for item in (first_actor.controlled_items or ()) if item.item_id == "weapon.dagger")
+    shortsword = next(item for item in (first_actor.controlled_items or ()) if item.item_id == "weapon.shortsword")
+    assert {item.slot: item.item_uuid for item in first_actor.visual_loadout.layers} == {WeaponSlot.MELEE_MAIN.value: dagger.item_uuid}
+    assert {item.slot: item.item_uuid for item in latest_actor.visual_loadout.layers} == {WeaponSlot.MELEE_MAIN.value: shortsword.item_uuid}
+    assert first_actor.visual_loadout.active_weapon_set is latest_actor.visual_loadout.active_weapon_set is WeaponSet.MELEE
     assert latest_actor.normal_hp == first_actor.normal_hp == 80
     assert tuple(sample_cast(first.timeline, elapsed) for elapsed in sample_times) == original_samples
 
     historical = first.after
     for lineage in equipment:
-        historical = reduce_lineage(historical, lineage)
-    second = bind_cast(historical, second_lineage, data, travel_apex_steps=1.0)
+        historical = reduce_player_lineage(historical, lineage)
+    second = bind_cast(historical, public_second, data, travel_apex_steps=1.0)
     assert (first.timeline.source.applications[0].target.hp, first.timeline.source.applications[0].resulting_hp,
             second.timeline.source.applications[0].target.hp, second.timeline.source.applications[0].resulting_hp) == (80, 73, 73, 66)
     assert second.after == latest
@@ -185,11 +190,11 @@ def test_public_mixed_history_keeps_first_cast_dagger_while_latest_reaches_short
                       if layer.slot == "weapon") for cast in (first, second)) == ("Melee1", "Melee3")
 
     reset_engine_runtime()
-    replay_first = bind_cast(seed, first_lineage, data, travel_apex_steps=1.0)
+    replay_first = bind_cast(seed, public_first, data, travel_apex_steps=1.0)
     replay = replay_first.after
     for lineage in equipment:
-        replay = reduce_lineage(replay, lineage)
-    replay_second = bind_cast(replay, second_lineage, data, travel_apex_steps=1.0)
+        replay = reduce_player_lineage(replay, lineage)
+    replay_second = bind_cast(replay, public_second, data, travel_apex_steps=1.0)
     assert replay_first == first
     assert replay_second == second
     assert tuple(sample_cast(replay_first.timeline, elapsed) for elapsed in sample_times) == original_samples

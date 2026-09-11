@@ -21,7 +21,8 @@ from game.choreography_draw import load_choreography_media
 from game.combat import actor_contact
 from game.motion import bind_motion, sample_motion
 from game.playback_frame import PlaybackFrame, sample_playback_frame
-from game.presentation import reduce_lineage
+from game.player_projection import reduce_lineage
+from tests.game.player_helpers import player_history
 from game.projection import Camera
 from game.scene import load_scene_media, scene_actors
 from game.visual_position import VisualPosition
@@ -48,13 +49,14 @@ def test_actual_condition_recovery_preserves_pose_through_turns_and_next_motion(
     data: AnimationData, behavior: str, seeds: tuple[int, ...], resume: bool,
 ) -> None:
     captured = paralysis_lifecycle(repeat_save_seeds=seeds, movement_behavior=behavior, resume=resume)
-    before, lineages = captured.before, captured.lineages
+    before, lineages = player_history(captured)
     latest = before
     for lineage in lineages:
         latest = reduce_lineage(latest, lineage)
     initial = bind_motion(before, lineages[0], data)
     assert initial is not None
     held = sample_motion(initial, data, initial.reactions[0].end_ms - .001).contact
+    assert held is not None
     identity, mover = held.actor_uuid, UUID(held.actor_uuid)
     # The exact native wrapper and child identities, after the initial root.
     owned = {fact.condition_uuid for fact in reduce_lineage(before, lineages[0]).actors[mover].conditions}
@@ -141,7 +143,7 @@ def test_paused_lifecycle_clip_keeps_applied_membership_while_latest_has_recover
     run = tmp_path / "runs" / json.loads((tmp_path / "latest.json").read_text())["run"]
     trace = json.loads((run / "cases/recovery-paused/trace.json").read_text())
     first = trace["lineages"][0]
-    mover = first["root"]["source_entity_uuid"]
+    mover = first["root"]["fact"]["source_entity_uuid"]
     applied = trace["heads"][0]["after"]["actors"][mover]["conditions"]
     owned = {fact["uuid"] for fact in applied}
     assert len(owned) == 2

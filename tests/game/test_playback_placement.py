@@ -18,7 +18,8 @@ from game.choreography_draw import load_choreography_media
 from game.combat import actor_contact
 from game.motion import bind_motion, sample_motion
 from game.playback_frame import sample_playback_frame
-from game.presentation import reduce_lineage
+from game.player_projection import reduce_lineage
+from tests.game.player_helpers import player_history
 from game.projection import Camera
 from game.scene import load_scene_media, scene_actors
 from game.visual_position import VisualPosition, placed_contact
@@ -41,15 +42,16 @@ def test_interrupted_pose_survives_completion_and_idle_in_every_camera(
     if later_step:
         captured = attack_history("weapon.longsword", seed, opportunity=True, whole_movement=True,
             maximum_hp=maximum_hp, movement_behavior=behavior, destination=(3, 1))
-        before, lineage = captured.before, captured.lineages[0]
+        before, (lineage,) = player_history(captured, role="hero" if maximum_hp == 4 else None)
     else:
         captured = movement_with_paralysis(seed, maximum_hp, movement_behavior=behavior)
-        before, lineage = captured.before, captured.lineages[0]
+        before, (lineage,) = player_history(captured, role="mover" if maximum_hp == 4 else None)
     after = reduce_lineage(before, lineage)
     motion = bind_motion(before, lineage, data)
     assert motion is not None
     reaction, = motion.reactions
     held = sample_motion(motion, data, reaction.end_ms - .001)
+    assert held.contact is not None
     identity = motion.actor.actor_uuid
     pygame.init()
     try:
@@ -68,7 +70,7 @@ def test_interrupted_pose_survives_completion_and_idle_in_every_camera(
             later = sample_playback_frame(after, None, data, 0, 4000,
                 camera, idle.facings, media, font, badge, positions=idle.positions)
             if later_step:
-                retained = after.actors[lineage.root.source_entity_uuid].last_visual_position
+                retained = after.actors[captured.lineages[0].root.source_entity_uuid].last_visual_position
                 assert retained == (3, 2)
                 for frame in (completed, idle, later):
                     assert frame.positions[identity].legal_grid == retained
@@ -82,7 +84,7 @@ def test_interrupted_pose_survives_completion_and_idle_in_every_camera(
                     assert contact.grid != motion.actor.grid
                 assert contact.elevation_steps == held.contact.elevation_steps
                 assert contact.body_lift_px == held.lift_px
-                assert contact.hp == after.actors[lineage.root.source_entity_uuid].normal_hp
+                assert contact.hp == after.actors[captured.lineages[0].root.source_entity_uuid].normal_hp
                 assert frame.displayed == after
             # Same global time at head release: neither position nor idle/Die
             # frame, body pixels, support shadow or painter depth changes.
@@ -94,7 +96,7 @@ def test_interrupted_pose_survives_completion_and_idle_in_every_camera(
                 assert command[0] == next_command[0]
                 assert command[2:] == next_command[2:]
                 assert pygame.image.tobytes(command[1], "RGBA") == pygame.image.tobytes(next_command[1], "RGBA")
-        legal = actor_contact(after, after.actors[lineage.root.source_entity_uuid], data)
+        legal = actor_contact(after, after.actors[captured.lineages[0].root.source_entity_uuid], data)
         assert legal.grid == ((3, 2) if later_step else (3, 3)) and legal.body_lift_px == 0
         assert reduce_lineage(before, lineage) == after
     finally:
@@ -115,15 +117,17 @@ def test_visual_placement_keeps_fresh_facts_and_yields_to_a_real_relocation() ->
 @pytest.mark.parametrize("behavior", ["action.move", "action.jump"])
 def test_committed_movement_starts_from_its_existing_visual_pose(data: AnimationData, behavior: str) -> None:
     captured = movement_with_paralysis(17, movement_behavior=behavior)
-    before, lineage = captured.before, captured.lineages[0]
-    original = actor_contact(before, before.actors[lineage.root.source_entity_uuid], data)
+    before, (lineage,) = player_history(captured)
+    original = actor_contact(before, before.actors[captured.lineages[0].root.source_entity_uuid], data)
     prior_pose = placed_contact(original, VisualPosition(original.grid, (2.664, 3), 0, 19))
     normal = bind_motion(before, lineage, data)
     moving = bind_motion(before, lineage, data, contacts={prior_pose.actor_uuid: prior_pose})
     assert normal is not None and moving is not None
     start = sample_motion(moving, data, 0)
+    assert start.contact is not None
     assert start.contact.grid == prior_pose.grid and start.lift_px == prior_pose.body_lift_px
     # The actual Step and source contexts still own duration and destination.
     assert moving.complete_ms == normal.complete_ms
     final = sample_motion(moving, data, moving.complete_ms)
+    assert final.contact is not None
     assert final.contact.grid == (2, 3) and final.contact.body_lift_px == final.lift_px == 0

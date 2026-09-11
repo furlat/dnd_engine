@@ -76,6 +76,7 @@ from dnd.maps.arena_layout import (
     StandardBarrierObjects,
     build_standard_arena_environment,
     create_standard_arena_floor,
+    place_standard_directional_barrier,
     darken_arena,
 )
 @dataclass(frozen=True)
@@ -217,6 +218,19 @@ def _preview_for_battlefield(battlefield_id: str) -> BattlefieldPreview:
     builder_id = battlefield_id.removeprefix("battlefield.")
     if builder_id in {"open_floor_bright", "open_floor_dark"}:
         return BattlefieldPreview()
+    if builder_id == "visibility_two_doors_open":
+        return BattlefieldPreview(objects=tuple(
+            _preview_object((7, y), "door" if y in (5, 9) else "wall", "Aperture" if y in (5, 9) else "Wall",
+                            blocked_directions=() if y in (5, 9) else ("west",),
+                            is_open=True if y in (5, 9) else None)
+            for y in range(3, 12)))
+    if builder_id in {"visibility_doorway_open", "visibility_doorway_closed"}:
+        opened = builder_id.endswith("_open")
+        return BattlefieldPreview(objects=tuple(
+            _preview_object(position, "wall", "Wall", blocked_directions=("west",))
+            for position in WALL_POSITIONS
+        ) + (_preview_object(DOOR_POSITION, "door", "Door",
+                             blocked_directions=() if opened else ("west",), is_open=opened),))
     if builder_id == "standard_hazards_closed":
         return _standard_hazards_preview(open_door=False)
     if builder_id == "standard_hazards_open":
@@ -317,6 +331,18 @@ def _preview_for_battlefield(battlefield_id: str) -> BattlefieldPreview:
 
 
 BATTLEFIELDS: tuple[BattlefieldDefinition, ...] = (
+    BattlefieldDefinition(battlefield_id="battlefield.visibility_open_range", title="Bright Sight-Range Field",
+                          width=26, height=7, tags=("bright", "open-field", "visibility"),
+                          capabilities=("open-floor", "bright-light")),
+    _battlefield("battlefield.visibility_two_doors_open", "Bright Two-Aperture Wall",
+                 ("bright", "doorway", "visibility"), "bright",
+                 ("bright-light", "open-door", "directional-barrier")),
+    _battlefield("battlefield.visibility_doorway_open", "Bright Open Doorway",
+                 ("bright", "doorway", "visibility"), "bright",
+                 ("bright-light", "open-door", "directional-barrier")),
+    _battlefield("battlefield.visibility_doorway_closed", "Bright Closed Doorway",
+                 ("bright", "doorway", "visibility"), "bright",
+                 ("bright-light", "closed-door", "directional-barrier")),
     _battlefield(
         "battlefield.standard_hazards_closed",
         "Dark Standard Hazards With Closed Door",
@@ -615,6 +641,40 @@ def _build_standard_hazards(
         notable_positions={"door": door_position},
         object_uuids={"door": environment.barrier.door.uuid},
     )
+
+
+def _build_visibility_open_range(definition: BattlefieldDefinition, grid: GridMap) -> BuiltBattlefield:
+    """An open field extending beyond the native twenty-tile optical radius."""
+    grid.create_rectangle(0, 0, definition.width, definition.height)
+    return _empty_runtime(definition)
+
+
+def _build_visibility_two_doors(definition: BattlefieldDefinition, grid: GridMap) -> BuiltBattlefield:
+    """Two ordinary native apertures allow separated sight runs in one move."""
+    create_standard_arena_floor(grid)
+    identities: dict[str, UUID] = {}
+    for y in range(3, 12):
+        if y in (5, 9):
+            door = build_directional_door(display_name="Aperture", blocked_channels=STANDARD_BLOCKING_CHANNELS, is_open=True)
+            door.place_on_grid((7, y), boundary_direction=CardinalDirection.WEST)
+            identities[f"door-{y}"] = door.uuid
+        else:
+            wall = build_directional_wall(blocked_channels=STANDARD_BLOCKING_CHANNELS)
+            wall.place_on_grid((7, y), boundary_direction=CardinalDirection.WEST)
+    return BuiltBattlefield(definition=definition, environment=None,
+                            notable_positions={"first_door": (7, 5), "second_door": (7, 9)},
+                            object_uuids=identities)
+
+
+def _build_visibility_doorway(definition: BattlefieldDefinition, grid: GridMap) -> BuiltBattlefield:
+    """Bright floor with the established directional wall and actual native door."""
+    create_standard_arena_floor(grid)
+    barrier = place_standard_directional_barrier(grid)
+    if definition.battlefield_id.endswith("_open"):
+        barrier.door.open()
+    return BuiltBattlefield(definition=definition, environment=None,
+                            notable_positions={"door": DOOR_POSITION},
+                            object_uuids={"door": barrier.door.uuid})
 
 
 def _build_standard_hazards_closed(definition: BattlefieldDefinition, grid: GridMap) -> BuiltBattlefield:
@@ -944,6 +1004,10 @@ BattlefieldBuilder = Callable[
 ]
 
 _BUILDERS: dict[str, BattlefieldBuilder] = {
+    "battlefield.visibility_open_range": _build_visibility_open_range,
+    "battlefield.visibility_two_doors_open": _build_visibility_two_doors,
+    "battlefield.visibility_doorway_open": _build_visibility_doorway,
+    "battlefield.visibility_doorway_closed": _build_visibility_doorway,
     "battlefield.standard_hazards_closed": _build_standard_hazards_closed,
     "battlefield.open_floor_bright": _build_open_floor_bright,
     "battlefield.standard_hazards_open": _build_standard_hazards_open,

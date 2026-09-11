@@ -10,10 +10,8 @@ from types import MappingProxyType
 from typing import Mapping
 from uuid import UUID
 
-from dnd.actions import AttackEvent, SpellEvent
 from dnd.core.dice import AttackOutcome
 from dnd.core.equipment_types import WeaponSet, WeaponSlot
-from dnd.core.events import DamageAppliedEvent, Event, LifeStateChangeEvent
 from dnd.core.life_types import LifeState
 from game.animation import (
     ActorContact, BodySample, DamageTiming, GeometryProjectileSample, NumberSample, VitalsSample,
@@ -21,13 +19,14 @@ from game.animation import (
     projectile_curve_point, projectile_curve_tangent, projectile_endpoints, reference_point_contact,
     resolve_damage, sample_damage_body, sample_damage_number,
 )
-from game.animation_data import resolve_actor_layers
+from game.animation_data import resolve_player_layers
 from game.animation_types import (
     ActionFeedback, ActionProjectile, AnimationData, AttackRecipe, AttackVariant, ElementColors, Facing8,
     LayerColors, RigLayer, StudioActorLayer, StudioDamage,
 )
 from game.combat import actor_contact
-from game.presentation import CompletedLineage, PresentationTarget, reduce_lineage
+from game.player_facts import AttackFact, DamageFact, LifeFact, PlayerLineage, PlayerNode, PlayerState, SpellFact
+from game.player_projection import reduce_lineage
 from game.projection import HEIGHT_STEP_PIXELS, TILE_WIDTH, project_world
 
 
@@ -86,12 +85,12 @@ class AttackSample:
 @dataclass(frozen=True, slots=True)
 class BoundAttack:
     timeline: AttackTimeline
-    after: PresentationTarget
+    after: PlayerState
     appearances: Mapping[str, tuple[RigLayer, ...]]
     owned_life_events: frozenset[UUID] = frozenset()
 
 
-def select_attack_profile(recipe: AttackRecipe, event: AttackEvent) -> AttackVariant | None:
+def select_attack_profile(recipe: AttackRecipe, event: AttackFact) -> AttackVariant | None:
     """Original highest-precedence selector using declaration-time facts.
 
     Current engine facts use direct authored species/behavior IDs. Existing
@@ -104,7 +103,7 @@ def select_attack_profile(recipe: AttackRecipe, event: AttackEvent) -> AttackVar
     damage_types = tuple(row.value for row in event.damage_types)
     primary = damage_types[0] if damage_types else None
     elemental = any(row not in _PHYSICAL_DAMAGE for row in damage_types)
-    item_id = event.source_item_presentation.item_id if event.source_item_presentation is not None else None
+    item_id = event.source_item_id
     candidates: list[AttackVariant] = []
     for candidate in recipe.variants:
         match = candidate.match
@@ -124,7 +123,7 @@ def select_attack_profile(recipe: AttackRecipe, event: AttackEvent) -> AttackVar
     return winners[0]
 
 
-def _attack_colors(data: AnimationData, event: AttackEvent) -> ElementColors:
+def _attack_colors(data: AnimationData, event: AttackFact) -> ElementColors:
     types = tuple(row.value for row in event.damage_types)
     elemental = next((row for row in types if row not in _PHYSICAL_DAMAGE), types[0] if types else None)
     palette = data.damage_context.palette
@@ -132,7 +131,7 @@ def _attack_colors(data: AnimationData, event: AttackEvent) -> ElementColors:
 
 
 def _attack_layers(data: AnimationData, source: ActorContact, profile: AttackVariant,
-                   event: AttackEvent) -> tuple[tuple[StudioActorLayer, ...], tuple[str, ...]]:
+                   event: AttackFact) -> tuple[tuple[StudioActorLayer, ...], tuple[str, ...]]:
     hit = event.attack_outcome in (AttackOutcome.HIT, AttackOutcome.CRIT)
     rules = profile.attackVfx
     selected = (rules.onMiss if not hit else rules.onCrit
@@ -212,13 +211,14 @@ def attack_projectile_contact(timeline: AttackTimeline, effect: GeometryProjecti
     return reference_point_contact(timeline.data, effect.point, height, quadrant), height
 
 
-def bind_attack(before: PresentationTarget, lineage: CompletedLineage, data: AnimationData,
+def bind_attack(before: PlayerState, lineage: PlayerLineage, data: AnimationData,
                 *, facings: Mapping[str, Facing8] | None = None,
                 contacts: Mapping[str, ActorContact] | None = None) -> BoundAttack | None:
     """Bind one retained attack root; geometry remains authored profile data."""
-    root = lineage.root
-    if not isinstance(root, AttackEvent):
-        raise ValueError("attack binding requires a retained AttackEvent root")
+    root_node = lineage.root
+    root = root_node.fact
+    if not isinstance(root, AttackFact):
+        raise ValueError("attack binding requires a retained AttackFact root")
     if root.behavior_id is None or root.behavior_id not in data.attack_recipes:
         return None
     recipe = data.attack_recipes[root.behavior_id]
@@ -270,31 +270,33 @@ def bind_attack(before: PresentationTarget, lineage: CompletedLineage, data: Ani
         projectile = AttackProjectileTimeline(profile.projectile, release, contact, first, last, _attack_colors(data, root))
     by_lineage = {event.lineage_uuid: event for event in lineage.events}
 
-    def primary_effect(event: Event) -> bool:
+    def primary_effect(event: PlayerNode) -> bool:
         """Nested actions own their own effects in the shared causal composition."""
         parent = event.parent_lineage
-        while parent is not None and parent != root.lineage_uuid:
+        while parent is not None and parent != root_node.lineage_uuid:
             ancestor = by_lineage[parent]
-            if isinstance(ancestor, (AttackEvent, SpellEvent)):
+            if isinstance(ancestor.fact, (AttackFact, SpellFact)):
                 return False
             parent = ancestor.parent_lineage
-        return parent == root.lineage_uuid
+        return parent == root_node.lineage_uuid
 
-    applied = [event for event in lineage.events if isinstance(event, DamageAppliedEvent) and primary_effect(event)]
+    applied = [event.fact for event in lineage.events
+               if isinstance(event.fact, DamageFact) and event.fact.stage == "applied" and primary_effect(event)]
     if len(applied) > 1 or any(event.target_entity_uuid != target_actor.uuid for event in applied):
         return None
-    changes = [event for event in lineage.events if isinstance(event, LifeStateChangeEvent)
-               and event.entity_uuid == target_actor.uuid and primary_effect(event)]
+    changes = [(event.uuid, event.fact) for event in lineage.events if isinstance(event.fact, LifeFact)
+               and event.fact.entity_uuid == target_actor.uuid and primary_effect(event)]
     if len(changes) > 1:
         return None
-    life = changes[0].new_state if changes else None
+    life = changes[0][1].new_state if changes else None
     fact = applied[0] if applied else None
-    damage = resolve_damage(data, fact.damage_type.value, critical=root.attack_outcome is AttackOutcome.CRIT) if fact is not None else None
+    damage = (resolve_damage(data, fact.damage_type.value, critical=root.attack_outcome is AttackOutcome.CRIT)
+              if fact is not None and fact.damage_type is not None else None)
     timing = compile_damage(data, target, damage, contact, life) if damage is not None else None
     layers, missing = _attack_layers(data, source, profile, root)
     assert root.attack_outcome is not None
     timeline = AttackTimeline(
-        root_event_uuid=str(root.uuid), source=source, target=target, data=data,
+        root_event_uuid=str(root_node.uuid), source=source, target=target, data=data,
         profile_id=profile.id, clip=display_clip, playback_speed=profile.actor.playbackSpeed,
         facing=facing, contact_ms=contact, body_end_ms=body_end,
         # FloatingText.run returns immediately: a badge fade does not hold the
@@ -303,21 +305,19 @@ def bind_attack(before: PresentationTarget, lineage: CompletedLineage, data: Ani
         damage=damage, damage_timing=timing, damage_total=fact.applied_damage if fact is not None else None,
         # The owned life commit may normalize the packet's intermediate HP
         # (for example, entering DYING at zero). Present its HP/life together.
-        resulting_hp=changes[0].normal_hit_points if changes else fact.resulting_normal_hp if fact is not None else None,
+        resulting_hp=changes[0][1].normal_hit_points if changes else fact.resulting_normal_hp if fact is not None else None,
         resulting_life_state=life,
         feedback=recipe.attackFeedback[_OUTCOMES[root.attack_outcome]], missing_media=(*body_missing, *missing),
         projectile=projectile, authored_clip=profile.actor.clip,
         release_ms=release if projectile is not None else None,
     )
     appearances = {
-        contact.actor_uuid: resolve_actor_layers(
-            data, actor.appearance, actor.items, actor.equipment,
-            (WeaponSet.RANGED if profile.projectile is not None else WeaponSet.MELEE)
-            if actor.uuid == source_actor.uuid else actor.active_weapon_set, rig_id=contact.rig_id,
-        ) for actor, contact in ((source_actor, source), (target_actor, target))
+        contact.actor_uuid: resolve_player_layers(data, actor, rig_id=contact.rig_id,
+            active_weapon_set=(WeaponSet.RANGED if profile.projectile is not None else WeaponSet.MELEE)
+            if actor.uuid == source_actor.uuid else None) for actor, contact in ((source_actor, source), (target_actor, target))
     }
     return BoundAttack(timeline, reduce_lineage(before, lineage), MappingProxyType(appearances),
-                       frozenset(event.uuid for event in changes) if timing is not None else frozenset())
+                       frozenset(identity for identity, _ in changes) if timing is not None else frozenset())
 
 
 def sample_attack(timeline: AttackTimeline, elapsed_ms: float) -> AttackSample:

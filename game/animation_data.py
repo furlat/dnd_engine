@@ -6,7 +6,7 @@ import json
 from pathlib import Path, PurePosixPath
 import struct
 from types import MappingProxyType
-from typing import Literal, Mapping
+from typing import Literal, Mapping, Sequence
 from uuid import UUID
 
 from pydantic import Field, JsonValue, TypeAdapter
@@ -24,6 +24,7 @@ from game.animation_types import (
     VoluntaryMovementContext,
 )
 from game.condition_types import load_condition_recipes
+from game.player_facts import PlayerActor, VisualItem
 
 
 DATA_ROOT = Path(__file__).resolve().parent / "data" / "neuroclient"
@@ -53,7 +54,7 @@ _ITEM_VISUAL_CATEGORIES_BY_NAME = {
 def resolve_actor_layers(
     data: AnimationData,
     appearance: AppearanceConfig,
-    items: tuple[ItemPresentationState, ...],
+    items: Sequence[ItemPresentationState | VisualItem],
     equipment: tuple[tuple[str, UUID], ...],
     active_weapon_set: WeaponSet,
     *,
@@ -118,6 +119,20 @@ def resolve_actor_layers(
                 layer.render_layer.value, layer.sprite_key, layer.tint_rgb,
             )
     return tuple(layers[slot] for slot in rig.slot_order if slot in layers)
+
+
+def resolve_player_layers(
+    data: AnimationData, actor: PlayerActor, *, rig_id: str,
+    active_weapon_set: WeaponSet | None = None,
+) -> tuple[RigLayer, ...]:
+    """Resolve disclosed equipment through the same authored layer mapping."""
+    loadout = actor.visual_loadout
+    return resolve_actor_layers(
+        data, actor.appearance, loadout.layers,
+        tuple((row.slot, row.item_uuid) for row in loadout.layers),
+        loadout.active_weapon_set if active_weapon_set is None else active_weapon_set,
+        rig_id=rig_id,
+    )
 
 
 class _Bindings(AuthoredRecord):

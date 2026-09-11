@@ -22,6 +22,8 @@ from game.combat import actor_contact
 from game.motion import bind_motion, sample_motion
 from game.projection import HEIGHT_STEP_PIXELS, TILE_WIDTH, project_world
 from tests.game.scenarios import attack_history
+from tests.game.player_helpers import player_history, visible_body, visible_contact
+from game.player_facts import AttackFact
 
 
 @pytest.fixture(scope="module")
@@ -44,9 +46,10 @@ def test_weapon_facts_choose_authored_profile_and_contact_feedback(
     try:
         captured = attack_history(weapon, seed)
         before, lineage = captured.before, captured.lineages[0]
+        player, (received,) = player_history(captured)
         assert isinstance(lineage.root, AttackEvent) and lineage.root.attack_outcome is outcome
         assert lineage.root.target_entity_uuid is not None
-        bound = bind_attack(before, lineage, data, facings={str(lineage.root.target_entity_uuid): "NW"})
+        bound = bind_attack(player, received, data, facings={str(lineage.root.target_entity_uuid): "NW"})
         assert bound is not None
         timeline = bound.timeline
         assert timeline.profile_id == profile
@@ -83,11 +86,12 @@ def test_real_goblin_opportunity_attack_uses_same_profile_and_preserves_pre_step
     random_state = random.getstate()
     try:
         captured = attack_history("weapon.longsword", 17, opportunity=True)
-        before, lineage = captured.before, captured.lineages[0]
+        lineage = captured.lineages[0]
+        player, (received,) = player_history(captured)
         assert isinstance(lineage.root, AttackEvent)
         assert lineage.root.behavior_id == "reaction.opportunity_attack"
         assert lineage.root.parent_lineage is not None
-        bound = bind_attack(before, lineage, data)
+        bound = bind_attack(player, received, data)
         assert bound is not None
         timeline = bound.timeline
         assert (timeline.source.grid, timeline.target.grid) == ((4, 3), (3, 3))
@@ -116,8 +120,9 @@ def test_walk_holds_at_the_provoking_edge_and_resumes_only_committed_steps(
     try:
         captured = attack_history("weapon.longsword", 5 if maximum_hp == 4 else 17, opportunity=True,
                                   whole_movement=True, destination=destination, maximum_hp=maximum_hp)
-        before, lineage = captured.before, captured.lineages[0]
-        timeline = bind_motion(before, lineage, data)
+        lineage = captured.lineages[0]
+        player, (received,) = player_history(captured, role="hero" if maximum_hp == 4 else None)
+        timeline = bind_motion(player, received, data)
         assert timeline is not None and len(timeline.reactions) == 1
         reaction = timeline.reactions[0]
         steps = [event for event in lineage.events if isinstance(event, StepMovementEvent)]
@@ -127,37 +132,39 @@ def test_walk_holds_at_the_provoking_edge_and_resumes_only_committed_steps(
         expected = tuple(start + (end - start) * fraction
                          for start, end in zip(step.from_position, step.to_position))
         held = sample_motion(timeline, data, reaction.start_ms)
-        assert held.reaction is reaction.choreography and held.contact.grid == pytest.approx(expected)
+        assert held.reaction is reaction.choreography and visible_contact(held).grid == pytest.approx(expected)
         assert held.reaction_elapsed_ms == 0
         assert held.displayed_vitals[0].hp == maximum_hp
         assert attack.behavior_id is not None
-        profile = select_attack_profile(data.attack_recipes[attack.behavior_id], attack)
+        attack_fact = next(node.fact for node in received.events if node.uuid == attack.uuid)
+        assert isinstance(attack_fact, AttackFact)
+        profile = select_attack_profile(data.attack_recipes[attack.behavior_id], attack_fact)
         assert profile is not None
-        source = actor_contact(before, before.actors[attack.source_entity_uuid], data)
+        source = actor_contact(player, player.actors[attack.source_entity_uuid], data)
         clip = body_clip(data, source, profile.actor.clip)
         contact_frame = next(anchor.frame for name in ("impact", "contact", "effect")
                              for anchor in profile.anchors if anchor.name == name)
         impact_at = reaction.start_ms + contact_frame * 1000 / (clip.fps * profile.actor.playbackSpeed)
         impact = sample_motion(timeline, data, impact_at)
         damage = next(event for event in lineage.events if isinstance(event, DamageAppliedEvent))
-        assert impact.contact.grid == held.contact.grid
+        assert visible_contact(impact).grid == visible_contact(held).grid
         assert impact.displayed_vitals[0].hp == damage.resulting_normal_hp
         final = sample_motion(timeline, data, timeline.complete_ms)
         assert final.complete and final.reaction is None
         assert final.displayed_vitals[0].hp == damage.resulting_normal_hp
         if step.committed:
             resumed = sample_motion(timeline, data, reaction.end_ms)
-            assert resumed.reaction is None and resumed.body.frame == 0
-            assert resumed.contact.grid == held.contact.grid
-            assert final.contact.grid == destination
+            assert resumed.reaction is None and visible_body(resumed).frame == 0
+            assert visible_contact(resumed).grid == visible_contact(held).grid
+            assert visible_contact(final).grid == destination
             remaining = (data.movement_context.walkStepDurationMs
                          * ((step.to_position[0] - step.from_position[0]) ** 2
                             + (step.to_position[1] - step.from_position[1]) ** 2) ** .5 * (1 - fraction))
             assert timeline.complete_ms == pytest.approx(reaction.end_ms + remaining)
-            assert final.contact.life_state is LifeState.ALIVE
+            assert visible_contact(final).life_state is LifeState.ALIVE
         else:
-            assert final.contact.grid == held.contact.grid
-            assert final.contact.life_state is LifeState.DEAD and final.body.clip == "Die"
+            assert visible_contact(final).grid == visible_contact(held).grid
+            assert visible_contact(final).life_state is LifeState.DEAD and visible_body(final).clip == "Die"
             assert timeline.complete_ms == reaction.end_ms
         assert sample_motion(timeline, data, reaction.start_ms) == held
     finally:
@@ -170,9 +177,10 @@ def test_real_diagonal_jump_uses_original_planar_distance_clock_and_arc(data: An
     try:
         captured = attack_history("weapon.longsword", 17, opportunity=True,
             whole_movement=True, destination=(4, 4), movement_behavior="action.jump")
-        before, lineage = captured.before, captured.lineages[0]
+        lineage = captured.lineages[0]
+        player, (received,) = player_history(captured)
         assert isinstance(lineage.root, JumpEvent)
-        timeline = bind_motion(before, lineage, data)
+        timeline = bind_motion(player, received, data)
         assert timeline is not None and not timeline.reactions
         context = data.movement_context
         distance = 2 ** .5
@@ -180,11 +188,11 @@ def test_real_diagonal_jump_uses_original_planar_distance_clock_and_arc(data: An
         arc = context.jumpArcBasePx + distance * context.jumpArcPerCellPx
         assert timeline.complete_ms == pytest.approx(duration)
         middle = sample_motion(timeline, data, duration / 2)
-        assert middle.contact.grid == pytest.approx((3.5, 3.5))
+        assert visible_contact(middle).grid == pytest.approx((3.5, 3.5))
         assert middle.lift_px == pytest.approx(arc)
-        assert middle.body.clip == context.jumpClip
+        assert visible_body(middle).clip == context.jumpClip
         final = sample_motion(timeline, data, duration)
-        assert final.complete and final.contact.grid == (4, 4) and final.lift_px == 0
+        assert final.complete and visible_contact(final).grid == (4, 4) and final.lift_px == 0
     finally:
         reset_engine_runtime()
         random.setstate(random_state)
@@ -195,8 +203,8 @@ def test_later_edge_reaction_binds_the_hp_left_by_the_earlier_attack(data: Anima
     try:
         captured = attack_history("weapon.longsword", 17, opportunity=True,
             whole_movement=True, destination=(0, 3), watcher_positions=((4, 3), (2, 4)))
-        before, lineage = captured.before, captured.lineages[0]
-        timeline = bind_motion(before, lineage, data)
+        player, (received,) = player_history(captured)
+        timeline = bind_motion(player, received, data)
         assert timeline is not None and len(timeline.reactions) == 2
         first, second = timeline.reactions
         prior_result = sample_choreography(first.choreography, first.choreography.complete_ms).vitals[0]
@@ -207,7 +215,7 @@ def test_later_edge_reaction_binds_the_hp_left_by_the_earlier_attack(data: Anima
         assert first.end_ms < second.start_ms
         held = sample_motion(timeline, data, second.start_ms)
         assert held.displayed_vitals[0].hp == prior_result.hp
-        assert sample_motion(timeline, data, timeline.complete_ms).contact.grid == (0, 3)
+        assert visible_contact(sample_motion(timeline, data, timeline.complete_ms)).grid == (0, 3)
     finally:
         reset_engine_runtime()
         random.setstate(random_state)
@@ -228,9 +236,10 @@ def test_real_shortbow_uses_original_release_delivery_join_and_retained_loadout(
     try:
         captured = attack_history("weapon.shortbow", seed, weapon_slot=WeaponSlot.RANGED_MAIN,
             goblin_source=goblin_source, watcher_positions=(position,), maximum_hp=maximum_hp)
-        before, lineage = captured.before, captured.lineages[0]
+        lineage = captured.lineages[0]
+        player, (received,) = player_history(captured)
         assert isinstance(lineage.root, AttackEvent) and lineage.root.attack_outcome is outcome
-        bound = bind_attack(before, lineage, data)
+        bound = bind_attack(player, received, data)
         assert bound is not None and bound.timeline.projectile is not None
         timeline, projectile = bound.timeline, bound.timeline.projectile
         assert timeline.profile_id == "ranged" and timeline.authored_clip == "Attack3"
@@ -259,7 +268,7 @@ def test_real_shortbow_uses_original_release_delivery_join_and_retained_loadout(
             assert timeline.complete_ms == max(timeline.body_end_ms, timeline.damage_timing.end_ms)
             if maximum_hp == 4:
                 assert arrived.vitals[0].life_state is LifeState.DEAD
-        assert bound.after.actors[lineage.root.source_entity_uuid].active_weapon_set is WeaponSet.RANGED
+        assert bound.after.actors[lineage.root.source_entity_uuid].visual_loadout.active_weapon_set is WeaponSet.RANGED
         if goblin_source:
             assert timeline.clip == "Idle"
             assert "smallscale.goblin01/Attack3/body" in timeline.missing_media
@@ -270,7 +279,7 @@ def test_real_shortbow_uses_original_release_delivery_join_and_retained_loadout(
 
         # Held subcell contacts enter before both facing and endpoint compilation.
         held = replace(timeline.target, grid=(3.25, 4.5), elevation_steps=1.25, visual_scale=.5)
-        rebound = bind_attack(before, lineage, data, contacts={held.actor_uuid: held})
+        rebound = bind_attack(player, received, data, contacts={held.actor_uuid: held})
         assert rebound is not None and rebound.timeline.target == held
         held_timeline = rebound.timeline
         assert held_timeline.projectile is not None

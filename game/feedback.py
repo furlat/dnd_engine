@@ -15,6 +15,7 @@ from game.choreography import BoundChoreography
 from game.combat import actor_contact
 from game.forced_movement import forced_contact
 from game.motion import MotionTimeline
+from game.player_facts import HealFact
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,8 +96,8 @@ def choreography_feedback(bound: BoundChoreography, data: AnimationData, absolut
     healing = data.healing_context
     if healing.feedbackEnabled:
         for cue in bound.healing:
-            event = cue.event
-            assert event.target_entity_uuid is not None
+            event = cue.event.fact
+            assert isinstance(event, HealFact)
             identity = str(event.target_entity_uuid)
             contact = group_contacts.get(identity)
             if contact is None:
@@ -131,7 +132,7 @@ def motion_feedback(motion: MotionTimeline, data: AnimationData, absolute_start_
     context, style = data.movement_reaction_context, data.badge_style
     for reaction in motion.reactions:
         start = absolute_start_ms + reaction.start_ms
-        if context.feedbackEnabled:
+        if context.feedbackEnabled and reaction.source is not None:
             label = context.label if reaction.action_label is None else f"{context.label}: {reaction.action_label}"
             tracks.append(FeedbackTrack(reaction.source, start, style.durationMs, None, label,
                                         context.feedbackColor, style, kind="badge"))

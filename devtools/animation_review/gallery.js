@@ -149,6 +149,10 @@ function makeCard(row) {
   const tags = element("div", "case-tags");
   tags.append(...row.tags.map(tag => element("span", "tag", tag)));
   header.append(tags, element("p", "description", row.description));
+  if (row.perspective) {
+    header.append(element("p", "description",
+      `Experiment ${row.perspective.experiment_id} · ${row.perspective.role}'s subjective view. Paired clips share native events; their presentation times are independent.`));
+  }
   const media = element("div", "video-wrap");
   let video = null;
   const mediaError = element("p", "media-error");
@@ -228,6 +232,16 @@ function makeCard(row) {
     footer.append(input);
   }
   footer.append(button("Export this case", () => exportCases([row.id])));
+  if (row.perspective) {
+    footer.append(button("Show paired views", () => {
+      document.getElementById("clear-filters").click();
+      ui.search.value = row.perspective.experiment_id;
+      filterCards();
+    }));
+    footer.append(button("Export paired views", () => exportCases(manifest.cases
+      .filter(other => other.perspective?.experiment_id === row.perspective.experiment_id)
+      .map(other => other.id))));
+  }
   const evidence = element("details", "evidence");
   evidence.open = row.status === "failed";
   evidence.append(element("summary", "", `${row.checks.length} checks · ${row.gaps.length} presentation gaps`));

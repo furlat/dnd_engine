@@ -4,8 +4,6 @@ from dataclasses import dataclass, replace
 from math import isfinite
 from uuid import UUID
 
-from dnd.actions import AttackEvent, SpellEvent
-from dnd.core.events import DamageAppliedEvent, Event, LifeStateChangeEvent, TakeDamageEvent
 from dnd.core.life_types import LifeState
 from game.animation import (
     ActorContact, BodySample, DamageTiming, VitalsSample, compile_damage,
@@ -13,7 +11,7 @@ from game.animation import (
 )
 from game.animation_types import AnimationData, StudioDamage
 from game.combat import actor_contact
-from game.presentation import CompletedLineage, PresentationTarget
+from game.player_facts import AttackFact, DamageFact, LifeFact, PlayerLineage, PlayerNode, PlayerState, SpellFact
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,34 +34,37 @@ class DamageSample:
     complete: bool
 
 
-def bind_damage(before: PresentationTarget, lineage: CompletedLineage, data: AnimationData,
+def bind_damage(before: PlayerState, lineage: PlayerLineage, data: AnimationData,
                 *, start_ms: float, contact: ActorContact | None = None) -> DamageCue | None:
     """Own one direct applied packet and its life commit, excluding nested hits."""
-    root = lineage.root
-    if not isinstance(root, TakeDamageEvent):
+    root_node = lineage.root
+    root = root_node.fact
+    if not isinstance(root, DamageFact) or root.stage != "taken":
         raise ValueError("damage binding requires a retained TakeDamageEvent root")
     if not isfinite(start_ms) or start_ms < 0:
         raise ValueError("damage start requires finite nonnegative time")
-    if root.canceled or root.target_entity_uuid is None or root.target_entity_uuid not in before.actors:
+    if root_node.canceled or root.target_entity_uuid is None or root.target_entity_uuid not in before.actors:
         return None
     actor = before.actors[root.target_entity_uuid]
-    packets = [event for event in lineage.events if isinstance(event, DamageAppliedEvent)
-               and not event.canceled and event.parent_lineage == root.lineage_uuid]
+    packets = [event.fact for event in lineage.events if isinstance(event.fact, DamageFact)
+               and event.fact.stage == "applied" and not event.canceled
+               and event.parent_lineage == root_node.lineage_uuid]
     if len(packets) != 1 or packets[0].target_entity_uuid != actor.uuid:
         return None
     by_lineage = {event.lineage_uuid: event for event in lineage.events}
 
-    def owned_effect(event: Event) -> bool:
+    def owned_effect(event: PlayerNode) -> bool:
         parent = event.parent_lineage
-        while parent is not None and parent != root.lineage_uuid:
+        while parent is not None and parent != root_node.lineage_uuid:
             ancestor = by_lineage[parent]
-            if isinstance(ancestor, (AttackEvent, SpellEvent, TakeDamageEvent)):
+            if (isinstance(ancestor.fact, (AttackFact, SpellFact))
+                    or isinstance(ancestor.fact, DamageFact) and ancestor.fact.stage == "taken"):
                 return False
             parent = ancestor.parent_lineage
-        return parent == root.lineage_uuid
+        return parent == root_node.lineage_uuid
 
-    changes = [event for event in lineage.events if isinstance(event, LifeStateChangeEvent)
-               and not event.canceled and event.entity_uuid == actor.uuid and owned_effect(event)]
+    changes = [(event.uuid, event.fact) for event in lineage.events if isinstance(event.fact, LifeFact)
+               and not event.canceled and event.fact.entity_uuid == actor.uuid and owned_effect(event)]
     if len(changes) > 1:
         return None
     target = actor_contact(before, actor, data) if contact is None else contact
@@ -71,13 +72,15 @@ def bind_damage(before: PresentationTarget, lineage: CompletedLineage, data: Ani
         raise ValueError("damage contact belongs to a different recipient")
     target = replace(target, hp=actor.normal_hp, life_state=actor.life_state)
     packet = packets[0]
-    life = changes[0].new_state if changes else actor.life_state
+    if packet.damage_type is None or packet.applied_damage is None or packet.resulting_normal_hp is None:
+        raise ValueError("applied damage requires its native after-values")
+    life = changes[0][1].new_state if changes else actor.life_state
     # Entering DYING can normalize the packet's intermediate negative HP.
-    hp = changes[0].normal_hit_points if changes else packet.resulting_normal_hp
+    hp = changes[0][1].normal_hit_points if changes else packet.resulting_normal_hp
     damage = resolve_damage(data, packet.damage_type.value)
     timing = compile_damage(data, target, damage, start_ms, life)
-    return DamageCue(root.uuid, target, timing, damage, packet.applied_damage, hp, life,
-                     frozenset(event.uuid for event in changes), data)
+    return DamageCue(root_node.uuid, target, timing, damage, packet.applied_damage, hp, life,
+                     frozenset(identity for identity, _ in changes), data)
 
 
 def sample_damage(cue: DamageCue, elapsed_ms: float) -> DamageSample:

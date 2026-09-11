@@ -17,12 +17,13 @@ from game.animation_draw import (
     arrange_feedback_commands, number_draw_commands,
 )
 from game.animation_types import AnimationData, Facing8
+from game.animation_data import resolve_player_layers
 from game.choreography import BoundChoreography, sample_choreography
 from game.choreography_draw import ChoreographyMedia, choreography_draw_commands
 from game.condition_animation import condition_transition_appearances, resolve_condition_appearance
 from game.feedback import FeedbackTrack, sample_feedback
 from game.motion import MotionTimeline, sample_motion
-from game.presentation import PresentationTarget
+from game.player_facts import PlayerState
 from game.projection import Camera
 from game.scene import SceneActor, available_clips, scene_actors, scene_draw_commands
 from game.visual_position import VisualPosition
@@ -30,7 +31,7 @@ from game.visual_position import VisualPosition
 
 @dataclass(frozen=True, slots=True)
 class PlaybackFrame:
-    displayed: PresentationTarget
+    displayed: PlayerState
     actors: tuple[SceneActor, ...]
     commands: tuple[AnimationDrawCommand, ...]
     complete: bool
@@ -40,7 +41,7 @@ class PlaybackFrame:
 
 
 def sample_playback_frame(
-    before: PresentationTarget, after: PresentationTarget | None, data: AnimationData,
+    before: PlayerState, after: PlayerState | None, data: AnimationData,
     elapsed_ms: float, presentation_ms: float, camera: Camera, facings: Mapping[str, Facing8],
     body_media: BodyRows, number_font: pygame.font.Font, badge_font: pygame.font.Font, *,
     choreography: BoundChoreography | None = None, choreography_media: ChoreographyMedia | None = None,
@@ -61,8 +62,7 @@ def sample_playback_frame(
     group_elapsed = elapsed_ms
     movement_sample = None
     if motion is not None:
-        mover = next(actor for actor in scene_actors(motion.before, data, facings)
-                     if actor.contact.actor_uuid == motion.actor.actor_uuid)
+        mover = SceneActor(motion.actor, resolve_player_layers(data, motion.actor_state, rig_id=motion.actor.rig_id))
         clips = available_clips(mover, data)
         movement_sample = sample_motion(motion, data, elapsed_ms,
             clip=motion.clip if motion.clip in clips else "Idle")
@@ -90,7 +90,7 @@ def sample_playback_frame(
                            and (position := positions.get(actor.contact.actor_uuid)) is not None
                            and position.legal_grid == actor.contact.grid}
     settled_contacts = group_sample.contacts if group_sample is not None else ()
-    if movement_sample is not None:
+    if movement_sample is not None and movement_sample.contact is not None:
         settled_contacts = (*settled_contacts, movement_sample.contact)
     if complete:
         for moving in settled_contacts:
@@ -111,9 +111,10 @@ def sample_playback_frame(
             body_lift_px=placed[actor.contact.actor_uuid].body_lift_px,
             facing=placed[actor.contact.actor_uuid].facing))
             if actor.contact.actor_uuid in placed else actor for actor in actors)
-    if movement_sample is not None:
-        actors = tuple(replace(actor, contact=movement_sample.contact)
-                       if actor.contact.actor_uuid == movement_sample.contact.actor_uuid else actor for actor in actors)
+    if movement_sample is not None and movement_sample.contact is not None:
+        moving_contact = movement_sample.contact
+        actors = tuple(replace(actor, contact=moving_contact)
+                       if actor.contact.actor_uuid == moving_contact.actor_uuid else actor for actor in actors)
     condition_appearances = {str(actor.uuid): resolve_condition_appearance(actor.conditions, data.condition_recipes)
                              for actor in displayed.actors.values()}
     if group is not None and group_sample is not None:
@@ -136,11 +137,12 @@ def sample_playback_frame(
         bodies = (*tuple(body for entry in group_sample.clips for body in entry.sample.bodies), *group_sample.bodies)
         excluded = frozenset(body.actor_uuid for body in bodies)
         resulting_facings.update((body.actor_uuid, body.facing) for body in bodies)
-    if movement_sample is not None:
+    if movement_sample is not None and movement_sample.contact is not None:
         moving = movement_sample.contact
         if moving.actor_uuid not in excluded:
             mover = next(actor for actor in actors if actor.contact.actor_uuid == moving.actor_uuid)
             body = sample_idle_body(data, moving, presentation_ms) if complete else movement_sample.body
+            assert body is not None
             extra = (*extra, *actor_draw_commands(data, body, moving, mover.layers, body_media,
                                                  camera, condition=condition_appearances[moving.actor_uuid]))
         excluded = excluded | {moving.actor_uuid}

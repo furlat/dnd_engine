@@ -1,6 +1,6 @@
 """Dependency-neutral values shared by perception components and events."""
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence, Set
 from enum import Enum
 from typing import Protocol
 from uuid import UUID
@@ -59,10 +59,58 @@ class SensesView(Protocol):
         ...
 
 
+class SensoryDelta(Protocol):
+    """Recorded observer after-values consumed by the shared sensory reducer.
+
+    Native events and public player facts expose the same values. Reduction
+    needs neither native event construction nor its source/handler metadata.
+    """
+
+    @property
+    def observer_uuid(self) -> UUID: ...
+    @property
+    def initial(self) -> bool: ...
+    @property
+    def observer_position(self) -> tuple[int, int]: ...
+    @property
+    def observer_position_changed(self) -> bool: ...
+    @property
+    def visible_cells_added(self) -> Sequence[tuple[int, int]]: ...
+    @property
+    def visible_cells_removed(self) -> Sequence[tuple[int, int]]: ...
+    @property
+    def seen_cells_added(self) -> Sequence[tuple[int, int]]: ...
+    @property
+    def entity_contacts_changed(self) -> Mapping[UUID, PerceivedContact]: ...
+    @property
+    def entity_contacts_removed(self) -> Set[UUID]: ...
+    @property
+    def object_contacts_changed(self) -> Mapping[UUID, PerceivedContact]: ...
+    @property
+    def object_contacts_removed(self) -> Set[UUID]: ...
+    @property
+    def effective_light_levels_changed(self) -> Mapping[str, int]: ...
+    @property
+    def sense_modes_changed(self) -> bool: ...
+    @property
+    def sense_modes(self) -> Sequence[SenseMode] | None: ...
+    @property
+    def passive_perception_changed(self) -> bool: ...
+    @property
+    def passive_perception(self) -> int | None: ...
+    @property
+    def visual_access_changed(self) -> bool: ...
+    @property
+    def visual_access(self) -> int | None: ...
+    @property
+    def paths_dirty(self) -> bool: ...
+
+
 __all__ = [
     "OpticalObscurement",
     "PerceivedContact",
     "SenseMode",
     "SensesType",
     "SensesView",
+    "SensoryDelta",
 ]

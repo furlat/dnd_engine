@@ -27,7 +27,7 @@ from game.presentation import (
     reduce_interval, reduce_lineage,
 )
 
-from game.replay import CapturedHistory, capture_history
+from game.replay import CapturedHistory, ObserverCapture, capture_history
 
 
 def movement_history(
@@ -166,7 +166,8 @@ def movement_history(
             assert mover.position == destination
             spent = sum(event.movement_cost for event in history[-1].events if isinstance(event, StepMovementEvent))
             assert mover.action_economy.movement.normalized_score == movement_before - spent
-        return capture_history(before, tuple(history))
+        return capture_history(before, tuple(history), observers=tuple(ObserverCapture("mover" if actor is mover else "haste-caster", actor.uuid, before.reducer_cursor)
+            for actor in actors))
     finally:
         game.close()
         reset_engine_runtime()

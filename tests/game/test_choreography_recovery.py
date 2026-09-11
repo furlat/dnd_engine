@@ -18,10 +18,13 @@ from game.combat import BoundCast, bind_cast
 from game.combat_demo import iter_combat_demo
 from game.condition_types import ConditionRecipe
 from game.presentation import CompletedLineage, PresentationTarget, capture_lineage, reduce_lineage, IntervalEnvelope, reduce_interval
+from game.player_projection import reduce_lineage as reduce_player
+from game.replay import CapturedHistory, capture_history
+from tests.game.player_helpers import player_history
 
 
 @pytest.fixture(scope="module")
-def concentrating_hit() -> tuple[PresentationTarget, CompletedLineage]:
+def concentrating_hit() -> CapturedHistory:
     script = iter_combat_demo()
     try:
         initialization = next(script)
@@ -38,7 +41,7 @@ def concentrating_hit() -> tuple[PresentationTarget, CompletedLineage]:
         before = reduce_lineage(seed, capture_lineage(applied, observer_uuid=seed.observer_uuid))
         lineage = next(script)  # The same discovered Fire Bolt; its native save fails.
         assert isinstance(lineage, CompletedLineage)
-        return before, lineage
+        return capture_history(before, (lineage,))
     finally:
         script.close()
         reset_engine_runtime()
@@ -46,9 +49,9 @@ def concentrating_hit() -> tuple[PresentationTarget, CompletedLineage]:
 
 @pytest.mark.parametrize("recovery_enabled", (True, False))
 def test_authored_recovery_follows_native_late_child_without_moving_delivery(
-    concentrating_hit: tuple[PresentationTarget, CompletedLineage], recovery_enabled: bool,
+    concentrating_hit: CapturedHistory, recovery_enabled: bool,
 ) -> None:
-    before, lineage = concentrating_hit
+    lineage = concentrating_hit.lineages[0]
     data = load_animation_data()
     fact, = lineage.conditions
     assert fact.behavior_id == "condition.concentrating"
@@ -81,8 +84,9 @@ def test_authored_recovery_follows_native_late_child_without_moving_delivery(
         drafts=MappingProxyType({**data.drafts, "spell.fire_bolt": spell}),
         condition_recipes=MappingProxyType({**data.condition_recipes, fact.behavior_id: condition}),
         damage_context=DamageContext.model_validate_json(json.dumps(context)))
-    delivery = bind_cast(before, lineage, authored).timeline
-    group = bind_choreography(before, lineage, authored)
+    player, (received,) = player_history(concentrating_hit)
+    delivery = bind_cast(player, received, authored).timeline
+    group = bind_choreography(player, received, authored)
     node, = group.nodes
     assert node.event_uuid == lineage.root.uuid and isinstance(node.bound, BoundCast)
     joined = node.bound.timeline
@@ -99,7 +103,7 @@ def test_authored_recovery_follows_native_late_child_without_moving_delivery(
     assert joined.applications == delivery.applications
     assert tuple(anchor for anchor in joined.anchors if anchor.name not in ("recover", "complete")) == tuple(
         anchor for anchor in delivery.anchors if anchor.name not in ("recover", "complete"))
-    assert group.after == reduce_lineage(before, lineage)
+    assert group.after == reduce_player(player, received)
 
     # At the old recovery window, the cast waits while the child fades. Actual
     # HP is already visible and membership is removed at the child anchor.

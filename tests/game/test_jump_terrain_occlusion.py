@@ -18,10 +18,12 @@ from game.app import draw_frame
 from game.assets import AssetCatalog, SurfaceCache, load_catalog
 from game.motion import MotionTimeline, bind_motion, sample_motion
 from game.playback_frame import sample_playback_frame
-from game.presentation import PresentationTarget, reduce_lineage
+from game.player_facts import PlayerState
+from game.player_projection import reduce_lineage
 from game.projection import Camera, painter_key, project_screen
 from game.scene import load_scene_media, scene_actors
 from tests.game.movement_scenarios import movement_history
+from tests.game.player_helpers import player_history, visible_contact
 
 
 @pytest.fixture(scope="module")
@@ -37,14 +39,14 @@ def renderer() -> Iterator[tuple[AnimationData, AssetCatalog, SurfaceCache]]:
 
 @pytest.fixture(scope="module")
 def histories(renderer: tuple[AnimationData, AssetCatalog, SurfaceCache]) -> dict[
-    str, tuple[PresentationTarget, PresentationTarget, MotionTimeline, BodyRows]
+    str, tuple[PlayerState, PlayerState, MotionTimeline, BodyRows]
 ]:
     data = renderer[0]
     result = {}
     for name, route in (("uphill", ((13, 20), (14, 20))), ("downhill", ((14, 20), (13, 20)))):
         captured = movement_history(route=route, battlefield_id="battlefield.visual_vertical_seam",
                                          behavior="action.jump")
-        before, roots = captured.before, captured.lineages
+        before, roots = player_history(captured)
         lineage, = roots
         after = reduce_lineage(before, lineage)
         motion = bind_motion(before, lineage, data)
@@ -71,12 +73,12 @@ class RaisedTerrainOcclusion(AssertionError):
 ])
 def test_native_jump_terrain_pixels(
     renderer: tuple[AnimationData, AssetCatalog, SurfaceCache],
-    histories: dict[str, tuple[PresentationTarget, PresentationTarget, MotionTimeline, BodyRows]],
+    histories: dict[str, tuple[PlayerState, PlayerState, MotionTimeline, BodyRows]],
     name: str, elapsed: float, airborne: bool, quadrant: int,
 ) -> None:
     data, catalog, cache = renderer
     before, after, motion, media = histories[name]
-    height = body_elevation_steps(sample_motion(motion, data, elapsed).contact, data)
+    height = body_elevation_steps(visible_contact(sample_motion(motion, data, elapsed)), data)
     assert height > 2 if airborne else height == 0
     number, badge = (pygame.font.SysFont(style.fontFamily, round(style.fontSizePx))
                      for style in (data.number_style, data.badge_style))
@@ -103,7 +105,7 @@ def test_native_jump_terrain_pixels(
     missing = opaque & np.any(rendered != pixels, axis=2)
     missing_count = int(np.count_nonzero(missing))
     assert np.count_nonzero(opaque) > 100
-    contact = sample_motion(motion, data, elapsed).contact
+    contact = visible_contact(sample_motion(motion, data, elapsed))
     floor_y = project_screen(contact.grid, camera, elevation_steps=2)[1]
     pivot_y = project_screen(contact.grid, camera,
         elevation_steps=body_elevation_steps(contact, data))[1]

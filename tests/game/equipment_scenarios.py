@@ -25,7 +25,7 @@ from game.presentation import (
     CompletedLineage, capture_interval, capture_lineage,
     reduce_interval, reduce_lineage,
 )
-from game.replay import CapturedHistory, capture_history
+from game.replay import CapturedHistory, ObserverCapture, capture_history
 
 
 def equipment_sequence_history(
@@ -134,7 +134,9 @@ def equipment_sequence_history(
             assert fighter.action_economy.resources["extra_attacks"].current == 0
             assert fighter.equipment.active_weapon_set is WeaponSet.RANGED
         assert encounter.get_current_entity() is fighter
-        return capture_history(before, tuple(history))
+        return capture_history(before, tuple(history), observers=(ObserverCapture("fighter", fighter.uuid, before.reducer_cursor),
+            *(ObserverCapture(f"target-{index + 1}", actor.uuid, before.reducer_cursor)
+              for index, actor in enumerate(targets))))
     finally:
         game.close()
         reset_engine_runtime()

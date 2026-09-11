@@ -6,14 +6,17 @@ import json
 import pytest
 
 from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import EventQueue, SensoryUpdateEvent, StepMovementEvent
+from dnd.core.events import EventQueue
 from game.animation_data import load_animation_data
 from game.attack import bind_attack
 from game.motion import bind_motion, sample_motion
-from game.presentation import lineage_branch, reduce_lineage, stage_lineage
+from game.presentation import reduce_lineage as reduce_native_lineage
+from game.player_projection import lineage_branch, reduce_lineage, stage_lineage
+from game.player_facts import SensoryFact, StepFact
 from game.replay import decode_sequence, encode_sequence
 from game.scene import scene_actors
 from tests.game.discovery_scenarios import discovery_history
+from tests.game.player_helpers import player_history
 
 
 def test_initial_archive_excludes_existing_hidden_actor_payloads() -> None:
@@ -28,7 +31,7 @@ def test_initial_archive_excludes_existing_hidden_actor_payloads() -> None:
     for field in ("admitted", "conditions", "admissions"):
         assert str(identity) not in json.dumps(initialization[field])
     assert set(before.actors) == {before.observer_uuid}
-    revealed = reduce_lineage(before, discovery).actors[identity]
+    revealed = reduce_native_lineage(before, discovery).actors[identity]
     assert revealed.normal_hp == 33
     item_uuid = dict(revealed.equipment)[WeaponSlot.MELEE_MAIN.value]
     assert next(item for item in revealed.items if item.item_uuid == item_uuid).item_id == "weapon.dagger"
@@ -51,6 +54,9 @@ def test_saved_discovery_admits_current_actor_without_private_history(mode: Lite
     assert admission.event_uuid in {row.event_uuid for row in restored.objective_rows}
     assert EventQueue.event_cursor() == 0
 
+    before, (restored, later) = player_history(history)
+    assert before.senses is not None
+    admission, = restored.observations
     data = load_animation_data()
     prepared = stage_lineage(before, restored)
     assert prepared.actors[identity] == admission.actor
@@ -58,15 +64,15 @@ def test_saved_discovery_admits_current_actor_without_private_history(mode: Lite
     assert identity not in before.actors and identity not in before.senses.entities
     actors = scene_actors(prepared, data, {})
     assert str(identity) in {actor.contact.actor_uuid for actor in actors}
-    item_uuid = dict(prepared.actors[identity].equipment)[WeaponSlot.MELEE_MAIN.value]
-    item = next(item for item in prepared.actors[identity].items if item.item_uuid == item_uuid)
+    item = next(item for item in prepared.actors[identity].visual_loadout.layers
+                if item.slot == WeaponSlot.MELEE_MAIN.value)
     assert item.item_id == "weapon.dagger"
     after = reduce_lineage(before, restored)
     assert after.actors[identity].normal_hp == 33
     attack = bind_attack(after, later, data)
     assert attack is not None and attack.timeline.target.actor_uuid == str(identity)
     assert attack.timeline.target.hp == 33
-    assert not later.admissions
+    assert not later.observations
     assert attack.after == reduce_lineage(after, later)
     assert attack.after.actors[identity].normal_hp < 33
     assert EventQueue.event_cursor() == 0
@@ -77,20 +83,21 @@ def test_discovery_is_applied_at_its_actual_movement_step() -> None:
     before, lineages = history.before, history.lineages
     state, (lineage, _) = decode_sequence(encode_sequence(history.initialization, lineages))
     assert state == before
+    state, (lineage, _) = player_history(history)
     restored_before = state
-    identity = lineage.admissions[0].actor.uuid
-    steps = tuple(event for event in lineage.events if isinstance(event, StepMovementEvent))
+    identity = lineage.observations[0].actor.uuid
+    steps = tuple(event for event in lineage.events if isinstance(event.fact, StepFact))
     assert len(steps) > 1
     admitted_at: list[tuple[int, int]] = []
     for step in steps:
         branch = lineage_branch(lineage, step)
         previous = state
         state = reduce_lineage(state, branch)
-        sensory = tuple(event for event in branch.events if isinstance(event, SensoryUpdateEvent)
-                        and event.observer_uuid == state.observer_uuid)
+        sensory = tuple(event.fact for event in branch.events if isinstance(event.fact, SensoryFact))
         if any(identity in event.entity_contacts_changed for event in sensory):
             assert identity not in previous.actors and identity in state.actors
-            admitted_at.append(step.to_position)
+            assert isinstance(step.fact, StepFact)
+            admitted_at.append(step.fact.to_position)
         else:
             assert identity not in state.actors
     assert admitted_at == [(4, 3)]

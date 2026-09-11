@@ -15,9 +15,8 @@ from uuid import UUID
 
 import pygame
 
-from dnd.actions import AttackEvent, JumpEvent, MovementEvent
 from dnd.core.base_actions import AvailableActionsResult
-from dnd.core.events import EventQueue, StepMovementEvent
+from dnd.core.events import EventQueue
 from game.animation_data import load_animation_data
 from game.animation_types import Facing8
 from game.app import draw_frame
@@ -28,9 +27,10 @@ from game.feedback import FeedbackTrack, choreography_feedback, motion_feedback
 from game.controls import ActionSelection, EndTurn, MenuState, draw_menu, draw_target_preview, handle_menu_event
 from game.motion import MotionTimeline, bind_motion
 from game.playback_frame import sample_playback_frame
-from game.presentation import (
-    CompletedLineage, PresentationTarget, capture_interval, capture_lineage,
-    reduce_interval, reduce_lineage, stage_lineage,
+from game.presentation import capture_interval, capture_lineage
+from game.player_facts import AttackFact, MovementFact, PlayerLineage, PlayerState, StepFact
+from game.player_projection import (
+    begin_projection, project_lineage, reduce_initialization, reduce_lineage, stage_lineage,
 )
 from game.projection import Camera, ZOOM_LEVELS
 from game.scene import draw_actor_labels, load_scene_media, scene_actors
@@ -57,19 +57,19 @@ class GameFrame:
 
 @dataclass(frozen=True, slots=True)
 class GameSummary:
-    latest: PresentationTarget
-    historical: PresentationTarget
+    latest: PlayerState
+    historical: PlayerState
     frames: tuple[GameFrame, ...]
-    lineages: tuple[CompletedLineage, ...]
+    lineages: tuple[PlayerLineage, ...]
     player_commands: int
     presentation_gaps: tuple[tuple[UUID, str], ...]
     encounter_ended: bool
 
 
-PlayerInput = Callable[[PresentationTarget, AvailableActionsResult], ActionSelection | EndTurn | None]
+PlayerInput = Callable[[PlayerState, AvailableActionsResult], ActionSelection | EndTurn | None]
 
 
-def _log_lines(lineage: CompletedLineage) -> tuple[str, ...]:
+def _log_lines(lineage: PlayerLineage) -> tuple[str, ...]:
     # These are already projected at capture. Never use an objective event name
     # or the live combat log as a replacement for undisclosed narrative.
     return tuple(dict.fromkeys(re.sub(r"\{[a-z ]+:([^{}]*)\}", r"\1", event.combat_log.compact)
@@ -95,7 +95,8 @@ async def _run(
             name="encounter startup", start_cursor=0, end_cursor=cursor,
             observer_uuid=observer.uuid, battlefield_id="battlefield.open_floor_bright",
         )
-        baseline, _ = reduce_interval(None, startup)
+        projection, initialization = begin_projection(startup)
+        baseline = reduce_initialization(initialization)
         latest = historical = baseline
         data = load_animation_data(rig_files=tuple(sorted((Path(__file__).parent / "data/rigs").glob("*.json"))))
         number_font, badge_font = (pygame.font.SysFont(style.fontFamily, round(style.fontSizePx),
@@ -113,11 +114,11 @@ async def _run(
                  sum(actor.contact.grid[1] for actor in actors) / len(actors))
         camera = Camera(quadrant=quadrant, zoom=1.0, viewport=window_size).with_focus(focus)
         camera = camera.with_screen_pan((panel_rect.width / 2, -45))
-        pending: deque[CompletedLineage] = deque()
-        retained: list[CompletedLineage] = []
+        pending: deque[PlayerLineage] = deque()
+        retained: list[PlayerLineage] = []
         frames: list[GameFrame] = []
         gaps: list[tuple[UUID, str]] = []
-        active: CompletedLineage | None = None
+        active: PlayerLineage | None = None
         after = historical
         choreography: BoundChoreography | None = None
         motion: MotionTimeline | None = None
@@ -139,14 +140,17 @@ async def _run(
         def receive(operation: Operation) -> None:
             nonlocal latest
             for root in operation.roots:
-                lineage = capture_lineage(root, observer_uuid=observer.uuid,
-                                          known_actor_uuids=frozenset(latest.actors))
+                native = capture_lineage(root, observer_uuid=observer.uuid,
+                                         known_actor_uuids=frozenset(latest.actors))
+                lineage = project_lineage(projection, native)
+                if lineage is None:
+                    continue
                 latest = reduce_lineage(latest, lineage)
                 pending.append(lineage)
                 retained.append(lineage)
-                classes = {row.event_uuid: row.event_class for row in lineage.objective_rows}
+                classes = {row.event_uuid: row.event_class for row in native.objective_rows}
                 gaps.extend((identity, f"Unprojected state payload: {classes[identity]}")
-                            for identity, _ in lineage.dispositions)
+                            for identity, _ in native.dispositions)
 
         while running and (max_frames is None or frame < max_frames):
             delta = (clock.tick(60) / 1000 if frame_deltas is None
@@ -230,7 +234,7 @@ async def _run(
             if active is None and pending and not paused:
                 active = pending.popleft()
                 after = reduce_lineage(historical, active)
-                if active.admissions:
+                if active.observations:
                     body_media.update(load_scene_media(scene_actors(stage_lineage(historical, active), data, facings), data))
                 choreography = None
                 choreography_media = None
@@ -245,8 +249,8 @@ async def _run(
                         gaps.extend(group.gaps)
                     feedback.extend(motion_feedback(motion, data, presentation_ms))
                 else:
-                    if isinstance(active.root, (MovementEvent, JumpEvent)) and any(
-                        isinstance(event, AttackEvent) or (isinstance(event, StepMovementEvent) and event.committed)
+                    if isinstance(active.root.fact, MovementFact) and any(
+                        isinstance(event.fact, AttackFact) or (isinstance(event.fact, StepFact) and event.fact.committed)
                         for event in active.events
                     ):
                         gaps.append((active.root.uuid, "Movement reaction choreography is not bound"))

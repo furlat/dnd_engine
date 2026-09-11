@@ -16,9 +16,11 @@ from uuid import uuid4
 
 from dnd.content_system.bootstrap import bootstrap_content_system
 from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
-from devtools.animation_review.cases import RecordedInput, ReviewSequence, load_cases, produce
+from devtools.animation_review.cases import RecordedInput, ReviewCase, ReviewPerspective, ReviewSequence, load_cases, produce
 from devtools.animation_review.record import record_case
-from game.replay import decode_sequence, encode_sequence
+from dnd.core.base_object import PASSIVE_EVENT_REPLAY
+from game.replay import RecordedSequence
+from game.player_projection import decode_player_sequence, encode_player_sequence, project_sequence
 
 
 REPO = Path(__file__).resolve().parents[2]
@@ -37,6 +39,46 @@ def source_identity() -> dict:
     return {"branch": git("branch", "--show-current"), "commit": git("rev-parse", "HEAD"),
             "dirty": bool(git("status", "--porcelain")),
             "source_hash": hashlib.sha256(json.dumps(hashes, sort_keys=True).encode()).hexdigest(), "files": hashes}
+
+
+def public_input(recorded: RecordedInput) -> RecordedInput:
+    """Project a historical private capture without changing its saved bytes."""
+    if recorded.sequence_format == "player-v1":
+        return recorded
+    native = RecordedSequence.model_validate(recorded.sequence, context=PASSIVE_EVENT_REPLAY)
+    player = project_sequence(native)
+    return recorded.model_copy(update={"sequence": json.loads(encode_player_sequence(player)),
+                                       "sequence_format": "player-v1"})
+
+
+def capture_inputs(case: ReviewCase, output: Path, captured_at: str, sources: dict) -> tuple[RecordedInput, ...]:
+    """Run one experiment, then persist each participant's public input separately."""
+    generated = produce(case)
+    views = generated.views or {"observer": RecordedSequence(
+        initialization=generated.initialization, lineages=generated.lineages)}
+    result = []
+    for role, native in views.items():
+        primary = native.initialization.observer_uuid == generated.before.observer_uuid
+        identity = case.id if primary else f"{case.id}--{role}"
+        view_case = case.model_copy(update={"id": identity, "title": f"{case.title} · {role}",
+                                           "tags": (*case.tags, f"observer:{role}")})
+        perspective = ReviewPerspective(experiment_id=case.id, role=role,
+            observer_uuid=native.initialization.observer_uuid, generation=native.initialization.generation,
+            start_cursor=native.initialization.end_cursor,
+            end_cursor=max((lineage.end_cursor for lineage in native.lineages), default=native.initialization.end_cursor))
+        recorded = RecordedInput(case=view_case, captured_at=captured_at, sources=sources,
+            sequence=json.loads(encode_player_sequence(project_sequence(native))),
+            sequence_format="player-v1", perspective=perspective)
+        directory = output / "inputs" / identity
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "native.json").write_text(native.model_dump_json(), encoding="utf-8")
+        (directory / "input.json").write_text(recorded.model_dump_json(), encoding="utf-8")
+        result.append(RecordedInput.model_validate_json((directory / "input.json").read_bytes()))
+    write_json(output / "inputs" / case.id / "perspectives.json", {
+        "schema_version": 1, "experiment_id": case.id,
+        "views": [recorded.case.id for recorded in result],
+    })
+    return tuple(result)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -75,7 +117,8 @@ def main(argv: list[str] | None = None) -> int:
     else:
         cases = load_cases()
     selected = tuple(case for case in cases if
-                     (not args.case or any(fnmatch.fnmatchcase(case.id, pattern) for pattern in args.case)) and
+                     (not args.case or any(fnmatch.fnmatchcase(case.id, pattern) or pattern.startswith(case.id + "--")
+                                          for pattern in args.case)) and
                      (not args.tag or set(case.tags) & set(args.tag)))
     if not selected:
         parser.error("no catalog cases matched")
@@ -89,14 +132,15 @@ def main(argv: list[str] | None = None) -> int:
         if missing:
             parser.error(f"no saved gameplay input for {', '.join(missing)}; use --capture to generate selected inputs once")
         for case in selected:
-            path = output / "inputs" / case.id / "input.json"
-            recorded = RecordedInput.model_validate_json(path.read_bytes())
-            if recorded.case.id != case.id:
-                parser.error(f"saved input {path} belongs to a different case")
-            if recorded.case != case:
-                print(f"{case.id}: using its recorded case definition; --capture explicitly replaces it.", flush=True)
-            saved[case.id] = recorded
-        selected = tuple(saved[case.id].case for case in selected)
+            index_path = output / "inputs" / case.id / "perspectives.json"
+            identities = json.loads(index_path.read_text())["views"] if index_path.is_file() else [case.id]
+            for identity in identities:
+                path = output / "inputs" / identity / "input.json"
+                recorded = RecordedInput.model_validate_json(path.read_bytes())
+                if recorded.case.id != identity:
+                    parser.error(f"saved input {path} belongs to a different case")
+                saved[identity] = recorded
+        selected = tuple(recorded.case for recorded in saved.values())
     if not 1 <= args.fps <= 60 or min(args.width, args.height) < 240 or args.width % 2 or args.height % 2:
         parser.error("fps must be 1..60; even video dimensions must be at least 240")
     ffmpeg = shutil.which("ffmpeg")
@@ -126,6 +170,19 @@ def main(argv: list[str] | None = None) -> int:
         shutil.copyfile(Path(__file__).with_name(source), destination / target)
     if args.capture:
         SERVER_CONTENT_SYSTEM_RUNTIME.install(bootstrap_content_system())
+    capture_errors: dict[str, str] = {}
+    if args.capture:
+        captured_cases = []
+        for case in selected:
+            print(f"Capture once: {case.id}", flush=True)
+            try:
+                for recorded in capture_inputs(case, output, now.isoformat(), sources):
+                    saved[recorded.case.id] = recorded
+                    captured_cases.append(recorded.case)
+            except Exception:
+                capture_errors[case.id] = traceback.format_exc()
+                captured_cases.append(case)
+        selected = tuple(captured_cases)
     for index, case in enumerate(selected):
         print(f"[{index + 1}/{len(selected)}] {case.id}", flush=True)
         relative = Path("cases") / case.id
@@ -138,22 +195,25 @@ def main(argv: list[str] | None = None) -> int:
                 "video": None, "poster": None, "input": None, "trace": (relative / "trace.json").as_posix(),
                 "duration_ms": 0, "frame_count": 0, "status": "failed", "checks": [], "gaps": []}
         try:
-            if args.capture:
-                generated = produce(case)
-                recorded = RecordedInput(case=case, captured_at=now.isoformat(), sources=sources,
-                                         sequence=json.loads(encode_sequence(generated.initialization, generated.lineages)))
-                input_path = output / "inputs" / case.id / "input.json"
-                input_path.parent.mkdir(parents=True, exist_ok=True)
-                input_path.write_text(recorded.model_dump_json(), encoding="utf-8")
-                # The first render crosses the same persisted boundary as every
-                # later render. The producer's objects never enter record_case.
-                recorded = RecordedInput.model_validate_json(input_path.read_bytes())
-            else:
-                recorded = saved[case.id]
+            if case.id in capture_errors:
+                raise RuntimeError(f"Native input capture failed:\n{capture_errors[case.id]}")
+            original = saved[case.id]
+            recorded = public_input(original)
+            native_path = output / "inputs" / case.id / "native.json"
+            if original.sequence_format == "native-v2":
+                write_json(folder / "native.json", original.sequence)
+            elif native_path.is_file():
+                shutil.copyfile(native_path, folder / "native.json")
             (folder / "input.json").write_text(recorded.model_dump_json(), encoding="utf-8")
             item["input"] = (relative / "input.json").as_posix()
             trace["input"] = {"captured_at": recorded.captured_at, "sources": recorded.sources}
-            sequence = ReviewSequence(*decode_sequence(json.dumps(recorded.sequence, separators=(",", ":")).encode("utf-8")))
+            if recorded.perspective is not None:
+                item["perspective"] = recorded.perspective.model_dump(mode="json")
+                trace["perspective"] = item["perspective"]
+            # Both the first render and replay consume the persisted public packet.
+            persisted = RecordedInput.model_validate_json((folder / "input.json").read_bytes())
+            sequence = ReviewSequence(*decode_player_sequence(
+                json.dumps(persisted.sequence, separators=(",", ":")).encode("utf-8")))
             item.update(record_case(case, folder, trace, sequence=sequence, fps=args.fps,
                                     size=(args.width, args.height), ffmpeg=ffmpeg))
             item.update(video=(relative / "clip.mp4").as_posix(), poster=(relative / "poster.png").as_posix())

@@ -9,7 +9,6 @@ from typing import Iterator
 import pygame
 import pytest
 
-from dnd.core.events import LifeStateChangeEvent
 from dnd.core.life_types import LifeState
 from dnd.runtime_reset import reset_engine_runtime
 from game.animation import body_clip, sample_cast, sample_idle_body
@@ -24,11 +23,14 @@ from game.combat_demo import iter_combat_demo
 from game.feedback import choreography_feedback, motion_feedback, sample_feedback
 from game.motion import bind_motion, sample_motion
 from game.playback_frame import PlaybackFrame, sample_playback_frame
-from game.presentation import CompletedLineage, PresentationTarget, reduce_lineage, IntervalEnvelope, reduce_interval
+from game.player_facts import LifeFact, PlayerLineage, PlayerState
+from game.player_projection import reduce_lineage
+from game.presentation import CompletedLineage, IntervalEnvelope
 from game.projection import Camera
 from game.scene import load_scene_media, scene_actors
 from game.visual_position import VisualPosition
 from tests.game.scenarios import attack_history, lifecycle_history
+from tests.game.player_helpers import player_history, player_inputs
 
 
 @pytest.fixture(scope="module")
@@ -65,7 +67,7 @@ def test_native_lifecycle_badges_keep_original_text_color_and_decorative_lifetim
     authored = {row["text"]: row for category in ("deathSave", "lifeState") for row in source[category].values()}
     assert len(authored) == 7
     captured = lifecycle_history(save_seeds=seeds, heal_after=heal_after)
-    before, roots = captured.before, captured.lineages
+    before, roots = player_history(captured)
     seen: list[str] = []
     longer = replace(data, badge_style=data.badge_style.model_copy(update={"durationMs": 2 * data.badge_style.durationMs}))
     for lineage in roots:
@@ -91,7 +93,7 @@ def test_native_death_plays_once_then_corpse_and_revival_preserve_pose_in_four_c
     data: AnimationData, pygame_runtime: None,
 ) -> None:
     captured = lifecycle_history(save_seeds=(1, 0, 31), revive_after=True)
-    before, roots = captured.before, captured.lineages
+    before, roots = player_history(captured)
     target, = (actor.uuid for actor in before.actors.values() if actor.life_state is LifeState.DYING)
     legal = actor_contact(before, before.actors[target], data, "NW")
     identity = legal.actor_uuid
@@ -112,8 +114,8 @@ def test_native_death_plays_once_then_corpse_and_revival_preserve_pose_in_four_c
         group = bind_choreography(before, lineage, data, facings=facings, contacts=contacts)
         assert group.gaps == ()
         group_media = load_choreography_media(group)
-        deaths = tuple(cue for cue in group.lifecycle if isinstance(cue.event, LifeStateChangeEvent)
-                       and cue.event.new_state is LifeState.DEAD)
+        deaths = tuple(cue for cue in group.lifecycle if isinstance(cue.event.fact, LifeFact)
+                       and cue.event.fact.new_state is LifeState.DEAD)
         revival = before.actors[target].life_state is LifeState.DEAD and after.actors[target].life_state is LifeState.ALIVE
         if deaths:
             death, = deaths
@@ -182,15 +184,14 @@ def test_native_death_plays_once_then_corpse_and_revival_preserve_pose_in_four_c
     assert before.actors[target].normal_hp == 3 and before.actors[target].life_state is LifeState.ALIVE
 
 
-def lethal_cast_history() -> tuple[PresentationTarget, CompletedLineage]:
+def lethal_cast_history() -> tuple[PlayerState, PlayerLineage]:
     script = iter_combat_demo(goblin_recipient=True, second_attack_seed=17)
     try:
         initialization = next(script)
         assert isinstance(initialization, IntervalEnvelope)
-        before, _ = reduce_interval(None, initialization)
         first, second = next(script), next(script)
-        assert isinstance(before, PresentationTarget)
         assert isinstance(first, CompletedLineage) and isinstance(second, CompletedLineage)
+        before, (first, second) = player_inputs(initialization, (first, second))
         return reduce_lineage(before, first), second
     finally:
         script.close()
@@ -203,7 +204,7 @@ def test_owned_lethal_delivery_keeps_its_original_timing_and_exactly_one_body(
 ) -> None:
     if family == "attack":
         captured = attack_history("weapon.longsword", 17, opportunity=True, maximum_hp=4)
-        before, lineage = captured.before, captured.lineages[0]
+        before, (lineage,) = player_history(captured)
         bound = bind_attack(before, lineage, data)
         assert bound is not None
     else:
@@ -212,8 +213,8 @@ def test_owned_lethal_delivery_keeps_its_original_timing_and_exactly_one_body(
     group = bind_choreography(before, lineage, data)
     assert len(group.nodes) == 1 and group.nodes[0].bound.timeline == bound.timeline
     assert group.complete_ms == bound.timeline.complete_ms
-    death, = (cue for cue in group.lifecycle if isinstance(cue.event, LifeStateChangeEvent)
-              and cue.event.new_state is LifeState.DEAD)
+    death, = (cue for cue in group.lifecycle if isinstance(cue.event.fact, LifeFact)
+              and cue.event.fact.new_state is LifeState.DEAD)
     assert death.state_owned and death.death_end_ms is None
     assert death.event.uuid in bound.owned_life_events
     media = load_scene_media(scene_actors(before, data, {}), data)
@@ -238,7 +239,7 @@ def test_opportunity_downing_keeps_hit_recovery_and_original_dying_child_badge(
 ) -> None:
     captured = attack_history("weapon.longsword", 17, opportunity=True, whole_movement=True,
                                      maximum_hp=4, uses_death_saves=True)
-    before, lineage = captured.before, captured.lineages[0]
+    before, (lineage,) = player_history(captured)
     motion = bind_motion(before, lineage, data)
     assert motion is not None
     reaction, = motion.reactions
@@ -248,9 +249,9 @@ def test_opportunity_downing_keeps_hit_recovery_and_original_dying_child_badge(
     attack = node.bound.timeline
     timing = attack.damage_timing
     assert timing is not None
-    cue, = (row for row in group.lifecycle if isinstance(row.event, LifeStateChangeEvent)
-            and row.event.new_state is LifeState.DYING)
-    assert isinstance(cue.event, LifeStateChangeEvent)
+    cue, = (row for row in group.lifecycle if isinstance(row.event.fact, LifeFact)
+            and row.event.fact.new_state is LifeState.DYING)
+    assert isinstance(cue.event.fact, LifeFact)
     clip = body_clip(data, attack.target, data.damage_context.bodyClip)
     assert cue.start_ms == pytest.approx(timing.start_ms +
         data.damage_context.conditionFrame * 1000 / (clip.fps * data.damage_context.bodyPlaybackSpeed))
@@ -269,7 +270,7 @@ def test_opportunity_downing_keeps_hit_recovery_and_original_dying_child_badge(
     assert not hit.bodies and not recovered.bodies
     assert hit.clips[0].sample.bodies[1].clip == data.damage_context.bodyClip
     assert recovered.clips[0].sample.bodies[1].clip == "Idle"
-    target_uuid = cue.event.entity_uuid
+    target_uuid = cue.event.fact.entity_uuid
     pending = sample_choreography(group, timing.hp_ms - .001)
     assert pending.displayed.actors[target_uuid].normal_hp == 4
     assert pending.displayed.actors[target_uuid].life_state is LifeState.ALIVE
@@ -278,10 +279,11 @@ def test_opportunity_downing_keeps_hit_recovery_and_original_dying_child_badge(
     for time in (timing.hp_ms, timing.end_ms, group.complete_ms):
         displayed = sample_choreography(group, time)
         vital, = (value for value in displayed.vitals if value.actor_uuid == str(target_uuid))
-        assert vital.hp == displayed.displayed.actors[target_uuid].normal_hp == cue.event.normal_hit_points == 0
+        assert vital.hp == displayed.displayed.actors[target_uuid].normal_hp == cue.event.fact.normal_hit_points == 0
         assert vital.life_state is LifeState.DYING
     after = reduce_lineage(before, lineage)
     final = sample_motion(motion, data, motion.complete_ms)
+    assert final.contact is not None and final.body is not None
     assert final.contact.life_state is LifeState.DYING and final.contact.grid != motion.actor.grid
     assert final.body.clip == "Idle" and motion.complete_ms == reaction.end_ms
     media = load_scene_media(scene_actors(before, data, {}), data)

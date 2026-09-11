@@ -17,7 +17,8 @@ from game.animation_draw import BodyRows, attack_draw_commands, load_attack_medi
 from game.app import draw_frame
 from game.assets import SurfaceCache, load_catalog
 from game.attack import BoundAttack, bind_attack, sample_attack
-from game.presentation import PresentationTarget
+from game.player_facts import PlayerState
+from tests.game.player_helpers import player_history
 from game.projection import Camera
 from tests.game.scenarios import attack_history
 
@@ -26,7 +27,7 @@ from tests.game.scenarios import attack_history
     (False, 17, 80, (7, 3)), (False, 1, 80, (6, 6)),
     (True, 17, 80, (7, 3)), (True, 1, 80, (6, 6)), (True, 5, 4, (7, 5)),
 ], ids=["modular-hit", "modular-miss", "goblin-hit", "goblin-miss", "goblin-lethal"])
-def ranged_scene(request: pytest.FixtureRequest) -> Iterator[tuple[PresentationTarget, BoundAttack, BodyRows]]:
+def ranged_scene(request: pytest.FixtureRequest) -> Iterator[tuple[PlayerState, BoundAttack, BodyRows]]:
     random_state = random.getstate()
     with pytest.MonkeyPatch.context() as environment:
         environment.setenv("SDL_VIDEODRIVER", "dummy")
@@ -37,7 +38,7 @@ def ranged_scene(request: pytest.FixtureRequest) -> Iterator[tuple[PresentationT
             goblin_source, seed, maximum_hp, position = request.param
             captured = attack_history("weapon.shortbow", seed, weapon_slot=WeaponSlot.RANGED_MAIN,
                 goblin_source=goblin_source, maximum_hp=maximum_hp, watcher_positions=(position,))
-            before, lineage = captured.before, captured.lineages[0]
+            before, (lineage,) = player_history(captured)
             data = load_animation_data(rig_files=(Path("game/data/rigs/goblin01.json"),))
             bound = bind_attack(before, lineage, data)
             assert bound is not None and bound.timeline.projectile is not None
@@ -50,7 +51,7 @@ def ranged_scene(request: pytest.FixtureRequest) -> Iterator[tuple[PresentationT
 
 @pytest.mark.parametrize("quadrant", range(4))
 def test_real_shortbow_pixels_cross_the_map_and_retire_at_contact(
-    ranged_scene: tuple[PresentationTarget, BoundAttack, BodyRows], quadrant: int, tmp_path: Path,
+    ranged_scene: tuple[PlayerState, BoundAttack, BodyRows], quadrant: int, tmp_path: Path,
 ) -> None:
     before, bound, media = ranged_scene
     timeline, data = bound.timeline, bound.timeline.data

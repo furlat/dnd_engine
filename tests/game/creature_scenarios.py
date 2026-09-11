@@ -29,7 +29,7 @@ from game.presentation import (
     reduce_interval, reduce_lineage,
 )
 
-from game.replay import CapturedHistory, capture_history
+from game.replay import CapturedHistory, ObserverCapture, capture_history
 
 
 def creature_history(
@@ -118,7 +118,8 @@ the next operation. Native rules own rolls, defenses, resources and life state.
                 assert isinstance(event, AttackEvent) and event.phase is EventPhase.COMPLETION
                 retain(start)
                 if target_actor.health.life_state is LifeState.DEAD:
-                    return capture_history(before, tuple(history))
+                    return capture_history(before, tuple(history), observers=(ObserverCapture("fighter", fighter.uuid, before.reducer_cursor),
+                        ObserverCapture("creature", creature.uuid, before.reducer_cursor)))
             start = EventQueue.event_cursor()
             encounter.next_turn()
             retain(start)

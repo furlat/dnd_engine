@@ -9,6 +9,8 @@ import numpy as np
 import pygame
 import pytest
 
+from tests.game.player_helpers import player_history
+
 from devtools.animation_review.cases import load_cases, produce
 from dnd.core.life_types import LifeState
 from game.animation import ActorContact, body_clip
@@ -52,10 +54,10 @@ class PlaybackScene:
 
 def load_scene(case_id: str, data: AnimationData) -> PlaybackScene:
     sequence = produce(next(case for case in load_cases() if case.id == case_id))
-    lineage, = sequence.lineages
-    group = bind_choreography(sequence.before, lineage, data)
+    before, (lineage,) = player_history(sequence)
+    group = bind_choreography(before, lineage, data)
     assert group.gaps == (), (case_id, group.gaps)
-    return PlaybackScene(group, load_scene_media(scene_actors(sequence.before, data, {}), data),
+    return PlaybackScene(group, load_scene_media(scene_actors(before, data, {}), data),
                          load_choreography_media(group))
 
 

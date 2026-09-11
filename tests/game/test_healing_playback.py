@@ -17,7 +17,8 @@ from game.choreography_draw import load_choreography_media
 from game.combat import actor_contact
 from game.feedback import choreography_feedback, sample_feedback
 from game.playback_frame import sample_playback_frame
-from game.presentation import reduce_lineage
+from game.player_projection import reduce_lineage
+from tests.game.player_helpers import player_history
 from game.projection import Camera
 from game.scene import load_scene_media, scene_actors
 from game.visual_position import VisualPosition
@@ -34,15 +35,15 @@ def test_native_heal_changes_hp_at_entry_and_keeps_placed_feedback_after_complet
     data: AnimationData, dying: bool,
 ) -> None:
     captured = healing_history(dying=dying)
-    before, lineage = captured.before, captured.lineages[0]
-    event = lineage.root
+    before, (lineage,) = player_history(captured)
+    event = captured.lineages[0].root
     assert isinstance(event, HealEvent) and event.target_entity_uuid is not None
     target = event.target_entity_uuid
     after = reduce_lineage(before, lineage)
     group = bind_choreography(before, lineage, data)
     assert group.complete_ms == 0 and group.nodes == ()
     if dying:
-        life, = (row for row in lineage.events if isinstance(row, LifeStateChangeEvent))
+        life, = (row for row in captured.lineages[0].events if isinstance(row, LifeStateChangeEvent))
         assert (life.previous_state, life.new_state) == (LifeState.DYING, LifeState.ALIVE)
     assert group.gaps == ()
     context = data.healing_context
@@ -99,7 +100,7 @@ def test_native_heal_changes_hp_at_entry_and_keeps_placed_feedback_after_complet
 
 def test_selected_healing_feedback_controls_and_unsupported_body_media_are_explicit(data: AnimationData) -> None:
     captured = healing_history()
-    before, lineage = captured.before, captured.lineages[0]
+    before, (lineage,) = player_history(captured)
     quiet = replace(data, healing_context=data.healing_context.model_copy(update={"feedbackEnabled": False}))
     quiet_group = bind_choreography(before, lineage, quiet)
     assert choreography_feedback(quiet_group, quiet, 0) == ()
@@ -134,11 +135,11 @@ def test_healing_gallery_records_native_entry_and_decorative_tail_in_all_corners
     for case in ("healing-capped", "healing-dying"):
         trace = json.loads((run / "cases" / case / "trace.json").read_text())
         root = trace["lineages"][0]["root"]
-        target = root["target_entity_uuid"]
+        target = root["fact"]["target_entity_uuid"]
         head, = trace["heads"]
         assert head["duration_ms"] == 0
         entry = next(frame for frame in trace["frames"] if frame["root_uuid"] == root["uuid"])
-        assert entry["state"]["actors"][target]["hp"] == root["resulting_normal_hp"]
+        assert entry["state"]["actors"][target]["hp"] == root["fact"]["resulting_normal_hp"]
         assert entry["state"]["actors"][target]["life"] == LifeState.ALIVE.value
         tail = [frame for frame in trace["frames"] if frame["root_uuid"] is None
                 and frame["video_ms"] > head["video_start_ms"]]

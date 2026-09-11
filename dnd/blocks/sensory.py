@@ -19,7 +19,7 @@ from dnd.core.events import (
     SensoryUpdateReason,
 )
 from dnd.core.base_block import LightLevel
-from dnd.types.senses import OpticalObscurement, PerceivedContact, SenseMode, SensesType
+from dnd.types.senses import OpticalObscurement, PerceivedContact, SenseMode, SensesType, SensoryDelta
 from dnd.types.world import CardinalDirection, WorldEdgeChannel
 
 
@@ -348,9 +348,9 @@ class SensesSnapshot:
 def reduce_senses_snapshot(
     expected_observer_uuid: UUID,
     previous: Optional[SensesSnapshot],
-    event: SensoryUpdateEvent,
+    event: SensoryDelta,
 ) -> SensesSnapshot:
-    """Reduce one observer Event into a fresh passive sensory snapshot."""
+    """Reduce recorded observer after-values into a fresh sensory snapshot."""
     if event.observer_uuid != expected_observer_uuid:
         raise ValueError("sensory update belongs to a different observer")
     if event.initial:

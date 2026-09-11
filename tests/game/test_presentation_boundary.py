@@ -106,11 +106,18 @@ def test_three_intervals_are_complete_passive_and_replay_after_reset() -> None:
 
     target, reduced_open = reduce_interval(target, opened)
     assert target.door_is_open is True
+    opened_door = next(event for _, event in opened.admitted
+                       if isinstance(event, SpatialChangeEvent) and event.object_uuid == startup.door_uuid)
+    assert target.objects[startup.door_uuid].item.boundary_structure == opened_door.object_boundary_structure
+    assert not target.objects[startup.door_uuid].item.boundary_structure.blocked_channels
     assert (32, 31) in target.senses.visible
     assert target.senses.effective_light_levels[(32, 31)] is LightLevel.DIM_LIGHT
 
     target, reduced_closed = reduce_interval(target, closed)
     assert target.door_is_open is False
+    closed_door = next(event for _, event in closed.admitted
+                       if isinstance(event, SpatialChangeEvent) and event.object_uuid == startup.door_uuid)
+    assert target.objects[startup.door_uuid].item.boundary_structure == closed_door.object_boundary_structure
     assert (32, 31) not in target.senses.visible
     assert (32, 31) in target.senses.seen
     assert target.senses == live_final

@@ -33,8 +33,9 @@ from dnd.scenarios.battlefield_catalog import build_battlefield
 from dnd.spells.evocation import FireBolt, MagicMissile
 from dnd.types.senses import SenseMode, SensesType
 from game.presentation import (
-    CompletedLineage, IntervalEnvelope, capture_interval, capture_lineage,
+    CompletedLineage, IntervalEnvelope, capture_interval, capture_lineage, reduce_interval,
 )
+from game.replay import CapturedHistory, ObserverCapture, capture_history
 
 
 BATTLEFIELD_ID = "battlefield.visual_vertical_seam"
@@ -46,7 +47,7 @@ def iter_combat_demo(
     goblin_recipient: bool = False,
     replace_weapon: bool = False,
     magic_missile: bool = False,
-) -> Generator[IntervalEnvelope | CompletedLineage, None, None]:
+) -> Generator[IntervalEnvelope | CompletedLineage, None, CapturedHistory]:
     """Yield native initialization and two legal casts, optionally replacing gear between.
 
     Magic Missile allocates A/B/A with damage seeds 0 and 1. The separate
@@ -126,6 +127,7 @@ def iter_combat_demo(
         standing_torch_uuid=built.object_uuids["standing_torch"],
     )
     yield startup
+    captured_lineages: list[CompletedLineage] = []
 
     for cast_number in (1, 2):
         random_state = random.getstate()
@@ -156,6 +158,7 @@ def iter_combat_demo(
         finally:
             random.setstate(random_state)
         yield lineage
+        captured_lineages.append(lineage)
         if cast_number == 1 and replacement_item_uuid is not None:
             random_state = random.getstate()
             try:
@@ -170,3 +173,24 @@ def iter_combat_demo(
             finally:
                 random.setstate(random_state)
             yield from replacement
+            captured_lineages.extend(replacement)
+    before, _ = reduce_interval(None, startup)
+    return capture_history(before, tuple(captured_lineages), observers=tuple(
+        ObserverCapture("caster" if index == 0 else f"recipient-{index}", actor.uuid, startup.end_cursor)
+        for index, actor in enumerate(actors)))
+
+
+def capture_combat_demo(
+    *, caster_position: tuple[int, int] = (16, 25), second_attack_seed: int = 0,
+    goblin_recipient: bool = False, replace_weapon: bool = False, magic_missile: bool = False,
+) -> CapturedHistory:
+    """Exhaust the interactive producer once and receive its named recorded views."""
+    script = iter_combat_demo(caster_position=caster_position, second_attack_seed=second_attack_seed,
+        goblin_recipient=goblin_recipient, replace_weapon=replace_weapon, magic_missile=magic_missile)
+    try:
+        while True:
+            next(script)
+    except StopIteration as finished:
+        return finished.value
+    finally:
+        script.close()

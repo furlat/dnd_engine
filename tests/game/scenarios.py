@@ -37,7 +37,7 @@ from game.presentation import (
     reduce_interval, reduce_lineage,
 )
 
-from game.replay import CapturedHistory, capture_history
+from game.replay import CapturedHistory, ObserverCapture, capture_history
 
 
 def attack_history(
@@ -115,7 +115,11 @@ def attack_history(
                           if isinstance(event, AttackEvent) and event.phase is EventPhase.COMPLETION)
         assert isinstance(result, (AttackEvent, MovementEvent, JumpEvent))
         lineage = capture_lineage(result, observer_uuid=observer.uuid)
-        return capture_history(before, (lineage,))
+        return capture_history(before, (lineage,), observers=(
+            ObserverCapture("hero", hero.uuid, before.reducer_cursor),
+            *(ObserverCapture(f"watcher-{index + 1}", actor.uuid, before.reducer_cursor)
+              for index, actor in enumerate(watchers)),
+        ))
     finally:
         game.close()
         reset_engine_runtime()
@@ -254,7 +258,10 @@ def movement_with_paralysis(
         _, roots = _capture_operation(before, cursor, mover, reactor, encounter)
         lineage, = (lineage for lineage in roots if lineage.root.uuid == root.uuid)
         assert mover.position == root.end_position
-        return capture_history(before, (lineage,))
+        return capture_history(before, (lineage,), observers=(
+            ObserverCapture("mover", mover.uuid, before.reducer_cursor),
+            ObserverCapture("reactor", reactor.uuid, before.reducer_cursor),
+        ))
 
 
 def paralysis_lifecycle(
@@ -304,7 +311,10 @@ def paralysis_lifecycle(
             assert isinstance(resumed, (MovementEvent, JumpEvent)) and resumed.end_position == (2, 3)
         elif "Paralyzed" in mover.active_conditions:
             assert not any(row.valid_targets for row in get_available_actions(mover).all_actions)
-        return capture_history(before, tuple(history))
+        return capture_history(before, tuple(history), observers=(
+            ObserverCapture("mover", mover.uuid, before.reducer_cursor),
+            ObserverCapture("reactor", reactor.uuid, before.reducer_cursor),
+        ))
 
 
 def dodge_expiry_history() -> CapturedHistory:
@@ -337,7 +347,10 @@ def dodge_expiry_history() -> CapturedHistory:
         assert encounter.get_current_entity() is mover and "Dodging" not in mover.active_conditions
         assert any(row.behavior_id == "action.dodge" and row.valid_targets
                    for row in get_available_actions(mover).all_actions)
-        return capture_history(before, tuple(history))
+        return capture_history(before, tuple(history), observers=(
+            ObserverCapture("mover", mover.uuid, before.reducer_cursor),
+            ObserverCapture("reactor", reactor.uuid, before.reducer_cursor),
+        ))
 
 
 @contextmanager
@@ -426,7 +439,10 @@ def healing_history(*, dying: bool = False) -> CapturedHistory:
             assert retained.identified_entity_observer_uuids == original.identified_entity_observer_uuids
             assert retained.located_entity_observer_uuids == original.located_entity_observer_uuids
             assert retained.located_position_observer_uuids == original.located_position_observer_uuids
-        return capture_history(before, (lineage,))
+        return capture_history(before, (lineage,), observers=(
+            ObserverCapture("healer", observer.uuid, before.reducer_cursor),
+            ObserverCapture("recipient", target.uuid, before.reducer_cursor),
+        ))
 
 
 def lifecycle_history(
@@ -485,4 +501,7 @@ def lifecycle_history(
             revived = target.revive(hit_points=3)
             assert revived
             retain(cursor)
-        return capture_history(before, tuple(history))
+        return capture_history(before, tuple(history), observers=(
+            ObserverCapture("healer", observer.uuid, before.reducer_cursor),
+            ObserverCapture("recipient", target.uuid, before.reducer_cursor),
+        ))

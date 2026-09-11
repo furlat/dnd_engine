@@ -13,11 +13,11 @@ from game.damage import DamageCue
 from game.forced_movement import ForcedMovementCue, ShoveCue
 from game.motion import MotionLeg, MotionTimeline
 from game.playback_frame import PlaybackFrame
-from game.presentation import CompletedLineage, PresentationTarget
+from game.player_facts import PlayerLineage, PlayerState
 
 
-STATE = TypeAdapter(PresentationTarget)
-LINEAGE = TypeAdapter(CompletedLineage)
+STATE = TypeAdapter(PlayerState)
+LINEAGE = TypeAdapter(PlayerLineage)
 TIMELINE = TypeAdapter(AttackTimeline | CastTimeline)
 CONDITIONS = TypeAdapter(tuple[ConditionTimeline, ...])
 LEGS = TypeAdapter(tuple[MotionLeg, ...])
@@ -28,7 +28,7 @@ FORCED = TypeAdapter(ForcedMovementCue)
 DAMAGE = TypeAdapter(DamageCue)
 
 
-def state_summary(state: PresentationTarget) -> dict[str, Any]:
+def state_summary(state: PlayerState) -> dict[str, Any]:
     """Compact actual reducer facts; full initial state is stored once per clip."""
     return {
         "cursor": state.reducer_cursor,
@@ -38,8 +38,8 @@ def state_summary(state: PresentationTarget) -> dict[str, Any]:
         "actors": {str(identity): {
             "name": actor.name, "hp": actor.normal_hp, "max_hp": actor.maximum_hp,
             "temporary_hp": actor.temporary_hp, "life": actor.life_state.value,
-            "active_weapon_set": actor.active_weapon_set.value,
-            "equipment": [(slot, str(item)) for slot, item in actor.equipment],
+            "active_weapon_set": actor.visual_loadout.active_weapon_set.value,
+            "equipment": [(item.slot, str(item.item_uuid)) for item in actor.visual_loadout.layers],
             "conditions": [{"uuid": str(row.condition_uuid), "event_uuid": str(row.event_uuid),
                             "behavior_id": row.behavior_id, "name": row.name} for row in actor.conditions],
             "last_visual_position": actor.last_visual_position,
@@ -50,8 +50,8 @@ def state_summary(state: PresentationTarget) -> dict[str, Any]:
 def group_trace(group: BoundChoreography) -> dict[str, Any]:
     return {
         "root_uuid": str(group.root_uuid), "complete_ms": group.complete_ms,
-        "admissions": [{"at_ms": at, "event_uuid": str(admission.event_uuid),
-                        "actor_uuid": str(admission.actor.uuid)} for at, admission in group.admissions],
+        "observations": [{"at_ms": at, "event_uuid": str(observation.event_uuid),
+                          "actor_uuid": str(observation.actor.uuid)} for at, observation in group.observations],
         "shoves": [SHOVE.dump_python(cue, mode="json", exclude={"data"}, warnings="error") for cue in group.shoves],
         "forced_movement": [{**FORCED.dump_python(cue, mode="json", exclude={"data"}, warnings="error"),
                              "context": cue.data.forced_movement_context.model_dump(mode="json"),

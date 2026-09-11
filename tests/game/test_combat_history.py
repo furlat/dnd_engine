@@ -14,14 +14,13 @@ from dnd.actions import SpellEvent
 from dnd.actions_functional import get_available_actions, register_spell
 from dnd.blocks.appearance import AppearanceConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
-from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.blocks.spellcasting import SpellcastingConfig
 from dnd.controller import HumanController
 from dnd.core.base_conditions import ConditionApplicationEvent
 from dnd.core.condition_types import ConditionCategory
 from dnd.core.dice import AttackOutcome
 from dnd.core.events import (
-    DamageAppliedEvent, DeathEvent, EntityCreatedEvent, Event, EventPhase, EventQueue, EventType,
+    DamageAppliedEvent, DeathEvent, Event, EventPhase, EventQueue, EventType,
     LifeStateChangeEvent, SensoryUpdateEvent, SpatialChangeEvent, SpatialChangeType,
     TakeDamageEvent,
 )
@@ -31,21 +30,24 @@ from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.spells.evocation import FireBolt
-from dnd.world_authoring import project_world_tile
+from dnd.scenarios.battlefield_catalog import build_battlefield
 from game.animation import body_clip, sample_cast
 from game.animation_data import DATA_ROOT, load_animation_data
 from game.animation_types import AnimationData
 from game.combat import bind_cast
 from game.combat_demo import iter_combat_demo
 from game.presentation import (
-    CompletedLineage, PresentationTarget, capture_lineage, reduce_lineage, seed_actors,
+    CompletedLineage, PresentationTarget, capture_lineage, capture_interval,
     IntervalEnvelope, reduce_interval,
 )
+from game.player_projection import reduce_lineage
+from tests.game.player_helpers import player_inputs
 
 
 @dataclass(frozen=True)
 class PublicCasts:
     seed: PresentationTarget
+    initialization: IntervalEnvelope
     first: CompletedLineage
     second: CompletedLineage
     declaration: Event
@@ -61,11 +63,11 @@ def data() -> AnimationData:
 @pytest.fixture
 def casts() -> PublicCasts:
     """Compose known actors, discover a real spell, and spend two actual turns."""
-    grid = reset_engine_runtime(grid_size=(8, 8))
+    reset_engine_runtime()
+    build_battlefield("battlefield.open_floor_bright")
     random_state = random.getstate()
     game = Game()
     actors: list[Entity] = []
-    births: list[EntityCreatedEvent] = []
     for name, position, faction in (
         ("Caster", (1, 1), "heroes"),
         ("Recipient", (4, 1), "monsters"),
@@ -85,7 +87,7 @@ def casts() -> PublicCasts:
         )
         if name == "Caster":
             register_spell(actor, FireBolt, caster_level=1)
-        births.append(actor.compose_entity())
+        actor.compose_entity()
         game.deploy_entity(actor, position)
         actors.append(actor)
     caster, recipient = actors
@@ -99,15 +101,10 @@ def casts() -> PublicCasts:
     while encounter.get_current_entity() is not caster:
         encounter.next_turn()
 
-    seed = seed_actors(
-        PresentationTarget(
-            generation=EventQueue.generation_id(), observer_uuid=caster.uuid,
-            tiles={position: project_world_tile(tile) for position, tile in grid.get_all_tiles().items()},
-            senses=capture_senses_snapshot(caster.senses),
-            reducer_cursor=EventQueue.event_cursor(),
-        ),
-        tuple(births),
-    )
+    initialization = capture_interval(name="cast initialization", start_cursor=0,
+        end_cursor=EventQueue.event_cursor(), observer_uuid=caster.uuid,
+        battlefield_id="battlefield.open_floor_bright")
+    seed, _ = reduce_interval(None, initialization)
     histories: list[CompletedLineage] = []
     hp = [recipient.get_normal_hp()]
     first_declaration: Event | None = None
@@ -132,7 +129,7 @@ def casts() -> PublicCasts:
         hp.append(recipient.get_normal_hp())
     random.setstate(random_state)
     assert first_declaration is not None
-    return PublicCasts(seed, histories[0], histories[1], first_declaration, recipient.uuid, (hp[0], hp[1], hp[2]))
+    return PublicCasts(seed, initialization, histories[0], histories[1], first_declaration, recipient.uuid, (hp[0], hp[1], hp[2]))
 
 
 def test_later_public_cast_reduces_without_retiming_or_overwriting_active_history(
@@ -152,7 +149,8 @@ def test_later_public_cast_reduces_without_retiming_or_overwriting_active_histor
         event.uuid in {row.event_uuid for row in casts.first.objective_rows}
         for event in casts.first.events
     )
-    first = bind_cast(casts.seed, casts.first, data)
+    seed, (first_lineage, second_lineage) = player_inputs(casts.initialization, (casts.first, casts.second))
+    first = bind_cast(seed, first_lineage, data)
     assert first.timeline.source.applications[0].target.hp == 80
     assert first.timeline.source.applications[0].resulting_hp == 73
     assert first.timeline.source.applications[0].application_id is None
@@ -167,24 +165,24 @@ def test_later_public_cast_reduces_without_retiming_or_overwriting_active_histor
     assert original_samples[2].vitals[0].hp == 80
     assert original_samples[3].vitals[0].hp == 73
 
-    latest_first = reduce_lineage(casts.seed, casts.first)
-    latest_second = reduce_lineage(latest_first, casts.second)
+    latest_first = reduce_lineage(seed, first_lineage)
+    latest_second = reduce_lineage(latest_first, second_lineage)
     assert casts.seed.actors[casts.recipient].normal_hp == 80
     assert latest_first.actors[casts.recipient].normal_hp == 73
     assert latest_second.actors[casts.recipient].normal_hp == 66
     assert latest_second.actors[casts.recipient].temporary_hp == 0
-    second = bind_cast(first.after, casts.second, data)
+    second = bind_cast(first.after, second_lineage, data)
     assert second.timeline.source.applications[0].target.hp == 73
     assert second.timeline.source.applications[0].resulting_hp == 66
     assert tuple(sample_cast(first.timeline, elapsed) for elapsed in sample_times) == original_samples
     assert latest_first == first.after
     assert latest_second == second.after
-    assert bind_cast(casts.seed, casts.first, data).timeline == first.timeline
+    assert bind_cast(seed, first_lineage, data).timeline == first.timeline
 
     # The same saved input must still replay after all authoritative owners vanish.
     reset_engine_runtime()
-    replay_first = bind_cast(casts.seed, casts.first, data)
-    replay_second = bind_cast(replay_first.after, casts.second, data)
+    replay_first = bind_cast(seed, first_lineage, data)
+    replay_second = bind_cast(replay_first.after, second_lineage, data)
     assert replay_first.timeline == first.timeline
     assert replay_second.timeline == second.timeline
     assert replay_second.after == latest_second
@@ -200,13 +198,14 @@ def test_real_unfinished_declaration_is_not_a_renderable_lineage(casts: PublicCa
 def test_missing_historical_recipient_fails_instead_of_using_live_entity(
     casts: PublicCasts, data: AnimationData,
 ) -> None:
-    incomplete = replace(casts.seed, actors={
-        actor_uuid: actor for actor_uuid, actor in casts.seed.actors.items()
+    seed, (first_lineage, _) = player_inputs(casts.initialization, (casts.first, casts.second))
+    incomplete = replace(seed, actors={
+        actor_uuid: actor for actor_uuid, actor in seed.actors.items()
         if actor_uuid != casts.recipient
     })
     assert Entity.get(casts.recipient) is not None
     with pytest.raises(ValueError, match="actor|target|recipient|baseline"):
-        bind_cast(incomplete, casts.first, data)
+        bind_cast(incomplete, first_lineage, data)
 
 
 @pytest.mark.parametrize(
@@ -252,8 +251,9 @@ def test_canonical_goblin_marker_and_cast_history_survive_turns_and_runtime_rese
     assert marker_fact.condition_uuid == live_marker.condition.uuid
     assert marker_fact.name == live_marker.condition.name
 
-    first = bind_cast(seed, hit, data)
-    latest_first = reduce_lineage(seed, hit)
+    seed, (public_hit,) = player_inputs(initialization, (hit,))
+    first = bind_cast(seed, public_hit, data)
+    latest_first = reduce_lineage(seed, public_hit)
     hp_anchor = first.timeline.applications[0].hp_ms
     assert hp_anchor is not None
     first_times = (0.0, hp_anchor - 0.01, hp_anchor, first.timeline.complete_ms)
@@ -275,8 +275,9 @@ def test_canonical_goblin_marker_and_cast_history_survive_turns_and_runtime_rese
             if child.parent_lineage == event.lineage_uuid
         }
     assert next(fact for fact in hit.conditions if fact.event_uuid == marker.uuid) == marker_fact
-    second = bind_cast(first.after, second_lineage, data)
-    latest_second = reduce_lineage(latest_first, second_lineage)
+    _, (_, public_second) = player_inputs(initialization, (hit, second_lineage))
+    second = bind_cast(first.after, public_second, data)
+    latest_second = reduce_lineage(latest_first, public_second)
     assert tuple(
         state.actors[recipient.uuid].normal_hp for state in (seed, latest_first, latest_second)
     ) == (10, 3, expected_hp)
@@ -345,8 +346,8 @@ def test_canonical_goblin_marker_and_cast_history_survive_turns_and_runtime_rese
         assert not second.timeline.source.applications[0].damage_applied
 
     reset_engine_runtime()
-    replay_first = bind_cast(seed, hit, data)
-    replay_second = bind_cast(replay_first.after, second_lineage, data)
+    replay_first = bind_cast(seed, public_hit, data)
+    replay_second = bind_cast(replay_first.after, public_second, data)
     assert replay_first.timeline == first.timeline
     assert replay_second.timeline == second.timeline
     assert replay_second.after == latest_second

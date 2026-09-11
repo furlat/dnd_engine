@@ -10,7 +10,9 @@ from dnd.core.life_types import LifeState
 from game.animation_data import load_animation_data
 from game.attack import BoundAttack
 from game.choreography import bind_choreography
-from game.presentation import reduce_lineage
+from game.player_projection import reduce_lineage
+from game.player_facts import AttackFact
+from tests.game.player_helpers import player_history
 from game.scene import scene_actors
 from tests.game.creature_scenarios import creature_history
 
@@ -30,16 +32,16 @@ def test_native_creature_duel_uses_its_packaged_body_and_real_life_state(identit
                and root.root.source_entity_uuid == creature.uuid]
     assert attacks and attacks[0].weapon_slot is slot
     data = load_animation_data(rig_files=tuple(sorted(Path("game/data/rigs").glob("*.json"))))
-    history = before
+    history, roots = player_history(captured)
     for root in roots:
         actors = scene_actors(history, data, {})
         selected = next(actor for actor in actors if actor.contact.actor_uuid == str(creature.uuid))
         assert selected.contact.rig_id == rig
-        if isinstance(root.root, AttackEvent):
+        if isinstance(root.root.fact, AttackFact):
             group = bind_choreography(history, root, data)
             assert group.nodes, group.gaps
             assert not [gap for _, gap in group.gaps if not gap.startswith("Missing media:")], group.gaps
-            if root.root.source_entity_uuid == creature.uuid:
+            if root.root.fact.source_entity_uuid == creature.uuid:
                 bound = group.nodes[0].bound
                 assert isinstance(bound, BoundAttack) and bound.timeline.source.rig_id == rig
                 assert not [gap for _, gap in group.gaps if gap.endswith("/body")], group.gaps

@@ -13,7 +13,9 @@ from game.animation import sample_cast
 from game.animation_data import load_animation_data
 from game.combat import bind_cast
 from game.combat_demo import iter_combat_demo
-from game.presentation import CompletedLineage, PresentationTarget, reduce_lineage, IntervalEnvelope, reduce_interval
+from game.presentation import CompletedLineage, IntervalEnvelope
+from game.player_projection import reduce_lineage
+from tests.game.player_helpers import player_inputs
 
 
 @pytest.mark.parametrize("attack_seed, outcome", [
@@ -27,12 +29,11 @@ def test_public_miss_keeps_hp_and_authored_delivery_without_hit_feedback(
     try:
         initialization = next(script)
         assert isinstance(initialization, IntervalEnvelope)
-        seed, _ = reduce_interval(None, initialization)
         hit_lineage = next(script)
-        assert isinstance(seed, PresentationTarget)
         assert isinstance(hit_lineage, CompletedLineage)
         data = load_animation_data()
-        hit = bind_cast(seed, hit_lineage, data)
+        seed, (public_hit,) = player_inputs(initialization, (hit_lineage,))
+        hit = bind_cast(seed, public_hit, data)
         missed_lineage = next(script)
         assert isinstance(missed_lineage, CompletedLineage)
     finally:
@@ -48,13 +49,14 @@ def test_public_miss_keeps_hp_and_authored_delivery_without_hit_feedback(
     assert root.combat_log is not None and root.combat_log.success is False
     assert "misses" in root.combat_log.compact
 
-    missed = bind_cast(hit.after, missed_lineage, data)
+    _, (_, public_miss) = player_inputs(initialization, (hit_lineage, missed_lineage))
+    missed = bind_cast(hit.after, public_miss, data)
     recipient = UUID(missed.timeline.source.applications[0].target.actor_uuid)
     assert hit.after.actors[recipient].normal_hp == 73
     assert missed.after.actors[recipient].normal_hp == 73
     assert missed.after.actors[recipient].temporary_hp == 0
     assert missed.after.actors[recipient].life_state is LifeState.ALIVE
-    assert missed.after == reduce_lineage(hit.after, missed_lineage)
+    assert missed.after == reduce_lineage(hit.after, public_miss)
     assert missed.timeline.source.applications[0].damage_applied is False
     assert missed.timeline.source.applications[0].damage_total is None
     assert missed.timeline.source.applications[0].resulting_hp is None
@@ -75,6 +77,6 @@ def test_public_miss_keeps_hp_and_authored_delivery_without_hit_feedback(
         assert sample.numbers == () and sample.vitals[0].flash is None
 
     reset_engine_runtime()
-    replay = bind_cast(hit.after, missed_lineage, data)
+    replay = bind_cast(hit.after, public_miss, data)
     assert replay.after == missed.after
     assert tuple(sample_cast(replay.timeline, elapsed) for elapsed in times) == samples

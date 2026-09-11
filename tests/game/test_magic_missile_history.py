@@ -11,7 +11,9 @@ from game.animation import sample_cast
 from game.animation_data import load_animation_data
 from game.combat import bind_cast
 from game.combat_demo import iter_combat_demo
-from game.presentation import CompletedLineage, PresentationTarget, reduce_lineage, IntervalEnvelope, reduce_interval
+from game.presentation import CompletedLineage, PresentationTarget, IntervalEnvelope, reduce_interval
+from game.player_projection import reduce_lineage
+from tests.game.player_helpers import player_inputs
 
 
 def test_public_repeated_target_cast_keeps_each_application_while_latest_advances() -> None:
@@ -65,7 +67,8 @@ def test_public_repeated_target_cast_keeps_each_application_while_latest_advance
             assert event.identified_entity_observer_uuids == original.identified_entity_observer_uuids
             assert event.located_entity_observer_uuids == original.located_entity_observer_uuids
 
-        first = bind_cast(seed, first_lineage, data, travel_apex_steps=1.0)
+        seed, (public_first,) = player_inputs(initialization, (first_lineage,))
+        first = bind_cast(seed, public_first, data, travel_apex_steps=1.0)
         sources = first.timeline.source.applications
         assert [source.application_id for source in sources] == [str(event.application_id) for event in applications]
         assert [source.target.actor_uuid for source in sources] == [str(a_uuid), str(b_uuid), str(a_uuid)]
@@ -94,12 +97,13 @@ def test_public_repeated_target_cast_keeps_each_application_while_latest_advance
     finally:
         script.close()
 
-    latest_first = reduce_lineage(seed, first_lineage)
-    latest_second = reduce_lineage(latest_first, second_lineage)
+    _, (public_first, public_second) = player_inputs(initialization, (first_lineage, second_lineage))
+    latest_first = reduce_lineage(seed, public_first)
+    latest_second = reduce_lineage(latest_first, public_second)
     assert tuple(latest_first.actors[identity].normal_hp for identity in (a_uuid, b_uuid)) == (73, 75)
     assert tuple(latest_second.actors[identity].normal_hp for identity in (a_uuid, b_uuid)) == (66, 73)
     assert tuple(sample_cast(first.timeline, elapsed) for elapsed in sample_times) == original_samples
-    second = bind_cast(first.after, second_lineage, data, travel_apex_steps=1.0)
+    second = bind_cast(first.after, public_second, data, travel_apex_steps=1.0)
     assert [source.target.hp for source in second.timeline.source.applications] == [73, 75, 73]
     assert [source.damage_total for source in second.timeline.source.applications] == [3, 2, 4]
     assert [source.resulting_hp for source in second.timeline.source.applications] == [70, 73, 66]
@@ -109,8 +113,8 @@ def test_public_repeated_target_cast_keeps_each_application_while_latest_advance
     assert all(vital.life_state is LifeState.ALIVE for vital in final_sample.vitals)
 
     reset_engine_runtime()
-    replay_first = bind_cast(seed, first_lineage, data, travel_apex_steps=1.0)
-    replay_second = bind_cast(replay_first.after, second_lineage, data, travel_apex_steps=1.0)
+    replay_first = bind_cast(seed, public_first, data, travel_apex_steps=1.0)
+    replay_second = bind_cast(replay_first.after, public_second, data, travel_apex_steps=1.0)
     assert replay_first == first and replay_second == second
     assert tuple(sample_cast(replay_first.timeline, elapsed) for elapsed in sample_times) == original_samples
     assert sample_cast(replay_second.timeline, replay_second.timeline.complete_ms) == final_sample

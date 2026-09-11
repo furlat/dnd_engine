@@ -7,7 +7,6 @@ from typing import Iterator, Mapping
 import pygame
 import pytest
 
-from dnd.actions import AttackEvent
 from dnd.core.equipment_types import WeaponSlot
 from game.animation import (
     ActorContact, GeometryProjectileSample, ProjectileSample, project_geometry_projectile,
@@ -21,9 +20,11 @@ from game.animation_types import AnimationData
 from game.attack import BoundAttack, attack_projectile_contact, bind_attack, project_attack_projectile, sample_attack
 from game.combat import BoundCast, actor_contact, bind_cast
 from game.combat_demo import iter_combat_demo
-from game.presentation import CompletedLineage, PresentationTarget, IntervalEnvelope, reduce_interval
+from game.presentation import CompletedLineage, IntervalEnvelope
+from game.player_facts import AttackFact, PlayerLineage, PlayerState
 from game.projection import Camera, HEIGHT_STEP_PIXELS, TILE_WIDTH
 from tests.game.scenarios import attack_history
+from tests.game.player_helpers import player_history, player_inputs
 
 
 @pytest.fixture(scope="module")
@@ -32,27 +33,28 @@ def data() -> AnimationData:
 
 
 @pytest.fixture(scope="module")
-def histories() -> dict[str, tuple[PresentationTarget, CompletedLineage]]:
+def histories() -> dict[str, tuple[PlayerState, PlayerLineage]]:
     captured = attack_history("weapon.shortbow", 17, weapon_slot=WeaponSlot.RANGED_MAIN,
                               watcher_positions=((7, 3),))
-    result = {"shortbow": (captured.before, captured.lineages[0])}
+    before, (lineage,) = player_history(captured)
+    result = {"shortbow": (before, lineage)}
     for name, missile in (("firebolt", False), ("missile", True)):
         script = iter_combat_demo(magic_missile=missile)
         try:
             initialization = next(script)
             assert isinstance(initialization, IntervalEnvelope)
-            before, _ = reduce_interval(None, initialization)
             lineage = next(script)
-            assert isinstance(before, PresentationTarget) and isinstance(lineage, CompletedLineage)
-            result[name] = before, lineage
+            assert isinstance(lineage, CompletedLineage)
+            before, (public_lineage,) = player_inputs(initialization, (lineage,))
+            result[name] = before, public_lineage
         finally:
             script.close()
     return result
 
 
-def bind_history(before: PresentationTarget, lineage: CompletedLineage, data: AnimationData,
+def bind_history(before: PlayerState, lineage: PlayerLineage, data: AnimationData,
                  contacts: Mapping[str, ActorContact]) -> BoundAttack | BoundCast:
-    if isinstance(lineage.root, AttackEvent):
+    if isinstance(lineage.root.fact, AttackFact):
         bound = bind_attack(before, lineage, data, contacts=contacts)
         assert bound is not None
         return bound
@@ -82,7 +84,7 @@ def projected_travel(bound: BoundAttack | BoundCast, progress: float, quadrant: 
 @pytest.mark.parametrize("kind", ("firebolt", "missile", "shortbow"))
 @pytest.mark.parametrize("quadrant", range(4))
 def test_real_projectiles_follow_body_height_without_planar_drift_or_double_lift(
-    data: AnimationData, histories: dict[str, tuple[PresentationTarget, CompletedLineage]],
+    data: AnimationData, histories: dict[str, tuple[PlayerState, PlayerLineage]],
     kind: str, quadrant: int,
 ) -> None:
     before, lineage = histories[kind]
@@ -131,7 +133,7 @@ def display() -> Iterator[None]:
 
 @pytest.mark.parametrize("quadrant", range(4))
 def test_body_and_number_rise_once_while_shadow_stays_on_actual_support(
-    data: AnimationData, histories: dict[str, tuple[PresentationTarget, CompletedLineage]],
+    data: AnimationData, histories: dict[str, tuple[PlayerState, PlayerLineage]],
     display: None, quadrant: int,
 ) -> None:
     before, lineage = histories["shortbow"]

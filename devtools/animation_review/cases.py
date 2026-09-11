@@ -3,18 +3,20 @@
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated, Literal
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, TypeAdapter
 
 from dnd.core.equipment_types import WeaponSlot
-from game.combat_demo import iter_combat_demo
-from game.presentation import CompletedLineage, IntervalEnvelope, PresentationTarget, reduce_interval
+from game.combat_demo import capture_combat_demo
 from game.replay import CapturedHistory
+from game.player_facts import PlayerLineage, PlayerState
 from tests.game.creature_scenarios import creature_history
 from tests.game.discovery_scenarios import discovery_history
 from tests.game.equipment_scenarios import equipment_sequence_history
 from tests.game.forced_movement_scenarios import forced_movement_history
 from tests.game.movement_scenarios import movement_history
+from tests.game.visibility_scenarios import VisibilityRole, visibility_history
 from tests.game.scenarios import (
     attack_history, dodge_expiry_history, healing_history, lifecycle_history, movement_with_paralysis, paralysis_lifecycle,
 )
@@ -101,6 +103,17 @@ class DiscoveryCase(BaseModel):
     mode: Literal["enter_view", "deploy_later"] = "enter_view"
 
 
+class VisibilityCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["visibility"]
+    battlefield_id: str = "battlefield.visibility_doorway_open"
+    observer_position: tuple[int, int] = (5, 7)
+    subject_position: tuple[int, int] = (8, 4)
+    route: tuple[tuple[VisibilityRole, tuple[int, int]], ...] = (("subject", (8, 10)),)
+    hidden_change_after: int | None = None
+    dash_before: bool = False
+
+
 class MovementCase(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     kind: Literal["movement"]
@@ -132,7 +145,7 @@ class ReviewCase(BaseModel):
     tags: tuple[str, ...]
     description: str
     scenario: Annotated[AttackCase | ParalysisCase | CastCase | ParalysisLifecycleCase | DodgeExpiryCase | HealingCase | LifecycleCase
-                        | CreatureCase | EquipmentCase | DiscoveryCase | MovementCase | ForcedMovementCase,
+                        | CreatureCase | EquipmentCase | DiscoveryCase | VisibilityCase | MovementCase | ForcedMovementCase,
                         Field(discriminator="kind")]
     pause_at_ms: float | None = Field(default=None, ge=0)
     pause_duration_ms: float = Field(default=750, gt=0)
@@ -140,8 +153,18 @@ class ReviewCase(BaseModel):
 
 @dataclass(frozen=True)
 class ReviewSequence:
-    before: PresentationTarget
-    lineages: tuple[CompletedLineage, ...]
+    before: PlayerState
+    lineages: tuple[PlayerLineage, ...]
+
+
+class ReviewPerspective(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    experiment_id: str
+    role: str
+    observer_uuid: UUID
+    generation: UUID
+    start_cursor: int
+    end_cursor: int
 
 
 class RecordedInput(BaseModel):
@@ -154,6 +177,8 @@ class RecordedInput(BaseModel):
     captured_at: str
     sources: dict[str, JsonValue]
     sequence: JsonValue
+    sequence_format: Literal["native-v2", "player-v1"] = "native-v2"
+    perspective: ReviewPerspective | None = None
 
 
 def load_cases(path: Path = Path(__file__).with_name("catalog.json")) -> tuple[ReviewCase, ...]:
@@ -181,6 +206,10 @@ def produce(case: ReviewCase) -> CapturedHistory:
             return equipment_sequence_history(replacement=scenario.replacement, attacks=scenario.attacks)
         case DiscoveryCase() as scenario:
             return discovery_history(mode=scenario.mode)
+        case VisibilityCase() as scenario:
+            return visibility_history(battlefield_id=scenario.battlefield_id,
+                observer_position=scenario.observer_position, subject_position=scenario.subject_position,
+                route=scenario.route, hidden_change_after=scenario.hidden_change_after, dash_before=scenario.dash_before)
         case MovementCase() as scenario:
             return movement_history(route=scenario.route, battlefield_id=scenario.battlefield_id,
                                                 behavior=scenario.behavior, boost=scenario.boost)
@@ -209,20 +238,8 @@ def produce(case: ReviewCase) -> CapturedHistory:
             return lifecycle_history(save_seeds=scenario.save_seeds,
                 heal_after=scenario.heal_after, revive_after=scenario.revive_after)
         case CastCase() as scenario:
-            script = iter_combat_demo(
+            return capture_combat_demo(
                 caster_position=scenario.caster_position, second_attack_seed=scenario.second_attack_seed,
                 goblin_recipient=scenario.goblin_recipient, replace_weapon=scenario.replace_weapon,
                 magic_missile=scenario.magic_missile,
             )
-            try:
-                initialization = next(script)
-                if not isinstance(initialization, IntervalEnvelope):
-                    raise ValueError("scenario must begin with its recorded initialization events")
-                before, _ = reduce_interval(None, initialization)
-                roots = tuple(script)
-                if not all(isinstance(root, CompletedLineage) for root in roots):
-                    raise ValueError("scenario must yield complete lineages after its baseline")
-                return CapturedHistory(initialization, before,
-                                       tuple(root for root in roots if isinstance(root, CompletedLineage)))
-            finally:
-                script.close()

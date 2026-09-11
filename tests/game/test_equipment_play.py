@@ -27,6 +27,7 @@ def test_replacement_keeps_historical_gear_until_its_gesture_completes(pause_fir
     caster_id = first.source.caster.actor_uuid
     caster_uuid = UUID(caster_id)
     latest = summary.latest.actors[caster_uuid]
+    latest_equipment = tuple((item.slot, item.item_uuid) for item in latest.visual_loadout.layers)
     first_frames = [frame for frame in summary.frames if frame.cast_number == 1]
     second_frames = [frame for frame in summary.frames if frame.cast_number == 2]
     assert len(summary.equipment_timelines) == 1
@@ -38,11 +39,11 @@ def test_replacement_keeps_historical_gear_until_its_gesture_completes(pause_fir
     assert second.source.applications[0].target.hp == 73 and second.source.applications[0].resulting_hp == 66
 
     assert any(
-        frame.latest_equipment == latest.equipment and frame.reduced_casts == 2
+        frame.latest_equipment == latest_equipment and frame.reduced_casts == 2
         and frame.latest_vitals[0].hp == 66 and not frame.sample.complete
         for frame in first_frames
     )
-    assert first_frames[0].latest_equipment != latest.equipment
+    assert first_frames[0].latest_equipment != latest_equipment
     for frame in first_frames + second_frames:
         assert frame.sample == sample_cast(summary.timelines[frame.cast_number - 1], frame.elapsed_ms)
         expected = "Melee1" if frame.cast_number == 1 else "Melee3"
@@ -54,7 +55,7 @@ def test_replacement_keeps_historical_gear_until_its_gesture_completes(pause_fir
     for frame in summary.equipment_frames:
         assert frame.root_event_uuid == equipment.root_event_uuid
         assert frame.sample == sample_equipment(equipment, frame.elapsed_ms)
-        assert frame.latest_equipment == latest.equipment
+        assert frame.latest_equipment == latest_equipment
         assert frame.sample.body.facing == equipment.actor.facing
         assert not frame.sample.body.hide_weapon
         expected = "Melee3" if frame.sample.complete else "Melee1"
@@ -69,6 +70,6 @@ def test_replacement_keeps_historical_gear_until_its_gesture_completes(pause_fir
         assert len(paused) > 2
         assert all(frame.sample == paused[0].sample and frame.elapsed_ms == paused[0].elapsed_ms
                    for frame in paused)
-        assert paused[0].latest_equipment != latest.equipment
-        assert paused[-1].latest_equipment == latest.equipment
+        assert paused[0].latest_equipment != latest_equipment
+        assert paused[-1].latest_equipment == latest_equipment
         assert paused[0].latest_vitals[0].hp == 73 and paused[-1].latest_vitals[0].hp == 66

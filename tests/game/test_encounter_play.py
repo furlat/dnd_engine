@@ -8,7 +8,7 @@ os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 
 import pygame
 
-from dnd.actions import AttackEvent, MovementEvent
+from game.player_facts import AttackFact, MovementFact
 from game.controls import ActionSelection, EndTurn
 from game.encounter_play import run
 
@@ -45,9 +45,9 @@ def test_full_round_moves_conditions_and_enemy_actions_while_history_paused() ->
     assert result.player_commands == 6
     assert result.latest == result.historical
     assert result.historical.round_number == 2
-    assert any(isinstance(lineage.root, MovementEvent) for lineage in result.lineages)
-    assert len({lineage.root.source_entity_uuid for lineage in result.lineages
-                if isinstance(lineage.root, AttackEvent)}) == 2
+    assert any(isinstance(lineage.root.fact, MovementFact) for lineage in result.lineages)
+    assert len({lineage.root.fact.source_entity_uuid for lineage in result.lineages
+                if isinstance(lineage.root.fact, AttackFact)}) == 2
     paused = [frame for frame in result.frames if frame.paused]
     assert len(paused) > 3
     assert len({frame.historical_cursor for frame in paused}) == 1

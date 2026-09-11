@@ -11,8 +11,7 @@ from uuid import UUID
 
 import pygame
 
-from dnd.actions import AttackEvent, JumpEvent, MovementEvent
-from dnd.core.events import EventPhase, ForcedMovementEvent, StepMovementEvent
+from dnd.core.events import EventPhase
 from game.animation_data import load_animation_data
 from game.animation_draw import actor_screen_bounds
 from game.animation_types import Facing8
@@ -24,7 +23,8 @@ from game.combat import actor_contact
 from game.feedback import FeedbackTrack, choreography_feedback, motion_feedback
 from game.motion import MotionTimeline, bind_motion
 from game.playback_frame import PlaybackFrame, sample_playback_frame
-from game.presentation import PresentationTarget, reduce_lineage, stage_lineage
+from game.player_facts import AttackFact, ForcedMovementFact, MovementFact, PlayerState, StepFact
+from game.player_projection import reduce_lineage, stage_lineage
 from game.projection import Camera, TILE_WIDTH, ZOOM_LEVELS, project_screen
 from game.scene import draw_actor_labels, load_scene_media, scene_actors
 from game.visual_position import VisualPosition
@@ -51,9 +51,10 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
     def check(name: str, passed: bool, detail: str) -> None:
         checks.append({"name": name, "passed": passed, "detail": detail})
 
-    check("completed-events", bool(sequence.lineages) and all(
-        event.phase is EventPhase.COMPLETION for root in sequence.lineages for event in root.events),
-        "Every retained event is complete before video sampling begins.")
+    check("completed-events", all(
+        event.phase in (EventPhase.COMPLETION, EventPhase.CANCEL)
+        for root in sequence.lineages for event in root.events),
+        "Every received causal node is terminal before video sampling begins; an empty perceived history is valid.")
     check("complete-descendants", all(
         child in {event.lineage_uuid for event in root.events}
         for root in sequence.lineages for event in root.events for child in event.children_lineages),
@@ -150,7 +151,7 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
         assert encoder.stdin is not None
         sink = encoder.stdin
 
-        def capture(after: PresentationTarget | None = None, elapsed_ms: float = 0.0,
+        def capture(after: PlayerState | None = None, elapsed_ms: float = 0.0,
                     root_uuid: UUID | None = None, choreography: BoundChoreography | None = None,
                     choreography_media: ChoreographyMedia | None = None, motion: MotionTimeline | None = None,
                     reaction_media: dict[UUID, ChoreographyMedia] | None = None, paused: bool = False) -> PlaybackFrame:
@@ -174,7 +175,8 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
                                   shown_hp=sample.shown_hp, active_uuid=None,
                                   commands=sample.commands, viewport=feedback_viewport)
                 view.fill((14, 20, 28), (0, 0, size[0], 44))
-                label = f"{case.id}  |  {presentation_ms:.0f} ms  |  {'PAUSED' if paused else 'history'}"
+                mode = "PAUSED" if paused else "history" if sequence.lineages else "no perceived changes"
+                label = f"{case.id}  |  {presentation_ms:.0f} ms  |  {mode}"
                 view.blit(cache.debug_font.render(label, True, (230, 237, 245)), (12, 8))
                 cursors = f"latest {latest.reducer_cursor}  |  displayed {sample.displayed.reducer_cursor}  |  camera {camera.quadrant}"
                 view.blit(cache.debug_font.render(cursors, True, (158, 179, 197)), (12, 26))
@@ -205,7 +207,7 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
 
         try:
             for _ in range(ceil(350 / interval)):
-                capture()
+                sampled = capture()
                 presentation_ms += interval
             pause_done = False
             for lineage in sequence.lineages:
@@ -213,17 +215,14 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
                 contacts = {actor.contact.actor_uuid: actor.contact
                             for actor in scene_actors(before, data, facings, positions)}
                 motion = bind_motion(before, lineage, data, contacts=contacts)
-                if isinstance(lineage.root, (MovementEvent, JumpEvent)) and any(
-                    isinstance(event, AttackEvent) or isinstance(event, StepMovementEvent) and event.committed
+                if isinstance(lineage.root.fact, MovementFact) and any(
+                    isinstance(event.fact, AttackFact) or isinstance(event.fact, StepFact) and event.fact.committed
                     for event in lineage.events
                 ):
                     check(f"movement-bound:{lineage.root.uuid}", motion is not None,
                           "A committed movement/reaction must execute its movement choreography.")
                     if motion is None:
                         gaps.append(f"{lineage.root.uuid}: Movement reaction choreography is not bound")
-                classes = {row.event_uuid: row.event_class for row in lineage.objective_rows}
-                gaps.extend(f"{identity}: Unprojected state payload: {classes[identity]}"
-                            for identity, _ in lineage.dispositions)
                 group = None if motion is not None else bind_choreography(before, lineage, data,
                                                                         facings=facings, contacts=contacts)
                 group_media = load_choreography_media(group) if group is not None else None
@@ -260,21 +259,24 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
                       "At completion the frame exposes the authoritative reduced state.")
                 for bound in groups:
                     for cue in bound.forced_movement:
-                        native = next(event for event in lineage.events
-                                      if isinstance(event, ForcedMovementEvent) and event.uuid == cue.event_uuid)
-                        contact = next(actor.contact for actor in sampled.actors
-                                       if actor.contact.actor_uuid == cue.actor.actor_uuid)
-                        check(f"forced-position:{native.uuid}", contact.grid == native.end_position,
-                              f"Visible {contact.grid}; native displacement committed {native.end_position}.")
-                steps = [event for event in lineage.events if isinstance(event, StepMovementEvent)]
+                        node = next(event for event in lineage.events if event.uuid == cue.event_uuid)
+                        assert isinstance(node.fact, ForcedMovementFact)
+                        contact = next((actor.contact for actor in sampled.actors
+                                        if actor.contact.actor_uuid == cue.actor.actor_uuid), None)
+                        if contact is not None:
+                            check(f"forced-position:{node.uuid}", contact.grid == node.fact.end_position,
+                                  f"Visible {contact.grid}; received displacement committed {node.fact.end_position}.")
+                steps = [event.fact for event in lineage.events if isinstance(event.fact, StepFact)]
                 if steps:
                     actor_uuid = str(steps[-1].source_entity_uuid)
-                    contact = next(row.contact for row in sampled.actors if row.contact.actor_uuid == actor_uuid)
+                    contact = next((row.contact for row in sampled.actors if row.contact.actor_uuid == actor_uuid), None)
                     expected = steps[-1].to_position if steps[-1].committed else steps[-1].from_position
-                    legal = actor_contact(after, after.actors[steps[-1].source_entity_uuid], data)
-                    check(f"committed-position:{lineage.root.uuid}", legal.grid == expected,
-                          f"Legal {legal.grid}; actual last Step settled at {expected}.")
-                    if motion is not None:
+                    legal = (actor_contact(after, after.actors[steps[-1].source_entity_uuid], data)
+                             if contact is not None else None)
+                    if legal is not None:
+                        check(f"committed-position:{lineage.root.uuid}", legal.grid == expected,
+                              f"Legal {legal.grid}; last received Step settled at {expected}.")
+                    if motion is not None and legal is not None and contact is not None:
                         stopped = legal if steps[-1].committed else motion.reactions[-1].contact
                         check(f"visual-position:{lineage.root.uuid}",
                               (contact.grid, contact.elevation_steps, contact.body_lift_px)

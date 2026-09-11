@@ -9,7 +9,7 @@ import pygame
 from dnd.core.life_types import LifeState
 from dnd.core.condition_types import ConditionCategory
 from game.animation import ActorContact, sample_idle_body
-from game.animation_data import resolve_actor_layers
+from game.animation_data import resolve_player_layers
 from game.animation_draw import (
     AnimationDrawCommand, BodyRows, actor_draw_commands, actor_screen_bounds,
     load_actor_media, place_feedback_rect,
@@ -17,7 +17,7 @@ from game.animation_draw import (
 from game.animation_types import AnimationData, Facing8, RigLayer
 from game.combat import actor_contact
 from game.condition_animation import ConditionAppearance
-from game.presentation import PresentationTarget
+from game.player_facts import PlayerState
 from game.projection import Camera, project_screen
 from game.visual_position import VisualPosition, placed_contact
 
@@ -28,7 +28,7 @@ class SceneActor:
     layers: tuple[RigLayer, ...]
 
 
-def scene_actors(target: PresentationTarget, data: AnimationData,
+def scene_actors(target: PlayerState, data: AnimationData,
                  facings: Mapping[str, Facing8],
                  positions: Mapping[str, VisualPosition] | None = None) -> tuple[SceneActor, ...]:
     """Current visual contacts and witnessed corpses; no stale living positions."""
@@ -43,8 +43,7 @@ def scene_actors(target: PresentationTarget, data: AnimationData,
         contact = actor_contact(target, actor, data, facings.get(str(actor.uuid), "S"))
         position = positions.get(contact.actor_uuid) if positions else None
         contact = placed_contact(contact, position)
-        layers = resolve_actor_layers(data, actor.appearance, actor.items, actor.equipment,
-                                      actor.active_weapon_set, rig_id=contact.rig_id)
+        layers = resolve_player_layers(data, actor, rig_id=contact.rig_id)
         result.append(SceneActor(contact, layers))
     return tuple(result)
 
@@ -78,7 +77,7 @@ def scene_draw_commands(actors: tuple[SceneActor, ...], data: AnimationData,
 
 
 def draw_actor_labels(screen: pygame.Surface, font: pygame.font.Font,
-                      actors: tuple[SceneActor, ...], target: PresentationTarget,
+                      actors: tuple[SceneActor, ...], target: PlayerState,
                       camera: Camera, *, shown_hp: Mapping[str, int | None],
                       active_uuid: UUID | None,
                       commands: tuple[AnimationDrawCommand, ...] = (),

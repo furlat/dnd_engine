@@ -24,7 +24,7 @@ from game.presentation import (
     reduce_interval, reduce_lineage,
 )
 
-from game.replay import CapturedHistory, capture_history
+from game.replay import CapturedHistory, ObserverCapture, capture_history
 
 
 def discovery_history(
@@ -68,6 +68,7 @@ def discovery_history(
         assert birth.current_hit_points == 40
         if mode == "enter_view":
             game.deploy_entity(unseen, unseen.position)
+        unseen_start = EventQueue.event_cursor()
         assert unseen.uuid not in observer.senses.entities
         private_start = EventQueue.event_cursor()
         assert unseen.equip_item(dagger.uuid, WeaponSlot.MELEE_MAIN)
@@ -91,6 +92,7 @@ def discovery_history(
             assert isinstance(root, MovementEvent)
         else:
             game.deploy_entity(unseen, unseen.position)
+            unseen_start = EventQueue.event_cursor()
             root, = (event for _, event in EventQueue.iter_events_since(start)
                      if isinstance(event, SpatialChangeEvent) and event.parent_lineage is None
                      and event.phase is EventPhase.COMPLETION)
@@ -114,7 +116,10 @@ def discovery_history(
                                 known_actor_uuids=frozenset(admitted.actors))
         assert not later.admissions
         assert reduce_lineage(admitted, later).actors[unseen.uuid].normal_hp == unseen.get_hp()
-        return capture_history(before, (discovery, later))
+        return capture_history(before, (discovery, later), observers=(
+            ObserverCapture("observer", observer.uuid, before.reducer_cursor),
+            ObserverCapture("discovered", unseen.uuid, unseen_start),
+        ))
     finally:
         game.close()
         reset_engine_runtime()

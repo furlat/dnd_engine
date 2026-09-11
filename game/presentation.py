@@ -219,13 +219,10 @@ def _safe_to_detach(event: Event) -> bool:
 
 
 def _admitted(
-    index: int,
     event: Event,
     *,
     observer_uuid: UUID,
     battlefield_id: str,
-    door_uuid: UUID | None,
-    standing_torch_uuid: UUID | None,
 ) -> bool:
     if event.phase is not EventPhase.COMPLETION:
         return False
@@ -246,16 +243,13 @@ def _admitted(
         return event.battlefield_id == battlefield_id
     if type(event) is ItemLocationStateEvent:
         return (
-            event.item_state.item_uuid == standing_torch_uuid
-            and event.item_state.item_id == "environment.standing_torch"
-            and event.location is ItemLocation.FLOOR
+            event.location is ItemLocation.FLOOR
             and event.world_placement is not None
         )
     if type(event) is SpatialChangeEvent:
         return (
             event.change_type is SpatialChangeType.OBJECT_CHANGED
             and event.event_type.value == "spatial_object_changed"
-            and event.object_uuid == door_uuid
         )
     if type(event) is SensoryUpdateEvent:
         return event.observer_uuid == observer_uuid
@@ -293,12 +287,9 @@ def capture_interval(
     subjective: list[SubjectiveTextRow] = []
     for index, event in indexed:
         is_admitted = _admitted(
-            index,
             event,
             observer_uuid=observer_uuid,
             battlefield_id=battlefield_id,
-            door_uuid=door_uuid,
-            standing_torch_uuid=standing_torch_uuid,
         )
         if is_admitted:
             copied = (_retained_event(event, observer_uuid)
@@ -361,6 +352,48 @@ def _copy_snapshot(snapshot: SensesSnapshot | None) -> SensesSnapshot | None:
     )
 
 
+def apply_world_fact(target: PresentationTarget, event: Event) -> None:
+    """Fold recorded world after-values without querying native world owners."""
+    if isinstance(event, WorldInitializedEvent):
+        target.world = event
+        target.tiles = {tile.position: tile for tile in event.tiles}
+        target.objects = {row.item.item_uuid: row for row in event.objects}
+    elif isinstance(event, ItemLocationStateEvent) and event.location is ItemLocation.FLOOR:
+        if event.world_placement is None:
+            raise ValueError("floor item fact requires its recorded placement")
+        existing = target.objects.get(event.item_state.item_uuid)
+        target.objects[event.item_state.item_uuid] = WorldObjectState(
+            placement=event.world_placement, item=event.item_state,
+            contained_items=existing.contained_items if existing is not None else (),
+        )
+    elif isinstance(event, SpatialChangeEvent) and event.change_type is SpatialChangeType.OBJECT_CHANGED:
+        existing = target.objects.get(event.object_uuid) if event.object_uuid is not None else None
+        if existing is None:
+            return
+        values: dict[str, object] = {"boundary_structure": event.object_boundary_structure}
+        for key, value in (
+            ("name", event.object_name), ("map_char", event.object_map_char),
+            ("is_open", event.object_is_open), ("blocks_movement", event.object_blocks_movement),
+            ("blocks_optics", event.object_blocks_optics),
+            ("blocks_propagation", event.object_blocks_propagation),
+        ):
+            if value is not None:
+                values[key] = value
+        target.objects[existing.item.item_uuid] = existing.model_copy(update={
+            "placement": event.placement or existing.placement,
+            "item": existing.item.model_copy(update=values),
+        })
+    else:
+        return
+    if target.door_uuid is not None and (door := target.objects.get(target.door_uuid)) is not None:
+        target.door_placement = door.placement
+        target.door_is_open = door.item.is_open
+    if target.standing_torch_uuid is not None:
+        fixture = target.objects.get(target.standing_torch_uuid)
+        if fixture is not None:
+            target.standing_torch_state = fixture.item
+
+
 def reduce_interval(
     target: PresentationTarget | None,
     envelope: IntervalEnvelope,
@@ -404,9 +437,7 @@ def reduce_interval(
             # merely because a private birth exists in the recorded interval.
             dispositions[index] = Disposition.STATE_ONLY
         elif type(event) is WorldInitializedEvent:
-            target.world = event
-            target.tiles = {tile.position: tile for tile in event.tiles}
-            target.objects = {row.item.item_uuid: row for row in event.objects}
+            apply_world_fact(target, event)
             if envelope.door_uuid is not None:
                 door = target.objects.get(envelope.door_uuid)
                 if door is None:
@@ -420,27 +451,10 @@ def reduce_interval(
                 target.standing_torch_state = fixture.item
             pending.add(index)
         elif type(event) is ItemLocationStateEvent:
-            if event.world_placement is None:
-                raise RuntimeError("admitted standing fixture lacks floor placement")
-            target.standing_torch_state = event.item_state
-            target.objects[event.item_state.item_uuid] = WorldObjectState(
-                placement=event.world_placement,
-                item=event.item_state,
-            )
+            apply_world_fact(target, event)
             pending.add(index)
         elif type(event) is SpatialChangeEvent:
-            if envelope.door_uuid is None:
-                raise RuntimeError("door change lacks its selected fixture identity")
-            if event.placement is None or event.object_is_open is None:
-                raise RuntimeError("admitted door change lacks a complete after-value")
-            target.door_placement = event.placement
-            target.door_is_open = event.object_is_open
-            existing = target.objects.get(envelope.door_uuid)
-            if existing is not None:
-                target.objects[envelope.door_uuid] = existing.model_copy(update={
-                    "placement": event.placement,
-                    "item": existing.item.model_copy(update={"is_open": event.object_is_open}),
-                })
+            apply_world_fact(target, event)
             pending.add(index)
         elif type(event) is SensoryUpdateEvent:
             _reduce_sensory_fact(target, event)
@@ -628,14 +642,14 @@ def _retained_event(event: Event, observer_uuid: UUID) -> Event:
         case SpatialChangeEvent(change_type=(
             SpatialChangeType.PERCEIVABILITY_CHANGED | SpatialChangeType.ENTITY_ENTERED
             | SpatialChangeType.ENTITY_LEFT | SpatialChangeType.MOVEMENT_COLLISION
-            | SpatialChangeType.LIGHT_CHANGED
+            | SpatialChangeType.LIGHT_CHANGED | SpatialChangeType.OBJECT_CHANGED
         )):
             copied = event.model_copy(update=common)
         case ActionEvent() if type(event) is ActionEvent:
             copied = event.model_copy(update=common)
         case EquipmentEvent():
             copied = event.model_copy(update=common)
-        case ItemLocationStateEvent(location=ItemLocation.INVENTORY | ItemLocation.EQUIPMENT):
+        case ItemLocationStateEvent(location=ItemLocation.INVENTORY | ItemLocation.EQUIPMENT | ItemLocation.FLOOR):
             copied = event.model_copy(update=common)
         case _:
             copied = _event_header(event).model_copy(update=common)
@@ -705,8 +719,10 @@ def _capture_actor_admissions(
         if completed and isinstance(event, EntityCreatedEvent):
             actors[event.entity_uuid] = actor_from_birth(event)
         sensory = completed and isinstance(event, SensoryUpdateEvent) and event.observer_uuid == observer_uuid
+        acquired: set[UUID] = set()
         if sensory:
             assert isinstance(event, SensoryUpdateEvent)
+            acquired = set(event.entity_contacts_changed) - contacts.keys()
             observer_position = event.observer_position
             for identity in event.entity_contacts_removed:
                 contacts.pop(identity, None)
@@ -722,7 +738,7 @@ def _capture_actor_admissions(
                 observed.update(event.entity_contacts_changed)
                 observed.add(observer_uuid)
                 candidates.update(observed)
-            for identity in sorted(candidates - admitted, key=str):
+            for identity in sorted((candidates - admitted) | acquired, key=str):
                 if identity not in actors:
                     continue
                 identified = observer in event.identified_entity_observer_uuids.get(str(identity), set())
@@ -749,11 +765,12 @@ def _capture_actor_admissions(
 def capture_lineage(
     root: Event, *, observer_uuid: UUID, known_actor_uuids: frozenset[UUID] = frozenset(),
 ) -> CompletedLineage:
-    """Retain a closed known-participant lineage after its public operation.
+    """Retain a closed native lineage privately after its public operation.
 
     Follow existing child lineages. Operation cursor ranges and callback batches
-    do not establish a render unit. This first binder admits known participants;
-    other disclosure cases keep their existing rules and require later binding.
+    do not establish a render unit. Observer grants remain exact facts in this
+    private record; the outgoing projection decides which payloads and geometry
+    an observer receives. Unknown participants must not erase observed children.
     """
     generation = EventQueue.generation_id()
     history = tuple(EventQueue.iter_events_since(0))
@@ -790,35 +807,6 @@ def capture_lineage(
     )
     if not indexed or root.uuid not in {event.uuid for _, event in indexed}:
         raise ValueError("lineage root is absent from the current EventQueue")
-    initial_versions: dict[UUID, Event] = {}
-    for _, event in indexed:
-        initial_versions.setdefault(event.lineage_uuid, event)
-    observer = str(observer_uuid)
-    known_at_start = {
-        lineage_uuid: {
-            participant
-            for participant in (initial.source_entity_uuid, initial.target_entity_uuid)
-            if participant is not None
-            and observer in initial.identified_entity_observer_uuids.get(str(participant), set())
-            and observer in initial.located_entity_observer_uuids.get(str(participant), set())
-        }
-        for lineage_uuid, initial in initial_versions.items()
-    }
-    for event in nodes.values():
-        participants = _actor_participants(event)
-        for participant in participants:
-            if participant is None or participant == observer_uuid:
-                continue
-            if observer not in event.identified_entity_observer_uuids.get(str(participant), set()):
-                raise NotImplementedError("selected lineage binding requires identified participants")
-            # A witnessed participant can lose contact during this root or its
-            # reaction. Keep that historical attachment from the same lineage's
-            # initial evidence; terminal grants and sensory removals stay exact.
-            if (participant not in known_at_start[root.lineage_uuid]
-                    and participant not in known_at_start[event.lineage_uuid]
-                    and observer not in event.located_entity_observer_uuids.get(str(participant), set())):
-                raise NotImplementedError("selected lineage binding requires located participants")
-
     retained = tuple(
         _retained_event(event, observer_uuid)
         for _, event in indexed
@@ -872,9 +860,7 @@ def lineage_branch(lineage: CompletedLineage, root: Event) -> CompletedLineage:
 
 
 def _admit_actor(target: PresentationTarget, admission: ActorAdmission) -> None:
-    """Add one observed actor to an owned value; existing history wins."""
-    if admission.actor.uuid in target.actors:
-        return
+    """Apply the actor's recorded state at this actual observation boundary."""
     target.actors[admission.actor.uuid] = admission.actor
     if admission.contact is not None and target.senses is not None:
         target.senses.entities[admission.actor.uuid] = admission.contact.model_copy(deep=True)
@@ -884,7 +870,8 @@ def stage_actors(target: PresentationTarget, admissions: tuple[ActorAdmission, .
     """Add the specified observed actors to a fresh presentation value."""
     result = copy_target(target)
     for admission in admissions:
-        _admit_actor(result, admission)
+        if admission.actor.uuid not in result.actors:
+            _admit_actor(result, admission)
     return result
 
 
@@ -936,7 +923,9 @@ def reduce_lineage(target: PresentationTarget, lineage: CompletedLineage) -> Pre
                 # These facts explain causality. Only the committed applied
                 # packet changes HP, so aggregate totals cannot apply it twice.
                 pass
-            case DeathEvent() | DeathSaveEvent() | ReviveEvent() | InstantDeathEvent() | SpatialChangeEvent():
+            case SpatialChangeEvent() | ItemLocationStateEvent(location=ItemLocation.FLOOR):
+                apply_world_fact(result, event)
+            case DeathEvent() | DeathSaveEvent() | ReviveEvent() | InstantDeathEvent():
                 # Keep the cause. The actual life and sensory children supply
                 # the successor facts; do not infer them from death/occupancy.
                 pass

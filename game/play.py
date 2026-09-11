@@ -18,9 +18,6 @@ from uuid import UUID
 
 import pygame
 
-from dnd.actions import SpellEvent
-from dnd.blocks.base_item import ItemLocationStateEvent
-from dnd.blocks.equipment import WeaponEquipEvent, WeaponUnequipEvent
 from dnd.runtime_reset import reset_engine_runtime
 from game.animation import (
     BodySample, CastSample, CastTimeline, EquipmentSample, EquipmentTimeline, VitalsSample,
@@ -36,7 +33,9 @@ from game.app import BACKGROUND, WINDOW_SIZE, draw_frame
 from game.assets import SurfaceCache, load_catalog
 from game.combat import BoundCast, BoundEquipment, bind_cast, bind_equipment
 from game.combat_demo import iter_combat_demo
-from game.presentation import CompletedLineage, IntervalEnvelope, PresentationTarget, reduce_interval, reduce_lineage
+from game.presentation import CompletedLineage, IntervalEnvelope
+from game.player_facts import EquipmentFact, PlayerLineage, PlayerState, SpellFact
+from game.player_projection import begin_projection, project_lineage, reduce_initialization, reduce_lineage
 from game.projection import Camera, ZOOM_LEVELS
 
 
@@ -73,8 +72,8 @@ class PlaybackSummary:
     timelines: tuple[CastTimeline, ...]
     frames: tuple[PlaybackFrame, ...]
     completed_casts: int
-    latest: PresentationTarget
-    historical: PresentationTarget
+    latest: PlayerState
+    historical: PlayerState
     equipment_timelines: tuple[EquipmentTimeline, ...]
     equipment_frames: tuple[EquipmentPlaybackFrame, ...]
     completed_lineages: int
@@ -135,7 +134,8 @@ async def _run(
         initialization = next(script)
         if not isinstance(initialization, IntervalEnvelope):
             raise RuntimeError("combat script must first publish native initialization")
-        seed, _ = reduce_interval(None, initialization)
+        projection, public_initialization = begin_projection(initialization)
+        seed = reduce_initialization(public_initialization)
         latest = historical = seed
         catalog = load_catalog()
         rig_files = (Path(__file__).parent / "data" / "rigs" / "goblin01.json",) if goblin_recipient else ()
@@ -149,7 +149,7 @@ async def _run(
                sum(contact.position[1] for contact in positions) / len(positions))
         focus = ((start[0] + end[0]) / 2, (start[1] + end[1]) / 2)
         camera = Camera(quadrant=quadrant, zoom=0.75, viewport=window_size).with_focus(focus)
-        pending: deque[CompletedLineage] = deque()
+        pending: deque[PlayerLineage] = deque()
         active: BoundCast | BoundEquipment | None = None
         shown: BoundCast | BoundEquipment | None = None
         cast_media: AnimationMedia | None = None
@@ -208,27 +208,30 @@ async def _run(
             # These are input-script deadlines, independent of the active
             # timeline, pause state, queue length or display completion.
             while issued < len(deadlines) and input_ms >= deadlines[issued]:
-                lineage = next(script)
-                if not isinstance(lineage, CompletedLineage):
+                native = next(script)
+                if not isinstance(native, CompletedLineage):
                     raise RuntimeError("combat input must produce its completed lineage")
+                lineage = project_lineage(projection, native)
+                issued += 1
+                if lineage is None:
+                    continue
                 latest = reduce_lineage(latest, lineage)
                 pending.append(lineage)
-                issued += 1
-                if isinstance(lineage.root, SpellEvent):
+                if isinstance(lineage.root.fact, SpellFact):
                     reduced_casts += 1
                 await asyncio.sleep(0)
 
             started = False
             while active is None and pending:
                 lineage = pending.popleft()
-                match lineage.root:
-                    case SpellEvent():
+                match lineage.root.fact:
+                    case SpellFact():
                         # Explicit terrace geometry; original recipe/time stays intact.
                         active = bind_cast(historical, lineage, data, travel_apex_steps=1.0)
                         timelines.append(active.timeline)
                         cast_media = load_animation_media(active.timeline, active.appearances)
                         equipment_media = None
-                    case ItemLocationStateEvent():
+                    case EquipmentFact():
                         active = bind_equipment(
                             historical, lineage, data,
                             {body.actor_uuid: body.facing for body in displayed_bodies},
@@ -244,7 +247,7 @@ async def _run(
                                 (active.timeline.actor, active.replacement, ("Idle",)),
                             ))
                             cast_media = None
-                    case WeaponEquipEvent() | WeaponUnequipEvent():
+                    case None:
                         pass
                     case _:
                         raise NotImplementedError("the selected playback has no binding for this root")
@@ -332,7 +335,8 @@ async def _run(
                     if isinstance(active, BoundCast):
                         completed += 1
                     active = None
-                latest_equipment = latest.actors[latest.observer_uuid].equipment
+                latest_equipment = tuple((item.slot, item.item_uuid)
+                                         for item in latest.actors[latest.observer_uuid].visual_loadout.layers)
                 match sample:
                     case CastSample():
                         published.append(PlaybackFrame(

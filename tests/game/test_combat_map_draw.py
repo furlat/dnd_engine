@@ -15,7 +15,8 @@ from game.app import draw_frame
 from game.assets import AssetCatalog, SurfaceCache, load_catalog
 from game.combat import BoundCast, bind_cast
 from game.combat_demo import iter_combat_demo
-from game.presentation import CompletedLineage, PresentationTarget, IntervalEnvelope, reduce_interval
+from game.presentation import CompletedLineage, IntervalEnvelope, PresentationTarget, reduce_interval
+from tests.game.player_helpers import player_inputs
 from game.projection import Camera, camera_pose, project_screen
 
 
@@ -39,13 +40,16 @@ def scene() -> Iterator[MapScene]:
         scenario = iter_combat_demo(caster_position=(16, 24))
         initialization = next(scenario)
         assert isinstance(initialization, IntervalEnvelope)
+        # The painter tests deliberately relocate contacts to authored walls
+        # outside this observer's view. Keep that map fixture complete; only
+        # the real cast binding crosses the player packet boundary.
         target, _ = reduce_interval(None, initialization)
         lineage = next(scenario)
-        assert isinstance(target, PresentationTarget)
         assert isinstance(lineage, CompletedLineage)
+        player, (lineage,) = player_inputs(initialization, (lineage,))
         # This fixture also protects the original point-dart depth regression.
         # The playable game selects the authored sprite bundle separately.
-        cast = bind_cast(target, lineage, load_animation_data(authored_bundles=()))
+        cast = bind_cast(player, lineage, load_animation_data(authored_bundles=()))
         catalog = load_catalog()
         media = load_animation_media(cast.timeline, cast.appearances)
         try:

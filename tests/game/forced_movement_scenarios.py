@@ -33,7 +33,7 @@ from game.presentation import (
     reduce_interval, reduce_lineage,
 )
 
-from game.replay import CapturedHistory, capture_history
+from game.replay import CapturedHistory, ObserverCapture, capture_history
 
 
 def _modular_actor(name: str, position: tuple[int, int], *, source: bool = False, hp: int = 40) -> Entity:
@@ -184,7 +184,8 @@ def forced_movement_history(
             assert forced[-1].end_position == target.position
         if isinstance(result, ShoveEvent):
             assert result.end_position == target.position or (result.contest_success is False and target.position == target_position)
-        return capture_history(before, tuple(history))
+        return capture_history(before, tuple(history), observers=tuple(ObserverCapture(f"participant-{index + 1}", actor.uuid, before.reducer_cursor)
+            for index, actor in enumerate(actors)))
     finally:
         game.close()
         reset_engine_runtime()

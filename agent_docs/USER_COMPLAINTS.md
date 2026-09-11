@@ -160,6 +160,11 @@ Asset references supplied by the user:
   select faulty ones and export a trace/pinned moment for debugging.
 - Recorded clips must preserve causal and turn relationships. Do not invent
   condition transitions just to show an animation capability.
+- September 11: collect both entities' subjective viewpoints for every
+  experiment, retaining four camera corners for each. Include many entering/
+  leaving-sight walks, brief glimpses through open doorways and discovery caused
+  by the observer walking. Both viewpoints must describe the same native
+  experiment, with visibility changes during the complete movement lineage.
 
 ### C11 — Stop replacing understanding with speculative repair
 
@@ -213,7 +218,7 @@ C01/C02/C05/C06 are implemented for the current retained event families. This
 does not claim archival of arbitrary executable engine object graphs or complete
 inventory/drop/destruction presentation.
 
-C03/C04 remain **partial**: observer-movement discovery and later deployment are
+C03/C04 were **partial at `12ae1eb`**: observer-movement discovery and later deployment were
 covered, but the existing capture gate rejects an unseen actor moving into view.
 The retained local archive also still contains objective diagnostic headers,
 world data and foreign sensory rows. Actor admissions retain full item records;
@@ -223,3 +228,20 @@ player transmission payload. These limits do not justify inventing different
 subjectivity rules.
 The complaints above remain the acceptance requirements, independently of these
 implementation notes.
+
+**Visibility unit implemented:** unseen entry, timed contact loss
+and reacquisition now cross serialized public player events. Private native
+archives are separate. Equipped visual layers/active set, own sensory deltas,
+observed world memory and causal structure reach playback; foreign inventory
+and objective diagnostic rows do not. Fifteen native experiments are recorded
+from both participants, with all four corners per viewpoint. All 30 clips replay
+from public bytes with native generation disabled and reproduce their capture
+videos exactly. Six paired lethal-reaction/forced-movement clips pass the same
+boundary; the controlled mover retains its interrupted corpse position.
+
+C03/C04 and the paired-view requirement C10 are implemented for the connected
+event families. Other actors' equipped appearance is public; their full item
+records are not. The native archive remains a separate local diagnostic artifact.
+These results do not claim full inventory/drop/destruction presentation or all
+Studio animation primitives. RECOVERY_PLAN links the review galleries and records
+the final checks and remaining broader gameplay work.

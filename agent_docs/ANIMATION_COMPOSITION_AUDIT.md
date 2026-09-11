@@ -941,3 +941,177 @@ existing retained identities. They add no per-spell executor hierarchy, new
 mechanical event vocabulary, live-condition copies or independent action queue.
 Further source primitives should join this same composition boundary; adding
 more wrappers around the same state would not improve the design.
+## Public visibility and paired replay — September 11
+
+This section describes the current visibility unit; the older sections below
+remain evidence for their earlier checkpoints. Validation is still in progress.
+
+### Private capture and outgoing projection
+
+`12ae1eb` preserves native initialization and complete lineages as a private
+recording. Concrete passive decoding retains original event identities without
+registering events or creating live entities. The current unit adds the missing
+outgoing player projection; it does not replace that native archive or execute
+mechanics during replay.
+
+The public packet contains initialization events and complete causal roots.
+`game/player_facts.py` supplies passive JSON values: an opaque causal node with
+an optional permitted fact, actor observations, world observations, and the
+source indexes needed to reduce those observations at the right point. The
+opaque node preserves event/lineage identities, parent and ordered children,
+terminal phase and cancellation. A hidden payload does not erase its ancestry.
+There is no second action queue or alternative mechanical event system.
+
+`game/player_projection.py` reads private recorded grants and after-values. It
+copies the allowed information into that packet. Its private accumulation is
+also derived from recorded events, with no queries to live entities, inventory,
+or perception. The player reducer, binders and renderer operate on public
+values. Native diagnostics are kept separately for local review.
+
+### Applying the original disclosure contract
+
+The July player mapper and native Step grant fields distinguish knowing an
+actor from knowing a path. A Step requires the observer's actor identity grant
+and its endpoint/location grants. A later visible Step can disclose movement
+even when the root began unseen. Gating the whole Move by its first observation
+would discard that valid disclosure. Conversely, using the root's entire path
+would expose the hidden approach and departure.
+
+The current projection therefore evaluates actual Step grants. It retains own
+sensory updates exactly, including first contact and loss of contact when the
+adjacent path is undisclosed. Foreign sensory payloads stay private. An actor's
+new observation supplies recorded current HP, condition and visual-loadout
+values, including reacquisition after hidden changes. Other actors have equipped
+visual layers and active weapon set; only the controlled observer carries full
+item records. This follows the existing visual-state policy rather than inventing
+health approximation or a new visibility rule.
+
+World values follow the same distinction: observed tiles and objects update
+remembered state, while an unseen change does not refresh that memory. A boundary
+wall can be observed from either incident visible support. Door changes use the
+recorded spatial after-value; its sensory child can complete before the spatial
+parent, so that child's exact causal parent supplies the already-committed door
+appearance. Unrelated future world values are not a substitute.
+
+A final native two-door initialization probe exposed a remaining early-demo
+filter: `capture_interval` retained OBJECT_CHANGED only for its selected
+`door_uuid`. Closing the second aperture before the baseline therefore left that
+visible door falsely open in the saved input. Capture now retains the supported
+world fact families independently of fixture UUID; the shared world fold applies
+them, and outgoing observation decides what is transmitted. The same selector
+was removed from supported floor-item after-values. Selected door/torch aliases
+remain only for the old diagnostic demo's display bookkeeping.
+
+### Playback ownership
+
+One complete Move remains one head. Its geometric legs contain only disclosed
+edges. Contact loss and reacquisition are timed state changes; no interpolated
+leg joins two separated visible spans. A lone visible point gets one existing
+authored walking-step duration as a dwell. A loss followed by reacquisition has
+one geometry-free interval using that same duration, independent of hidden Step
+count or distance. Each observer's history can consequently have a different
+duration while visible movement retains the original authored speed.
+
+Binding can preload later actor media and required support values. That staged
+input is not the currently displayed state. Sampling starts from the actual
+historical state and applies observations at their disclosed causal boundary.
+Latest reduction can already have lost sight while paused playback continues
+to show the earlier sighting. Neither clock waits on the other.
+
+Public effects whose source is unidentified still preserve the permitted target
+outcome. The existing damage primitive handles that case without inventing a
+source actor or exposing an otherwise hidden attack payload.
+
+The lethal opportunity-attack regression exposed an important viewpoint
+difference. In the recorded spectator view, the failed Step identifies the
+mover and locates its origin, but does not authorize its attempted destination.
+Its attack/death descendants remain permitted. The spectator therefore receives
+the complete reaction at the known origin, beneath an opaque Step. The controlled
+mover's view authorizes its attempted edge and preserves the original walking
+lead and corpse offset. Jump reactions remain grounded before flight. The tests
+now exercise both views of the same native event history; native outcomes did
+not change to accommodate the projection.
+
+Two shared integration corrections followed from those real tests: movement
+must bind permitted descendants even when their direct parent lacks geometric
+payload, and a reaction's actor position must come from its historical input,
+before death removes the observer's contact. Forced displacement separately uses
+its recorded ENTITY_ENTERED location/authorized parent path to place reached-cell
+damage; requiring an ordinary position-grant map on that spatial event lost the
+existing native anchor. These are projection/binding corrections, not new
+mechanical rules or grounds for relaxing ordinary Step endpoint authority.
+
+### Paired experiment ownership
+
+Each finite native experiment explicitly names its participants before reset.
+The capture derives both observer histories from that one generation and its
+actual roots. Later-created actors start at a real later initialization boundary.
+Each viewpoint is an ordinary saved public sequence and gets four camera
+corners. Pair metadata connects observer role/UUID, experiment and original event
+identities; camera angle does not select an observer. A wholly unperceived root has no outgoing contribution. A sequence with
+no received roots legitimately produces an idle clip; opaque nodes remain inside
+every root that contributes a fact, log or observation.
+
+`--capture` runs native mechanics once and persists these inputs. Ordinary
+gallery replay loads them. Old private captures can be projected from their
+existing bytes without rerunning mechanics. Native diagnostics remain in a
+separate local file, outside the input consumed by the frame compositor.
+
+The acceptance matrix includes range entry/exit, doorway crossings and reversals,
+observer movement, an open/closed-door control, isolated contact, repeated
+sightings, current gear/HP after reacquisition and two visible spans within one
+native Move. Tests retain native mechanical assertions at the native boundary
+and cross encoded public bytes before testing binding/sampling.
+
+The open-field range cases were corrected after native evidence showed that
+the first fixture never left the actual sight radius. They now cross the boundary
+on an extended bright field: contact appears at x20 and is lost at x21. All
+fifteen matrix rows assert native acquisition/removal patterns for both actors,
+including which actor moved. Successful scenario execution alone does not prove
+that a visibility experiment exercised its advertised condition.
+
+### Review and measured result
+
+The anti-slop review compared disclosure with the original July mapper, including
+known-target damage/healing, conditions/life, equipment, Step endpoint authority
+and forced-movement authority. The anti-OOP review checked causal node/version
+identity, descendants beneath opaque parents, one movement timeline, historical
+reaction inputs and the distinction between preloading and displayed state. Both
+approved the resulting bounded implementation. No second animation queue,
+per-spell executor, native visibility rule or authored recipe was introduced.
+
+The [final paired visibility replay](http://127.0.0.1:8767/runs/20260911T212148Z-a25e65/index.html)
+passes all 30 cards: 15 shared native experiments, 2,255 frames and 65 public heads.
+The original 72 saved inputs are unchanged. In a fresh process with native
+production/bootstrap disabled, all 30 videos, public inputs and native diagnostic
+files match capture bytes exactly. Initial/head/latest states and sampled frames
+also match without normalization. Older raw trace serialization lacks three
+optional null attribution fields (`dispatch_index`, `outcome`,
+`triggering_lineage_uuid`); the comparison retains the raw difference and names
+those defaults explicitly. The private capture fix for unselected doors landed
+during replay while the public consumer source remained stable; the verification
+report records that distinction. This is not a claim that the whole checkout
+remained unchanged during the run.
+
+The [paired reaction/displacement check](http://127.0.0.1:8767/qa-player-boundary/runs/20260911T212720Z-acfe0a/index.html)
+adds six passing cards using the final capture code: walk killed, jump killed
+and lethal shove, from both participants. Frame/trace inspection retains the
+controlled walker at rendered `(2.664, 3)`, the interrupted jumper grounded at
+`(3, 3)`, and the forced recipient at actual reached cell `(2, 11)`. Spectator
+origin-only disclosure remains a separate permitted history. Representative
+four-corner images accompany both reports.
+
+Focused checks pass: 17 native visibility/public-wire tests, eight projection
+tests, seven gallery tests, 57 attack/movement/placement tests, nine lifecycle
+tests, and ten forced-movement tests with two existing terrain expectations.
+Live encounter and cast/equipment/volley callers also pass through public bytes.
+These groups overlap; they are not an additive full-suite total. The broad suite
+passed 684 tests with two existing expectations and reported 11 failures plus
+16 fixture errors. Ten failures used reaction code imported before its final
+correction; the terrain fixture still bypassed public serialization. After its
+caller migration, rerunning all 27 reported cases against final source gives
+22 passes, four existing terrain expectations and one older startup timing
+failure (9.06 seconds against eight). Previous checkpoint evidence records the
+same timing issue; no timing or terrain assertion was relaxed. Production
+presentation/review modules and changed caller tests pass Pyright. RECOVERY_PLAN
+records the completed unit and this remaining verification limit.

@@ -21,7 +21,10 @@ from game.attack import select_attack_profile
 from game.choreography import sample_choreography
 from game.combat import actor_contact
 from game.motion import bind_motion, sample_motion
-from game.presentation import PresentationTarget, reduce_lineage
+from game.presentation import reduce_lineage
+from game.player_projection import reduce_lineage as reduce_player
+from game.player_facts import AttackFact, PlayerState
+from tests.game.player_helpers import player_history, visible_contact
 from tests.game.scenarios import movement_with_paralysis
 
 
@@ -30,7 +33,7 @@ def data() -> AnimationData:
     return load_animation_data()
 
 
-def authored_contact_ms(data: AnimationData, before: PresentationTarget, attack: AttackEvent) -> float:
+def authored_contact_ms(data: AnimationData, before: PlayerState, attack: AttackFact) -> float:
     assert attack.behavior_id is not None
     profile = select_attack_profile(data.attack_recipes[attack.behavior_id], attack)
     assert profile is not None
@@ -58,6 +61,7 @@ def test_real_opportunity_rider_joins_before_the_step_commits_or_stops(
 ) -> None:
     captured = movement_with_paralysis(seed, maximum_hp, movement_behavior=movement_behavior)
     before, lineage = captured.before, captured.lineages[0]
+    player, (received,) = player_history(captured, role="mover" if maximum_hp == 4 else None)
     # The public helper has reset the entire engine. Everything below replays
     # retained facts and authored data, including the condition identities.
     root = lineage.root
@@ -101,16 +105,19 @@ def test_real_opportunity_rider_joins_before_the_step_commits_or_stops(
     assert latest.actors[mover_uuid].normal_hp == hp
     assert latest.actors[mover_uuid].life_state is life
     assert {fact.name for fact in latest.actors[mover_uuid].conditions} == disabling
-    assert actor_contact(latest, latest.actors[mover_uuid], data).grid == root.end_position
+    player_latest = reduce_player(player, received)
+    assert actor_contact(player_latest, player_latest.actors[mover_uuid], data).grid == root.end_position
     assert before.actors[mover_uuid].normal_hp == maximum_hp
     assert not before.actors[mover_uuid].conditions
 
-    motion = bind_motion(before, lineage, data)
+    motion = bind_motion(player, received, data)
     assert motion is not None and len(motion.reactions) == 1
     reaction, = motion.reactions
     # The original Attack recipe/body owns contact, regardless of how the
     # compositor represents this Attack, its save and the two conditions.
-    contact_ms = authored_contact_ms(data, before, attack)
+    attack_fact = next(node.fact for node in received.events if node.uuid == attack.uuid)
+    assert isinstance(attack_fact, AttackFact)
+    contact_ms = authored_contact_ms(data, player, attack_fact)
     prior = sample_choreography(reaction.choreography, contact_ms - .001)
     impact = sample_choreography(reaction.choreography, contact_ms)
     assert prior.displayed.actors[mover_uuid].normal_hp == maximum_hp
@@ -130,21 +137,21 @@ def test_real_opportunity_rider_joins_before_the_step_commits_or_stops(
     assert motion_impact.displayed is not None
     assert {fact.name for fact in motion_impact.displayed.actors[mover_uuid].conditions} == disabling
     assert before_join.reaction is reaction.choreography
-    assert before_join.contact.grid == held.contact.grid
+    assert visible_contact(before_join).grid == visible_contact(held).grid
     assert before_join.lift_px == held.lift_px
     assert not before_join.complete
     assert reaction.end_ms - reaction.start_ms == pytest.approx(reaction.choreography.complete_ms)
     final = sample_motion(motion, data, motion.complete_ms)
     assert final.complete and final.reaction is None
-    assert final.contact.grid == (root.end_position if committed else held.contact.grid)
-    assert final.contact.hp == hp and final.contact.life_state is life
+    assert visible_contact(final).grid == (root.end_position if committed else visible_contact(held).grid)
+    assert visible_contact(final).hp == hp and visible_contact(final).life_state is life
     assert final.lift_px == (0 if committed else held.lift_px)
     assert final.displayed is not None
     assert {fact.name for fact in final.displayed.actors[mover_uuid].conditions} == disabling
     if committed:
         resumed = sample_motion(motion, data, reaction.end_ms)
         assert resumed.reaction is None and not resumed.complete
-        assert resumed.contact.grid == held.contact.grid
+        assert visible_contact(resumed).grid == visible_contact(held).grid
         assert resumed.lift_px == held.lift_px
         assert motion.complete_ms > reaction.end_ms
     else:
@@ -155,11 +162,11 @@ def test_real_opportunity_rider_joins_before_the_step_commits_or_stops(
             context.jumpBaseDurationMs + context.jumpPerCellDurationMs))
         arc = min(context.jumpArcMaxPx, context.jumpArcBasePx + context.jumpArcPerCellPx)
         assert reaction.start_ms == 0
-        assert held.contact.grid == root.start_position
-        assert held.lift_px == held.contact.body_lift_px == 0
+        assert visible_contact(held).grid == root.start_position
+        assert held.lift_px == visible_contact(held).body_lift_px == 0
         if committed:
             middle = sample_motion(motion, data, reaction.end_ms + duration / 2)
-            assert middle.contact.grid == pytest.approx((2.5, 3))
+            assert visible_contact(middle).grid == pytest.approx((2.5, 3))
             assert middle.lift_px == pytest.approx(arc)
             assert motion.complete_ms == pytest.approx(duration + reaction.choreography.complete_ms)
         else:
@@ -171,8 +178,9 @@ def test_real_opportunity_rider_joins_before_the_step_commits_or_stops(
 
 def test_authored_condition_transition_holds_the_real_reaction_beyond_its_attack(data: AnimationData) -> None:
     captured = movement_with_paralysis(0, movement_behavior="action.jump")
-    before, lineage = captured.before, captured.lineages[0]
-    original = bind_motion(before, lineage, data)
+    lineage = captured.lineages[0]
+    player, (received,) = player_history(captured)
+    original = bind_motion(player, received, data)
     assert original is not None
     recipe = data.condition_recipes["condition.paralyzed"]
     alpha, duration_ms = .4, 2500.0
@@ -183,7 +191,7 @@ def test_authored_condition_transition_holds_the_real_reaction_beyond_its_attack
     authored = replace(data, condition_recipes=MappingProxyType({
         **data.condition_recipes, "condition.paralyzed": changed_recipe,
     }))
-    extended = bind_motion(before, lineage, authored)
+    extended = bind_motion(player, received, authored)
     assert extended is not None
     original_reaction, = original.reactions
     reaction, = extended.reactions
@@ -193,11 +201,13 @@ def test_authored_condition_transition_holds_the_real_reaction_beyond_its_attack
     assert reaction.start_ms == original_reaction.start_ms
     assert reaction.end_ms > original_reaction.end_ms
     attack, = (event for event in lineage.events if isinstance(event, AttackEvent))
-    contact_ms = authored_contact_ms(data, before, attack)
+    attack_fact = next(node.fact for node in received.events if node.uuid == attack.uuid)
+    assert isinstance(attack_fact, AttackFact)
+    contact_ms = authored_contact_ms(data, player, attack_fact)
     assert reaction.choreography.complete_ms == pytest.approx(contact_ms + duration_ms)
     held = sample_motion(extended, authored, original_reaction.end_ms)
     assert held.reaction is reaction.choreography and not held.complete
-    assert held.contact.grid == original_reaction.contact.grid
+    assert visible_contact(held).grid == original_reaction.contact.grid
     assert held.lift_px == original_reaction.lift_px
     transitions = sample_choreography(reaction.choreography, original_reaction.choreography.complete_ms)
     fact = next(row for row in lineage.conditions if row.behavior_id == "condition.paralyzed")
@@ -206,7 +216,7 @@ def test_authored_condition_transition_holds_the_real_reaction_beyond_its_attack
     assert alpha < paralyzed.appearance.alpha < 1
     final = sample_motion(extended, authored, extended.complete_ms)
     assert final.complete and final.reaction is None and final.lift_px == held.lift_px
-    assert final.contact.grid == held.contact.grid and final.contact.hp == 73
+    assert visible_contact(final).grid == visible_contact(held).grid and visible_contact(final).hp == 73
     assert final.displayed is not None
     mover_uuid = lineage.root.source_entity_uuid
     assert {fact.name for fact in final.displayed.actors[mover_uuid].conditions} == {"Paralyzed", "Ghoul Paralysis"}

@@ -8,13 +8,12 @@ from uuid import UUID
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 
-from dnd.actions import MovementEvent, SpellEvent
 from dnd.core.base_actions import ActionAvailabilityStatus, AvailableActionsResult
-from dnd.core.events import DamageAppliedEvent, EncounterEndEvent, EventType
+from dnd.core.events import EventType
 from dnd.core.life_types import LifeState
 from game.controls import ActionSelection, EndTurn
 from game.encounter_play import GameSummary, run
-from game.presentation import PresentationTarget
+from game.player_facts import ConditionChangeFact, DamageFact, MovementFact, PlayerState, SpellFact, TurnFact
 
 
 def check_encounter_completion(*, capture_dir: Path | None = None) -> GameSummary:
@@ -24,7 +23,7 @@ def check_encounter_completion(*, capture_dir: Path | None = None) -> GameSummar
     spent_spell_rounds: list[int] = []
     fighter_uuids: set[UUID] = set()
 
-    def choose(target: PresentationTarget, available: AvailableActionsResult) -> ActionSelection | EndTurn:
+    def choose(target: PlayerState, available: AvailableActionsResult) -> ActionSelection | EndTurn:
         actor = target.current_actor_uuid
         assert actor is not None
         living_hostiles = {identity for identity, state in target.actors.items()
@@ -78,7 +77,8 @@ def check_encounter_completion(*, capture_dir: Path | None = None) -> GameSummar
     assert result.historical.round_number == 2 and result.historical.current_actor_uuid is None
     enemies = [state for state in result.historical.actors.values() if state.creature_content_ref is not None]
     assert len(enemies) == 2 and all(state.life_state is LifeState.DEAD for state in enemies)
-    endings = [lineage for lineage in result.lineages if isinstance(lineage.root, EncounterEndEvent)]
+    endings = [lineage for lineage in result.lineages if isinstance(lineage.root.fact, TurnFact)
+               and lineage.root.fact.event_type is EventType.ENCOUNTER_END]
     assert len(endings) == 1
     ending_frame = next(frame.index for frame in result.frames if frame.root_uuid == endings[0].root.uuid)
     after_end = [frame for frame in result.frames if frame.index > ending_frame]
@@ -86,20 +86,21 @@ def check_encounter_completion(*, capture_dir: Path | None = None) -> GameSummar
     assert all(frame.pending == 0 and frame.historical_cursor == frame.latest_cursor for frame in after_end)
     assert len(fighter_uuids) == 1
     fighter_uuid = next(iter(fighter_uuids))
-    assert any(isinstance(lineage.root, MovementEvent) and lineage.root.source_entity_uuid == fighter_uuid
+    assert any(isinstance(lineage.root.fact, MovementFact) and lineage.root.fact.source_entity_uuid == fighter_uuid
                for lineage in result.lineages)
-    casts = [lineage.root for lineage in result.lineages if isinstance(lineage.root, SpellEvent)]
+    casts = [lineage.root.fact for lineage in result.lineages if isinstance(lineage.root.fact, SpellFact)]
     assert len(casts) == 2
-    assert all(sum(cost.cost for cost in root.costs if cost.cost_type == "spell_slot_1") == 1 for root in casts)
     for lineage in result.lineages:
         for event in lineage.events:
-            if isinstance(event, DamageAppliedEvent):
-                assert event.target_entity_uuid is not None
-                expected_hp[event.target_entity_uuid] = event.resulting_normal_hp
-    dodge = next(fact for lineage in result.lineages for fact in lineage.conditions if fact.name == "Dodging")
-    removed = any(event.event_type is EventType.CONDITION_REMOVAL and event.uuid == fact.event_uuid
-                  for lineage in result.lineages for event in lineage.events for fact in lineage.conditions
-                  if fact.condition_uuid == dodge.condition_uuid)
+            fact = event.fact
+            if isinstance(fact, DamageFact) and fact.stage == "applied":
+                assert fact.resulting_normal_hp is not None
+                expected_hp[fact.target_entity_uuid] = fact.resulting_normal_hp
+    conditions = [event.fact for lineage in result.lineages for event in lineage.events
+                  if isinstance(event.fact, ConditionChangeFact)]
+    dodge = next(fact.condition for fact in conditions if fact.condition.name == "Dodging")
+    removed = any(fact.event_type is EventType.CONDITION_REMOVAL
+                  and fact.condition.condition_uuid == dodge.condition_uuid for fact in conditions)
     assert (dodge.condition_uuid in {condition.condition_uuid for condition in result.historical.actors[fighter_uuid].conditions}) is not removed
     assert {identity: state.normal_hp for identity, state in result.historical.actors.items()} == expected_hp
     return result

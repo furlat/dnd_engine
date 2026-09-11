@@ -8,7 +8,7 @@ from uuid import uuid4
 import pytest
 
 from dnd.core.condition_types import ConditionCategory
-from dnd.core.events import Event, EventPhase, EventType
+from dnd.core.events import EventPhase, EventType
 from dnd.runtime_reset import reset_engine_runtime
 from game.animation import ActorContact
 from game.animation_data import load_animation_data
@@ -20,6 +20,8 @@ from game.feedback import choreography_feedback, motion_feedback, sample_feedbac
 from game.motion import bind_motion, sample_motion
 from game.presentation import CompletedLineage, ConditionFact, PresentationTarget, IntervalEnvelope, reduce_interval
 from tests.game.scenarios import attack_history, movement_with_paralysis
+from tests.game.player_helpers import player_history, player_inputs
+from game.player_facts import ConditionChangeFact, PlayerNode, PlayerState, PlayerWorld
 
 
 @pytest.fixture(scope="module")
@@ -31,11 +33,14 @@ def test_dodge_badge_survives_immediate_join_and_seeks_on_the_presentation_clock
     target = uuid4()
     fact = ConditionFact(uuid4(), uuid4(), "Dodging", ConditionCategory.STATUS,
                          "condition.dodging", None, None)
-    event = Event(uuid=fact.event_uuid, source_entity_uuid=target, target_entity_uuid=target,
-        event_type=EventType.CONDITION_APPLICATION, phase=EventPhase.COMPLETION, use_register=False)
+    event = PlayerNode(uuid=fact.event_uuid, lineage_uuid=uuid4(), parent_event=None,
+        parent_lineage=None, children_lineages=(), phase=EventPhase.COMPLETION, canceled=False,
+        fact=ConditionChangeFact(target_entity_uuid=target, condition=fact,
+                                 event_type=EventType.CONDITION_APPLICATION))
     condition = compile_condition(data.condition_recipes, event, fact, (), start_ms=0,
                                   badge_style=data.badge_style)
-    state = PresentationTarget(uuid4(), target)
+    state = PlayerState(generation=uuid4(), observer_uuid=target,
+        world=PlayerWorld(battlefield_id="feedback", battlefield_name="Feedback", bounds=(0,0,10,10), width=10, height=10))
     group = BoundChoreography(event.uuid, state, state, (), (condition,), condition.complete_ms, ())
     launch = ActorContact(str(target), (3.25, 4.5), "E", .5, elevation_steps=1.25)
     contacts = {str(target): launch}
@@ -65,7 +70,7 @@ def test_real_attack_uses_number_recipe_duration_or_independent_miss_badge(data:
     random_state = random.getstate()
     try:
         captured = attack_history("weapon.longsword", seed)
-        before, lineage = captured.before, captured.lineages[0]
+        before, (lineage,) = player_history(captured)
         group = bind_choreography(before, lineage, data)
         complete = group.complete_ms
         tracks = choreography_feedback(group, data, 100)
@@ -94,6 +99,7 @@ def test_repeated_cast_feedback_keeps_original_application_identity_and_anchors(
         before, _ = reduce_interval(None, initialization)
         lineage = next(script)
         assert isinstance(before, PresentationTarget) and isinstance(lineage, CompletedLineage)
+        before, (lineage,) = player_inputs(initialization, (lineage,))
         group = bind_choreography(before, lineage, data)
         tracks = choreography_feedback(group, data, 400)
         assert len(tracks) == 3
@@ -112,7 +118,7 @@ def test_repeated_cast_feedback_keeps_original_application_identity_and_anchors(
 
 def test_reaction_badge_uses_authored_context_without_changing_movement(data: AnimationData) -> None:
     captured = movement_with_paralysis(17)
-    before, lineage = captured.before, captured.lineages[0]
+    before, (lineage,) = player_history(captured)
     motion = bind_motion(before, lineage, data)
     assert motion is not None
     tracks = motion_feedback(motion, data, 400)

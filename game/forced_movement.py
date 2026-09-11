@@ -9,15 +9,15 @@ from math import hypot
 from typing import Mapping
 from uuid import UUID
 
-from dnd.actions import ShoveEvent
-from dnd.core.events import ForcedMovementEvent, SpatialChangeEvent, SpatialChangeType
+from dnd.core.events import SpatialChangeType
 from game.animation import (
     ActorContact, BodySample, body_clip, body_duration, body_frame, facing_for_delta,
     sample_idle_body,
 )
 from game.animation_types import AnimationData, LifecycleFeedback
 from game.combat import actor_contact
-from game.presentation import CompletedLineage, PresentationTarget, reduce_lineage
+from game.player_facts import ForcedMovementFact, PlayerLineage, PlayerNode, PlayerState, ShoveFact, SpatialFact
+from game.player_projection import reduce_lineage
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,8 +58,10 @@ class ForcedMovementCue:
     data: AnimationData
 
 
-def bind_shove(before: PresentationTarget, event: ShoveEvent, data: AnimationData,
+def bind_shove(before: PlayerState, node: PlayerNode, data: AnimationData,
                start_ms: float, contacts: Mapping[str, ActorContact]) -> ShoveCue:
+    event = node.fact
+    assert isinstance(event, ShoveFact)
     if event.behavior_id is None or event.behavior_id not in data.shove_recipes:
         raise ValueError("Shove has no exact authored recipe")
     recipe = data.shove_recipes[event.behavior_id]
@@ -79,7 +81,7 @@ def bind_shove(before: PresentationTarget, event: ShoveEvent, data: AnimationDat
         raise ValueError("Shove contact anchor is absent or unreachable")
     outcome = ("resisted" if not event.contest_success else "succeeded_prone" if event.knocked_prone
                else "succeeded_blocked" if event.push_distance == 0 else "succeeded_push")
-    return ShoveCue(event.uuid, source, target, recipe.actor.clip, recipe.actor.playbackSpeed,
+    return ShoveCue(node.uuid, source, target, recipe.actor.clip, recipe.actor.playbackSpeed,
         start_ms, start_ms + frame * 1000 / (metadata.fps * recipe.actor.playbackSpeed),
         start_ms + body_duration(metadata, recipe.actor.playbackSpeed), data.shove_feedback[outcome], data)
 
@@ -90,11 +92,12 @@ def motion_progress(value: float, curve: str, *, inverse: bool = False) -> float
     return 1 - (1 - value) ** (1 / power if inverse else power)
 
 
-def bind_forced_movement(before: PresentationTarget, lineage: CompletedLineage,
+def bind_forced_movement(before: PlayerState, lineage: PlayerLineage,
                          data: AnimationData, start_ms: float,
                          contacts: Mapping[str, ActorContact]) -> ForcedMovementCue:
-    event = lineage.root
-    assert isinstance(event, ForcedMovementEvent) and event.target_entity_uuid is not None
+    node = lineage.root
+    event = node.fact
+    assert isinstance(event, ForcedMovementFact) and event.target_entity_uuid is not None
     context, profile = data.forced_movement_context, data.forced_movement_profile
     if context.media or context.recovery.media:
         raise NotImplementedError("Forced movement media tracks are not bound")
@@ -104,7 +107,8 @@ def bind_forced_movement(before: PresentationTarget, lineage: CompletedLineage,
                  event.end_position[1] - event.start_position[1])
     if context.facingPolicy != "preserve":
         facing_delta = (-direction[0], -direction[1])
-        if context.facingPolicy == "source_or_opposite_travel" and event.source_entity_uuid in before.actors:
+        if (context.facingPolicy == "source_or_opposite_travel" and event.source_entity_uuid is not None
+                and event.source_entity_uuid in before.actors):
             source = contacts.get(str(event.source_entity_uuid)) or actor_contact(
                 before, before.actors[event.source_entity_uuid], data)
             facing_delta = source.grid[0] - actor.grid[0], source.grid[1] - actor.grid[1]
@@ -113,10 +117,10 @@ def bind_forced_movement(before: PresentationTarget, lineage: CompletedLineage,
     if profile.brace_frame >= metadata.frames:
         raise ValueError("Forced movement brace frame is unreachable on the selected rig")
     after = reduce_lineage(before, lineage)
-    spatial = tuple(row for row in lineage.events if isinstance(row, SpatialChangeEvent)
-                    and row.entity_uuid == target.uuid and row.parent_lineage == event.lineage_uuid
-                    and row.change_type in (SpatialChangeType.ENTITY_ENTERED, SpatialChangeType.ENTITY_LEFT))
-    entered = tuple(row for row in spatial if row.change_type is SpatialChangeType.ENTITY_ENTERED)
+    spatial = tuple((row.uuid, row.fact) for row in lineage.events if isinstance(row.fact, SpatialFact)
+                    and row.fact.entity_uuid == target.uuid and row.parent_lineage == node.lineage_uuid
+                    and row.fact.change_type in (SpatialChangeType.ENTITY_ENTERED, SpatialChangeType.ENTITY_LEFT))
+    entered = tuple(fact for _, fact in spatial if fact.change_type is SpatialChangeType.ENTITY_ENTERED)
     grids = [actor.grid, *(row.position for row in entered)]
     if grids[-1] != event.end_position:
         grids.append(event.end_position)
@@ -139,15 +143,15 @@ def bind_forced_movement(before: PresentationTarget, lineage: CompletedLineage,
         complete += body_duration(body_clip(data, actor, context.recovery.bodyClip), context.recovery.bodyPlaybackSpeed)
     arrivals: list[tuple[UUID, float]] = []
     entered_index = 1
-    for row in spatial:
+    for identity, row in spatial:
         # LEFT is published after committing its destination, immediately
         # before that destination's ENTERED fact. Both share the reached point.
         index = min(entered_index, len(points) - 1)
         at = travel_start + duration * motion_progress(points[index].progress, context.motionCurve, inverse=True)
-        arrivals.append((row.uuid, at))
+        arrivals.append((identity, at))
         if row.change_type is SpatialChangeType.ENTITY_ENTERED:
             entered_index += 1
-    return ForcedMovementCue(event.uuid, actor, points, tuple(arrivals), profile.target_clip,
+    return ForcedMovementCue(node.uuid, actor, points, tuple(arrivals), profile.target_clip,
         profile.brace_frame, speed, start_ms, travel_start, travel_start + duration, body_end, complete, data)
 
 

@@ -24,8 +24,9 @@ def test_generated_clips_retain_their_frames_lineages_and_authored_maps(tmp_path
                         "--width", "640", "--height", "480", "--output", str(tmp_path)]) == 0
     output = latest_run(tmp_path)
     manifest = json.loads((output / "manifest.json").read_text())
-    assert {case["id"] for case in manifest["cases"]} == {
+    assert {case["perspective"]["experiment_id"] for case in manifest["cases"]} == {
         "ranged-hit", "walk-paralyzed", "firebolt-level", "equipment-remove-active-weapon"}
+    assert len(manifest["cases"]) == 9
     assert (output / "index.html").is_file() and (output / "gallery.js").is_file()
     for case in manifest["cases"]:
         trace = json.loads((output / case["trace"]).read_text())
@@ -49,7 +50,7 @@ def test_generated_clips_retain_their_frames_lineages_and_authored_maps(tmp_path
         assert all(child in {event["lineage_uuid"] for event in root["events"]}
                    for event in root["events"] for child in event["children_lineages"])
         if case["id"] == "walk-paralyzed":
-            mover = trace["latest"]["actors"][root["root"]["source_entity_uuid"]]
+            mover = trace["latest"]["actors"][root["root"]["fact"]["source_entity_uuid"]]
             assert mover["hp"] == 73
             assert "Paralyzed" in {condition["name"] for condition in mover["conditions"]}
             assert trace["heads"][0]["composition"]["reactions"]
@@ -63,7 +64,7 @@ def test_generated_clips_retain_their_frames_lineages_and_authored_maps(tmp_path
             cast = trace["heads"][0]["composition"]["nodes"][0]
             assert cast["primitive"] == "cast" and cast["timeline"]["recipe"]
             assert cast["timeline"]["release_ms"] < cast["timeline"]["applications"][0]["travel_end_ms"]
-        else:
+        elif case["id"] == "equipment-remove-active-weapon":
             actor = trace["latest"]["observer_uuid"]
             equipment_head, = (head for head in trace["heads"] if head["composition"]["equipment"])
             cue, = equipment_head["composition"]["equipment"]
@@ -91,7 +92,9 @@ def test_recording_failure_remains_in_manifest_with_exportable_trace(tmp_path: P
     assert review.main(["--capture", "--case", "melee-hit", "--output", str(tmp_path)]) == 1
     output = latest_run(tmp_path)
     manifest = json.loads((output / "manifest.json").read_text())
-    case, = manifest["cases"]
+    case = next(row for row in manifest["cases"] if row["id"] == "melee-hit")
+    assert len(manifest["cases"]) == 2
+    assert all(row["status"] == "failed" for row in manifest["cases"])
     assert case["id"] == "melee-hit" and case["status"] == "failed"
     assert case["video"] is None and "encoder unavailable" in case["error"]
     trace = json.loads((output / case["trace"]).read_text())
@@ -144,7 +147,8 @@ def test_saved_and_exported_input_replay_without_native_generation(tmp_path: Pat
     assert review.main(["--capture", *options]) == 0
     first = latest_run(tmp_path)
     manifest = json.loads((first / "manifest.json").read_text())
-    item, = manifest["cases"]
+    item = next(row for row in manifest["cases"] if row["id"] == "walk-recovery")
+    assert len(manifest["cases"]) == 2
     original = json.loads((first / item["trace"]).read_text())
     input_bytes = (first / item["input"]).read_bytes()
     exported = tmp_path / "review.json"
@@ -207,3 +211,60 @@ def test_replay_requires_saved_input_and_rejects_old_diagnostic_exports(tmp_path
     assert old.value.code == 2
     assert "old traces cannot be faithfully replayed" in capsys.readouterr().err
     assert not (tmp_path / "runs").exists()
+
+
+def test_paired_doorway_inputs_replay_without_native_generation(tmp_path: Path) -> None:
+    options = ['--case', 'sight-doorway-cross', '--case', 'sight-doorway-closed', '--fps', '12',
+               '--width', '640', '--height', '480', '--output', str(tmp_path)]
+    assert review.main(['--capture', *options]) == 0
+    first = latest_run(tmp_path)
+    manifest = json.loads((first / 'manifest.json').read_text())
+    assert len(manifest['cases']) == 4
+    for experiment in ('sight-doorway-cross', 'sight-doorway-closed'):
+        pair = [row for row in manifest['cases'] if row['perspective']['experiment_id'] == experiment]
+        assert {row['perspective']['role'] for row in pair} == {'observer', 'subject'}
+        assert len({row['perspective']['generation'] for row in pair}) == 1
+        assert len({row['perspective']['start_cursor'] for row in pair}) == 1
+        assert len({row['perspective']['observer_uuid'] for row in pair}) == 2
+        roots = []
+        for row in pair:
+            directory = first / 'cases' / row['id']
+            recorded = json.loads((directory / 'input.json').read_text())
+            assert recorded['sequence_format'] == 'player-v1'
+            assert (directory / 'native.json').is_file()
+            assert 'objective_rows' not in (directory / 'input.json').read_text()
+            roots.append({root['root']['uuid'] for root in recorded['sequence']['lineages']})
+        if experiment == 'sight-doorway-cross':
+            assert roots[0] == roots[1]
+    closed = json.loads((first / 'cases/sight-doorway-closed/trace.json').read_text())
+    assert not closed['lineages'] and not closed['heads']
+    assert len(closed['frames']) > 1
+    receiving = '''
+import sys
+from devtools.animation_review import __main__ as review
+from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
+from dnd.core.events import EventQueue
+from dnd.entity import Entity
+
+def unavailable(*args, **kwargs):
+    raise AssertionError('native generation is unavailable')
+review.produce = unavailable
+review.bootstrap_content_system = unavailable
+assert not SERVER_CONTENT_SYSTEM_RUNTIME.is_installed
+assert not Entity.get_all_entities() and EventQueue.event_cursor() == 0
+status = review.main(sys.argv[1:])
+assert not SERVER_CONTENT_SYSTEM_RUNTIME.is_installed
+assert not Entity.get_all_entities() and EventQueue.event_cursor() == 0
+raise SystemExit(status)
+'''
+    result = subprocess.run([sys.executable, '-c', receiving, *options], cwd=review.REPO,
+                            capture_output=True, text=True, timeout=120)
+    assert result.returncode == 0, result.stdout + result.stderr
+    second = latest_run(tmp_path)
+    for row in manifest['cases']:
+        original = json.loads((first / row['trace']).read_text())
+        replayed = json.loads((second / row['trace']).read_text())
+        assert (first / row['input']).read_bytes() == (second / row['input']).read_bytes()
+        assert (first / row['video']).read_bytes() == (second / row['video']).read_bytes()
+        for key in ('initial', 'lineages', 'heads', 'latest', 'frames', 'perspective', 'input'):
+            assert original[key] == replayed[key], (row['id'], key)
