@@ -23,6 +23,7 @@ SOURCE_REVISION = "d274f2d62ca9c1c5ed62a77841cacf6cc0347491"
 DATA_ROOT = "game/data/neuroclient"
 ASSET_ROOT = "game/assets/neuroclient"
 SPELL_IDS = ("fire_bolt", "acid_splash", "magic_missile")
+FORCED_PROFILE_OWNER = "src/ui/actionStudio/studioSubjectiveActionFrame.ts"
 SOURCE_JSON = (
     "public/studio/spell-studio-drafts.json",
     "public/studio/spell-projectile-assets.json",
@@ -46,6 +47,7 @@ SOURCE_TS = (
         "visualAnchors",
     )),
     "src/iso.ts",
+    FORCED_PROFILE_OWNER,
 )
 ENGINE_OWNERS = (
     "dnd/content_system/spell_catalog_composition.py",
@@ -60,7 +62,7 @@ RIG_CATEGORIES = (
     "Ranged1", "Ranged4",
 )
 MELEE_CLIPS = ("Attack1", "Attack2", "Attack4", "Attack5", "Attack6")
-RIG_CLIPS = ("Idle", *MELEE_CLIPS, "Attack3", "TakeDamage", "Die", "Taunt", "Special1", "Run", "Rolling")
+RIG_CLIPS = ("Idle", *MELEE_CLIPS, "Attack3", "TakeDamage", "Die", "Taunt", "Special1", "Run", "Rolling", "Kick")
 FIRE_ASSET_ID = "lelu_fire_strike_128_pixel_lab_fire24_px8"
 FIRE_SHEET = f"/authored-vfx/projectiles/neuroclient_128/{FIRE_ASSET_ID}/{FIRE_ASSET_ID}.png"
 RESOURCE_URLS = (
@@ -266,6 +268,15 @@ def candidate_outputs(app: Path, bun: Path) -> dict[str, bytes]:
         f"{DATA_ROOT}/spell-studio-drafts.materialized.json": json_bytes(resolved["drafts"]),
         f"{DATA_ROOT}/rig-tables.json": json_bytes(resolved["rigs"]),
         f"{DATA_ROOT}/bindings.json": json_bytes({"spells": refs, "root_rig": "neuroclient.modular", "resources": resources}),
+        # Studio's forced-motion base values are cue literals, not context JSON.
+        # Preserve that reviewed selection as data; the imported context owns
+        # its duration/playback scales, ease, facing and optional recovery.
+        f"{DATA_ROOT}/forced-movement-profile.json": json_bytes({
+            "duration_ms": 420, "target_clip": "TakeDamage", "brace_frame": 3, "playback_speed": 1,
+            "provenance": {"source": FORCED_PROFILE_OWNER, "revision": SOURCE_REVISION,
+                           "source_sha256": sha256(source[FORCED_PROFILE_OWNER]),
+                           "selection": "shove_success forced_movement cue literals (lines 658-674)"},
+        }),
     })
     provenance = {
         "neuroclient": {"revision": SOURCE_REVISION, "source_sha256": {

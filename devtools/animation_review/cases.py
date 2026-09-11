@@ -11,6 +11,7 @@ from game.combat_demo import iter_combat_demo
 from game.presentation import CompletedLineage, PresentationTarget
 from tests.game.creature_scenarios import creature_history
 from tests.game.equipment_scenarios import equipment_sequence_history
+from tests.game.forced_movement_scenarios import forced_movement_history
 from tests.game.movement_scenarios import movement_history
 from tests.game.scenarios import (
     attack_history, dodge_expiry_history, healing_history, lifecycle_history, movement_with_paralysis, paralysis_lifecycle,
@@ -101,6 +102,21 @@ class MovementCase(BaseModel):
     boost: Literal["none", "haste", "bonus-dash"] = "none"
 
 
+class ForcedMovementCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["forced-movement"]
+    source_position: tuple[int, int] = (3, 3)
+    target_position: tuple[int, int] = (4, 3)
+    battlefield_id: str = "battlefield.open_floor_bright"
+    seed: int = 0
+    blocker_position: tuple[int, int] | None = None
+    watcher_position: tuple[int, int] | None = None
+    target_identity: str | None = None
+    target_hp: Literal[4, 40] = 40
+    mechanism: Literal["shove", "telekinesis"] = "shove"
+    destination: tuple[int, int] | None = None
+
+
 class ReviewCase(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     id: str = Field(pattern=r"^[a-z0-9][a-z0-9-]*$")
@@ -108,7 +124,7 @@ class ReviewCase(BaseModel):
     tags: tuple[str, ...]
     description: str
     scenario: Annotated[AttackCase | ParalysisCase | CastCase | ParalysisLifecycleCase | DodgeExpiryCase | HealingCase | LifecycleCase
-                        | CreatureCase | EquipmentCase | MovementCase,
+                        | CreatureCase | EquipmentCase | MovementCase | ForcedMovementCase,
                         Field(discriminator="kind")]
     pause_at_ms: float | None = Field(default=None, ge=0)
     pause_duration_ms: float = Field(default=750, gt=0)
@@ -130,6 +146,15 @@ def load_cases(path: Path = Path(__file__).with_name("catalog.json")) -> tuple[R
 def produce(case: ReviewCase) -> ReviewSequence:
     """Run real rules once, then hand only retained values to the recorder."""
     match case.scenario:
+        case ForcedMovementCase() as scenario:
+            before, lineages = forced_movement_history(
+                source_position=scenario.source_position, target_position=scenario.target_position,
+                battlefield_id=scenario.battlefield_id, seed=scenario.seed,
+                blocker_position=scenario.blocker_position, watcher_position=scenario.watcher_position,
+                target_identity=scenario.target_identity, target_hp=scenario.target_hp,
+                mechanism=scenario.mechanism, destination=scenario.destination,
+            )
+            return ReviewSequence(before, lineages)
         case CreatureCase() as scenario:
             before, lineages = creature_history(scenario.creature_identity, weapon_slot=scenario.weapon_slot,
                                                 seed=scenario.seed)

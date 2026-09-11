@@ -23,12 +23,13 @@ is now imported through the original Studio schema, independently of gameplay.
 
 ### Current position — read this before the checkpoint details
 
-**Previous code checkpoint:** `7365184` on `codex/recovery-design` completed
-the creature/equipment/movement unit with a 53-case gallery. The current
-correction moves jump reactions before takeoff and keeps one body traversal
-across the entire flight. Focused native/pixel tests and independent ownership
-reviews pass; the expanded 58-case gallery is complete. Raised-terrace
-jump occlusion remains an explicit visual exception.
+**Previous code checkpoint:** `48abb31` on `codex/recovery-design` completed
+grounded jump reactions and one body traversal across the flight, with a
+58-case gallery. The completed forced-movement unit connects native Shove and
+ForcedMovement to the same historical choreography. All 69 four-view recordings
+pass, including 11 new cases; the previous 58 videos and input pixel sequences
+match exactly. Raised-terrace occlusion also affects the two stair-displacement
+cards and remains an explicit visual exception.
 
 **Where we are:** the in-process encounter and independent historical playback
 work. We are expanding the shared presentation capabilities consumed by that
@@ -39,11 +40,12 @@ mean that the full NeuroStudio vocabulary or the full game is implemented.
 | --- | --- | --- |
 | Existing engine → retained subjective lineages → independent playback | Established for connected event families | Original ancestry/grants, one reducer used for latest/history, one historical queue/head; native work advances while rendering is paused. Backend mechanics remain authoritative. |
 | Playable Pygame encounter | Working bounded encounter | Discovered actions/targets, movement, attacks, player turns, native enemy decisions, resources and encounter completion. One player viewpoint and an initially known actor set. |
-| Shared authored animation composition | Working, incomplete vocabulary | Original Studio data drives the connected attack/cast/movement/condition/equipment primitives. Complete walking reactions interrupt at their edge; jump reactions join at launch before one flight. Authored fields outside those primitives remain explicit limits. |
-| Repeatable visual validation | Implemented | 58 catalog histories, four cameras per clip, selection/pinned-time trace export and actual pixel checks. Game and recorder share the frame compositor. Passing recording checks do not approve every pixel. |
+| Shared authored animation composition | Working, incomplete vocabulary | Original Studio data drives the connected attack/cast/movement/condition/equipment primitives, now including shove contact and forced brace/travel/release. Complete walking reactions interrupt at their edge; jump reactions join at launch before one flight. Authored fields outside those primitives remain explicit limits. |
+| Repeatable visual validation | Implemented | 69 catalog histories, four cameras per clip, selection/pinned-time trace export and actual pixel checks. Game and recorder share the frame compositor. Passing recording checks do not approve every pixel. |
 | Continuing condition and life histories | Completed prior unit | Native paralysis recovery/persistence, Dodge expiry, capped healing, death saves, stabilization, death/revival and correct retained placement/HP. |
 | Creatures, equipment and movement | Implemented with explicit visual limits | Three exact rig identities; real wardrobe/item replacement; same-turn melee → longbow; turning routes with native Haste/Dash; grounded jump reactions followed by one flight across water/elevation. Rear-view terrace overlap and later-Step launch reach are documented below. |
-| Broader gameplay presentation and content | Still partial | Self/touch/direct/area/persistent delivery, broader condition media, forced movement, additional rigs and roster/map/inventory UI remain pending. |
+| Forced movement | Completed bounded unit | Exact Shove contact, native actual path, original recipient brace/ease/release, reached-cell spatial damage/death and retained corpse placement. Telekinesis's granted displacement uses the same primitive. Stair terrain occlusion remains visible and tagged. |
+| Broader gameplay presentation and content | Still partial | Self/touch/direct/area/persistent delivery, broader condition media, additional rigs and roster/map/inventory UI remain pending. Forced movement does not by itself complete every spell that can cause it. |
 
 **What changed after the human's `58b0946` checkpoint:**
 
@@ -58,10 +60,9 @@ touch casting, a full weapon-triggered Hold Person cast, or the demon/undead/
 animal catalog. The tested sword rider applies native paralysis; its real
 reaction/condition lineage is what the clip demonstrates.
 
-**Completed lane:** the human-requested creatures/equipment/movement unit
-has its four-view gallery and explicit visual exception. The completed bounded
-correction below addresses the human's jump review. Broader spell delivery
-remains the next pending shared-capability area. New creature recipes and equipment media are used by
+**Completed lane:** forced movement extends the shared movement/action area after
+the creature/equipment unit and jump correction. Broader spell
+delivery remains the next pending shared-capability area. New creature recipes and equipment media are used by
 the live/recorded shared path; these clips do not add an inventory or roster UI.
 The terrain finding is recorded for a bounded follow-up design investigation;
 it does not authorize a renderer rewrite or displace the gameplay plan.
@@ -74,6 +75,81 @@ status; they are not substitutes for explaining progress through the plan.
 
 The sections below retain detailed checkpoint evidence. Completed sequences
 and their earlier instructions are not the next work queue.
+
+### Completed unit — forced movement through shared choreography
+
+The human requested implementation after reviewing the jump correction at
+`48abb31`. Connect native Shove/ForcedMovement lineages to the existing historical
+head and four-camera recorder. Native rules, subjectivity, committed positions,
+spatial handlers, costs and opportunity-attack eligibility remain authoritative.
+
+**Source contract:** NeuroClient ShoveClip starts its owned forced-movement or
+prone children at the authored contact frame, then joins body and children.
+ForcedMoveClip plays the recipient body to its brace frame, holds that pose
+while grid motion follows the context curve, resumes the remaining body frames,
+then plays any authored recovery. The imported shove recipe uses Kick/contact7;
+the original forced_movement context owns easing, facing and scales. The Studio
+preview supplied TakeDamage/brace3/speed1/travel420ms in its cue constructor,
+outside JSON. Preserve those exact values in a small portable adapter resource;
+retain original source JSON unchanged. The old server's different brace/speed/
+distance policy is historical evidence, not a rule to reintroduce.
+
+**Implementation boundary:** two passive cues for shove body/contact and forced
+displacement inside the existing BoundChoreography. They sample body poses and
+actor contacts through the existing scene renderer. No artificial Attack event,
+new queue, clock, rules engine, spell executor or Pygame-specific mechanics.
+Existing per-rig TakeDamage mappings supply recipient bodies; import only the
+missing original modular Kick sheets through the existing importer. Preserve
+an explicit gap for rigs without that source gesture.
+
+**Causality:** ForcedMovementEvent is not a voluntary Step. Shove's real
+LEFT/ENTERED descendants occur at each committed cell and can cause damage,
+conditions or death there. Bind those descendants at their reached positions
+within the same head; do not inherit the old client's leaf-only assumption or
+recompute eligibility/stopping. No failed/resisted/fully blocked shove invents
+a displacement child. Legal and previously retained visual origins remain
+separate through the existing placement contract.
+
+**Finite acceptance:** actual discovered shove success/resistance/obstacles,
+no-OA and native costs, modular/fixed-rig recipients, allowed height changes,
+and one existing spatial effect lineage. Exercise a non-Shove native producer
+through the same displacement primitive when available without building a new
+spell delivery/VFX program. Verify contact anchoring, brace/travel/release,
+native after-values and descendant identity, paused history, four-view pixels
+and settlement into idle. Add data rows to the gallery and export compiled cue
+timings in its existing traces. Keep prior gallery cases as regressions.
+
+**Review/checkpoint:** the anti-OOP reviewer studies original Studio/runtime
+authoring and passive timeline ownership; the anti-slop reviewer studies native
+lineage/position/handler semantics and finite scope. Review these findings before
+production edits, then review implementation and actual clips. Read HOW_TO_TEST
+before writing tests. Record exact coverage, unresolved visual limits and any
+source-confirmed unrelated test failures, update this dashboard and commit the
+validated unit on this branch.
+
+**Outcome:** the original Kick contact and recipient brace/travel/release now
+run through shared choreography, with actual reached-cell spatial effects and
+stable corpse placement. Success/resistance/full and partial obstruction,
+native movement/reaction costs, a Goblin recipient, allowed stairs, nonlethal
+and lethal spikes, and a Telekinesis-granted displacement are recorded.
+The latter begins after its real cast/grab setup and does not claim complete
+Telekinesis or other spell-delivery coverage. Fixed source rigs without Kick
+keep an explicit gap; cliff falling remains outside this unit.
+
+**Validation:** 139 targeted tests passed; two strict expected failures retain
+the existing stair-map visibility limit. Height/body projection passes
+separately. The anti-slop and anti-OOP reviewers approved ownership/source
+design; selected encoded four-view clips were independently inspected.
+Changed-file Pyright is clean and all 327 importer outputs match. The 21 exact
+Kick PNGs total 2,525,473 bytes; no new VFX or native rules were authored.
+
+**Gallery:** [69 cases, 11 new forced-movement histories](http://127.0.0.1:8767/runs/20260911T022551Z-96e142/index.html).
+Run `20260911T022551Z-96e142` contains 6,204 four-view frames, with all 58
+previous videos and pixel sequences unchanged from `20260910T215953Z-b06297`.
+All 814 captured source files match the implementation. Its `inspection/`
+directory records comparison, sampled encoded images, test groups and visual
+limits. The gallery and MP4 byte ranges return HTTP 200/206. The detailed audit
+retains source ownership and the measured stair occlusion.
 
 ### Completed correction — grounded jump reactions and one flight traversal
 

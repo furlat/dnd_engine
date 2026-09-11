@@ -556,6 +556,28 @@ class MovementReactionContext(AuthoredRecord):
     recovery: MovementRecovery
 
 
+class ForcedMovementContext(AuthoredRecord):
+    label: str
+    feedbackEnabled: bool
+    feedbackColor: Color
+    motionCurve: Literal["linear", "ease_out_quad", "ease_out_cubic"]
+    facingPolicy: Literal["source_or_opposite_travel", "opposite_travel", "preserve"]
+    durationScale: Annotated[float, Field(ge=0.25, le=4)]
+    playbackSpeedScale: Annotated[float, Field(ge=0.25, le=4)]
+    media: tuple[MovementMediaTrack, ...]
+    recovery: MovementRecovery
+
+
+class ForcedMovementProfile(AuthoredRecord):
+    """Original Studio cue values kept in portable local data, outside mechanics."""
+
+    duration_ms: Positive
+    target_clip: Identifier
+    brace_frame: BodyFrame
+    playback_speed: Positive
+    provenance: FrozenMap[str]
+
+
 class VoluntaryMovementContext(AuthoredRecord):
     walkClip: Literal["Run", "Walk"]
     walkPlaybackSpeed: Annotated[float, Field(ge=0.1, le=8)]
@@ -695,10 +717,28 @@ class AttackRecipe(AuthoredRecord):
     actionFeedback: JsonValue
 
 
+class ShoveRecipe(AuthoredRecord):
+    """Original content action row; a Shove is not an Attack profile."""
+
+    definitionRef: ContentRef
+    compatibleCueKinds: tuple[str, ...]
+    previewChildCueKinds: tuple[str, ...]
+    disposition: Literal["authored"]
+    mediaFailurePolicy: Literal["fail_transaction", "omit_optional_track"]
+    actor: ActionActor
+    anchors: tuple[ActionFrameAnchor, ...]
+    attackFeedback: JsonValue
+    counterspellFeedback: JsonValue
+    variants: tuple[JsonValue, ...]
+    projectile: JsonValue
+    actionFeedback: JsonValue
+
+
 @dataclass(frozen=True, slots=True)
 class AnimationData:
     drafts: Mapping[str, StudioSpellDraft]
     attack_recipes: Mapping[str, AttackRecipe]
+    shove_recipes: Mapping[str, ShoveRecipe]
     condition_recipes: Mapping[str, ConditionRecipe]
     projectile_assets: Mapping[str, AuthoredProjectileAsset]
     rig: RigTables
@@ -714,6 +754,9 @@ class AnimationData:
     equipment_context: EquipmentTransitionContext
     movement_context: VoluntaryMovementContext
     movement_reaction_context: MovementReactionContext
+    forced_movement_context: ForcedMovementContext
+    forced_movement_profile: ForcedMovementProfile
+    shove_feedback: Mapping[str, LifecycleFeedback]
     number_style: FloatingFeedbackStyle
     badge_style: FloatingFeedbackStyle
     dart_style: DartStyle

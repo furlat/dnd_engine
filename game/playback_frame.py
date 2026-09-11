@@ -89,15 +89,28 @@ def sample_playback_frame(
                            if positions is not None
                            and (position := positions.get(actor.contact.actor_uuid)) is not None
                            and position.legal_grid == actor.contact.grid}
-    if movement_sample is not None and complete:
-        moving = movement_sample.contact
-        legal = next(actor.contact for actor in legal_actors if actor.contact.actor_uuid == moving.actor_uuid)
-        if (moving.grid, moving.elevation_steps, moving.body_lift_px) != (legal.grid, legal.elevation_steps, 0):
-            resulting_positions[moving.actor_uuid] = VisualPosition(
-                legal.grid, moving.grid, moving.elevation_steps, moving.body_lift_px)
-        else:
-            resulting_positions.pop(moving.actor_uuid, None)
+    settled_contacts = group_sample.contacts if group_sample is not None else ()
+    if movement_sample is not None:
+        settled_contacts = (*settled_contacts, movement_sample.contact)
+    if complete:
+        for moving in settled_contacts:
+            legal = next((actor.contact for actor in legal_actors if actor.contact.actor_uuid == moving.actor_uuid), None)
+            if legal is None:
+                continue
+            if (moving.grid, moving.elevation_steps, moving.body_lift_px) != (legal.grid, legal.elevation_steps, 0):
+                resulting_positions[moving.actor_uuid] = VisualPosition(
+                    legal.grid, moving.grid, moving.elevation_steps, moving.body_lift_px)
+            else:
+                resulting_positions.pop(moving.actor_uuid, None)
     actors = scene_actors(displayed, data, facings, resulting_positions)
+    if group_sample is not None:
+        placed = {contact.actor_uuid: contact for contact in group_sample.contacts}
+        actors = tuple(replace(actor, contact=replace(actor.contact,
+            grid=placed[actor.contact.actor_uuid].grid,
+            elevation_steps=placed[actor.contact.actor_uuid].elevation_steps,
+            body_lift_px=placed[actor.contact.actor_uuid].body_lift_px,
+            facing=placed[actor.contact.actor_uuid].facing))
+            if actor.contact.actor_uuid in placed else actor for actor in actors)
     if movement_sample is not None:
         actors = tuple(replace(actor, contact=movement_sample.contact)
                        if actor.contact.actor_uuid == movement_sample.contact.actor_uuid else actor for actor in actors)
@@ -115,8 +128,11 @@ def sample_playback_frame(
         for body in group_sample.bodies:
             actor = next((row for row in actors if row.contact.actor_uuid == body.actor_uuid), None)
             if actor is not None:
+                if complete and body.clip == "Idle" and body.actor_uuid in placed:
+                    body = sample_idle_body(data, actor.contact, presentation_ms)
+                flash = next((value.flash for value in group_sample.vitals if value.actor_uuid == body.actor_uuid), None)
                 extra = (*extra, *actor_draw_commands(data, body, actor.contact, actor.layers, body_media,
-                    camera, condition=condition_appearances[body.actor_uuid]))
+                    camera, flash=flash, condition=condition_appearances[body.actor_uuid]))
         bodies = (*tuple(body for entry in group_sample.clips for body in entry.sample.bodies), *group_sample.bodies)
         excluded = frozenset(body.actor_uuid for body in bodies)
         resulting_facings.update((body.actor_uuid, body.facing) for body in bodies)

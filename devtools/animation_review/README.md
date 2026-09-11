@@ -23,7 +23,7 @@ then encoded as a synchronized 2×2 video: 0/1 above, 2/3 below. Defaults are
 fullscreen control to inspect the pixels. The state/condition rules stay in
 the engine; this recorder adds no animation rules or gameplay queue.
 
-The catalog covers 58 cases: melee profiles and outcomes, modular and
+The catalog covers 69 cases: melee profiles and outcomes, modular and
 fixed-rig ranged attacks, ordinary movement, walking/jumping opportunity attacks
 with save/miss/paralysis/death, paused retained playback, two-cast histories,
 repeated targets, height and equipment roots, plus six continuing condition
@@ -66,6 +66,21 @@ Step, outside melee reach of the visual launch. The clip exposes this spatial
 limit while preserving native eligibility, ancestry and committed endpoints.
 If a later Step stops, legal and visual positions can differ; the existing
 placement override keeps the grounded body stable across head completion.
+
+Eleven forced-movement cards add native Shove success/resistance, full/partial
+obstruction, no opportunity reaction, stair ascent/descent, a Goblin recipient,
+spike entry damage/death and a granted Telekinesis displacement. The original
+Kick contact launches the recipient's TakeDamage brace, eased travel and body
+release. Original context JSON and the Studio preview's cue values remain data;
+the trace includes both alongside the compiled path and reached-cell timings.
+Actual spatial children apply their damage at the cell reached, within the same
+lineage. Death retains the reached corpse position through release to idle.
+Forced displacement neither spends voluntary movement nor synthesizes Steps.
+The two stair cards carry `known-occlusion`: projected height is correct, but
+the existing terrace painter hides much of the moving body in several views.
+These are allowed native slopes, not a cliff-falling implementation. The
+Telekinesis card starts with the real cast/grab already established and records
+its granted Move action; it does not claim broader spell-delivery coverage.
 
 The authored recipes, rig maps and trace JSON are usable by a later TypeScript
 frontend. That frontend still needs presentation reduction/sampling and its
@@ -112,6 +127,7 @@ draw metadata; stable command coordinates alone do not prove a frozen image.
 .venv/bin/python -m devtools.animation_review --case 'walk-*'
 .venv/bin/python -m devtools.animation_review --tag ranged
 .venv/bin/python -m devtools.animation_review --tag gameplay
+.venv/bin/python -m devtools.animation_review --tag forced-movement
 .venv/bin/python -m devtools.animation_review --review /path/to/downloaded-review.json
 ```
 

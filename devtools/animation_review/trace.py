@@ -9,6 +9,8 @@ from game.attack import AttackTimeline, BoundAttack
 from game.animation_types import RigLayer
 from game.choreography import BoundChoreography
 from game.condition_animation import ConditionTimeline
+from game.damage import DamageCue
+from game.forced_movement import ForcedMovementCue, ShoveCue
 from game.motion import MotionLeg, MotionTimeline
 from game.playback_frame import PlaybackFrame
 from game.presentation import CompletedLineage, PresentationTarget
@@ -21,6 +23,9 @@ CONDITIONS = TypeAdapter(tuple[ConditionTimeline, ...])
 LEGS = TypeAdapter(tuple[MotionLeg, ...])
 EQUIPMENT = TypeAdapter(EquipmentTimeline)
 LAYERS = TypeAdapter(tuple[RigLayer, ...])
+SHOVE = TypeAdapter(ShoveCue)
+FORCED = TypeAdapter(ForcedMovementCue)
+DAMAGE = TypeAdapter(DamageCue)
 
 
 def state_summary(state: PresentationTarget) -> dict[str, Any]:
@@ -45,6 +50,12 @@ def state_summary(state: PresentationTarget) -> dict[str, Any]:
 def group_trace(group: BoundChoreography) -> dict[str, Any]:
     return {
         "root_uuid": str(group.root_uuid), "complete_ms": group.complete_ms,
+        "shoves": [SHOVE.dump_python(cue, mode="json", exclude={"data"}, warnings="error") for cue in group.shoves],
+        "forced_movement": [{**FORCED.dump_python(cue, mode="json", exclude={"data"}, warnings="error"),
+                             "context": cue.data.forced_movement_context.model_dump(mode="json"),
+                             "profile": cue.data.forced_movement_profile.model_dump(mode="json")}
+                            for cue in group.forced_movement],
+        "damage": [DAMAGE.dump_python(cue, mode="json", exclude={"data"}, warnings="error") for cue in group.damage],
         "nodes": [{"event_uuid": str(node.event_uuid), "start_ms": node.start_ms,
                    "primitive": "attack" if isinstance(node.bound, BoundAttack) else "cast",
                    "timeline": TIMELINE.dump_python(

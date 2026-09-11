@@ -18,9 +18,10 @@ from dnd.core.item_types import EquippedVisualPolicy, ItemPresentationState
 from dnd.items.authored_variant_inventory import AUTHORED_ITEM_VARIANT_CATEGORIES
 from game.animation_types import (
     AnimationData, AttackRecipe, AuthoredProjectileAsset, AuthoredRecord, BodyClip, BodyRig, BoltStyle, DamageContext, DartStyle,
-    DeathContext, DeathSaveContext, EquipmentTransitionContext, FloatingFeedbackStyle, FrozenMap, HealingContext,
-    Identifier, LifeStateContext, MovementReactionContext, RigLayer, RigTables,
-    StudioDraftFile, StudioSpellDraft, VoluntaryMovementContext,
+    DeathContext, DeathSaveContext, EquipmentTransitionContext, FloatingFeedbackStyle, ForcedMovementContext,
+    ForcedMovementProfile, FrozenMap, HealingContext, Identifier, LifecycleFeedback, LifeStateContext,
+    MovementReactionContext, RigLayer, RigTables, ShoveRecipe, StudioDraftFile, StudioSpellDraft,
+    VoluntaryMovementContext,
 )
 from game.condition_types import load_condition_recipes
 
@@ -269,6 +270,7 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
         source_root / "src/render/data/animation/contentActionPresentationRecipes.json"
     ))
     attack_recipes: dict[str, AttackRecipe] = {}
+    shove_recipes: dict[str, ShoveRecipe] = {}
     for row in action_file.recipes:
         kinds = row["compatibleCueKinds"]
         if isinstance(kinds, list) and "attack" in kinds:
@@ -277,6 +279,12 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
             if identity in attack_recipes:
                 raise ValueError(f"ambiguous authored attack identity: {identity}")
             attack_recipes[identity] = recipe
+        if isinstance(kinds, list) and "shove" in kinds:
+            shove = ShoveRecipe.model_validate_json(json.dumps(row))
+            identity = shove.definitionRef.content_id
+            if identity in shove_recipes:
+                raise ValueError(f"ambiguous authored shove identity: {identity}")
+            shove_recipes[identity] = shove
     generated = _object(json.loads(_read(source_root / "src/render/data/animation/generatedSpellPresentationProfile.json")), "generated profile")
     projectile_profile = _object(generated["projectile"], "generated projectile")
     geometry_styles = _object(projectile_profile["geometryStyles"], "geometry styles")
@@ -353,6 +361,9 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
         equipment_context = EquipmentTransitionContext.model_validate_json(json.dumps(contexts["equipment_transition"]))
         movement_context = VoluntaryMovementContext.model_validate_json(json.dumps(contexts["voluntary_movement"]))
         movement_reaction_context = MovementReactionContext.model_validate_json(json.dumps(contexts["pre_motion_reaction"]))
+        forced_movement_context = ForcedMovementContext.model_validate_json(json.dumps(contexts["forced_movement"]))
+        outcomes = _object(contexts["outcome_feedback"], "outcome_feedback")
+        shove_feedback = TypeAdapter(FrozenMap[LifecycleFeedback]).validate_json(json.dumps(outcomes["shove"]))
         number_style = FloatingFeedbackStyle.model_validate_json(json.dumps(feedback["number"]))
         badge_style = FloatingFeedbackStyle.model_validate_json(json.dumps(feedback["badge"]))
     except KeyError as exc:
@@ -367,6 +378,7 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
     return AnimationData(
         drafts=MappingProxyType(drafts),
         attack_recipes=MappingProxyType(attack_recipes),
+        shove_recipes=MappingProxyType(shove_recipes),
         condition_recipes=load_condition_recipes(source_root / "src/render/data/animation/conditionPresentation.json"),
         projectile_assets=MappingProxyType(projectile_assets),
         rig=rig,
@@ -382,6 +394,9 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
         equipment_context=equipment_context,
         movement_context=movement_context,
         movement_reaction_context=movement_reaction_context,
+        forced_movement_context=forced_movement_context,
+        forced_movement_profile=ForcedMovementProfile.model_validate_json(_read(data_root / "forced-movement-profile.json")),
+        shove_feedback=shove_feedback,
         number_style=number_style,
         badge_style=badge_style,
         dart_style=dart_style,

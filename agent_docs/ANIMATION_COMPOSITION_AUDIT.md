@@ -5,6 +5,105 @@ the active recovery plan, not a replacement plan or a mechanics repair backlog.
 It compares the current Python code with the original source at
 `/home/tommaso/Dev/NeuroClient/app`.
 
+## Forced movement — September 11
+
+The human requested this shared capability after the jump correction at
+`48abb31`. Native Shove and ForcedMovement already existed. This unit connects
+their complete retained lineages to the same choreography and renderer used
+by the encounter and recorder; no native mechanic or world painter changed.
+
+**Original authoring:** NeuroClient `src/render/clips/ShoveClip.ts` starts the
+shove body, dispatches children at its contact and joins their completion with
+the body. The exact `action.shove` recipe supplies Kick, contact frame 7, speed 1.
+`ForcedMoveClip.ts` plays the recipient to its brace, holds that frame over
+eased grid motion, resumes the rest of the body and optionally recovers. The
+original `actionContextPresentation.json` forced_movement row owns easing,
+facing and scales. Studio preview `studioSubjectiveActionFrame.ts` lines 658–674
+supplied TakeDamage, brace frame 3, speed 1 and travel 420ms outside that JSON. A small
+`forced-movement-profile.json` adapts those exact cue values and records the
+original file/revision/hash. Original imported source JSON remains unchanged.
+The old server's different speed/brace/distance formula is not the contract
+selected here. The runtime needs Python/Pygame and the imported data, with no
+TypeScript materialization at playback time.
+
+**Media:** 21 original modular Kick sheets total 2,525,473 bytes. The existing
+importer verifies 327 outputs. All imported fixed rigs already supply their
+own TakeDamage mapping; no new fixed-rig aliases or invented sprites were
+added. A fixed rig lacking a source Kick gesture remains an explicit binding
+gap. The gallery exercises a modular source and modular/Goblin recipients.
+
+**Ownership:** two passive cue records join the existing BoundChoreography:
+ShoveCue owns source body/contact, ForcedMovementCue owns recipient brace,
+actual path, support height and release. The shared sample returns contacts
+to the existing scene compositor. No artificial Attack event, extra historical
+head, queue, clock, per-spell executor or gameplay decision was introduced.
+Original data and detached trace values remain usable by a later TS sampler.
+
+**Spatial effects:** native Entity position is committed before LEFT and
+ENTERED publication. Shove's actual direct spatial children define the reached
+path, including partial obstruction or an incapacitating endpoint. Inverse
+context easing maps those actual cells to presentation times. Children keep
+their identities/ancestry and bind at their reached contact; a forced subtree
+does not inherit an outer attack's damage ownership. A small shared DamageCue
+uses the existing damage primitive for actual unowned TakeDamage descendants,
+including their exact applied packet and owned life event. It is connected
+only under forced movement in this unit. This deliberately does not inherit
+the original client's leaf-only forced-cue assumption, which would drop these
+real native descendants.
+
+**Legal and visual positions:** the lethal spike stops at native (2,11), but
+the retained last-live sensory contact remains (2,10): death removes visual
+contact before the ENTERED completion fact. Existing VisualPosition now also
+receives settled choreography contacts. The corpse therefore stays at (2,11)
+through death, head release and idle without changing legal/sensory facts.
+Living completion keeps current vitals and joins the ordinary idle clock.
+
+The eleven new catalog cases cover full/resisted/fully blocked/partly blocked
+shoves; reaction and movement-resource preservation; actual allowed stair
+heights; a Goblin recipient; two spike entries (40→35→28HP); lethal first
+entry (4→−1HP/DEAD); and the real Telekinesis-granted Move action. Telekinesis's
+native cast/grab is established before that recorded action. This validates
+reuse outside Shove, not complete casting/delivery coverage for Telekinesis,
+Thunderwave, Gust or other producers. These are committed displacements over
+native allowed positions, not a new cliff-falling mechanic.
+
+**Explicit visual exception:** the existing terrace painter occludes stair
+displacement. At travel midpoint, correct contacts/heights are up (16,22.5),
+z 1.5 and down (16,23.5), z 0.5. Visible/opaque body pixels across quadrants 0–3
+are up 66/424, 391/588, 278/434, 31/579 and down 1/434, 5/579, 54/424, 93/588. Height and
+actual body-surface checks pass separately; two strict expected map-visibility
+failures preserve this finding. Both gallery cards carry `known-occlusion`.
+This extends the known hill-jump finding; it does not silently approve those
+pixels or authorize a terrain redesign.
+
+**Targeted checks:** 139 passed and two strict map-visibility xfails. The
+non-overlapping groups contain 27 authoring/source/rig checks (97.96s), 11
+native forced histories (10.25s), six standalone damage checks, ten forced
+playback checks, 71 prior attack/motion/placement/condition/life/equipment
+regressions (126.23s), and 14 recorder/HTTP/encounter/gameplay checks (109.77s).
+Changed-file Pyright reports zero errors. This is a targeted validation record,
+not a claim that the entire repository's historical test suite is green.
+
+The anti-slop reviewer approved native ancestry, committed-cell timing,
+damage/life ownership and reached-corpse settlement. The anti-OOP reviewer
+approved passive data and shared sampling, then independently inspected the
+encoded four-view success/Goblin/spikes/lethal/Telekinesis contact sheets.
+Those selected images show brace/travel/release, native HP and stable corpse
+placement; stair visibility remains excluded. The root also inspected the
+final-resolution encoded success, lethal and stair contact sheets.
+
+Final run `20260911T022551Z-96e142` passes all **69 recording cases**, with
+6,204 four-view frames. All **58 previous videos and encoder-input pixel
+sequences are identical** to `20260910T215953Z-b06297`. All eleven new cases
+have no binding gaps. Source hash
+`816df2efcd36d1e169c1044bebb2ebfa281f48c659ecb6ed2313a6976f38df87`
+covers 814 files, all matching the final implementation. The capture records
+the pre-commit base and dirty state honestly; completion documentation is
+outside its hash scope. `inspection/verification.json` records the exact
+comparison, test groups, reviewers and scope limits; sampled images and their
+frame indices are alongside it. Gallery HTML and MP4 range requests return
+HTTP 200/206.
+
 ## Jump correction — September 11
 
 The human rejected the airborne opportunity-reaction hold and requested one

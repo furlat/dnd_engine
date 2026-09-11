@@ -13,6 +13,7 @@ from game.animation_types import AnimationData, FloatingFeedbackStyle
 from game.attack import BoundAttack
 from game.choreography import BoundChoreography
 from game.combat import actor_contact
+from game.forced_movement import forced_contact
 from game.motion import MotionTimeline
 
 
@@ -50,6 +51,22 @@ def choreography_feedback(bound: BoundChoreography, data: AnimationData, absolut
         raise ValueError("feedback start requires finite nonnegative time")
     tracks: list[FeedbackTrack] = []
     group_contacts = dict(contacts or {})
+    for cue in bound.shoves:
+        group_contacts.update((contact.actor_uuid, contact) for contact in (cue.source, cue.target))
+        if cue.feedback.enabled:
+            tracks.append(FeedbackTrack(cue.target, absolute_start_ms + cue.contact_ms,
+                data.badge_style.durationMs, None, cue.feedback.text, cue.feedback.color,
+                data.badge_style, kind="badge"))
+    context = data.forced_movement_context
+    if context.feedbackEnabled:
+        for cue in bound.forced_movement:
+            tracks.append(FeedbackTrack(cue.actor, absolute_start_ms + cue.start_ms, data.badge_style.durationMs,
+                None, context.label, context.feedbackColor, data.badge_style, kind="badge"))
+    for cue in bound.damage:
+        number = cue.damage.floatingNumber
+        if number.enabled:
+            tracks.append(FeedbackTrack(cue.contact, absolute_start_ms + cue.timing.number_ms,
+                number.durationMs, cue.applied_damage, number.label, number.color, data.number_style))
     for node in bound.nodes:
         start = absolute_start_ms + node.start_ms
         if isinstance(node.bound, BoundAttack):
@@ -93,6 +110,9 @@ def choreography_feedback(bound: BoundChoreography, data: AnimationData, absolut
         contact = group_contacts.get(identity)
         if contact is None:
             contact = actor_contact(bound.before, bound.before.actors[condition.target_uuid], data)
+        for cue in bound.forced_movement:
+            if cue.actor.actor_uuid == identity and condition.start_ms >= cue.start_ms:
+                contact = forced_contact(cue, data, condition.start_ms)
         style = condition.badge_style
         tracks.append(FeedbackTrack(contact, absolute_start_ms + condition.start_ms, style.durationMs,
             None, condition.feedback_text, condition.feedback_color, style, kind="badge"))

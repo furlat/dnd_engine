@@ -12,7 +12,7 @@ from uuid import UUID
 import pygame
 
 from dnd.actions import AttackEvent, JumpEvent, MovementEvent
-from dnd.core.events import EventPhase, StepMovementEvent
+from dnd.core.events import EventPhase, ForcedMovementEvent, StepMovementEvent
 from game.animation_data import load_animation_data
 from game.animation_draw import actor_screen_bounds
 from game.animation_types import Facing8
@@ -256,6 +256,14 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
                     sampled = capture(after, elapsed, lineage.root.uuid, group, group_media, motion, reaction_media)
                 check(f"settled-state:{lineage.root.uuid}", sampled.complete and sampled.displayed == after,
                       "At completion the frame exposes the authoritative reduced state.")
+                for bound in groups:
+                    for cue in bound.forced_movement:
+                        native = next(event for event in lineage.events
+                                      if isinstance(event, ForcedMovementEvent) and event.uuid == cue.event_uuid)
+                        contact = next(actor.contact for actor in sampled.actors
+                                       if actor.contact.actor_uuid == cue.actor.actor_uuid)
+                        check(f"forced-position:{native.uuid}", contact.grid == native.end_position,
+                              f"Visible {contact.grid}; native displacement committed {native.end_position}.")
                 steps = [event for event in lineage.events if isinstance(event, StepMovementEvent)]
                 if steps:
                     actor_uuid = str(steps[-1].source_entity_uuid)
