@@ -130,14 +130,16 @@ class EquipmentTimeline:
     actor: ActorContact
     recipe: EquipmentTransitionContext
     data: AnimationData
+    commit_ms: float
     complete_ms: float
 
 
 @dataclass(frozen=True, slots=True)
 class EquipmentSample:
-    """Same-stance replacements retain their old layers until completion."""
+    """Authored stance commit and body completion are separate instants."""
 
     body: BodySample
+    committed: bool
     complete: bool
 
 
@@ -239,10 +241,14 @@ def compile_equipment(data: AnimationData, root_event_uuid: str, actor: ActorCon
     body_clip(data, actor, "Idle")
     if recipe.media:
         raise NotImplementedError("equipment transition media is outside the selected body-only context")
-    duration = 0.0
+    duration = commit = 0.0
     if recipe.bodyEnabled:
-        duration = body_duration(body_clip(data, actor, recipe.bodyClip), recipe.bodyPlaybackSpeed)
-    return EquipmentTimeline(root_event_uuid, actor, recipe, data, duration)
+        clip = body_clip(data, actor, recipe.bodyClip)
+        duration = body_duration(clip, recipe.bodyPlaybackSpeed)
+        # SwitchWeaponClip commits on the authored frame, with a final commit
+        # after body completion if a mapped clip never reaches that frame.
+        commit = min(duration, recipe.commitFrame * 1000 / (clip.fps * recipe.bodyPlaybackSpeed))
+    return EquipmentTimeline(root_event_uuid, actor, recipe, data, commit, duration)
 
 
 def sample_idle_body(data: AnimationData, actor: ActorContact, elapsed_ms: float) -> BodySample:
@@ -257,21 +263,19 @@ def sample_idle_body(data: AnimationData, actor: ActorContact, elapsed_ms: float
 
 
 def sample_equipment(timeline: EquipmentTimeline, elapsed_ms: float) -> EquipmentSample:
-    """Seek the same-MELEE gesture without modifying identity or equipped items."""
+    """Seek the original gesture and stance marker without mutating game facts."""
     if not isfinite(elapsed_ms) or elapsed_ms < 0:
         raise ValueError("elapsed time must be finite and nonnegative")
     actor, recipe, data = timeline.actor, timeline.recipe, timeline.data
     if elapsed_ms >= timeline.complete_ms:
-        return EquipmentSample(sample_idle_body(data, actor, elapsed_ms - timeline.complete_ms), True)
+        return EquipmentSample(sample_idle_body(data, actor, elapsed_ms - timeline.complete_ms), True, True)
     metadata = body_clip(data, actor, recipe.bodyClip)
     body = BodySample(
         actor.actor_uuid, recipe.bodyClip,
         body_frame(elapsed_ms, metadata.fps * recipe.bodyPlaybackSpeed, metadata.frames, loop=False),
         actor.facing,
     )
-    # commitFrame changes the source's selected weapon set. This selected
-    # replacement keeps MELEE throughout; item identity changes at settlement.
-    return EquipmentSample(body, False)
+    return EquipmentSample(body, elapsed_ms >= timeline.commit_ms, False)
 
 
 def _iso(grid: tuple[float, float], data: AnimationData) -> tuple[float, float]:

@@ -8,13 +8,13 @@ from typing import Mapping
 from uuid import UUID
 
 from dnd.actions import AttackEvent, JumpEvent, MovementEvent, ShoveEvent, SpellEvent
-from dnd.blocks.appearance import AppearanceConfig
 from dnd.blocks.base_item import ItemLocationStateEvent
 from dnd.blocks.equipment import EquipmentEvent
 from dnd.blocks.sensory import SensesSnapshot, reduce_senses_snapshot
-from dnd.core.base_actions import ActionEvent
+from dnd.core.base_actions import ActionEvent, BaseCost
+from dnd.core.base_object import PASSIVE_EVENT_REPLAY
+from dnd.core.combat_log import CombatLogEntry
 from dnd.core.base_conditions import ConditionApplicationEvent, ConditionRemovalEvent
-from dnd.core.condition_types import ConditionCategory
 from dnd.core.events import (
     DamageAppliedEvent,
     DamageRollResultEvent,
@@ -45,11 +45,12 @@ from dnd.core.events import (
     WorldObjectState,
     WorldTileState,
 )
-from dnd.core.equipment_types import WeaponSet, WeaponSlot
 from dnd.core.item_types import ItemLocation, ItemPresentationState
-from dnd.core.life_types import LifeState
 from dnd.subjective_combat_log import project_combat_log
+from dnd.types.senses import PerceivedContact
 from dnd.types.world_placement import WorldObjectPlacement
+from game.event_record import RecordedEvent
+from game.actor_facts import ActorState, ConditionFact, actor_fact_owner, actor_from_birth, apply_actor_fact
 
 
 class Disposition(StrEnum):
@@ -103,15 +104,15 @@ class IntervalEnvelope:
     start_cursor: int
     end_cursor: int
     observer_uuid: UUID
-    seed_cursor: int | None
-    seed_snapshot: SensesSnapshot | None
     battlefield_id: str
     door_uuid: UUID | None
     standing_torch_uuid: UUID | None
     objective_rows: tuple[ObjectiveRow, ...]
     subjective_rows: tuple[SubjectiveTextRow, ...]
-    admitted: tuple[tuple[int, Event], ...]
+    admitted: tuple[tuple[int, RecordedEvent], ...]
     dispositions: tuple[tuple[int, Disposition], ...]
+    conditions: tuple[ConditionFact, ...] = ()
+    admissions: tuple[ActorAdmission, ...] = ()
 
 
 @dataclass(slots=True)
@@ -136,37 +137,12 @@ class PresentationTarget:
 
 
 @dataclass(frozen=True, slots=True)
-class ActorState:
-    """Retained actor facts; appearance remains independent of the drawer."""
-
-    uuid: UUID
-    name: str
-    character_body_id: str | None
-    creature_content_ref: str | None
-    appearance: AppearanceConfig
-    items: tuple[ItemPresentationState, ...]
-    equipment: tuple[tuple[str, UUID], ...]
-    active_weapon_set: WeaponSet
-    normal_hp: int
-    maximum_hp: int
-    temporary_hp: int
-    life_state: LifeState
-    armor_class: int = 10
-    conditions: tuple[ConditionFact, ...] = ()
-    last_visual_position: tuple[int, int] | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class ConditionFact:
-    """A condition's presentation facts, without its live rules/ownership graph."""
+class ActorAdmission:
+    """Actor state at an actual observation version in the received lineage."""
 
     event_uuid: UUID
-    condition_uuid: UUID
-    name: str
-    category: ConditionCategory
-    behavior_id: str | None
-    resulting_max_hp: int | None
-    resulting_ac: int | None
+    actor: ActorState
+    contact: PerceivedContact | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -179,13 +155,14 @@ class CompletedLineage:
 
     generation: UUID
     observer_uuid: UUID
-    root: Event
-    events: tuple[Event, ...]
+    root: RecordedEvent
+    events: tuple[RecordedEvent, ...]
     objective_rows: tuple[ObjectiveRow, ...]
     start_cursor: int
     end_cursor: int
     conditions: tuple[ConditionFact, ...] = ()
     dispositions: tuple[tuple[UUID, Disposition], ...] = ()
+    admissions: tuple[ActorAdmission, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -246,15 +223,23 @@ def _admitted(
     event: Event,
     *,
     observer_uuid: UUID,
-    seed_cursor: int | None,
     battlefield_id: str,
     door_uuid: UUID | None,
     standing_torch_uuid: UUID | None,
 ) -> bool:
     if event.phase is not EventPhase.COMPLETION:
         return False
+    if isinstance(event, EntityCreatedEvent):
+        return event.entity_uuid == observer_uuid
     if isinstance(event, (TurnEvent, RoundEvent, EncounterEvent)):
         return True
+    owner = actor_fact_owner(event)
+    if owner is not None:
+        observer = str(observer_uuid)
+        return owner == observer_uuid or (
+            observer in event.identified_entity_observer_uuids.get(str(owner), set())
+            and observer in event.located_entity_observer_uuids.get(str(owner), set())
+        )
     if not _safe_to_detach(event):
         return False
     if type(event) is WorldInitializedEvent:
@@ -273,11 +258,7 @@ def _admitted(
             and event.object_uuid == door_uuid
         )
     if type(event) is SensoryUpdateEvent:
-        return (
-            event.observer_uuid == observer_uuid
-            and seed_cursor is not None
-            and index >= seed_cursor
-        )
+        return event.observer_uuid == observer_uuid
     return False
 
 
@@ -290,19 +271,12 @@ def capture_interval(
     battlefield_id: str,
     door_uuid: UUID | None = None,
     standing_torch_uuid: UUID | None = None,
-    seed_cursor: int | None = None,
-    seed_snapshot: SensesSnapshot | None = None,
 ) -> IntervalEnvelope:
     """Synchronously copy one exact already-committed EventQueue interval."""
     generation = EventQueue.generation_id()
     cursor = EventQueue.event_cursor()
     if not 0 <= start_cursor <= end_cursor <= cursor:
         raise ValueError("invalid EventQueue interval cursors")
-    if seed_snapshot is not None:
-        if seed_cursor is None:
-            raise ValueError("observer seed snapshot requires its source cursor")
-        if not start_cursor <= seed_cursor <= end_cursor:
-            raise ValueError("observer seed cursor lies outside the interval")
     indexed = tuple(
         (index, event)
         for index, event in EventQueue.iter_events_since(start_cursor)
@@ -314,34 +288,28 @@ def capture_interval(
         raise RuntimeError("EventQueue generation changed during capture")
 
     admitted: list[tuple[int, Event]] = []
+    admitted_original: list[tuple[int, Event]] = []
     dispositions: list[tuple[int, Disposition]] = []
     subjective: list[SubjectiveTextRow] = []
     for index, event in indexed:
-        if (
-            type(event) is SensoryUpdateEvent
-            and event.observer_uuid == observer_uuid
-            and seed_cursor is not None
-            and index < seed_cursor
-            and seed_cursor != end_cursor
-        ):
-            raise RuntimeError("selected-observer sensory update precedes startup seed")
         is_admitted = _admitted(
             index,
             event,
             observer_uuid=observer_uuid,
-            seed_cursor=seed_cursor,
             battlefield_id=battlefield_id,
             door_uuid=door_uuid,
             standing_torch_uuid=standing_torch_uuid,
         )
         if is_admitted:
             copied = (_retained_event(event, observer_uuid)
-                      if isinstance(event, (TurnEvent, RoundEvent, EncounterEvent))
+                      if isinstance(event, (TurnEvent, RoundEvent, EncounterEvent)) or actor_fact_owner(event) is not None
                       else event.model_copy(deep=True))
             admitted.append((index, copied))
+            admitted_original.append((index, event))
             disposition = (
                 Disposition.STATE_ONLY
-                if isinstance(event, (SensoryUpdateEvent, TurnEvent, RoundEvent, EncounterEvent))
+                if isinstance(event, (EntityCreatedEvent, SensoryUpdateEvent, TurnEvent, RoundEvent, EncounterEvent))
+                or actor_fact_owner(event) is not None
                 else Disposition.PENDING_DISPLAY
             )
         else:
@@ -361,8 +329,6 @@ def capture_interval(
         start_cursor=start_cursor,
         end_cursor=end_cursor,
         observer_uuid=observer_uuid,
-        seed_cursor=seed_cursor,
-        seed_snapshot=_copy_snapshot(seed_snapshot),
         battlefield_id=battlefield_id,
         door_uuid=door_uuid,
         standing_torch_uuid=standing_torch_uuid,
@@ -370,6 +336,10 @@ def capture_interval(
         subjective_rows=tuple(subjective),
         admitted=tuple(admitted),
         dispositions=tuple(dispositions),
+        conditions=tuple(fact for _, event in admitted_original if (fact := _condition_fact(event)) is not None),
+        admissions=(_capture_actor_admissions(
+            tuple(EventQueue.iter_events_since(0)), tuple(admitted_original), observer_uuid, frozenset(),
+        ) if admitted_original else ()),
     )
 
 
@@ -402,7 +372,6 @@ def reduce_interval(
             observer_uuid=envelope.observer_uuid,
             door_uuid=envelope.door_uuid,
             standing_torch_uuid=envelope.standing_torch_uuid,
-            senses=_copy_snapshot(envelope.seed_snapshot),
             reducer_cursor=envelope.start_cursor,
         )
     if target.generation != envelope.generation:
@@ -414,8 +383,27 @@ def reduce_interval(
 
     dispositions = dict(envelope.dispositions)
     pending: set[int] = set()
+    condition_facts = {fact.event_uuid: fact for fact in envelope.conditions}
+    admissions: dict[UUID, list[ActorAdmission]] = {}
+    for row in envelope.admissions:
+        admissions.setdefault(row.event_uuid, []).append(row)
     for index, event in envelope.admitted:
-        if type(event) is WorldInitializedEvent:
+        for row in admissions.get(event.uuid, ()):
+            _admit_actor(target, row)
+        if event.canceled:
+            continue
+        owner = actor_fact_owner(event)
+        if owner is not None:
+            actor = target.actors.get(owner)
+            if actor is not None:
+                target.actors[owner] = apply_actor_fact(actor, event, condition_facts.get(event.uuid))
+            dispositions[index] = Disposition.STATE_ONLY
+            continue
+        if isinstance(event, EntityCreatedEvent):
+            # Composition is folded into observed admissions, never revealed
+            # merely because a private birth exists in the recorded interval.
+            dispositions[index] = Disposition.STATE_ONLY
+        elif type(event) is WorldInitializedEvent:
             target.world = event
             target.tiles = {tile.position: tile for tile in event.tiles}
             target.objects = {row.item.item_uuid: row for row in event.objects}
@@ -455,14 +443,7 @@ def reduce_interval(
                 })
             pending.add(index)
         elif type(event) is SensoryUpdateEvent:
-            if target.senses is None:
-                raise RuntimeError("sensory delta arrived without an observer seed")
-            event.validate_replay_payload()
-            target.senses = reduce_senses_snapshot(
-                target.observer_uuid,
-                target.senses,
-                event,
-            )
+            _reduce_sensory_fact(target, event)
             dispositions[index] = Disposition.STATE_ONLY
         elif isinstance(event, (TurnEvent, RoundEvent, EncounterEvent)):
             _reduce_turn_fact(target, event)
@@ -507,6 +488,21 @@ def copy_target(target: PresentationTarget) -> PresentationTarget:
     )
 
 
+def _reduce_sensory_fact(target: PresentationTarget, event: SensoryUpdateEvent) -> None:
+    """Apply the observer's native after-values, retaining last visual placement."""
+    if event.observer_uuid != target.observer_uuid:
+        return
+    event.validate_replay_payload()
+    target.senses = reduce_senses_snapshot(target.observer_uuid, target.senses, event)
+    if event.observer_position_changed and target.observer_uuid in target.actors:
+        observer = target.actors[target.observer_uuid]
+        target.actors[observer.uuid] = replace(observer, last_visual_position=event.observer_position)
+    for identity, contact in event.entity_contacts_changed.items():
+        actor = target.actors.get(identity)
+        if actor is not None and contact.visual:
+            target.actors[identity] = replace(actor, last_visual_position=contact.position)
+
+
 def _reduce_turn_fact(target: PresentationTarget, event: TurnEvent | RoundEvent | EncounterEvent) -> None:
     if isinstance(event, TurnEvent):
         target.round_number = event.round_number
@@ -526,8 +522,6 @@ def _reduce_turn_fact(target: PresentationTarget, event: TurnEvent | RoundEvent 
 def seed_actors(
     target: PresentationTarget,
     births: tuple[EntityCreatedEvent, ...],
-    *,
-    active_weapon_sets: Mapping[UUID, WeaponSet],
 ) -> PresentationTarget:
     """Establish the selected known actors at the explicit startup baseline.
 
@@ -545,20 +539,8 @@ def seed_actors(
             contact = target.senses.entities.get(birth.entity_uuid)
             if contact is None or not contact.visual:
                 raise ValueError("selected actor startup requires a known visual contact")
-        result.actors[birth.entity_uuid] = ActorState(
-            uuid=birth.entity_uuid,
-            name=birth.entity_name,
-            character_body_id=birth.character_body_id,
-            creature_content_ref=birth.creature_content_ref,
-            appearance=AppearanceConfig.model_validate(dict(birth.appearance)),
-            items=tuple(item.model_copy(deep=True) for item in birth.items),
-            equipment=tuple(birth.equipment),
-            active_weapon_set=active_weapon_sets[birth.entity_uuid],
-            normal_hp=birth.maximum_hit_points - birth.damage_taken,
-            maximum_hp=birth.maximum_hit_points,
-            temporary_hp=birth.temporary_hit_points,
-            life_state=LifeState(birth.life_state),
-            armor_class=birth.armor_class,
+        result.actors[birth.entity_uuid] = replace(
+            actor_from_birth(birth),
             last_visual_position=(target.senses.position if birth.entity_uuid == target.observer_uuid
                                   else target.senses.entities[birth.entity_uuid].position),
         )
@@ -570,8 +552,9 @@ def _event_header(event: Event) -> Event:
 
     Condition details live in ConditionFact. Unsupported payloads retain this
     same causal/diagnostic header and an explicit unsupported disposition.
+    Passive validation also preserves absent turn metadata during live capture.
     """
-    header = Event(
+    header = Event.model_validate(dict(
         name=event.name, uuid=event.uuid, source_entity_uuid=event.source_entity_uuid,
         source_entity_name=event.source_entity_name,
         target_entity_uuid=event.target_entity_uuid, target_entity_name=event.target_entity_name,
@@ -594,7 +577,7 @@ def _event_header(event: Event) -> Event:
         located_position_observer_uuids={
             position: set(observers) for position, observers in event.located_position_observer_uuids.items()
         },
-    )
+    ), context=PASSIVE_EVENT_REPLAY)
     header._effective_handler_presentations = event.effective_handler_presentations
     return header
 
@@ -606,6 +589,10 @@ def _retained_event(event: Event, observer_uuid: UUID) -> Event:
         controlled_entity_uuids=frozenset({str(observer_uuid)}),
         observer_entity_uuids=frozenset({str(observer_uuid)}),
     )
+    if projected_log is not None:
+        # CombatLogEntry.data is JSON-valued evidence. Normalize its arrays at
+        # capture so original and restored inputs have the same value meaning.
+        projected_log = CombatLogEntry.model_validate_json(projected_log.model_dump_json())
     common = {"use_register": False, "context": None, "combat_log": projected_log}
     match event:
         case SpellEvent() | AttackEvent():
@@ -621,7 +608,9 @@ def _retained_event(event: Event, observer_uuid: UUID) -> Event:
                 }),
             }) for packet in event.damage_packets]
             copied = event.model_copy(update={**common, "context": {}, "damage_packets": packets})
-        case D20RollResultEvent() | HealRollResultEvent():
+        case D20RollResultEvent():
+            copied = event.model_copy(update={**common, "context": {}, "bonus": None})
+        case HealRollResultEvent():
             copied = event.model_copy(update={**common, "context": {}})
         case D20Event():
             copied = event.model_copy(update={
@@ -652,6 +641,10 @@ def _retained_event(event: Event, observer_uuid: UUID) -> Event:
             copied = _event_header(event).model_copy(update=common)
     # DiceRoll contains concrete values; model_copy avoids its registering
     # constructor. Live value/Damage graphs were removed before this deep copy.
+    if isinstance(copied, ActionEvent):
+        copied = copied.model_copy(update={"costs": [
+            BaseCost.model_validate_json(cost.model_dump_json()) for cost in copied.costs
+        ]})
     return copied.model_copy(deep=True)
 
 
@@ -682,7 +675,80 @@ def _actor_participants(event: Event) -> tuple[UUID, ...]:
             return ()
 
 
-def capture_lineage(root: Event, *, observer_uuid: UUID) -> CompletedLineage:
+def _condition_fact(event: Event) -> ConditionFact | None:
+    if not isinstance(event, (ConditionApplicationEvent, ConditionRemovalEvent)):
+        return None
+    return ConditionFact(
+        event_uuid=event.uuid, condition_uuid=event.condition.uuid,
+        name=event.condition.name or "Condition", category=event.condition.condition_category,
+        behavior_id=event.behavior_id, resulting_max_hp=event.resulting_max_hp,
+        resulting_ac=event.resulting_ac,
+    )
+
+
+def _capture_actor_admissions(
+    history: tuple[tuple[int, Event], ...], indexed: tuple[tuple[int, Event], ...],
+    observer_uuid: UUID, known_actor_uuids: frozenset[UUID],
+) -> tuple[ActorAdmission, ...]:
+    """Fold private recorded facts, disclosing only actors actually observed here."""
+    actors: dict[UUID, ActorState] = {}
+    contacts: dict[UUID, PerceivedContact] = {}
+    observer_position: tuple[int, int] | None = None
+    selected = {event.uuid for _, event in indexed}
+    admitted = set(known_actor_uuids)
+    result: list[ActorAdmission] = []
+    observer = str(observer_uuid)
+    for index, event in history:
+        if index > indexed[-1][0]:
+            break
+        completed = event.phase is EventPhase.COMPLETION and not event.canceled
+        if completed and isinstance(event, EntityCreatedEvent):
+            actors[event.entity_uuid] = actor_from_birth(event)
+        sensory = completed and isinstance(event, SensoryUpdateEvent) and event.observer_uuid == observer_uuid
+        if sensory:
+            assert isinstance(event, SensoryUpdateEvent)
+            observer_position = event.observer_position
+            for identity in event.entity_contacts_removed:
+                contacts.pop(identity, None)
+            contacts.update(event.entity_contacts_changed)
+        if event.uuid in selected and not event.canceled:
+            candidates = set(_actor_participants(event))
+            owner = actor_fact_owner(event)
+            if owner is not None:
+                candidates.add(owner)
+            observed: set[UUID] = set()
+            if sensory:
+                assert isinstance(event, SensoryUpdateEvent)
+                observed.update(event.entity_contacts_changed)
+                observed.add(observer_uuid)
+                candidates.update(observed)
+            for identity in sorted(candidates - admitted, key=str):
+                if identity not in actors:
+                    continue
+                identified = observer in event.identified_entity_observer_uuids.get(str(identity), set())
+                located = observer in event.located_entity_observer_uuids.get(str(identity), set())
+                if identity != observer_uuid and identity not in observed and not (identified and located):
+                    continue
+                contact = contacts.get(identity) if identity != observer_uuid else None
+                if identity != observer_uuid and contact is None:
+                    raise ValueError("observed actor requires its recorded sensory contact")
+                position = (observer_position if identity == observer_uuid
+                            else contact.position if contact is not None and contact.visual else None)
+                result.append(ActorAdmission(
+                    event.uuid, replace(actors[identity], last_visual_position=position),
+                    contact.model_copy(deep=True) if contact is not None else None,
+                ))
+                admitted.add(identity)
+        if completed:
+            owner = actor_fact_owner(event)
+            if owner is not None and owner in actors:
+                actors[owner] = apply_actor_fact(actors[owner], event, _condition_fact(event))
+    return tuple(result)
+
+
+def capture_lineage(
+    root: Event, *, observer_uuid: UUID, known_actor_uuids: frozenset[UUID] = frozenset(),
+) -> CompletedLineage:
     """Retain a closed known-participant lineage after its public operation.
 
     Follow existing child lineages. Operation cursor ranges and callback batches
@@ -759,17 +825,9 @@ def capture_lineage(root: Event, *, observer_uuid: UUID) -> CompletedLineage:
         if event.uuid == nodes[event.lineage_uuid].uuid
     )
     retained_root = next(event for event in retained if event.uuid == root.uuid)
-    conditions = tuple(
-        ConditionFact(
-            event_uuid=event.uuid, condition_uuid=event.condition.uuid,
-            name=event.condition.name or "Condition", category=event.condition.condition_category,
-            behavior_id=event.behavior_id, resulting_max_hp=event.resulting_max_hp,
-            resulting_ac=event.resulting_ac,
-        )
-        for _, event in indexed
-        if event.uuid == nodes[event.lineage_uuid].uuid
-        and isinstance(event, (ConditionApplicationEvent, ConditionRemovalEvent))
-    )
+    conditions = tuple(fact for _, event in indexed
+                       if event.uuid == nodes[event.lineage_uuid].uuid
+                       and (fact := _condition_fact(event)) is not None)
     condition_ids = {fact.event_uuid for fact in conditions}
     dispositions = tuple(
         (event.uuid, Disposition.UNSUPPORTED) for event in retained
@@ -787,6 +845,7 @@ def capture_lineage(root: Event, *, observer_uuid: UUID) -> CompletedLineage:
         end_cursor=indexed[-1][0] + 1,
         conditions=conditions,
         dispositions=dispositions,
+        admissions=_capture_actor_admissions(history, indexed, observer_uuid, known_actor_uuids),
     )
 
 
@@ -804,10 +863,40 @@ def lineage_branch(lineage: CompletedLineage, root: Event) -> CompletedLineage:
     events = tuple(event for event in lineage.events if event.lineage_uuid in selected)
     identities = {event.uuid for event in events}
     rows = tuple(row for row in lineage.objective_rows if row.lineage_uuid in selected)
+    version_ids = {row.event_uuid for row in rows}
     return replace(lineage, root=root, events=events, objective_rows=rows,
                    start_cursor=rows[0].source_index, end_cursor=rows[-1].source_index + 1,
                    conditions=tuple(row for row in lineage.conditions if row.event_uuid in identities),
-                   dispositions=tuple(row for row in lineage.dispositions if row[0] in identities))
+                   dispositions=tuple(row for row in lineage.dispositions if row[0] in identities),
+                   admissions=tuple(row for row in lineage.admissions if row.event_uuid in version_ids))
+
+
+def _admit_actor(target: PresentationTarget, admission: ActorAdmission) -> None:
+    """Add one observed actor to an owned value; existing history wins."""
+    if admission.actor.uuid in target.actors:
+        return
+    target.actors[admission.actor.uuid] = admission.actor
+    if admission.contact is not None and target.senses is not None:
+        target.senses.entities[admission.actor.uuid] = admission.contact.model_copy(deep=True)
+
+
+def stage_actors(target: PresentationTarget, admissions: tuple[ActorAdmission, ...]) -> PresentationTarget:
+    """Add the specified observed actors to a fresh presentation value."""
+    result = copy_target(target)
+    for admission in admissions:
+        _admit_actor(result, admission)
+    return result
+
+
+def stage_lineage(target: PresentationTarget, lineage: CompletedLineage) -> PresentationTarget:
+    """Prepare newly admitted actors for binding without changing history's owner.
+
+    The display still admits contacts at their recorded event. This preparation
+    supplies the bodies and entry contacts needed to compile that first lineage.
+    """
+    if target.generation != lineage.generation or target.observer_uuid != lineage.observer_uuid:
+        raise ValueError("lineage belongs to a different presentation baseline")
+    return stage_actors(target, lineage.admissions)
 
 
 def reduce_lineage(target: PresentationTarget, lineage: CompletedLineage) -> PresentationTarget:
@@ -822,88 +911,27 @@ def reduce_lineage(target: PresentationTarget, lineage: CompletedLineage) -> Pre
     condition_facts = {fact.event_uuid: fact for fact in lineage.conditions}
     unsupported = {identity for identity, disposition in lineage.dispositions
                    if disposition is Disposition.UNSUPPORTED}
+    source_indexes = {row.event_uuid: row.source_index for row in lineage.objective_rows}
+    admissions = iter(sorted(lineage.admissions, key=lambda row: source_indexes[row.event_uuid]))
+    admission = next(admissions, None)
     for event in lineage.events:
+        while admission is not None and source_indexes[admission.event_uuid] <= source_indexes[event.uuid]:
+            _admit_actor(result, admission)
+            admission = next(admissions, None)
         if event.canceled or event.uuid in unsupported:
             continue
-        match event:
-            case AttackEvent() if event.attack_outcome is not None:
-                actor = result.actors.get(event.source_entity_uuid)
-                if actor is not None:
-                    selected = (WeaponSet.RANGED if event.weapon_slot in
-                                (WeaponSlot.RANGED_MAIN, WeaponSlot.RANGED_OFF) else WeaponSet.MELEE)
-                    result.actors[actor.uuid] = replace(actor, active_weapon_set=selected)
-            case DamageAppliedEvent():
-                actor = (
-                    result.actors.get(event.target_entity_uuid)
-                    if event.target_entity_uuid is not None else None
-                )
-                if actor is None:
-                    raise ValueError("damage requires the retained target actor")
-                result.actors[actor.uuid] = replace(
-                    actor,
-                    normal_hp=event.resulting_normal_hp,
-                    temporary_hp=event.resulting_temporary_hp,
-                )
-            case HealEvent():
-                if event.was_blocked:
+        owner = actor_fact_owner(event)
+        if owner is not None:
+            actor = result.actors.get(owner)
+            if actor is None:
+                if isinstance(event, (AttackEvent, EquipmentEvent)):
                     continue
-                actor = result.actors.get(event.target_entity_uuid) if event.target_entity_uuid is not None else None
-                if actor is None or event.resulting_normal_hp is None or event.resulting_temporary_hp is None:
-                    raise ValueError("healing requires its retained target and committed HP after-values")
-                result.actors[actor.uuid] = replace(
-                    actor, normal_hp=event.resulting_normal_hp, temporary_hp=event.resulting_temporary_hp,
-                )
-            case Event(event_type=EventType.CONDITION_APPLICATION | EventType.CONDITION_REMOVAL):
-                fact = condition_facts[event.uuid]
-                actor = result.actors.get(event.target_entity_uuid) if event.target_entity_uuid is not None else None
-                if actor is None:
-                    raise ValueError("condition membership requires its retained actor")
-                members = {condition.condition_uuid: condition for condition in actor.conditions}
-                if event.event_type is EventType.CONDITION_REMOVAL:
-                    members.pop(fact.condition_uuid, None)
-                elif fact.category is not ConditionCategory.INTERNAL:
-                    members[fact.condition_uuid] = fact
-                result.actors[actor.uuid] = replace(
-                    actor, conditions=tuple(members.values()),
-                    maximum_hp=actor.maximum_hp if fact.resulting_max_hp is None else fact.resulting_max_hp,
-                    armor_class=actor.armor_class if fact.resulting_ac is None else fact.resulting_ac,
-                )
-            case LifeStateChangeEvent():
-                actor = result.actors.get(event.entity_uuid)
-                if actor is None:
-                    raise ValueError("life transition requires the retained actor")
-                result.actors[actor.uuid] = replace(actor, life_state=event.new_state,
-                                                   normal_hp=event.normal_hit_points)
+                raise ValueError("actor fact requires its retained owner")
+            result.actors[owner] = apply_actor_fact(actor, event, condition_facts.get(event.uuid))
+            continue
+        match event:
             case SensoryUpdateEvent():
-                if event.observer_uuid == result.observer_uuid:
-                    if result.senses is None:
-                        raise ValueError("sensory update requires the observer baseline")
-                    result.senses = reduce_senses_snapshot(result.observer_uuid, result.senses, event)
-                    if event.observer_position_changed and result.observer_uuid in result.actors:
-                        observer = result.actors[result.observer_uuid]
-                        result.actors[observer.uuid] = replace(observer, last_visual_position=event.observer_position)
-                    for identity, contact in event.entity_contacts_changed.items():
-                        actor = result.actors.get(identity)
-                        if actor is not None and contact.visual:
-                            result.actors[identity] = replace(actor, last_visual_position=contact.position)
-            case ItemLocationStateEvent(location=ItemLocation.INVENTORY | ItemLocation.EQUIPMENT):
-                actor = result.actors.get(event.owner_uuid) if event.owner_uuid is not None else None
-                if actor is None:
-                    raise ValueError("equipment fact requires its retained owner actor")
-                item = event.item_state
-                items = {row.item_uuid: row for row in actor.items}
-                items[item.item_uuid] = item
-                equipment = {slot: identity for slot, identity in actor.equipment
-                             if identity != item.item_uuid}
-                if event.location is ItemLocation.EQUIPMENT:
-                    if event.equipment_slot is None:
-                        raise ValueError("equipped item fact requires its committed slot")
-                    equipment[event.equipment_slot.value] = item.item_uuid
-                result.actors[actor.uuid] = replace(
-                    actor, items=tuple(items.values()), equipment=tuple(equipment.items()),
-                    armor_class=(actor.armor_class if event.entity_armor_class_after is None
-                                 else event.entity_armor_class_after),
-                )
+                _reduce_sensory_fact(result, event)
             case ActionEvent() | TakeDamageEvent() | D20RollResultEvent() | DamageRollResultEvent() | HealRollResultEvent() | D20Event():
                 # These facts explain causality. Only the committed applied
                 # packet changes HP, so aggregate totals cannot apply it twice.
@@ -918,10 +946,6 @@ def reduce_lineage(target: PresentationTarget, lineage: CompletedLineage) -> Pre
                 # Senses supplies committed positions. Turn/round facts retain
                 # the real engine clock; presentation does not tick conditions.
                 pass
-            case EquipmentEvent():
-                # These real roots precede the aggregate membership facts.
-                # Hooks and slot operations are not replayed by presentation.
-                pass
             case _:
                 raise NotImplementedError(f"lineage reduction does not consume {type(event).__name__}")
     result.reducer_cursor = lineage.end_cursor
@@ -929,6 +953,7 @@ def reduce_lineage(target: PresentationTarget, lineage: CompletedLineage) -> Pre
 
 
 __all__ = [
+    "ActorAdmission",
     "ActorState",
     "CompletedLineage",
     "ConditionFact",
@@ -945,5 +970,7 @@ __all__ = [
     "reduce_interval",
     "reduce_lineage",
     "seed_actors",
+    "stage_actors",
+    "stage_lineage",
     "settle_dispositions",
 ]

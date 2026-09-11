@@ -50,6 +50,8 @@ def state_summary(state: PresentationTarget) -> dict[str, Any]:
 def group_trace(group: BoundChoreography) -> dict[str, Any]:
     return {
         "root_uuid": str(group.root_uuid), "complete_ms": group.complete_ms,
+        "admissions": [{"at_ms": at, "event_uuid": str(admission.event_uuid),
+                        "actor_uuid": str(admission.actor.uuid)} for at, admission in group.admissions],
         "shoves": [SHOVE.dump_python(cue, mode="json", exclude={"data"}, warnings="error") for cue in group.shoves],
         "forced_movement": [{**FORCED.dump_python(cue, mode="json", exclude={"data"}, warnings="error"),
                              "context": cue.data.forced_movement_context.model_dump(mode="json"),
@@ -82,6 +84,9 @@ def motion_trace(motion: MotionTimeline) -> dict[str, Any]:
         "playback_speed": motion.playback_speed, "body_loops": motion.body_loops,
         "complete_ms": motion.complete_ms,
         "legs": LEGS.dump_python(motion.legs, mode="json", warnings="error"),
+        "states": [{"at_ms": at, "cursor": state.reducer_cursor,
+                    "actors": [str(identity) for identity in state.actors]}
+                   for at, state in motion.states],
         "reactions": [{"start_ms": row.start_ms, "end_ms": row.end_ms,
                        "held_grid": row.contact.grid, "lift_px": row.lift_px,
                        "group": group_trace(row.choreography)} for row in motion.reactions],

@@ -21,7 +21,7 @@ from game.animation_types import AnimationData
 from game.attack import BoundAttack, attack_projectile_contact, bind_attack, project_attack_projectile, sample_attack
 from game.combat import BoundCast, actor_contact, bind_cast
 from game.combat_demo import iter_combat_demo
-from game.presentation import CompletedLineage, PresentationTarget
+from game.presentation import CompletedLineage, PresentationTarget, IntervalEnvelope, reduce_interval
 from game.projection import Camera, HEIGHT_STEP_PIXELS, TILE_WIDTH
 from tests.game.scenarios import attack_history
 
@@ -33,12 +33,16 @@ def data() -> AnimationData:
 
 @pytest.fixture(scope="module")
 def histories() -> dict[str, tuple[PresentationTarget, CompletedLineage]]:
-    result = {"shortbow": attack_history("weapon.shortbow", 17, weapon_slot=WeaponSlot.RANGED_MAIN,
-                                        watcher_positions=((7, 3),))}
+    captured = attack_history("weapon.shortbow", 17, weapon_slot=WeaponSlot.RANGED_MAIN,
+                              watcher_positions=((7, 3),))
+    result = {"shortbow": (captured.before, captured.lineages[0])}
     for name, missile in (("firebolt", False), ("missile", True)):
         script = iter_combat_demo(magic_missile=missile)
         try:
-            before, lineage = next(script), next(script)
+            initialization = next(script)
+            assert isinstance(initialization, IntervalEnvelope)
+            before, _ = reduce_interval(None, initialization)
+            lineage = next(script)
             assert isinstance(before, PresentationTarget) and isinstance(lineage, CompletedLineage)
             result[name] = before, lineage
         finally:

@@ -15,7 +15,6 @@ from dnd.actions import AttackEvent, JumpEvent, MovementEvent
 from dnd.actions_functional import execute_by_index, get_available_actions, setup_standard_actions
 from dnd.blocks.appearance import AppearanceConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
-from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.content_system.creature_materialization import materialize_creature
 from dnd.controller import HumanController
@@ -35,8 +34,10 @@ from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
 from game.presentation import (
     CompletedLineage, PresentationTarget, capture_interval, capture_lineage,
-    reduce_interval, reduce_lineage, seed_actors,
+    reduce_interval, reduce_lineage,
 )
+
+from game.replay import CapturedHistory, capture_history
 
 
 def attack_history(
@@ -45,7 +46,7 @@ def attack_history(
     movement_behavior: str = "action.move", watcher_positions: tuple[tuple[int, int], ...] = ((4, 3),),
     weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN, goblin_source: bool = False,
     uses_death_saves: bool = False,
-) -> tuple[PresentationTarget, CompletedLineage]:
+) -> CapturedHistory:
     """Execute the discovered attack/movement and detach its completed history."""
     previous = random.getstate()
     reset_engine_runtime()
@@ -65,7 +66,7 @@ def attack_history(
             (build_authored_item("apparel.robes.red_mage", hero.uuid), BodyPart.BODY),
             (build_authored_item("apparel.cloth_shoes.red", hero.uuid), BodyPart.FEET),
         ))
-        hero_birth = hero.compose_entity()
+        hero.compose_entity()
         setup_standard_actions(hero)
         watchers = tuple(materialize_creature(
             BESTIARY_CREATURE_RECIPES_BY_ID["goblin"], runtime_entity_uuid=uuid4(),
@@ -75,7 +76,8 @@ def attack_history(
         ) for position in watcher_positions)
         goblin = watchers[0]
         source, target = (goblin, hero) if goblin_source else (hero, goblin)
-        births = (hero_birth, *(watcher.compose_entity() for watcher in watchers))
+        for watcher in watchers:
+            watcher.compose_entity()
         for watcher in watchers:
             add_opportunity_attack_handler(watcher)
         for actor in (hero, *watchers):
@@ -96,12 +98,9 @@ def attack_history(
         startup = capture_interval(
             name="attack startup", start_cursor=0, end_cursor=cursor,
             observer_uuid=observer.uuid, battlefield_id=built.definition.battlefield_id,
-            seed_cursor=cursor, seed_snapshot=capture_senses_snapshot(observer.senses),
         )
         baseline, _ = reduce_interval(None, startup)
-        before = seed_actors(baseline, births, active_weapon_sets={
-            actor.uuid: actor.equipment.active_weapon_set for actor in (hero, *watchers)
-        })
+        before = baseline
         random.seed(seed)
         available = get_available_actions(source)
         choice = next(row for row in available.all_actions if row.behavior_id == (
@@ -116,7 +115,7 @@ def attack_history(
                           if isinstance(event, AttackEvent) and event.phase is EventPhase.COMPLETION)
         assert isinstance(result, (AttackEvent, MovementEvent, JumpEvent))
         lineage = capture_lineage(result, observer_uuid=observer.uuid)
-        return before, lineage
+        return capture_history(before, (lineage,))
     finally:
         game.close()
         reset_engine_runtime()
@@ -165,7 +164,8 @@ def _condition_encounter(
                 weapon_names=("Longsword",),
             ))
         add_opportunity_attack_handler(reactor)
-        births = mover.compose_entity(), reactor.compose_entity()
+        mover.compose_entity()
+        reactor.compose_entity()
         for actor in (mover, reactor):
             game.deploy_entity(actor, actor.position)
         Entity.update_all_entities_senses()
@@ -181,12 +181,9 @@ def _condition_encounter(
         startup = capture_interval(
             name="movement interruption", start_cursor=0, end_cursor=cursor,
             observer_uuid=reactor.uuid, battlefield_id=built.definition.battlefield_id,
-            seed_cursor=cursor, seed_snapshot=capture_senses_snapshot(reactor.senses),
         )
         baseline, _ = reduce_interval(None, startup)
-        before = seed_actors(baseline, births, active_weapon_sets={
-            actor.uuid: actor.equipment.active_weapon_set for actor in (mover, reactor)
-        })
+        before = baseline
         yield before, mover, reactor, encounter
     finally:
         game.close()
@@ -247,7 +244,7 @@ def _capture_operation(
 
 def movement_with_paralysis(
     seed: int, maximum_hp: int = 80, *, movement_behavior: str = "action.move",
-) -> tuple[PresentationTarget, CompletedLineage]:
+) -> CapturedHistory:
     """Compatibility case: detach just the original complete Move or Jump."""
     with _condition_encounter(maximum_hp=maximum_hp) as (before, mover, reactor, encounter):
         random.seed(seed)
@@ -257,13 +254,13 @@ def movement_with_paralysis(
         _, roots = _capture_operation(before, cursor, mover, reactor, encounter)
         lineage, = (lineage for lineage in roots if lineage.root.uuid == root.uuid)
         assert mover.position == root.end_position
-        return before, lineage
+        return capture_history(before, (lineage,))
 
 
 def paralysis_lifecycle(
     *, repeat_save_seeds: tuple[int, ...] = (0,), movement_behavior: str = "action.move",
     resume: bool = True,
-) -> tuple[PresentationTarget, tuple[CompletedLineage, ...]]:
+) -> CapturedHistory:
     """Native repeat saves/removal across turns, optionally followed by actual movement."""
     with _condition_encounter() as (before, mover, reactor, encounter):
         latest = before
@@ -307,10 +304,10 @@ def paralysis_lifecycle(
             assert isinstance(resumed, (MovementEvent, JumpEvent)) and resumed.end_position == (2, 3)
         elif "Paralyzed" in mover.active_conditions:
             assert not any(row.valid_targets for row in get_available_actions(mover).all_actions)
-        return before, tuple(history)
+        return capture_history(before, tuple(history))
 
 
-def dodge_expiry_history() -> tuple[PresentationTarget, tuple[CompletedLineage, ...]]:
+def dodge_expiry_history() -> CapturedHistory:
     """Dodge, a real opposing sword attack, and natural next-turn expiration."""
     with _condition_encounter(paralysis_rider=False) as (before, mover, reactor, encounter):
         latest = before
@@ -340,7 +337,7 @@ def dodge_expiry_history() -> tuple[PresentationTarget, tuple[CompletedLineage, 
         assert encounter.get_current_entity() is mover and "Dodging" not in mover.active_conditions
         assert any(row.behavior_id == "action.dodge" and row.valid_targets
                    for row in get_available_actions(mover).all_actions)
-        return before, tuple(history)
+        return capture_history(before, tuple(history))
 
 
 @contextmanager
@@ -370,7 +367,8 @@ def _healing_encounter() -> Iterator[tuple[PresentationTarget, Entity, Entity, E
                 (build_authored_item("apparel.robes.red_mage", actor.uuid), BodyPart.BODY),
                 (build_authored_item("apparel.cloth_shoes.red", actor.uuid), BodyPart.FEET),
             ))
-        births = observer.compose_entity(), target.compose_entity()
+        observer.compose_entity()
+        target.compose_entity()
         for actor in (observer, target):
             game.deploy_entity(actor, actor.position)
         Entity.update_all_entities_senses()
@@ -385,12 +383,9 @@ def _healing_encounter() -> Iterator[tuple[PresentationTarget, Entity, Entity, E
         startup = capture_interval(
             name="healing startup", start_cursor=0, end_cursor=cursor,
             observer_uuid=observer.uuid, battlefield_id=built.definition.battlefield_id,
-            seed_cursor=cursor, seed_snapshot=capture_senses_snapshot(observer.senses),
         )
         baseline, _ = reduce_interval(None, startup)
-        before = seed_actors(baseline, births, active_weapon_sets={
-            actor.uuid: actor.equipment.active_weapon_set for actor in (observer, target)
-        })
+        before = baseline
         yield before, observer, target, encounter
     finally:
         game.close()
@@ -398,7 +393,7 @@ def _healing_encounter() -> Iterator[tuple[PresentationTarget, Entity, Entity, E
         random.setstate(previous)
 
 
-def healing_history(*, dying: bool = False) -> tuple[PresentationTarget, CompletedLineage]:
+def healing_history(*, dying: bool = False) -> CapturedHistory:
     """Heal a natively injured actor; only the engine changes HP and life state."""
     with _healing_encounter() as (before, observer, target, _encounter):
         # Establish the injured baseline from the real completed damage tree,
@@ -431,12 +426,12 @@ def healing_history(*, dying: bool = False) -> tuple[PresentationTarget, Complet
             assert retained.identified_entity_observer_uuids == original.identified_entity_observer_uuids
             assert retained.located_entity_observer_uuids == original.located_entity_observer_uuids
             assert retained.located_position_observer_uuids == original.located_position_observer_uuids
-        return before, lineage
+        return capture_history(before, (lineage,))
 
 
 def lifecycle_history(
     *, save_seeds: tuple[int, ...] = (0,), heal_after: bool = False, revive_after: bool = False,
-) -> tuple[PresentationTarget, tuple[CompletedLineage, ...]]:
+) -> CapturedHistory:
     """Retain actual turn-start death saves and native recovery of the same actor."""
     assert save_seeds and not (heal_after and revive_after)
     with _healing_encounter() as (latest, observer, target, encounter):
@@ -490,4 +485,4 @@ def lifecycle_history(
             revived = target.revive(hit_points=3)
             assert revived
             retain(cursor)
-        return before, tuple(history)
+        return capture_history(before, tuple(history))

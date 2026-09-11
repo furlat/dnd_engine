@@ -11,14 +11,17 @@ from game.animation import sample_cast
 from game.animation_data import load_animation_data
 from game.combat import bind_cast
 from game.combat_demo import iter_combat_demo
-from game.presentation import CompletedLineage, PresentationTarget, reduce_lineage
+from game.presentation import CompletedLineage, PresentationTarget, reduce_lineage, IntervalEnvelope, reduce_interval
 
 
 def test_public_repeated_target_cast_keeps_each_application_while_latest_advances() -> None:
     data = load_animation_data()
     script = iter_combat_demo(magic_missile=True)
     try:
-        seed, first_lineage = next(script), next(script)
+        initialization = next(script)
+        assert isinstance(initialization, IntervalEnvelope)
+        seed, _ = reduce_interval(None, initialization)
+        first_lineage = next(script)
         assert isinstance(seed, PresentationTarget)
         assert isinstance(first_lineage, CompletedLineage)
         root = first_lineage.root

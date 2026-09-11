@@ -58,7 +58,7 @@ from dnd.blocks.creature_proficiencies import (
 )
 from dnd.blocks.action_economy import ActionEconomyConfig, ActionEconomy
 from dnd.blocks.skills import SkillSetConfig, SkillSet
-from dnd.blocks.sensory import Senses, spatial_senses_system
+from dnd.blocks.sensory import Senses, capture_senses_snapshot, spatial_senses_system
 from dnd.core.base_block import SensesType, SenseMode, LightLevel
 from dnd.blocks.inventory import Inventory, InventoryAddResult
 from dnd.blocks.spellcasting import SpellcastingBlock, SpellcastingConfig
@@ -1118,6 +1118,7 @@ class Entity(BaseBlock):
                 (slot.value, item.uuid)
                 for slot, item in equipped_by_slot
             ),
+            active_weapon_set=self.equipment.active_weapon_set,
         )
 
     def discard_uncommitted(self) -> None:
@@ -4406,7 +4407,8 @@ class Entity(BaseBlock):
         max_distance: int = 10,
         path_max_distance: Optional[int] = None,
     ) -> None:
-        """Reduce perception, then materialize navigation from that projection."""
+        """Reduce perception, materialize navigation, and record any actual delta."""
+        before = capture_senses_snapshot(self.senses)
         spatial_senses_system.recompute_observer(
             self.uuid,
             max_distance=max_distance,
@@ -4415,6 +4417,7 @@ class Entity(BaseBlock):
             max_distance=max_distance,
             path_max_distance=path_max_distance,
         )
+        spatial_senses_system.publish_observer_refresh(self.uuid, before)
 
     @classmethod
     def update_all_entities_senses(cls, max_distance: int = 10) -> None:

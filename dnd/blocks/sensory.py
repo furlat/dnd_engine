@@ -347,12 +347,24 @@ class SensesSnapshot:
 
 def reduce_senses_snapshot(
     expected_observer_uuid: UUID,
-    previous: SensesSnapshot,
+    previous: Optional[SensesSnapshot],
     event: SensoryUpdateEvent,
 ) -> SensesSnapshot:
     """Reduce one observer Event into a fresh passive sensory snapshot."""
     if event.observer_uuid != expected_observer_uuid:
         raise ValueError("sensory update belongs to a different observer")
+    if event.initial:
+        if event.passive_perception is None or event.visual_access is None:
+            raise ValueError("initial sensory update requires capability after-values")
+        # Initial additions are the complete view, not a merge with stale caches.
+        previous = SensesSnapshot(
+            position=event.observer_position, visible=set(), seen=set(),
+            entities={}, objects={}, effective_light_levels={}, paths_dirty=False,
+            passive_perception=event.passive_perception,
+            sense_modes_hash=hash(()), sense_modes=(), visual_access=event.visual_access,
+        )
+    if previous is None:
+        raise ValueError("sensory delta requires a previously recorded initial state")
 
     visible = set(previous.visible)
     visible.difference_update(event.visible_cells_removed)
@@ -470,22 +482,24 @@ def capture_senses_snapshot(senses: Senses) -> SensesSnapshot:
 
 def emit_sensory_update_delta(
     owner_uuid: UUID,
-    cause_event: Event,
+    cause_event: Optional[Event],
     before: SensesSnapshot,
     after: SensesSnapshot,
     reason: SensoryUpdateReason,
     *,
     register_event: bool = True,
+    initial: bool = False,
 ) -> Optional[SensoryUpdateEvent]:
     """Emit a completed sensory event for one observer-cache transition.
 
     Args:
         owner_uuid: Entity UUID that owns the senses component.
-        cause_event: Causal engine event under which to parent the delta.
+        cause_event: Actual causal event, or None for an independent refresh.
         before: Sensory state before the transition.
         after: Sensory state after the transition.
         reason: Typed reason for the sensory transition.
         register_event: Whether to register the completed event immediately.
+        initial: Publish the complete after-state without an unrecorded seed.
 
     Returns:
         The completed sensory event when the snapshots differ, otherwise None.
@@ -493,38 +507,39 @@ def emit_sensory_update_delta(
     timing = action_timing_enabled()
     total_started = time.perf_counter() if timing else 0.0
     started = time.perf_counter() if timing else 0.0
-    visible_added = after.visible - before.visible
-    visible_removed = before.visible - after.visible
-    seen_added = after.seen - before.seen
+    visible_added = after.visible if initial else after.visible - before.visible
+    visible_removed = set() if initial else before.visible - after.visible
+    seen_added = after.seen if initial else after.seen - before.seen
 
     entity_changed = {
         uuid: contact
         for uuid, contact in after.entities.items()
-        if before.entities.get(uuid) != contact
+        if initial or before.entities.get(uuid) != contact
     }
-    entity_removed = set(before.entities) - set(after.entities)
+    entity_removed = set() if initial else set(before.entities) - set(after.entities)
     object_changed = {
         uuid: contact
         for uuid, contact in after.objects.items()
-        if before.objects.get(uuid) != contact
+        if initial or before.objects.get(uuid) != contact
     }
-    object_removed = set(before.objects) - set(after.objects)
+    object_removed = set() if initial else set(before.objects) - set(after.objects)
     light_changed = {
         f"{position[0]},{position[1]}": level.value
         for position, level in sorted(after.effective_light_levels.items())
-        if before.effective_light_levels.get(position) != level
+        if initial or before.effective_light_levels.get(position) != level
     }
 
-    passive_changed = before.passive_perception != after.passive_perception
-    sense_modes_changed = before.sense_modes_hash != after.sense_modes_hash
-    visual_access_changed = before.visual_access != after.visual_access
-    position_changed = before.position != after.position
+    passive_changed = initial or before.passive_perception != after.passive_perception
+    sense_modes_changed = initial or before.sense_modes_hash != after.sense_modes_hash
+    visual_access_changed = initial or before.visual_access != after.visual_access
+    position_changed = initial or before.position != after.position
     perception_capability_changed = (
         reason in {SensoryUpdateReason.CONDITION, SensoryUpdateReason.LIFE_STATE}
         and (passive_changed or sense_modes_changed or visual_access_changed)
     )
     paths_refresh_needed = (
-        ((not before.paths_dirty) and after.paths_dirty)
+        (initial and after.paths_dirty)
+        or ((not before.paths_dirty) and after.paths_dirty)
         or (perception_capability_changed and after.paths_dirty)
     )
 
@@ -556,13 +571,14 @@ def emit_sensory_update_delta(
         source_entity_uuid=owner_uuid,
         target_entity_uuid=owner_uuid,
         observer_uuid=owner_uuid,
+        initial=initial,
         observer_position=after.position,
         observer_position_changed=position_changed,
         effective_light_levels_changed=light_changed,
-        cause_event_uuid=cause_event.uuid,
+        cause_event_uuid=cause_event.uuid if cause_event is not None else None,
         update_reason=reason,
-        parent_event=cause_event.uuid,
-        parent_lineage=cause_event.lineage_uuid,
+        parent_event=cause_event.uuid if cause_event is not None else None,
+        parent_lineage=cause_event.lineage_uuid if cause_event is not None else None,
         phase=EventPhase.COMPLETION,
         use_register=False,
         visible_cells_added=_sorted_positions(visible_added),
@@ -632,6 +648,7 @@ class SpatialSensesSystem:
 
     def __init__(self) -> None:
         self.senses_by_observer: Dict[UUID, Senses] = {}
+        self.published_observers: Set[UUID] = set()
         self.footprints_by_observer: Dict[UUID, ObserverFootprint] = {}
         self.observers_by_known_position: DefaultDict[
             Tuple[int, int], Set[UUID]
@@ -650,6 +667,7 @@ class SpatialSensesSystem:
     def reset(self) -> None:
         """Clear observers and candidate indexes."""
         self.senses_by_observer.clear()
+        self.published_observers.clear()
         self.footprints_by_observer.clear()
         self.observers_by_known_position.clear()
         self.observers_by_entity.clear()
@@ -662,6 +680,7 @@ class SpatialSensesSystem:
     def unregister_observer(self, observer_uuid: UUID) -> None:
         """Remove an observer and all of its candidate memberships."""
         self.senses_by_observer.pop(observer_uuid, None)
+        self.published_observers.discard(observer_uuid)
         footprint = self.footprints_by_observer.pop(observer_uuid, None)
         if footprint is not None:
             self._remove_footprint(observer_uuid, footprint)
@@ -975,6 +994,22 @@ class SpatialSensesSystem:
             special_senses=tuple(sorted(special, key=lambda value: value.value)),
         )
 
+    def publish_observer_refresh(
+        self, observer_uuid: UUID, before: SensesSnapshot,
+    ) -> Optional[SensoryUpdateEvent]:
+        """Record an independent explicit refresh after existing cache updates."""
+        senses = self.senses_by_observer.get(observer_uuid)
+        if senses is None:
+            return None
+        event = emit_sensory_update_delta(
+            observer_uuid, None, before, capture_senses_snapshot(senses),
+            SensoryUpdateReason.UNKNOWN,
+            initial=observer_uuid not in self.published_observers,
+        )
+        if event is not None:
+            self.published_observers.add(observer_uuid)
+        return event
+
     def refresh_observer(self, observer_uuid: UUID) -> None:
         """Synchronize one observer's candidate reverse indexes."""
         senses = self.senses_by_observer.get(observer_uuid)
@@ -1103,11 +1138,13 @@ class SpatialSensesSystem:
                 after,
                 self._reason_for(event, observer_uuid),
                 register_event=False,
+                initial=observer_uuid not in self.published_observers,
             )
             if sensory_event is not None:
                 sensory_events.append(sensory_event)
         if sensory_events:
             EventQueue.register_completion_sequence(sensory_events)
+            self.published_observers.update(event.observer_uuid for event in sensory_events)
 
     @staticmethod
     def _reason_for(event: Event, observer_uuid: UUID) -> SensoryUpdateReason:

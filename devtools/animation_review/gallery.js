@@ -220,6 +220,13 @@ function makeCard(row) {
     trace.rel = "noopener";
     footer.append(trace);
   } else footer.append(element("span", "media-error", "Trace path missing"));
+  if (row.input) {
+    const input = element("a", "", "Open recorded input ↗");
+    input.href = localURL(row.input);
+    input.target = "_blank";
+    input.rel = "noopener";
+    footer.append(input);
+  }
   footer.append(button("Export this case", () => exportCases([row.id])));
   const evidence = element("details", "evidence");
   evidence.open = row.status === "failed";
@@ -262,13 +269,20 @@ async function exportCases(ids) {
           || trace?.case?.id !== entry.case.id) {
         throw new Error("Trace identity differs from the reviewed run/case. Reload the correct immutable run.");
       }
+      const recordedInput = entry.case.input ? await readJSON(entry.case.input) : null;
+      if (recordedInput && (recordedInput.kind !== "dnd-animation-input" || recordedInput.schema_version !== 1
+          || recordedInput.case?.id !== entry.case.id || recordedInput.captured_at !== trace.input?.captured_at
+          || recordedInput.sources?.source_hash !== trace.input?.sources?.source_hash)) {
+        throw new Error("Recorded input differs from the reviewed case's capture. Reload the correct immutable run.");
+      }
       // MP4 timestamps have microsecond precision; retain the pinned time and
       // identify its preceding source frame without integer-ms rounding loss.
       const frames = Array.isArray(trace.frames) ? trace.frames : [];
       const selectedFrame = entry.review.at_ms === null ? null : frames.reduce((latest, frame) =>
         Number.isFinite(frame.video_ms) && frame.video_ms <= entry.review.at_ms + .001
           && (latest === null || frame.video_ms > latest.video_ms) ? frame : latest, null);
-      return {...entry, review: {...entry.review, selected_frame_index: selectedFrame?.index ?? null}, trace};
+      return {...entry, review: {...entry.review, selected_frame_index: selectedFrame?.index ?? null},
+        recorded_input: recordedInput, trace};
     }));
     const failures = results.flatMap((result, index) => result.status === "rejected" ? [`${selected[index].case.id}: ${result.reason.message}`] : []);
     if (failures.length) throw new Error(`Nothing was exported. Complete traces could not be loaded:\n${failures.join("\n")}`);
@@ -282,7 +296,8 @@ async function exportCases(ids) {
     link.click();
     link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 60000);
-    message(`Exported ${selections.length} complete case${selections.length === 1 ? "" : "s"}, with pinned times, notes and run identity.`);
+    const replayable = selections.filter(entry => entry.recorded_input).length;
+    message(`Exported ${selections.length} case${selections.length === 1 ? "" : "s"}, with pinned times, notes and run identity. ${replayable} include recorded input for replay.`);
   } catch (error) { message(error.message, true); }
   finally { exporting = false; counts(); }
 }

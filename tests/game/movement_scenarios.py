@@ -9,7 +9,6 @@ from dnd.actions_functional import execute_by_index, get_available_actions, regi
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.appearance import AppearanceConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
-from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.controller import HumanController
 from dnd.core.condition_types import ConditionCategory
@@ -24,9 +23,11 @@ from dnd.scenarios.battlefield_catalog import build_battlefield
 from dnd.spells.transmutation import Haste
 from dnd.types.senses import SenseMode, SensesType
 from game.presentation import (
-    CompletedLineage, PresentationTarget, capture_interval, capture_lineage,
-    reduce_interval, reduce_lineage, seed_actors,
+    CompletedLineage, capture_interval, capture_lineage,
+    reduce_interval, reduce_lineage,
 )
+
+from game.replay import CapturedHistory, capture_history
 
 
 def movement_history(
@@ -34,7 +35,7 @@ def movement_history(
     battlefield_id: str = "battlefield.open_floor_bright",
     behavior: Literal["action.move", "action.jump"] = "action.move",
     boost: Literal["none", "haste", "bonus-dash"] = "none",
-) -> tuple[PresentationTarget, tuple[CompletedLineage, ...]]:
+) -> CapturedHistory:
     """Execute discovered choices; Haste's actual cast establishes the baseline.
 
     The Haste casting animation belongs to a later delivery unit. Its original
@@ -76,7 +77,8 @@ def movement_history(
             register_spell(caster, Haste)
         if boost == "bonus-dash":
             register_cunning_action(mover)
-        births = tuple(actor.compose_entity() for actor in actors)
+        for actor in actors:
+            actor.compose_entity()
         for actor in actors:
             game.deploy_entity(actor, actor.position)
         Entity.update_all_entities_senses()
@@ -90,11 +92,9 @@ def movement_history(
             encounter.next_turn()
         cursor = EventQueue.event_cursor()
         startup = capture_interval(name="movement route startup", start_cursor=0, end_cursor=cursor,
-            observer_uuid=mover.uuid, battlefield_id=battlefield_id, seed_cursor=cursor,
-            seed_snapshot=capture_senses_snapshot(mover.senses))
+            observer_uuid=mover.uuid, battlefield_id=battlefield_id,)
         baseline, _ = reduce_interval(None, startup)
-        latest = seed_actors(baseline, births,
-            active_weapon_sets={actor.uuid: actor.equipment.active_weapon_set for actor in actors})
+        latest = baseline
         history: list[CompletedLineage] = []
 
         def retain(cursor: int) -> None:
@@ -166,7 +166,7 @@ def movement_history(
             assert mover.position == destination
             spent = sum(event.movement_cost for event in history[-1].events if isinstance(event, StepMovementEvent))
             assert mover.action_economy.movement.normalized_score == movement_before - spent
-        return before, tuple(history)
+        return capture_history(before, tuple(history))
     finally:
         game.close()
         reset_engine_runtime()

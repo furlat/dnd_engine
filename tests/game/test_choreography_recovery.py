@@ -17,14 +17,16 @@ from game.choreography import bind_choreography, sample_choreography
 from game.combat import BoundCast, bind_cast
 from game.combat_demo import iter_combat_demo
 from game.condition_types import ConditionRecipe
-from game.presentation import CompletedLineage, PresentationTarget, capture_lineage, reduce_lineage
+from game.presentation import CompletedLineage, PresentationTarget, capture_lineage, reduce_lineage, IntervalEnvelope, reduce_interval
 
 
 @pytest.fixture(scope="module")
 def concentrating_hit() -> tuple[PresentationTarget, CompletedLineage]:
     script = iter_combat_demo()
     try:
-        seed = next(script)
+        initialization = next(script)
+        assert isinstance(initialization, IntervalEnvelope)
+        seed, _ = reduce_interval(None, initialization)
         assert isinstance(seed, PresentationTarget)
         recipient = next(actor for actor in seed.actors.values() if actor.name == "Recipient")
         actor = Entity.get(recipient.uuid)

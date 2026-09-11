@@ -21,7 +21,7 @@ from game.animation import sample_cast
 from game.animation_data import load_animation_data, resolve_actor_layers
 from game.combat import bind_cast
 from game.combat_demo import iter_combat_demo
-from game.presentation import CompletedLineage, PresentationTarget, capture_lineage, reduce_lineage, seed_actors
+from game.presentation import CompletedLineage, PresentationTarget, capture_lineage, reduce_lineage, seed_actors, IntervalEnvelope, reduce_interval
 
 
 def test_public_weapon_replacement_retains_loadout_and_replays_after_reset() -> None:
@@ -47,7 +47,7 @@ def test_public_weapon_replacement_retains_loadout_and_replays_after_reset() -> 
             senses=capture_senses_snapshot(actor.senses),
             reducer_cursor=EventQueue.event_cursor(),
         ),
-        (birth,), active_weapon_sets={actor.uuid: actor.equipment.active_weapon_set},
+        (birth,),
     )
     initial = seed.actors[actor.uuid]
     data = load_animation_data()
@@ -141,7 +141,10 @@ def test_public_mixed_history_keeps_first_cast_dagger_while_latest_reaches_short
     data = load_animation_data()
     script = iter_combat_demo(replace_weapon=True)
     try:
-        seed, first_lineage = next(script), next(script)
+        initialization = next(script)
+        assert isinstance(initialization, IntervalEnvelope)
+        seed, _ = reduce_interval(None, initialization)
+        first_lineage = next(script)
         assert isinstance(seed, PresentationTarget)
         assert isinstance(first_lineage, CompletedLineage)
         first = bind_cast(seed, first_lineage, data, travel_apex_steps=1.0)

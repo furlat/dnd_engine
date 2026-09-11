@@ -11,7 +11,7 @@ from dnd.core.action_types import (
     RestrictedActionKind,
 )
 from dnd.core.events import Event, EventType, EventPhase, EventProcessor, Range, EventQueue
-from dnd.core.base_object import BaseObject
+from dnd.core.base_object import BaseObject, PASSIVE_EVENT_REPLAY
 from dnd.core.base_block import BaseBlock
 from dnd.core.combat_log import ActionLogData, CombatLogEntry, CombatLogEntryType, MultiEntityLogData, md_color
 from dnd.core.content.identities import ContentRef, validate_namespaced_id
@@ -637,7 +637,11 @@ class ActionEvent(Event):
 
     def model_post_init(self, __context: Any) -> None:
         """Freeze active authored identity before the event is registered."""
-        if self.behavior_id is None and self.provided_by_id is None:
+        if (
+            __context is not PASSIVE_EVENT_REPLAY
+            and self.behavior_id is None
+            and self.provided_by_id is None
+        ):
             binding = active_runtime_behavior_binding()
             if binding is not None:
                 self.behavior_id = binding.behavior_id

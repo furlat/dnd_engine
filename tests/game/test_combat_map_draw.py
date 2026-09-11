@@ -15,7 +15,7 @@ from game.app import draw_frame
 from game.assets import AssetCatalog, SurfaceCache, load_catalog
 from game.combat import BoundCast, bind_cast
 from game.combat_demo import iter_combat_demo
-from game.presentation import CompletedLineage, PresentationTarget
+from game.presentation import CompletedLineage, PresentationTarget, IntervalEnvelope, reduce_interval
 from game.projection import Camera, camera_pose, project_screen
 
 
@@ -37,7 +37,10 @@ def scene() -> Iterator[MapScene]:
         pygame.init()
         screen = pygame.display.set_mode((1000, 800))
         scenario = iter_combat_demo(caster_position=(16, 24))
-        target, lineage = next(scenario), next(scenario)
+        initialization = next(scenario)
+        assert isinstance(initialization, IntervalEnvelope)
+        target, _ = reduce_interval(None, initialization)
+        lineage = next(scenario)
         assert isinstance(target, PresentationTarget)
         assert isinstance(lineage, CompletedLineage)
         # This fixture also protects the original point-dart depth regression.

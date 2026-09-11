@@ -42,8 +42,9 @@ def histories(renderer: tuple[AnimationData, AssetCatalog, SurfaceCache]) -> dic
     data = renderer[0]
     result = {}
     for name, route in (("uphill", ((13, 20), (14, 20))), ("downhill", ((14, 20), (13, 20)))):
-        before, roots = movement_history(route=route, battlefield_id="battlefield.visual_vertical_seam",
+        captured = movement_history(route=route, battlefield_id="battlefield.visual_vertical_seam",
                                          behavior="action.jump")
+        before, roots = captured.before, captured.lineages
         lineage, = roots
         after = reduce_lineage(before, lineage)
         motion = bind_motion(before, lineage, data)

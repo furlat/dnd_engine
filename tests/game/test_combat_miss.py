@@ -13,7 +13,7 @@ from game.animation import sample_cast
 from game.animation_data import load_animation_data
 from game.combat import bind_cast
 from game.combat_demo import iter_combat_demo
-from game.presentation import CompletedLineage, PresentationTarget, reduce_lineage
+from game.presentation import CompletedLineage, PresentationTarget, reduce_lineage, IntervalEnvelope, reduce_interval
 
 
 @pytest.mark.parametrize("attack_seed, outcome", [
@@ -25,7 +25,10 @@ def test_public_miss_keeps_hp_and_authored_delivery_without_hit_feedback(
 ) -> None:
     script = iter_combat_demo(second_attack_seed=attack_seed)
     try:
-        seed, hit_lineage = next(script), next(script)
+        initialization = next(script)
+        assert isinstance(initialization, IntervalEnvelope)
+        seed, _ = reduce_interval(None, initialization)
+        hit_lineage = next(script)
         assert isinstance(seed, PresentationTarget)
         assert isinstance(hit_lineage, CompletedLineage)
         data = load_animation_data()

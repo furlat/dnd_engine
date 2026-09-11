@@ -36,7 +36,7 @@ from game.app import BACKGROUND, WINDOW_SIZE, draw_frame
 from game.assets import SurfaceCache, load_catalog
 from game.combat import BoundCast, BoundEquipment, bind_cast, bind_equipment
 from game.combat_demo import iter_combat_demo
-from game.presentation import CompletedLineage, PresentationTarget, reduce_lineage
+from game.presentation import CompletedLineage, IntervalEnvelope, PresentationTarget, reduce_interval, reduce_lineage
 from game.projection import Camera, ZOOM_LEVELS
 
 
@@ -132,9 +132,10 @@ async def _run(
         magic_missile=magic_missile,
     )
     try:
-        seed = next(script)
-        if not isinstance(seed, PresentationTarget):
-            raise RuntimeError("combat script must first establish its presentation baseline")
+        initialization = next(script)
+        if not isinstance(initialization, IntervalEnvelope):
+            raise RuntimeError("combat script must first publish native initialization")
+        seed, _ = reduce_interval(None, initialization)
         latest = historical = seed
         catalog = load_catalog()
         rig_files = (Path(__file__).parent / "data" / "rigs" / "goblin01.json",) if goblin_recipient else ()

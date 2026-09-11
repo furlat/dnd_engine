@@ -39,6 +39,7 @@ from game.combat import bind_cast
 from game.combat_demo import iter_combat_demo
 from game.presentation import (
     CompletedLineage, PresentationTarget, capture_lineage, reduce_lineage, seed_actors,
+    IntervalEnvelope, reduce_interval,
 )
 
 
@@ -106,7 +107,6 @@ def casts() -> PublicCasts:
             reducer_cursor=EventQueue.event_cursor(),
         ),
         tuple(births),
-        active_weapon_sets={actor.uuid: actor.equipment.active_weapon_set for actor in actors},
     )
     histories: list[CompletedLineage] = []
     hp = [recipient.get_normal_hp()]
@@ -222,7 +222,9 @@ def test_canonical_goblin_marker_and_cast_history_survive_turns_and_runtime_rese
 ) -> None:
     data = load_animation_data(rig_files=(DATA_ROOT.parent / "rigs/goblin01.json",))
     script = iter_combat_demo(goblin_recipient=True, second_attack_seed=second_attack_seed)
-    seed = next(script)
+    initialization = next(script)
+    assert isinstance(initialization, IntervalEnvelope)
+    seed, _ = reduce_interval(None, initialization)
     assert isinstance(seed, PresentationTarget)
     recipient = next(
         actor for actor in seed.actors.values()

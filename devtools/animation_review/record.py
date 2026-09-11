@@ -24,23 +24,22 @@ from game.combat import actor_contact
 from game.feedback import FeedbackTrack, choreography_feedback, motion_feedback
 from game.motion import MotionTimeline, bind_motion
 from game.playback_frame import PlaybackFrame, sample_playback_frame
-from game.presentation import PresentationTarget, reduce_lineage
+from game.presentation import PresentationTarget, reduce_lineage, stage_lineage
 from game.projection import Camera, TILE_WIDTH, ZOOM_LEVELS, project_screen
 from game.scene import draw_actor_labels, load_scene_media, scene_actors
 from game.visual_position import VisualPosition
-from devtools.animation_review.cases import ReviewCase, produce
+from devtools.animation_review.cases import ReviewCase, ReviewSequence
 from devtools.animation_review.trace import LINEAGE, STATE, draw_trace, frame_trace, group_trace, motion_trace, state_summary
 
 
 def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
-                fps: int, size: tuple[int, int], ffmpeg: str) -> dict[str, Any]:
-    sequence = produce(case)
+                sequence: ReviewSequence, fps: int, size: tuple[int, int], ffmpeg: str) -> dict[str, Any]:
     before = sequence.before
     latest = before
     for lineage in sequence.lineages:
         latest = reduce_lineage(latest, lineage)
     trace.update({
-        "mode": "retained-sequence; latest reduced before historical playback",
+        "mode": "decoded-recorded-input; latest reduced before historical playback",
         "initial": STATE.dump_python(before, mode="json", serialize_as_any=True, warnings="error"),
         "latest": state_summary(latest),
         "lineages": [LINEAGE.dump_python(root, mode="json", serialize_as_any=True, warnings="error")
@@ -85,6 +84,9 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
     appearances = list(actors)
     framing_contacts = [actor.contact for actor in actors]
     for root in sequence.lineages:
+        entrants = scene_actors(stage_lineage(before, root), data, facings)
+        appearances.extend(entrants)
+        framing_contacts.extend(actor.contact for actor in entrants)
         flight = bind_motion(before, root, data)
         if flight is not None:
             # Reuse compiled geometry for a conservative flight envelope. The

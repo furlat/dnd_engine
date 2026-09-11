@@ -11,6 +11,7 @@ from uuid import UUID
 
 from dnd.actions import AttackEvent, ShoveEvent, SpellEvent
 from dnd.blocks.base_item import ItemLocationStateEvent
+from dnd.blocks.equipment import EquipmentEvent
 from dnd.core.condition_types import ConditionCategory
 from dnd.core.events import DeathSaveEvent, Event, ForcedMovementEvent, HealEvent, LifeStateChangeEvent, TakeDamageEvent
 from dnd.core.life_types import LifeState
@@ -28,7 +29,8 @@ from game.forced_movement import (
     forced_contact, sample_forced_body, sample_shove,
 )
 from game.presentation import (
-    CompletedLineage, PresentationTarget, copy_target, lineage_branch, reduce_lineage,
+    ActorAdmission, CompletedLineage, PresentationTarget, lineage_branch, reduce_lineage,
+    stage_actors, stage_lineage,
 )
 
 
@@ -84,6 +86,7 @@ class BoundChoreography:
     shoves: tuple[ShoveCue, ...] = ()
     forced_movement: tuple[ForcedMovementCue, ...] = ()
     damage: tuple[DamageCue, ...] = ()
+    admissions: tuple[tuple[float, ActorAdmission], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -110,6 +113,10 @@ def bind_choreography(before: PresentationTarget, lineage: CompletedLineage, dat
                       *, facings: Mapping[str, Facing8] | None = None,
                       contacts: Mapping[str, ActorContact] | None = None) -> BoundChoreography:
     """Compile exact causal ownership, never content names or future conditions."""
+    displayed_before = before
+    before = stage_lineage(before, lineage)
+    admission_lineages = {row.event_uuid: row.lineage_uuid for row in lineage.objective_rows}
+    admissions: list[tuple[float, ActorAdmission]] = []
     by_lineage = {event.lineage_uuid: event for event in lineage.events}
     facts = {fact.event_uuid: fact for fact in lineage.conditions}
     order = {event.uuid: index for index, event in enumerate(lineage.events)}
@@ -133,6 +140,8 @@ def bind_choreography(before: PresentationTarget, lineage: CompletedLineage, dat
                         for identity in event.children_lineages), default=at)
         if displacement is not None:
             at = dict(displacement.arrivals).get(event.uuid, at)
+        admissions.extend((at, admission) for admission in lineage.admissions
+                          if admission_lineages[admission.event_uuid] == event.lineage_uuid)
         placed_contacts = dict(contacts or {})
         if displacement is not None:
             placed = forced_contact(displacement, data, at)
@@ -193,7 +202,8 @@ def bind_choreography(before: PresentationTarget, lineage: CompletedLineage, dat
                     end = max(end, standalone_damage.timing.end_ms)
             except (ValueError, NotImplementedError) as error:
                 gaps.append((event.uuid, str(error)))
-        if isinstance(event, ItemLocationStateEvent) and event.owner_uuid is not None:
+        if (isinstance(event, EquipmentEvent)
+                or isinstance(event, ItemLocationStateEvent) and event.owner_uuid is not None):
             try:
                 bound_equipment = bind_equipment(_before_event(before, lineage, event),
                     lineage_branch(lineage, event), data, facings or {}, contacts=contacts)
@@ -345,14 +355,16 @@ def bind_choreography(before: PresentationTarget, lineage: CompletedLineage, dat
             timeline = replace(node.bound.timeline, complete_ms=max(node.bound.timeline.complete_ms, child_end))
             nodes[index] = replace(node, bound=replace(node.bound, timeline=timeline))
         complete = max(complete, node.start_ms + timeline.complete_ms)
-    return BoundChoreography(lineage.root.uuid, before, reduce_lineage(before, lineage),
+    return BoundChoreography(lineage.root.uuid, displayed_before, reduce_lineage(displayed_before, lineage),
                              tuple(nodes), tuple(conditions), complete, tuple(gaps), tuple(healing),
-                             tuple(lifecycle), tuple(equipment), tuple(shoves), tuple(forced_movement), tuple(damage))
+                             tuple(lifecycle), tuple(equipment), tuple(shoves), tuple(forced_movement), tuple(damage),
+                             tuple(admissions))
 
 
 def sample_choreography(bound: BoundChoreography, elapsed_ms: float) -> ChoreographySample:
     """Absolute sampling: seeking neither replays mechanics nor consumes facts."""
-    displayed = copy_target(bound.before)
+    displayed = stage_actors(bound.before, tuple(admission for at, admission in bound.admissions
+                                                if elapsed_ms >= at))
     clips: list[ActionSample] = []
     vitals: dict[str, VitalsSample] = {}
     bodies: dict[str, BodySample] = {}
@@ -378,11 +390,13 @@ def sample_choreography(bound: BoundChoreography, elapsed_ms: float) -> Choreogr
             continue
         sample = sample_equipment(cue.bound.timeline, elapsed_ms - cue.start_ms)
         identity = UUID(cue.bound.timeline.actor.actor_uuid)
+        successor = cue.bound.after.actors[identity]
+        if sample.committed:
+            displayed.actors[identity] = replace(displayed.actors[identity],
+                active_weapon_set=successor.active_weapon_set)
         if sample.complete:
-            # SwitchWeaponClip commits stance at commitFrame; item identity
-            # belongs to the completed frame's loadout patch. This gesture
-            # replaces items within an unchanged stance.
-            successor = cue.bound.after.actors[identity]
+            # The authored commitFrame selects the set; completed item facts
+            # settle the loadout identity after the same gesture.
             displayed.actors[identity] = replace(displayed.actors[identity],
                 items=successor.items, equipment=successor.equipment,
                 active_weapon_set=successor.active_weapon_set, armor_class=successor.armor_class)

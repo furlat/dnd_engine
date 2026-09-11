@@ -12,6 +12,7 @@ from dnd.blocks.sensory import (
     reduce_senses_snapshot,
 )
 from dnd.core.events import (
+    EntityCreatedEvent,
     EventQueue,
     SensoryUpdateEvent,
     SpatialChangeEvent,
@@ -39,6 +40,7 @@ def test_three_intervals_are_complete_passive_and_replay_after_reset() -> None:
     )
     assert all(
         type(event) in {
+            EntityCreatedEvent,
             WorldInitializedEvent,
             ItemLocationStateEvent,
             SpatialChangeEvent,
@@ -126,7 +128,8 @@ def test_three_intervals_are_complete_passive_and_replay_after_reset() -> None:
 def test_wrong_observer_reduction_rejects_without_mutating_seed() -> None:
     startup = build_demo_intervals()[0]
     sensory = next(event for _, event in startup.admitted if type(event) is SensoryUpdateEvent)
-    seed = startup.seed_snapshot
+    target, _ = reduce_interval(None, startup)
+    seed = target.senses
     assert seed is not None
     before = (set(seed.visible), set(seed.seen), dict(seed.objects))
     with pytest.raises(ValueError, match="different observer"):

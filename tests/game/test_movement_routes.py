@@ -49,7 +49,8 @@ def test_native_routes_keep_actual_costs_conditions_terrain_and_replayable_steps
     random_state = random.getstate()
     # Literal inputs are the same finite choices exposed by the catalog.
     assert behavior in ("action.move", "action.jump") and boost in ("none", "haste", "bonus-dash")
-    before, roots = movement_history(route=route, battlefield_id=battlefield, behavior=behavior, boost=boost)
+    captured = movement_history(route=route, battlefield_id=battlefield, behavior=behavior, boost=boost)
+    before, roots = captured.before, captured.lineages
     assert random.getstate() == random_state
     mover = before.observer_uuid
     assert before.senses is not None and before.senses.position == route[0]
@@ -126,8 +127,9 @@ def test_native_routes_keep_actual_costs_conditions_terrain_and_replayable_steps
 def test_multicell_jump_resolves_its_actual_reaction_before_takeoff_or_stops_grounded(
     data: AnimationData, seed: int, maximum_hp: int, survives: bool, destination: tuple[int, int],
 ) -> None:
-    before, lineage = attack_history("weapon.longsword", seed, opportunity=True, whole_movement=True,
+    captured = attack_history("weapon.longsword", seed, opportunity=True, whole_movement=True,
         maximum_hp=maximum_hp, movement_behavior="action.jump", destination=destination)
+    before, lineage = captured.before, captured.lineages[0]
     assert isinstance(lineage.root, JumpEvent)
     motion = bind_motion(before, lineage, data)
     assert motion is not None
@@ -172,8 +174,9 @@ def test_multicell_jump_resolves_its_actual_reaction_before_takeoff_or_stops_gro
 
 
 def test_multiple_native_opportunity_attacks_join_on_the_ground_before_one_jump(data: AnimationData) -> None:
-    before, lineage = attack_history("weapon.longsword", 17, opportunity=True, whole_movement=True,
+    captured = attack_history("weapon.longsword", 17, opportunity=True, whole_movement=True,
         movement_behavior="action.jump", destination=(3, 1), watcher_positions=((4, 3), (2, 3)))
+    before, lineage = captured.before, captured.lineages[0]
     assert isinstance(lineage.root, JumpEvent)
     native = tuple(event for event in lineage.events if isinstance(event, AttackEvent))
     assert len(native) == 2
@@ -208,7 +211,8 @@ def test_multiple_native_opportunity_attacks_join_on_the_ground_before_one_jump(
 def test_jump_draws_one_complete_clip_over_its_airtime_and_lands_without_a_camera_snap(
     data: AnimationData, battlefield: str, route: tuple[tuple[int, int], ...],
 ) -> None:
-    before, roots = movement_history(route=route, battlefield_id=battlefield, behavior="action.jump")
+    captured = movement_history(route=route, battlefield_id=battlefield, behavior="action.jump")
+    before, roots = captured.before, captured.lineages
     lineage, = roots
     after = reduce_lineage(before, lineage)
     motion = bind_motion(before, lineage, data)

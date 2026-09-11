@@ -34,6 +34,10 @@ class EquipmentEvent(Event):
     name: str = Field(default="Equipment Event", description="An equipment event")
     slot: EquipmentSlot = Field(description="The slot being affected")
     item_uuid: UUID = Field(description="UUID of the item being transitioned")
+    active_weapon_set_after: Optional[WeaponSet] = Field(
+        default=None,
+        description="Exact owner stance after the accepted equipment completion.",
+    )
 
 
 class WeaponEquipEvent(EquipmentEvent):
@@ -1122,6 +1126,7 @@ class Equipment(BaseBlock):
                     EventPhase.COMPLETION,
                     status_message="Destroyed item equipment state completed",
                     use_register=True,
+                    active_weapon_set_after=self.active_weapon_set,
                 )
                 return
 
@@ -1625,8 +1630,12 @@ class Equipment(BaseBlock):
         self._commit_equipped_item(item, selected_slot)
 
         for transition in published_unequips:
-            transition.execution.phase_to(EventPhase.EFFECT).phase_to(EventPhase.COMPLETION)
-        published_equip.execution.phase_to(EventPhase.EFFECT).phase_to(EventPhase.COMPLETION)
+            transition.execution.phase_to(EventPhase.EFFECT).phase_to(
+                EventPhase.COMPLETION, active_weapon_set_after=self.active_weapon_set,
+            )
+        published_equip.execution.phase_to(EventPhase.EFFECT).phase_to(
+            EventPhase.COMPLETION, active_weapon_set_after=self.active_weapon_set,
+        )
         return EquipmentEquipResult(
             succeeded=True,
             selected_slot=selected_slot,
@@ -1680,7 +1689,9 @@ class Equipment(BaseBlock):
         if isinstance(slot, WeaponSlot):
             self._reconcile_active_weapon_set(preferred_slot=slot)
 
-        published.execution.phase_to(EventPhase.EFFECT).phase_to(EventPhase.COMPLETION)
+        published.execution.phase_to(EventPhase.EFFECT).phase_to(
+            EventPhase.COMPLETION, active_weapon_set_after=self.active_weapon_set,
+        )
         return current_item
 
     def group_equippable_items(

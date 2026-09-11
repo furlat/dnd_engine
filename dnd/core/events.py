@@ -70,7 +70,7 @@ from dnd.types.spatial_effects import (
     SpatialEffectInteractionOperation,
     SpatialEffectLayer,
 )
-from dnd.core.equipment_types import WeaponSlot
+from dnd.core.equipment_types import WeaponSet, WeaponSlot
 from dnd.core.item_types import ItemPresentationState
 from dnd.types.materials import TileSurface
 from dnd.types.abilities import AbilityName, SavingThrowName, SkillName
@@ -105,7 +105,7 @@ import logging
 import time
 
 from dnd.action_timing import action_timing_enabled, record_action_timing
-from dnd.core.base_object import BaseObject
+from dnd.core.base_object import BaseObject, PASSIVE_EVENT_REPLAY
 
 logger = logging.getLogger(__name__)
 
@@ -480,6 +480,8 @@ class Event(BaseModel):
         }
 
     def model_post_init(self, __context: Any) -> None:
+        if __context is PASSIVE_EVENT_REPLAY:
+            return
         if self.turn_execution_id is None:
             parent = (
                 EventQueue.get_event_by_uuid(self.parent_event)
@@ -1021,6 +1023,7 @@ class EntityCreatedEvent(Event):
     items: Tuple[ItemPresentationState, ...] = ()
     inventory_item_uuids: Tuple[UUID, ...] = ()
     equipment: Tuple[Tuple[str, UUID], ...] = ()
+    active_weapon_set: WeaponSet
 
 
 class _EntityLevelFact(Event):
@@ -3267,12 +3270,11 @@ class SensesUpdateHint(BaseModel):
 
 
 class SensoryUpdateEvent(Event):
-    """Observer-specific sensory state delta.
+    """Observer-specific initial sensory state or subsequent delta.
 
-    This event records the backend-authoritative change to one observer's
-    visibility/fog/entity/object perception. It is emitted before the causative
-    parent completes, so clients can animate perception changes from the event
-    tree without recomputing FOV or polling snapshots for timing.
+    Causal updates are emitted before their parent completes. An independent
+    explicit refresh has no causal parent. Both carry backend-authoritative
+    perception, so consumers need neither FOV recomputation nor a live seed.
     """
     name: str = Field(default="Sensory Update", description="Observer sensory state changed.")
     event_type: EventType = Field(
@@ -3280,6 +3282,10 @@ class SensoryUpdateEvent(Event):
         description="Event category for observer-specific sensory deltas.",
     )
     observer_uuid: UUID = Field(description="Observer whose sensory state changed.")
+    initial: bool = Field(
+        default=False,
+        description="First complete published sensory state for this observer.",
+    )
     observer_position: Tuple[int, int] = Field(
         default=(0, 0),
         description="Observer grid position after the sensory update.",
@@ -3294,7 +3300,10 @@ class SensoryUpdateEvent(Event):
             "Changed backend-resolved subjective light after-values, keyed as 'x,y'."
         ),
     )
-    cause_event_uuid: UUID = Field(description="Event UUID that caused this sensory update.")
+    cause_event_uuid: Optional[UUID] = Field(
+        default=None,
+        description="Actual causal event, or None for an independent explicit refresh.",
+    )
     update_reason: SensoryUpdateReason = Field(
         default=SensoryUpdateReason.UNKNOWN,
         description="Reason category used by clients to interpret the delta.",
@@ -3355,6 +3364,23 @@ class SensoryUpdateEvent(Event):
         default=False,
         description="Whether the observer should refresh cached path data.",
     )
+
+    @model_validator(mode="after")
+    def validate_initial_state(self) -> "SensoryUpdateEvent":
+        """An initial fact supplies every scalar needed without a live seed."""
+        if self.initial and not (
+            "observer_position" in self.model_fields_set
+            and self.observer_position_changed
+            and self.sense_modes_changed and self.sense_modes is not None
+            and self.passive_perception_changed and self.passive_perception is not None
+            and self.visual_access_changed and self.visual_access is not None
+        ):
+            raise ValueError("initial sensory update requires complete position and capability after-values")
+        if self.cause_event_uuid is None and (
+            self.parent_event is not None or self.parent_lineage is not None
+        ):
+            raise ValueError("independent sensory refresh cannot have a causal parent")
+        return self
 
     def validate_replay_payload(self) -> None:
         """Reject runtime owners and callables from sensory after-values."""

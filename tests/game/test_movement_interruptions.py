@@ -56,7 +56,8 @@ def test_real_opportunity_rider_joins_before_the_step_commits_or_stops(
     data: AnimationData, movement_behavior: str, seed: int, maximum_hp: int, outcome: AttackOutcome,
     saved: bool | None, termination: MovementTerminationReason, hp: int, life: LifeState,
 ) -> None:
-    before, lineage = movement_with_paralysis(seed, maximum_hp, movement_behavior=movement_behavior)
+    captured = movement_with_paralysis(seed, maximum_hp, movement_behavior=movement_behavior)
+    before, lineage = captured.before, captured.lineages[0]
     # The public helper has reset the entire engine. Everything below replays
     # retained facts and authored data, including the condition identities.
     root = lineage.root
@@ -169,7 +170,8 @@ def test_real_opportunity_rider_joins_before_the_step_commits_or_stops(
 
 
 def test_authored_condition_transition_holds_the_real_reaction_beyond_its_attack(data: AnimationData) -> None:
-    before, lineage = movement_with_paralysis(0, movement_behavior="action.jump")
+    captured = movement_with_paralysis(0, movement_behavior="action.jump")
+    before, lineage = captured.before, captured.lineages[0]
     original = bind_motion(before, lineage, data)
     assert original is not None
     recipe = data.condition_recipes["condition.paralyzed"]

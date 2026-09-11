@@ -61,7 +61,7 @@ def sample_playback_frame(
     group_elapsed = elapsed_ms
     movement_sample = None
     if motion is not None:
-        mover = next(actor for actor in scene_actors(before, data, facings)
+        mover = next(actor for actor in scene_actors(motion.before, data, facings)
                      if actor.contact.actor_uuid == motion.actor.actor_uuid)
         clips = available_clips(mover, data)
         movement_sample = sample_motion(motion, data, elapsed_ms,

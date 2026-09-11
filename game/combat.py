@@ -9,6 +9,8 @@ from uuid import UUID
 
 from dnd.actions import AttackEvent, SpellEvent
 from dnd.blocks.base_item import ItemLocationStateEvent
+from dnd.blocks.equipment import EquipmentEvent
+from dnd.core.equipment_types import WeaponSet
 from dnd.core.events import DamageAppliedEvent, Event, LifeStateChangeEvent
 from dnd.core.life_types import LifeState
 from game.animation import (
@@ -171,17 +173,27 @@ def bind_equipment(
     facings: Mapping[str, Facing8],
     *, contacts: Mapping[str, ActorContact] | None = None,
 ) -> BoundEquipment | None:
-    """Animate an actual visible item replacement, retaining its old layers.
+    """Bind visible stance or item changes to the original equipment gesture.
 
-    The original frame machinery staged a loadout patch alongside one gesture.
-    Here the committed fact that changes visible layers owns that gesture;
-    the other independent equipment roots still reduce without animation.
+    Equipment completions supply the accepted stance; item-location facts
+    supply membership. A fact that leaves visible layers unchanged adds no
+    gesture. Sampling commits stance at the authored frame and items at the end.
     """
     root = lineage.root
-    if not isinstance(root, ItemLocationStateEvent) or root.owner_uuid is None:
-        raise ValueError("equipment binding requires an owned item-location root")
+    if isinstance(root, EquipmentEvent):
+        # NeuroClient mapEquipment emits no SwitchWeapon intent for NONE;
+        # that loadout change settles through the ordinary state reduction.
+        if root.active_weapon_set_after is WeaponSet.NONE:
+            return None
+        owner = root.source_entity_uuid
+    elif isinstance(root, ItemLocationStateEvent):
+        owner = root.owner_uuid
+    else:
+        raise ValueError("equipment binding requires an equipment or item-location root")
+    if owner is None:
+        raise ValueError("equipment binding requires its retained actor owner")
     after = reduce_lineage(target, lineage)
-    actor = target.actors[root.owner_uuid]
+    actor = target.actors[owner]
     contact = actor_contact(target, actor, data, facings.get(str(actor.uuid), "S"))
     placed = (contacts or {}).get(contact.actor_uuid)
     if placed is not None:
@@ -198,8 +210,6 @@ def bind_equipment(
     )
     if replacement == previous:
         return None
-    if successor.active_weapon_set != actor.active_weapon_set:
-        raise NotImplementedError("this binding consumes item replacement within the same active set")
     actor_contacts = dict(contacts) if contacts is not None else {
         str(row.uuid): actor_contact(target, row, data, facings.get(str(row.uuid), "S"))
         for row in target.actors.values()

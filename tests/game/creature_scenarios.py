@@ -9,7 +9,6 @@ from uuid import uuid4
 
 from dnd.actions import AttackEvent, MovementEvent
 from dnd.actions_functional import execute_by_index, get_available_actions
-from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.content.characters.premades import FIGHTER_PREMADE_ID, create_premade_character
 from dnd.content_system.creature_materialization import materialize_creature
 from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
@@ -17,7 +16,7 @@ from dnd.controller import HumanController
 from dnd.core.content.materialization import CreatureDeploymentRole, CreaturePossessionMode
 from dnd.core.content.recipes import ContentRecipe
 from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import EntityCreatedEvent, EventPhase, EventQueue
+from dnd.core.events import EventPhase, EventQueue
 from dnd.core.life_types import LifeState
 from dnd.encounter import Encounter
 from dnd.entity import Entity
@@ -26,14 +25,16 @@ from dnd.reactions import add_opportunity_attack_handler
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
 from game.presentation import (
-    CompletedLineage, PresentationTarget, capture_interval, capture_lineage,
-    reduce_interval, reduce_lineage, seed_actors,
+    CompletedLineage, capture_interval, capture_lineage,
+    reduce_interval, reduce_lineage,
 )
+
+from game.replay import CapturedHistory, capture_history
 
 
 def creature_history(
     creature_identity: str, *, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN, seed: int = 17,
-) -> tuple[PresentationTarget, tuple[CompletedLineage, ...]]:
+) -> CapturedHistory:
     """Move, make the selected attack, then duel a native Fighter until death.
 
 Every action is discovered afresh and every independent root is captured before
@@ -70,14 +71,9 @@ the next operation. Native rules own rolls, defenses, resources and life state.
         startup = capture_interval(
             name="creature startup", start_cursor=0, end_cursor=cursor,
             observer_uuid=fighter.uuid, battlefield_id=built.definition.battlefield_id,
-            seed_cursor=cursor, seed_snapshot=capture_senses_snapshot(fighter.senses),
         )
         baseline, _ = reduce_interval(None, startup)
-        births = tuple(event for _, event in EventQueue.iter_events_since(0)
-                       if isinstance(event, EntityCreatedEvent) and event.entity_uuid in game.entities)
-        before = seed_actors(baseline, births, active_weapon_sets={
-            actor.uuid: actor.equipment.active_weapon_set for actor in actors
-        })
+        before = baseline
         latest = before
         history: list[CompletedLineage] = []
 
@@ -122,7 +118,7 @@ the next operation. Native rules own rolls, defenses, resources and life state.
                 assert isinstance(event, AttackEvent) and event.phase is EventPhase.COMPLETION
                 retain(start)
                 if target_actor.health.life_state is LifeState.DEAD:
-                    return before, tuple(history)
+                    return capture_history(before, tuple(history))
             start = EventQueue.event_cursor()
             encounter.next_turn()
             retain(start)

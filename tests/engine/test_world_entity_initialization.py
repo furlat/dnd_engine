@@ -521,6 +521,7 @@ def _expected_entity_created_fields(entity: Entity) -> dict[str, object]:
             (item.equipped_slot, item.uuid)
             for item in equipped_items
         ),
+        "active_weapon_set": entity.equipment.active_weapon_set,
     }
 
 
@@ -852,7 +853,7 @@ def test_rich_entity_birth_matches_all_declared_aggregate_fields() -> None:
         if field_name not in Event.model_fields
     )
     assert tuple(expected) == declared_fields
-    assert len(declared_fields) == 65
+    assert len(declared_fields) == 66
     assert expected["applied_class_levels"]
     assert expected["feature_ids"]
     assert expected["handler_ids"]

@@ -33,7 +33,8 @@ def data() -> AnimationData:
 def test_native_heal_changes_hp_at_entry_and_keeps_placed_feedback_after_completion(
     data: AnimationData, dying: bool,
 ) -> None:
-    before, lineage = healing_history(dying=dying)
+    captured = healing_history(dying=dying)
+    before, lineage = captured.before, captured.lineages[0]
     event = lineage.root
     assert isinstance(event, HealEvent) and event.target_entity_uuid is not None
     target = event.target_entity_uuid
@@ -97,7 +98,8 @@ def test_native_heal_changes_hp_at_entry_and_keeps_placed_feedback_after_complet
 
 
 def test_selected_healing_feedback_controls_and_unsupported_body_media_are_explicit(data: AnimationData) -> None:
-    before, lineage = healing_history()
+    captured = healing_history()
+    before, lineage = captured.before, captured.lineages[0]
     quiet = replace(data, healing_context=data.healing_context.model_copy(update={"feedbackEnabled": False}))
     quiet_group = bind_choreography(before, lineage, quiet)
     assert choreography_feedback(quiet_group, quiet, 0) == ()
@@ -126,7 +128,7 @@ def test_selected_healing_feedback_controls_and_unsupported_body_media_are_expli
 
 
 def test_healing_gallery_records_native_entry_and_decorative_tail_in_all_corners(tmp_path: Path) -> None:
-    assert review.main(["--tag", "healing", "--fps", "12", "--width", "640", "--height", "480",
+    assert review.main(["--capture", "--tag", "healing", "--fps", "12", "--width", "640", "--height", "480",
                         "--output", str(tmp_path)]) == 0
     run = tmp_path / "runs" / json.loads((tmp_path / "latest.json").read_text())["run"]
     for case in ("healing-capped", "healing-dying"):

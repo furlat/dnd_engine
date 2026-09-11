@@ -21,7 +21,8 @@ from tests.game.creature_scenarios import creature_history
     ("content.srd_5_1_cc:creature:creature.wolf@1", WeaponSlot.MELEE_MAIN, "smallscale.greywolf"),
 ))
 def test_native_creature_duel_uses_its_packaged_body_and_real_life_state(identity, slot, rig) -> None:
-    before, roots = creature_history(identity, weapon_slot=slot)
+    captured = creature_history(identity, weapon_slot=slot)
+    before, roots = captured.before, captured.lineages
     creature, = (actor for actor in before.actors.values() if actor.uuid != before.observer_uuid)
     assert creature.creature_content_ref == identity
     assert any(isinstance(root.root, MovementEvent) and root.root.source_entity_uuid == creature.uuid for root in roots)

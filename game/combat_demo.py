@@ -16,7 +16,6 @@ from dnd.actions_functional import execute_by_index, get_available_actions, regi
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.appearance import AppearanceConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
-from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.blocks.spellcasting import SpellcastingConfig
 from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.content_system.creature_materialization import materialize_creature
@@ -24,7 +23,7 @@ from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
 from dnd.controller import HumanController
 from dnd.core.content.materialization import CreatureDeploymentRole, CreaturePossessionMode
 from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import EntityCreatedEvent, EventPhase, EventQueue
+from dnd.core.events import EventPhase, EventQueue
 from dnd.encounter import Encounter
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
@@ -34,8 +33,7 @@ from dnd.scenarios.battlefield_catalog import build_battlefield
 from dnd.spells.evocation import FireBolt, MagicMissile
 from dnd.types.senses import SenseMode, SensesType
 from game.presentation import (
-    CompletedLineage, PresentationTarget, capture_interval, capture_lineage,
-    reduce_interval, seed_actors,
+    CompletedLineage, IntervalEnvelope, capture_interval, capture_lineage,
 )
 
 
@@ -48,8 +46,8 @@ def iter_combat_demo(
     goblin_recipient: bool = False,
     replace_weapon: bool = False,
     magic_missile: bool = False,
-) -> Generator[PresentationTarget | CompletedLineage, None, None]:
-    """Yield the baseline and two legal casts, optionally replacing gear between.
+) -> Generator[IntervalEnvelope | CompletedLineage, None, None]:
+    """Yield native initialization and two legal casts, optionally replacing gear between.
 
     Magic Missile allocates A/B/A with damage seeds 0 and 1. The separate
     second_attack_seed selects the Fire Bolt demonstration's attack outcome.
@@ -59,7 +57,6 @@ def iter_combat_demo(
     built = build_battlefield(BATTLEFIELD_ID)
     game = Game()
     actors: list[Entity] = []
-    births: list[EntityCreatedEvent] = []
     replacement_item_uuid: UUID | None = None
     placements = (
         ("Caster", caster_position, "heroes"),
@@ -103,11 +100,9 @@ def iter_combat_demo(
                 shortsword = build_authored_item("weapon.shortsword", actor.uuid)
                 actor.install_initial_items(((dagger, WeaponSlot.MELEE_MAIN), (shortsword, None)))
                 replacement_item_uuid = shortsword.uuid
-        births.append(actor.compose_entity())
+        actor.compose_entity()
         actors.append(actor)
     caster, recipient = actors[:2]
-    seed_cursor = EventQueue.event_cursor()
-    initial_senses = capture_senses_snapshot(caster.senses)
     for actor in actors:
         game.deploy_entity(actor, actor.position)
     Entity.update_all_entities_senses()
@@ -129,13 +124,8 @@ def iter_combat_demo(
         observer_uuid=caster.uuid, battlefield_id=BATTLEFIELD_ID,
         door_uuid=built.object_uuids["door"],
         standing_torch_uuid=built.object_uuids["standing_torch"],
-        seed_cursor=seed_cursor, seed_snapshot=initial_senses,
     )
-    target, _ = reduce_interval(None, startup)
-    yield seed_actors(
-        target, tuple(births),
-        active_weapon_sets={actor.uuid: actor.equipment.active_weapon_set for actor in actors},
-    )
+    yield startup
 
     for cast_number in (1, 2):
         random_state = random.getstate()

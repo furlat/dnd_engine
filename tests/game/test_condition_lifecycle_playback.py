@@ -47,7 +47,8 @@ def body_pixels(frame: PlaybackFrame, identity: str) -> tuple[tuple[int, int], b
 def test_actual_condition_recovery_preserves_pose_through_turns_and_next_motion(
     data: AnimationData, behavior: str, seeds: tuple[int, ...], resume: bool,
 ) -> None:
-    before, lineages = paralysis_lifecycle(repeat_save_seeds=seeds, movement_behavior=behavior, resume=resume)
+    captured = paralysis_lifecycle(repeat_save_seeds=seeds, movement_behavior=behavior, resume=resume)
+    before, lineages = captured.before, captured.lineages
     latest = before
     for lineage in lineages:
         latest = reduce_lineage(latest, lineage)
@@ -135,7 +136,7 @@ def test_actual_condition_recovery_preserves_pose_through_turns_and_next_motion(
 
 
 def test_paused_lifecycle_clip_keeps_applied_membership_while_latest_has_recovered(tmp_path: Path) -> None:
-    assert review.main(["--case", "recovery-paused", "--fps", "12", "--width", "640", "--height", "480",
+    assert review.main(["--capture", "--case", "recovery-paused", "--fps", "12", "--width", "640", "--height", "480",
                         "--output", str(tmp_path)]) == 0
     run = tmp_path / "runs" / json.loads((tmp_path / "latest.json").read_text())["run"]
     trace = json.loads((run / "cases/recovery-paused/trace.json").read_text())

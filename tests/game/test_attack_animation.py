@@ -42,7 +42,8 @@ def test_weapon_facts_choose_authored_profile_and_contact_feedback(
 ) -> None:
     random_state = random.getstate()
     try:
-        before, lineage = attack_history(weapon, seed)
+        captured = attack_history(weapon, seed)
+        before, lineage = captured.before, captured.lineages[0]
         assert isinstance(lineage.root, AttackEvent) and lineage.root.attack_outcome is outcome
         assert lineage.root.target_entity_uuid is not None
         bound = bind_attack(before, lineage, data, facings={str(lineage.root.target_entity_uuid): "NW"})
@@ -81,7 +82,8 @@ def test_weapon_facts_choose_authored_profile_and_contact_feedback(
 def test_real_goblin_opportunity_attack_uses_same_profile_and_preserves_pre_step_contact(data: AnimationData) -> None:
     random_state = random.getstate()
     try:
-        before, lineage = attack_history("weapon.longsword", 17, opportunity=True)
+        captured = attack_history("weapon.longsword", 17, opportunity=True)
+        before, lineage = captured.before, captured.lineages[0]
         assert isinstance(lineage.root, AttackEvent)
         assert lineage.root.behavior_id == "reaction.opportunity_attack"
         assert lineage.root.parent_lineage is not None
@@ -112,8 +114,9 @@ def test_walk_holds_at_the_provoking_edge_and_resumes_only_committed_steps(
 ) -> None:
     random_state = random.getstate()
     try:
-        before, lineage = attack_history("weapon.longsword", 5 if maximum_hp == 4 else 17, opportunity=True,
+        captured = attack_history("weapon.longsword", 5 if maximum_hp == 4 else 17, opportunity=True,
                                   whole_movement=True, destination=destination, maximum_hp=maximum_hp)
+        before, lineage = captured.before, captured.lineages[0]
         timeline = bind_motion(before, lineage, data)
         assert timeline is not None and len(timeline.reactions) == 1
         reaction = timeline.reactions[0]
@@ -165,8 +168,9 @@ def test_walk_holds_at_the_provoking_edge_and_resumes_only_committed_steps(
 def test_real_diagonal_jump_uses_original_planar_distance_clock_and_arc(data: AnimationData) -> None:
     random_state = random.getstate()
     try:
-        before, lineage = attack_history("weapon.longsword", 17, opportunity=True,
+        captured = attack_history("weapon.longsword", 17, opportunity=True,
             whole_movement=True, destination=(4, 4), movement_behavior="action.jump")
+        before, lineage = captured.before, captured.lineages[0]
         assert isinstance(lineage.root, JumpEvent)
         timeline = bind_motion(before, lineage, data)
         assert timeline is not None and not timeline.reactions
@@ -189,8 +193,9 @@ def test_real_diagonal_jump_uses_original_planar_distance_clock_and_arc(data: An
 def test_later_edge_reaction_binds_the_hp_left_by_the_earlier_attack(data: AnimationData) -> None:
     random_state = random.getstate()
     try:
-        before, lineage = attack_history("weapon.longsword", 17, opportunity=True,
+        captured = attack_history("weapon.longsword", 17, opportunity=True,
             whole_movement=True, destination=(0, 3), watcher_positions=((4, 3), (2, 4)))
+        before, lineage = captured.before, captured.lineages[0]
         timeline = bind_motion(before, lineage, data)
         assert timeline is not None and len(timeline.reactions) == 2
         first, second = timeline.reactions
@@ -221,8 +226,9 @@ def test_real_shortbow_uses_original_release_delivery_join_and_retained_loadout(
 ) -> None:
     random_state = random.getstate()
     try:
-        before, lineage = attack_history("weapon.shortbow", seed, weapon_slot=WeaponSlot.RANGED_MAIN,
+        captured = attack_history("weapon.shortbow", seed, weapon_slot=WeaponSlot.RANGED_MAIN,
             goblin_source=goblin_source, watcher_positions=(position,), maximum_hp=maximum_hp)
+        before, lineage = captured.before, captured.lineages[0]
         assert isinstance(lineage.root, AttackEvent) and lineage.root.attack_outcome is outcome
         bound = bind_attack(before, lineage, data)
         assert bound is not None and bound.timeline.projectile is not None

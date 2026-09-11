@@ -17,7 +17,9 @@ from game.animation import (
 from game.animation_types import AnimationData
 from game.choreography import BoundChoreography, bind_choreography, sample_choreography
 from game.combat import actor_contact
-from game.presentation import CompletedLineage, PresentationTarget, lineage_branch, reduce_lineage
+from game.presentation import (
+    CompletedLineage, PresentationTarget, lineage_branch, reduce_lineage, stage_actors, stage_lineage,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,6 +61,7 @@ class MotionTimeline:
     before: PresentationTarget
     settled_lift_px: float = 0
     body_loops: bool = True
+    states: tuple[tuple[float, PresentationTarget], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,7 +99,7 @@ def _bind_jump(target: PresentationTarget, lineage: CompletedLineage, jump: Jump
             group = bind_choreography(working, lineage_branch(lineage, event), data,
                 facings={actor.actor_uuid: facing}, contacts={**contacts, actor.actor_uuid: held})
             source = contacts.get(str(event.source_entity_uuid)) or actor_contact(
-                working, working.actors[event.source_entity_uuid], data)
+                group.after, group.after.actors[event.source_entity_uuid], data)
             reactions.append(MotionReaction(group, held, source, elapsed, elapsed + group.complete_ms,
                                             held.body_lift_px, event.name))
             elapsed += group.complete_ms
@@ -112,7 +115,8 @@ def _bind_jump(target: PresentationTarget, lineage: CompletedLineage, jump: Jump
         settled = replace(settled, grid=launch.grid, elevation_steps=launch.elevation_steps,
                           body_lift_px=launch.body_lift_px)
         return MotionTimeline(launch, (), context.jumpClip, 1, 0, elapsed, tuple(reactions),
-                              settled, target, launch.body_lift_px, body_loops=False)
+                              settled, target, launch.body_lift_px, body_loops=False,
+                              states=((elapsed, working),))
     distance = hypot(jump.end_position[0] - jump.start_position[0],
                      jump.end_position[1] - jump.start_position[1])
     duration = min(context.jumpMaxDurationMs, max(context.jumpMinDurationMs,
@@ -121,7 +125,8 @@ def _bind_jump(target: PresentationTarget, lineage: CompletedLineage, jump: Jump
     leg = MotionLeg(launch.grid, settled.grid, launch.elevation_steps, settled.elevation_steps,
                     elapsed, elapsed + duration, elapsed, arc, initial_lift_px=launch.body_lift_px)
     return MotionTimeline(launch, (leg,), context.jumpClip, 1, arc, elapsed + duration,
-                          tuple(reactions), settled, target, body_loops=False)
+                          tuple(reactions), settled, target, body_loops=False,
+                          states=((elapsed + duration, working),))
 
 
 def bind_motion(target: PresentationTarget, lineage: CompletedLineage,
@@ -134,7 +139,12 @@ def bind_motion(target: PresentationTarget, lineage: CompletedLineage,
                   and event.parent_lineage == lineage.root.lineage_uuid)
     if not steps:
         return None
-    actor = actor_contact(target, target.actors[lineage.root.source_entity_uuid], data)
+    staged = stage_lineage(target, lineage)
+    actor = actor_contact(staged, staged.actors[lineage.root.source_entity_uuid], data)
+    root_versions = {row.event_uuid for row in lineage.objective_rows
+                     if row.lineage_uuid == lineage.root.lineage_uuid}
+    target = stage_actors(target, tuple(admission for admission in lineage.admissions
+                                      if admission.event_uuid in root_versions))
     contacts = contacts or {}
     actor = contacts.get(actor.actor_uuid, actor)
     context = data.movement_context
@@ -145,6 +155,7 @@ def bind_motion(target: PresentationTarget, lineage: CompletedLineage,
     reactions: list[MotionReaction] = []
     elapsed = body_start = 0.0
     working = target
+    states: list[tuple[float, PresentationTarget]] = []
     settled = actor
     settled_lift = 0.0
     for step_index, step in enumerate(steps):
@@ -186,7 +197,7 @@ def bind_motion(target: PresentationTarget, lineage: CompletedLineage,
                 group = bind_choreography(working, lineage_branch(lineage, attack_event), data,
                     facings={actor.actor_uuid: facing}, contacts={**contacts, actor.actor_uuid: held})
                 source = contacts.get(str(attack_event.source_entity_uuid)) or actor_contact(
-                    working, working.actors[attack_event.source_entity_uuid], data)
+                    group.after, group.after.actors[attack_event.source_entity_uuid], data)
                 reactions.append(MotionReaction(group, held, source, elapsed, elapsed + group.complete_ms,
                                                 held.body_lift_px,
                                                 attack_event.name))
@@ -201,6 +212,7 @@ def bind_motion(target: PresentationTarget, lineage: CompletedLineage,
         # Step results update the working retained contact for the next edge.
         # Its attack after-values are idempotent facts, not repeated mechanics.
         working = reduce_lineage(working, branch)
+        states.append((elapsed, working))
         settled = actor_contact(working, working.actors[step.source_entity_uuid], data, facing_for_delta(delta, data))
         if not step.committed:
             # The legal Step stays at its origin. Playback keeps the position
@@ -212,7 +224,8 @@ def bind_motion(target: PresentationTarget, lineage: CompletedLineage,
     if not legs:
         return None
     return MotionTimeline(actor, tuple(legs), context.walkClip, context.walkPlaybackSpeed,
-                          max(leg.arc_height_px for leg in legs), elapsed, tuple(reactions), settled, target, settled_lift)
+                          max(leg.arc_height_px for leg in legs), elapsed, tuple(reactions), settled, target, settled_lift,
+                          states=tuple(states))
 
 
 def sample_motion(timeline: MotionTimeline, data: AnimationData, elapsed_ms: float,
@@ -222,12 +235,18 @@ def sample_motion(timeline: MotionTimeline, data: AnimationData, elapsed_ms: flo
     complete = elapsed_ms >= timeline.complete_ms
     vitals: dict[str, VitalsSample] = {}
     displayed = timeline.before
+    state_ms = -1.0
+    for at, state in timeline.states:
+        if elapsed < at:
+            break
+        displayed, state_ms = state, at
     active: MotionReaction | None = None
     for reaction in timeline.reactions:
         if elapsed < reaction.start_ms:
             break
         sample = sample_choreography(reaction.choreography, elapsed - reaction.start_ms)
-        displayed = sample.displayed
+        if reaction.end_ms > state_ms:
+            displayed = sample.displayed
         vitals.update((value.actor_uuid, value) for value in sample.vitals)
         if elapsed < reaction.end_ms:
             active = reaction

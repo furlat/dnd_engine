@@ -18,7 +18,7 @@ from game.combat_demo import iter_combat_demo
 from game.condition_animation import compile_condition
 from game.feedback import choreography_feedback, motion_feedback, sample_feedback
 from game.motion import bind_motion, sample_motion
-from game.presentation import CompletedLineage, ConditionFact, PresentationTarget
+from game.presentation import CompletedLineage, ConditionFact, PresentationTarget, IntervalEnvelope, reduce_interval
 from tests.game.scenarios import attack_history, movement_with_paralysis
 
 
@@ -64,7 +64,8 @@ def test_dodge_badge_survives_immediate_join_and_seeks_on_the_presentation_clock
 def test_real_attack_uses_number_recipe_duration_or_independent_miss_badge(data: AnimationData, seed: int) -> None:
     random_state = random.getstate()
     try:
-        before, lineage = attack_history("weapon.longsword", seed)
+        captured = attack_history("weapon.longsword", seed)
+        before, lineage = captured.before, captured.lineages[0]
         group = bind_choreography(before, lineage, data)
         complete = group.complete_ms
         tracks = choreography_feedback(group, data, 100)
@@ -88,7 +89,10 @@ def test_real_attack_uses_number_recipe_duration_or_independent_miss_badge(data:
 def test_repeated_cast_feedback_keeps_original_application_identity_and_anchors(data: AnimationData) -> None:
     script = iter_combat_demo(magic_missile=True)
     try:
-        before, lineage = next(script), next(script)
+        initialization = next(script)
+        assert isinstance(initialization, IntervalEnvelope)
+        before, _ = reduce_interval(None, initialization)
+        lineage = next(script)
         assert isinstance(before, PresentationTarget) and isinstance(lineage, CompletedLineage)
         group = bind_choreography(before, lineage, data)
         tracks = choreography_feedback(group, data, 400)
@@ -107,7 +111,8 @@ def test_repeated_cast_feedback_keeps_original_application_identity_and_anchors(
 
 
 def test_reaction_badge_uses_authored_context_without_changing_movement(data: AnimationData) -> None:
-    before, lineage = movement_with_paralysis(17)
+    captured = movement_with_paralysis(17)
+    before, lineage = captured.before, captured.lineages[0]
     motion = bind_motion(before, lineage, data)
     assert motion is not None
     tracks = motion_feedback(motion, data, 400)

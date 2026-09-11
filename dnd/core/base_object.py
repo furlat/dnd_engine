@@ -1,6 +1,11 @@
 from pydantic import BaseModel, Field, ConfigDict
-from typing import Any, ClassVar, Dict, List, Optional
+from typing import Any, ClassVar, Dict, Final, List, Optional
 from uuid import UUID, uuid4
+
+
+# Explicit Pydantic validation context for detached event values and their
+# passive nested records. This does not restore executable engine graphs.
+PASSIVE_EVENT_REPLAY: Final[object] = object()
 
 
 class BaseObject(BaseModel):
@@ -49,7 +54,7 @@ class BaseObject(BaseModel):
 
     def model_post_init(self, __context: Any) -> None:
         """Register the object by UUID when registry participation is enabled."""
-        if self.use_register:
+        if __context is not PASSIVE_EVENT_REPLAY and self.use_register:
             self.__class__._registry[self.uuid] = self
 
     @classmethod

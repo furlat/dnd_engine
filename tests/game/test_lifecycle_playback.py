@@ -24,7 +24,7 @@ from game.combat_demo import iter_combat_demo
 from game.feedback import choreography_feedback, motion_feedback, sample_feedback
 from game.motion import bind_motion, sample_motion
 from game.playback_frame import PlaybackFrame, sample_playback_frame
-from game.presentation import CompletedLineage, PresentationTarget, reduce_lineage
+from game.presentation import CompletedLineage, PresentationTarget, reduce_lineage, IntervalEnvelope, reduce_interval
 from game.projection import Camera
 from game.scene import load_scene_media, scene_actors
 from game.visual_position import VisualPosition
@@ -64,7 +64,8 @@ def test_native_lifecycle_badges_keep_original_text_color_and_decorative_lifetim
     assert data.life_state_context.model_dump(mode="json") == source["lifeState"]
     authored = {row["text"]: row for category in ("deathSave", "lifeState") for row in source[category].values()}
     assert len(authored) == 7
-    before, roots = lifecycle_history(save_seeds=seeds, heal_after=heal_after)
+    captured = lifecycle_history(save_seeds=seeds, heal_after=heal_after)
+    before, roots = captured.before, captured.lineages
     seen: list[str] = []
     longer = replace(data, badge_style=data.badge_style.model_copy(update={"durationMs": 2 * data.badge_style.durationMs}))
     for lineage in roots:
@@ -89,7 +90,8 @@ def test_native_lifecycle_badges_keep_original_text_color_and_decorative_lifetim
 def test_native_death_plays_once_then_corpse_and_revival_preserve_pose_in_four_cameras(
     data: AnimationData, pygame_runtime: None,
 ) -> None:
-    before, roots = lifecycle_history(save_seeds=(1, 0, 31), revive_after=True)
+    captured = lifecycle_history(save_seeds=(1, 0, 31), revive_after=True)
+    before, roots = captured.before, captured.lineages
     target, = (actor.uuid for actor in before.actors.values() if actor.life_state is LifeState.DYING)
     legal = actor_contact(before, before.actors[target], data, "NW")
     identity = legal.actor_uuid
@@ -183,7 +185,9 @@ def test_native_death_plays_once_then_corpse_and_revival_preserve_pose_in_four_c
 def lethal_cast_history() -> tuple[PresentationTarget, CompletedLineage]:
     script = iter_combat_demo(goblin_recipient=True, second_attack_seed=17)
     try:
-        before = next(script)
+        initialization = next(script)
+        assert isinstance(initialization, IntervalEnvelope)
+        before, _ = reduce_interval(None, initialization)
         first, second = next(script), next(script)
         assert isinstance(before, PresentationTarget)
         assert isinstance(first, CompletedLineage) and isinstance(second, CompletedLineage)
@@ -198,7 +202,8 @@ def test_owned_lethal_delivery_keeps_its_original_timing_and_exactly_one_body(
     data: AnimationData, pygame_runtime: None, family: str,
 ) -> None:
     if family == "attack":
-        before, lineage = attack_history("weapon.longsword", 17, opportunity=True, maximum_hp=4)
+        captured = attack_history("weapon.longsword", 17, opportunity=True, maximum_hp=4)
+        before, lineage = captured.before, captured.lineages[0]
         bound = bind_attack(before, lineage, data)
         assert bound is not None
     else:
@@ -231,8 +236,9 @@ def test_owned_lethal_delivery_keeps_its_original_timing_and_exactly_one_body(
 def test_opportunity_downing_keeps_hit_recovery_and_original_dying_child_badge(
     data: AnimationData, pygame_runtime: None,
 ) -> None:
-    before, lineage = attack_history("weapon.longsword", 17, opportunity=True, whole_movement=True,
+    captured = attack_history("weapon.longsword", 17, opportunity=True, whole_movement=True,
                                      maximum_hp=4, uses_death_saves=True)
+    before, lineage = captured.before, captured.lineages[0]
     motion = bind_motion(before, lineage, data)
     assert motion is not None
     reaction, = motion.reactions

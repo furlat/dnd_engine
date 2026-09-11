@@ -16,7 +16,6 @@ from uuid import UUID
 import pygame
 
 from dnd.actions import AttackEvent, JumpEvent, MovementEvent
-from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.core.base_actions import AvailableActionsResult
 from dnd.core.events import EventQueue, StepMovementEvent
 from game.animation_data import load_animation_data
@@ -31,7 +30,7 @@ from game.motion import MotionTimeline, bind_motion
 from game.playback_frame import sample_playback_frame
 from game.presentation import (
     CompletedLineage, PresentationTarget, capture_interval, capture_lineage,
-    reduce_interval, reduce_lineage, seed_actors,
+    reduce_interval, reduce_lineage, stage_lineage,
 )
 from game.projection import Camera, ZOOM_LEVELS
 from game.scene import draw_actor_labels, load_scene_media, scene_actors
@@ -95,12 +94,9 @@ async def _run(
         startup = capture_interval(
             name="encounter startup", start_cursor=0, end_cursor=cursor,
             observer_uuid=observer.uuid, battlefield_id="battlefield.open_floor_bright",
-            seed_cursor=cursor, seed_snapshot=capture_senses_snapshot(observer.senses),
         )
         baseline, _ = reduce_interval(None, startup)
-        latest = historical = seed_actors(baseline, session.births, active_weapon_sets={
-            actor.uuid: actor.equipment.active_weapon_set for actor in session.game.entities.values()
-        })
+        latest = historical = baseline
         data = load_animation_data(rig_files=tuple(sorted((Path(__file__).parent / "data/rigs").glob("*.json"))))
         number_font, badge_font = (pygame.font.SysFont(style.fontFamily, round(style.fontSizePx),
                                                        bold=style.fontWeight == "bold")
@@ -143,7 +139,8 @@ async def _run(
         def receive(operation: Operation) -> None:
             nonlocal latest
             for root in operation.roots:
-                lineage = capture_lineage(root, observer_uuid=observer.uuid)
+                lineage = capture_lineage(root, observer_uuid=observer.uuid,
+                                          known_actor_uuids=frozenset(latest.actors))
                 latest = reduce_lineage(latest, lineage)
                 pending.append(lineage)
                 retained.append(lineage)
@@ -233,6 +230,8 @@ async def _run(
             if active is None and pending and not paused:
                 active = pending.popleft()
                 after = reduce_lineage(historical, active)
+                if active.admissions:
+                    body_media.update(load_scene_media(scene_actors(stage_lineage(historical, active), data, facings), data))
                 choreography = None
                 choreography_media = None
                 contacts = {actor.contact.actor_uuid: actor.contact

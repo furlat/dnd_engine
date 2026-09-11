@@ -29,8 +29,9 @@ def data() -> AnimationData:
 def test_actual_damage_keeps_packet_and_normalized_life_facts_while_seeking(
     data: AnimationData, maximum_hp: int, death_saves: bool, life: LifeState,
 ) -> None:
-    before, lineage = attack_history("weapon.longsword", 17, opportunity=True,
+    captured = attack_history("weapon.longsword", 17, opportunity=True,
         maximum_hp=maximum_hp, uses_death_saves=death_saves)
+    before, lineage = captured.before, captured.lineages[0]
     event, = (row for row in lineage.events if isinstance(row, TakeDamageEvent))
     branch = lineage_branch(lineage, event)
     packet, = (row for row in branch.events if isinstance(row, DamageAppliedEvent))
@@ -73,7 +74,8 @@ def test_actual_damage_keeps_packet_and_normalized_life_facts_while_seeking(
 
 
 def test_source_damage_frames_control_delayed_hp_flash_and_release(data: AnimationData) -> None:
-    before, lineage = attack_history("weapon.longsword", 17, opportunity=True)
+    captured = attack_history("weapon.longsword", 17, opportunity=True)
+    before, lineage = captured.before, captured.lineages[0]
     event, = (row for row in lineage.events if isinstance(row, TakeDamageEvent))
     branch = lineage_branch(lineage, event)
     authored = replace(data, damage_context=data.damage_context.model_copy(update={
@@ -98,10 +100,11 @@ def test_source_damage_frames_control_delayed_hp_flash_and_release(data: Animati
 def test_actual_spike_entries_keep_separate_damage_and_reached_contacts(
     data: AnimationData, target_hp: Literal[4, 40],
 ) -> None:
-    before, roots = forced_movement_history(
+    captured = forced_movement_history(
         source_position=(2, 9), target_position=(2, 10),
         battlefield_id="battlefield.standard_hazards_open", target_hp=target_hp,
     )
+    before, roots = captured.before, captured.lineages
     lineage, = roots
     damages = tuple(row for row in lineage.events if isinstance(row, TakeDamageEvent))
     assert len(damages) == (2 if target_hp == 40 else 1)

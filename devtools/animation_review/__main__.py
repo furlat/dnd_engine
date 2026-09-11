@@ -1,4 +1,4 @@
-"""Generate a fresh review run: python -m devtools.animation_review."""
+"""Render saved gameplay inputs; use --capture to generate them from native rules."""
 
 import argparse
 from datetime import datetime, timezone
@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import shlex
 import shutil
 import subprocess
 import sys
@@ -15,8 +16,9 @@ from uuid import uuid4
 
 from dnd.content_system.bootstrap import bootstrap_content_system
 from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
-from devtools.animation_review.cases import load_cases
+from devtools.animation_review.cases import RecordedInput, ReviewSequence, load_cases, produce
 from devtools.animation_review.record import record_case
+from game.replay import decode_sequence, encode_sequence
 
 
 REPO = Path(__file__).resolve().parents[2]
@@ -41,7 +43,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--case", action="append", default=[], help="Case ID or glob; repeat to select several.")
     parser.add_argument("--tag", action="append", default=[], help="Include cases matching any selected tag.")
-    parser.add_argument("--review", type=Path, help="Rerun the case IDs in an exported review JSON.")
+    parser.add_argument("--capture", action="store_true", help="Generate and replace selected saved inputs, then render their decoded bytes.")
+    parser.add_argument("--review", type=Path, help="Render the recorded inputs embedded in an exported review JSON.")
     parser.add_argument("--list", action="store_true", help="List the catalog without running the engine.")
     parser.add_argument("--output", type=Path, default=Path(".runtime/animation-review"))
     parser.add_argument("--fps", type=int, default=24)
@@ -49,17 +52,28 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--height", type=int, default=640, help="Height of each camera view; video is a 2x2 mosaic.")
     args = parser.parse_args(argv)
     os.chdir(REPO)
-    cases = load_cases()
+    saved: dict[str, RecordedInput] = {}
+    review_origins: dict[str, dict] = {}
     if args.review:
+        if args.capture:
+            parser.error("--review consumes recorded input; use --capture with catalog selection to generate new input")
         review = json.loads(args.review.read_text())
         if review.get("kind") != "dnd-animation-review":
             parser.error("--review must be an exported animation review")
         if not review.get("selections"):
             parser.error("exported review contains no selected cases")
-        args.case.extend(row["case"]["id"] for row in review["selections"])
-        unknown = set(args.case) - {case.id for case in cases}
-        if unknown:
-            parser.error(f"review contains unavailable case IDs: {sorted(unknown)}")
+        for row in review["selections"]:
+            if not row.get("recorded_input"):
+                parser.error("review contains a diagnostic trace without executable recorded input; "
+                             "old traces cannot be faithfully replayed. Capture the scenario explicitly with --capture.")
+            recorded = RecordedInput.model_validate(row["recorded_input"])
+            if recorded.case.id != row["case"]["id"] or recorded.case.id in saved:
+                parser.error("review contains a mismatched or duplicate recorded case")
+            saved[recorded.case.id] = recorded
+            review_origins[recorded.case.id] = {"run": review.get("run"), "review": row.get("review")}
+        cases = tuple(recorded.case for recorded in saved.values())
+    else:
+        cases = load_cases()
     selected = tuple(case for case in cases if
                      (not args.case or any(fnmatch.fnmatchcase(case.id, pattern) for pattern in args.case)) and
                      (not args.tag or set(case.tags) & set(args.tag)))
@@ -69,6 +83,20 @@ def main(argv: list[str] | None = None) -> int:
         for case in selected:
             print(f"{case.id:28} {', '.join(case.tags)}")
         return 0
+    output = args.output.resolve()
+    if not args.capture and not args.review:
+        missing = [case.id for case in selected if not (output / "inputs" / case.id / "input.json").is_file()]
+        if missing:
+            parser.error(f"no saved gameplay input for {', '.join(missing)}; use --capture to generate selected inputs once")
+        for case in selected:
+            path = output / "inputs" / case.id / "input.json"
+            recorded = RecordedInput.model_validate_json(path.read_bytes())
+            if recorded.case.id != case.id:
+                parser.error(f"saved input {path} belongs to a different case")
+            if recorded.case != case:
+                print(f"{case.id}: using its recorded case definition; --capture explicitly replaces it.", flush=True)
+            saved[case.id] = recorded
+        selected = tuple(saved[case.id].case for case in selected)
     if not 1 <= args.fps <= 60 or min(args.width, args.height) < 240 or args.width % 2 or args.height % 2:
         parser.error("fps must be 1..60; even video dimensions must be at least 240")
     ffmpeg = shutil.which("ffmpeg")
@@ -78,7 +106,6 @@ def main(argv: list[str] | None = None) -> int:
     os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
     now = datetime.now(timezone.utc)
     run_id = now.strftime("%Y%m%dT%H%M%SZ") + "-" + uuid4().hex[:6]
-    output = args.output.resolve()
     destination = output / "runs" / run_id
     destination.mkdir(parents=True)
     sources = source_identity()
@@ -86,24 +113,49 @@ def main(argv: list[str] | None = None) -> int:
            **{key: value for key, value in sources.items() if key != "files"},
            "fps": args.fps, "width": args.width * 2, "height": args.height * 2,
            "view_width": args.width, "view_height": args.height, "layout": "four-corners-2x2",
-           "command": f"python -m devtools.animation_review --fps {args.fps} --width {args.width} --height {args.height} "
-                      + " ".join(f"--case {case.id}" for case in selected)}
+           "input_mode": "capture" if args.capture else "review" if args.review else "saved",
+           "command": shlex.join([sys.executable, "-m", "devtools.animation_review",
+                                  *(["--capture"] if args.capture else []),
+                                  *(["--review", str(args.review.resolve())] if args.review else []),
+                                  "--fps", str(args.fps), "--width", str(args.width), "--height", str(args.height),
+                                  "--output", str(output),
+                                  *[arg for case in selected for arg in ("--case", case.id)]])}
     manifest = {"schema_version": 1, "run": run, "cases": []}
     write_json(destination / "sources.json", sources)
     for source, target in (("gallery.html", "index.html"), ("gallery.css", "styles.css"), ("gallery.js", "gallery.js")):
         shutil.copyfile(Path(__file__).with_name(source), destination / target)
-    SERVER_CONTENT_SYSTEM_RUNTIME.install(bootstrap_content_system())
+    if args.capture:
+        SERVER_CONTENT_SYSTEM_RUNTIME.install(bootstrap_content_system())
     for index, case in enumerate(selected):
         print(f"[{index + 1}/{len(selected)}] {case.id}", flush=True)
         relative = Path("cases") / case.id
         folder = destination / relative
         folder.mkdir(parents=True)
         trace = {"schema_version": 1, "run": run, "case": case.model_dump(mode="json"), "sources": sources}
+        if case.id in review_origins:
+            trace["review_origin"] = review_origins[case.id]
         item = {"id": case.id, "title": case.title, "tags": case.tags, "description": case.description,
-                "video": None, "poster": None, "trace": (relative / "trace.json").as_posix(),
+                "video": None, "poster": None, "input": None, "trace": (relative / "trace.json").as_posix(),
                 "duration_ms": 0, "frame_count": 0, "status": "failed", "checks": [], "gaps": []}
         try:
-            item.update(record_case(case, folder, trace, fps=args.fps, size=(args.width, args.height), ffmpeg=ffmpeg))
+            if args.capture:
+                generated = produce(case)
+                recorded = RecordedInput(case=case, captured_at=now.isoformat(), sources=sources,
+                                         sequence=json.loads(encode_sequence(generated.initialization, generated.lineages)))
+                input_path = output / "inputs" / case.id / "input.json"
+                input_path.parent.mkdir(parents=True, exist_ok=True)
+                input_path.write_text(recorded.model_dump_json(), encoding="utf-8")
+                # The first render crosses the same persisted boundary as every
+                # later render. The producer's objects never enter record_case.
+                recorded = RecordedInput.model_validate_json(input_path.read_bytes())
+            else:
+                recorded = saved[case.id]
+            (folder / "input.json").write_text(recorded.model_dump_json(), encoding="utf-8")
+            item["input"] = (relative / "input.json").as_posix()
+            trace["input"] = {"captured_at": recorded.captured_at, "sources": recorded.sources}
+            sequence = ReviewSequence(*decode_sequence(json.dumps(recorded.sequence, separators=(",", ":")).encode("utf-8")))
+            item.update(record_case(case, folder, trace, sequence=sequence, fps=args.fps,
+                                    size=(args.width, args.height), ffmpeg=ffmpeg))
             item.update(video=(relative / "clip.mp4").as_posix(), poster=(relative / "poster.png").as_posix())
         except Exception as error:
             trace["error"] = traceback.format_exc()

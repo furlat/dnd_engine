@@ -42,14 +42,16 @@ def test_original_equipment_body_timing_and_replay(timeline: EquipmentTimeline) 
             timeline.recipe.commitFrame, timeline.recipe.media) == ("Taunt", 3, 4, ())
     assert timeline.complete_ms == pytest.approx(388.8888888889)
     stance_frame_ms = 1000 / 9
+    assert timeline.commit_ms == pytest.approx(stance_frame_ms)
+    assert not sample_equipment(timeline, stance_frame_ms - .001).committed
     stance = sample_equipment(timeline, stance_frame_ms)
     assert stance.body == BodySample("actor", "Taunt", 4, "S")
-    assert not stance.complete
+    assert stance.committed and not stance.complete
     before_end = sample_equipment(timeline, timeline.complete_ms - 0.001)
     assert before_end.body.clip == "Taunt" and not before_end.complete
     complete = sample_equipment(timeline, timeline.complete_ms)
     assert complete.body == BodySample("actor", "Idle", 0, "S")
-    assert complete.complete
+    assert complete.committed and complete.complete
     later = sample_equipment(timeline, timeline.complete_ms + 250)
     assert later.body == BodySample("actor", "Idle", 3, "S") and later.complete
     reset_engine_runtime(grid_size=(2, 2))
@@ -62,7 +64,7 @@ def test_disabled_equipment_body_settles_immediately(data: AnimationData, timeli
     direct = compile_equipment(disabled, timeline.root_event_uuid, timeline.actor)
     assert direct.complete_ms == 0
     sample = sample_equipment(direct, 0)
-    assert sample.complete and sample.body == BodySample("actor", "Idle", 0, "S")
+    assert sample.committed and sample.complete and sample.body == BodySample("actor", "Idle", 0, "S")
 
 
 def test_other_actor_keeps_existing_idle_or_final_death_pose(data: AnimationData) -> None:
@@ -101,7 +103,7 @@ def actor_media(screen, timeline: EquipmentTimeline):
 def _pixels(screen: pygame.Surface, timeline: EquipmentTimeline, body: BodySample,
             layers: tuple[RigLayer, ...], rows: BodyRows, quadrant: int) -> bytes:
     camera = Camera(quadrant=quadrant, zoom=1, viewport=screen.get_size()).with_focus(
-        timeline.actor.grid, elevation_steps=timeline.actor.elevation_steps,
+        timeline.actor.grid, elevation_steps=round(timeline.actor.elevation_steps),
     )
     screen.fill((0, 0, 0))
     for _, image, destination, blend, _ in sorted(actor_draw_commands(

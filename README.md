@@ -25,11 +25,13 @@ saves displayed frames. The gameplay tests submit commands through the same
 boundary and exercise complete rounds while playback is paused.
 
 For the current clip-extraction checkpoint, run
-`python -m devtools.animation_review` and
+`python -m devtools.animation_review --capture` once and
 `python -m devtools.animation_review.serve`, then open
-<http://127.0.0.1:8767/>. Each standardized sequence is captured once from all
-four corners in a synchronized 2×2 video. The gallery supports parallel review,
-frame/time selection, notes and complete debug-trace export. See the
+<http://127.0.0.1:8767/>. Later runs of `python -m devtools.animation_review`
+render the saved event sequences without rerunning mechanics; explicit
+`--capture` replaces their inputs. Each video shows all four corners in a
+synchronized 2×2 view. The gallery supports parallel review, frame/time
+selection, notes and export of the recorded input with its debug trace. See the
 [review workflow](devtools/animation_review/README.md) and its maintained
 [case catalog](devtools/animation_review/catalog.json).
 

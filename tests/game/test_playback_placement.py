@@ -39,10 +39,12 @@ def test_interrupted_pose_survives_completion_and_idle_in_every_camera(
     data: AnimationData, behavior: str, seed: int, maximum_hp: int, later_step: bool,
 ) -> None:
     if later_step:
-        before, lineage = attack_history("weapon.longsword", seed, opportunity=True, whole_movement=True,
+        captured = attack_history("weapon.longsword", seed, opportunity=True, whole_movement=True,
             maximum_hp=maximum_hp, movement_behavior=behavior, destination=(3, 1))
+        before, lineage = captured.before, captured.lineages[0]
     else:
-        before, lineage = movement_with_paralysis(seed, maximum_hp, movement_behavior=behavior)
+        captured = movement_with_paralysis(seed, maximum_hp, movement_behavior=behavior)
+        before, lineage = captured.before, captured.lineages[0]
     after = reduce_lineage(before, lineage)
     motion = bind_motion(before, lineage, data)
     assert motion is not None
@@ -112,7 +114,8 @@ def test_visual_placement_keeps_fresh_facts_and_yields_to_a_real_relocation() ->
 
 @pytest.mark.parametrize("behavior", ["action.move", "action.jump"])
 def test_committed_movement_starts_from_its_existing_visual_pose(data: AnimationData, behavior: str) -> None:
-    before, lineage = movement_with_paralysis(17, movement_behavior=behavior)
+    captured = movement_with_paralysis(17, movement_behavior=behavior)
+    before, lineage = captured.before, captured.lineages[0]
     original = actor_contact(before, before.actors[lineage.root.source_entity_uuid], data)
     prior_pose = placed_contact(original, VisualPosition(original.grid, (2.664, 3), 0, 19))
     normal = bind_motion(before, lineage, data)

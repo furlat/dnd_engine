@@ -1,5 +1,9 @@
 # D&D recovery: plan of action
 
+The [user complaint record](agent_docs/USER_COMPLAINTS.md) preserves the user's
+corrections and required contracts, including record-once event replay. Read it
+alongside this plan; a bounded implementation status does not relax those contracts.
+
 Updated 2026-09-11 after the user's correction: **develop the game, not a
 sequence of spell demonstrations.** Working branch: **codex/recovery-design**,
 based on **codex/july-reconstruction at 16a6bfe**. The human committed the
@@ -23,6 +27,112 @@ is now imported through the original Studio schema, independently of gameplay.
 
 ### Current position — read this before the checkpoint details
 
+**Event-recording correction, September 11 — validated replay checkpoint:** at
+`f6a0a1a`, gallery playback used original Python objects and `--review` reran
+native scenarios. The working tree now decodes saved concrete events and
+replays them without native generation, records active-weapon after-values,
+and admits later actors from their recorded history. Native initial sensory
+facts replace the live snapshot handoff. Version 2 stores initialization events
+and complete lineages; the ordinary reducer derives the starting state from
+those events. The live encounter uses the same initialization path.
+The [source audit](agent_docs/ANIMATION_COMPOSITION_AUDIT.md#event-recording-contract-correction--september-11)
+preserves the original failures and attribution. Full player transmission still
+needs its existing subjectivity boundary; a local archive containing objective
+diagnostics is not that payload. Documentation and status questions accompany
+this active work rather than ending it.
+
+### Active unit — recorded inputs drive the game presentation
+
+**Required behavior:** generate native histories once, save their complete
+presentation inputs, then load those bytes for subsequent reduction, binding,
+rendering and gallery review. Receiving data must neither reconstruct live
+entities nor register/re-execute mechanical events. The existing timeline,
+subjectivity, authored recipes and per-rig mappings keep their meaning.
+
+**Implementation order:**
+
+1. Establish faithful concrete event encoding/decoding through the existing
+   typed schemas and original concrete discriminator principle. Preserve all
+   consumed facts and exact ancestry, projected logs and observer authority.
+   Reuse the existing reducer/sampler; do not introduce another event taxonomy
+   or a generic serializer for executable engine graphs.
+2. Record native active-weapon state at birth and accepted equipment completion.
+   Consume these after-values in presentation and remove startup's live stance
+   handoff. The existing activation/reconciliation logic remains the sole rule.
+3. Make recorded initialization sufficient and connect actor admission from
+   existing composition/state and sensory facts. First discovery must use the
+   actor's state at that point, including changes preceding discovery, and stage
+   the received actor before binding its first visible lineage. Apply existing
+   objective-to-subjective meaning before delivering player data.
+4. Make the gallery load saved sequences. Case generation is an explicit input
+   capture operation; re-recording/reviewing saved input uses no native producer.
+   Keep all four camera views, pinned traces and the shared frame compositor.
+5. Verify serialized inputs in a fresh process, compare every historical
+   successor and representative pixels with the corresponding first recording,
+   and include real discovery and active-set reconciliation histories. Update
+   this plan and the audit with measured outcomes before broader gameplay work.
+
+**Review:** the anti-OOP reviewer checks passive deserialization, typed schema
+reuse, ownership and import direction; the anti-slop reviewer checks native
+after-values, existing subjectivity and completeness of the gameplay cases.
+They review the concrete design before edits to shared contracts, then the
+implementation. Read HOW_TO_TEST before writing tests. Tests must cross actual
+saved bytes rather than reuse the producer's Python objects or merely inspect
+JSON fields. No VFX authoring, new stance rule, second animation queue or old
+server reinstatement is part of this unit.
+
+**Measured progress during this unit:** the broad game run passed 683 tests with
+six existing expected failures; its two remaining failures were old gallery
+callers needing explicit `--capture`, and both passed after that correction.
+The dedicated gallery suite separately passed six tests, including saved-input
+and exported-review replay in a fresh process with native production disabled.
+Native sensory initialization/perception/lifecycle coverage passed 67 tests;
+native equipment coverage passed 51. These focused checks overlap and are not
+an additive total. Changed presentation/review production modules pass Pyright.
+
+Comparison with original native rows caught 14 startup condition headers
+inheriting the capture turn when their original turn was absent. Capture now
+uses the same passive validation path as decoding; the real pre-encounter
+condition regression and adjacent replay tests pass (12 tests). Only those
+14 inputs were recaptured. The other 58 native recordings remain unchanged;
+all recorded turn identities now match their original native versions.
+
+**Final gallery:** [72 cases replayed from saved events](http://127.0.0.1:8767/runs/20260911T175347Z-ca915d/index.html)
+contains 6,561 synchronized four-view frames and 277 completed heads. Every
+video and input file is byte-identical to its corresponding capture, including
+original input provenance. All event arrays, historical successors, timeline
+samples and pixel hashes match. Fourteen initial-state diagnostics differ only
+in `sense_modes_hash`, Python's process-local sensory cache hash; the actual
+sense modes, contacts and capabilities match exactly. Both raw differences and
+the comparison excluding only that field are preserved in the run's
+`inspection/replay-verification.json` and `inspection/replay-comparison.json`.
+Native scenario production and content bootstrap were disabled throughout this
+fresh-process replay; EventQueue/entities stayed empty and the dice registry
+was unchanged. This verifies saved input without rerunning the game. Existing
+terrain/reach exceptions and nine cases' explicit rig-media gaps remain visible;
+the replay result does not claim that every visual is complete. Anti-slop and
+anti-OOP reviews approved the bounded implementation and these stated limits.
+
+Architecture checks passed 46 and exposed three unchanged failures involving
+the old server's `dnd.core.senses` import and the preexisting `EquipmentSlot`
+alias. Full engine-suite collection also encounters unchanged old-server and
+`dnd.content_system.item_bindings` imports. Those failures are not evidence of
+this change, and restoring retired server code is outside the recovery plan.
+
+**Remaining part of this contract:** C03/C04 in the complaint record remain
+partial. Observer movement can discover a previously unseen actor, and an actor
+can be deployed into view with its current recorded equipment and HP. An unseen
+actor moving into view is still rejected by the existing capture gate. The
+original endpoint authority permits state discovery there without revealing
+the hidden origin as an animation. Connect that existing rule within complete
+lineages; do not restore the failed server's per-Step queues. The actual player
+projection must also distinguish controlled inventory from observed visual
+loadouts and keep local objective diagnostics/foreign sensory rows out of the
+delivered packet. These are the next connections before calling this a complete
+client/server-compatible subjective stream. The
+[source study](agent_docs/ANIMATION_COMPOSITION_AUDIT.md#source-study-for-the-remaining-entering-view-connection)
+records the native reproduction and historical implementation differences.
+
 **Previous code checkpoint:** `48abb31` on `codex/recovery-design` completed
 grounded jump reactions and one body traversal across the flight, with a
 58-case gallery. The completed forced-movement unit connects native Shove and
@@ -38,10 +148,10 @@ mean that the full NeuroStudio vocabulary or the full game is implemented.
 
 | Plan area | Current status | Evidence and practical boundary |
 | --- | --- | --- |
-| Existing engine → retained subjective lineages → independent playback | Established for connected event families | Original ancestry/grants, one reducer used for latest/history, one historical queue/head; native work advances while rendering is paused. Backend mechanics remain authoritative. |
-| Playable Pygame encounter | Working bounded encounter | Discovered actions/targets, movement, attacks, player turns, native enemy decisions, resources and encounter completion. One player viewpoint and an initially known actor set. |
+| Existing engine → retained lineages → independent playback | Event initialization and saved replay implemented | Original ancestry/grants, one reducer for latest/history and one historical queue/head. Passive concrete decoding runs without a live engine. Local diagnostics still require separation at the player transmission boundary. |
+| Playable Pygame encounter | Working bounded encounter | Discovered actions/targets, movement, attacks, player turns, native enemy decisions, resources and encounter completion. One player viewpoint; later actor admission is connected for observer movement and deployment. Moving into view remains partial. |
 | Shared authored animation composition | Working, incomplete vocabulary | Original Studio data drives the connected attack/cast/movement/condition/equipment primitives, now including shove contact and forced brace/travel/release. Complete walking reactions interrupt at their edge; jump reactions join at launch before one flight. Authored fields outside those primitives remain explicit limits. |
-| Repeatable visual validation | Implemented | 69 catalog histories, four cameras per clip, selection/pinned-time trace export and actual pixel checks. Game and recorder share the frame compositor. Passing recording checks do not approve every pixel. |
+| Repeatable visual validation | 72 saved-input replays validated | Four cameras per clip, selection/pinned-time trace export, shared frame compositor and actual pixel checks. All 72 videos match their capture bytes. Generation requires explicit `--capture`; default and exported review replay saved initialization events and lineages. |
 | Continuing condition and life histories | Completed prior unit | Native paralysis recovery/persistence, Dodge expiry, capped healing, death saves, stabilization, death/revival and correct retained placement/HP. |
 | Creatures, equipment and movement | Implemented with explicit visual limits | Three exact rig identities; real wardrobe/item replacement; same-turn melee → longbow; turning routes with native Haste/Dash; grounded jump reactions followed by one flight across water/elevation. Rear-view terrace overlap and later-Step launch reach are documented below. |
 | Forced movement | Completed bounded unit | Exact Shove contact, native actual path, original recipient brace/ease/release, reached-cell spatial damage/death and retained corpse placement. Telekinesis's granted displacement uses the same primitive. Stair terrain occlusion remains visible and tagged. |

@@ -4,12 +4,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, TypeAdapter
 
 from dnd.core.equipment_types import WeaponSlot
 from game.combat_demo import iter_combat_demo
-from game.presentation import CompletedLineage, PresentationTarget
+from game.presentation import CompletedLineage, IntervalEnvelope, PresentationTarget, reduce_interval
+from game.replay import CapturedHistory
 from tests.game.creature_scenarios import creature_history
+from tests.game.discovery_scenarios import discovery_history
 from tests.game.equipment_scenarios import equipment_sequence_history
 from tests.game.forced_movement_scenarios import forced_movement_history
 from tests.game.movement_scenarios import movement_history
@@ -89,8 +91,14 @@ class CreatureCase(BaseModel):
 class EquipmentCase(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     kind: Literal["equipment"]
-    replacement: Literal["weapon", "wardrobe"] = "weapon"
+    replacement: Literal["weapon", "wardrobe", "remove-weapon"] = "weapon"
     attacks: bool = True
+
+
+class DiscoveryCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["discovery"]
+    mode: Literal["enter_view", "deploy_later"] = "enter_view"
 
 
 class MovementCase(BaseModel):
@@ -124,7 +132,7 @@ class ReviewCase(BaseModel):
     tags: tuple[str, ...]
     description: str
     scenario: Annotated[AttackCase | ParalysisCase | CastCase | ParalysisLifecycleCase | DodgeExpiryCase | HealingCase | LifecycleCase
-                        | CreatureCase | EquipmentCase | MovementCase | ForcedMovementCase,
+                        | CreatureCase | EquipmentCase | DiscoveryCase | MovementCase | ForcedMovementCase,
                         Field(discriminator="kind")]
     pause_at_ms: float | None = Field(default=None, ge=0)
     pause_duration_ms: float = Field(default=750, gt=0)
@@ -136,6 +144,18 @@ class ReviewSequence:
     lineages: tuple[CompletedLineage, ...]
 
 
+class RecordedInput(BaseModel):
+    """Saved gameplay input plus its capture provenance and review settings."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    schema_version: Literal[1] = 1
+    kind: Literal["dnd-animation-input"] = "dnd-animation-input"
+    case: ReviewCase
+    captured_at: str
+    sources: dict[str, JsonValue]
+    sequence: JsonValue
+
+
 def load_cases(path: Path = Path(__file__).with_name("catalog.json")) -> tuple[ReviewCase, ...]:
     cases = TypeAdapter(tuple[ReviewCase, ...]).validate_json(path.read_text())
     if len({case.id for case in cases}) != len(cases):
@@ -143,59 +163,51 @@ def load_cases(path: Path = Path(__file__).with_name("catalog.json")) -> tuple[R
     return cases
 
 
-def produce(case: ReviewCase) -> ReviewSequence:
+def produce(case: ReviewCase) -> CapturedHistory:
     """Run real rules once, then hand only retained values to the recorder."""
     match case.scenario:
         case ForcedMovementCase() as scenario:
-            before, lineages = forced_movement_history(
+            return forced_movement_history(
                 source_position=scenario.source_position, target_position=scenario.target_position,
                 battlefield_id=scenario.battlefield_id, seed=scenario.seed,
                 blocker_position=scenario.blocker_position, watcher_position=scenario.watcher_position,
                 target_identity=scenario.target_identity, target_hp=scenario.target_hp,
                 mechanism=scenario.mechanism, destination=scenario.destination,
             )
-            return ReviewSequence(before, lineages)
         case CreatureCase() as scenario:
-            before, lineages = creature_history(scenario.creature_identity, weapon_slot=scenario.weapon_slot,
+            return creature_history(scenario.creature_identity, weapon_slot=scenario.weapon_slot,
                                                 seed=scenario.seed)
-            return ReviewSequence(before, lineages)
         case EquipmentCase() as scenario:
-            before, lineages = equipment_sequence_history(replacement=scenario.replacement, attacks=scenario.attacks)
-            return ReviewSequence(before, lineages)
+            return equipment_sequence_history(replacement=scenario.replacement, attacks=scenario.attacks)
+        case DiscoveryCase() as scenario:
+            return discovery_history(mode=scenario.mode)
         case MovementCase() as scenario:
-            before, lineages = movement_history(route=scenario.route, battlefield_id=scenario.battlefield_id,
+            return movement_history(route=scenario.route, battlefield_id=scenario.battlefield_id,
                                                 behavior=scenario.behavior, boost=scenario.boost)
-            return ReviewSequence(before, lineages)
         case AttackCase() as scenario:
-            before, lineage = attack_history(
+            return attack_history(
                 scenario.weapon, scenario.seed, opportunity=scenario.opportunity,
                 whole_movement=scenario.opportunity, destination=scenario.destination,
                 maximum_hp=scenario.maximum_hp, movement_behavior=scenario.movement_behavior,
                 watcher_positions=scenario.watcher_positions, weapon_slot=scenario.weapon_slot,
                 goblin_source=scenario.goblin_source, uses_death_saves=scenario.uses_death_saves,
             )
-            return ReviewSequence(before, (lineage,))
         case ParalysisCase() as scenario:
-            before, lineage = movement_with_paralysis(
+            return movement_with_paralysis(
                 scenario.seed, scenario.maximum_hp, movement_behavior=scenario.movement_behavior,
             )
-            return ReviewSequence(before, (lineage,))
         case ParalysisLifecycleCase() as scenario:
-            before, lineages = paralysis_lifecycle(
+            return paralysis_lifecycle(
                 repeat_save_seeds=scenario.repeat_save_seeds,
                 movement_behavior=scenario.movement_behavior, resume=scenario.resume,
             )
-            return ReviewSequence(before, lineages)
         case DodgeExpiryCase():
-            before, lineages = dodge_expiry_history()
-            return ReviewSequence(before, lineages)
+            return dodge_expiry_history()
         case HealingCase() as scenario:
-            before, lineage = healing_history(dying=scenario.dying)
-            return ReviewSequence(before, (lineage,))
+            return healing_history(dying=scenario.dying)
         case LifecycleCase() as scenario:
-            before, lineages = lifecycle_history(save_seeds=scenario.save_seeds,
+            return lifecycle_history(save_seeds=scenario.save_seeds,
                 heal_after=scenario.heal_after, revive_after=scenario.revive_after)
-            return ReviewSequence(before, lineages)
         case CastCase() as scenario:
             script = iter_combat_demo(
                 caster_position=scenario.caster_position, second_attack_seed=scenario.second_attack_seed,
@@ -203,12 +215,14 @@ def produce(case: ReviewCase) -> ReviewSequence:
                 magic_missile=scenario.magic_missile,
             )
             try:
-                before = next(script)
-                if not isinstance(before, PresentationTarget):
-                    raise ValueError("scenario must begin with its retained baseline")
+                initialization = next(script)
+                if not isinstance(initialization, IntervalEnvelope):
+                    raise ValueError("scenario must begin with its recorded initialization events")
+                before, _ = reduce_interval(None, initialization)
                 roots = tuple(script)
                 if not all(isinstance(root, CompletedLineage) for root in roots):
                     raise ValueError("scenario must yield complete lineages after its baseline")
-                return ReviewSequence(before, tuple(root for root in roots if isinstance(root, CompletedLineage)))
+                return CapturedHistory(initialization, before,
+                                       tuple(root for root in roots if isinstance(root, CompletedLineage)))
             finally:
                 script.close()

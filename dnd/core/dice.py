@@ -20,6 +20,8 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, computed_field, model_validator
 
+from dnd.core.base_object import PASSIVE_EVENT_REPLAY
+
 from dnd.core.values import (
     AdvantageStatus,
     AutoHitStatus,
@@ -162,7 +164,8 @@ class DiceRoll(BaseModel):
     )
 
     def model_post_init(self, __context: Any) -> None:
-        self.__class__._registry[self.roll_uuid] = self
+        if __context is not PASSIVE_EVENT_REPLAY:
+            self.__class__._registry[self.roll_uuid] = self
 
     @classmethod
     def get(cls, uuid: UUID) -> Optional['DiceRoll']:

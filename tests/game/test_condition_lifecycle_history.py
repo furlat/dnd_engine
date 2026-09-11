@@ -45,7 +45,8 @@ def test_native_repeat_saves_remove_exact_owned_conditions_and_restore_movement(
     behavior: str, seeds: tuple[int, ...], resume: bool, expected_saves: tuple[bool, ...],
 ) -> None:
     random_state = random.getstate()
-    before, roots = paralysis_lifecycle(repeat_save_seeds=seeds, movement_behavior=behavior, resume=resume)
+    captured = paralysis_lifecycle(repeat_save_seeds=seeds, movement_behavior=behavior, resume=resume)
+    before, roots = captured.before, captured.lineages
     assert random.getstate() == random_state
     states = replay(before, roots)
     move = roots[0]
@@ -104,7 +105,8 @@ def test_native_repeat_saves_remove_exact_owned_conditions_and_restore_movement(
 
 def test_dodge_survives_the_opposing_action_and_expires_as_its_real_independent_root() -> None:
     random_state = random.getstate()
-    before, roots = dodge_expiry_history()
+    captured = dodge_expiry_history()
+    before, roots = captured.before, captured.lineages
     assert random.getstate() == random_state
     states = replay(before, roots)
     mover = before.current_actor_uuid

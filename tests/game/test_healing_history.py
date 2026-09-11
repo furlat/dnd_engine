@@ -13,7 +13,8 @@ from tests.game.scenarios import healing_history
 @pytest.mark.parametrize("dying", (False, True), ids=("living-capped", "dying-restored"))
 def test_native_healing_retains_actual_cap_and_authoritative_life_transition_after_reset(dying: bool) -> None:
     random_state = random.getstate()
-    before, lineage = healing_history(dying=dying)
+    captured = healing_history(dying=dying)
+    before, lineage = captured.before, captured.lineages[0]
     assert random.getstate() == random_state
     root = lineage.root
     assert isinstance(root, HealEvent) and root.target_entity_uuid is not None

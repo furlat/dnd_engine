@@ -5,6 +5,260 @@ the active recovery plan, not a replacement plan or a mechanics repair backlog.
 It compares the current Python code with the original source at
 `/home/tommaso/Dev/NeuroClient/app`.
 
+## Event recording contract correction — September 11
+
+**Working-tree implementation note:** the audit below describes `f6a0a1a`.
+The repair now preserves concrete passive event values, consumes saved inputs
+in the gallery, records native weapon stance, emits initial sensory events,
+and admits actors from earlier native facts at their actual observation.
+Version 2 stores initialization events and later complete lineages; it derives
+the starting state through the ordinary reducer. All 72 saved-input replays
+passed with identical video/input bytes and matching gameplay state. Use the
+active unit in [RECOVERY_PLAN](../RECOVERY_PLAN.md) for measured checks and the
+explicit process-local diagnostic hash difference.
+
+Two boundaries remain distinct from those implemented checks. The retained local
+archive includes objective diagnostics and foreign sensory records, so it is not
+yet a player transmission payload. Also, a native actor moving from outside the
+view into it is rejected by the existing known-participant capture gate. The
+reproduction uses observer `(0, 3)` and an unseen actor moving `(11, 3)` →
+`(10, 3)` through its discovered action; capture raises the existing identified-
+participant limitation before binding. Observer movement toward an unseen actor
+and later deployment into view are accepted and covered. Do not describe those
+two accepted cases as complete partial-visibility support or loosen subjectivity
+to admit the rejected case.
+
+### Implemented recording boundary
+
+- `game/event_record.py` uses the original concrete `wire_type` principle and
+  existing event schemas. It explicitly retains the projected log, observation
+  grants and effective handler presentation data excluded from native dumps.
+  Missing recorded fields are rejected instead of gaining fresh identities or
+  ambient defaults. The supported set is the retained event families used by
+  this presentation, not arbitrary executable engine object graphs.
+- `PASSIVE_EVENT_REPLAY` is a validation context in the native dependency leaf.
+  Event, action, object and dice construction retain their normal behavior for
+  mechanics; passive validation skips registration and ambient inheritance.
+  This avoids a duplicate generated event model or a runtime class importer.
+- `game/replay.py` records the actual setup interval before the producer closes
+  its runtime. World construction, observer composition, observed actor
+  admissions, initial senses and any real pre-clip actions rebuild the baseline.
+  Neither a materialized `before` value nor a live sensory/equipment handoff is
+  a required replay input. The encounter startup uses the same reducer path.
+- `game/actor_facts.py` shares one after-value fold between recorded history at
+  capture and the presentation reducer. The native equipment owner publishes
+  its selected active set; the client does not repeat reconciliation rules.
+  Actor admission uses current recorded HP/equipment and enters the displayed
+  history at its actual observation, even when latest has advanced further.
+- Equipment gestures preserve NeuroClient's authored commit-frame meaning.
+  Native sword removal selects the surviving bow at that point; same-set item
+  replacements settle membership at the existing completion boundary. Binding
+  and sampling use the same historical head and imported Studio data.
+
+A final fidelity comparison found that header capture still used normal Event
+construction: a pre-encounter condition with no turn acquired the turn active
+during capture. The real `movement_with_paralysis(17)` regression failed before
+the fix and passes with the existing passive validation context. Metadata is
+compared against original native versions, not just against another copy of
+the recording. Fourteen affected inputs were replaced; the other 58 remained
+unchanged. The final run `20260911T175347Z-ca915d` replayed all 72 with native
+production/bootstrap unavailable and empty EventQueue/entities. Its 6,561
+four-view frames and all input/provenance bytes match the corresponding source
+captures. Fourteen raw initial diagnostics differ only in the known
+process-local `sense_modes_hash`; semantic state, timelines and recorded facts
+match without any array-order normalization. Raw and semantic comparison
+reports are retained separately in the run's `inspection` directory.
+
+The sections below preserve the original audit against `f6a0a1a`. Present-tense
+failure descriptions there refer to that checkpoint, not the corrected working
+tree. The remaining entering-view and outgoing-projection section describes
+current limits.
+
+Audit of `f6a0a1a` against recovery base `16a6bfe`, following the user's rejection
+of serialization and later actor discovery as optional future work. The
+[complaint record](USER_COMPLAINTS.md) preserves those requirements separately
+from these findings. This section qualifies earlier references below to retained
+replay and portable trace data. No runtime code was changed during the audit.
+
+### The acceptance contract was bypassed
+
+The user requires native sequences to be generated once and saved, then replayed
+through Python reduction and rendering without rerunning the game. The current
+implementation proves a weaker boundary:
+
+1. `devtools/animation_review/record.py:35` calls `produce(case)` to run the native
+   scenario and obtain Python objects.
+2. It exports those objects through `STATE` and `LINEAGE` TypeAdapters, then
+   continues reducing and rendering the original objects. The export is never
+   read back to provide playback input.
+3. `devtools/animation_review/__main__.py` implements `--review` by extracting
+   selected case IDs and invoking the producers again. It does not replay the
+   selected trace.
+4. `tests/game/test_animation_review.py` checks the produced videos and JSON
+   evidence. The retained-history tests reset the engine while keeping the
+   original Python values. Neither establishes disk-to-reducer equivalence.
+
+This is a missing required path in the recovery implementation. A successful
+gallery run cannot certify it. The exporter and its tests first appear in
+`58b0946`; later gameplay coverage continued using that same boundary.
+
+### Actual failures and their attribution
+
+| Finding | Source and attribution |
+| --- | --- |
+| Baseline JSON does not decode through its declared adapter | `PresentationTarget` contains coordinate-keyed indexes. Their JSON keys become strings, while the adapter expects tuples. These indexes are a read model, not a verified event archive. |
+| Lineage decoding loses concrete event fields | `CompletedLineage.root` and `.events` are annotated with base `Event`. Exporting with `serialize_as_any=True` writes subclass fields; validating that JSON through the same declared adapter reconstructs base Events. There is no concrete decoder in this new path. |
+| Turn identity and projected logs disappear | The in-memory reducer consumes retained identity grants; the encounter UI consumes retained projected logs. Native fields are marked `exclude=True`, so this exporter drops them. Those exclusions predate `16a6bfe`; the new consumer/exporter combination failed to preserve the information it needs. |
+| Reading the world event can register it | Startup keeps the native world's `use_register=True`. Native Event construction registers unless opted out. The default and constructor behavior predate recovery; using native construction as passive archive ingestion is the new boundary mistake. |
+| Later actor admission is absent | `seed_actors` initializes a chosen startup roster. `reduce_lineage` updates existing actors but has no birth/discovery admission path. `scene_actors` can only draw those indexed actors. The user rejects this as a sufficient game design. |
+| Active weapon state is partly handed over separately | Native `Equipment.active_weapon_set` and its activation/reconciliation logic already exist. Startup passes a live map of those values to `seed_actors`; attacks update the retained set from their slot. General recorded initial/transition coverage is unfinished. |
+
+The weapon gap was reproduced through public mechanics: an actor equipped with
+a shortsword in MELEE_MAIN and a longbow in RANGED_MAIN starts in MELEE. After
+`actor.unequip_item(MELEE_MAIN)`, native equipment correctly selects RANGED.
+The resulting WeaponUnequipEvent and ItemLocationStateEvent remove the sword
+from the retained equipment, but the retained active set remains MELEE.
+`EntityCreatedEvent` lacks the initial active set, and the equipment/location
+events lack its reconciliation after-value, already at `16a6bfe`. Recording the
+existing owner's result is required; the client must not reproduce that rule.
+
+The diff of `dnd/core/events.py` from `16a6bfe` changes Event inheritance from
+BaseObject to BaseModel, preserves the inherited fields/defaults, removes
+duplicate BaseObject registration, and keeps sensory validation rejecting
+runtime Events. It does **not** introduce the grant/log serialization exclusions
+or remove active weapon state. `dnd/actions.py`, `dnd/blocks/equipment.py`,
+`dnd/core/base_conditions.py`, `dnd/blocks/base_item.py`, `dnd/core/item_types.py`
+and `dnd/entity.py` have no diff from that baseline. This attributes the observed
+losses; it does not certify every native event for arbitrary object archival.
+
+### Existing source meaning to preserve
+
+`server/event_contract.py:44` already defines a concrete `wire_type` boundary;
+`server/timeline_contracts.py:178` receives those values as passive `WireEvent`
+records without constructing mechanical Events. Objective replay stores those
+concrete inputs. Subjective replay stores the exact delivered observer bootstrap
+and updates. These are established source designs, not code newly invented by
+this audit. Their generated event schema already drifted before `16a6bfe`, so
+the old server package is not a drop-in current adapter.
+
+The NeuroClient source at `d274f2d` uses those received subjective values with
+independent latest and presentation histories. `stateSync.ts:203` stages newly
+admitted actor summaries and visual loadouts before their first transaction.
+The earlier server's `build_entity_visual_loadout` captures native active weapon
+state, and `diff_subjective_worlds` emits its replacement. These explain why
+recorded client input could supply facts that the new Python path currently
+hands over locally or omits. Preserve their meaning without reinstating the old
+server's orchestration or moving animation authoring into the backend.
+
+Initial sensory capture also predates recovery: `reduce_senses_snapshot` takes
+an existing snapshot, and `tests/engine/test_subjective_combat_log_replay.py:850`
+explicitly retains initial senses before applying the native sensory events.
+`Entity.update_all_entities_senses` can recompute caches without publishing an
+event; `game/session.py:90` calls it. Thus this audit does not establish that
+recovery deleted an already complete event-only initial bootstrap. The archive
+must record the initial observer facts too; replay cannot fetch those values
+again from a live Entity or silently omit the initialization boundary.
+
+Existing subjectivity is not being redesigned. Native event-time grants,
+observer sensory changes and `project_combat_log` remain the authority. A native
+Shove capture contained four sensory updates, two for another observer. The
+current reducer ignores foreign updates, but the local capture still includes
+them and objective diagnostics. That entire debug capture is therefore not the
+player's transmission payload. Completing the integration must apply the
+existing objective-to-subjective meaning at the actual outgoing boundary.
+
+### What the isolated replay experiment did establish
+
+A temporary decoder outside the repository restored coordinate indexes and
+concrete event types and disabled world registration. Fourteen roots across
+Shove/lethal displacement, Fire Bolt and paralysis recovery bound and sampled
+with zero live entities and zero EventQueue entries. Shove/lethal and Fire Bolt
+after-state summaries matched the recordings. Three recovery turn-identity
+summaries differed because the export had lost the observer grants; projected
+combat logs were absent too. The temporary decoder used diagnostic class data
+and is not an implemented archive reader or a proposed production design.
+Scratch reproduction scripts are `/tmp/dnd_transport_audit.py` and
+`/tmp/dnd_transport_old_wire_audit.py`; their findings are retained here because
+temporary files are not durable project evidence. The latter accepted 36
+retained events through the historical wire decoder and rejected 19 for the
+preexisting generated-schema drift. No old server was started.
+
+The animation sampler does not require live mechanics. The recorded-input
+contract remains unsatisfied, and the missing facts/connections must be repaired
+there. Re-running the game is not an acceptable substitute for faithful replay.
+
+### Source study for the remaining entering-view connection
+
+A native actor moving `(11, 3)` → `(10, 3)` with observer `(0, 3)` produces
+valid discovery despite the capture rejection described above. The observer
+does not identify the mover at root EFFECT, does identify it at Step completion,
+has no grant for the origin, and has a destination grant. A causal sensory fact
+adds its visual contact at `(10, 3)`. No mechanics repair is indicated.
+
+July's `server/player_replication/mapper.py::_step_geometry_allowed` requires
+ownership or the same observer in both endpoint grants. The matching later
+server uses the same geometry rule and forms contiguous authorized runs. Thus
+this particular entering edge supplies an actor/state update, without a movement
+animation revealing its hidden origin. NeuroClient's
+`src/render/subjectivePresentationMapper.ts` accepts frames without animation
+cues; `src/engine/eventIngestion.ts` commits their state and positions. Its
+`src/engine/stateSync.ts` stages newly admitted bodies at disclosed entry anchors
+when there is animation. These are connections to reuse, not new subjectivity.
+
+The historical implementations differ: July gates Step identity, while the
+later failed mapper gates frozen root-EFFECT identity and its runtime publishes
+each committed Step as an observable projection boundary. Do not restore those
+Step queues/stores. Our objective remains complete causal lineages and one
+historical head. Multiple visible runs within a partially observed movement
+need a deliberate reconciliation of that source difference; the one entering
+edge does not authorize silently choosing a broader identity rule.
+
+The existing outgoing projection also distinguishes controlled actors' full
+equipment from other observed actors' visual loadouts. The current retained
+`ActorAdmission.actor.items` contains inventory. Together with objective headers,
+world data and foreign sensory rows, this is a concrete reason the local archive
+must not yet be sent as a player packet. The private historical fold provides
+the required source facts; it does not replace that existing outgoing projection.
+
+The current `objective_rows` also supplies a structural index. Choreography's
+`_before_event` needs the first version's source index, not just the terminal
+event order. Reduction, subtree extraction and admission timing need each
+version's `source_index`, `event_uuid` and `lineage_uuid`. Names, status text and
+actor details are diagnostic consumers of that row, not prerequisites for those
+operations. Preserve the required index when keeping diagnostics local. Existing
+Event parent/ordered-child lineage fields already own the causal graph; another
+graph or queue is unnecessary. NeuroClient's graph mapper around2920 and
+Studio's cue builder around855 retain parent/ordered-child presentation IDs and
+separate presentation order from the source-event causal watermark. Do not
+substitute that watermark for Python's version-order index without preserving
+entry state and admission ownership.
+
+For supported map/equipment cases, this study found no missing native input for
+the original structural projection. World initialization records boundary
+geometry and blocking channels; spatial changes record their after-values;
+observer events record visibility, light and capabilities. Structural walls
+are not necessarily ordinary object contacts, so filtering every object by
+contact membership would misapply the original projection. A public door probe
+found an existing reducer omission from `16a6bfe`: opening records empty blocking
+channels, but the retained object updates only placement and `is_open`. Its
+structure remains closed. Current drawing and visibility use the correctly
+updated open flag and sensory events, and no current gameplay failure was
+reproduced. Apply the already-recorded structure when connecting the offline
+structural projection; this is not a missing native mechanic or a prerequisite
+for the current clip replay.
+
+References examined without executing the old server:
+
+- Current `server/player_replication/mapper.py`: Step identity around739,
+  endpoint geometry around2627.
+- `dnd_engine_broken/deprecated/server_deprecated/player_replication/mapper.py`:
+  authorized runs around1734, frozen root identity around1961, endpoint geometry
+  around3964; `runtime.py` observable Step boundary around1305.
+- The same historical `world_projection.py`: perceived identities around245,
+  controlled/visual loadouts around288, world/visibility replacements around398.
+- NeuroClient `subjectivePresentationMapper.ts` around445,
+  `eventIngestion.ts` around415 and `stateSync.ts` around326.
+
 ## Forced movement — September 11
 
 The human requested this shared capability after the jump correction at

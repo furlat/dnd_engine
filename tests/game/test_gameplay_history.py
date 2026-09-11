@@ -96,12 +96,9 @@ def test_flat_encounter_retains_movement_oa_melee_conditions_and_turns() -> None
         startup = capture_interval(
             name="flat startup", start_cursor=0, end_cursor=cursor,
             observer_uuid=hero.uuid, battlefield_id=built.definition.battlefield_id,
-            seed_cursor=cursor, seed_snapshot=capture_senses_snapshot(hero.senses),
         )
         baseline, _ = reduce_interval(None, startup)
-        seed = seed_actors(baseline, (hero_birth, goblin_birth), active_weapon_sets={
-            hero.uuid: hero.equipment.active_weapon_set, goblin.uuid: goblin.equipment.active_weapon_set,
-        })
+        seed = seed_actors(baseline, (hero_birth, goblin_birth))
         assert seed.world is not None and seed.tiles and seed.door_uuid is None
         assert seed.current_actor_uuid == hero.uuid and seed.round_number == encounter.round_number
         assert seed.senses is not None and seed.senses.position == (3, 3)
@@ -202,12 +199,9 @@ def test_premade_torch_movement_preserves_tile_light_causes_and_subjective_state
         startup = capture_interval(
             name="premade startup", start_cursor=0, end_cursor=cursor,
             observer_uuid=observer.uuid, battlefield_id=session.battlefield.definition.battlefield_id,
-            seed_cursor=cursor, seed_snapshot=capture_senses_snapshot(observer.senses),
         )
         seed, _ = reduce_interval(None, startup)
-        latest = seed_actors(seed, session.births, active_weapon_sets={
-            actor.uuid: actor.equipment.active_weapon_set for actor in session.game.entities.values()
-        })
+        latest = seed_actors(seed, session.births)
         while True:
             operation = advance_controller(session)
             for root in operation.roots:
@@ -262,12 +256,9 @@ def test_native_turn_after_lethal_oa_preserves_metadata_without_redisclosing_act
         startup = capture_interval(
             name="native round startup", start_cursor=0, end_cursor=cursor,
             observer_uuid=observer.uuid, battlefield_id=session.battlefield.definition.battlefield_id,
-            seed_cursor=cursor, seed_snapshot=capture_senses_snapshot(observer.senses),
         )
         baseline, _ = reduce_interval(None, startup)
-        seed = seed_actors(baseline, session.births, active_weapon_sets={
-            actor.uuid: actor.equipment.active_weapon_set for actor in session.game.entities.values()
-        })
+        seed = seed_actors(baseline, session.births)
         latest = seed
 
         def receive(operation: Operation) -> None:
@@ -371,12 +362,9 @@ def test_witnessed_reaction_survives_moving_observers_death_without_new_location
         startup = capture_interval(
             name="observer startup", start_cursor=0, end_cursor=cursor,
             observer_uuid=hero.uuid, battlefield_id=built.definition.battlefield_id,
-            seed_cursor=cursor, seed_snapshot=capture_senses_snapshot(hero.senses),
         )
         baseline, _ = reduce_interval(None, startup)
-        seed = seed_actors(baseline, (hero_birth, goblin_birth), active_weapon_sets={
-            hero.uuid: hero.equipment.active_weapon_set, goblin.uuid: goblin.equipment.active_weapon_set,
-        })
+        seed = seed_actors(baseline, (hero_birth, goblin_birth))
         random.seed(5)
         root = _action(hero, "action.move", (2, 3))
         attack_versions = [event for _, event in EventQueue.iter_events_since(cursor)

@@ -10,7 +10,6 @@ from uuid import UUID, uuid4
 import pygame
 
 from dnd.blocks.base_item import ItemLocationStateEvent
-from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.core.events import (
     Event,
     EventPhase,
@@ -1165,8 +1164,6 @@ def _iter_demo_intervals() -> Iterator[IntervalEnvelope]:
     if len(standing_torch.get_attached_light_sources()) != 1:
         raise RuntimeError("standing fixture must own one active light")
 
-    seed_cursor = EventQueue.event_cursor()
-    seed = capture_senses_snapshot(observer.senses)
     game = Game()
     game.deploy_entity(observer, built.notable_positions["observer"])
     startup_end = EventQueue.event_cursor()
@@ -1175,8 +1172,6 @@ def _iter_demo_intervals() -> Iterator[IntervalEnvelope]:
         start_cursor=startup_start,
         end_cursor=startup_end,
         observer_uuid=observer.uuid,
-        seed_cursor=seed_cursor,
-        seed_snapshot=seed,
         battlefield_id=BATTLEFIELD_ID,
         door_uuid=door.uuid,
         standing_torch_uuid=standing_torch.uuid,
@@ -1199,7 +1194,6 @@ def _iter_demo_intervals() -> Iterator[IntervalEnvelope]:
         start_cursor=open_start,
         end_cursor=open_end,
         observer_uuid=observer.uuid,
-        seed_cursor=seed_cursor,
         battlefield_id=BATTLEFIELD_ID,
         door_uuid=door.uuid,
         standing_torch_uuid=standing_torch.uuid,
@@ -1222,7 +1216,6 @@ def _iter_demo_intervals() -> Iterator[IntervalEnvelope]:
         start_cursor=close_start,
         end_cursor=close_end,
         observer_uuid=observer.uuid,
-        seed_cursor=seed_cursor,
         battlefield_id=BATTLEFIELD_ID,
         door_uuid=door.uuid,
         standing_torch_uuid=standing_torch.uuid,

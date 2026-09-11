@@ -29,7 +29,8 @@ def test_native_turn_saves_and_recovery_preserve_life_hp_and_complete_ancestry(
     save_results: tuple[tuple[int, int, int], ...], final_state: LifeState, final_hp: int,
 ) -> None:
     random_state = random.getstate()
-    before, roots = lifecycle_history(save_seeds=seeds, heal_after=heal_after, revive_after=revive_after)
+    captured = lifecycle_history(save_seeds=seeds, heal_after=heal_after, revive_after=revive_after)
+    before, roots = captured.before, captured.lineages
     assert random.getstate() == random_state
     target, = (actor.uuid for actor in before.actors.values() if actor.life_state is LifeState.DYING)
     assert target != before.observer_uuid and before.current_actor_uuid == before.observer_uuid
@@ -120,10 +121,11 @@ def test_native_turn_saves_and_recovery_preserve_life_hp_and_complete_ancestry(
 
 def test_native_opportunity_damage_downs_player_without_committing_the_interrupted_step() -> None:
     random_state = random.getstate()
-    before, lineage = attack_history(
+    captured = attack_history(
         "weapon.longsword", 17, opportunity=True, whole_movement=True,
         maximum_hp=4, uses_death_saves=True,
     )
+    before, lineage = captured.before, captured.lineages[0]
     assert random.getstate() == random_state and EventQueue.get_event_by_uuid(lineage.root.uuid) is None
     assert isinstance(lineage.root, MovementEvent) and lineage.dispositions == ()
     mover = lineage.root.source_entity_uuid

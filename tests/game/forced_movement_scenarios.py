@@ -10,7 +10,6 @@ from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.appearance import AppearanceConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
-from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.content_system.creature_materialization import materialize_creature
 from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
@@ -30,9 +29,11 @@ from dnd.scenarios.battlefield_catalog import build_battlefield
 from dnd.spells.transmutation import Telekinesis
 from dnd.types.senses import SenseMode, SensesType
 from game.presentation import (
-    CompletedLineage, PresentationTarget, capture_interval, capture_lineage,
-    reduce_interval, reduce_lineage, seed_actors,
+    CompletedLineage, capture_interval, capture_lineage,
+    reduce_interval, reduce_lineage,
 )
+
+from game.replay import CapturedHistory, capture_history
 
 
 def _modular_actor(name: str, position: tuple[int, int], *, source: bool = False, hp: int = 40) -> Entity:
@@ -60,7 +61,7 @@ def forced_movement_history(
     blocker_position: tuple[int, int] | None = None, watcher_position: tuple[int, int] | None = None,
     target_identity: str | None = None, target_hp: Literal[4, 40] = 40,
     mechanism: Literal["shove", "telekinesis"] = "shove", destination: tuple[int, int] | None = None,
-) -> tuple[PresentationTarget, tuple[CompletedLineage, ...]]:
+) -> CapturedHistory:
     """Execute a Shove or an earned Telekinesis Move through action discovery.
 
     For Telekinesis, the actual cast/grab establishes the returned baseline;
@@ -101,7 +102,8 @@ def forced_movement_history(
         if mechanism == "telekinesis":
             assert destination is not None
             register_spell(source, Telekinesis)
-        births = tuple(actor.compose_entity() for actor in actors)
+        for actor in actors:
+            actor.compose_entity()
         for actor in actors:
             if built.definition.light_level == "darkness":
                 actor.senses.add_sense_mode_source(actor.uuid,
@@ -118,11 +120,9 @@ def forced_movement_history(
             encounter.next_turn()
         cursor = EventQueue.event_cursor()
         startup = capture_interval(name="forced movement startup", start_cursor=0, end_cursor=cursor,
-            observer_uuid=source.uuid, battlefield_id=battlefield_id, seed_cursor=cursor,
-            seed_snapshot=capture_senses_snapshot(source.senses))
+            observer_uuid=source.uuid, battlefield_id=battlefield_id,)
         baseline, _ = reduce_interval(None, startup)
-        latest = seed_actors(baseline, births,
-            active_weapon_sets={actor.uuid: actor.equipment.active_weapon_set for actor in actors})
+        latest = baseline
         history: list[CompletedLineage] = []
 
         def retain(start: int) -> None:
@@ -184,7 +184,7 @@ def forced_movement_history(
             assert forced[-1].end_position == target.position
         if isinstance(result, ShoveEvent):
             assert result.end_position == target.position or (result.contest_success is False and target.position == target_position)
-        return before, tuple(history)
+        return capture_history(before, tuple(history))
     finally:
         game.close()
         reset_engine_runtime()

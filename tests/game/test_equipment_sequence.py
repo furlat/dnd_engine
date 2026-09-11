@@ -8,8 +8,8 @@ import pytest
 
 from dnd.actions import AttackEvent
 from dnd.blocks.base_item import ItemLocationStateEvent
-from dnd.blocks.equipment import ArmorEquipEvent, ArmorUnequipEvent, EquipmentEvent
-from dnd.core.equipment_types import WeaponSet
+from dnd.blocks.equipment import ArmorEquipEvent, ArmorUnequipEvent, EquipmentEvent, WeaponUnequipEvent
+from dnd.core.equipment_types import WeaponSet, WeaponSlot
 from dnd.core.item_types import ItemLocation
 from game.animation import body_clip, sample_equipment
 from game.animation_data import load_animation_data
@@ -33,7 +33,8 @@ def data() -> AnimationData:
 @pytest.fixture(scope="module", params=("weapon", "wardrobe"))
 def history(request: pytest.FixtureRequest) -> tuple[PresentationTarget, tuple[CompletedLineage, ...]]:
     replacement: Literal["weapon", "wardrobe"] = request.param
-    return equipment_sequence_history(replacement=replacement)
+    captured = equipment_sequence_history(replacement=replacement)
+    return captured.before, captured.lineages
 
 
 @pytest.fixture(scope="module")
@@ -179,3 +180,67 @@ def test_shared_equipment_gesture_preserves_identity_until_settlement_and_attack
                         assert pygame.image.tobytes(commands[0][1], "RGBA") == pygame.image.tobytes(idle_body[1], "RGBA")
         before = after
     assert equipment_count == 1 and before == latest
+
+
+def test_removed_active_sword_commits_surviving_bow_at_authored_frame_before_ranged_attack(
+    data: AnimationData, pygame_runtime: None,
+) -> None:
+    captured = equipment_sequence_history(replacement="remove-weapon")
+    before, roots = captured.before, captured.lineages
+    identity = before.observer_uuid
+    initial = before.actors[identity]
+    equipment = dict(initial.equipment)
+    sword, bow = equipment[WeaponSlot.MELEE_MAIN.value], equipment[WeaponSlot.RANGED_MAIN.value]
+    assert WeaponSlot.MELEE_OFF.value not in equipment
+    assert initial.active_weapon_set is WeaponSet.MELEE
+    fonts = tuple(pygame.font.SysFont(style.fontFamily, round(style.fontSizePx), bold=True)
+                  for style in (data.number_style, data.badge_style))
+    saw_switch = False
+    sword_stored = False
+    for root in roots:
+        after = reduce_lineage(before, root)
+        group = bind_choreography(before, root, data)
+        assert not group.gaps
+        if isinstance(root.root, ItemLocationStateEvent) and root.root.item_state.item_uuid == sword:
+            assert root.root.location is ItemLocation.INVENTORY
+            sword_stored = True
+        if isinstance(root.root, WeaponUnequipEvent):
+            saw_switch = True
+            assert root.root.item_uuid == sword and root.root.active_weapon_set_after is WeaponSet.RANGED
+            assert before.actors[identity].active_weapon_set is WeaponSet.MELEE
+            assert after.actors[identity].active_weapon_set is WeaponSet.RANGED
+            cue, = group.equipment
+            timeline = cue.bound.timeline
+            assert timeline.recipe.bodyClip == "Taunt" and timeline.recipe.commitFrame == 4
+            old_weapon, = (layer for layer in cue.bound.appearances[str(identity)] if layer.slot == "weapon")
+            media = load_scene_media((*scene_actors(before, data, {}), *scene_actors(after, data, {})), data)
+            group_media = load_choreography_media(group)
+            for quadrant in range(4):
+                camera = Camera(quadrant=quadrant, viewport=(960, 640)).with_focus(timeline.actor.grid)
+                for elapsed, expected in ((timeline.commit_ms - .001, WeaponSet.MELEE),
+                                          (timeline.commit_ms, WeaponSet.RANGED),
+                                          (timeline.complete_ms, WeaponSet.RANGED)):
+                    frame = sample_playback_frame(before, after, data, elapsed, elapsed, camera, {}, media,
+                                                  *fonts, choreography=group, choreography_media=group_media)
+                    assert frame.displayed.actors[identity].active_weapon_set is expected
+                    actor, = (actor for actor in frame.actors if actor.contact.actor_uuid == str(identity))
+                    weapon, = (layer for layer in actor.layers if layer.slot == "weapon")
+                    assert weapon.category == ("Ranged4" if expected is WeaponSet.RANGED else old_weapon.category)
+                    # Compare the actual composed body with and without its
+                    # selected weapon, at the same sampled pose and camera.
+                    body = sample_equipment(timeline, elapsed).body
+                    drawn, = (command for command in frame.commands
+                              if command[4][0] == str(identity) and command[4][6] == "actor")
+                    bare, = (command for command in actor_draw_commands(data, body, actor.contact,
+                        tuple(layer for layer in actor.layers if layer.slot != "weapon"), media, camera)
+                             if command[4][6] == "actor")
+                    assert pygame.image.tobytes(drawn[1], "RGBA") != pygame.image.tobytes(bare[1], "RGBA")
+        if isinstance(root.root, AttackEvent) and root.root.weapon_slot is WeaponSlot.RANGED_MAIN:
+            assert saw_switch and sword_stored
+            assert before.actors[identity].active_weapon_set is WeaponSet.RANGED
+            slots = dict(before.actors[identity].equipment)
+            assert WeaponSlot.MELEE_MAIN.value not in slots
+            assert slots[WeaponSlot.RANGED_MAIN.value] == bow
+            assert any(item.item_uuid == sword for item in before.actors[identity].items)
+        before = after
+    assert saw_switch and sword_stored
