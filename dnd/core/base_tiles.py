@@ -128,20 +128,18 @@ class Tile(BaseBlock):
         default=LightLevel.BRIGHT_LIGHT,
         description="Base objective light level before illumination or obscurement modifiers.",
     )
-    _illuminations: Dict[UUID, LightLevel] = PrivateAttr(default_factory=dict)
-    _illumination_caps: Dict[UUID, LightLevel] = PrivateAttr(default_factory=dict)
-    _center_object_bands: Dict[int, TileObjectBand] = PrivateAttr(
-        default_factory=dict
-    )
+    _illuminations: Dict[UUID, LightLevel] = PrivateAttr(default={})
+    _illumination_caps: Dict[UUID, LightLevel] = PrivateAttr(default={})
+    _center_object_bands: Dict[int, TileObjectBand] = PrivateAttr(default={})
     _boundary_object_bands: Dict[
         CardinalDirection,
         Dict[int, TileObjectBand],
     ] = PrivateAttr(default_factory=_empty_boundary_object_bands)
-    _entity_uuids: set[UUID] = PrivateAttr(default_factory=set)
+    _entity_uuids: set[UUID] = PrivateAttr(default=set())
     _spatial_condition_uuids: Dict[
         SpatialEffectLayer,
         set[UUID],
-    ] = PrivateAttr(default_factory=dict)
+    ] = PrivateAttr(default={})
 
     @model_validator(mode="after")
     def validate_elevation_surface(self) -> "Tile":
@@ -165,6 +163,33 @@ class Tile(BaseBlock):
         return tuple(
             sorted(self._boundary_object_bands.get(direction, {}).items())
         )
+
+    def get_center_object_uuids(self, height: Optional[int] = None) -> set[UUID]:
+        """Return center members without constructing an ordered band snapshot."""
+        if height is not None:
+            band = self._center_object_bands.get(height)
+            return set(band.object_uuids) if band is not None else set()
+        return {
+            object_uuid
+            for band in self._center_object_bands.values()
+            for object_uuid in band.object_uuids
+        }
+
+    def get_boundary_object_uuids(
+        self,
+        direction: CardinalDirection,
+        height: Optional[int] = None,
+    ) -> set[UUID]:
+        """Return side members at one height or across that side's bands."""
+        bands = self._boundary_object_bands.get(direction, {})
+        if height is not None:
+            band = bands.get(height)
+            return set(band.object_uuids) if band is not None else set()
+        return {
+            object_uuid
+            for band in bands.values()
+            for object_uuid in band.object_uuids
+        }
 
     def _replace_center_object_band(
         self,

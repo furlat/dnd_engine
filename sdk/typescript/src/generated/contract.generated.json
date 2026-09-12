@@ -153,7 +153,7 @@
       "kind": "union"
     }
   },
-  "contract_hash": "da4bd3626e65d728fc9469cdd4a3350eaf914eeac1221af9871f019ba75aac0d",
+  "contract_hash": "476997eadf5e573430f3803a72c4f0b22a1fa3cfd4d01cf488357f69946b70fd",
   "contract_version": 1,
   "enums": {
     "dnd.analytics.models.GameOutcomeResolution": {
@@ -31706,9 +31706,6 @@
     },
     "server.content_catalog.ContentManifestResponse": {
       "fields": {
-        "built_in_artifact_digest": {
-          "kind": "string"
-        },
         "content_set_digest": {
           "kind": "string"
         },

@@ -86,7 +86,6 @@ class HostedWorkerReadiness(BaseModel):
     status: Literal["ready", "content_mismatch"] = "ready"
     content_api_version: int = Field(ge=1)
     content_set_digest: str = Field(min_length=64, max_length=64)
-    built_in_artifact_digest: str = Field(min_length=64, max_length=64)
     expected_content_set_digest: str | None = Field(
         default=None,
         min_length=64,

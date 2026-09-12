@@ -110,11 +110,10 @@ class ContentManifestResponse(BaseModel):
     schema_version: Literal[2] = CONTENT_MANIFEST_SCHEMA_VERSION
     engine_content_api: int
     content_set_digest: str
-    built_in_artifact_digest: str
     packs: tuple[ContentPackManifestEntry, ...]
     sources: tuple[ContentSource, ...]
 
-    @field_validator("content_set_digest", "built_in_artifact_digest")
+    @field_validator("content_set_digest")
     @classmethod
     def _validate_digest(cls, value: str, info) -> str:
         return validate_sha256(value, info.field_name)
@@ -373,7 +372,6 @@ def build_content_manifest(
     return ContentManifestResponse(
         engine_content_api=ENGINE_CONTENT_API_VERSION,
         content_set_digest=loaded.content_set_digest,
-        built_in_artifact_digest=loaded.built_in_artifact_digest,
         packs=tuple(sorted(packs, key=lambda pack: pack.pack_id)),
         sources=tuple(sorted(
             loaded.registry.sources.values(),

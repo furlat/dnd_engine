@@ -2475,7 +2475,6 @@ async def hosted_worker_readiness() -> HostedWorkerReadiness:
         ),
         content_api_version=ENGINE_CONTENT_API_VERSION,
         content_set_digest=content_system.content_set_digest,
-        built_in_artifact_digest=content_system.built_in_artifact_digest,
         expected_content_set_digest=expected_content_set_digest,
         external_pack_ids=tuple(
             sorted(pack.manifest.pack_id for pack in content_system.packs)

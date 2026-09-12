@@ -31,7 +31,6 @@ const manifest: ContentManifestResponse = {
   schema_version: 2,
   engine_content_api: 1,
   content_set_digest: digest,
-  built_in_artifact_digest: digest,
   packs: [{
     pack_id: "content.srd_5_1_cc",
     pack_version: "1",

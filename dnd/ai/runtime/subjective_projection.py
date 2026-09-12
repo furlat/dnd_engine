@@ -35,7 +35,6 @@ from dnd.core.creature_types import DamageType
 from dnd.core.gridmap import get_map
 from dnd.core.life_types import LifeState
 from dnd.core.modifiers import ResistanceStatus
-from dnd.types.world import MovementMode
 from dnd.entity import Entity
 
 
@@ -162,7 +161,8 @@ def project_known_entities(
     }
     if prior_world is not None:
         for entity_uuid, fact in prior_world.known_entities.items():
-            facts.setdefault(entity_uuid, remember_entity_fact(fact))
+            if entity_uuid not in facts:
+                facts[entity_uuid] = remember_entity_fact(fact)
     return dict(sorted(facts.items()))
 
 
@@ -417,15 +417,13 @@ def project_known_objects(
     }
     if prior_world is not None:
         for object_uuid, fact in prior_world.known_objects.items():
-            facts.setdefault(
-                object_uuid,
-                fact.model_copy(
+            if object_uuid not in facts:
+                facts[object_uuid] = fact.model_copy(
                     update={
                         "knowledge_state": KnowledgeState.REMEMBERED,
                         "observer_uuids": [],
                     }
-                ),
-            )
+                )
     return dict(sorted(facts.items()))
 
 
@@ -495,15 +493,13 @@ def project_known_tiles(
         )
     if prior_world is not None:
         for key, fact in prior_world.known_tiles.items():
-            facts.setdefault(
-                key,
-                fact.model_copy(
+            if key not in facts:
+                facts[key] = fact.model_copy(
                     update={
                         "knowledge_state": KnowledgeState.SEEN,
                         "observer_uuids": [],
                     }
-                ),
-            )
+                )
     return dict(sorted(facts.items()))
 
 
@@ -543,14 +539,15 @@ def project_visible_tile_fact(
         if first_observer
         else grid.get_directional_block_map(position)
     )
+    walking_cost = tile.walking_cost.normalized_score
     return ObservationTileFact(
         key=subjective_tile_key(position),
         position=position,
         knowledge_state=KnowledgeState.VISIBLE,
         observer_uuids=observer_ids,
         name=tile.name,
-        walkable=tile.get_movement_cost(MovementMode.WALKING) > 0,
-        walking_cost=int(tile.walking_cost.normalized_score),
+        walkable=walking_cost > 0,
+        walking_cost=int(walking_cost),
         is_hazardous=is_hazardous,
         conditions=list(tile.active_conditions),
         light_level=tile.resolved_light_level.value,

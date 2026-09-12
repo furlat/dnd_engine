@@ -7,9 +7,10 @@ from uuid import UUID
 import pytest
 from pydantic import ValidationError
 
-from dnd.blocks.sensory import capture_senses_snapshot, reduce_senses_snapshot
+from dnd.blocks.sensory import capture_senses_snapshot
 from dnd.core.base_object import PASSIVE_EVENT_REPLAY
 from dnd.core.events import EventPhase, EventQueue, SensoryUpdateEvent
+from dnd.types.senses import reduce_senses_snapshot
 from game.event_record import decode_event, encode_event
 from tests.engine.test_senses_light_stealth import (
     create_skeleton, reset_senses_state,
@@ -56,6 +57,8 @@ def test_explicit_refresh_records_changed_view_without_reparenting_or_empty_even
     for event in sensory_since(observer.uuid):
         state = reduce_senses_snapshot(observer.uuid, state, event)
     assert state is not None
+    historical = state
+    original = capture_senses_snapshot(observer.senses)
 
     cursor = EventQueue.event_cursor()
     observer.update_entity_senses(max_distance=1)
@@ -71,6 +74,8 @@ def test_explicit_refresh_records_changed_view_without_reparenting_or_empty_even
     state = reduce_senses_snapshot(observer.uuid, state, restored)
     actual = capture_senses_snapshot(observer.senses)
     assert replace(state, paths_dirty=False) == replace(actual, paths_dirty=False)
+    assert replace(historical, paths_dirty=False) == replace(original, paths_dirty=False)
+    assert target.uuid in historical.entities and target.uuid not in state.entities
 
     cursor = EventQueue.event_cursor()
     observer.update_entity_senses(max_distance=1)
@@ -84,6 +89,7 @@ def test_explicit_refresh_records_changed_view_without_reparenting_or_empty_even
     state = reduce_senses_snapshot(observer.uuid, state, changes[0])
     actual = capture_senses_snapshot(observer.senses)
     assert replace(state, paths_dirty=False) == replace(actual, paths_dirty=False)
+    assert replace(historical, paths_dirty=False) == replace(original, paths_dirty=False)
 
 
 def test_initial_scalar_omissions_and_delta_without_baseline_are_rejected() -> None:

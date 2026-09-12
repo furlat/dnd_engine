@@ -5,7 +5,7 @@ from uuid import uuid4
 import pytest
 from pydantic import ValidationError
 
-from dnd.core.base_block import BaseBlock
+from dnd.core.base_block import BaseBlock, LightLevel
 from dnd.core.base_tiles import Tile
 from dnd.core.events import (
     Event,
@@ -26,6 +26,7 @@ from dnd.core.world_edges import (
     progressive_elevation_transition,
 )
 from dnd.types.materials import Material, SurfaceLayer, TileSurface
+from dnd.types.spatial_effects import SpatialEffectLayer
 from dnd.types.world import CardinalDirection, MovementMode
 from dnd.types.world_placement import (
     BoundaryStructure,
@@ -631,3 +632,73 @@ def test_canceled_tile_elevation_change_preserves_support_tuple() -> None:
         tile.elevation_surface_kind,
         tile.slope_axis,
     ) == (0, ElevationSurfaceKind.ORDINARY, None)
+
+
+@pytest.mark.parametrize("channel", [WorldEdgeChannel.OPTICAL, WorldEdgeChannel.PROPAGATION])
+def test_boundary_contacts_reach_entry_only_after_exit_door_opens(
+    channel: WorldEdgeChannel,
+) -> None:
+    grid = _two_tile_grid()
+    assert grid.get_boundary_route_layers(
+        (0, 0), CardinalDirection.EAST, channel,
+    ) == ((), ())
+    door = build_directional_door(
+        blocked_channels=(WorldEdgeChannel.OPTICAL, WorldEdgeChannel.PROPAGATION),
+    )
+    door.place_on_grid((0, 0), boundary_direction=CardinalDirection.EAST)
+    assert grid.get_boundary_route_layers(
+        (0, 0), CardinalDirection.EAST, channel,
+    ) == ((door.uuid,), ())
+    far_wall = StructuralBoundaryBlock(
+        name="Entry wall", source_entity_uuid=uuid4(),
+        blocked_channels=(WorldEdgeChannel.OPTICAL, WorldEdgeChannel.PROPAGATION),
+    )
+    grid.place_object(
+        far_wall.uuid, (1, 0), boundary_direction=CardinalDirection.WEST,
+        base_height_steps=2,
+    )
+    assert grid.get_boundary_route_layers(
+        (0, 0), CardinalDirection.EAST, channel,
+    ) == ((door.uuid,), ())
+    assert grid.get_boundary_route_layers(
+        (1, 0), CardinalDirection.WEST, channel,
+    ) == ((far_wall.uuid,), ())
+
+    door.open()
+    # The reached entry wall is itself visible, even though it blocks passage.
+    assert grid.get_boundary_route_layers(
+        (0, 0), CardinalDirection.EAST, channel,
+    ) == ((door.uuid,), (far_wall.uuid,))
+    assert grid.get_boundary_route_layers(
+        (1, 0), CardinalDirection.WEST, channel,
+    ) == ((far_wall.uuid,), ())
+    grid.remove_object(far_wall.uuid)
+    assert grid.get_boundary_route_layers(
+        (0, 0), CardinalDirection.EAST, channel,
+    ) == ((door.uuid,), ())
+
+
+def test_tiles_keep_independent_light_placement_and_condition_membership() -> None:
+    grid = _two_tile_grid()
+    first, second = grid.get_tile(0, 0), grid.get_tile(1, 0)
+    assert first is not None and second is not None
+    grid.set_tile_base_light((0, 0), LightLevel.DARKNESS)
+    grid.set_tile_base_light((1, 0), LightLevel.DARKNESS)
+    illumination, cap = uuid4(), uuid4()
+    grid.apply_light_modifier(illumination, {(0, 0)}, LightLevel.BRIGHT_LIGHT)
+    assert first.resolved_light_level is LightLevel.BRIGHT_LIGHT
+    assert second.resolved_light_level is LightLevel.DARKNESS
+    grid.set_tile_base_light((1, 0), LightLevel.BRIGHT_LIGHT)
+    grid.apply_light_modifier(cap, {(0, 0)}, LightLevel.DIM_LIGHT, cap=True)
+    assert first.resolved_light_level is LightLevel.DIM_LIGHT
+    assert second.resolved_light_level is LightLevel.BRIGHT_LIGHT
+
+    item = BaseBlock(name="Floor marker", source_entity_uuid=uuid4())
+    grid.place_object(item.uuid, (0, 0))
+    assert grid.get_center_objects_at((0, 0)) == {item.uuid}
+    assert grid.get_center_objects_at((1, 0)) == set()
+    condition_uuid = uuid4()
+    first.add_spatial_condition_reference(condition_uuid, SpatialEffectLayer.FIELD)
+    assert first.get_spatial_condition_uuids() == {condition_uuid}
+    assert second.get_spatial_condition_uuids() == set()
+    first.remove_spatial_condition_reference(condition_uuid, SpatialEffectLayer.FIELD)

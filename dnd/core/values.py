@@ -182,8 +182,10 @@ class StaticValue(BaseValue):
         Raises:
             ValueError: If an outgoing modifier targets the value source.
         """
-        for modifier in list(self.value_modifiers.values()) + list(self.min_constraints.values()) + list(self.max_constraints.values()):
-            if self.is_outgoing_modifier:
+        if not self.is_outgoing_modifier:
+            return self
+        for modifiers in (self.value_modifiers, self.min_constraints, self.max_constraints):
+            for modifier in modifiers.values():
                 if modifier.target_entity_uuid == self.source_entity_uuid:
                     raise ValueError(f"Outgoing modifier target ({modifier.target_entity_uuid}) should not be the same as the value source ({self.source_entity_uuid})")
 

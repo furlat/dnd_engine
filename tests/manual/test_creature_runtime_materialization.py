@@ -206,7 +206,6 @@ def _runtime(
         LoadedContentSystem(
             registry=registry,
             packs=(),
-            built_in_artifact_digest="b" * 64,
             content_set_digest="c" * 64,
         ),
     )

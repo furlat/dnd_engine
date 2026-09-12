@@ -237,16 +237,6 @@ class BaseBlock(BaseModel):
 
         return self
 
-    @model_validator(mode='after')
-    def populate_blocks_and_values(self) -> Self:
-        """Discover direct child blocks and modifiable values on this model.
-
-        Returns:
-            This block after updating the local lookup dictionaries.
-        """
-        self._populate_blocks_and_values()
-
-        return self
 
     def model_post_init(self, __context: Any) -> None:
         """Register this block in the block registry by UUID."""

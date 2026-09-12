@@ -2756,12 +2756,9 @@ class GridMap:
         tile = self._tiles.get(position)
         if tile is None:
             return set()
-        object_uuids: Set[UUID] = set()
-        for _, band in tile.get_center_object_bands():
-            object_uuids.update(band.object_uuids)
+        object_uuids = tile.get_center_object_uuids()
         for direction in CardinalDirection:
-            for _, band in tile.get_boundary_object_bands(direction):
-                object_uuids.update(band.object_uuids)
+            object_uuids.update(tile.get_boundary_object_uuids(direction))
         return object_uuids
 
     def get_center_objects_at(
@@ -2773,15 +2770,7 @@ class GridMap:
         tile = self._tiles.get(position)
         if tile is None:
             return set()
-        bands = tile.get_center_object_bands()
-        if height is not None:
-            band = dict(bands).get(height)
-            return set(band.object_uuids) if band is not None else set()
-        return {
-            object_uuid
-            for _, band in bands
-            for object_uuid in band.object_uuids
-        }
+        return tile.get_center_object_uuids(height)
 
     def get_boundary_objects_at(
         self,
@@ -2793,15 +2782,7 @@ class GridMap:
         tile = self._tiles.get(position)
         if tile is None:
             return set()
-        bands = tile.get_boundary_object_bands(direction)
-        if height is not None:
-            band = dict(bands).get(height)
-            return set(band.object_uuids) if band is not None else set()
-        return {
-            object_uuid
-            for _, band in bands
-            for object_uuid in band.object_uuids
-        }
+        return tile.get_boundary_object_uuids(direction, height)
 
     def get_object_placement(
         self,
@@ -2961,25 +2942,22 @@ class GridMap:
         destination = (source[0] + delta[0], source[1] + delta[1])
         if destination not in self._tiles:
             return exit_layer, ()
-        edge = self.get_world_edge(source, destination)
-        if not all(
-            self._world_edge_contribution_allows(
-                contribution,
-                channel,
-                source_height=edge.source_height_steps,
-                destination_height=edge.destination_height_steps,
-                movement_mode=MovementMode.WALKING,
-            )
-            for contribution in edge.exit_contributions
-        ):
-            return exit_layer, ()
-        return exit_layer, tuple(sorted(
+        entry_layer = tuple(sorted(
             self.get_boundary_objects_at(
                 destination,
                 self._opposite_direction(direction),
             ),
             key=str,
         ))
+        if not entry_layer:
+            return exit_layer, ()
+        # Optical and propagation channels use the existing XY blocking policy.
+        for object_uuid in exit_layer:
+            provider = BaseBlock.get(object_uuid)
+            structure = provider.get_boundary_structure() if provider is not None else None
+            if structure is not None and channel in structure.blocked_channels:
+                return exit_layer, ()
+        return exit_layer, entry_layer
 
     def get_objects_with_conditions(self) -> List[BaseBlock]:
         """Get placed objects with active conditions (for environment step).

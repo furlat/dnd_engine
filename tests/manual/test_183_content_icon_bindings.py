@@ -17,14 +17,11 @@ from dnd.conditions import Blinded
 from dnd.content_system.behavior_bindings import BehaviorBinder
 from dnd.content_system.bootstrap import bootstrap_content_system
 from dnd.content_system.builtin import (
-    BUILT_IN_ARTIFACT_PATHS,
     BUILT_IN_DECLARATIONS,
     BUILT_IN_RECIPE_PRESETS,
 )
 from dnd.content_system.icon_bindings import (
     BUILT_IN_CONTENT_ICON_BINDING_LEDGER,
-    CONTENT_ICON_BINDING_LEDGER_PATH,
-    GAME_ICON_ASSET_INDEX_PATH,
     NEUROCLIENT_GAME_ICON_ASSET_INDEX,
     BuiltInContentIconBindingLedger,
     validate_builtin_content_icons,
@@ -288,9 +285,6 @@ def test_runtime_selection_uses_only_exact_generated_identity_rows() -> None:
         "aliases",
     ):
         assert forbidden not in generated_source
-
-    assert GAME_ICON_ASSET_INDEX_PATH in BUILT_IN_ARTIFACT_PATHS
-    assert CONTENT_ICON_BINDING_LEDGER_PATH in BUILT_IN_ARTIFACT_PATHS
 
 
 def test_original_declaration_identity_survives_runtime_behavior_binding() -> None:

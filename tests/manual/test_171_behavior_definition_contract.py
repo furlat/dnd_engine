@@ -301,7 +301,6 @@ def test_public_behavior_catalog_is_code_free_and_has_no_parameter_schema() -> N
     loaded = LoadedContentSystem(
         registry=registry,
         packs=(),
-        built_in_artifact_digest="a" * 64,
         content_set_digest="b" * 64,
     )
     catalog = build_public_content_catalog(loaded)

@@ -51,7 +51,6 @@ def test_content_manifest_exposes_exact_packs_sources_and_deployment_digest() ->
 
     assert manifest.engine_content_api == 2
     assert manifest.content_set_digest == loaded.content_set_digest
-    assert manifest.built_in_artifact_digest == loaded.built_in_artifact_digest
     assert tuple(pack.pack_id for pack in manifest.packs) == (
         "content.neurodragon",
         "content.srd_5_1_cc",

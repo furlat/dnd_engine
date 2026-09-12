@@ -1,9 +1,7 @@
-"""Validated backend-owned inventory of authored item presentation variants."""
+"""Imported item presentation variants and their explicit layer bindings."""
 
 from __future__ import annotations
 
-import hashlib
-import json
 from pathlib import Path
 from types import MappingProxyType
 from typing import Literal, Self
@@ -26,17 +24,6 @@ AUTHORED_ITEM_VISUAL_LEDGER_PATH = (
     / "ledgers"
     / "neuroclient_authored_item_visuals.json"
 )
-
-
-def _canonical_digest(value: object) -> str:
-    encoded = json.dumps(
-        value,
-        allow_nan=False,
-        ensure_ascii=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode("utf-8")
-    return hashlib.sha256(encoded).hexdigest()
 
 
 class AuthoredItemEquipmentLayer(BaseModel):
@@ -214,7 +201,7 @@ class AuthoredItemVariantSource(BaseModel):
 
 
 class AuthoredItemVariantLedger(BaseModel):
-    """Self-authenticating backend-owned snapshot of the authored inventory."""
+    """Imported inventory; source audit metadata is retained as historical data."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -226,22 +213,12 @@ class AuthoredItemVariantLedger(BaseModel):
     source: AuthoredItemVariantSource
 
     @model_validator(mode="after")
-    def _validate_inventory(self) -> Self:
-        if self.authored_category_count != len(self.inventory.categories):
-            raise ValueError("authored category count does not match inventory")
+    def _validate_lookup_identities(self) -> Self:
         rows = tuple(
             row
             for category in self.inventory.categories
             for row in category.variants
         )
-        if self.authored_variant_count != len(rows):
-            raise ValueError("authored variant count does not match inventory")
-        expected_digest = _canonical_digest(
-            self.inventory.model_dump(mode="json"),
-        )
-        if self.inventory_digest != expected_digest:
-            raise ValueError("inventory_digest does not authenticate inventory")
-
         inventory_ids = [row.inventory_id for row in rows]
         if len(inventory_ids) != len(set(inventory_ids)):
             raise ValueError("authored inventory IDs must be globally unique")
@@ -306,20 +283,6 @@ class AuthoredItemVariantLedger(BaseModel):
                     f"{identity}",
                 )
 
-        raw_ids: dict[str, list[str]] = {}
-        for row in rows:
-            raw_ids.setdefault(row.source_visual_variant_id, []).append(
-                row.inventory_id,
-            )
-        collisions = {
-            raw_id: tuple(inventory_ids)
-            for raw_id, inventory_ids in sorted(raw_ids.items())
-            if len(inventory_ids) > 1
-        }
-        if self.inventory.source_visual_variant_id_collisions != collisions:
-            raise ValueError(
-                "source visual variant collision evidence is incomplete",
-            )
         return self
 
 

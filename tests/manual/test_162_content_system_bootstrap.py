@@ -10,18 +10,12 @@ import pytest
 from dnd.content_system.bootstrap import bootstrap_content_system
 from dnd.content_system.artifact_digest import (
     LocalContentImportError,
-    digest_artifact_paths,
     resolve_local_python_module_closure,
 )
 from dnd.content_system.builtin import (
-    BUILT_IN_ARTIFACT_DIGEST,
-    BUILT_IN_ARTIFACT_PATHS,
-    BUILT_IN_DATA_ARTIFACT_PATHS,
     BUILT_IN_DECLARATIONS,
-    BUILT_IN_IMPLEMENTATION_ROOT_MODULES,
     BUILT_IN_PACK_DEPENDENCIES,
     BUILT_IN_PACK_VERSIONS,
-    BUILT_IN_PYTHON_ARTIFACT_PATHS,
     BUILT_IN_SOURCES,
 )
 from dnd.content_system.builtin_inventory import (
@@ -40,7 +34,6 @@ def test_default_bootstrap_freezes_exact_builtin_identity() -> None:
     loaded = bootstrap_content_system(pack_roots=(DEFAULT_CONTENT_PACK_ROOT,))
 
     assert len(loaded.content_set_digest) == 64
-    assert loaded.built_in_artifact_digest == BUILT_IN_ARTIFACT_DIGEST
     assert loaded.packs == ()
     assert loaded.registry.declarations == {
         declaration.ref.identity_key: declaration
@@ -110,67 +103,10 @@ def test_configured_roots_are_default_plus_sorted_absolute_additions(
         )
 
 
-def test_builtin_artifact_digest_is_required_and_stable() -> None:
-    """Built-in source and data close over one authenticated identity."""
-    assert len(BUILT_IN_ARTIFACT_DIGEST) == 64
-    assert BUILT_IN_ARTIFACT_DIGEST == bootstrap_content_system(
-        pack_roots=(DEFAULT_CONTENT_PACK_ROOT,),
-    ).built_in_artifact_digest
-    relative_paths = {
-        path.relative_to(Path(__file__).resolve().parents[2]).as_posix()
-        for path in BUILT_IN_ARTIFACT_PATHS
-    }
-    assert {
-        "dnd/actions_functional.py",
-        "dnd/classes/barbarian.py",
-        "dnd/classes/barbarian_progression_definitions.py",
-        "dnd/items/armors.py",
-        "dnd/items/consumables.py",
-        "dnd/items/spell_items.py",
-        "dnd/items/torches.py",
-        "dnd/items/weapons.py",
-        "dnd/classes/content_factories.py",
-        "dnd/classes/fighter.py",
-        "dnd/classes/progression_definitions.py",
-        "dnd/classes/rage.py",
-        "dnd/classes/sorcerer.py",
-        "dnd/classes/sorcerer_progression_definitions.py",
-        "dnd/content_system/artifact_digest.py",
-        "dnd/content_system/builtin.py",
-        "dnd/content_system/builtin_character_builds.py",
-        "dnd/content_system/character_build_validation.py",
-        "dnd/content_system/character_materialization.py",
-        "dnd/content_system/installed_creature_materialization.py",
-        "dnd/monsters/bestiary.py",
-        "dnd/monsters/bestiary_content.py",
-        "dnd/monsters/bestiary_items.py",
-        "dnd/monsters/skeleton_abilities.py",
-        "dnd/monsters/srd_roster.py",
-        "dnd/monsters/traits.py",
-        "dnd/player_character_body.py",
-        "dnd/spells/conjuration.py",
-        "dnd/spells/necromancy.py",
-        "content_data/ledgers/neuroclient_authored_item_visuals.json",
-        "content_data/sources/neurodragon_original_b2b3930.json",
-        "content_data/sources/neurodragon_original_b2b3930.txt",
-        "content_data/sources/srd_5_1_cc.json",
-    } <= relative_paths
-    assert set(BUILT_IN_PYTHON_ARTIFACT_PATHS).isdisjoint(
-        BUILT_IN_DATA_ARTIFACT_PATHS,
-    )
-    assert set(BUILT_IN_ARTIFACT_PATHS) == {
-        *BUILT_IN_PYTHON_ARTIFACT_PATHS,
-        *BUILT_IN_DATA_ARTIFACT_PATHS,
-    }
-    assert BUILT_IN_IMPLEMENTATION_ROOT_MODULES == (
-        "dnd.content_system.builtin",
-    )
-
-
-def test_transitive_helper_bytes_change_builtin_artifact_identity(
+def test_installed_pack_dependency_closure_includes_transitive_helpers(
     tmp_path: Path,
 ) -> None:
-    """A delegated helper changes identity without becoming a manual root."""
+    """External-pack dependency inspection follows delegated local helpers."""
     package = tmp_path / "dnd"
     classes = package / "classes"
     content_system = package / "content_system"
@@ -210,30 +146,12 @@ def test_transitive_helper_bytes_change_builtin_artifact_identity(
         "dnd/content_system/__init__.py",
         "dnd/content_system/builtin.py",
     }
-    before = digest_artifact_paths(
-        artifacts,
-        repository_root=tmp_path,
-    )
-
-    helper_module.write_text(
-        "def create_barbarian() -> str:\n    return 'second'\n",
-        encoding="utf-8",
-    )
-    after = digest_artifact_paths(
-        resolve_local_python_module_closure(
-            ("dnd.content_system.builtin",),
-            repository_root=tmp_path,
-        ),
-        repository_root=tmp_path,
-    )
-
-    assert before != after
 
 
 def test_transitive_local_import_closure_fails_closed(
     tmp_path: Path,
 ) -> None:
-    """A missing local helper cannot produce a partial content identity."""
+    """External-pack dependency inspection rejects unresolved local imports."""
     package = tmp_path / "dnd"
     package.mkdir()
     (package / "__init__.py").write_text("", encoding="utf-8")
@@ -291,7 +209,6 @@ def test_runtime_installs_one_digest_and_never_rebinds() -> None:
     incompatible = loaded.__class__(
         registry=loaded.registry,
         packs=loaded.packs,
-        built_in_artifact_digest="f" * 64,
         content_set_digest="e" * 64,
     )
     with pytest.raises(RuntimeError, match="already installed"):

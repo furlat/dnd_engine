@@ -7,7 +7,6 @@ from dataclasses import replace
 from pathlib import Path
 
 from dnd.content_system.builtin import (
-    BUILT_IN_ARTIFACT_DIGEST,
     BUILT_IN_DECLARATIONS,
     BUILT_IN_PACK_DEPENDENCIES,
     BUILT_IN_PACK_VERSIONS,
@@ -37,7 +36,6 @@ def bootstrap_content_system(
     )
     loaded = load_content_system(
         pack_roots=resolved_roots,
-        built_in_artifact_digest=BUILT_IN_ARTIFACT_DIGEST,
         built_in_sources=BUILT_IN_SOURCES,
         built_in_declarations=BUILT_IN_DECLARATIONS,
         built_in_recipe_presets=BUILT_IN_RECIPE_PRESETS,

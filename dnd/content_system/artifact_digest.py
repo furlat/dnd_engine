@@ -1,9 +1,8 @@
-"""Deterministic source closure and digesting for trusted built-in content."""
+"""Static local dependency inspection for installed content-pack validation."""
 
 from __future__ import annotations
 
 import ast
-import hashlib
 from collections.abc import Iterable
 from pathlib import Path
 
@@ -209,38 +208,3 @@ def resolve_local_python_module_closure(
             key=lambda path: path.relative_to(root).as_posix(),
         ),
     )
-
-
-def digest_artifact_paths(
-    paths: Iterable[Path],
-    *,
-    repository_root: Path,
-) -> str:
-    """Hash one exact, path-framed artifact set."""
-    root = repository_root.resolve(strict=True)
-    resolved_paths = tuple(path.resolve(strict=True) for path in paths)
-    if not resolved_paths:
-        raise ValueError("At least one built-in artifact is required")
-    if len(resolved_paths) != len(set(resolved_paths)):
-        raise ValueError("Built-in artifact paths must be unique")
-    relative_paths: dict[Path, str] = {}
-    for resolved in resolved_paths:
-        try:
-            relative_paths[resolved] = resolved.relative_to(root).as_posix()
-        except ValueError as exc:
-            raise ValueError(
-                f"Built-in artifact escapes repository root: {resolved}",
-            ) from exc
-    digest = hashlib.sha256()
-    digest.update(b"dnd-engine-built-in-content-artifacts-v2\0")
-    for resolved in sorted(
-        resolved_paths,
-        key=relative_paths.__getitem__,
-    ):
-        relative = relative_paths[resolved].encode("utf-8")
-        payload = resolved.read_bytes()
-        digest.update(len(relative).to_bytes(8, "big"))
-        digest.update(relative)
-        digest.update(len(payload).to_bytes(8, "big"))
-        digest.update(payload)
-    return digest.hexdigest()

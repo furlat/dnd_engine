@@ -27,7 +27,6 @@ from dnd.content_system.import_boundary import import_content_pack_module
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import SpellProtectionRegistry
 from dnd.core.base_object import BaseObject
-from dnd.core.content.identities import validate_sha256
 from dnd.core.content.pack_contracts import ContentPackManifest
 from dnd.core.content.provenance import ContentSource
 from dnd.core.content.recipe_presets import (
@@ -151,7 +150,6 @@ class LoadedContentSystem:
 
     registry: FrozenContentRegistry
     packs: tuple[DiscoveredContentPack, ...]
-    built_in_artifact_digest: str
     content_set_digest: str
     behavior_declarations_by_class: Mapping[
         type[object],
@@ -674,18 +672,13 @@ def discover_content_packs(
 def load_content_system(
     *,
     pack_roots: Sequence[Path],
-    built_in_artifact_digest: str,
     built_in_sources: Sequence[ContentSource] = (),
     built_in_declarations: Sequence[ContentDeclaration] = (),
     built_in_recipe_presets: Sequence[ContentRecipePreset] = (),
     built_in_pack_versions: Mapping[str, str] | None = None,
     built_in_pack_dependencies: Mapping[str, frozenset[str]] | None = None,
 ) -> LoadedContentSystem:
-    """Import all validated packs and publish only a complete frozen registry."""
-    validated_built_in_artifact_digest = validate_sha256(
-        built_in_artifact_digest,
-        "built_in_artifact_digest",
-    )
+    """Construct built-ins directly, importing external packs when present."""
     normalized_built_in_pack_versions = dict(built_in_pack_versions or {})
     normalized_built_in_pack_dependencies = {
         pack_id: frozenset(dependencies)
@@ -694,6 +687,30 @@ def load_content_system(
         ).items()
     }
     packs = discover_content_packs(pack_roots)
+    builder = ContentRegistryBuilder()
+    for source in built_in_sources:
+        builder.add_source(source)
+    for declaration in built_in_declarations:
+        builder.add_declaration(declaration)
+    for preset in built_in_recipe_presets:
+        builder.add_recipe_preset(preset)
+    if not packs:
+        return LoadedContentSystem(
+            registry=builder.freeze(
+                pack_dependencies=normalized_built_in_pack_dependencies,
+            ),
+            packs=(),
+            content_set_digest=_content_set_digest(
+                packs=(),
+                pack_digests={},
+                built_in_sources=built_in_sources,
+                built_in_declarations=built_in_declarations,
+                built_in_recipe_presets=built_in_recipe_presets,
+                built_in_pack_versions=normalized_built_in_pack_versions,
+                built_in_pack_dependencies=normalized_built_in_pack_dependencies,
+            ),
+        )
+
     _validate_pack_dependencies(
         packs,
         built_in_pack_versions=normalized_built_in_pack_versions,
@@ -716,16 +733,8 @@ def load_content_system(
             + ", ".join(changed_after_discovery),
         )
     _validate_static_pack_imports(packs)
-    if packs:
-        _require_cold_engine_runtime()
+    _require_cold_engine_runtime()
 
-    builder = ContentRegistryBuilder()
-    for source in built_in_sources:
-        builder.add_source(source)
-    for declaration in built_in_declarations:
-        builder.add_declaration(declaration)
-    for preset in built_in_recipe_presets:
-        builder.add_recipe_preset(preset)
     for pack in packs:
         for source in pack.manifest.sources:
             builder.add_source(source)
@@ -787,7 +796,6 @@ def load_content_system(
         content_set_digest = _content_set_digest(
             packs=packs,
             pack_digests=post_import_digests,
-            built_in_artifact_digest=validated_built_in_artifact_digest,
             built_in_sources=built_in_sources,
             built_in_declarations=built_in_declarations,
             built_in_recipe_presets=built_in_recipe_presets,
@@ -797,7 +805,6 @@ def load_content_system(
         return LoadedContentSystem(
             registry=registry,
             packs=packs,
-            built_in_artifact_digest=validated_built_in_artifact_digest,
             content_set_digest=content_set_digest,
         )
     except BaseException:
@@ -1707,16 +1714,15 @@ def _content_set_digest(
     *,
     packs: Sequence[DiscoveredContentPack],
     pack_digests: Mapping[str, str],
-    built_in_artifact_digest: str,
     built_in_sources: Sequence[ContentSource],
     built_in_declarations: Sequence[ContentDeclaration],
     built_in_recipe_presets: Sequence[ContentRecipePreset],
     built_in_pack_versions: Mapping[str, str],
     built_in_pack_dependencies: Mapping[str, frozenset[str]],
 ) -> str:
+    """Identify declared content and installed packs without scanning engine source."""
     payload = {
         "engine_content_api": ENGINE_CONTENT_API_VERSION,
-        "built_in_artifact_digest": built_in_artifact_digest,
         "built_in_pack_versions": dict(sorted(built_in_pack_versions.items())),
         "built_in_pack_dependencies": {
             pack_id: sorted(dependencies)

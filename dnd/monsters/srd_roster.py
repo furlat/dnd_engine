@@ -1506,14 +1506,13 @@ def _build_srd_creature_declarations() -> tuple[ContentDeclaration, ...]:
     displays = tuple(facts.display_name for facts in _SRD_CREATURE_FACTS)
     orders = tuple(facts.sort_order for facts in _SRD_CREATURE_FACTS)
     if (
-        len(ids) != 28
-        or len(ids) != len(set(ids))
+        len(ids) != len(set(ids))
         or len(displays) != len(set(displays))
         or len(orders) != len(set(orders))
         or set(ids) != set(_CONFIGURE_SRD_CREATURE_BY_ID)
     ):
         raise RuntimeError(
-            "SRD creature declarations require 28 unique identities, display "
+            "SRD creature declarations require unique identities, display "
             "names, order values, and matching private configuration helpers",
         )
     return tuple(

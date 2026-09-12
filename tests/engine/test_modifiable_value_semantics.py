@@ -3,6 +3,9 @@
 from typing import cast
 from uuid import UUID, uuid4
 
+import pytest
+from pydantic import ValidationError
+
 from dnd.core.base_object import BaseObject
 from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import (
@@ -23,6 +26,7 @@ from dnd.core.values import (
     BaseValue,
     CriticalStatus,
     ModifiableValue,
+    StaticValue,
 )
 
 
@@ -698,3 +702,31 @@ if __name__ == "__main__":
     test_eb_02_010_imported_target_channels_share_live_modifier_buckets()
     test_eb_02_011_inactive_contextual_damage_types_are_empty()
     print("PASS: engine book modifiable value tests")
+
+
+@pytest.mark.parametrize("bucket", ["value_modifiers", "min_constraints", "max_constraints"])
+def test_outgoing_numerical_buckets_reject_their_own_source(bucket: str) -> None:
+    reset_value_state()
+    owner_uuid, target_uuid = uuid4(), uuid4()
+    own_modifier = number_mod(owner_uuid, 1)
+    incoming = StaticValue(
+        source_entity_uuid=owner_uuid,
+        **{bucket: {own_modifier.uuid: own_modifier}},
+    )
+    assert incoming.source_entity_uuid == owner_uuid
+    with pytest.raises(ValidationError, match="Outgoing modifier target"):
+        StaticValue(
+            source_entity_uuid=owner_uuid,
+            is_outgoing_modifier=True,
+            **{bucket: {own_modifier.uuid: own_modifier}},
+        )
+    other_modifier = NumericalModifier(
+        source_entity_uuid=owner_uuid, target_entity_uuid=target_uuid,
+        name="Other target", value=1,
+    )
+    outgoing = StaticValue(
+        source_entity_uuid=owner_uuid,
+        is_outgoing_modifier=True,
+        **{bucket: {other_modifier.uuid: other_modifier}},
+    )
+    assert outgoing.source_entity_uuid == owner_uuid

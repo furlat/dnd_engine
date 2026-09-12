@@ -14,11 +14,13 @@ from dnd.blocks.base_item import UsableItem
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_actions import (
     ActionAvailabilityStatus,
+    ActionOutcomeProfile as EngineActionOutcomeProfile,
     AvailableActionInfo,
     AvailableActionsResult,
     AvailableTarget,
     BaseAction,
     BaseCost,
+    OpportunityAttackExposure as EngineOpportunityAttackExposure,
     TargetType,
 )
 from dnd.entity import Entity
@@ -36,11 +38,15 @@ from dnd.ai.contracts.control import (
     ActionTarget,
     AffordanceSet,
     CanonicalActionRow,
+    DamageRollProfile,
     DecisionEpoch,
     DecisionEpochReason,
     END_TURN_ROW_ID,
     EconomyGate,
     OpportunityAttackExposure,
+    OutcomeAdvantage,
+    OutcomeApplicationScope,
+    OutcomeResolution,
     ResourcePool,
 )
 from dnd.ai.contracts.semantics import (
@@ -689,6 +695,49 @@ def _build_action_row_descriptors(
     }
 
 
+def _project_outcome_profile(
+    profile: EngineActionOutcomeProfile | None,
+) -> ActionOutcomeProfile | None:
+    """Carry an already-disclosed outcome into the controller's value types."""
+    if profile is None:
+        return None
+    return ActionOutcomeProfile(
+        effect_id=profile.effect_id,
+        resolution=OutcomeResolution(profile.resolution.value),
+        applications=profile.applications,
+        application_scope=OutcomeApplicationScope(profile.application_scope.value),
+        damage_rolls=tuple(
+            DamageRollProfile(
+                dice_count=roll.dice_count,
+                die_size=roll.die_size,
+                flat_bonus=roll.flat_bonus,
+                damage_type=roll.damage_type,
+            )
+            for roll in profile.damage_rolls
+        ),
+        attack_bonus=profile.attack_bonus,
+        advantage=OutcomeAdvantage(profile.advantage.value),
+        critical_threshold=profile.critical_threshold,
+        critical_extra_dice=profile.critical_extra_dice,
+        save_dc=profile.save_dc,
+        save_ability=profile.save_ability,
+        half_damage_on_save=profile.half_damage_on_save,
+        scope=profile.scope,
+    )
+
+
+def _project_opportunity_attack_exposure(
+    exposure: EngineOpportunityAttackExposure,
+) -> OpportunityAttackExposure:
+    """Detach one mutable native route threat for a controller decision."""
+    return OpportunityAttackExposure(
+        reactor_uuid=str(exposure.reactor_uuid),
+        reactor_name=exposure.reactor_name,
+        from_position=exposure.from_position,
+        to_position=exposure.to_position,
+    )
+
+
 def _describe_action_row(
     row: AvailableActionInfo,
     semantic_catalog: dict[str, ActionSemantics],
@@ -725,11 +774,7 @@ def _describe_action_row(
         semantics=semantics,
         semantics_ref=semantics_ref,
         cost=_action_cost_profile_from_action(row),
-        outcome_profile=(
-            ActionOutcomeProfile.model_validate(row.outcome_profile.model_dump(mode="json"))
-            if row.outcome_profile is not None
-            else None
-        ),
+        outcome_profile=_project_outcome_profile(row.outcome_profile),
         capability_tags=tuple(sorted(tag.value for tag in semantics.tags)),
         affordance_tags=tuple(_affordance_tags_from_action(row, semantics)),
     )
@@ -762,7 +807,7 @@ def _action_row_descriptor_cache_key(row: AvailableActionInfo) -> tuple[Any, ...
         row.weapon_slot,
         row.weapon_name,
         tuple(row.damage_types),
-        _frozen_model_key(row.outcome_profile),
+        row.outcome_profile,
         _frozen_model_key(row.self_setup_profile),
         _frozen_model_key(row.target_effect_profile),
         _frozen_model_key(row.world_effect_profile),
@@ -848,11 +893,7 @@ def _build_affordance_rows_from_actions(
                     semantics=semantics,
                     semantics_ref=action_semantics_ref(semantics),
                     cost=_action_cost_profile_from_action(row),
-                    outcome_profile=(
-                        ActionOutcomeProfile.model_validate(row.outcome_profile.model_dump(mode="json"))
-                        if row.outcome_profile is not None
-                        else None
-                    ),
+                    outcome_profile=_project_outcome_profile(row.outcome_profile),
                     capability_tags=tuple(sorted(tag.value for tag in semantics.tags)),
                     affordance_tags=tuple(_affordance_tags_from_action(row, semantics)),
                 )
@@ -1050,15 +1091,11 @@ def _action_target_from_available_target(
         path=tuple(target.path or ()),
         safe_path=tuple(target.safe_path or ()),
         opportunity_attack_exposures=tuple(
-            OpportunityAttackExposure.model_validate(
-                exposure.model_dump(mode="json")
-            )
+            _project_opportunity_attack_exposure(exposure)
             for exposure in target.opportunity_attack_exposures
         ),
         safe_path_opportunity_attack_exposures=tuple(
-            OpportunityAttackExposure.model_validate(
-                exposure.model_dump(mode="json")
-            )
+            _project_opportunity_attack_exposure(exposure)
             for exposure in target.safe_path_opportunity_attack_exposures
         ),
         affected_entity_uuids=tuple(

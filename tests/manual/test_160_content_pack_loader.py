@@ -21,7 +21,6 @@ from dnd.core.events import EventQueue
 from dnd.entity import Entity
 
 
-_BUILT_IN_ARTIFACT_DIGEST = "a" * 64
 _MUTATED_OBJECT_UUID = UUID("10000000-0000-0000-0000-000000000001")
 _MUTATED_ENTITY_UUID = UUID("10000000-0000-0000-0000-000000000002")
 _MUTATED_HANDLER_UUID = UUID("10000000-0000-0000-0000-000000000003")
@@ -230,11 +229,9 @@ def test_discovery_is_cold_and_loading_publishes_one_frozen_registry(
 
     loaded = load_content_system(
         pack_roots=(root,),
-        built_in_artifact_digest=_BUILT_IN_ARTIFACT_DIGEST,
     )
     assert marker.read_text(encoding="utf-8") == "imported"
     assert len(loaded.content_set_digest) == 64
-    assert loaded.built_in_artifact_digest == _BUILT_IN_ARTIFACT_DIGEST
     assert tuple(loaded.registry.declarations) == (
         "fixture.alpha:item:item.alpha@1",
     )
@@ -368,7 +365,6 @@ def test_content_api_v2_pack_can_author_exact_origin_definitions(
 
     loaded = load_content_system(
         pack_roots=(root,),
-        built_in_artifact_digest=_BUILT_IN_ARTIFACT_DIGEST,
     )
     species = loaded.registry.declarations[
         "fixture.origin_capable:species:species.fixture@1"
@@ -411,11 +407,9 @@ def test_pack_root_order_does_not_change_content_set_digest(tmp_path: Path) -> N
 
     forward = load_content_system(
         pack_roots=(first_root, second_root),
-        built_in_artifact_digest=_BUILT_IN_ARTIFACT_DIGEST,
     )
     reverse = load_content_system(
         pack_roots=(second_root, first_root),
-        built_in_artifact_digest=_BUILT_IN_ARTIFACT_DIGEST,
     )
     assert forward.content_set_digest == reverse.content_set_digest
     assert tuple(forward.registry.declarations) == tuple(reverse.registry.declarations)
@@ -446,7 +440,6 @@ def test_duplicate_pack_id_and_import_failure_abort_without_partial_result(
     with pytest.raises(ValueError, match="Duplicate content pack"):
         load_content_system(
             pack_roots=(first_root, second_root),
-            built_in_artifact_digest=_BUILT_IN_ARTIFACT_DIGEST,
         )
 
     failure_root = tmp_path / "failure"
@@ -462,7 +455,6 @@ def test_duplicate_pack_id_and_import_failure_abort_without_partial_result(
     with pytest.raises(RuntimeError, match="fixture import failed"):
         load_content_system(
             pack_roots=(failure_root,),
-            built_in_artifact_digest=_BUILT_IN_ARTIFACT_DIGEST,
         )
 
 
@@ -511,27 +503,22 @@ def test_length_prefixed_pack_hash_has_no_file_boundary_collision(
     ) != pack_loader._hash_pack_directory(separate_records)
 
 
-def test_built_in_artifact_digest_is_validated_and_changes_content_identity(
+def test_builtin_pack_versions_participate_in_content_identity(
     tmp_path: Path,
 ) -> None:
-    """Built-in executable content participates in the frozen set identity."""
+    """Installed declarations and declared pack versions identify built-ins."""
     root = tmp_path / "packs"
     root.mkdir()
     first = load_content_system(
         pack_roots=(root,),
-        built_in_artifact_digest="a" * 64,
+        built_in_pack_versions={"core.rules": "1.0.0"},
     )
     second = load_content_system(
         pack_roots=(root,),
-        built_in_artifact_digest="b" * 64,
+        built_in_pack_versions={"core.rules": "1.0.1"},
     )
 
     assert first.content_set_digest != second.content_set_digest
-    with pytest.raises(ValueError, match="built_in_artifact_digest"):
-        load_content_system(
-            pack_roots=(root,),
-            built_in_artifact_digest="not-a-sha256",
-        )
 
 
 def test_failed_import_restores_module_and_path_state_then_retry_is_fresh(
@@ -554,7 +541,6 @@ def test_failed_import_restores_module_and_path_state_then_retry_is_fresh(
     with pytest.raises(RuntimeError, match="fixture import failed"):
         load_content_system(
             pack_roots=(root,),
-            built_in_artifact_digest=_BUILT_IN_ARTIFACT_DIGEST,
         )
     assert python_root not in sys.path
     assert not any(
@@ -573,7 +559,6 @@ def test_failed_import_restores_module_and_path_state_then_retry_is_fresh(
     )
     loaded = load_content_system(
         pack_roots=(root,),
-        built_in_artifact_digest=_BUILT_IN_ARTIFACT_DIGEST,
     )
     assert tuple(loaded.registry.declarations) == (
         "fixture.retry:item:item.retry@1",
@@ -614,7 +599,6 @@ def test_cross_pack_import_requires_a_direct_manifest_dependency_before_import(
     with pytest.raises(ValueError, match="direct manifest dependency"):
         load_content_system(
             pack_roots=(root,),
-            built_in_artifact_digest=_BUILT_IN_ARTIFACT_DIGEST,
         )
     assert not alpha_marker.exists()
     assert not beta_marker.exists()
@@ -636,7 +620,6 @@ def test_cross_pack_import_requires_a_direct_manifest_dependency_before_import(
     )
     loaded = load_content_system(
         pack_roots=(root,),
-        built_in_artifact_digest=_BUILT_IN_ARTIFACT_DIGEST,
     )
     assert set(loaded.registry.declarations) == {
         "fixture.alpha_importer:item:item.alpha_importer@1",
@@ -671,7 +654,6 @@ def test_pack_dependency_cycle_is_rejected_before_any_pack_executes(
     with pytest.raises(ValueError, match="dependency cycle"):
         load_content_system(
             pack_roots=(root,),
-            built_in_artifact_digest=_BUILT_IN_ARTIFACT_DIGEST,
         )
     assert not alpha_marker.exists()
     assert not beta_marker.exists()
@@ -714,7 +696,6 @@ def test_mutation_after_discovery_is_rejected_before_pack_executes(
     with pytest.raises(RuntimeError, match="after discovery"):
         load_content_system(
             pack_roots=(root,),
-            built_in_artifact_digest=_BUILT_IN_ARTIFACT_DIGEST,
         )
     assert not marker.exists()
 
@@ -822,7 +803,6 @@ def test_forbidden_pack_import_mechanisms_fail_before_any_pack_executes(
     with pytest.raises(ValueError, match=message):
         load_content_system(
             pack_roots=(root,),
-            built_in_artifact_digest=_BUILT_IN_ARTIFACT_DIGEST,
         )
     assert not marker.exists()
 
@@ -849,7 +829,6 @@ def test_transitive_upward_dnd_import_fails_before_any_pack_executes(
     with pytest.raises(ValueError, match="transitively reaches forbidden"):
         load_content_system(
             pack_roots=(root,),
-            built_in_artifact_digest=_BUILT_IN_ARTIFACT_DIGEST,
         )
     assert not marker.exists()
 
@@ -876,7 +855,6 @@ def test_dependency_leaf_and_entity_imports_remain_supported(
 
     loaded = load_content_system(
         pack_roots=(root,),
-        built_in_artifact_digest=_BUILT_IN_ARTIFACT_DIGEST,
     )
     assert marker.read_text(encoding="utf-8") == "imported"
     assert tuple(loaded.registry.declarations) == (
@@ -923,7 +901,6 @@ def test_forbidden_upward_pack_imports_fail_before_any_pack_executes(
     with pytest.raises(ValueError, match="forbidden composition dependency"):
         load_content_system(
             pack_roots=(root,),
-            built_in_artifact_digest=_BUILT_IN_ARTIFACT_DIGEST,
         )
     assert not marker.exists()
 
@@ -956,7 +933,6 @@ def test_live_engine_object_rejects_pack_before_import_without_mutation(
         with pytest.raises(RuntimeError, match="cold engine runtime"):
             load_content_system(
                 pack_roots=(root,),
-                built_in_artifact_digest=_BUILT_IN_ARTIFACT_DIGEST,
             )
         assert not marker.exists()
         assert id(BaseObject._registry) == registry_identity
@@ -995,7 +971,6 @@ def test_equal_content_runtime_container_replacement_is_detected_and_restored(
         with pytest.raises(RuntimeError, match="mutated engine runtime state"):
             load_content_system(
                 pack_roots=(root,),
-                built_in_artifact_digest=_BUILT_IN_ARTIFACT_DIGEST,
             )
         assert BaseObject._registry is original_registry
         assert not original_registry
@@ -1052,7 +1027,6 @@ def test_top_level_runtime_mutations_abort_and_restore_every_registry(
     with pytest.raises((RuntimeError, ValueError), match=expected_error):
         load_content_system(
             pack_roots=(root,),
-            built_in_artifact_digest=_BUILT_IN_ARTIFACT_DIGEST,
         )
 
     assert _runtime_registry_identity() == before
@@ -1090,7 +1064,6 @@ def test_relative_package_imports_remain_supported(tmp_path: Path) -> None:
 
     loaded = load_content_system(
         pack_roots=(root,),
-        built_in_artifact_digest=_BUILT_IN_ARTIFACT_DIGEST,
     )
     assert marker.read_text(encoding="utf-8") == "imported"
     assert tuple(loaded.registry.declarations) == (
@@ -1129,7 +1102,6 @@ def test_relative_internal_import_cycle_fails_before_pack_execution(
     with pytest.raises(ValueError, match="Python import cycle"):
         load_content_system(
             pack_roots=(root,),
-            built_in_artifact_digest=_BUILT_IN_ARTIFACT_DIGEST,
         )
     assert not marker.exists()
 
@@ -1163,7 +1135,6 @@ def test_relative_import_cannot_escape_to_an_undeclared_pack(
     with pytest.raises(ValueError, match="direct manifest dependency"):
         load_content_system(
             pack_roots=(root,),
-            built_in_artifact_digest=_BUILT_IN_ARTIFACT_DIGEST,
         )
     assert not importer_marker.exists()
     assert not dependency_marker.exists()
@@ -1196,14 +1167,12 @@ def test_successive_loads_reusing_a_python_package_do_not_share_import_roots(
 
     first = load_content_system(
         pack_roots=(first_root,),
-        built_in_artifact_digest=_BUILT_IN_ARTIFACT_DIGEST,
     )
     assert first_marker.exists()
     assert first_python_root not in sys.path
 
     second = load_content_system(
         pack_roots=(second_root,),
-        built_in_artifact_digest=_BUILT_IN_ARTIFACT_DIGEST,
     )
     assert second_marker.exists()
     assert second_python_root not in sys.path
