@@ -1204,8 +1204,11 @@ effect anchor and body/children join inside the existing choreography. Its data
 imports four original materialized Studio drafts and binds the new potion to
 the original drink recipe with a local label override. No runtime TypeScript,
 new queue, condition-specific tint, or per-spell renderer is introduced. The
-original drink strip asset is absent from the reference checkout; the trace
-reports that media gap while retaining Taunt, slot hiding and effect timing.
+original drink strip asset is absent from the reference checkout. Its original
+media track remains in JSON, but the shared body-action path does not yet load,
+sample or draw it; supplying the file alone will not enable it. The trace reports
+that media gap while retaining Taunt, slot hiding and effect timing. The user
+confirmed that this VFX connection can wait; the drinking gesture is implemented.
 
 The [28-card gallery](http://127.0.0.1:8767/runs/20260912T013031Z-811447/index.html)
 contains all 14 experiments from both participants: 3,482 frames across 384
@@ -1229,8 +1232,8 @@ projection/charge/passive replay passes 15 tests, and the independent native
 potion/charge review passes five overlapping tests. Game/review production and
 changed replay tests pass Pyright; the original importer matches all 327 outputs.
 Anti-slop and anti-OOP reviewers approve the scoped mechanics and shared-data
-boundaries. Four potion-view cards retain the one documented missing drink-strip
-asset; no replacement effect was fabricated. The broad run passed 747 tests with
+boundaries. Four potion-view cards retain the documented unbound drink-strip
+track; no replacement effect was fabricated. The broad run passed 747 tests with
 six existing terrain expectations and two failures. A fresh rerun verifies the
 corrected disappearance drawer; the only remaining failure is the older startup
 budget (successful application exit in 8.23 seconds against eight). RECOVERY_PLAN

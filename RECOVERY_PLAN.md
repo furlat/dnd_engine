@@ -97,8 +97,12 @@ latest has reached cursor277. Ordinary invisibility removes the other actor;
 truesight retains its authored translucent body; successful Hide removes contact
 without tinting the controlled actor. Revealing attacks stage the actual newly
 disclosed position and final appearance. The sole selected media gap is the
-missing original drink strip on four potion-view cards; Taunt, slot hiding,
-condition timing and finite consumption work through shared owners.
+original drink strip on four potion-view cards. Its asset is absent from the
+reference checkout, and the generic body-action media track is not yet connected
+to loading/sampling/drawing. Keeping that track in JSON does not implement its
+playback. This VFX work is deferred at the user's request; the authored Taunt
+drinking gesture, slot hiding, condition timing and finite consumption already
+work through shared owners.
 
 The 14-case native/public matrix, 18 body/movement/condition/recovery checks,
 15 projection/consumption/passive-replay checks and five independent native

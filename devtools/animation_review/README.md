@@ -116,7 +116,8 @@ see it. Search is not an existing native action and is outside this matrix.
 Capture or replay just this unit with `--capture --tag concealment` or
 `--tag concealment`; both commands include each experiment's two perspectives.
 The potion uses the original authored Taunt/effect-frame-8 body track. Its
-original drink strip is currently reported as an unbound media gap; no
+original drink strip is currently reported as an unbound media gap: both its
+asset and the body-action media-track playback connection are outstanding; no
 replacement VFX is generated for it.
 
 Paired cards have **Show paired views** and **Export paired views** controls.
