@@ -27,6 +27,39 @@ is now imported through the original Studio schema, independently of gameplay.
 
 ### Current position — read this before the checkpoint details
 
+**Active hard stop, September 12 — engine and application performance:** the
+user has stopped rendering feature work. Identify and fix measured sources of
+slowness; an eight-second smoke pass alone is not the objective. Separate fresh
+imports/content installation, native world/entity construction, steady native
+turns/actions/senses, event capture/projection/reduction, asset preparation and
+actual drawing. Compare compatible workloads against pinned earlier revisions
+to distinguish inherited costs from recovery regressions. Retain the existing
+rules, subjective lineages, recorded replay and independent playback clock.
+
+1. Record serial baseline timings and profiles for native-only work and the
+   application boundaries. Use actual discovered actions, turn advancement and
+   saved histories. Record scenario size, events/outcomes, environment and
+   profiler overhead. Native benchmarks must not require Pygame or recording.
+2. Trace hot work to its owner and introduction in history: eager imports and
+   schema construction, per-tile values, validation, spatial recalculation,
+   defensive copies and serialization. Do not assume every copy is redundant
+   or that startup measures steady turn throughput.
+3. Remove demonstrated redundant work. Bundled asset validation belongs in
+   authoring/verification where possible; ordinary play should load its shipped
+   data. Preserve ownership and error behavior where it matters. No deferred
+   imports, registry replacement, weakened event semantics or renderer redesign
+   to make a benchmark smaller.
+4. Run behavior tests appropriate to each changed owner and replay saved public
+   histories. Repeat the same serial measurements and report before/after by
+   subsystem, including remaining expensive work. Keep the eight-second gate
+   intact and document the game/renderer boundary in the performance report.
+
+**Reviews:** anti-slop review independently checks historical/native semantics,
+workload equivalence and claimed savings; anti-OOP review checks dependency DAGs,
+ECS ownership and whether each optimization removes work rather than adding a
+parallel system. Both review concrete changes. Root owns serial benchmarking;
+reviewers study independently without concurrent timing jobs.
+
 **Completed unit, September 12 — invisibility, stealth and truesight:** extend the
 paired subjective recordings through the existing native concealment rules.
 Test allied and opposing factions, from both the concealed/casting actor and
@@ -120,6 +153,17 @@ below document the same budget issue. No timing threshold or terrain expectation
 was relaxed. Logs and a validation summary are preserved under the gallery's
 `inspection/validation` directory. This concealment unit is complete; the
 startup budget and prior terrain limitations remain separate outstanding work.
+
+**Startup profiling, September 12:** the user's requested measurement reproduced
+the unchanged eight-second smoke gate at 8.897–9.000s, with successful settlement.
+This is the older map diagnostic's whole process, not encounter startup. A
+representative 8.973s run spent 3.897s importing, 2.457s producing the native
+world/door intervals, 0.948s validating the asset catalog, 0.439s decoding assets
+and 0.348s drawing twelve frames. Reduction took less than a millisecond.
+[The profile and source findings](agent_docs/STARTUP_PROFILE_2026-09-12.md)
+record the remaining overhead, repeated root-path resolution and native
+tile-cost construction. No implementation or timing threshold was changed;
+the budget remains outstanding.
 
 **Completed visibility unit, September 11:** after the validated `12ae1eb` replay
 checkpoint, the user requested extensive entering/leaving-sight and doorway
