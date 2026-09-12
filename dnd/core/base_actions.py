@@ -871,10 +871,6 @@ class BaseAction(BaseObject):
             "implementation identity."
         ),
     )
-    parent_event: Optional[Event] = Field(
-        default=None,
-        description="Optional parent event used to nest action-created events.",
-    )
     costs: List[Cost] = Field(default_factory=list, description="Runtime costs required by this action.")
     target_type: TargetType = Field(
         default=TargetType.SELF,

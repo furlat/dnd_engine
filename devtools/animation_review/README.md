@@ -1,12 +1,13 @@
 # Animation clip extraction and review
 
-From the repository root, using the existing virtual environment and installed
-`ffmpeg`/`ffprobe`:
+From the repository root, use the [WSL uv setup](../../README.md) and installed
+`ffmpeg`/`ffprobe`. Export the same `UV_PROJECT_ENVIRONMENT` in each new shell:
 
 ```bash
-.venv/bin/python -m devtools.animation_review.capture
-.venv/bin/python -m devtools.animation_review
-.venv/bin/python -m devtools.animation_review.serve
+export UV_PROJECT_ENVIRONMENT="$HOME/.cache/dnd-engine/venv"
+uv run --no-sync python -m devtools.animation_review.capture
+uv run --no-sync python -m devtools.animation_review
+uv run --no-sync python -m devtools.animation_review.serve
 ```
 
 Open <http://127.0.0.1:8767/>. `devtools.animation_review.capture` generates and saves the selected
@@ -242,15 +243,15 @@ state and draw metadata.
 ## Repeat a focused step
 
 ```bash
-.venv/bin/python -m devtools.animation_review --list
-.venv/bin/python -m devtools.animation_review.capture --case 'walk-*'
-.venv/bin/python -m devtools.animation_review --case 'walk-*'
-.venv/bin/python -m devtools.animation_review --tag ranged
-.venv/bin/python -m devtools.animation_review --tag gameplay
-.venv/bin/python -m devtools.animation_review --tag forced-movement
-.venv/bin/python -m devtools.animation_review.capture --tag visibility
-.venv/bin/python -m devtools.animation_review --tag visibility
-.venv/bin/python -m devtools.animation_review --review /path/to/downloaded-review.json
+uv run --no-sync python -m devtools.animation_review --list
+uv run --no-sync python -m devtools.animation_review.capture --case 'walk-*'
+uv run --no-sync python -m devtools.animation_review --case 'walk-*'
+uv run --no-sync python -m devtools.animation_review --tag ranged
+uv run --no-sync python -m devtools.animation_review --tag gameplay
+uv run --no-sync python -m devtools.animation_review --tag forced-movement
+uv run --no-sync python -m devtools.animation_review.capture --tag visibility
+uv run --no-sync python -m devtools.animation_review --tag visibility
+uv run --no-sync python -m devtools.animation_review --review /path/to/downloaded-review.json
 ```
 
 `--review` renders the actual saved inputs embedded in the exported review.
@@ -273,7 +274,7 @@ and the full catalog at an implementation checkpoint. No image-diff baseline
 is silently promoted by the tool.
 
 ```bash
-SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy .venv/bin/python -m pytest \
+SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy uv run --no-sync python -m pytest \
   tests/game/test_animation_review.py tests/game/test_animation_review_server.py -q
 ```
 

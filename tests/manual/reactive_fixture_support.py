@@ -117,7 +117,6 @@ def create_intercept_processor(charge_destination: Tuple[int, int]):
                 source_entity_uuid=source_entity_uuid,
                 target_entity_uuid=event.source_entity_uuid,
                 weapon_slot=WeaponSlot.MELEE_MAIN,
-                parent_event=event,
                 use_register=False,
                 costs=[
                     Cost(

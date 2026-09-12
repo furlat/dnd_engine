@@ -27,13 +27,27 @@ is now imported through the original Studio schema, independently of gameplay.
 
 ### Current position — read this before the checkpoint details
 
+**Latest priority and result:** the user accepts the measured ~200ms GC pauses
+for now and selected WSL. Controlled comparisons put native imports at **1.709s**
+with uv's Python 3.13.12 and Linux source/packages, versus the earlier mounted
+Python 3.12 environment's **4.529s**. Package versions are unchanged. The new WSL
+environment is prepared; imports against the actual C: checkout measure
+**2.909s**. The checkout remains there pending the source-location decision.
+A diagnostic Linux source copy is not the active branch. See the results for
+separate comparisons, setup and native turn costs;
+these figures do not measure whole-game startup. Leave GC tuning and capture
+persistence aside.
+
 **Current unit, September 12 — performance repair implementation:** the user
 approved executing the reviewed repair plan after the whole-source audit and
 plain timing baseline. The startup/media/query pass is checkpointed as `13f412d`
-and `18a2163`. The next reviewed unit implements compact ordinary Tile costs and
-removes the mandatory duplicate condition-effect prediction catalog. Native
-behavior checks and serial timing results are recorded below; feature/VFX work
-remains paused.
+and `18a2163`. Compact ordinary Tile costs and removal of the mandatory duplicate
+condition-effect prediction catalog are checkpointed as `0a2140c`. The current
+loading unit establishes the WSL uv setup and removes only the unread stored
+action parent, preserving the explicit event-parent arguments. Thirty selected
+lifecycle, movement interruption, history and session checks pass on WSL Python
+3.13.12, and the game boots through its one-frame headless check. The field
+deletion has no demonstrated import-speed gain. Feature/VFX work remains paused.
 
 - [Fix plan](agent_docs/PERFORMANCE_FIX_PLAN_2026-09-12.md): first repair ordinary
   startup/import and media ownership; then native query/AI work; then measured
@@ -68,7 +82,8 @@ do not establish faster turn execution. The last saved-playback measurement
 remains 3.493s versus 8.404s; rendering was not rerun for this native-only unit.
 Public reduction/passive records are separated from native adapters, and the
 internal AI outcome/exposure serialization bridge is removed. Existing AI
-observation memory stays. Native imports still take roughly 4–4.5s.
+observation memory stays. Those native import measurements used the old mounted
+environment; the latest controlled WSL comparison is recorded above.
 
 **Validated media/capture checkpoint:** the two-actor request now loads 72 initial
 pose rows and 136 total with its movement (127.5 MiB), down from 1,008 rows and

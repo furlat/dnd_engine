@@ -6,6 +6,30 @@ implementation stop. First unit: ordinary startup/import and media ownership,
 with bounded native query duplication work prepared alongside it. Measure serially
 after focused behavior checks; record results below as units are validated.
 
+**Latest user priority:** ignore the approximately 200ms GC pauses for now; cold
+loading is the next target, using WSL. The completed environment comparison
+isolates package storage, source storage and interpreter version. It identifies
+roughly two seconds of filesystem overhead; native imports reach 1.709s with
+Python 3.13.12 and Linux source/packages. Keep import, setup and turn timings
+distinct. The WSL uv environment is ready and documented, using the unchanged
+dependency lock. Imports against the actual C: checkout measure 2.909s.
+The live checkout remains on C: pending the folder decision;
+the diagnostic source copy is not the active branch. This does not claim uv
+itself removes model construction. Anti-slop reviewer `recorded_gallery` reviewed
+the measurement boundary and launch commands; anti-OOP reviewer
+`lifecycle_source_review` studied concrete native schema/import ownership.
+No GC/capture changes belong to this unit.
+
+The ownership review supports one small deletion: BaseAction stores an unread
+parent Event in every inherited action schema. Actual ancestry already travels
+through the explicit `apply(parent_event)` argument into event construction.
+Remove only that field and the two redundant Attack constructor arguments
+(production opportunity attack and its manual fixture). Keep all event parents,
+lineages and apply arguments. Both reviewers approve this scope. Existing real
+opportunity/save/paralysis/death lineage cases and native session/event lifecycle
+checks validate it. Measure import effects separately; do not claim seconds from
+this deletion or expand into the used item-snapshot/binding fields.
+
 **Implementation checkpoint:** [measured results](PERFORMANCE_REPAIR_RESULTS_2026-09-12.md).
 Ordinary-play audit removal, passive public import ownership, session/requested
 media loading, native query/AI value duplication, the world-diff guard and batch
@@ -17,7 +41,7 @@ and an alternating comparison. Native imports, private actor-history refolding
 and the remaining content-identity work are still open as bounded below. This is
 not completion of every numbered phase.
 
-### Current authorized unit: ordinary terrain and remaining catalog obligations
+### Completed fourth unit: ordinary terrain and remaining catalog obligations
 
 The first pass is checkpointed as `13f412d` (native) and `18a2163` (public
 playback/media and its audit/results). The user authorized continuing recovery.

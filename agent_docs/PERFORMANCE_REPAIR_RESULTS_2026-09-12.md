@@ -525,24 +525,125 @@ already uses that loader, so moving that type alone has no demonstrated saving
 for this workload. The review found no additional obvious local deletion. The
 older instrumented spans overlap and are not current savings estimates.
 
+## Fifth checkpoint: identify the loading cost and use uv in WSL
+
+The user deprioritized the approximately 200ms GC pauses and selected WSL for
+continued work. Cold loading is the focus. The initial environment was created
+by `python -m venv` using the system Python 3.12.3; both it and the checkout were
+on `/mnt/c`. The installed packages match `uv.lock`, including Pydantic 2.13.4,
+pydantic-core 2.46.4 and pygame-ce 2.5.8. The sole absent lock entry, colorama,
+has Windows-only dependency markers. Dependency drift did not explain the cost.
+
+uv 0.10.9 is installed in WSL. Scratch environments were synced from the existing
+lock, retaining package versions. Timing invokes their interpreters directly;
+uv resolution/installation is outside the clocks. The same eight-turn native
+workload is used throughout, without Pygame or capture/projection. Comparisons
+alternate three fresh processes per configuration, after a separately retained
+first-use run. These are not measurements with the OS filesystem cache cleared.
+
+| Controlled comparison | Before: native imports | After: native imports |
+|---|---:|---:|
+| Python 3.12.3, same mounted source; move installed packages to Linux filesystem | 4.529s | 4.044s |
+| Same Python/environment; move native source and required data to Linux filesystem | 4.059s | 2.347s |
+| Same Linux source and package versions; system Python 3.12.3 → uv Python 3.13.12 | 2.265s | 1.709s |
+
+Each row has its own comparison runs; do not subtract values from different rows
+as exact additive savings. Source copies contain the actual `0a2140c` native
+package, session composition and required sibling content data/pack root, with
+no code optimization. The source-location comparison's controller medians are
+2.828s and 2.826s: the filesystem difference affects imports, not ordinary native
+turn work. The interpreter comparison's controller medians are 2.688s and 2.090s;
+setup is 0.208s and 0.375s, so not every stage improves. GC was not tuned or pursued.
+Every repeated native workload retains eight turns, four rounds, 1,175 event
+versions, the previous positions and already-observed HP variants.
+
+This identifies roughly two seconds of the earlier import measurement as
+filesystem overhead. The real construction work remains material, but the
+five-second figure is not a sound budget for a wholesale native-model rewrite.
+The selected interpreter is uv-managed Python 3.13 in WSL; native Linux storage
+is the configuration behind its lowest measured loading time. `.python-version`
+selects 3.13, and the prepared environment is
+`/home/tommaso/.cache/dnd-engine/venv`. The README documents its exported
+`UV_PROJECT_ENVIRONMENT`, locked sync with bytecode compilation during setup,
+and `uv run --no-sync` commands. The live checkout remains on C: pending the
+folder decision; a diagnostic source copy is not a new source of truth for
+development. The actual game boots under this WSL environment from the current
+checkout with `--headless --frames 1`, reporting zero commands, one initialization
+lineage and matching historical/latest state. This is a startup check, not a
+repeated whole-game timing result.
+
+Three fresh native workload runs with this prepared environment and the **actual
+current C: checkout** measure imports at a median **2.909s** (2.904–3.075s),
+encounter setup at 0.328s and controller work at 1.844s. The whole native process
+is 6.378s (6.348–6.566s); it includes eight human turns and native AI, with no
+rendering. Counts, final positions and the previously observed HP variants
+remain the same. These runs follow environment setup and the game smoke check;
+they do not clear OS caches. This is the selected runtime's current result;
+the 1.709s figure above requires native Linux source as well.
+
+A native Windows comparison was completed before the user selected WSL. Its
+uv-managed Python 3.14.4 imports in a median 1.803s on the actual Windows checkout.
+Its fresh environment's first import took 12.707s. A single first full game boot
+including one headless frame took 18.471s through the Windows command bridge and
+exited successfully; this is not an import timing or a repeated startup result.
+Those measurements remain as evidence, not the selected launch workflow. The
+Windows environment did not replace the original Linux `.venv`.
+
+### Small native ownership cleanup
+
+Removed the unread stored `BaseAction.parent_event` field and the redundant
+Attack constructor argument in production/manual opportunity-reaction code.
+Actual ancestry still flows through `apply(parent_event)` into declaration/event
+construction. Event parents, complete lineages and public event serialization
+remain unchanged. Internal raw action model dumps lose that unused field;
+supported action discovery uses its existing explicit records.
+
+Both reviewers independently traced the callers before the deletion. Existing
+event lifecycle, actual opportunity/save/paralysis/death lineages, public history
+and native session tests pass: the same 30 selected cases on Linux Python 3.12.3
+(8.84s), Windows Python 3.14.4 (7.47s), and selected WSL Python 3.13.12 (8.45s).
+This does not claim the whole suite passed. No new tests merely assert the
+absence of the field.
+
+An alternating, import-only comparison on native Linux storage with Python 3.13
+measured 1.715s before and 1.780s after (three runs each). This small deletion has
+**no demonstrated import-speed gain**; it simplifies ownership and does not
+account for the environment improvements. The used item-snapshot and binding
+fields were not privatized, and no broad Pydantic migration, deferred construction
+or import cache was added.
+
+Raw commands, paths, interpreter versions, individual spans and initial-use
+results are under `.runtime/performance-recovery/startup-environment-20260912/`.
+`environment-summary.json` covers the controlled comparisons;
+`parent-edge-imports.json` retains the code-only comparison. Correctness logs
+include `parent-edge-checks-linux.log`, `parent-edge-checks-windows.log` and
+`parent-edge-checks-wsl313.log`; the selected runtime's game startup is in
+`wsl-game-smoke.log`.
+`selected-wsl-mounted-summary.json` records the prepared runtime's three runs
+against the actual checkout, including source/interpreter paths and outcomes.
+
 ## Open work and limits
 
 The measured repairs remove audit obligations, excess preloading, import
 coupling and repeated native/projection work. They do **not** close performance
 recovery. The remaining large owners are explicit:
 
-1. Native cold imports still take roughly 4–4.5s. The existing profile identifies
-   eager native Pydantic class construction and module I/O. The next import
-   design must address actual dependencies/representation; adding schema caches,
-   late imports or mass unchecked construction would preserve the wrong premise.
+1. Native imports take 2.909s with the selected WSL environment and current C:
+   source, or about 1.7s with native Linux source/packages. The earlier 4–4.5s
+   includes mounted filesystem overhead;
+   the live source-location decision remains open. Eager native Pydantic class
+   construction still has a cost. Any further import change needs evidence
+   about actual dependencies/representation; schema caches, late imports or
+   mass unchecked construction would preserve the wrong premise.
 2. Private admission capture still refolds actor history per root. A retained
    source-ordered fold needs the plan's acquisition-time/overlapping-root design
    review. Batch completion order is not an acceptable replacement for that.
 3. Native execution still costs several seconds for this eight-turn workload,
-   including measured generation-two collection pauses. The alternating results
-   do not establish faster turns. Ordinary tile construction is now 0.164s;
-   reducing that allocation does not settle runtime pauses, remaining content
-   ownership or root compilation. Those stay separately bounded work.
+   including measured generation-two collection pauses, which the user accepts
+   for now. The Tile comparison does not establish faster turns; the separate
+   interpreter comparison records a controller improvement. Ordinary tile
+   construction is now 0.164s. Remaining content ownership and root compilation
+   stay separately bounded work.
 
 Legacy external-pack/SDK limitations from the earlier checks remain: the broad
 pack-loader selection had 13 failures, and full SDK generation is blocked by

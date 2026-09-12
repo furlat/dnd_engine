@@ -10,6 +10,25 @@ ownership, lifecycle traces, source coverage and evidence for this branch.
 The examples below span earlier designs; the recovery plan and the applicable
 bounded contract govern when those historical examples disagree.
 
+Use uv in WSL with the checked-in Python version and dependency lock:
+
+```bash
+export UV_PROJECT_ENVIRONMENT="$HOME/.cache/dnd-engine/venv"
+uv sync --locked --compile-bytecode
+uv run --no-sync python -m game
+```
+
+Repeat the `export` in each new shell. Run installation once, then use
+`uv run --no-sync` for the prepared environment.
+Use the same prefix for tests, for example
+`uv run --no-sync python -m pytest -q tests/game/test_session.py`.
+Keep the checkout on WSL's Linux filesystem for fast imports: Python 3.13 with
+native source/package paths measured about 1.7s; reading source through `/mnt/c`
+adds substantial filesystem overhead. The environment above stays on Linux
+storage regardless of the checkout location. These are fresh-process import
+measurements after setup, not whole-game startup times. See the
+[startup comparison](agent_docs/PERFORMANCE_REPAIR_RESULTS_2026-09-12.md).
+
 `python -m game` starts the playable Goblin skirmish: the existing fighter and
 sorcerer premades, canonical Goblins and native enemy controller on a flat,
 bright map. Choose discovered actions with Up/Down, choose targets with Tab

@@ -50,7 +50,6 @@ def opportunity_attack_processor(event: StepMovementEvent, source_entity_uuid: U
             name="Opportunity Attack",
             source_entity_uuid=source_entity_uuid,
             target_entity_uuid=event.source_entity_uuid,
-            parent_event=event,
             weapon_slot=WeaponSlot.MELEE_MAIN,
             use_register=False,
             costs=[Cost(

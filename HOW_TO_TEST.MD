@@ -19,6 +19,11 @@ applies them to the Python/FastAPI backend and TypeScript/Playwright frontend.
 
 ## Scope Comes Before Tests
 
+Use the uv environment and Python version documented in `README.md`. Run tests
+with `uv run --no-sync python -m pytest` after `uv sync --locked --compile-bytecode`.
+Record source/environment locations with startup timings: WSL reads through
+`/mnt/c` add filesystem cost that should not be attributed to engine execution.
+
 Before changing code, write down four things:
 
 1. **Requested behavior** — the one feature or regression being changed.
