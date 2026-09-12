@@ -87,6 +87,38 @@ perception to manufacture an edge. The native acceptance matrix checks every
 visibility row's initial contact, acquisition/loss order, moving participant,
 and the two-aperture case's single movement root before clip review.
 
+Fourteen concealment experiments add twenty-eight subjective clips. The
+**subject** is the Invisibility caster or hidden actor; the **perceiver** is
+the other actor, who may cast True Seeing or drink its potion. Each card labels
+allied/opposing factions and its actual sight grant. Each viewpoint still has
+four camera corners. The finite matrix is:
+
+| Native experiment | Variants | Measured outcome for the perceiver |
+| --- | --- | --- |
+| Invisibility, move, reveal | Opponent attacks; ally drops concentration | Contact disappears and returns on the revealing action. |
+| True Seeing spell, Invisibility, move, reveal | Allied and opposing | Contact persists; the subject is still mechanically Invisible. |
+| Invisibility, True Seeing, native expiry | Opposing; paused history | Contact disappears, returns on the actual grant, disappears when its ten-round effect ends. |
+| True Seeing and invisible doorway crossing | Opposing | The wall still conceals movement outside the aperture. |
+| Bright-light Hide | Allied and opposing | Enemy observation withholds Hide from action discovery; allied observation allows its actual Stealth roll. |
+| Dim-light Hide, move, ranged reveal | High and low Stealth | High conceals; low applies Hidden while contact persists. |
+| True Seeing, Invisible + high Hidden, attack | Opposing | Truesight bypasses Invisibility but the native Stealth DC still conceals; attack removes both. |
+| True Seeing, low Hidden, casting reveal | Opposing | Contact persists; Fire Bolt removes Hidden through the native handler. |
+| True Seeing potion, Invisibility, move, reveal | Allied and opposing | Actual bonus-action use grants sight and consumes the owner's one-charge item. |
+
+These histories use discovered actions and ordinary encounter turns. Spell
+slots, factions, equipped clothing and dim map cells are initial setup data;
+no fixture sets live invisibility, Hidden or truesight flags. A blocked Hide
+has no fabricated canceled event and therefore yields an honest idle clip.
+The observer's recording includes only its own inventory consumption. The
+subject's own state and movement remain available while another actor cannot
+see it. Search is not an existing native action and is outside this matrix.
+
+Capture or replay just this unit with `--capture --tag concealment` or
+`--tag concealment`; both commands include each experiment's two perspectives.
+The potion uses the original authored Taunt/effect-frame-8 body track. Its
+original drink strip is currently reported as an unbound media gap; no
+replacement VFX is generated for it.
+
 Paired cards have **Show paired views** and **Export paired views** controls.
 Each card still contains four synchronized camera corners. The two observers'
 presentation durations can differ because they receive different parts of the

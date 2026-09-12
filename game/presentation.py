@@ -8,7 +8,7 @@ from typing import Mapping
 from uuid import UUID
 
 from dnd.actions import AttackEvent, JumpEvent, MovementEvent, ShoveEvent, SpellEvent
-from dnd.blocks.base_item import ItemLocationStateEvent
+from dnd.blocks.base_item import ItemChargeConsumptionEvent, ItemLocationStateEvent
 from dnd.blocks.equipment import EquipmentEvent
 from dnd.blocks.sensory import SensesSnapshot, reduce_senses_snapshot
 from dnd.core.base_actions import ActionEvent, BaseCost
@@ -647,7 +647,7 @@ def _retained_event(event: Event, observer_uuid: UUID) -> Event:
             copied = event.model_copy(update=common)
         case ActionEvent() if type(event) is ActionEvent:
             copied = event.model_copy(update=common)
-        case EquipmentEvent():
+        case EquipmentEvent() | ItemChargeConsumptionEvent():
             copied = event.model_copy(update=common)
         case ItemLocationStateEvent(location=ItemLocation.INVENTORY | ItemLocation.EQUIPMENT | ItemLocation.FLOOR):
             copied = event.model_copy(update=common)
@@ -667,6 +667,8 @@ def _actor_participants(event: Event) -> tuple[UUID, ...]:
     match event:
         case TurnEvent() | RoundEvent() | EncounterEvent() | SensoryUpdateEvent():
             return ()
+        case ItemChargeConsumptionEvent():
+            return (event.source_entity_uuid,) if event.source_entity_uuid is not None else ()
         case SpatialChangeEvent(change_type=SpatialChangeType.LIGHT_CHANGED):
             # light_changed() stores the affected tile UUID in entity_uuid.
             # Its sensory children provide observer-specific light after-values.

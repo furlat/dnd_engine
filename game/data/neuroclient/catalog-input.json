@@ -143,5 +143,153 @@
         "dart"
       ]
     }
+  },
+  {
+    "name": "Invisibility",
+    "school": "illusion",
+    "level": 2,
+    "source": "wotc.srd_5_1_cc",
+    "contentRef": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.invisibility",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "metadata": {
+      "catalog_id": "invisibility",
+      "description": "Concentration. Touch target becomes invisible until attacking or casting.",
+      "target_type": "entity",
+      "range_type": "touch",
+      "range_ft": 5,
+      "delivery": "touch",
+      "projectile_type": null,
+      "aoe": null,
+      "damage_types": [],
+      "healing": false,
+      "attack_roll": false,
+      "saving_throws": [],
+      "concentration": true,
+      "ritual": false,
+      "verbal": true,
+      "somatic": null,
+      "material": null,
+      "classes": [],
+      "subclasses": [],
+      "multi_target": null,
+      "recommended_asset_tags": [
+        "concentration"
+      ]
+    }
+  },
+  {
+    "name": "See Invisibility",
+    "school": "divination",
+    "level": 2,
+    "source": "wotc.srd_5_1_cc",
+    "contentRef": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.see_invisibility",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "metadata": {
+      "catalog_id": "see_invisibility",
+      "description": "See invisible creatures and objects",
+      "target_type": "self",
+      "range_type": "self",
+      "range_ft": 0,
+      "delivery": "self",
+      "projectile_type": null,
+      "aoe": null,
+      "damage_types": [],
+      "healing": false,
+      "attack_roll": false,
+      "saving_throws": [],
+      "concentration": false,
+      "ritual": false,
+      "verbal": true,
+      "somatic": null,
+      "material": null,
+      "classes": [],
+      "subclasses": [],
+      "multi_target": null,
+      "recommended_asset_tags": []
+    }
+  },
+  {
+    "name": "Greater Invisibility",
+    "school": "illusion",
+    "level": 4,
+    "source": "wotc.srd_5_1_cc",
+    "contentRef": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.greater_invisibility",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "metadata": {
+      "catalog_id": "greater_invisibility",
+      "description": "Concentration. Touch target becomes invisible, Stealth check to maintain on attack/cast.",
+      "target_type": "entity",
+      "range_type": "touch",
+      "range_ft": 5,
+      "delivery": "touch",
+      "projectile_type": null,
+      "aoe": null,
+      "damage_types": [],
+      "healing": false,
+      "attack_roll": false,
+      "saving_throws": [],
+      "concentration": true,
+      "ritual": false,
+      "verbal": true,
+      "somatic": null,
+      "material": null,
+      "classes": [],
+      "subclasses": [],
+      "multi_target": null,
+      "recommended_asset_tags": [
+        "concentration"
+      ]
+    }
+  },
+  {
+    "name": "True Seeing",
+    "school": "divination",
+    "level": 6,
+    "source": "wotc.srd_5_1_cc",
+    "contentRef": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.true_seeing",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "metadata": {
+      "catalog_id": "true_seeing",
+      "description": "Grant truesight 120ft",
+      "target_type": "entity",
+      "range_type": "touch",
+      "range_ft": 5,
+      "delivery": "touch",
+      "projectile_type": null,
+      "aoe": null,
+      "damage_types": [],
+      "healing": false,
+      "attack_roll": false,
+      "saving_throws": [],
+      "concentration": false,
+      "ritual": false,
+      "verbal": true,
+      "somatic": null,
+      "material": null,
+      "classes": [],
+      "subclasses": [],
+      "multi_target": null,
+      "recommended_asset_tags": []
+    }
   }
 ]

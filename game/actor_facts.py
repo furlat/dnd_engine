@@ -5,7 +5,7 @@ from uuid import UUID
 
 from dnd.actions import AttackEvent
 from dnd.blocks.appearance import AppearanceConfig
-from dnd.blocks.base_item import ItemLocationStateEvent
+from dnd.blocks.base_item import ItemChargeConsumptionEvent, ItemLocationStateEvent
 from dnd.blocks.equipment import EquipmentEvent
 from dnd.core.condition_types import ConditionCategory
 from dnd.core.equipment_types import WeaponSet, WeaponSlot
@@ -67,7 +67,7 @@ def actor_fact_owner(event: Event) -> UUID | None:
     match event:
         case AttackEvent() if event.attack_outcome is not None:
             return event.source_entity_uuid
-        case EquipmentEvent():
+        case EquipmentEvent() | ItemChargeConsumptionEvent():
             return event.source_entity_uuid
         case DamageAppliedEvent() | HealEvent():
             return event.target_entity_uuid
@@ -83,6 +83,14 @@ def actor_fact_owner(event: Event) -> UUID | None:
 def apply_actor_fact(actor: ActorState, event: Event, condition: ConditionFact | None = None) -> ActorState:
     """Apply native after-values; do not execute damage, hooks or equipment rules."""
     match event:
+        case ItemChargeConsumptionEvent():
+            items = tuple(item.model_copy(update={
+                "charges": event.charges_after, "stack_count": event.stack_count_after,
+            }) if item.item_uuid == event.item_uuid else item for item in actor.items
+                if not (event.item_destroyed and item.item_uuid == event.item_uuid))
+            equipment = tuple((slot, identity) for slot, identity in actor.equipment
+                              if not (event.item_destroyed and identity == event.item_uuid))
+            return replace(actor, items=items, equipment=equipment)
         case AttackEvent() if event.attack_outcome is not None:
             selected = (WeaponSet.RANGED if event.weapon_slot in
                         (WeaponSlot.RANGED_MAIN, WeaponSlot.RANGED_OFF) else WeaponSet.MELEE)

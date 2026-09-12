@@ -1,6 +1,6 @@
 {
   "asset_index_digest": "3bd799f4ad12eb9d097f1a9c44790a2d0d0e75a8ee8b83e85ababce79aada632",
-  "binding_digest": "1fa198aea36b8fbd84b7d29fc6c3d5b2d9f7442773d48838de51a522f6bb8107",
+  "binding_digest": "539085ff77c8281a34a7c253b3365accf53baae04ce032f404d1e271eae1d50d",
   "definitions": [
     {
       "asset_sha256": "540da9d7cb94419501c0c8c47d73ca05d826d8d70e2f18c6adae5e13e4c92892",
@@ -225,6 +225,20 @@
       "evidence_kind": "content_dependency",
       "evidence_token": "grants_action:content.neurodragon:item:consumable.healing_potion@1->content.neurodragon:action:action.item.potion_healing.drink@1",
       "icon_key": "item.potion-of-healing"
+    },
+    {
+      "asset_sha256": "eaef6634534bafe01784d2183c1a2957aef05bae24ca5a9097c948b853a93c40",
+      "content_ref": {
+        "content_id": "action.item.potion_true_seeing.drink",
+        "content_version": 1,
+        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0",
+        "definition_kind": "action",
+        "pack_id": "content.neurodragon"
+      },
+      "decision": "bind",
+      "evidence_kind": "content_dependency",
+      "evidence_token": "recovery_2026_09_12_applies_condition:action.item.potion_true_seeing.drink->condition.spell.true_seeing;shares_existing_true_seeing_icon",
+      "icon_key": "spell.true-seeing"
     },
     {
       "asset_sha256": "47fb894fc802b96e2686ba177e09ee425f07bdb5ac352f13e44d792d651525b3",

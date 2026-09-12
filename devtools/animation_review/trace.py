@@ -7,6 +7,7 @@ from pydantic import TypeAdapter
 from game.animation import CastTimeline, EquipmentTimeline
 from game.attack import AttackTimeline, BoundAttack
 from game.animation_types import RigLayer
+from game.body_action import BodyActionCue
 from game.choreography import BoundChoreography
 from game.condition_animation import ConditionTimeline
 from game.damage import DamageCue
@@ -26,6 +27,7 @@ LAYERS = TypeAdapter(tuple[RigLayer, ...])
 SHOVE = TypeAdapter(ShoveCue)
 FORCED = TypeAdapter(ForcedMovementCue)
 DAMAGE = TypeAdapter(DamageCue)
+BODY_ACTION = TypeAdapter(BodyActionCue)
 
 
 def state_summary(state: PlayerState) -> dict[str, Any]:
@@ -58,6 +60,8 @@ def group_trace(group: BoundChoreography) -> dict[str, Any]:
                              "profile": cue.data.forced_movement_profile.model_dump(mode="json")}
                             for cue in group.forced_movement],
         "damage": [DAMAGE.dump_python(cue, mode="json", exclude={"data"}, warnings="error") for cue in group.damage],
+        "body_actions": [BODY_ACTION.dump_python(cue, mode="json", exclude={"data"}, warnings="error")
+                         for cue in group.body_actions],
         "nodes": [{"event_uuid": str(node.event_uuid), "start_ms": node.start_ms,
                    "primitive": "attack" if isinstance(node.bound, BoundAttack) else "cast",
                    "timeline": TIMELINE.dump_python(

@@ -9,7 +9,7 @@ from dataclasses import dataclass, replace
 from uuid import UUID
 
 from dnd.actions import AttackEvent, JumpEvent, MovementEvent, ShoveEvent, SpellEvent
-from dnd.blocks.base_item import ItemLocationStateEvent
+from dnd.blocks.base_item import ItemChargeConsumptionEvent, ItemLocationStateEvent
 from dnd.blocks.equipment import EquipmentEvent
 from dnd.blocks.sensory import reduce_senses_snapshot
 from dnd.core.base_actions import ActionEvent
@@ -27,7 +27,7 @@ from dnd.types.world import CardinalDirection
 from game.actor_facts import ActorState, ConditionFact, actor_fact_owner, actor_from_birth, apply_actor_fact
 from game.player_facts import (
     ActionFact, AttackFact, ConditionChangeFact, ContentAttribution, DamageFact,
-    DeathSaveFact, EquipmentFact, FloorItem, ForcedMovementFact, HealFact, LifeFact,
+    DeathSaveFact, EquipmentFact, FloorItem, ForcedMovementFact, HealFact, ItemChargeFact, LifeFact,
     MovementFact, PlayerActor, PlayerFact, PlayerInitialization, PlayerLineage,
     PlayerNode, PlayerObject, PlayerObservation, PlayerSequence, PlayerState,
     PlayerWorld, SensoryFact, ShoveFact, SpatialFact, SpellFact, StepFact, TurnFact,
@@ -144,13 +144,15 @@ def _project_fact(event: Event, observer: UUID, actors: dict[UUID, ActorState],
                 return None
             if any(not _identified(event, identity, observer) for identity in event.declared_target_entity_uuids):
                 return None
-            if event.source_position is not None and event.source_entity_uuid != observer and not _position_allowed(event, event.source_position, observer):
-                # Existing exact actor-location evidence also authenticates the
-                # declaration coordinate; not every action owns position grants.
+            source_position = event.source_position
+            if source_position is not None and event.source_entity_uuid != observer and not _position_allowed(event, source_position, observer):
+                # Identity authorizes the witnessed cast independently of its
+                # optional coordinate. Disappearance can withdraw location at
+                # completion while the receiver retains the prior visual pose.
                 if str(observer) not in event.located_entity_observer_uuids.get(str(source), set()):
-                    return None
+                    source_position = None
             return SpellFact(source_entity_uuid=source, target_entity_uuid=target,
-                behavior_id=event.behavior_id, name=event.name, source_position=event.source_position,
+                behavior_id=event.behavior_id, name=event.name, source_position=source_position,
                 declared_target_entity_uuids=tuple(event.declared_target_entity_uuids),
                 application_id=event.application_id, application_index=event.application_index)
         case ShoveEvent():
@@ -180,6 +182,10 @@ def _project_fact(event: Event, observer: UUID, actors: dict[UUID, ActorState],
         case DeathSaveEvent():
             return (None if event.entity_uuid not in known or not _identified(event, event.entity_uuid, observer) else DeathSaveFact(
                 entity_uuid=event.entity_uuid, natural_roll=event.natural_roll, succeeded=event.succeeded))
+        case ItemChargeConsumptionEvent():
+            return (ItemChargeFact(source_entity_uuid=observer, item_uuid=event.item_uuid,
+                charges_after=event.charges_after, stack_count_after=event.stack_count_after,
+                item_destroyed=event.item_destroyed) if event.source_entity_uuid == observer else None)
         case EquipmentEvent() | ItemLocationStateEvent():
             owner = actor_fact_owner(event)
             if owner is None or owner not in known or owner not in actors or not _identified(event, owner, observer):
@@ -451,6 +457,18 @@ def stage_lineage(target: PlayerState, lineage: PlayerLineage) -> PlayerState:
 
 def _apply_fact(target: PlayerState, fact: PlayerFact) -> None:
     match fact:
+        case ItemChargeFact():
+            actor = target.actors[fact.source_entity_uuid]
+            if actor.controlled_items is None or actor.uuid != target.observer_uuid:
+                raise ValueError("item charges require the controlled actor's inventory")
+            items = tuple(item.model_copy(update={
+                "charges": fact.charges_after, "stack_count": fact.stack_count_after,
+            }) if item.item_uuid == fact.item_uuid else item for item in actor.controlled_items
+                if not (fact.item_destroyed and item.item_uuid == fact.item_uuid))
+            layers = tuple(layer for layer in actor.visual_loadout.layers
+                           if not (fact.item_destroyed and layer.item_uuid == fact.item_uuid))
+            target.actors[actor.uuid] = replace(actor, controlled_items=items,
+                visual_loadout=replace(actor.visual_loadout, layers=layers))
         case SensoryFact():
             target.senses = reduce_senses_snapshot(target.observer_uuid, target.senses, fact)
             if fact.observer_position_changed and target.observer_uuid in target.actors:

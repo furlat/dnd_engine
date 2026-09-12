@@ -198,6 +198,8 @@ def _body_image(body: BodySample, contact: ActorContact, appearance: tuple[RigLa
     overlays = {layer.slot: layer for layer in body.cast_layers}
     row = rig.facing_rows[body.facing]
     for slot in rig.slot_order:
+        if slot in body.hidden_slots:
+            continue
         if only_shadow is not None and (slot == "shadow") != only_shadow:
             continue
         overlay = overlays.get(slot)

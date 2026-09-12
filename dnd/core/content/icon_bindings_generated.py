@@ -108,6 +108,12 @@ BUILT_IN_CONTENT_ICON_BINDINGS: dict[
         'item.potion-of-healing',
         '68a638040386125009a4353504e49c7d3a13b8a792cb099ab9cdb93de569d4a6',
     ),
+    'content.neurodragon:action:action.item.potion_true_seeing.drink@1#b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0': (
+        'b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0',
+        'bind',
+        'spell.true-seeing',
+        'eaef6634534bafe01784d2183c1a2957aef05bae24ca5a9097c948b853a93c40',
+    ),
     'content.neurodragon:action:action.item.torch.extinguish@1#b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0': (
         'b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0',
         'bind',

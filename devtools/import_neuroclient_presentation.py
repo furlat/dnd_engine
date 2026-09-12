@@ -22,7 +22,8 @@ REPO = Path(__file__).resolve().parents[1]
 SOURCE_REVISION = "d274f2d62ca9c1c5ed62a77841cacf6cc0347491"
 DATA_ROOT = "game/data/neuroclient"
 ASSET_ROOT = "game/assets/neuroclient"
-SPELL_IDS = ("fire_bolt", "acid_splash", "magic_missile")
+SPELL_IDS = ("fire_bolt", "acid_splash", "magic_missile", "invisibility",
+             "greater_invisibility", "see_invisibility", "true_seeing")
 FORCED_PROFILE_OWNER = "src/ui/actionStudio/studioSubjectiveActionFrame.ts"
 SOURCE_JSON = (
     "public/studio/spell-studio-drafts.json",
@@ -53,6 +54,7 @@ ENGINE_OWNERS = (
     "dnd/content_system/spell_catalog_composition.py",
     "dnd/spells/catalog_content.py", "dnd/spells/content_metadata.py",
     "dnd/spells/evocation.py", "dnd/spells/conjuration.py",
+    "dnd/spells/illusion.py", "dnd/spells/divination.py",
     "dnd/core/content/registration.py", "dnd/core/content/identities.py",
 )
 RIG_CATEGORIES = (
@@ -77,7 +79,8 @@ RESOURCE_URLS = (
 CAPTURE_OWNER = """
 import json
 from dnd.content_system.spell_catalog_composition import SPELL_CATALOG_COMPOSITION_ROWS
-selected = {'fire_bolt', 'acid_splash', 'magic_missile'}
+selected = {'fire_bolt', 'acid_splash', 'magic_missile', 'invisibility',
+            'greater_invisibility', 'see_invisibility', 'true_seeing'}
 print(json.dumps([
     {'name': row.display_name, 'school': row.school, 'level': row.level,
      'source': row.declaration.provenance.primary_source_id,
@@ -248,7 +251,7 @@ def candidate_outputs(app: Path, bun: Path) -> dict[str, bytes]:
     media = {url: contained_path(app, "public" + url).read_bytes() for url in RESOURCE_URLS}
     catalog = json.loads(run([sys.executable, "-c", CAPTURE_OWNER], cwd=REPO))
     if sorted(row["metadata"]["catalog_id"] for row in catalog) != sorted(SPELL_IDS):
-        raise ValueError("Composition owner did not produce exactly the selected three spells")
+        raise ValueError("Composition owner did not produce exactly the selected spells")
     refs = {row["contentRef"]["content_id"]: row["contentRef"] for row in catalog}
     for saved in json.loads(source[SOURCE_JSON[0]])["spells"]:
         ref = saved["definitionRef"]

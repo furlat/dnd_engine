@@ -218,6 +218,16 @@ class TurnFact:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
+class ItemChargeFact:
+    kind: Literal["item_charge"] = "item_charge"
+    source_entity_uuid: UUID
+    item_uuid: UUID
+    charges_after: int
+    stack_count_after: int
+    item_destroyed: bool
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
 class ActionFact:
     kind: Literal["action"] = "action"
     source_entity_uuid: UUID
@@ -254,7 +264,7 @@ class SensoryFact:
 PlayerFact = Annotated[
     AttackFact | SpellFact | MovementFact | StepFact | ForcedMovementFact | ShoveFact
     | DamageFact | HealFact | LifeFact | DeathSaveFact | EquipmentFact
-    | ConditionChangeFact | SpatialFact | TurnFact | ActionFact | SensoryFact,
+    | ConditionChangeFact | SpatialFact | TurnFact | ActionFact | SensoryFact | ItemChargeFact,
     Field(discriminator="kind"),
 ]
 

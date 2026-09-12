@@ -165,6 +165,11 @@ Asset references supplied by the user:
   leaving-sight walks, brief glimpses through open doorways and discovery caused
   by the observer walking. Both viewpoints must describe the same native
   experiment, with visibility changes during the complete movement lineage.
+- September 12: exercise invisibility and stealth with and without truesight,
+  adding a truesight spell/potion only where missing. Include allied versus
+  opposing factions and both the concealed/casting actor and perceiver views.
+  Use the established native distinctions; sharing a faction is not a renderer
+  permission to reveal an otherwise undisclosed actor.
 
 ### C11 — Stop replacing understanding with speculative repair
 

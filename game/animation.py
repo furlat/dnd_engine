@@ -120,6 +120,7 @@ class BodySample:
     facing: Facing8
     hide_weapon: bool = False
     cast_layers: tuple[StudioActorLayer, ...] = ()
+    hidden_slots: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

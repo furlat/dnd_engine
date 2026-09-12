@@ -64,6 +64,7 @@ def test_catalog_snapshot_and_bindings_match_the_current_content_owner() -> None
     assert bindings["root_rig"] == "neuroclient.modular"
     assert set(bindings["spells"]) == {
         "spell.fire_bolt", "spell.acid_splash", "spell.magic_missile",
+        "spell.invisibility", "spell.greater_invisibility", "spell.see_invisibility", "spell.true_seeing",
     }
     for captured in catalog:
         row = SPELL_CATALOG_COMPOSITION_BY_ID[captured["metadata"]["catalog_id"]]

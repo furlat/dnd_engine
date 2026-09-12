@@ -346,11 +346,13 @@
       "dnd/spells/content_metadata.py": "285de752f944bb4903dadf2608d4b9dc33df03ad4c1ee8e642be7191d5e5432b",
       "dnd/spells/evocation.py": "4af6cca15382a58a621b75ba18c842221bdb2721dc245550b68d9e51c5de9416",
       "dnd/spells/conjuration.py": "acea7effdd9ebe949f923333ccc5ed1970afc9b1225efc6f8c7609731d8d76e5",
+      "dnd/spells/illusion.py": "2bcae6542cbed5e8f11c24be7c2972eeb5c45c445e8a6e05ebf52d2993a6395b",
+      "dnd/spells/divination.py": "25c10f7738b672a6d5700ee3c6cdcc354337c4b27ff485696c6cb82795d465f0",
       "dnd/core/content/registration.py": "b194125ad04c102257494d22b57e695abf75b7fd5d50b33a8fda0fcafb63fbb2",
       "dnd/core/content/identities.py": "e7e94e916e5450f5496d54bfffee1b3c9b9047cea77b67ab434765adbc6ab706"
     }
   },
-  "exporter_text_sha256": "e4ee40d78146df411ee441c6b0480c1d267ee0993ed97caac18378ed0ff0874f",
+  "exporter_text_sha256": "99cb75cf2c4206375d07c5f0477539747457a172957d7ad7d810aded53f5ad6c",
   "bun_version": "1.3.14",
   "outputs": {
     "game/assets/neuroclient/authored-vfx/projectiles/neuroclient_128/lelu_fire_strike_128_pixel_lab_fire24_px8/lelu_fire_strike_128_pixel_lab_fire24_px8.png": "71c516e244faafc9f7b2837293aebb691a7449eba0ddcb9dbf7e347b856f9a32",
@@ -660,8 +662,8 @@
     "game/assets/neuroclient/spritesheets/Slash2/Attack4.png": "74eaf3cc88082671033429587a7c55eedd45f7ce67bc6db48bcad5dafeadee2a",
     "game/assets/neuroclient/spritesheets/Slash2/Attack5.png": "7e2f56a1a36076edb3584c2bba228c465da4ca37a527adf82b035933176197af",
     "game/assets/neuroclient/spritesheets/Slash2/Attack6.png": "33ead0b546534701bdacab3b2cd9bf3e0f79595aac340a6675c207c58e995bcc",
-    "game/data/neuroclient/bindings.json": "9fd2315102feaf443af4f92f37ff8092ac710d0aa092ef69556f740ac7fb30d5",
-    "game/data/neuroclient/catalog-input.json": "9f4594e633073a5443f97b87de0729847fbdb6d10e73ef3f301fd2732e30a3ad",
+    "game/data/neuroclient/bindings.json": "1e337f08934b6bac11ed59c76d8bf4252455b2815d923e9225062ec5e929c74c",
+    "game/data/neuroclient/catalog-input.json": "5aa0e03eb8930fe09869e8fcb7d6a4bf5eba9fc9dbb6a5fda5b15f317a217107",
     "game/data/neuroclient/forced-movement-profile.json": "2cd50c6c9a9347f637d7e31d1f25842dcb1d93310608f189a58921ddf9df0544",
     "game/data/neuroclient/rig-tables.json": "19047cc84685a9cc2c96c6ffd18059cc8371a3a7763bd57fb642693f97fd99fe",
     "game/data/neuroclient/source/public/studio/spell-projectile-assets.json": "6dd222c2babbdfe67b27b10adefb2dd536f599ec4bba4578b54367d498782d06",
@@ -678,6 +680,6 @@
     "game/data/neuroclient/source/src/render/data/animation/generatedSpellPresentationProfile.json": "60cf2529095b21bf9ec57618732825a9567d1e29312e2d22ae9da67c484e67f4",
     "game/data/neuroclient/source/src/render/data/animation/paletteMap.json": "96d0b8708729d7a22a7f56e54db1cec13ea52909c2ffb629ae1d9f14661b93f1",
     "game/data/neuroclient/source/src/render/data/animation/vfxSourceHues.json": "785e2522bfa140b0cb9ee87e1125a47f1d861610dda71bfbfd19f8f7e6047310",
-    "game/data/neuroclient/spell-studio-drafts.materialized.json": "a3b16a991b8b01524d4e8191b4fa1e2be151d617de96c226f5d1100a7b2f9602"
+    "game/data/neuroclient/spell-studio-drafts.materialized.json": "d5c2ad45da8c2b52a7c6be4052b65bd7f90dfa304fa34e36e4f3d19fccf8a62b"
   }
 }

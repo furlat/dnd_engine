@@ -120,8 +120,7 @@ def sample_playback_frame(
     if group is not None and group_sample is not None:
         condition_appearances = condition_transition_appearances(group.conditions, group_elapsed, condition_appearances)
         assert group_media is not None
-        extra = choreography_draw_commands(group, group_sample, group_media, data,
-            {actor.contact.actor_uuid: actor.contact for actor in actors},
+        extra = choreography_draw_commands(group, group_sample, group_media,
             number_font, badge_font, camera, condition_appearances=condition_appearances)
         body_actors = {body.actor_uuid for body in group_sample.bodies}
         extra = tuple(command for command in extra if command[4][6] not in ("actor", "actor_shadow")

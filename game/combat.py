@@ -101,7 +101,7 @@ def bind_cast(
     if caster is None:
         raise ValueError("cast binding requires the retained source actor")
     source_contact = actor_contact(target, caster, data)
-    if root.source_position != source_contact.grid:
+    if root.source_position is not None and root.source_position != source_contact.grid:
         raise ValueError("spell declaration and retained caster contact disagree")
     overrides = contacts or {}
     source_contact = overrides.get(str(caster.uuid), source_contact)

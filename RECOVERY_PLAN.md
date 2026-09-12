@@ -4,7 +4,7 @@ The [user complaint record](agent_docs/USER_COMPLAINTS.md) preserves the user's
 corrections and required contracts, including record-once event replay. Read it
 alongside this plan; a bounded implementation status does not relax those contracts.
 
-Updated 2026-09-11 after the user's correction: **develop the game, not a
+Updated 2026-09-12, retaining the user's correction: **develop the game, not a
 sequence of spell demonstrations.** Working branch: **codex/recovery-design**,
 based on **codex/july-reconstruction at 16a6bfe**. The human committed the
 validated recovery implementation as **58b0946** (`visio nextraction working`).
@@ -26,6 +26,96 @@ is now imported through the original Studio schema, independently of gameplay.
 ## Active work — playable encounter through shared capabilities
 
 ### Current position — read this before the checkpoint details
+
+**Completed unit, September 12 — invisibility, stealth and truesight:** extend the
+paired subjective recordings through the existing native concealment rules.
+Test allied and opposing factions, from both the concealed/casting actor and
+the perceiver, with four camera corners for each viewpoint. The actual True
+Seeing spell already exists; add only its missing potion through the existing
+consumable action/charge and condition-effect paths.
+
+1. Preserve the established distinctions: Hide's bright-light validation checks
+   visible enemies; allies do not veto it. Native contact filtering has no allied
+   invisibility exemption. Truesight bypasses invisibility but does not bypass a
+   successful Hidden Stealth DC. The controlled actor remains drawable from its
+   own recorded state. These are source findings, not new rules for this unit.
+2. Reuse TrueSeeingEffect's current 120-foot/ten-round behavior for the new
+   potion. Preserve ordinary bonus-action cost, finite charge consumption and
+   authenticated content ancestry. Its current unparented sensory notification
+   has been reproduced during a real spell cast; attach that notification to
+   the supplied condition lineage so discovery belongs to the same action head.
+   Potion replay must retain the existing charge/stack/destruction after-values
+   and update only the controlled owner's inventory; consumption is not a new
+   animation cue or an inferred removal based on the action name. True Seeing's
+   self target must also be available through actual action discovery, consistent
+   with its existing self-or-allies filter and validator.
+3. Reuse Studio's existing invisibility alpha/color, exclusive group and fade
+   durations. Hidden and True Seeing have no invented body tint or opacity.
+   Verify witnessed disappearance, reacquisition/reveal, and paused historical
+   playback against actual grants and native after-values. Connect only shared
+   action-body or delivery primitives necessary for these real histories;
+   inspect the original recipes before deciding what needs implementation.
+   Preserve a witnessed cast when its optional terminal coordinate is withheld.
+   Stage a revealing action's newly authorized participants from its received
+   contact, following NeuroClient's complete-action staging; do not reuse stale
+   remembered positions or change movement's per-step visibility timing.
+4. Build a finite data matrix: ordinary/true-seeing-spell/true-seeing-potion
+   observers against Invisibility; allied/enemy Hide eligibility; successful and
+   unsuccessful Stealth with and without truesight; combined Hidden+Invisible;
+   and actual revealing actions/removal. Use real discovered actions and turns.
+   Persist both histories from one native generation. Do not add a new Search
+   mechanic simply because that action is absent.
+5. Check native effect, cost, charge and contact results first, then public-byte
+   reduction and complete-lineage playback. Preserve old saved inputs, capture
+   the new paired cases, replay them with native production disabled and inspect
+   their videos. Record precise source/replay evidence and remaining limits.
+
+**Reviews:** the anti-slop reviewer checks current native faction/concealment
+rules, effect/cost/charge ownership and the matrix's actual outcomes. The
+anti-OOP reviewer checks original Studio recipes, shared binding/sampling,
+causal contact timing and import direction. Reviewers study source independently
+and review concrete changes; agreement does not replace native evidence.
+
+**Reviewable result:** [28 concealment clips](http://127.0.0.1:8767/runs/20260912T013031Z-811447/index.html)
+cover 14 experiments from the caster/hidden actor and the perceiver, with four
+camera corners per clip. Their 3,482 frames span 384 public history heads. The
+matrix includes allied/enemy Hide eligibility, successful/unsuccessful Stealth,
+ordinary and true-seeing observers, spell and potion delivery, an actual doorway,
+combined Hidden+Invisible, revealing attacks/casts and ten-round expiry.
+
+A fresh process replayed the saved public inputs with native production and
+bootstrap disabled. All 28 MP4s, public inputs and separate native diagnostic
+files are byte-identical to capture. Initial states, lineages, heads, latest
+states, sampled frames and checks also match exactly. The event cursor and
+entity population remain zero, content remains uninstalled and no dice rolls
+are registered. All 102 earlier saved inputs are unchanged. The replay report
+and 14 inspected four-corner images are in the gallery's `inspection` directory.
+Both capture runs and replay share the same source fingerprint.
+
+The paused expiry case holds 24 identical frames at historical cursor20 while
+latest has reached cursor277. Ordinary invisibility removes the other actor;
+truesight retains its authored translucent body; successful Hide removes contact
+without tinting the controlled actor. Revealing attacks stage the actual newly
+disclosed position and final appearance. The sole selected media gap is the
+missing original drink strip on four potion-view cards; Taunt, slot hiding,
+condition timing and finite consumption work through shared owners.
+
+The 14-case native/public matrix, 18 body/movement/condition/recovery checks,
+15 projection/consumption/passive-replay checks and five independent native
+potion/consumption checks pass. These groups overlap and are not additive.
+Production game/review modules and the changed replay tests pass Pyright.
+The original importer verifies all 327 outputs. Anti-slop and anti-OOP reviews
+approve the bounded implementation and original Studio/action-staging contracts.
+The broad `tests/game` run passed 747 tests, retained six existing terrain
+expectations, and reported two failures. It had loaded the condition drawer
+before its final correction: the completed-disappearance case then passed in
+the fresh 18-test group and the final two-case rerun. That rerun retained only
+the existing startup-budget failure: the application exited successfully in
+8.23 seconds against eight (8.94 seconds in the broad run). Prior checkpoints
+below document the same budget issue. No timing threshold or terrain expectation
+was relaxed. Logs and a validation summary are preserved under the gallery's
+`inspection/validation` directory. This concealment unit is complete; the
+startup budget and prior terrain limitations remain separate outstanding work.
 
 **Completed visibility unit, September 11:** after the validated `12ae1eb` replay
 checkpoint, the user requested extensive entering/leaving-sight and doorway

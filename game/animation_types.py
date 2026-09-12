@@ -717,8 +717,8 @@ class AttackRecipe(AuthoredRecord):
     actionFeedback: JsonValue
 
 
-class ShoveRecipe(AuthoredRecord):
-    """Original content action row; a Shove is not an Attack profile."""
+class ContentActionRecipe(AuthoredRecord):
+    """Original content-action row shared by actor gestures and Shove."""
 
     definitionRef: ContentRef
     compatibleCueKinds: tuple[str, ...]
@@ -731,7 +731,16 @@ class ShoveRecipe(AuthoredRecord):
     counterspellFeedback: JsonValue
     variants: tuple[JsonValue, ...]
     projectile: JsonValue
-    actionFeedback: JsonValue
+    actionFeedback: ActionFeedback | None
+
+
+ShoveRecipe = ContentActionRecipe
+BodyActionRecipe = ContentActionRecipe
+
+
+class BodyActionBinding(AuthoredRecord):
+    source_recipe: Identifier
+    action_feedback: ActionFeedback | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -739,6 +748,8 @@ class AnimationData:
     drafts: Mapping[str, StudioSpellDraft]
     attack_recipes: Mapping[str, AttackRecipe]
     shove_recipes: Mapping[str, ShoveRecipe]
+    body_action_recipes: Mapping[str, BodyActionRecipe]
+    body_action_bindings: Mapping[str, BodyActionBinding]
     condition_recipes: Mapping[str, ConditionRecipe]
     projectile_assets: Mapping[str, AuthoredProjectileAsset]
     rig: RigTables

@@ -1,0 +1,9 @@
+{
+  "action.item.potion_true_seeing.drink": {
+    "source_recipe": "action.item.potion_greater_invisibility.drink",
+    "action_feedback": {
+      "text": "True Seeing Potion",
+      "color": 12550143
+    }
+  }
+}

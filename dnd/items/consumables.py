@@ -63,6 +63,7 @@ from dnd.core.events import Event, EventPhase
 from dnd.core.creature_types import DamageType
 from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
+from dnd.spells.divination import TrueSeeingEffect
 from dnd.spells.transmutation import HasteEffect
 
 
@@ -134,6 +135,7 @@ def _consumable_action_identity(
     description: str,
     sort_order: int,
     applied_condition_types: tuple[type[BaseCondition], ...] = (),
+    provenance: ContentProvenance | None = None,
 ):
     """Declare one original action before its providing item factory."""
     return behavior_identity(
@@ -158,7 +160,7 @@ def _consumable_action_identity(
                 sort_order=sort_order,
             ),
         ),
-        provenance=_provenance(display_name),
+        provenance=provenance or _provenance(display_name),
         dependencies=tuple(
             ContentDependency(
                 relation=ContentDependencyRelation.APPLIES_CONDITION,
@@ -811,6 +813,46 @@ class _DrinkGreaterInvisibilityPotionAction(_PotionDrinkAction):
         )
 
 
+@_consumable_action_identity(
+    content_id="action.item.potion_true_seeing.drink",
+    display_name="Drink True Seeing Potion",
+    description="Drink the potion to gain truesight for ten rounds.",
+    sort_order=35,
+    provenance=ContentProvenance(
+        primary_source_id="wotc.srd_5_1_cc",
+        source_anchor="SRD 5.1 (CC-BY-4.0), True Seeing; recovery potion delivery, 2026-09-12",
+        relation=ContentProvenanceRelation.DERIVED_CONTENT,
+        fidelity=ContentFidelity.PARTIAL,
+        review_status=ContentReviewStatus.REVIEWED,
+        notes=("New Neurodragon potion added during recovery, not a baseline item. "
+               "Reuses the existing True Seeing effect: truesight 120 feet for ten rounds; "
+               "one consumable charge and the established potion bonus-action cost."),
+    ),
+)
+class _DrinkTrueSeeingPotionAction(_PotionDrinkAction):
+    """Drink a new recovery potion through the established True Seeing effect."""
+
+    name: str = Field(default="Drink True Seeing Potion", description="Potion action name.")
+    description: str = Field(default="Gain truesight 120ft for ten rounds", description="Potion effect.")
+    target_type: TargetType = Field(default=TargetType.SELF, description="The drinker receives the effect.")
+    source_item_uuid: Optional[UUID] = Field(default=None, description="Consumed potion identity.")
+
+    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
+        if Entity.get(self.source_entity_uuid) is None:
+            return declaration_event.cancel(status_message="Entity not found")
+        return declaration_event.phase_to(EventPhase.EXECUTION, status_message="Validated")
+
+    def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
+        entity = Entity.get(self.source_entity_uuid)
+        if entity is None:
+            return execution_event.cancel(status_message="Entity not found")
+        effect = TrueSeeingEffect(source_entity_uuid=entity.uuid, target_entity_uuid=entity.uuid,
+                                  duration=Duration(duration_type=DurationType.ROUNDS, duration=10))
+        bind_runtime_behavior_child(effect, provider_binding=self.behavior_binding, runtime_owner_uuid=entity.uuid)
+        entity.add_condition(effect, parent_event=execution_event)
+        return execution_event.phase_to(EventPhase.EFFECT, status_message="Drank Potion of True Seeing")
+
+
 class _PotionOfGreaterInvisibility(UsableItem):
     """Potion of Greater Invisibility. Single use, consumable."""
 
@@ -1013,6 +1055,18 @@ def build_greater_invisibility_potion(
             template=True,
         )],
         stack_id="potion_of_greater_invisibility",
+    )
+
+
+def build_true_seeing_potion(source_entity_uuid: UUID) -> UsableItem:
+    """Compose the recovery potion from the existing usable-item data."""
+    return UsableItem(
+        source_entity_uuid=source_entity_uuid, item_id="consumable.potion_true_seeing",
+        name="Potion of True Seeing", is_pickable=True, map_char="\u03b8",
+        is_consumable=True, charges=1, max_charges=1, max_stack=5,
+        stack_id="potion_of_true_seeing",
+        use_action_templates=[_DrinkTrueSeeingPotionAction(
+            source_entity_uuid=uuid4(), source_item_uuid=uuid4(), template=True)],
     )
 
 

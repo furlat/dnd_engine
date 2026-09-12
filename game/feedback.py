@@ -12,10 +12,11 @@ from game.animation import ActorContact, NumberSample
 from game.animation_types import AnimationData, FloatingFeedbackStyle
 from game.attack import BoundAttack
 from game.choreography import BoundChoreography
-from game.combat import actor_contact
+from game.combat import actor_contact, actor_is_visible
 from game.forced_movement import forced_contact
 from game.motion import MotionTimeline
 from game.player_facts import HealFact
+from game.player_projection import observe_actors
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,6 +53,12 @@ def choreography_feedback(bound: BoundChoreography, data: AnimationData, absolut
         raise ValueError("feedback start requires finite nonnegative time")
     tracks: list[FeedbackTrack] = []
     group_contacts = dict(contacts or {})
+    for cue in bound.body_actions:
+        group_contacts[cue.contact.actor_uuid] = cue.contact
+        if cue.feedback is not None:
+            tracks.append(FeedbackTrack(cue.contact, absolute_start_ms + cue.effect_ms,
+                data.badge_style.durationMs, None, cue.feedback.text, cue.feedback.color,
+                data.badge_style, kind="badge"))
     for cue in bound.shoves:
         group_contacts.update((contact.actor_uuid, contact) for contact in (cue.source, cue.target))
         if cue.feedback.enabled:
@@ -110,7 +117,12 @@ def choreography_feedback(bound: BoundChoreography, data: AnimationData, absolut
         identity = str(condition.target_uuid)
         contact = group_contacts.get(identity)
         if contact is None:
-            contact = actor_contact(bound.before, bound.before.actors[condition.target_uuid], data)
+            observed = observe_actors(bound.before, tuple(observation for at, observation in bound.observations
+                                                        if at <= condition.start_ms))
+            actor = observed.actors.get(condition.target_uuid)
+            if actor is None or not actor_is_visible(observed, actor):
+                continue
+            contact = actor_contact(observed, actor, data)
         for cue in bound.forced_movement:
             if cue.actor.actor_uuid == identity and condition.start_ms >= cue.start_ms:
                 contact = forced_contact(cue, data, condition.start_ms)

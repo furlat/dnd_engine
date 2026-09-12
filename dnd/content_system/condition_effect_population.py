@@ -1226,6 +1226,10 @@ _ACTION_AND_REACTION_BRANCHES: dict[_Definition, tuple[_Branch, ...]] = {
         conditions.GreaterInvisibilityEffect,
         target=ConditionEffectTarget.ACTOR,
     ),
+    consumables._DrinkTrueSeeingPotionAction: _single_apply(
+        divination.TrueSeeingEffect,
+        target=ConditionEffectTarget.ACTOR,
+    ),
     consumables._DrinkHastePotionAction: _single_apply(
         transmutation.HasteEffect,
         target=ConditionEffectTarget.ACTOR,

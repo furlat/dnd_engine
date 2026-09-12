@@ -17,6 +17,7 @@ from game.animation import (
 )
 from game.animation_types import AnimationData, Facing8, LifecycleFeedback, StudioCondition
 from game.attack import BoundAttack, AttackSample, bind_attack, sample_attack
+from game.body_action import BodyActionCue, bind_body_action, join_body_action, sample_body_action
 from game.combat import BoundCast, BoundEquipment, actor_contact, actor_is_visible, bind_cast, bind_equipment
 from game.condition_animation import ConditionTimeline, ConditionSample, compile_condition, sample_condition
 from game.damage import DamageCue, bind_damage, sample_damage
@@ -25,7 +26,7 @@ from game.forced_movement import (
     forced_contact, sample_forced_body, sample_shove,
 )
 from game.player_facts import (
-    AttackFact, ConditionChangeFact, DamageFact, DeathSaveFact, EquipmentFact, ForcedMovementFact,
+    ActionFact, AttackFact, ConditionChangeFact, DamageFact, DeathSaveFact, EquipmentFact, ForcedMovementFact,
     HealFact, LifeFact, PlayerLineage, PlayerNode, PlayerObservation, PlayerState, ShoveFact, SpellFact,
 )
 from game.player_projection import lineage_branch, reduce_lineage, observe_actors, stage_lineage
@@ -84,6 +85,7 @@ class BoundChoreography:
     forced_movement: tuple[ForcedMovementCue, ...] = ()
     damage: tuple[DamageCue, ...] = ()
     observations: tuple[tuple[float, PlayerObservation], ...] = ()
+    body_actions: tuple[BodyActionCue, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -109,11 +111,31 @@ def _before_event(before: PlayerState, lineage: PlayerLineage, event: PlayerNode
 def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: AnimationData,
                       *, facings: Mapping[str, Facing8] | None = None,
                       contacts: Mapping[str, ActorContact] | None = None) -> BoundChoreography:
-    """Compile exact causal ownership, never content names or future conditions."""
+    """Compile causal ownership from historical state and authorized action entries."""
     displayed_before = before
     before = stage_lineage(before, lineage)
     observation_lineages = {row.event_uuid: row.lineage_uuid for row in lineage.version_rows}
     observations: list[tuple[float, PlayerObservation]] = []
+    entry_actors: set[UUID] = set()
+    root_fact = lineage.root.fact
+    if isinstance(root_fact, (AttackFact, SpellFact)):
+        # NeuroClient stages newly after-visible referenced action actors before
+        # dispatch. A remembered hidden actor is not a presented actor: use the
+        # exact received reacquisition, never its old remembered coordinate.
+        referenced = {root_fact.source_entity_uuid, root_fact.target_entity_uuid}
+        if isinstance(root_fact, SpellFact):
+            referenced.update(root_fact.declared_target_entity_uuids)
+        successor = reduce_lineage(displayed_before, lineage)
+        fresh = {row.actor.uuid: replace(row, actor=successor.actors[row.actor.uuid])
+                 for row in lineage.observations
+                 if row.actor.uuid in referenced and row.contact is not None and row.contact.visual
+                 and (row.actor.uuid not in displayed_before.actors
+                      or not actor_is_visible(displayed_before, displayed_before.actors[row.actor.uuid]))
+                 and row.actor.uuid in successor.actors
+                 and actor_is_visible(successor, successor.actors[row.actor.uuid])}
+        before = observe_actors(before, tuple(fresh.values()))
+        observations.extend((0, row) for row in fresh.values())
+        entry_actors.update(fresh)
     by_lineage = {event.lineage_uuid: event for event in lineage.events}
     facts = {event.uuid: event.fact.condition for event in lineage.events
              if isinstance(event.fact, ConditionChangeFact)}
@@ -126,6 +148,8 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
     shoves: list[ShoveCue] = []
     forced_movement: list[ForcedMovementCue] = []
     damage: list[DamageCue] = []
+    body_actions: list[BodyActionCue] = []
+    actor_order: list[tuple[UUID, int, bool]] = []
     gaps: list[tuple[UUID, str]] = []
 
     def visit(event: PlayerNode, at: float, owner: ActionNode | None = None,
@@ -140,20 +164,36 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
         if displacement is not None:
             at = dict(displacement.arrivals).get(event.uuid, at)
         observations.extend((at, observation) for observation in lineage.observations
-                          if observation_lineages[observation.event_uuid] == event.lineage_uuid)
+                          if observation.actor.uuid not in entry_actors
+                          and observation_lineages[observation.event_uuid] == event.lineage_uuid)
         placed_contacts = dict(contacts or {})
         if displacement is not None:
             placed = forced_contact(displacement, data, at)
             placed_contacts[placed.actor_uuid] = placed
         end = at
         application = isinstance(fact, SpellFact) and fact.application_index is not None
+        body_action = None
+        if isinstance(fact, (ActionFact, SpellFact)) and not application:
+            try:
+                body_action = bind_body_action(_before_event(before, lineage, event), event, data,
+                    start_ms=at, facings=facings or {}, contacts=placed_contacts)
+            except (ValueError, NotImplementedError) as error:
+                gaps.append((event.uuid, str(error)))
+            if body_action is not None:
+                actor_order.append((event.uuid, len(body_actions), True))
+                body_actions.append(body_action)
+                end = body_action.complete_ms
+                at = body_action.effect_ms
+                override = body_action.condition
+                owner = None
+                gaps.extend((event.uuid, detail) for detail in body_action.gaps)
         visible_action = False
         if isinstance(fact, (AttackFact, SpellFact)):
             participants = (fact.source_entity_uuid, fact.target_entity_uuid)
             visible_action = all(identity is None or str(identity) in placed_contacts
                 or identity in before.actors and actor_is_visible(before, before.actors[identity])
                 for identity in participants)
-        if isinstance(fact, (AttackFact, SpellFact)) and not application and visible_action:
+        if isinstance(fact, (AttackFact, SpellFact)) and not application and visible_action and body_action is None:
             branch = lineage_branch(lineage, event)
             prior = _before_event(before, lineage, event)
             try:
@@ -166,6 +206,7 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
                 gaps.append((event.uuid, "Authored action delivery is not bound"))
             else:
                 owner = ActionNode(event.uuid, at, bound)
+                actor_order.append((event.uuid, len(nodes), False))
                 nodes.append(owner)
                 end = at + bound.timeline.complete_ms
                 if isinstance(bound, BoundAttack):
@@ -332,20 +373,26 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
     # Postorder joins: an authored recovery follows the whole delivery subtree,
     # including a nested cast or a condition transition longer than hit recovery.
     # These are offsets inside this one head, never extra queued roots.
-    for index in reversed(range(len(nodes))):
-        node = nodes[index]
+    for event_uuid, index, is_body in reversed(actor_order):
         child_ends = [condition.complete_ms for condition in conditions
-                      if owned_by(condition.event_uuid, node.event_uuid)]
-        child_ends.extend(child.start_ms + child.bound.timeline.complete_ms for child in nodes[index + 1:]
-                          if owned_by(child.event_uuid, node.event_uuid))
+                      if owned_by(condition.event_uuid, event_uuid)]
+        child_ends.extend(child.start_ms + child.bound.timeline.complete_ms for child in nodes
+                          if owned_by(child.event_uuid, event_uuid))
+        child_ends.extend(child.complete_ms for child in body_actions
+                          if owned_by(child.event_uuid, event_uuid))
         child_ends.extend(cue.death_end_ms for cue in lifecycle if cue.death_end_ms is not None
-                          and owned_by(cue.event.uuid, node.event_uuid))
+                          and owned_by(cue.event.uuid, event_uuid))
         child_ends.extend(cue.start_ms + cue.bound.timeline.complete_ms for cue in equipment
-                          if owned_by(cue.event_uuid, node.event_uuid))
-        child_ends.extend(cue.complete_ms for cue in forced_movement if owned_by(cue.event_uuid, node.event_uuid))
-        child_ends.extend(cue.timing.end_ms for cue in damage if owned_by(cue.event_uuid, node.event_uuid))
+                          if owned_by(cue.event_uuid, event_uuid))
+        child_ends.extend(cue.complete_ms for cue in forced_movement if owned_by(cue.event_uuid, event_uuid))
+        child_ends.extend(cue.timing.end_ms for cue in damage if owned_by(cue.event_uuid, event_uuid))
         if not child_ends:
             continue
+        if is_body:
+            body_actions[index] = join_body_action(body_actions[index], data, max(child_ends))
+            complete = max(complete, body_actions[index].complete_ms)
+            continue
+        node = nodes[index]
         child_end = max(child_ends) - node.start_ms
         timeline = node.bound.timeline
         if isinstance(node.bound, BoundCast):
@@ -363,7 +410,7 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
     return BoundChoreography(lineage.root.uuid, displayed_before, reduce_lineage(displayed_before, lineage),
                              tuple(nodes), tuple(conditions), complete, tuple(gaps), tuple(healing),
                              tuple(lifecycle), tuple(equipment), tuple(shoves), tuple(forced_movement), tuple(damage),
-                             tuple(observations))
+                             tuple(observations), tuple(body_actions))
 
 
 def sample_choreography(bound: BoundChoreography, elapsed_ms: float) -> ChoreographySample:
@@ -374,6 +421,11 @@ def sample_choreography(bound: BoundChoreography, elapsed_ms: float) -> Choreogr
     vitals: dict[str, VitalsSample] = {}
     bodies: dict[str, BodySample] = {}
     contacts: dict[str, ActorContact] = {}
+    for cue in bound.body_actions:
+        body = sample_body_action(cue, cue.data, elapsed_ms)
+        if body is not None:
+            bodies[body.actor_uuid] = body
+            contacts[body.actor_uuid] = cue.contact
     for cue in bound.shoves:
         if elapsed_ms >= cue.start_ms:
             bodies[cue.source.actor_uuid] = sample_shove(cue, cue.data, elapsed_ms)

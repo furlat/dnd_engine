@@ -12,6 +12,7 @@ from game.combat_demo import capture_combat_demo
 from game.replay import CapturedHistory
 from game.player_facts import PlayerLineage, PlayerState
 from tests.game.creature_scenarios import creature_history
+from tests.game.concealment_scenarios import ConcealmentProgram, RevealOperation, SightGrant, concealment_history
 from tests.game.discovery_scenarios import discovery_history
 from tests.game.equipment_scenarios import equipment_sequence_history
 from tests.game.forced_movement_scenarios import forced_movement_history
@@ -123,6 +124,16 @@ class MovementCase(BaseModel):
     boost: Literal["none", "haste", "bonus-dash"] = "none"
 
 
+class ConcealmentCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["concealment"]
+    program: ConcealmentProgram = "invisibility"
+    allied: bool = False
+    sight_grant: SightGrant = "none"
+    stealth_face: int = Field(default=18, ge=1, le=20)
+    reveal: RevealOperation = "drop-concentration"
+
+
 class ForcedMovementCase(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     kind: Literal["forced-movement"]
@@ -145,7 +156,7 @@ class ReviewCase(BaseModel):
     tags: tuple[str, ...]
     description: str
     scenario: Annotated[AttackCase | ParalysisCase | CastCase | ParalysisLifecycleCase | DodgeExpiryCase | HealingCase | LifecycleCase
-                        | CreatureCase | EquipmentCase | DiscoveryCase | VisibilityCase | MovementCase | ForcedMovementCase,
+                        | CreatureCase | EquipmentCase | DiscoveryCase | VisibilityCase | MovementCase | ForcedMovementCase | ConcealmentCase,
                         Field(discriminator="kind")]
     pause_at_ms: float | None = Field(default=None, ge=0)
     pause_duration_ms: float = Field(default=750, gt=0)
@@ -210,6 +221,9 @@ def produce(case: ReviewCase) -> CapturedHistory:
             return visibility_history(battlefield_id=scenario.battlefield_id,
                 observer_position=scenario.observer_position, subject_position=scenario.subject_position,
                 route=scenario.route, hidden_change_after=scenario.hidden_change_after, dash_before=scenario.dash_before)
+        case ConcealmentCase() as scenario:
+            return concealment_history(program=scenario.program, allied=scenario.allied,
+                sight_grant=scenario.sight_grant, stealth_face=scenario.stealth_face, reveal=scenario.reveal)
         case MovementCase() as scenario:
             return movement_history(route=scenario.route, battlefield_id=scenario.battlefield_id,
                                                 behavior=scenario.behavior, boost=scenario.boost)

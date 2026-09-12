@@ -6,12 +6,11 @@ from uuid import UUID
 
 import pygame
 
-from game.animation import ActorContact, CastSample
+from game.animation import CastSample
 from game.animation_draw import (
     AnimationDrawCommand, AnimationMedia, BodyRows, animation_draw_commands,
-    attack_draw_commands, load_animation_media, load_attack_media, number_draw_commands,
+    attack_draw_commands, load_animation_media, load_attack_media,
 )
-from game.animation_types import AnimationData
 from game.attack import AttackSample, BoundAttack
 from game.choreography import BoundChoreography, ChoreographySample
 from game.combat import BoundCast
@@ -37,8 +36,7 @@ def load_choreography_media(bound: BoundChoreography) -> ChoreographyMedia:
 
 
 def choreography_draw_commands(bound: BoundChoreography, sample: ChoreographySample,
-                               media: ChoreographyMedia, data: AnimationData,
-                               contacts: Mapping[str, ActorContact], font: pygame.font.Font,
+                               media: ChoreographyMedia, font: pygame.font.Font,
                                badge_font: pygame.font.Font, camera: Camera, *,
                                condition_appearances: Mapping[str, ConditionAppearance] | None = None,
                                ) -> tuple[AnimationDrawCommand, ...]:
@@ -65,6 +63,6 @@ def choreography_draw_commands(bound: BoundChoreography, sample: ChoreographySam
     result = [command for index, command in commands
               if command[4][6] not in ("actor", "actor_shadow")
               or owners[str(command[4][0])][2] == index]
-    numbers = tuple(condition.feedback for condition in sample.conditions if condition.feedback is not None)
-    result.extend(number_draw_commands(data, numbers, contacts, font, camera, badge_font=badge_font))
+    # The shared frame draws condition feedback from retained FloatingText
+    # tracks, whose launch contact survives the actor leaving sight.
     return tuple(result)

@@ -1115,3 +1115,124 @@ failure (9.06 seconds against eight). Previous checkpoint evidence records the
 same timing issue; no timing or terrain assertion was relaxed. Production
 presentation/review modules and changed caller tests pass Pyright. RECOVERY_PLAN
 records the completed unit and this remaining verification limit.
+
+## Invisibility, stealth and truesight — September 12
+
+The user requested paired concealment experiments with and without truesight,
+explicitly including allied/opposing factions and caster/subject versus perceiver.
+The active plan extends the existing public replay boundary; it does not define
+new subjectivity rules.
+
+### Existing native and authored contracts
+
+`dnd/spells/divination.py` already provides True Seeing and See Invisibility.
+True Seeing grants 120-foot truesight for the engine's current ten rounds.
+There was no True Seeing potion. The new consumable applies that same condition
+through the existing bonus-action, finite-charge and content-provider owners.
+
+`dnd/blocks/sensory.py` checks the Hidden Stealth DC against passive perception
+before its invisibility bypass. Truesight can reveal Invisible without defeating
+Hidden. This contact filter has no allied exception. `Hide._validate` separately
+rejects hiding from a visually observing enemy in ordinary bright light; an ally
+does not veto the attempt. Dim light follows its existing earlier validation
+branch. A rejected hostile Hide is absent from action discovery; its control clip
+must preserve unchanged condition/cost rather than fabricate a canceled event.
+
+NeuroClient's subjective-visibility adapter styles only an already retained actor.
+Its condition data gives Invisible/Invisibility/Greater Invisibility alpha0.5,
+the same body filter, an exclusive group, and240ms/200ms application/removal fades.
+The existing Python condition composition already follows those fields. Hidden
+and True Seeing introduce no body opacity/tint. Controlled self remains drawable;
+other actors require the actual observer's contact.
+
+The original TypeScript materializer produces body-only drafts for Invisibility,
+Greater Invisibility, True Seeing and See Invisibility: Special1, speed1,
+release frame8, hidden main weapon, no projectile/area and recovery disabled.
+The original cast executor dispatches self/touch children at release, then joins
+body and children. Drink's original generic action recipe uses Taunt and effect
+frame8 with its authored hidden-slot scope. The bounded shared body-action
+connection consumes those values inside the existing choreography head.
+
+### Concrete integration findings
+
+A real True Seeing cast emitted a separate spatial root because its condition
+notification omitted the supplied parent event. The repair passes that actual
+condition event identity through the existing sensory notification on application
+and removal; perception/range/duration rules remain unchanged.
+
+A real Haste-potion regression showed correct native destruction but a retained
+potion in decoded player inventory. Capture had downgraded
+`ItemChargeConsumptionEvent` to a header. The native event already provides exact
+charge, stack and destruction after-values. They now survive private recording,
+update private actor values and project as owner-only `ItemChargeFact` values.
+No action-name inference or animation cue is involved. Both final-item depletion
+and two-to-one stack consumption pass after private/public JSON round trips;
+the watching actor receives no foreign charge payload or inventory.
+
+True Seeing's existing self-or-allies filter and validator allowed its caster,
+but inherited `include_self=False` excluded that target from action discovery.
+The spell now exposes the self target through the same discovery path; its
+new native regression casts the discovered action, rather than calling an
+effect directly.
+
+An ordinary Invisibility cast exposed a projection error: its source identity
+was granted, its earlier visual contact was retained, but its terminal location
+was withheld. The outgoing projection discarded the whole cast because an
+optional coordinate lacked permission. July's `server/player_replication/mapper.py`
+`_spell_node` requires source identity for targeted spells; location permission
+is additionally required for area geometry. The public fact now keeps the
+authorized cast and omits that coordinate. The binder uses the actual historical
+contact and still rejects a conflicting coordinate when one is supplied.
+
+A revealing attack exposed the other half of the handoff. An invisible actor
+walked from `(7, 3)` to `(9, 3)` unseen and was reacquired during the attack.
+NeuroClient's `app/src/engine/stateSync.ts` (structural staging at line208 and
+`stagedReferencedVisibility` at line461) stages referenced actors authorized by
+the received after-world before dispatch. Its presented world excluded unseen
+living actors; this implementation retains them as memory. Root Attack/Spell
+binding now stages a previously unpresented referenced actor from its authorized
+successor snapshot and actual same-head visual contact. It uses `(9, 3)`, not
+remembered `(7, 3)`. The actor's earlier observation still contained Invisible;
+the action successor had removed it. NeuroClient's `presentationContext.ts`
+and `subjectivePresentationMapper.ts` seed a newly presented actor's appearance
+from that final projected summary, so staging must not restore the earlier
+condition snapshot later in the same action. Already visible actors retain
+their historical state. Movement keeps its existing per-step observation timing.
+
+The shared actor-track primitive samples the existing body frames, authored
+effect anchor and body/children join inside the existing choreography. Its data
+imports four original materialized Studio drafts and binds the new potion to
+the original drink recipe with a local label override. No runtime TypeScript,
+new queue, condition-specific tint, or per-spell renderer is introduced. The
+original drink strip asset is absent from the reference checkout; the trace
+reports that media gap while retaining Taunt, slot hiding and effect timing.
+
+The [28-card gallery](http://127.0.0.1:8767/runs/20260912T013031Z-811447/index.html)
+contains all 14 experiments from both participants: 3,482 frames across 384
+complete public heads. Both capture runs and the fresh replay use the same
+source fingerprint. Native generation and content bootstrap were unavailable
+during replay; event/entity populations stayed empty and the dice registry did
+not change. Every MP4, public input and separate native diagnostic file matches
+capture bytes. Initial state, lineages, heads, latest, frames and checks match
+exactly without normalization. All 102 preceding saved inputs are unchanged.
+
+`inspection/replay-verification.json` preserves the comparisons and
+`inspection/visual-inspection.json` identifies the reviewed frames. Fourteen
+full-corner PNGs cover witnessed casting/disappearance, opaque reacquisition at
+the actual new position, truesight, drinking, Hidden alone and with Invisible,
+doorway geometry and expiry. Paused expiry holds 24 identical frames at cursor20
+while latest is cursor277, then reaches the actual loss of contact.
+
+The native/public matrix passes 14 cases. The final shared-body, visible-movement,
+condition-drawing and choreography-recovery group passes 18 tests. Public
+projection/charge/passive replay passes 15 tests, and the independent native
+potion/charge review passes five overlapping tests. Game/review production and
+changed replay tests pass Pyright; the original importer matches all 327 outputs.
+Anti-slop and anti-OOP reviewers approve the scoped mechanics and shared-data
+boundaries. Four potion-view cards retain the one documented missing drink-strip
+asset; no replacement effect was fabricated. The broad run passed 747 tests with
+six existing terrain expectations and two failures. A fresh rerun verifies the
+corrected disappearance drawer; the only remaining failure is the older startup
+budget (successful application exit in 8.23 seconds against eight). RECOVERY_PLAN
+and the gallery's `inspection/validation` preserve both the broad and rerun
+results rather than claiming a fully green suite.

@@ -5,6 +5,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
+from dnd.actions import SpellEvent
 from dnd.blocks.base_item import ItemLocationStateEvent
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.conditions import Blinded
@@ -16,13 +17,14 @@ from dnd.game import Game
 from dnd.items.environment import CloseDirectionalDoorAction, OpenDirectionalDoorAction
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
-from game.player_facts import DamageFact, EquipmentFact, MovementFact, SensoryFact, StepFact
+from game.player_facts import DamageFact, EquipmentFact, MovementFact, SensoryFact, SpellFact, StepFact
 from game.animation_data import load_animation_data
 from game.choreography import bind_choreography, sample_choreography
 from game.player_projection import decode_player_sequence, encode_player_sequence, project_sequence, reduce_lineage
 from game.presentation import capture_interval, capture_lineage, reduce_interval
 from game.replay import ObserverCapture, RecordedSequence, capture_history
 from tests.game.visibility_scenarios import visibility_history
+from tests.game.concealment_scenarios import concealment_history
 from tests.game.scenarios import movement_with_paralysis
 
 
@@ -35,6 +37,25 @@ def _saved_public(native: RecordedSequence):
     before, roots = decode_player_sequence(payload)
     assert EventQueue.event_cursor() == 0
     return payload, before, roots
+
+
+def test_witnessed_invisibility_keeps_cast_when_terminal_coordinate_is_withheld() -> None:
+    history = concealment_history(reveal="none")
+    _, state, roots = _saved_public(history.views["perceiver"])
+    subject = history.views["subject"].initialization.observer_uuid
+    cast_uuid = next(root.root.uuid for root in history.views["perceiver"].lineages
+                     if isinstance(root.root, SpellEvent) and root.root.behavior_id == "spell.invisibility")
+    for root in roots:
+        if root.root.uuid == cast_uuid:
+            assert state.senses is not None and state.senses.entities[subject].position == (7, 3)
+            fact = root.root.fact
+            assert isinstance(fact, SpellFact), "disappearance must not erase the witnessed cast"
+            assert fact.source_entity_uuid == subject and fact.source_position is None
+            after = reduce_lineage(state, root)
+            assert after.senses is not None and subject not in after.senses.entities
+            return
+        state = reduce_lineage(state, root)
+    raise AssertionError("native Invisibility root is missing")
 
 
 def test_one_native_doorway_crossing_produces_two_distinct_player_packets() -> None:

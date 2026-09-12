@@ -121,8 +121,8 @@ _BUILT_IN_CLASS_BEHAVIOR_IDS = {
     for declaration in _BUILT_IN_BEHAVIOR_DECLARATIONS_BY_CLASS.values()
 }
 if (
-    len(_BUILT_IN_BEHAVIOR_DECLARATIONS_BY_CLASS) != 311
-    or len(_BUILT_IN_CLASS_BEHAVIOR_IDS) != 311
+    len(_BUILT_IN_BEHAVIOR_DECLARATIONS_BY_CLASS) != 312
+    or len(_BUILT_IN_CLASS_BEHAVIOR_IDS) != 312
 ):
     raise ValueError("Built-in behavior class inventory is not one-to-one")
 BUILT_IN_BEHAVIOR_DECLARATIONS_BY_CLASS = MappingProxyType(
@@ -135,7 +135,7 @@ _BUILT_IN_BEHAVIOR_IDS = {
     if declaration.mode is ContentDeclarationMode.BEHAVIOR_IDENTITY
 }
 if (
-    len(_BUILT_IN_BEHAVIOR_IDS) != 311
+    len(_BUILT_IN_BEHAVIOR_IDS) != 312
     or _BUILT_IN_CLASS_BEHAVIOR_IDS & BUILT_IN_PROVIDER_ONLY_BEHAVIOR_IDS
     or (
         _BUILT_IN_CLASS_BEHAVIOR_IDS | BUILT_IN_PROVIDER_ONLY_BEHAVIOR_IDS

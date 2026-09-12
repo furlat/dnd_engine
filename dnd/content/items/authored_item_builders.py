@@ -64,6 +64,7 @@ from dnd.items.consumables import (
     build_concentration_fire_weapon_coat,
     build_fire_weapon_coat,
     build_greater_invisibility_potion,
+    build_true_seeing_potion,
     build_haste_potion,
     build_healing_potion,
     build_lightning_weapon_coat,
@@ -626,6 +627,9 @@ DIRECT_ITEM_BUILDERS: Mapping[str, ItemBuilder] = MappingProxyType({
         "consumable.potion_greater_invisibility",
         build_greater_invisibility_potion,
     ),
+    "consumable.potion_true_seeing": _single_item_builder(
+        "consumable.potion_true_seeing", build_true_seeing_potion,
+    ),
     "consumable.weapon_coat.fire": _single_item_builder(
         "consumable.weapon_coat.fire", build_fire_weapon_coat,
     ),
@@ -716,8 +720,8 @@ DIRECT_ITEM_BUILDERS: Mapping[str, ItemBuilder] = MappingProxyType({
     ),
 })
 
-if len(DIRECT_ITEM_BUILDERS) != 150:
-    raise ValueError("direct item builder table must contain exactly 150 IDs")
+if len(DIRECT_ITEM_BUILDERS) != 151:
+    raise ValueError("direct item builder table must contain exactly 151 IDs")
 
 
 def build_authored_item(

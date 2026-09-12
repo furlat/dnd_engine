@@ -155,6 +155,7 @@ ACTION_BEHAVIOR_IDENTITY_SPECS: tuple[ActionBehaviorIdentitySpec, ...] = (
     _original(field_focus.DeployFieldFocus, "action.item.field_kit.deploy", "Deploy Field Focus", "Deploy the carried field focus at a selected position."),
     _original(consumables._ApplyWeaponCoatAction, "action.item.weapon_coat.apply", "Coat Main Hand", "Apply the carried weapon coating to the active main-hand weapon."),
     _original(consumables._DrinkGreaterInvisibilityPotionAction, "action.item.potion_greater_invisibility.drink", "Drink Greater Invisibility Potion", "Drink the potion to gain its greater-invisibility effect."),
+    _original(consumables._DrinkTrueSeeingPotionAction, "action.item.potion_true_seeing.drink", "Drink True Seeing Potion", "Drink the potion to gain truesight for ten rounds."),
     _original(consumables._DrinkHastePotionAction, "action.item.potion_haste.drink", "Drink Haste Potion", "Drink the potion to gain its haste effect."),
     _original(consumables._DrinkHealingPotionAction, "action.item.potion_healing.drink", "Drink Healing Potion", "Drink the potion to recover hit points."),
     _original(environment.CloseDirectionalDoorAction, "action.environment.directional_door.close", "Close Directional Door", "Close the directional door from an adjacent tile."),

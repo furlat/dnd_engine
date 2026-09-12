@@ -171,7 +171,7 @@ class TrueSeeingEffect(BaseCondition):
 
         target.senses.sense_modes.append(SenseMode(sense_type=SensesType.TRUESIGHT, range_feet=120))
         self._granted_sense_type = SensesType.TRUESIGHT
-        target._notify_perceivability_changed()
+        target._notify_perceivability_changed(parent_event=declaration_event.uuid)
 
         effect_event = declaration_event.phase_to(
             EventPhase.EFFECT,
@@ -190,7 +190,7 @@ class TrueSeeingEffect(BaseCondition):
                     if not (sm.sense_type == self._granted_sense_type
                             and sm.range_feet == self._granted_range)
                 ]
-                target._notify_perceivability_changed()
+                target._notify_perceivability_changed(parent_event=event.uuid if event is not None else None)
         return super()._remove(event)
 
 
@@ -205,6 +205,7 @@ class TrueSeeing(SpellAction):
     target_type: TargetType = Field(default=TargetType.ENTITY, description="Targeting mode.")
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.REACH, normal=5), description="Spell range.")
     valid_target_filter: str = Field(default="self_or_allies", description="Valid target filter key.")
+    include_self: bool = Field(default=True, description="True Seeing may target its caster.")
 
     def get_world_effect_profile(self, actor: Any) -> ActionWorldEffectProfile:
         """Declare the granted truesight sense and possible discoveries.

@@ -11,7 +11,7 @@ from typing import Annotated, Any
 from pydantic import BeforeValidator, PlainSerializer, TypeAdapter
 
 from dnd.actions import AttackEvent, JumpEvent, MovementEvent, ShoveEvent, SpellEvent
-from dnd.blocks.base_item import ItemLocationStateEvent
+from dnd.blocks.base_item import ItemChargeConsumptionEvent, ItemLocationStateEvent
 from dnd.blocks.equipment import (
     ArmorEquipEvent, ArmorUnequipEvent, EquipmentEvent, ShieldEquipEvent,
     ShieldUnequipEvent, WeaponEquipEvent, WeaponUnequipEvent,
@@ -41,6 +41,7 @@ EVENT_MODELS = {f"{model.__module__}.{model.__qualname__}": model for model in (
     AttackEvent, SpellEvent, MovementEvent, JumpEvent, ShoveEvent,
     EquipmentEvent, WeaponEquipEvent, WeaponUnequipEvent, ArmorEquipEvent,
     ArmorUnequipEvent, ShieldEquipEvent, ShieldUnequipEvent, ItemLocationStateEvent,
+    ItemChargeConsumptionEvent,
     D20Event, SavingThrowEvent, SkillCheckEvent, D20RollResultEvent,
     AttackD20RollResultEvent, SavingThrowD20RollResultEvent, SkillCheckD20RollResultEvent,
     DamageRollResultEvent, HealRollResultEvent, TakeDamageEvent, DamageAppliedEvent,

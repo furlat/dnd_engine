@@ -17,7 +17,8 @@ from dnd.core.equipment_types import BodyPart, VisualLoadoutSlot, WeaponSet, Wea
 from dnd.core.item_types import EquippedVisualPolicy, ItemPresentationState
 from dnd.items.authored_variant_inventory import AUTHORED_ITEM_VARIANT_CATEGORIES
 from game.animation_types import (
-    AnimationData, AttackRecipe, AuthoredProjectileAsset, AuthoredRecord, BodyClip, BodyRig, BoltStyle, DamageContext, DartStyle,
+    AnimationData, AttackRecipe, AuthoredProjectileAsset, AuthoredRecord, BodyActionBinding, BodyActionRecipe,
+    BodyClip, BodyRig, BoltStyle, DamageContext, DartStyle,
     DeathContext, DeathSaveContext, EquipmentTransitionContext, FloatingFeedbackStyle, ForcedMovementContext,
     ForcedMovementProfile, FrozenMap, HealingContext, Identifier, LifecycleFeedback, LifeStateContext,
     MovementReactionContext, RigLayer, RigTables, ShoveRecipe, StudioDraftFile, StudioSpellDraft,
@@ -286,6 +287,7 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
     ))
     attack_recipes: dict[str, AttackRecipe] = {}
     shove_recipes: dict[str, ShoveRecipe] = {}
+    body_action_recipes: dict[str, BodyActionRecipe] = {}
     for row in action_file.recipes:
         kinds = row["compatibleCueKinds"]
         if isinstance(kinds, list) and "attack" in kinds:
@@ -300,6 +302,17 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
             if identity in shove_recipes:
                 raise ValueError(f"ambiguous authored shove identity: {identity}")
             shove_recipes[identity] = shove
+        if isinstance(kinds, list) and any(kind in kinds for kind in ("action", "item_action")):
+            body_action = BodyActionRecipe.model_validate_json(json.dumps(row))
+            identity = body_action.definitionRef.content_id
+            if identity in body_action_recipes:
+                raise ValueError(f"ambiguous authored body action identity: {identity}")
+            body_action_recipes[identity] = body_action
+    body_action_bindings = TypeAdapter(FrozenMap[BodyActionBinding]).validate_json(
+        _read(data_root / "action-recipe-bindings.json"))
+    for binding in body_action_bindings.values():
+        if binding.source_recipe not in body_action_recipes:
+            raise ValueError(f"unknown source body action recipe: {binding.source_recipe}")
     generated = _object(json.loads(_read(source_root / "src/render/data/animation/generatedSpellPresentationProfile.json")), "generated profile")
     projectile_profile = _object(generated["projectile"], "generated projectile")
     geometry_styles = _object(projectile_profile["geometryStyles"], "geometry styles")
@@ -394,6 +407,8 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
         drafts=MappingProxyType(drafts),
         attack_recipes=MappingProxyType(attack_recipes),
         shove_recipes=MappingProxyType(shove_recipes),
+        body_action_recipes=MappingProxyType(body_action_recipes),
+        body_action_bindings=body_action_bindings,
         condition_recipes=load_condition_recipes(source_root / "src/render/data/animation/conditionPresentation.json"),
         projectile_assets=MappingProxyType(projectile_assets),
         rig=rig,

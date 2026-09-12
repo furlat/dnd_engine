@@ -39,6 +39,7 @@ _DIRECT_SPECIAL_IDS = frozenset({
     "consumable.healing_potion",
     "consumable.potion_haste",
     "consumable.potion_greater_invisibility",
+    "consumable.potion_true_seeing",
     "consumable.weapon_coat.fire",
     "consumable.weapon_coat.lightning",
     "consumable.weapon_coat.concentration_fire",
@@ -630,10 +631,11 @@ def test_cri_non_item_visual_overlay_still_matches_current_owners() -> None:
 
 
 def test_cri_public_item_inventory_is_exact_and_direct() -> None:
-    """The direct public surface is exactly 150 independent item species."""
+    """The prior 150 species plus the new True Seeing potion stay direct."""
     public_ids = set(DIRECT_ITEM_BUILDERS)
-    assert len(public_ids) == 150
-    assert _normalized_hash(public_ids) == _PUBLIC_ITEM_ID_HASH
+    assert len(public_ids) == 151
+    assert "consumable.potion_true_seeing" in public_ids
+    assert _normalized_hash(public_ids - {"consumable.potion_true_seeing"}) == _PUBLIC_ITEM_ID_HASH
     assert "environment.door" not in public_ids
     assert "environment.directional_door" in public_ids
     assert _PRIVATE_GUARDIAN_ID not in public_ids
@@ -666,7 +668,7 @@ def test_cri_remaining_legacy_and_direct_item_construction_owners_are_exact() ->
         for declaration in declarations.values()
     )
     assert cr0._presets() == {}
-    assert len(DIRECT_ITEM_BUILDERS) == 150
+    assert len(DIRECT_ITEM_BUILDERS) == 151
 
 
 def test_cri_remaining_legacy_and_migrated_direct_behavior_owners_are_exact() -> None:
@@ -677,10 +679,10 @@ def test_cri_remaining_legacy_and_migrated_direct_behavior_owners_are_exact() ->
         for declaration in declarations.values()
         if declaration.mode.value == "behavior_identity"
     }
-    assert len(behavior_ids) == 311
+    assert len(behavior_ids) == 312
     assert set(cr0._static_behavior_owners()) == behavior_ids
 
-    assert len(_DIRECT_SPECIAL_IDS) == 39
+    assert len(_DIRECT_SPECIAL_IDS) == 40
     assert len(set(DIRECT_ITEM_BUILDERS) - _DIRECT_SPECIAL_IDS) == 111
     legacy_content_ids = {
         declaration.ref.content_id for declaration in declarations.values()
