@@ -7,9 +7,10 @@ from pathlib import Path
 import pygame
 import pytest
 
-from devtools.animation_review import __main__ as review
+from devtools.animation_review import capture as review
 from dnd.core.events import HealEvent, LifeStateChangeEvent
 from dnd.core.life_types import LifeState
+from game.animation_draw import LoadedBodyRows
 from game.animation_data import load_animation_data
 from game.animation_types import AnimationData, HealingContext, MovementMediaTrack
 from game.choreography import bind_choreography
@@ -17,7 +18,7 @@ from game.choreography_draw import load_choreography_media
 from game.combat import actor_contact
 from game.feedback import choreography_feedback, sample_feedback
 from game.playback_frame import sample_playback_frame
-from game.player_projection import reduce_lineage
+from game.player_reduction import reduce_lineage
 from tests.game.player_helpers import player_history
 from game.projection import Camera
 from game.scene import load_scene_media, scene_actors
@@ -72,8 +73,9 @@ def test_native_heal_changes_hp_at_entry_and_keeps_placed_feedback_after_complet
     pygame.init()
     try:
         pygame.display.set_mode((960, 640))
-        media = load_scene_media(scene_actors(before, data, {}, positions), data)
-        group_media = load_choreography_media(group)
+        body_rows: LoadedBodyRows = {}
+        media = load_scene_media(scene_actors(before, data, {}, positions), data, body_rows=body_rows)
+        group_media = load_choreography_media(group, body_rows=body_rows)
         number_font, badge_font = (pygame.font.SysFont(style.fontFamily, round(style.fontSizePx))
                                    for style in (data.number_style, data.badge_style))
         for quadrant in range(4):
@@ -129,7 +131,7 @@ def test_selected_healing_feedback_controls_and_unsupported_body_media_are_expli
 
 
 def test_healing_gallery_records_native_entry_and_decorative_tail_in_all_corners(tmp_path: Path) -> None:
-    assert review.main(["--capture", "--tag", "healing", "--fps", "12", "--width", "640", "--height", "480",
+    assert review.main(["--tag", "healing", "--fps", "12", "--width", "640", "--height", "480",
                         "--output", str(tmp_path)]) == 0
     run = tmp_path / "runs" / json.loads((tmp_path / "latest.json").read_text())["run"]
     for case in ("healing-capped", "healing-dying"):

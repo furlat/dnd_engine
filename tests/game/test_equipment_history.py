@@ -20,7 +20,7 @@ from dnd.world_authoring import project_world_tile
 from game.animation import sample_cast
 from game.animation_data import load_animation_data, resolve_actor_layers
 from game.combat import bind_cast
-from game.player_projection import reduce_lineage as reduce_player_lineage
+from game.player_reduction import reduce_lineage as reduce_player_lineage
 from tests.game.player_helpers import player_inputs
 from game.combat_demo import iter_combat_demo
 from game.presentation import CompletedLineage, PresentationTarget, capture_lineage, reduce_lineage, seed_actors, IntervalEnvelope, reduce_interval

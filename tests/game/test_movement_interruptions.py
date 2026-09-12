@@ -22,7 +22,7 @@ from game.choreography import sample_choreography
 from game.combat import actor_contact
 from game.motion import bind_motion, sample_motion
 from game.presentation import reduce_lineage
-from game.player_projection import reduce_lineage as reduce_player
+from game.player_reduction import reduce_lineage as reduce_player
 from game.player_facts import AttackFact, PlayerState
 from tests.game.player_helpers import player_history, visible_contact
 from tests.game.scenarios import movement_with_paralysis

@@ -12,15 +12,17 @@ from dnd.core.base_actions import ActionEvent
 from dnd.core.events import EventPhase, EventQueue, StepMovementEvent
 from dnd.core.life_types import LifeState
 from game.animation import body_clip
+from game.animation_draw import LoadedBodyRows
 from game.animation_data import load_animation_data
 from game.animation_types import AnimationData
 from game.motion import bind_motion, sample_motion
 from game.playback_frame import sample_playback_frame
 from game.presentation import reduce_lineage
-from game.player_projection import reduce_lineage as reduce_player
+from game.player_reduction import reduce_lineage as reduce_player
 from tests.game.player_helpers import player_history, visible_body, visible_contact
 from game.projection import Camera
 from game.scene import load_scene_media, scene_actors
+from game.choreography_draw import load_motion_media
 from tests.game.movement_scenarios import movement_history
 from tests.game.scenarios import attack_history
 
@@ -227,7 +229,9 @@ def test_jump_draws_one_complete_clip_over_its_airtime_and_lands_without_a_camer
     pygame.init()
     try:
         pygame.display.set_mode((960, 640))
-        media = load_scene_media(scene_actors(before, data, {}), data)
+        body_rows: LoadedBodyRows = {}
+        media = load_scene_media(scene_actors(before, data, {}), data, body_rows=body_rows)
+        load_motion_media(motion, data, body_rows=body_rows)
         number, badge = (pygame.font.SysFont(style.fontFamily, round(style.fontSizePx))
                          for style in (data.number_style, data.badge_style))
         for quadrant in range(4):

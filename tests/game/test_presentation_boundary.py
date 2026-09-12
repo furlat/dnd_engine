@@ -22,7 +22,7 @@ from dnd.entity import Entity
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.types.senses import PerceivedContact, SenseMode, SensesType
 from dnd.types.world import LightLevel
-from game.app import build_demo_intervals
+from game.demo import build_demo_intervals
 from game.presentation import Disposition, reduce_interval
 
 

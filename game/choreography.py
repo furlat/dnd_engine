@@ -29,7 +29,7 @@ from game.player_facts import (
     ActionFact, AttackFact, ConditionChangeFact, DamageFact, DeathSaveFact, EquipmentFact, ForcedMovementFact,
     HealFact, LifeFact, PlayerLineage, PlayerNode, PlayerObservation, PlayerState, ShoveFact, SpellFact,
 )
-from game.player_projection import lineage_branch, reduce_lineage, observe_actors, stage_lineage
+from game.player_reduction import lineage_branch, reduce_lineage, observe_actors, stage_lineage
 
 
 @dataclass(frozen=True, slots=True)

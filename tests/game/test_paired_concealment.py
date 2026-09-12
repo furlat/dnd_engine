@@ -5,13 +5,15 @@ from uuid import UUID
 
 import pytest
 
-from devtools.animation_review.cases import ConcealmentCase, load_cases, produce
+from devtools.animation_review.cases import ConcealmentCase, load_cases
+from devtools.animation_review.produce import produce
 from dnd.core.base_object import PASSIVE_EVENT_REPLAY
 from dnd.core.events import EventQueue, SensoryUpdateEvent, SkillCheckEvent
 from dnd.entity import Entity
 from dnd.types.senses import SensesType
 from game.player_facts import ItemChargeFact, SensoryFact, StepFact
-from game.player_projection import decode_player_sequence, encode_player_sequence, project_sequence, reduce_lineage
+from game.player_projection import project_sequence
+from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
 from game.presentation import reduce_interval
 from game.replay import RecordedSequence
 

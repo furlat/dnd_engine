@@ -12,19 +12,20 @@ import pytest
 from dnd.core.life_types import LifeState
 from dnd.runtime_reset import reset_engine_runtime
 from game.animation import body_clip, sample_cast, sample_idle_body
+from game.animation_draw import LoadedBodyRows
 from game.animation_data import load_animation_data
 from game.animation_draw import AnimationDrawCommand, actor_draw_commands
 from game.animation_types import AnimationData, Facing8
 from game.attack import BoundAttack, bind_attack, sample_attack
 from game.choreography import bind_choreography, sample_choreography
-from game.choreography_draw import load_choreography_media
+from game.choreography_draw import load_choreography_media, load_motion_media
 from game.combat import actor_contact, bind_cast
 from game.combat_demo import iter_combat_demo
 from game.feedback import choreography_feedback, motion_feedback, sample_feedback
 from game.motion import bind_motion, sample_motion
 from game.playback_frame import PlaybackFrame, sample_playback_frame
 from game.player_facts import LifeFact, PlayerLineage, PlayerState
-from game.player_projection import reduce_lineage
+from game.player_reduction import reduce_lineage
 from game.presentation import CompletedLineage, IntervalEnvelope
 from game.projection import Camera
 from game.scene import load_scene_media, scene_actors
@@ -100,7 +101,8 @@ def test_native_death_plays_once_then_corpse_and_revival_preserve_pose_in_four_c
     held = replace(legal, grid=(4.25, 3), body_lift_px=19)
     positions = {identity: VisualPosition(legal.grid, held.grid, held.elevation_steps, held.body_lift_px)}
     facings: dict[str, Facing8] = {identity: "NW"}
-    media = load_scene_media(scene_actors(before, data, facings, positions), data)
+    body_rows: LoadedBodyRows = {}
+    media = load_scene_media(scene_actors(before, data, facings, positions), data, body_rows=body_rows)
     number, badge = (pygame.font.SysFont(style.fontFamily, round(style.fontSizePx))
                      for style in (data.number_style, data.badge_style))
     cameras = tuple(Camera(quadrant=q, viewport=(960, 640)).with_focus(legal.grid) for q in range(4))
@@ -113,7 +115,7 @@ def test_native_death_plays_once_then_corpse_and_revival_preserve_pose_in_four_c
         contacts = {actor.contact.actor_uuid: actor.contact for actor in scene_actors(before, data, facings, positions)}
         group = bind_choreography(before, lineage, data, facings=facings, contacts=contacts)
         assert group.gaps == ()
-        group_media = load_choreography_media(group)
+        group_media = load_choreography_media(group, body_rows=body_rows)
         deaths = tuple(cue for cue in group.lifecycle if isinstance(cue.event.fact, LifeFact)
                        and cue.event.fact.new_state is LifeState.DEAD)
         revival = before.actors[target].life_state is LifeState.DEAD and after.actors[target].life_state is LifeState.ALIVE
@@ -217,8 +219,9 @@ def test_owned_lethal_delivery_keeps_its_original_timing_and_exactly_one_body(
               and cue.event.fact.new_state is LifeState.DEAD)
     assert death.state_owned and death.death_end_ms is None
     assert death.event.uuid in bound.owned_life_events
-    media = load_scene_media(scene_actors(before, data, {}), data)
-    group_media = load_choreography_media(group)
+    body_rows: LoadedBodyRows = {}
+    media = load_scene_media(scene_actors(before, data, {}), data, body_rows=body_rows)
+    group_media = load_choreography_media(group, body_rows=body_rows)
     number, badge = (pygame.font.SysFont(style.fontFamily, round(style.fontSizePx))
                      for style in (data.number_style, data.badge_style))
     for time in (0, death.start_ms, group.complete_ms):
@@ -286,8 +289,9 @@ def test_opportunity_downing_keeps_hit_recovery_and_original_dying_child_badge(
     assert final.contact is not None and final.body is not None
     assert final.contact.life_state is LifeState.DYING and final.contact.grid != motion.actor.grid
     assert final.body.clip == "Idle" and motion.complete_ms == reaction.end_ms
-    media = load_scene_media(scene_actors(before, data, {}), data)
-    reactions = {group.root_uuid: load_choreography_media(group)}
+    body_rows: LoadedBodyRows = {}
+    media = load_scene_media(scene_actors(before, data, {}), data, body_rows=body_rows)
+    reactions = load_motion_media(motion, data, body_rows=body_rows)
     number, badge = (pygame.font.SysFont(style.fontFamily, round(style.fontSizePx))
                      for style in (data.number_style, data.badge_style))
     for quadrant in range(4):

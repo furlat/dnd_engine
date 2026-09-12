@@ -1,6 +1,5 @@
 """Record finite retained sequences with the game's actual frame compositor."""
 
-import hashlib
 import json
 from dataclasses import replace
 from math import ceil
@@ -13,18 +12,18 @@ import pygame
 
 from dnd.core.events import EventPhase
 from game.animation_data import load_animation_data
-from game.animation_draw import actor_screen_bounds
+from game.animation_draw import LoadedBodyRows, actor_screen_bounds
 from game.animation_types import Facing8
 from game.app import draw_frame
 from game.assets import SurfaceCache, load_catalog
 from game.choreography import BoundChoreography, bind_choreography
-from game.choreography_draw import ChoreographyMedia, load_choreography_media
+from game.choreography_draw import ChoreographyMedia, load_choreography_media, load_motion_media
 from game.combat import actor_contact
 from game.feedback import FeedbackTrack, choreography_feedback, motion_feedback
 from game.motion import MotionTimeline, bind_motion
 from game.playback_frame import PlaybackFrame, sample_playback_frame
 from game.player_facts import AttackFact, ForcedMovementFact, MovementFact, PlayerState, StepFact
-from game.player_projection import reduce_lineage, stage_lineage
+from game.player_reduction import reduce_lineage, stage_lineage
 from game.projection import Camera, TILE_WIDTH, ZOOM_LEVELS, project_screen
 from game.scene import draw_actor_labels, load_scene_media, scene_actors
 from game.visual_position import VisualPosition
@@ -81,12 +80,10 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
     height = round(sum(row.contact.elevation_steps for row in actors) / len(actors))
     cameras = tuple(Camera(quadrant=quadrant, zoom=1.0, viewport=size).with_focus(focus, elevation_steps=height)
                     for quadrant in range(4))
-    # Gear may change between roots; preload every actual retained loadout.
-    appearances = list(actors)
+    # Frame the whole history; media loads only as those heads enter playback.
     framing_contacts = [actor.contact for actor in actors]
     for root in sequence.lineages:
         entrants = scene_actors(stage_lineage(before, root), data, facings)
-        appearances.extend(entrants)
         framing_contacts.extend(actor.contact for actor in entrants)
         flight = bind_motion(before, root, data)
         if flight is not None:
@@ -99,9 +96,9 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
                     (leg.start, leg.start_height), (leg.end, leg.end_height)))
         before = reduce_lineage(before, root)
         retained_actors = scene_actors(before, data, facings)
-        appearances.extend(retained_actors)
         framing_contacts.extend(actor.contact for actor in retained_actors)
-    body_media = load_scene_media(tuple(appearances), data)
+    body_rows: LoadedBodyRows = {}
+    body_media = load_scene_media(actors, data, body_rows=body_rows)
     # Keep the old framing when it already covers the history. Longer routes
     # use one fixed focus/zoom for all four views, never a moving-camera patch.
     def fits(views: tuple[Camera, ...]) -> bool:
@@ -138,6 +135,8 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
     frame_index = 0
     interval = 1000 / fps
     poster_written = False
+    paused_pixels: bytes | None = None
+    paused_pixels_match = True
     camera_state_parity = True
     bodies_in_view = True
     video = directory / "clip.mp4"
@@ -156,6 +155,7 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
                     choreography_media: ChoreographyMedia | None = None, motion: MotionTimeline | None = None,
                     reaction_media: dict[UUID, ChoreographyMedia] | None = None, paused: bool = False) -> PlaybackFrame:
             nonlocal frame_index, facings, positions, poster_written, camera_state_parity, bodies_in_view
+            nonlocal paused_pixels, paused_pixels_match
             views = []
             samples = []
             for camera in cameras:
@@ -191,13 +191,19 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
             pygame.event.pump()
             pygame.display.flip()
             pixels = pygame.image.tobytes(screen, "RGB")
+            if paused:
+                if paused_pixels is None:
+                    paused_pixels = pixels
+                else:
+                    paused_pixels_match &= pixels == paused_pixels
+            else:
+                paused_pixels = None
             sink.write(pixels)
             if not poster_written and presentation_ms >= 900:
                 pygame.image.save(screen, directory / "poster.png")
                 poster_written = True
             trace["frames"].append({
                 "index": frame_index, "video_ms": frame_index * interval,
-                "pixel_sha256": hashlib.sha256(pixels).hexdigest(),
                 "presentation_ms": presentation_ms, "elapsed_ms": elapsed_ms,
                 "root_uuid": str(root_uuid) if root_uuid else None, "paused": paused,
                 "latest_cursor": latest.reducer_cursor, "views": views, **frame_trace(sample),
@@ -212,6 +218,10 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
             pause_done = False
             for lineage in sequence.lineages:
                 after = reduce_lineage(before, lineage)
+                load_scene_media((
+                    *scene_actors(stage_lineage(before, lineage), data, facings, positions),
+                    *scene_actors(after, data, facings, positions),
+                ), data, body_rows=body_rows)
                 contacts = {actor.contact.actor_uuid: actor.contact
                             for actor in scene_actors(before, data, facings, positions)}
                 motion = bind_motion(before, lineage, data, contacts=contacts)
@@ -225,9 +235,8 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
                         gaps.append(f"{lineage.root.uuid}: Movement reaction choreography is not bound")
                 group = None if motion is not None else bind_choreography(before, lineage, data,
                                                                         facings=facings, contacts=contacts)
-                group_media = load_choreography_media(group) if group is not None else None
-                reaction_media = {row.choreography.root_uuid: load_choreography_media(row.choreography)
-                                  for row in motion.reactions} if motion is not None else {}
+                group_media = load_choreography_media(group, body_rows=body_rows) if group is not None else None
+                reaction_media = load_motion_media(motion, data, body_rows=body_rows) if motion is not None else {}
                 duration = motion.complete_ms if motion is not None else group.complete_ms if group else 0
                 if motion is not None:
                     feedback.extend(motion_feedback(motion, data, presentation_ms))
@@ -303,10 +312,9 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
                   "Opaque actor pixels stay below the header and inside all four camera viewports, including jump lift.")
             if case.pause_at_ms is not None:
                 held = [row for row in trace["frames"] if row["paused"]]
-                check("frozen-presentation", len(held) > 1 and all(
+                check("frozen-presentation", len(held) > 1 and paused_pixels_match and all(
                     row["presentation_ms"] == held[0]["presentation_ms"] and row["state"] == held[0]["state"]
-                    and row["contacts"] == held[0]["contacts"] and row["views"] == held[0]["views"]
-                    and row["pixel_sha256"] == held[0]["pixel_sha256"] for row in held),
+                    and row["contacts"] == held[0]["contacts"] and row["views"] == held[0]["views"] for row in held),
                     "Video time advances while retained time, state, draw samples and rendered RGB pixels remain frozen.")
         finally:
             encoder.stdin.close()

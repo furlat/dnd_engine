@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict
 from dnd.core.base_object import PASSIVE_EVENT_REPLAY
 from dnd.core.events import EventPhase, EventQueue
 from game.presentation import (
-    CompletedLineage, IntervalEnvelope, PresentationTarget, capture_interval, capture_lineage,
+    CompletedLineage, IntervalEnvelope, PresentationTarget, capture_interval, capture_lineages,
     reduce_interval,
 )
 
@@ -79,15 +79,10 @@ def capture_history(
         latest, _ = reduce_interval(None, startup)
         if observer.entity_uuid not in latest.actors:
             raise ValueError(f"{observer.role} has no native actor at its initialization boundary")
-        known = set(latest.actors)
-        retained: list[CompletedLineage] = []
-        for index, root in roots:
-            if observer.start_cursor <= index < end_cursor:
-                lineage = capture_lineage(root, observer_uuid=observer.entity_uuid,
-                                          known_actor_uuids=frozenset(known))
-                retained.append(lineage)
-                known.update(admission.actor.uuid for admission in lineage.admissions)
-        views[observer.role] = RecordedSequence(initialization=startup, lineages=tuple(retained))
+        retained = capture_lineages(tuple(root for index, root in roots
+                                         if observer.start_cursor <= index < end_cursor),
+            observer_uuid=observer.entity_uuid, known_actor_uuids=frozenset(latest.actors))
+        views[observer.role] = RecordedSequence(initialization=startup, lineages=retained)
     return CapturedHistory(initialization, before, lineages, views)
 
 

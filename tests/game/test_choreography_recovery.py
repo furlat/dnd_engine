@@ -18,7 +18,7 @@ from game.combat import BoundCast, bind_cast
 from game.combat_demo import iter_combat_demo
 from game.condition_types import ConditionRecipe
 from game.presentation import CompletedLineage, PresentationTarget, capture_lineage, reduce_lineage, IntervalEnvelope, reduce_interval
-from game.player_projection import reduce_lineage as reduce_player
+from game.player_reduction import reduce_lineage as reduce_player
 from game.replay import CapturedHistory, capture_history
 from tests.game.player_helpers import player_history
 

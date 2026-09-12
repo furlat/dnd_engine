@@ -40,7 +40,7 @@ from game.presentation import (
     CompletedLineage, PresentationTarget, capture_lineage, capture_interval,
     IntervalEnvelope, reduce_interval,
 )
-from game.player_projection import reduce_lineage
+from game.player_reduction import reduce_lineage
 from tests.game.player_helpers import player_inputs
 
 

@@ -10,7 +10,7 @@ from dnd.core.life_types import LifeState
 from game.animation_data import load_animation_data
 from game.attack import BoundAttack
 from game.choreography import bind_choreography
-from game.player_projection import reduce_lineage
+from game.player_reduction import reduce_lineage
 from game.player_facts import AttackFact
 from tests.game.player_helpers import player_history
 from game.scene import scene_actors

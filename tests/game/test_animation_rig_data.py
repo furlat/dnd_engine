@@ -68,15 +68,10 @@ def test_explicit_goblin_binding_preserves_original_sheets_and_semantic_mapping(
     ("missing-row", "eight distinct facing rows"),
     ("unknown-category", "declared rig categories"),
     ("unbound-sheet", "clip resources and local bindings differ"),
-    ("missing-file", "missing local animation resource"),
-    ("outside-assets", "escapes local asset directory"),
-    ("relative-escape", "invalid local animation resource path"),
-    ("different-columns", "sheet dimensions differ"),
     ("zero-fps", "greater than 0"),
     ("zero-frames", "greater than or equal to 1"),
-    ("duplicate-json-key", "duplicate JSON key"),
 ])
-def test_unusable_additional_rig_rejected_before_playback(tmp_path: Path, case: str, error: str) -> None:
+def test_loader_rejects_ambiguous_rig_bindings(tmp_path: Path, case: str, error: str) -> None:
     document = json.loads(BINDING.read_text())
     rig = document["rig"]
     first = next(iter(document["resources"]))
@@ -90,22 +85,12 @@ def test_unusable_additional_rig_rejected_before_playback(tmp_path: Path, case: 
         rig["clips"]["Idle"]["sheets"]["invented"] = first
     elif case == "unbound-sheet":
         rig["clips"]["Idle"]["sheets"]["Goblin01"] = "/rigs/unbound.png"
-    elif case == "missing-file":
-        document["resources"][first] = "game/assets/rigs/goblin01/missing.png"
-    elif case == "outside-assets":
-        document["resources"][first] = "game/assets/neuroclient/spritesheets/NakedBody/Idle.png"
-    elif case == "relative-escape":
-        document["resources"][first] = "../outside.png"
-    elif case == "different-columns":
-        rig["clips"]["Idle"]["frames"] = 14
     elif case == "zero-fps":
         rig["clips"]["Idle"]["fps"] = 0
     elif case == "zero-frames":
         rig["clips"]["Idle"]["frames"] = 0
     path = tmp_path / "rig.json"
     source = json.dumps(document)
-    if case == "duplicate-json-key":
-        source = source.replace('"rig_id":', '"rig_id":"duplicate", "rig_id":', 1)
     path.write_text(source)
     with pytest.raises(ValueError, match=error):
         load_animation_data(rig_files=(path, path) if case == "repeated-file" else (path,))

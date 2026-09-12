@@ -9,13 +9,14 @@ from dnd.core.dice import DiceRoll
 from dnd.core.events import EventQueue
 from dnd.entity import Entity
 from dnd.runtime_reset import reset_engine_runtime
-from devtools.animation_review.cases import load_cases, produce
+from devtools.animation_review.cases import load_cases
+from devtools.animation_review.produce import produce
 from game.animation_data import load_animation_data
 from game.choreography import bind_choreography, sample_choreography
 from game.motion import bind_motion, sample_motion
 from game.presentation import reduce_lineage
 from game.replay import decode_sequence, encode_sequence
-from game.player_projection import reduce_lineage as reduce_player_lineage
+from game.player_reduction import reduce_lineage as reduce_player_lineage
 from tests.game.player_helpers import player_inputs
 
 

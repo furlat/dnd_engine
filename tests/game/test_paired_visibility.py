@@ -4,13 +4,15 @@ from pathlib import Path
 
 import pytest
 
-from devtools.animation_review.cases import load_cases, produce
+from devtools.animation_review.cases import load_cases
+from devtools.animation_review.produce import produce
 from dnd.actions import MovementEvent
 from dnd.core.base_object import PASSIVE_EVENT_REPLAY
 from dnd.core.events import EventQueue, SensoryUpdateEvent
 from dnd.entity import Entity
 from game.player_facts import EquipmentFact, SensoryFact, StepFact
-from game.player_projection import decode_player_sequence, encode_player_sequence, project_sequence, reduce_lineage
+from game.player_projection import project_sequence
+from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
 from game.replay import RecordedSequence
 from game.presentation import reduce_interval
 from tests.game.visibility_scenarios import visibility_history

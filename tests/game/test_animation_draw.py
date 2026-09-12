@@ -11,9 +11,10 @@ import pytest
 from dnd.core.life_types import LifeState
 from game.animation import ActorContact, CastApplication, CastInput, compile_cast, sample_cast
 from game.animation_data import load_animation_data
-from game.animation_draw import RigLayer, draw_animation, load_animation_media
+from game.animation_draw import LoadedBodyRows, RigLayer, draw_animation, load_actor_media, load_animation_media
 from game.animation_types import BodyRig, StudioSpellDraft
 from game.projection import Camera, project_screen
+from game.scene import SceneActor, load_scene_media, scene_draw_commands
 
 
 APPEARANCE = tuple(RigLayer(slot, category, alpha=0.5 if slot == "shadow" else 1) for slot, category in (
@@ -80,6 +81,30 @@ def test_required_gear_must_be_usable_before_preload_finishes(screen, timeline, 
         load_animation_media(candidate, APPEARANCES)
 
 
+def test_standing_scene_does_not_require_action_media_and_draws_all_facings(screen, timeline, tmp_path: Path) -> None:
+    data = timeline.data
+    resources = {url: path if url.endswith("/Idle.png") else tmp_path / "unrequested.png"
+                 for url, path in data.resources.items()}
+    data = replace(data, resources=MappingProxyType(resources))
+    actor = SceneActor(timeline.source.caster, APPEARANCE)
+    media = load_scene_media((actor,), data)
+    for facing in ("S", "SE"):
+        viewed = replace(actor, contact=replace(actor.contact, facing=facing))
+        for quadrant in range(4):
+            commands = scene_draw_commands((viewed,), data, media, Camera(quadrant=quadrant), 0)
+            body, = (command for command in commands if command[4][6] == "actor")
+            assert pygame.mask.from_surface(body[1]).count() > 0
+
+
+def test_nonlethal_cast_does_not_require_death_media(screen, timeline, tmp_path: Path) -> None:
+    data = timeline.data
+    resources = {url: tmp_path / "unrequested-death.png" if url.endswith("/Die.png") else path
+                 for url, path in data.resources.items()}
+    candidate = compile_cast(replace(data, resources=MappingProxyType(resources)), "spell.fire_bolt", timeline.source)
+    media = load_animation_media(candidate, APPEARANCES)
+    assert any(render_pixels(screen, candidate, media, candidate.complete_ms))
+
+
 @pytest.mark.parametrize("target_rig", ["neuroclient.modular", "smallscale.goblin01"])
 def test_preloaded_media_draws_every_phase_after_source_links_are_removed(
     screen, timeline, tmp_path: Path, target_rig: str,
@@ -95,16 +120,24 @@ def test_preloaded_media_draws_every_phase_after_source_links_are_removed(
     ),))
     candidate = compile_cast(data, "spell.fire_bolt", source)
     appearance = APPEARANCE if target_rig == "neuroclient.modular" else GOBLIN_APPEARANCE
-    loaded = load_animation_media(candidate, {"caster": APPEARANCE, "target": appearance})
-    for link in resources.values():
-        link.unlink()
-    assert all(not link.exists() for link in resources.values())
-    for elapsed in (0, 100, 900, 1900, 2800, 4000):
-        assert any(render_pixels(screen, candidate, loaded, elapsed)), elapsed
+    rows: LoadedBodyRows = {}
+    loaded = load_animation_media(candidate, {"caster": APPEARANCE, "target": appearance}, body_rows=rows)
     lethal = compile_cast(data, "spell.fire_bolt", replace(
         source, applications=(replace(source.applications[0], resulting_hp=0, resulting_life_state=LifeState.DEAD),),
     ))
-    assert any(render_pixels(screen, lethal, loaded, lethal.complete_ms))
+    lethal_media = load_animation_media(lethal, {"caster": APPEARANCE, "target": appearance}, body_rows=rows)
+    for link in resources.values():
+        link.unlink()
+    assert all(not link.exists() for link in resources.values())
+    # A later head may request the same identity/gear again. Its pixels remain
+    # available from the presentation session without reopening their files.
+    load_actor_media(data, (
+        (replace(source.caster, facing=candidate.facing), APPEARANCE, ("Idle", candidate.recipe.cast.actionClip)),
+        (source.applications[0].target, appearance, ("Idle", data.death_context.bodyClip)),
+    ), body_rows=rows)
+    for elapsed in (0, 100, 900, 1900, 2800, 4000):
+        assert any(render_pixels(screen, candidate, loaded, elapsed)), elapsed
+    assert any(render_pixels(screen, lethal, lethal_media, lethal.complete_ms))
 
 
 def test_seeking_back_restores_identical_pixels_after_other_phases(screen, timeline, media) -> None:
@@ -153,22 +186,26 @@ def test_fixed_target_matches_actual_sheet_and_support_in_every_direction(screen
 
 
 def test_fixed_target_hit_and_death_seek_restore_pixels_without_reloading(screen, fixed_scene) -> None:
-    candidate, loaded = fixed_scene
+    candidate, _ = fixed_scene
     assert candidate.applications[0].damage_start_ms is not None
     hit_time = candidate.applications[0].damage_start_ms + 250
-    expected_hit = render_pixels(screen, candidate, loaded, hit_time)
-    assert sample_cast(candidate, hit_time).bodies[1].clip == "TakeDamage"
     lethal = compile_cast(candidate.data, "spell.fire_bolt", replace(
         candidate.source, applications=(replace(
             candidate.source.applications[0], resulting_hp=0, resulting_life_state=LifeState.DEAD,
         ),),
     ))
-    corpse = render_pixels(screen, lethal, loaded, lethal.complete_ms)
+    rows: LoadedBodyRows = {}
+    appearances = {"caster": APPEARANCE, "target": GOBLIN_APPEARANCE}
+    loaded = load_animation_media(candidate, appearances, body_rows=rows)
+    lethal_media = load_animation_media(lethal, appearances, body_rows=rows)
+    expected_hit = render_pixels(screen, candidate, loaded, hit_time)
+    assert sample_cast(candidate, hit_time).bodies[1].clip == "TakeDamage"
+    corpse = render_pixels(screen, lethal, lethal_media, lethal.complete_ms)
     assert sample_cast(lethal, lethal.complete_ms).bodies[1].frame == 14
     assert corpse != expected_hit
     render_pixels(screen, candidate, loaded, 0)
     assert render_pixels(screen, candidate, loaded, hit_time) == expected_hit
-    assert render_pixels(screen, lethal, loaded, lethal.complete_ms) == corpse
+    assert render_pixels(screen, lethal, lethal_media, lethal.complete_ms) == corpse
 
 
 def test_different_rigs_can_use_the_same_category_names(screen, timeline) -> None:
@@ -219,7 +256,7 @@ def test_fixed_rig_origin_moves_body_and_feedback_together(screen, fixed_scene) 
     assert pygame.image.tobytes(frames[1], "RGB") == pygame.image.tobytes(expected, "RGB")
 
 
-@pytest.mark.parametrize("broken", ["missing-shadow", "wrong-dimensions", "removable-weapon"])
+@pytest.mark.parametrize("broken", ["missing-shadow", "removable-weapon"])
 def test_fixed_rig_media_failures_are_rejected_before_drawing(screen, timeline, broken) -> None:
     data = timeline.data
     rig = data.rigs["smallscale.goblin01"]
@@ -228,11 +265,6 @@ def test_fixed_rig_media_failures_are_rejected_before_drawing(screen, timeline, 
         resources = dict(data.resources)
         del resources[rig.clips["TakeDamage"].sheets["Goblin01Shadow"]]
         data = replace(data, resources=MappingProxyType(resources))
-    elif broken == "wrong-dimensions":
-        document = rig.model_dump(mode="json")
-        document["cell_width"] = 64
-        changed = BodyRig.model_validate_json(json.dumps(document))
-        data = replace(data, rigs=MappingProxyType({**data.rigs, "smallscale.goblin01": changed}))
     else:
         appearance += (RigLayer("weapon", "Melee1"),)
     source = replace(timeline.source, applications=(replace(

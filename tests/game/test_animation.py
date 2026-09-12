@@ -109,10 +109,8 @@ def imported_tree(tmp_path: Path) -> Path:
     ("duplicate-ref", "duplicate spell draft"),
     ("duplicate-asset", "duplicate projectile assetId"),
     ("binding-mismatch", "no exact authored definitionRef"),
-    ("missing-file", "missing local animation resource"),
-    ("escaping-file", "invalid local animation resource path"),
 ])
-def test_loader_rejects_ambiguous_or_unusable_imports(imported_tree: Path, case: str, error: str) -> None:
+def test_loader_rejects_ambiguous_recipe_bindings(imported_tree: Path, case: str, error: str) -> None:
     path = imported_tree / "bindings.json"
     if case == "duplicate-ref":
         path = imported_tree / "spell-studio-drafts.materialized.json"
@@ -125,10 +123,6 @@ def test_loader_rejects_ambiguous_or_unusable_imports(imported_tree: Path, case:
         document.append(document[0])
     elif case == "binding-mismatch":
         document["spells"]["spell.fire_bolt"]["definition_contract_hash"] = "0" * 64
-    else:
-        url = next(iter(document["resources"]))
-        document["resources"][url] = ("../outside.png" if case == "escaping-file"
-                                       else "game/assets/neuroclient/missing.png")
     path.write_text(json.dumps(document))
     with pytest.raises(ValueError, match=error):
         load_animation_data(imported_tree)

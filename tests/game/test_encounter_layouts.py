@@ -53,7 +53,7 @@ def check_layout(
     previous = random.getstate()
     random.seed(0)
     try:
-        result = run(player_input=choose, stop_after_commands=4, frame_deltas=(0.1,), max_frames=180,
+        result = run(collect_frames=True, player_input=choose, stop_after_commands=4, frame_deltas=(0.1,), max_frames=180,
                      quadrant=quadrant, player_positions=players, enemy_positions=enemies, capture_dir=capture_dir)
     finally:
         random.setstate(previous)

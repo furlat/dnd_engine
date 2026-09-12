@@ -14,7 +14,7 @@ from game.animation_types import AnimationData
 from game.combat import actor_contact
 from game.damage import bind_damage, sample_damage
 from game.presentation import lineage_branch as native_branch
-from game.player_projection import lineage_branch, reduce_lineage
+from game.player_reduction import lineage_branch, reduce_lineage
 from tests.game.player_helpers import player_history
 from tests.game.forced_movement_scenarios import forced_movement_history
 from tests.game.scenarios import attack_history

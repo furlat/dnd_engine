@@ -66,7 +66,7 @@ def check_encounter_completion(*, capture_dir: Path | None = None) -> GameSummar
     previous = random.getstate()
     random.seed(0)
     try:
-        result = run(player_input=choose, frame_deltas=(0.1,), max_frames=200,
+        result = run(collect_frames=True, player_input=choose, frame_deltas=(0.1,), max_frames=200,
                      player_positions=((5, 5), (5, 7)), enemy_positions=((9, 5), (9, 7)),
                      capture_dir=capture_dir)
     finally:

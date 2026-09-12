@@ -58,8 +58,8 @@ def test_water_kernel_and_real_blend_match_frozen_ts_oracle() -> None:
     try:
         catalog = load_catalog()
         cache = SurfaceCache(catalog)
-        ripple = pygame.surfarray.array3d(cache.canonical["water.ripple"])
-        normal = pygame.surfarray.array3d(cache.canonical["water.normal"])
+        ripple = pygame.surfarray.array3d(cache.canonical("water.ripple"))
+        normal = pygame.surfarray.array3d(cache.canonical("water.normal"))
         inputs = np.asarray(oracle["input_pixels"], dtype=np.float32)
         origins = np.repeat(
             np.asarray([oracle["source_origin_px"]], dtype=np.float32),
@@ -104,8 +104,8 @@ def test_world_phase_is_translation_independent_but_sheen_uses_screen_position()
     try:
         catalog = load_catalog()
         cache = SurfaceCache(catalog)
-        ripple = pygame.surfarray.array3d(cache.canonical["water.ripple"])
-        normal = pygame.surfarray.array3d(cache.canonical["water.normal"])
+        ripple = pygame.surfarray.array3d(cache.canonical("water.ripple"))
+        normal = pygame.surfarray.array3d(cache.canonical("water.normal"))
         common = dict(
             mask_alpha=np.ones(1, dtype=np.float32),
             input_pixels=np.asarray([[17, 23]], dtype=np.float32),
@@ -374,8 +374,8 @@ def test_zoom_preserves_world_sample_and_view_or_height_cannot_shift_origin() ->
     try:
         catalog = load_catalog()
         cache = SurfaceCache(catalog)
-        ripple = pygame.surfarray.array3d(cache.canonical["water.ripple"])
-        normal = pygame.surfarray.array3d(cache.canonical["water.normal"])
+        ripple = pygame.surfarray.array3d(cache.canonical("water.ripple"))
+        normal = pygame.surfarray.array3d(cache.canonical("water.normal"))
         position = (31, 33)
         origin = water_source_origin(
             position,

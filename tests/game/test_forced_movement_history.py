@@ -4,7 +4,8 @@ import random
 
 import pytest
 
-from devtools.animation_review.cases import ForcedMovementCase, load_cases, produce
+from devtools.animation_review.cases import ForcedMovementCase, load_cases
+from devtools.animation_review.produce import produce
 from dnd.actions import AttackEvent, ShoveEvent
 from dnd.core.base_actions import ActionEvent
 from dnd.core.events import EventPhase, EventQueue, ForcedMovementEvent, SpatialChangeEvent, SpatialChangeType, StepMovementEvent, TakeDamageEvent

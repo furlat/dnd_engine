@@ -1,4 +1,4 @@
-"""A finite catalog over existing public gameplay scenario producers."""
+"""Passive review catalog and saved-input schemas; no native scenario imports."""
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -8,19 +8,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, TypeAdapter
 
 from dnd.core.equipment_types import WeaponSlot
-from game.combat_demo import capture_combat_demo
-from game.replay import CapturedHistory
 from game.player_facts import PlayerLineage, PlayerState
-from tests.game.creature_scenarios import creature_history
-from tests.game.concealment_scenarios import ConcealmentProgram, RevealOperation, SightGrant, concealment_history
-from tests.game.discovery_scenarios import discovery_history
-from tests.game.equipment_scenarios import equipment_sequence_history
-from tests.game.forced_movement_scenarios import forced_movement_history
-from tests.game.movement_scenarios import movement_history
-from tests.game.visibility_scenarios import VisibilityRole, visibility_history
-from tests.game.scenarios import (
-    attack_history, dodge_expiry_history, healing_history, lifecycle_history, movement_with_paralysis, paralysis_lifecycle,
-)
 
 
 class AttackCase(BaseModel):
@@ -110,7 +98,7 @@ class VisibilityCase(BaseModel):
     battlefield_id: str = "battlefield.visibility_doorway_open"
     observer_position: tuple[int, int] = (5, 7)
     subject_position: tuple[int, int] = (8, 4)
-    route: tuple[tuple[VisibilityRole, tuple[int, int]], ...] = (("subject", (8, 10)),)
+    route: tuple[tuple[Literal["observer", "subject"], tuple[int, int]], ...] = (("subject", (8, 10)),)
     hidden_change_after: int | None = None
     dash_before: bool = False
 
@@ -127,11 +115,11 @@ class MovementCase(BaseModel):
 class ConcealmentCase(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     kind: Literal["concealment"]
-    program: ConcealmentProgram = "invisibility"
+    program: Literal["invisibility", "sight-expiry", "doorway", "hide-bright", "hide-dim", "stacked"] = "invisibility"
     allied: bool = False
-    sight_grant: SightGrant = "none"
+    sight_grant: Literal["none", "spell", "potion"] = "none"
     stealth_face: int = Field(default=18, ge=1, le=20)
-    reveal: RevealOperation = "drop-concentration"
+    reveal: Literal["none", "drop-concentration", "attack", "cast"] = "drop-concentration"
 
 
 class ForcedMovementCase(BaseModel):
@@ -197,63 +185,3 @@ def load_cases(path: Path = Path(__file__).with_name("catalog.json")) -> tuple[R
     if len({case.id for case in cases}) != len(cases):
         raise ValueError("review case IDs must be unique")
     return cases
-
-
-def produce(case: ReviewCase) -> CapturedHistory:
-    """Run real rules once, then hand only retained values to the recorder."""
-    match case.scenario:
-        case ForcedMovementCase() as scenario:
-            return forced_movement_history(
-                source_position=scenario.source_position, target_position=scenario.target_position,
-                battlefield_id=scenario.battlefield_id, seed=scenario.seed,
-                blocker_position=scenario.blocker_position, watcher_position=scenario.watcher_position,
-                target_identity=scenario.target_identity, target_hp=scenario.target_hp,
-                mechanism=scenario.mechanism, destination=scenario.destination,
-            )
-        case CreatureCase() as scenario:
-            return creature_history(scenario.creature_identity, weapon_slot=scenario.weapon_slot,
-                                                seed=scenario.seed)
-        case EquipmentCase() as scenario:
-            return equipment_sequence_history(replacement=scenario.replacement, attacks=scenario.attacks)
-        case DiscoveryCase() as scenario:
-            return discovery_history(mode=scenario.mode)
-        case VisibilityCase() as scenario:
-            return visibility_history(battlefield_id=scenario.battlefield_id,
-                observer_position=scenario.observer_position, subject_position=scenario.subject_position,
-                route=scenario.route, hidden_change_after=scenario.hidden_change_after, dash_before=scenario.dash_before)
-        case ConcealmentCase() as scenario:
-            return concealment_history(program=scenario.program, allied=scenario.allied,
-                sight_grant=scenario.sight_grant, stealth_face=scenario.stealth_face, reveal=scenario.reveal)
-        case MovementCase() as scenario:
-            return movement_history(route=scenario.route, battlefield_id=scenario.battlefield_id,
-                                                behavior=scenario.behavior, boost=scenario.boost)
-        case AttackCase() as scenario:
-            return attack_history(
-                scenario.weapon, scenario.seed, opportunity=scenario.opportunity,
-                whole_movement=scenario.opportunity, destination=scenario.destination,
-                maximum_hp=scenario.maximum_hp, movement_behavior=scenario.movement_behavior,
-                watcher_positions=scenario.watcher_positions, weapon_slot=scenario.weapon_slot,
-                goblin_source=scenario.goblin_source, uses_death_saves=scenario.uses_death_saves,
-            )
-        case ParalysisCase() as scenario:
-            return movement_with_paralysis(
-                scenario.seed, scenario.maximum_hp, movement_behavior=scenario.movement_behavior,
-            )
-        case ParalysisLifecycleCase() as scenario:
-            return paralysis_lifecycle(
-                repeat_save_seeds=scenario.repeat_save_seeds,
-                movement_behavior=scenario.movement_behavior, resume=scenario.resume,
-            )
-        case DodgeExpiryCase():
-            return dodge_expiry_history()
-        case HealingCase() as scenario:
-            return healing_history(dying=scenario.dying)
-        case LifecycleCase() as scenario:
-            return lifecycle_history(save_seeds=scenario.save_seeds,
-                heal_after=scenario.heal_after, revive_after=scenario.revive_after)
-        case CastCase() as scenario:
-            return capture_combat_demo(
-                caster_position=scenario.caster_position, second_attack_seed=scenario.second_attack_seed,
-                goblin_recipient=scenario.goblin_recipient, replace_weapon=scenario.replace_weapon,
-                magic_missile=scenario.magic_missile,
-            )

@@ -6,16 +6,21 @@ from uuid import UUID
 
 import pygame
 
-from game.animation import CastSample
+from dnd.core.life_types import LifeState
+from game.animation import ActorContact, CastSample
+from game.animation_data import resolve_player_layers
+from game.animation_types import AnimationData, RigLayer
 from game.animation_draw import (
-    AnimationDrawCommand, AnimationMedia, BodyRows, animation_draw_commands,
-    attack_draw_commands, load_animation_media, load_attack_media,
+    AnimationDrawCommand, AnimationMedia, BodyRows, LoadedBodyRows, animation_draw_commands,
+    attack_draw_commands, load_actor_media, load_animation_media, load_attack_media,
 )
 from game.attack import AttackSample, BoundAttack
 from game.choreography import BoundChoreography, ChoreographySample
 from game.combat import BoundCast
 from game.condition_animation import ConditionAppearance
+from game.motion import MotionTimeline
 from game.projection import Camera
+from game.scene import SceneActor, available_clips, load_scene_media, scene_actors
 
 
 @dataclass(frozen=True, slots=True)
@@ -24,15 +29,81 @@ class ChoreographyMedia:
     casts: Mapping[UUID, AnimationMedia]
 
 
-def load_choreography_media(bound: BoundChoreography) -> ChoreographyMedia:
+def load_choreography_media(bound: BoundChoreography, *,
+                             body_rows: LoadedBodyRows | None = None) -> ChoreographyMedia:
+    """Load this head's typed body cues into the caller's shared pixel rows."""
+    if body_rows is None:
+        body_rows = {}
     attacks: dict[UUID, BodyRows] = {}
     casts: dict[UUID, AnimationMedia] = {}
     for node in bound.nodes:
         if isinstance(node.bound, BoundAttack):
-            attacks[node.event_uuid] = load_attack_media(node.bound.timeline, node.bound.appearances)
+            attacks[node.event_uuid] = load_attack_media(node.bound.timeline, node.bound.appearances,
+                                                         body_rows=body_rows)
         else:
-            casts[node.event_uuid] = load_animation_media(node.bound.timeline, node.bound.appearances)
+            casts[node.event_uuid] = load_animation_media(node.bound.timeline, node.bound.appearances,
+                                                          body_rows=body_rows)
+    # These bodies use the ordinary scene drawer. Their retained appearances
+    # can change at equipment commits or at an actual observation in this head.
+    actors = [*bound.before.actors.values(), *bound.after.actors.values(),
+              *(row.actor for _, row in bound.observations),
+              *(cue.bound.after.actors[UUID(cue.bound.timeline.actor.actor_uuid)]
+                for cue in bound.equipment)]
+
+    def load(contact: ActorContact, clips: tuple[str, ...], data: AnimationData,
+             extra_layers: tuple[tuple[RigLayer, ...], ...] = ()) -> None:
+        appearances = dict.fromkeys((
+            *(resolve_player_layers(data, actor, rig_id=contact.rig_id)
+              for actor in actors if str(actor.uuid) == contact.actor_uuid), *extra_layers))
+        load_actor_media(data, tuple((contact, layers, clips) for layers in appearances),
+                         body_rows=body_rows, all_facings=True)
+
+    for equipment in bound.equipment:
+        cue = equipment.bound
+        clips = ((cue.timeline.recipe.bodyClip,) if cue.timeline.recipe.bodyEnabled else ())
+        load(cue.timeline.actor, (*clips, "Idle"), cue.timeline.data,
+             (cue.appearances[cue.timeline.actor.actor_uuid], cue.replacement))
+    for body_action in bound.body_actions:
+        if body_action.enabled:
+            recovery = body_action.recovery
+            clips = (body_action.clip, "Idle", *((recovery.bodyClip,) if recovery and recovery.enabled else ()))
+            load(body_action.contact, clips, body_action.data)
+    for shove in bound.shoves:
+        load(shove.source, (shove.clip, "Idle"), shove.data)
+    for forced in bound.forced_movement:
+        recovery = forced.data.forced_movement_context.recovery
+        clips = (forced.clip, "Idle", *((recovery.bodyClip,) if recovery.enabled else ()))
+        load(forced.actor, clips, forced.data)
+    for damage in bound.damage:
+        clips = {"Idle", damage.data.death_context.bodyClip if damage.resulting_life_state is LifeState.DEAD
+                 else damage.data.damage_context.bodyClip}
+        if damage.timing.hp_ms > damage.timing.start_ms:
+            clips.add(damage.data.damage_context.bodyClip)
+        load(damage.contact, tuple(clips), damage.data)
+    for life in bound.lifecycle:
+        if life.death_end_ms is not None and not life.state_owned:
+            load(life.contact, (life.data.death_context.bodyClip,), life.data)
     return ChoreographyMedia(attacks, casts)
+
+
+def load_motion_media(timeline: MotionTimeline, data: AnimationData, *,
+                      body_rows: LoadedBodyRows | None = None) -> dict[UUID, ChoreographyMedia]:
+    """Load a bound route and its reactions from existing retained states."""
+    if body_rows is None:
+        body_rows = {}
+    appearances = tuple(actor for state in (timeline.before, *(state for _, state in timeline.states))
+                        for actor in scene_actors(state, data, {}))
+    load_scene_media(appearances, data, body_rows=body_rows)
+    mover = SceneActor(timeline.actor, resolve_player_layers(
+        data, timeline.actor_state, rig_id=timeline.actor.rig_id))
+    clip = timeline.clip if timeline.clip in available_clips(mover, data) else "Idle"
+    if timeline.legs:
+        load_actor_media(data, tuple(
+            (actor.contact, actor.layers, (clip,)) for actor in (*appearances, mover)
+            if actor.contact.actor_uuid == timeline.actor.actor_uuid
+        ), body_rows=body_rows, all_facings=True)
+    return {reaction.choreography.root_uuid: load_choreography_media(
+        reaction.choreography, body_rows=body_rows) for reaction in timeline.reactions}
 
 
 def choreography_draw_commands(bound: BoundChoreography, sample: ChoreographySample,

@@ -12,7 +12,7 @@ from game.animation_data import load_animation_data
 from game.combat import bind_cast
 from game.combat_demo import iter_combat_demo
 from game.presentation import CompletedLineage, PresentationTarget, IntervalEnvelope, reduce_interval
-from game.player_projection import reduce_lineage
+from game.player_reduction import reduce_lineage
 from tests.game.player_helpers import player_inputs
 
 

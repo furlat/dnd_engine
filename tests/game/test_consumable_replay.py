@@ -14,7 +14,8 @@ from dnd.game import Game
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
 from game.player_facts import ItemChargeFact
-from game.player_projection import decode_player_sequence, encode_player_sequence, project_sequence, reduce_lineage
+from game.player_projection import project_sequence
+from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
 from game.presentation import capture_interval, reduce_interval
 from game.replay import CapturedHistory, ObserverCapture, RecordedSequence, capture_history
 

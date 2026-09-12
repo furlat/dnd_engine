@@ -12,13 +12,14 @@ import pygame
 import pytest
 
 from game.animation import ActorContact
+from game.animation_draw import LoadedBodyRows
 from game.animation_data import load_animation_data
 from game.animation_types import AnimationData
-from game.choreography_draw import load_choreography_media
+from game.choreography_draw import load_motion_media
 from game.combat import actor_contact
 from game.motion import bind_motion, sample_motion
 from game.playback_frame import sample_playback_frame
-from game.player_projection import reduce_lineage
+from game.player_reduction import reduce_lineage
 from tests.game.player_helpers import player_history
 from game.projection import Camera
 from game.scene import load_scene_media, scene_actors
@@ -57,8 +58,9 @@ def test_interrupted_pose_survives_completion_and_idle_in_every_camera(
     try:
         pygame.display.set_mode((960, 640))
         actors = scene_actors(before, data, {})
-        media = load_scene_media(actors, data)
-        reactions = {reaction.choreography.root_uuid: load_choreography_media(reaction.choreography)}
+        body_rows: LoadedBodyRows = {}
+        media = load_scene_media(actors, data, body_rows=body_rows)
+        reactions = load_motion_media(motion, data, body_rows=body_rows)
         font, badge = (pygame.font.SysFont(style.fontFamily, round(style.fontSizePx))
                        for style in (data.number_style, data.badge_style))
         for quadrant in range(4):

@@ -16,7 +16,8 @@ from dnd.runtime_reset import reset_engine_runtime
 from dnd.types.world import CardinalDirection, LightLevel
 from dnd.types.materials import Material
 from dnd.types.world_placement import BoundaryStructureKind
-from game.app import BACKGROUND, build_demo_intervals, draw_frame
+from game.app import BACKGROUND, draw_frame
+from game.demo import build_demo_intervals
 from game.assets import SurfaceCache, load_catalog
 from game.presentation import reduce_interval
 from game.projection import Camera, pick_support, project_screen
@@ -82,7 +83,8 @@ def test_whole_stair_frame_retains_contacts_and_individual_support_knowledge(ren
     )
     camera = Camera(quadrant=q, zoom=1.0, viewport=screen.get_size()).with_focus(mid, elevation_steps=1)
     evidence = draw_frame(screen, target, catalog, cache, camera, .2,
-                          show_grid=False, mouse_position=None)
+                          collect_evidence=True, show_grid=False, mouse_position=None)
+    assert evidence is not None
     assert evidence.matches
     flights = [row for row in evidence.actual_draws if len(row) > 6 and row[6] == "stairs"]
     assert len(flights) == 1
@@ -122,7 +124,8 @@ def test_terrace_frames_have_cliff_corners_and_no_void_below_the_flight(renderin
     target, screen, catalog, cache = rendering
     camera = Camera(quadrant=q, zoom=1.0, viewport=screen.get_size()).with_focus((16, 22))
     evidence = draw_frame(screen, target, catalog, cache, camera, .2,
-                          show_grid=False, mouse_position=None)
+                          collect_evidence=True, show_grid=False, mouse_position=None)
+    assert evidence is not None
     cliffs = [row for row in evidence.actual_draws if len(row) > 6 and row[6] == "cliff"]
     assert len(cliffs) == 21  # 19 outer-rim owners plus two inner bank faces
     assert sum("corner" in row[2] for row in cliffs) == 6
@@ -178,7 +181,8 @@ def test_raised_floor_and_lower_wall_occlude_in_physical_depth_order(rendering, 
     camera = Camera(zoom=1.0, viewport=screen.get_size()).with_focus(
         floor_position, elevation_steps=2).with_screen_pan((120, 60))
     evidence = draw_frame(screen, target, catalog, cache, camera, .2,
-                          show_grid=False, mouse_position=None)
+                          collect_evidence=True, show_grid=False, mouse_position=None)
+    assert evidence is not None
     assert evidence.matches
     layers = {}
     authored_rgb = tuple(catalog.bindings["treatments"]["authored"]["rgb"])

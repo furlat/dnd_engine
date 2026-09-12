@@ -18,20 +18,20 @@ import pygame
 from dnd.core.base_actions import AvailableActionsResult
 from dnd.core.events import EventQueue
 from game.animation_data import load_animation_data
+from game.animation_draw import LoadedBodyRows
 from game.animation_types import Facing8
 from game.app import draw_frame
 from game.assets import SurfaceCache, load_catalog
 from game.choreography import BoundChoreography, bind_choreography
-from game.choreography_draw import ChoreographyMedia, load_choreography_media
+from game.choreography_draw import ChoreographyMedia, load_choreography_media, load_motion_media
 from game.feedback import FeedbackTrack, choreography_feedback, motion_feedback
 from game.controls import ActionSelection, EndTurn, MenuState, draw_menu, draw_target_preview, handle_menu_event
 from game.motion import MotionTimeline, bind_motion
 from game.playback_frame import sample_playback_frame
 from game.presentation import capture_interval, capture_lineage
 from game.player_facts import AttackFact, MovementFact, PlayerLineage, PlayerState, StepFact
-from game.player_projection import (
-    begin_projection, project_lineage, reduce_initialization, reduce_lineage, stage_lineage,
-)
+from game.player_projection import begin_projection, project_lineage
+from game.player_reduction import reduce_initialization, reduce_lineage, stage_lineage
 from game.projection import Camera, ZOOM_LEVELS
 from game.scene import draw_actor_labels, load_scene_media, scene_actors
 from game.session import (
@@ -80,7 +80,7 @@ async def _run(
     *, frame_deltas: Sequence[float] | None, frame_events: Mapping[int, Sequence[pygame.event.Event]],
     max_frames: int | None, window_size: tuple[int, int], quadrant: int,
     capture_dir: Path | None, player_input: PlayerInput | None, stop_after_commands: int | None,
-    exit_when_ended: bool,
+    exit_when_ended: bool, collect_frames: bool,
     player_positions: tuple[tuple[int, int], tuple[int, int]],
     enemy_positions: tuple[tuple[int, int], tuple[int, int]],
 ) -> GameSummary:
@@ -105,7 +105,8 @@ async def _run(
         facings: dict[str, Facing8] = {}
         positions: dict[str, VisualPosition] = {}
         actors = scene_actors(historical, data, facings)
-        body_media = dict(load_scene_media(actors, data))
+        body_media: LoadedBodyRows = {}
+        load_scene_media(actors, data, body_rows=body_media)
         catalog = load_catalog()
         cache = SurfaceCache(catalog)
         panel_rect = pygame.Rect(0, 0, 345, window_size[1] - 145)
@@ -234,8 +235,10 @@ async def _run(
             if active is None and pending and not paused:
                 active = pending.popleft()
                 after = reduce_lineage(historical, active)
-                if active.observations:
-                    body_media.update(load_scene_media(scene_actors(stage_lineage(historical, active), data, facings), data))
+                load_scene_media((
+                    *scene_actors(stage_lineage(historical, active), data, facings),
+                    *scene_actors(after, data, facings),
+                ), data, body_rows=body_media)
                 choreography = None
                 choreography_media = None
                 contacts = {actor.contact.actor_uuid: actor.contact
@@ -243,9 +246,9 @@ async def _run(
                 motion = bind_motion(historical, active, data, contacts=contacts)
                 reaction_media = {}
                 if motion is not None:
+                    reaction_media = load_motion_media(motion, data, body_rows=body_media)
                     for reaction in motion.reactions:
                         group = reaction.choreography
-                        reaction_media[group.root_uuid] = load_choreography_media(group)
                         gaps.extend(group.gaps)
                     feedback.extend(motion_feedback(motion, data, presentation_ms))
                 else:
@@ -255,9 +258,7 @@ async def _run(
                     ):
                         gaps.append((active.root.uuid, "Movement reaction choreography is not bound"))
                     choreography = bind_choreography(historical, active, data, facings=facings, contacts=contacts)
-                    if choreography.equipment:
-                        body_media.update(load_scene_media(scene_actors(after, data, facings), data))
-                    choreography_media = load_choreography_media(choreography)
+                    choreography_media = load_choreography_media(choreography, body_rows=body_media)
                     gaps.extend(choreography.gaps)
                     feedback.extend(choreography_feedback(choreography, data, presentation_ms, contacts=contacts))
                 elapsed_ms = 0
@@ -310,12 +311,13 @@ async def _run(
                 panel.blit(cache.debug_font.render(line[:170], True, (226, 229, 235)), (16, 8 + index * 22))
             screen.blit(panel, (0, screen.height - panel.height))
             pygame.display.flip()
-            frames.append(GameFrame(
-                frame, latest.reducer_cursor, historical.reducer_cursor, len(pending),
-                active.root.uuid if active is not None else None, elapsed_ms, paused, ready and not paused,
-                tuple((actor.contact.actor_uuid, actor.contact.grid) for actor in actors),
-                tuple((actor.contact.actor_uuid, shown_hp.get(actor.contact.actor_uuid, actor.contact.hp)) for actor in actors),
-            ))
+            if collect_frames:
+                frames.append(GameFrame(
+                    frame, latest.reducer_cursor, historical.reducer_cursor, len(pending),
+                    active.root.uuid if active is not None else None, elapsed_ms, paused, ready and not paused,
+                    tuple((actor.contact.actor_uuid, actor.contact.grid) for actor in actors),
+                    tuple((actor.contact.actor_uuid, shown_hp.get(actor.contact.actor_uuid, actor.contact.hp)) for actor in actors),
+                ))
             if capture_dir is not None and (frame % 6 == 0 or complete):
                 pygame.image.save(screen, capture_dir / f"frame-{frame:05}.png")
             if active is not None and complete and not paused:
@@ -342,7 +344,7 @@ def run(
     max_frames: int | None = None, window_size: tuple[int, int] = (1280, 800), quadrant: int = 0,
     capture_dir: Path | None = None, player_input: PlayerInput | None = None,
     stop_after_commands: int | None = None,
-    exit_when_ended: bool = False,
+    exit_when_ended: bool = False, collect_frames: bool = False,
     player_positions: tuple[tuple[int, int], tuple[int, int]] = ((10, 10), (10, 12)),
     enemy_positions: tuple[tuple[int, int], tuple[int, int]] = ((14, 10), (14, 12)),
 ) -> GameSummary:
@@ -353,6 +355,6 @@ def run(
         frame_deltas=frame_deltas, frame_events=frame_events or {}, max_frames=max_frames,
         window_size=window_size, quadrant=quadrant, capture_dir=capture_dir,
         player_input=player_input, stop_after_commands=stop_after_commands,
-        exit_when_ended=exit_when_ended,
+        exit_when_ended=exit_when_ended, collect_frames=collect_frames,
         player_positions=player_positions, enemy_positions=enemy_positions,
     ))

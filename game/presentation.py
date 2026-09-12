@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, replace
 from enum import StrEnum
 from typing import Mapping
 from uuid import UUID
@@ -10,7 +10,7 @@ from uuid import UUID
 from dnd.actions import AttackEvent, JumpEvent, MovementEvent, ShoveEvent, SpellEvent
 from dnd.blocks.base_item import ItemChargeConsumptionEvent, ItemLocationStateEvent
 from dnd.blocks.equipment import EquipmentEvent
-from dnd.blocks.sensory import SensesSnapshot, reduce_senses_snapshot
+from dnd.types.senses import SensesSnapshot, reduce_senses_snapshot
 from dnd.core.base_actions import ActionEvent, BaseCost
 from dnd.core.base_object import PASSIVE_EVENT_REPLAY
 from dnd.core.combat_log import CombatLogEntry
@@ -43,14 +43,13 @@ from dnd.core.events import (
     TurnEvent,
     WorldInitializedEvent,
     WorldObjectState,
-    WorldTileState,
 )
-from dnd.core.item_types import ItemLocation, ItemPresentationState
+from dnd.core.item_types import ItemLocation
 from dnd.subjective_combat_log import project_combat_log
 from dnd.types.senses import PerceivedContact
-from dnd.types.world_placement import WorldObjectPlacement
 from game.event_record import RecordedEvent
-from game.actor_facts import ActorState, ConditionFact, actor_fact_owner, actor_from_birth, apply_actor_fact
+from game.actor_facts import ActorState, ConditionFact, PresentationTarget
+from game.actor_projection import actor_fact_owner, actor_from_birth, apply_actor_fact
 
 
 class Disposition(StrEnum):
@@ -113,27 +112,6 @@ class IntervalEnvelope:
     dispositions: tuple[tuple[int, Disposition], ...]
     conditions: tuple[ConditionFact, ...] = ()
     admissions: tuple[ActorAdmission, ...] = ()
-
-
-@dataclass(slots=True)
-class PresentationTarget:
-    """Read-optimized indexes over detached engine values."""
-
-    generation: UUID
-    observer_uuid: UUID
-    world: WorldInitializedEvent | None = None
-    tiles: dict[tuple[int, int], WorldTileState] = field(default_factory=dict)
-    objects: dict[UUID, WorldObjectState] = field(default_factory=dict)
-    door_uuid: UUID | None = None
-    door_placement: WorldObjectPlacement | None = None
-    door_is_open: bool | None = None
-    standing_torch_uuid: UUID | None = None
-    standing_torch_state: ItemPresentationState | None = None
-    senses: SensesSnapshot | None = None
-    reducer_cursor: int = 0
-    actors: dict[UUID, ActorState] = field(default_factory=dict)
-    current_actor_uuid: UUID | None = None
-    round_number: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -341,8 +319,8 @@ def _copy_snapshot(snapshot: SensesSnapshot | None) -> SensesSnapshot | None:
         position=snapshot.position,
         visible=set(snapshot.visible),
         seen=set(snapshot.seen),
-        entities={key: value.model_copy(deep=True) for key, value in snapshot.entities.items()},
-        objects={key: value.model_copy(deep=True) for key, value in snapshot.objects.items()},
+        entities=dict(snapshot.entities),
+        objects=dict(snapshot.objects),
         effective_light_levels=dict(snapshot.effective_light_levels),
         paths_dirty=snapshot.paths_dirty,
         passive_perception=snapshot.passive_perception,
@@ -352,8 +330,8 @@ def _copy_snapshot(snapshot: SensesSnapshot | None) -> SensesSnapshot | None:
     )
 
 
-def apply_world_fact(target: PresentationTarget, event: Event) -> None:
-    """Fold recorded world after-values without querying native world owners."""
+def apply_world_fact(target: PresentationTarget, event: Event) -> bool:
+    """Fold recorded world after-values, reporting whether any were applied."""
     if isinstance(event, WorldInitializedEvent):
         target.world = event
         target.tiles = {tile.position: tile for tile in event.tiles}
@@ -369,7 +347,7 @@ def apply_world_fact(target: PresentationTarget, event: Event) -> None:
     elif isinstance(event, SpatialChangeEvent) and event.change_type is SpatialChangeType.OBJECT_CHANGED:
         existing = target.objects.get(event.object_uuid) if event.object_uuid is not None else None
         if existing is None:
-            return
+            return False
         values: dict[str, object] = {"boundary_structure": event.object_boundary_structure}
         for key, value in (
             ("name", event.object_name), ("map_char", event.object_map_char),
@@ -384,7 +362,7 @@ def apply_world_fact(target: PresentationTarget, event: Event) -> None:
             "item": existing.item.model_copy(update=values),
         })
     else:
-        return
+        return False
     if target.door_uuid is not None and (door := target.objects.get(target.door_uuid)) is not None:
         target.door_placement = door.placement
         target.door_is_open = door.item.is_open
@@ -392,6 +370,7 @@ def apply_world_fact(target: PresentationTarget, event: Event) -> None:
         fixture = target.objects.get(target.standing_torch_uuid)
         if fixture is not None:
             target.standing_torch_state = fixture.item
+    return True
 
 
 def reduce_interval(
@@ -754,7 +733,7 @@ def _capture_actor_admissions(
                             else contact.position if contact is not None and contact.visual else None)
                 result.append(ActorAdmission(
                     event.uuid, replace(actors[identity], last_visual_position=position),
-                    contact.model_copy(deep=True) if contact is not None else None,
+                    contact,
                 ))
                 admitted.add(identity)
         if completed:
@@ -774,9 +753,38 @@ def capture_lineage(
     private record; the outgoing projection decides which payloads and geometry
     an observer receives. Unknown participants must not erase observed children.
     """
+    return capture_lineages((root,), observer_uuid=observer_uuid,
+                            known_actor_uuids=known_actor_uuids)[0]
+
+
+def capture_lineages(
+    roots: tuple[Event, ...], *, observer_uuid: UUID,
+    known_actor_uuids: frozenset[UUID] = frozenset(),
+) -> tuple[CompletedLineage, ...]:
+    """Share source indexing within this batch, preserving each complete root."""
     generation = EventQueue.generation_id()
     history = tuple(EventQueue.iter_events_since(0))
-    latest = {event.lineage_uuid: event for _, event in history}
+    latest: dict[UUID, Event] = {}
+    versions: dict[UUID, list[tuple[int, Event]]] = {}
+    for index, event in history:
+        latest[event.lineage_uuid] = event
+        versions.setdefault(event.lineage_uuid, []).append((index, event))
+    known = set(known_actor_uuids)
+    retained: list[CompletedLineage] = []
+    for root in roots:
+        lineage = _capture_lineage(root, observer_uuid=observer_uuid,
+            known_actor_uuids=frozenset(known), generation=generation,
+            history=history, latest=latest, versions=versions)
+        retained.append(lineage)
+        known.update(admission.actor.uuid for admission in lineage.admissions)
+    return tuple(retained)
+
+
+def _capture_lineage(
+    root: Event, *, observer_uuid: UUID, known_actor_uuids: frozenset[UUID],
+    generation: UUID, history: tuple[tuple[int, Event], ...], latest: Mapping[UUID, Event],
+    versions: Mapping[UUID, list[tuple[int, Event]]],
+) -> CompletedLineage:
     pending = [root]
     nodes: dict[UUID, Event] = {}
     while pending:
@@ -802,11 +810,8 @@ def capture_lineage(
         nodes[event.lineage_uuid] = event
         pending.extend(children)
 
-    indexed = tuple(
-        (index, event)
-        for index, event in history
-        if event.lineage_uuid in nodes
-    )
+    indexed = tuple(sorted((row for identity in nodes for row in versions.get(identity, ())),
+                           key=lambda row: row[0]))
     if not indexed or root.uuid not in {event.uuid for _, event in indexed}:
         raise ValueError("lineage root is absent from the current EventQueue")
     retained = tuple(
@@ -865,7 +870,7 @@ def _admit_actor(target: PresentationTarget, admission: ActorAdmission) -> None:
     """Apply the actor's recorded state at this actual observation boundary."""
     target.actors[admission.actor.uuid] = admission.actor
     if admission.contact is not None and target.senses is not None:
-        target.senses.entities[admission.actor.uuid] = admission.contact.model_copy(deep=True)
+        target.senses.entities[admission.actor.uuid] = admission.contact
 
 
 def stage_actors(target: PresentationTarget, admissions: tuple[ActorAdmission, ...]) -> PresentationTarget:

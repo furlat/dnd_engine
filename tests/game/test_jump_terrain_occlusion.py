@@ -19,9 +19,11 @@ from game.assets import AssetCatalog, SurfaceCache, load_catalog
 from game.motion import MotionTimeline, bind_motion, sample_motion
 from game.playback_frame import sample_playback_frame
 from game.player_facts import PlayerState
-from game.player_projection import reduce_lineage
+from game.player_reduction import reduce_lineage
 from game.projection import Camera, painter_key, project_screen
 from game.scene import load_scene_media, scene_actors
+from game.animation_draw import LoadedBodyRows
+from game.choreography_draw import load_motion_media
 from tests.game.movement_scenarios import movement_history
 from tests.game.player_helpers import player_history, visible_contact
 
@@ -53,7 +55,10 @@ def histories(renderer: tuple[AnimationData, AssetCatalog, SurfaceCache]) -> dic
         assert motion is not None
         assert before.tiles[(14, 20)].elevation_steps == 2
         assert before.tiles[(13, 20)].elevation_steps == 0
-        result[name] = before, after, motion, load_scene_media(scene_actors(before, data, {}), data)
+        body_rows: LoadedBodyRows = {}
+        media = load_scene_media(scene_actors(before, data, {}), data, body_rows=body_rows)
+        load_motion_media(motion, data, body_rows=body_rows)
+        result[name] = before, after, motion, media
     return result
 
 
@@ -90,7 +95,8 @@ def test_native_jump_terrain_pixels(
         number, badge, motion=motion)
     body, = (command for command in frame.commands if command[4][6] == "actor")
     evidence = draw_frame(screen, frame.displayed, catalog, cache, camera, elapsed / 1000,
-        show_grid=False, mouse_position=None, show_debug=False, extra_commands=frame.commands)
+        collect_evidence=True, show_grid=False, mouse_position=None, show_debug=False, extra_commands=frame.commands)
+    assert evidence is not None
     assert evidence.matches
     assert screen.get_rect().contains(body[1].get_bounding_rect().move(body[2]))
 

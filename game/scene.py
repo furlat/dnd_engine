@@ -1,6 +1,6 @@
 """Draw the known historical encounter through the existing actor/map painter."""
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from typing import Mapping
 from uuid import UUID
 
@@ -11,7 +11,7 @@ from dnd.core.condition_types import ConditionCategory
 from game.animation import ActorContact, sample_idle_body
 from game.animation_data import resolve_player_layers
 from game.animation_draw import (
-    AnimationDrawCommand, BodyRows, actor_draw_commands, actor_screen_bounds,
+    AnimationDrawCommand, BodyRows, LoadedBodyRows, actor_draw_commands, actor_screen_bounds,
     load_actor_media, place_feedback_rect,
 )
 from game.animation_types import AnimationData, Facing8, RigLayer
@@ -55,13 +55,14 @@ def available_clips(actor: SceneActor, data: AnimationData) -> tuple[str, ...]:
                         for layer in actor.layers))
 
 
-def load_scene_media(actors: tuple[SceneActor, ...], data: AnimationData) -> BodyRows:
-    # Each seed facing acquires its four rotated rows. Cardinal + diagonal
-    # seeds cover all views and later movement/attack facing changes.
+def load_scene_media(actors: tuple[SceneActor, ...], data: AnimationData, *,
+                     body_rows: LoadedBodyRows | None = None) -> BodyRows:
+    """Preload the displayed standing poses; action heads request their own clips."""
     return load_actor_media(data, tuple(
-        (replace(actor.contact, facing=facing), actor.layers, available_clips(actor, data))
-        for actor in actors for facing in ("S", "SE")
-    ))
+        (actor.contact, actor.layers,
+         (data.death_context.bodyClip if actor.contact.life_state is LifeState.DEAD else "Idle",))
+        for actor in actors
+    ), body_rows=body_rows, all_facings=True)
 
 
 def scene_draw_commands(actors: tuple[SceneActor, ...], data: AnimationData,

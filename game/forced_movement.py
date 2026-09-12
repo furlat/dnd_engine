@@ -17,7 +17,7 @@ from game.animation import (
 from game.animation_types import AnimationData, LifecycleFeedback
 from game.combat import actor_contact
 from game.player_facts import ForcedMovementFact, PlayerLineage, PlayerNode, PlayerState, ShoveFact, SpatialFact
-from game.player_projection import reduce_lineage
+from game.player_reduction import reduce_lineage
 
 
 @dataclass(frozen=True, slots=True)

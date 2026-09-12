@@ -12,6 +12,7 @@ from dnd.blocks.equipment import ArmorEquipEvent, ArmorUnequipEvent, EquipmentEv
 from dnd.core.equipment_types import WeaponSet, WeaponSlot
 from dnd.core.item_types import ItemLocation
 from game.animation import body_clip, sample_equipment
+from game.animation_draw import LoadedBodyRows
 from game.animation_data import load_animation_data
 from game.animation_draw import actor_draw_commands
 from game.animation_types import AnimationData
@@ -21,7 +22,7 @@ from game.choreography_draw import load_choreography_media
 from game.playback_frame import sample_playback_frame
 from game.presentation import reduce_lineage
 from game.replay import CapturedHistory
-from game.player_projection import reduce_lineage as reduce_player_lineage
+from game.player_reduction import reduce_lineage as reduce_player_lineage
 from tests.game.player_helpers import player_history
 from game.projection import Camera
 from game.scene import load_scene_media, scene_actors
@@ -102,7 +103,8 @@ def test_shared_equipment_gesture_preserves_identity_until_settlement_and_attack
         after = reduce_player_lineage(before, root)
         appearances.extend(scene_actors(after, data, {}))
         before = after
-    media = load_scene_media(tuple(appearances), data)
+    body_rows: LoadedBodyRows = {}
+    media = load_scene_media(tuple(appearances), data, body_rows=body_rows)
     before = initial
     fonts = tuple(pygame.font.SysFont(style.fontFamily, round(style.fontSizePx), bold=True)
                   for style in (data.number_style, data.badge_style))
@@ -122,7 +124,7 @@ def test_shared_equipment_gesture_preserves_identity_until_settlement_and_attack
                 layers = node.bound.appearances[str(before.observer_uuid)]
                 # The actual Fighter premade carries the authored longbow.
                 assert next(layer.category for layer in layers if layer.slot == "weapon") == "Ranged4"
-                group_media = load_choreography_media(group)
+                group_media = load_choreography_media(group, body_rows=body_rows)
                 identity = node.bound.timeline.source.actor_uuid
                 for quadrant in range(4):
                     camera = Camera(quadrant=quadrant, viewport=(960, 640)).with_focus(node.bound.timeline.source.grid)
@@ -157,7 +159,7 @@ def test_shared_equipment_gesture_preserves_identity_until_settlement_and_attack
             assert held.displayed.actors[before.observer_uuid].visual_loadout.layers == before.actors[before.observer_uuid].visual_loadout.layers
             assert latest.actors[before.observer_uuid].visual_loadout.layers != before.actors[before.observer_uuid].visual_loadout.layers
             assert sample_choreography(group, commit) == held
-            group_media = load_choreography_media(group)
+            group_media = load_choreography_media(group, body_rows=body_rows)
             for quadrant in range(4):
                 camera = Camera(quadrant=quadrant, viewport=(960, 640)).with_focus(timeline.actor.grid)
                 for elapsed in (0, commit, group.complete_ms - .001, group.complete_ms):
@@ -216,8 +218,9 @@ def test_removed_active_sword_commits_surviving_bow_at_authored_frame_before_ran
             timeline = cue.bound.timeline
             assert timeline.recipe.bodyClip == "Taunt" and timeline.recipe.commitFrame == 4
             old_weapon, = (layer for layer in cue.bound.appearances[str(identity)] if layer.slot == "weapon")
-            media = load_scene_media((*scene_actors(before, data, {}), *scene_actors(after, data, {})), data)
-            group_media = load_choreography_media(group)
+            body_rows: LoadedBodyRows = {}
+            media = load_scene_media((*scene_actors(before, data, {}), *scene_actors(after, data, {})), data, body_rows=body_rows)
+            group_media = load_choreography_media(group, body_rows=body_rows)
             for quadrant in range(4):
                 camera = Camera(quadrant=quadrant, viewport=(960, 640)).with_focus(timeline.actor.grid)
                 for elapsed, expected in ((timeline.commit_ms - .001, WeaponSet.MELEE),

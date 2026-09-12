@@ -26,7 +26,7 @@ from game.motion import MotionTimeline, sample_motion
 from game.player_facts import PlayerState
 from game.projection import Camera
 from game.scene import SceneActor, available_clips, scene_actors, scene_draw_commands
-from game.visual_position import VisualPosition
+from game.visual_position import VisualPosition, placed_contact
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,7 +76,8 @@ def sample_playback_frame(
             group_media = reaction_media[group.root_uuid]
         else:
             group_media = None
-    group_sample = sample_choreography(group, group_elapsed) if group is not None else None
+    group_sample = (movement_sample.reaction_sample if movement_sample is not None
+                    else sample_choreography(group, group_elapsed) if group is not None else None)
     if group_sample is not None:
         displayed = group_sample.displayed
         shown_hp.update((value.actor_uuid, value.hp) for value in group_sample.vitals)
@@ -102,7 +103,8 @@ def sample_playback_frame(
                     legal.grid, moving.grid, moving.elevation_steps, moving.body_lift_px)
             else:
                 resulting_positions.pop(moving.actor_uuid, None)
-    actors = scene_actors(displayed, data, facings, resulting_positions)
+    actors = tuple(replace(actor, contact=placed_contact(
+        actor.contact, resulting_positions.get(actor.contact.actor_uuid))) for actor in legal_actors)
     if group_sample is not None:
         placed = {contact.actor_uuid: contact for contact in group_sample.contacts}
         actors = tuple(replace(actor, contact=replace(actor.contact,

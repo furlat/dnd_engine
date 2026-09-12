@@ -3,7 +3,8 @@
 from game.animation import ActorContact, BodySample
 from game.motion import MotionSample
 from game.player_facts import PlayerLineage, PlayerState
-from game.player_projection import decode_player_sequence, encode_player_sequence, project_sequence
+from game.player_projection import project_sequence
+from game.player_reduction import decode_player_sequence, encode_player_sequence
 from game.presentation import CompletedLineage, IntervalEnvelope
 from game.replay import CapturedHistory, RecordedSequence
 

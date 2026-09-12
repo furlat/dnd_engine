@@ -20,7 +20,8 @@ from dnd.scenarios.battlefield_catalog import build_battlefield
 from game.player_facts import DamageFact, EquipmentFact, MovementFact, SensoryFact, SpellFact, StepFact
 from game.animation_data import load_animation_data
 from game.choreography import bind_choreography, sample_choreography
-from game.player_projection import decode_player_sequence, encode_player_sequence, project_sequence, reduce_lineage
+from game.player_projection import project_sequence
+from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
 from game.presentation import capture_interval, capture_lineage, reduce_interval
 from game.replay import ObserverCapture, RecordedSequence, capture_history
 from tests.game.visibility_scenarios import visibility_history

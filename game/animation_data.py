@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path, PurePosixPath
-import struct
 from types import MappingProxyType
 from typing import Literal, Mapping, Sequence
 from uuid import UUID
@@ -49,6 +48,15 @@ _WEAPON_SET_BY_SLOT = {
 }
 _ITEM_VISUAL_CATEGORIES_BY_NAME = {
     category.base_category: category for category in AUTHORED_ITEM_VARIANT_CATEGORIES
+}
+_EQUIPMENT_CATEGORIES = {
+    (binding.factory_identity, binding.equipment_slot): category
+    for category in AUTHORED_ITEM_VARIANT_CATEGORIES
+    for binding in category.factory_presentation_bindings
+}
+_EQUIPMENT_VARIANTS = {
+    (category.base_category, row.visual_variant_id): row
+    for category in AUTHORED_ITEM_VARIANT_CATEGORIES for row in category.variants
 }
 
 
@@ -96,25 +104,18 @@ def resolve_actor_layers(
         if item.equipped_visual_policy is EquippedVisualPolicy.HIDDEN:
             continue
         root = _ITEM_VISUAL_CATEGORIES_BY_NAME.get(item.visual_item_name)
-        if root is None:
+        if root is None or root.mechanical_factory_identity is None:
             raise ValueError(f"missing authored item visual: {item.visual_item_name}")
         visual_slot = _VISUAL_SLOT_BY_ENGINE_SLOT[slot]
-        matches = tuple(
-            category for category in AUTHORED_ITEM_VARIANT_CATEGORIES
-            if any(binding.factory_identity == root.mechanical_factory_identity
-                   and binding.equipment_slot is visual_slot
-                   for binding in category.factory_presentation_bindings)
-        )
-        if len(matches) != 1:
+        category = _EQUIPMENT_CATEGORIES.get((root.mechanical_factory_identity, visual_slot))
+        if category is None:
             raise ValueError(f"missing unique authored equipment binding: {item.visual_item_name}/{slot}")
-        category = matches[0]
         authored = category.base_presentation.equipment_layers
         if item.visual_variant_id is not None:
-            variants = tuple(row for row in category.variants
-                             if row.visual_variant_id == item.visual_variant_id)
-            if len(variants) != 1:
+            variant = _EQUIPMENT_VARIANTS.get((category.base_category, item.visual_variant_id))
+            if variant is None:
                 raise ValueError(f"missing authored item variant: {item.visual_item_name}/{item.visual_variant_id}/{slot}")
-            authored = variants[0].equipment_layers
+            authored = variant.equipment_layers
         for layer in authored:
             layers[layer.render_layer.value] = RigLayer(
                 layer.render_layer.value, layer.sprite_key, layer.tint_rgb,
@@ -167,22 +168,8 @@ class _RigBinding(AuthoredRecord):
     provenance: dict[str, JsonValue]
 
 
-def _unique_json_object(pairs: list[tuple[str, JsonValue]]) -> dict[str, JsonValue]:
-    result: dict[str, JsonValue] = {}
-    for key, value in pairs:
-        if key in result:
-            raise ValueError(f"duplicate JSON key {key!r}")
-        result[key] = value
-    return result
-
-
 def _read(path: Path) -> str:
-    try:
-        source = path.read_text(encoding="utf-8")
-        json.loads(source, object_pairs_hook=_unique_json_object)
-        return source
-    except (OSError, ValueError) as exc:
-        raise ValueError(f"cannot read animation data {path}: {exc}") from exc
+    return path.read_text(encoding="utf-8")
 
 
 def _object(value: JsonValue, name: str) -> dict[str, JsonValue]:
@@ -191,28 +178,11 @@ def _object(value: JsonValue, name: str) -> dict[str, JsonValue]:
     return value
 
 
-def _local_resources(bindings: Mapping[str, str], data_root: Path,
-                     asset_family: str = "neuroclient") -> dict[str, Path]:
-    # Imported paths are repository-relative. An exported tree is relocatable as
-    # a whole: <root>/game/data/neuroclient and <root>/game/assets/neuroclient.
-    game_root = data_root.parent.parent
-    repository_root = game_root.parent
-    asset_root = (game_root / "assets" / asset_family).resolve()
-    resources: dict[str, Path] = {}
-    for url, relative in bindings.items():
-        original = PurePosixPath(url)
-        if not url.startswith("/") or ".." in original.parts or "\\" in url:
-            raise ValueError(f"invalid original animation resource URL {url!r}")
-        authored_path = PurePosixPath(relative)
-        if authored_path.is_absolute() or ".." in authored_path.parts or "\\" in relative:
-            raise ValueError(f"invalid local animation resource path {relative!r}")
-        path = (repository_root / relative).resolve()
-        if not path.is_relative_to(asset_root):
-            raise ValueError(f"animation resource escapes local asset directory: {relative!r}")
-        if not path.is_file():
-            raise ValueError(f"missing local animation resource {url}: {path}")
-        resources[url] = path
-    return resources
+def _local_resources(bindings: Mapping[str, str], data_root: Path) -> dict[str, Path]:
+    # Importers own source conversion. The shipped tree moves as one unit;
+    # loading does not resolve/stat every known sprite.
+    repository_root = data_root.parent.parent.parent
+    return {url: repository_root / relative for url, relative in bindings.items()}
 
 
 def _root_body_rig(rig: RigTables, resources: Mapping[str, Path]) -> BodyRig:
@@ -237,20 +207,12 @@ def _additional_rigs(paths: tuple[Path, ...], data_root: Path,
         binding = _RigBinding.model_validate_json(_read(binding_path))
         if binding.rig_id in rigs:
             raise ValueError(f"duplicate body rig identity: {binding.rig_id}")
-        local = _local_resources(binding.resources, data_root, "rigs")
+        local = _local_resources(binding.resources, data_root)
         if set(local) & set(resources):
             raise ValueError("body rig resource identity already bound")
         referenced = {url for clip in binding.rig.clips.values() for url in clip.sheets.values()}
         if referenced != set(local):
             raise ValueError("body rig clip resources and local bindings differ")
-        for clip in binding.rig.clips.values():
-            expected = binding.rig.cell_width * clip.frames, binding.rig.cell_height * 8
-            for url in clip.sheets.values():
-                with local[url].open("rb") as source:
-                    header = source.read(24)
-                if (len(header) != 24 or header[:8] != b"\x89PNG\r\n\x1a\n"
-                        or header[12:16] != b"IHDR" or struct.unpack(">II", header[16:24]) != expected):
-                    raise ValueError(f"body rig sheet dimensions differ from metadata: {url}")
         rigs[binding.rig_id] = binding.rig
         for identity in binding.creature_content_refs:
             if identity in creature_rigs:
@@ -262,11 +224,11 @@ def _additional_rigs(paths: tuple[Path, ...], data_root: Path,
 def load_animation_data(data_root: Path = DATA_ROOT, *,
                         rig_files: tuple[Path, ...] = (),
                         authored_bundles: tuple[Path, ...] | None = None) -> AnimationData:
-    """Validate source records and finite bindings; execution support is separate.
+    """Decode shipped typed records; importers own authored source conversion.
 
     Unselected media may have metadata without copied sprites. Only explicit
-    local resource bindings require a file here; archive provenance URLs and
-    paths are never fetched or treated as runtime dependencies. By default the
+    local resource bindings select files for the media loader. Archive provenance
+    URLs and paths are never fetched or treated as runtime dependencies. By default the
     explicit sibling CodexFX bundle is selected when present; () retains the
     original NeuroClient baseline for source comparisons.
     """
@@ -347,7 +309,7 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
             _read(bundle / "projectile-assets.json")
         )
         resource_bindings = _ResourceBindings.model_validate_json(_read(bundle / "bindings.json"))
-        local_resources = _local_resources(resource_bindings.resources, data_root, "codexfx")
+        local_resources = _local_resources(resource_bindings.resources, data_root)
         if set(local_resources) & set(bundle_resources):
             raise ValueError("authored bundle resource identity already bound")
         bundle_resources.update(local_resources)

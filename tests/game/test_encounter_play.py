@@ -39,6 +39,7 @@ def test_full_round_moves_conditions_and_enemy_actions_while_history_paused() ->
         # Native ranged delivery and each Jump leg keep their authored duration.
         # The public settled-round boundary still determines when the run ends.
         result = run(player_input=choose, stop_after_commands=6, frame_deltas=(0.1,), max_frames=240,
+                     collect_frames=True,
                      frame_events={80: (pygame.event.Event(pygame.KEYDOWN, key=pygame.K_SPACE),)})
     finally:
         random.setstate(state)

@@ -63,11 +63,29 @@ def frame_pixels(scene: MapScene, target: PresentationTarget, camera: Camera,
                  timeline: CastTimeline, sample: CastSample | None) -> np.ndarray:
     evidence = draw_frame(
         scene.screen, target, scene.catalog, scene.cache, camera, 1.0,
-        show_grid=False, mouse_position=None,
+        collect_evidence=True, show_grid=False, mouse_position=None,
         extra_commands=animation_draw_commands(timeline, sample, scene.media, camera) if sample is not None else (),
     )
+    assert evidence is not None
     assert evidence.actual_draws == evidence.expected_draws
     return pygame.surfarray.array3d(scene.screen)
+
+
+def test_optional_draw_evidence_keeps_the_same_pixels(scene: MapScene) -> None:
+    timeline = scene.cast.timeline
+    sample = sample_cast(timeline, 1000)
+    for quadrant in range(4):
+        camera = Camera(quadrant=quadrant, viewport=scene.screen.get_size()).with_focus((16, 22))
+        commands = animation_draw_commands(timeline, sample, scene.media, camera)
+        plain = draw_frame(scene.screen, scene.target, scene.catalog, scene.cache, camera, 1,
+                           show_grid=False, show_debug=False, mouse_position=None, extra_commands=commands)
+        assert plain is None
+        pixels = pygame.surfarray.array3d(scene.screen)
+        evidence = draw_frame(scene.screen, scene.target, scene.catalog, scene.cache, camera, 1,
+                              show_grid=False, show_debug=False, mouse_position=None, extra_commands=commands,
+                              collect_evidence=True)
+        assert evidence is not None and evidence.matches
+        np.testing.assert_array_equal(pygame.surfarray.array3d(scene.screen), pixels)
 
 
 def caster_mask(scene: MapScene, timeline: CastTimeline, sample: CastSample,

@@ -279,14 +279,13 @@ async function exportCases(ids) {
   try {
     const results = await Promise.allSettled(selected.map(async entry => {
       const trace = await readJSON(entry.case.trace);
-      if (trace?.run?.id !== manifest.run.id || trace?.run?.source_hash !== manifest.run.source_hash
+      if (trace?.run?.id !== manifest.run.id
           || trace?.case?.id !== entry.case.id) {
         throw new Error("Trace identity differs from the reviewed run/case. Reload the correct immutable run.");
       }
       const recordedInput = entry.case.input ? await readJSON(entry.case.input) : null;
       if (recordedInput && (recordedInput.kind !== "dnd-animation-input" || recordedInput.schema_version !== 1
-          || recordedInput.case?.id !== entry.case.id || recordedInput.captured_at !== trace.input?.captured_at
-          || recordedInput.sources?.source_hash !== trace.input?.sources?.source_hash)) {
+          || recordedInput.case?.id !== entry.case.id || recordedInput.captured_at !== trace.input?.captured_at)) {
         throw new Error("Recorded input differs from the reviewed case's capture. Reload the correct immutable run.");
       }
       // MP4 timestamps have microsecond precision; retain the pinned time and
@@ -319,7 +318,7 @@ async function exportCases(ids) {
 async function initialize() {
   try {
     manifest = await readJSON("manifest.json");
-    if (manifest.schema_version !== 1 || !manifest.run?.id || !manifest.run.source_hash || !Array.isArray(manifest.cases)
+    if (manifest.schema_version !== 1 || !manifest.run?.id || !Array.isArray(manifest.cases)
         || !(manifest.run.fps > 0) || !(manifest.run.width > 0) || !(manifest.run.height > 0)) {
       throw new Error("Unsupported or incomplete review manifest; expected schema version 1 with run/video dimensions.");
     }
@@ -332,7 +331,7 @@ async function initialize() {
       }
       ids.add(row.id);
     }
-    storageKey = `dnd-animation-review:${manifest.run.id}:${manifest.run.created_at}:${manifest.run.source_hash}`;
+    storageKey = `dnd-animation-review:${manifest.run.id}:${manifest.run.created_at}`;
     try {
       const saved = JSON.parse(localStorage.getItem(storageKey) || "null");
       if (saved) {

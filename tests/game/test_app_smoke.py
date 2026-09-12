@@ -23,12 +23,9 @@ from dnd.types.materials import Material
 from dnd.types.world_placement import BoundaryStructureKind
 from game.app import (
     BACKGROUND,
-    _display_sources,
-    _produce_intervals,
-    build_demo_intervals,
     draw_frame,
-    run,
 )
+from game.demo import _display_sources, _produce_intervals, build_demo_intervals, run
 from game.assets import SurfaceCache, load_catalog
 from game.presentation import PresentationTarget, reduce_interval
 from game.projection import Camera, pick_support, project_screen
@@ -78,9 +75,10 @@ def test_real_frames_prove_disclosure_door_torch_memory_and_locality() -> None:
                 cache,
                 camera,
                 time_seconds,
-                show_grid=True,
+                collect_evidence=True, show_grid=True,
                 mouse_position=None,
             )
+            assert evidence is not None
             assert evidence.matches
             assert evidence.candidate_coordinates == 4096
             assert evidence.static_draws < evidence.candidate_coordinates
@@ -101,9 +99,10 @@ def test_real_frames_prove_disclosure_door_torch_memory_and_locality() -> None:
             cache,
             camera,
             1.3,
-            show_grid=True,
+            collect_evidence=True, show_grid=True,
             mouse_position=None,
         )
+        assert later_closed is not None
         assert later_closed.flame_frame != closed.flame_frame
         assert next(
             row[6]
@@ -210,9 +209,10 @@ def test_real_frames_prove_disclosure_door_torch_memory_and_locality() -> None:
             cache,
             camera,
             1.2,
-            show_grid=False,
+            collect_evidence=True, show_grid=False,
             mouse_position=None,
         )
+        assert local_evidence is not None
         assert (
             local_evidence.candidate_coordinates,
             local_evidence.water_chunks,
@@ -249,9 +249,10 @@ def test_real_frames_prove_disclosure_door_torch_memory_and_locality() -> None:
                 cache,
                 camera,
                 time_seconds,
-                show_grid=False,
+                collect_evidence=True, show_grid=False,
                 mouse_position=None,
             )
+            assert memory_evidence is not None
             assert memory_evidence.matches
             assert {row[3] for row in memory_evidence.actual_calculations} == {0.0}
             memory_frames.append(pygame.surfarray.array3d(screen)[:, 130:].copy())
@@ -334,9 +335,10 @@ def test_transparent_margin_fringe_preserves_world_draw_obligation() -> None:
             cache,
             camera,
             0.2,
-            show_grid=False,
+            collect_evidence=True, show_grid=False,
             mouse_position=None,
         )
+        assert evidence is not None
         represented, hidden = _display_sources(reduced, evidence)
         world_index = next(
             index
@@ -413,7 +415,7 @@ def test_fresh_process_uses_the_same_public_entry() -> None:
             sys.executable,
             "-c",
             (
-                "import sys; from game.app import run; "
+                "import sys; from game.demo import run; "
                 "run(frame_deltas=(0.1,), display_hold_seconds=0.0, "
                 "max_frames=12, window_size=(960, 540)); "
                 "assert 'dnd.content_system.builtin' not in sys.modules"
@@ -465,18 +467,19 @@ def test_engine_producer_yields_each_scripted_mechanic_incrementally() -> None:
     asyncio.run(exercise())
 
 
-def test_fresh_import_stays_inside_the_in_process_game_lane() -> None:
+def test_public_decoder_sampler_and_painter_imports_stay_passive() -> None:
     root = Path(__file__).parents[2]
     result = subprocess.run(
         [
             sys.executable,
             "-c",
             (
-                "import sys,time; start=time.perf_counter(); import game.app; "
-                "elapsed=time.perf_counter()-start; "
-                "assert elapsed <= 4.0, elapsed; "
-                "assert 'dnd.content_system.builtin' not in sys.modules; "
-                "print(elapsed)"
+                "import sys; import game.player_reduction; import game.playback_frame; import game.app; "
+                "forbidden = ('dnd.actions', 'dnd.conditions', 'dnd.entity', 'dnd.blocks.sensory', "
+                "'game.player_projection', 'game.presentation', 'game.actor_projection', "
+                "'game.combat_demo', 'game.demo'); "
+                "loaded = [name for name in sys.modules if any(name == prefix or name.startswith(prefix + '.') "
+                "for prefix in forbidden)]; assert not loaded, loaded"
             ),
         ],
         cwd=root,

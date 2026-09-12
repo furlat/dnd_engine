@@ -11,7 +11,8 @@ import pytest
 
 from tests.game.player_helpers import player_history
 
-from devtools.animation_review.cases import load_cases, produce
+from devtools.animation_review.cases import load_cases
+from devtools.animation_review.produce import produce
 from dnd.core.life_types import LifeState
 from game.animation import ActorContact, body_clip
 from game.animation_data import load_animation_data
@@ -25,6 +26,7 @@ from game.feedback import choreography_feedback
 from game.playback_frame import PlaybackFrame, sample_playback_frame
 from game.projection import Camera, TILE_WIDTH, project_screen
 from game.scene import load_scene_media, scene_actors
+from game.animation_draw import LoadedBodyRows
 
 
 @pytest.fixture(scope="module")
@@ -57,8 +59,10 @@ def load_scene(case_id: str, data: AnimationData) -> PlaybackScene:
     before, (lineage,) = player_history(sequence)
     group = bind_choreography(before, lineage, data)
     assert group.gaps == (), (case_id, group.gaps)
-    return PlaybackScene(group, load_scene_media(scene_actors(before, data, {}), data),
-                         load_choreography_media(group))
+    body_rows: LoadedBodyRows = {}
+    bodies = load_scene_media(scene_actors(before, data, {}), data, body_rows=body_rows)
+    media = load_choreography_media(group, body_rows=body_rows)
+    return PlaybackScene(group, bodies, media)
 
 
 def frame_at(scene: PlaybackScene, data: AnimationData, fonts: tuple[pygame.font.Font, pygame.font.Font],

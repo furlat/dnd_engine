@@ -15,6 +15,7 @@ from typing import Mapping, Sequence
 import numpy as np
 import pygame
 
+from dnd.core.life_types import LifeState
 from game.animation import (
     ActorContact, BodySample, CastSample, CastTimeline, GeometryProjectileSample, NumberSample,
     ProjectileSample, body_clip, body_elevation_steps, body_rig, project_geometry_projectile, project_projectile,
@@ -35,6 +36,7 @@ AnimationDrawCommand = tuple[
     tuple[object, ...],
 ]
 BodyRows = Mapping[tuple[str, str, str, int], pygame.Surface]
+LoadedBodyRows = dict[tuple[str, str, str, int], pygame.Surface]
 ActorMediaRequest = tuple[ActorContact, tuple[RigLayer, ...], tuple[str, ...]]
 
 
@@ -70,7 +72,8 @@ def _colored(frame: pygame.Surface, tint: int, source_hue: float | None = None) 
     return result
 
 
-def _actor_media_requests(data: AnimationData, actors: tuple[ActorMediaRequest, ...],
+def _actor_media_requests(data: AnimationData, actors: tuple[ActorMediaRequest, ...], *,
+                          all_facings: bool = False,
                           ) -> dict[tuple[str, str, str], set[int]]:
     body_requests: dict[tuple[str, str, str], set[int]] = {}
     for contact, layers, clips in actors:
@@ -78,7 +81,8 @@ def _actor_media_requests(data: AnimationData, actors: tuple[ActorMediaRequest, 
         slots = [layer.slot for layer in layers]
         if len(slots) != len(set(slots)) or "body" not in slots:
             raise ValueError("rig appearance requires a body and unique slots")
-        rows = {rig.facing_rows[view_facing(contact.facing, quadrant, data)] for quadrant in range(4)}
+        rows = (set(rig.facing_rows.values()) if all_facings else
+                {rig.facing_rows[view_facing(contact.facing, quadrant, data)] for quadrant in range(4)})
         for layer in layers:
             if layer.category not in rig.slot_categories.get(layer.slot, ()):
                 raise ValueError(f"invalid rig slot/category: {contact.rig_id}/{layer.slot}/{layer.category}")
@@ -94,9 +98,12 @@ def _actor_media_requests(data: AnimationData, actors: tuple[ActorMediaRequest, 
     return body_requests
 
 
-def _load_body_rows(data: AnimationData, requests: Mapping[tuple[str, str, str], set[int]]) -> BodyRows:
-    body_rows: dict[tuple[str, str, str, int], pygame.Surface] = {}
+def _load_body_rows(data: AnimationData, requests: Mapping[tuple[str, str, str], set[int]],
+                    body_rows: LoadedBodyRows) -> BodyRows:
     for (rig_id, clip, category), rows in requests.items():
+        missing = rows - {row for row in rows if (rig_id, clip, category, row) in body_rows}
+        if not missing:
+            continue
         rig = data.rigs[rig_id]
         binding = rig.clips[clip]
         url = binding.sheets[category]
@@ -104,35 +111,50 @@ def _load_body_rows(data: AnimationData, requests: Mapping[tuple[str, str, str],
             raise ValueError(f"missing required rig media: {url}")
         sheet = pygame.image.load(data.resources[url]).convert_alpha()
         expected = rig.cell_width * binding.frames, rig.cell_height * len(rig.facing_rows)
-        if sheet.get_size() != expected:
-            raise ValueError(f"rig sheet dimensions differ from metadata: {rig_id}/{clip}: {url}")
-        for row in rows:
+        for row in missing:
             body_rows[rig_id, clip, category, row] = sheet.subsurface(
                 (0, row * rig.cell_height, expected[0], rig.cell_height)
             ).copy()
     return MappingProxyType(body_rows)
 
 
-def load_actor_media(data: AnimationData, requests: tuple[ActorMediaRequest, ...]) -> BodyRows:
-    """Preload explicit actor layers/clips without acquiring a clock or appearance."""
-    return _load_body_rows(data, _actor_media_requests(data, requests))
+def load_actor_media(data: AnimationData, requests: tuple[ActorMediaRequest, ...], *,
+                     body_rows: LoadedBodyRows | None = None,
+                     all_facings: bool = False) -> BodyRows:
+    """Add missing rows to the caller's session media; appearances stay historical.
+
+    The supplied map belongs to one AnimationData and Pygame display session.
+    Loaded surfaces are read-only sources for per-frame compositing.
+    """
+    return _load_body_rows(data, _actor_media_requests(data, requests, all_facings=all_facings),
+                           {} if body_rows is None else body_rows)
 
 
-def load_attack_media(timeline: AttackTimeline, appearances: Mapping[str, tuple[RigLayer, ...]]) -> BodyRows:
+def load_attack_media(timeline: AttackTimeline, appearances: Mapping[str, tuple[RigLayer, ...]], *,
+                      body_rows: LoadedBodyRows | None = None) -> BodyRows:
     data = timeline.data
     source_layers = (*appearances[timeline.source.actor_uuid],
                      *(RigLayer(layer.slot, layer.category) for layer in timeline.layers))
+    target_clips = {data.death_context.bodyClip if timeline.target.life_state is LifeState.DEAD else "Idle"}
+    if timeline.damage_timing is not None:
+        target_clips.add(data.death_context.bodyClip if timeline.resulting_life_state is LifeState.DEAD
+                         else data.damage_context.bodyClip)
+        # Attack HP and life commit at hp_ms, so a lethal hit can begin with
+        # TakeDamage before entering the authored death clip.
+        if timeline.damage_timing.hp_ms > timeline.damage_timing.start_ms:
+            target_clips.add(data.damage_context.bodyClip)
     return load_actor_media(data, (
         (timeline.source, appearances[timeline.source.actor_uuid], ("Idle", timeline.clip)),
         (timeline.source, source_layers, (timeline.clip,)),
         (timeline.target, appearances[timeline.target.actor_uuid],
-         ("Idle", data.damage_context.bodyClip, data.death_context.bodyClip)),
-    ))
+         tuple(target_clips)),
+    ), body_rows=body_rows)
 
 
 def load_animation_media(timeline: CastTimeline,
-                         appearances: Mapping[str, tuple[RigLayer, ...]]) -> AnimationMedia:
-    """Validate and load every selected sheet before publishing any frame."""
+                         appearances: Mapping[str, tuple[RigLayer, ...]], *,
+                         body_rows: LoadedBodyRows | None = None) -> AnimationMedia:
+    """Load selected media, reusing the session's existing body rows."""
     data, source, cast = timeline.data, timeline.source, timeline.recipe.cast
     projectile = timeline.recipe.projectile
     assert projectile is not None
@@ -142,10 +164,17 @@ def load_animation_media(timeline: CastTimeline,
     if set(appearances) != {source.caster.actor_uuid, *targets}:
         raise ValueError("reference media requires one complete appearance per disclosed actor")
     caster_clips = {"Idle", cast.actionClip} | ({cast.recovery.bodyClip} if cast.recovery.enabled else set())
+    target_clips = {identity: {data.death_context.bodyClip if target.life_state is LifeState.DEAD else "Idle"}
+                    for identity, target in targets.items()}
+    for application in timeline.applications:
+        if application.damage_start_ms is not None:
+            target_clips[application.source.target.actor_uuid].add(
+                data.death_context.bodyClip if application.source.resulting_life_state is LifeState.DEAD
+                else data.damage_context.bodyClip)
     body_requests = _actor_media_requests(data, (
         (replace(source.caster, facing=timeline.facing), appearances[source.caster.actor_uuid], tuple(caster_clips)),
         *((target, appearances[target.actor_uuid],
-           ("Idle", data.damage_context.bodyClip, data.death_context.bodyClip)) for target in targets.values()),
+           tuple(target_clips[target.actor_uuid])) for target in targets.values()),
     ))
     caster_rig = body_rig(data, source.caster)
     for layer in (cast.weaponGlow, cast.aura, *(cast.effects or ()), cast.slash):
@@ -162,7 +191,7 @@ def load_animation_media(timeline: CastTimeline,
         body_requests.setdefault((source.caster.rig_id, cast.actionClip, layer.category), set()).update(
             caster_rig.facing_rows[view_facing(timeline.facing, quadrant, data)] for quadrant in range(4)
         )
-    body_rows = _load_body_rows(data, body_requests)
+    loaded_rows = _load_body_rows(data, body_requests, {} if body_rows is None else body_rows)
     projectile_rows: dict[tuple[str, int], pygame.Surface] = {}
     for application, interval in ((application, interval) for application in timeline.applications
                                   for interval in application.projectile_intervals):
@@ -172,13 +201,11 @@ def load_animation_media(timeline: CastTimeline,
             continue
         sheet = pygame.image.load(data.resources[asset.sheet]).convert_alpha()
         expected = asset.frame.width * asset.frame.cols, asset.frame.height * asset.frame.rows
-        if sheet.get_size() != expected:
-            raise ValueError(f"projectile sheet dimensions differ from metadata: {asset.assetId}")
         for row in rows:
             projectile_rows[asset.assetId, row] = sheet.subsurface((0, row * asset.frame.height, expected[0], asset.frame.height)).copy()
     font = pygame.font.SysFont(data.number_style.fontFamily, round(data.number_style.fontSizePx),
                                bold=data.number_style.fontWeight == "bold")
-    return AnimationMedia(MappingProxyType(dict(appearances)), body_rows,
+    return AnimationMedia(MappingProxyType(dict(appearances)), loaded_rows,
                           MappingProxyType(projectile_rows), font)
 
 

@@ -199,6 +199,85 @@ Asset references supplied by the user:
 
 ## Investigation and implementation status
 
+### September 12 — reviewed repair implementation authorized
+
+The user approved proceeding after the whole-source audit, anti-slop/anti-OOP
+review and plain timing baseline. That resumes performance implementation, not
+new gameplay or VFX work. Preserve the distinction between native execution,
+public event processing, asset preparation and drawing. Remove unnecessary
+obligations at their owner; do not replace source audits with cached attestations
+or let inherited tests make them requirements again.
+
+The first checkpoint removes source/census audits and the pending duplicate
+offline asset validator, gives body rows a session lifetime, separates native
+demos from the painter, and removes native query/copy duplication. A following
+bounded import repair separates passive records/public reduction from native
+capture. Exact measurements and remaining limits belong to the fix plan/results.
+
+### September 12 — fix plan and plain timing now requested
+
+The user has authorized a fix plan and a current timing diagnostic so improvements
+can be compared. The diagnostic must add no SHA/source verification, fingerprints,
+frame hashing or asset audit. Use elapsed measurements of actual native and saved
+playback work separately. This lifts the earlier measurement stop for this unit;
+it does not mean the proposed implementation or pending edits are now complete.
+
+The [reviewed fix plan](PERFORMANCE_FIX_PLAN_2026-09-12.md) and
+[current baseline](PERFORMANCE_BASELINE_2026-09-12.md) record the result, actual
+workloads, ranges, limitations and how to repeat the timings. No production edits
+were made during this planning/measurement unit.
+
+### September 12 — whole-codebase audit supersedes performance implementation
+
+- The user explicitly calls this a **critical design/work problem**. Do not
+  minimize it as a slip, isolated coding mistake, or small performance miss.
+  The audit must address how inherited implementation became authority and how
+  current review/testing let the same pattern return, including our own work.
+- The user explicitly stopped all implementation until the whole codebase is
+  scanned for unnecessary defensive machinery and repeated work.
+- The problem is architectural recurrence: the recovery rolled back months of
+  failed work, yet retained similar systems and accumulated more. Finding a
+  smaller budget miss, optimizing a source audit, or accepting inherited tests
+  as authority misses this framing.
+- Scan all subsystems, including older server/AI/content machinery and newly
+  written game/presentation code. Do not stop after removing one source hash.
+- Establish purpose, actual callers, cadence and evidence before proposing what
+  to retain or remove. Existing source and tests describe behavior; they do not
+  independently justify it.
+- Preserve the pending edits for review. During this stop, work is source study
+  and documentation only; no further fixes, tests, benchmarks or rendering.
+
+The completed [whole-codebase audit](audits/CODEBASE_MACHINERY_AUDIT_2026-09-12.md)
+records the source findings and the recurring design/work failure. It covers all
+1,031 Python/TS/JS files with explicit static-versus-semantic review limits.
+Implementation remains paused; audit completion does not approve pending edits.
+
+### September 12 — earlier performance unit, now paused
+
+- Stop rendering feature work and fix measured slowness. A barely passing
+  startup threshold does not establish acceptable game performance.
+- Separate native imports, world construction and real turn execution from
+  capture/projection/reduction, asset loading and drawing. Do not describe
+  whole-process startup as the time to render a handful of frames.
+- Investigate why earlier gameplay was fast. Compare compatible workloads and
+  attribute inherited costs versus changes in the recovery branch honestly.
+- Audit defensive copies, reserialization and repeated validation; do not
+  assume their necessity merely because an earlier implementation added them.
+- The user explicitly rejected built-in Python-source scanning/hashing on
+  startup and requested its immediate removal. Do not replace it with a new
+  verification/cache framework or hide it behind delayed imports.
+- Bundled authored assets should load during play; exhaustive authoring checks
+  should not delay every launch.
+- Commit the checkpoint before changing implementation. Continue documenting
+  findings and removals while doing the fixes; documentation is accompanying
+  work, not a reason to stop implementation.
+
+The pre-change checkpoint is `14b27f7`. The initial isolated native benchmark
+imports no Pygame and revealed 10.79s of import work before a 0.30s four-actor
+encounter setup. Its profiled import includes a 6.83s static source-closure walk;
+that value includes profiler overhead. The old 64-by-64 diagnostic constructs
+a different, much larger map and must not be presented as the same workload.
+
 The [September 11 source audit](ANIMATION_COMPOSITION_AUDIT.md#event-recording-contract-correction--september-11)
 records C01–C06 findings against native history and the current capture/export
 path. It attributes the serialization failures to the new recording/consumer

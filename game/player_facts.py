@@ -11,7 +11,6 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from dnd.blocks.appearance import AppearanceConfig
-from dnd.blocks.sensory import SensesSnapshot
 from dnd.core.action_execution import MovementProvocationPolicy
 from dnd.core.combat_log import CombatLogEntry
 from dnd.core.content.runtime import HandlerDispatchOutcome
@@ -21,7 +20,7 @@ from dnd.core.equipment_types import WeaponSet, WeaponSlot
 from dnd.core.events import EventPhase, EventType, MovementTrajectory, SpatialChangeType, WorldConnectorState, WorldTileState
 from dnd.core.item_types import EquippedVisualPolicy, ItemPresentationKind, ItemPresentationState
 from dnd.core.life_types import LifeState, LifeStateChangeReason
-from dnd.types.senses import PerceivedContact, SenseMode
+from dnd.types.senses import PerceivedContact, SenseMode, SensesSnapshot
 from dnd.types.world_placement import BoundaryStructure, WorldObjectPlacement
 from game.actor_facts import ConditionFact
 

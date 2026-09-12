@@ -25,27 +25,27 @@ saves displayed frames. The gameplay tests submit commands through the same
 boundary and exercise complete rounds while playback is paused.
 
 For the current clip-extraction checkpoint, run
-`python -m devtools.animation_review --capture` once and
+`python -m devtools.animation_review.capture` once and
 `python -m devtools.animation_review.serve`, then open
 <http://127.0.0.1:8767/>. Later runs of `python -m devtools.animation_review`
 render the saved event sequences without rerunning mechanics; explicit
-`--capture` replaces their inputs. Each video shows all four corners in a
+the capture command replaces their inputs. Each video shows all four corners in a
 synchronized 2×2 view. The gallery supports parallel review, frame/time
 selection, notes and export of the recorded input with its debug trace. See the
 [review workflow](devtools/animation_review/README.md) and its maintained
 [case catalog](devtools/animation_review/catalog.json).
 
-`python -m game --reference` opens the earlier two-cast terrace reference.
+`python -m game.reference` opens the earlier two-cast terrace reference.
 `--miss-second`, `--goblin` and `--lethal` select its existing outcome cases.
 These remain explicit regression references alongside the playable encounter.
 
-`python -m game --replace-weapon` equips a dagger at startup, replaces it with
+`python -m game.reference --replace-weapon` equips a dagger at startup, replaces it with
 a carried shortsword between the casts, and plays the original NeuroStudio
 equipment gesture. Latest gear and HP can advance while an earlier cast is
 paused; historical gear changes only when its gesture completes. This option
 also combines with `--goblin`, `--lethal`, `--quadrant` and `--headless`.
 
-`python -m game --magic-missile` runs two legal three-dart volleys against
+`python -m game.reference --magic-missile` runs two legal three-dart volleys against
 two targets in A/B/A order. Each volley retains one cast body and three distinct
 applications, including both hit reactions and damage numbers on A. This option
 combines with `--replace-weapon`, `--quadrant` and `--headless`.

@@ -8,6 +8,7 @@ from uuid import UUID
 import pygame
 import pytest
 
+from game.animation_draw import LoadedBodyRows
 from game.animation_data import load_animation_data
 from game.choreography import bind_choreography, sample_choreography
 from game.choreography_draw import load_choreography_media
@@ -15,7 +16,7 @@ from game.condition_types import ConditionRecipe
 from game.feedback import choreography_feedback, sample_feedback
 from game.playback_frame import sample_playback_frame
 from game.player_facts import ActionFact, AttackFact, SpellFact
-from game.player_projection import reduce_lineage, stage_lineage
+from game.player_reduction import reduce_lineage, stage_lineage
 from game.projection import Camera
 from game.scene import load_scene_media, scene_actors
 from tests.game.concealment_scenarios import concealment_history
@@ -57,10 +58,11 @@ def selected(history, role, behavior):
 def frame(before, root, data, elapsed, quadrant, font):
     group = bind_choreography(before, root, data)
     actors = scene_actors(stage_lineage(before, root), data, {})
-    media = load_scene_media(actors, data)
+    body_rows: LoadedBodyRows = {}
+    media = load_scene_media(actors, data, body_rows=body_rows)
     camera = Camera(quadrant=quadrant, viewport=(640, 480)).with_focus((7, 3))
     return sample_playback_frame(before, group.after, data, elapsed, elapsed, camera, {},
-        media, font, font, choreography=group, choreography_media=load_choreography_media(group),
+        media, font, font, choreography=group, choreography_media=load_choreography_media(group, body_rows=body_rows),
         feedback=choreography_feedback(group, data, 0))
 
 

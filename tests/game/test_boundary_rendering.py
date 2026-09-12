@@ -20,11 +20,10 @@ from dnd.types.world import CardinalDirection, LightLevel
 from game.app import (
     BACKGROUND,
     _authored_treatment,
-    _display_sources,
     _treatment,
-    build_demo_intervals,
     draw_frame,
 )
+from game.demo import _display_sources, build_demo_intervals
 from game.assets import SurfaceCache, load_catalog
 from game.presentation import PresentationTarget, reduce_interval
 from game.projection import Camera, MAP_CENTER, TILE_WIDTH, camera_pose, project_screen
@@ -161,9 +160,10 @@ def test_every_owner_tile_wall_subset_has_exact_four_camera_composition(
         cache,
         Camera(quadrant=quadrant, viewport=screen.get_size()).with_focus(OWNER),
         0.2,
-        show_grid=False,
+        collect_evidence=True, show_grid=False,
         mouse_position=None,
     )
+    assert evidence is not None
     rows = _boundary_rows(evidence)
     pair = frozenset(directions)
     is_corner = len(directions) == 2 and pair in CORNER_POSES
@@ -206,9 +206,10 @@ def test_corner_coalescing_ignores_support_light_but_requires_equal_base_height(
         cache,
         Camera(viewport=screen.get_size()).with_focus(OWNER),
         0.2,
-        show_grid=False,
+        collect_evidence=True, show_grid=False,
         mouse_position=None,
     )
+    assert treatment_evidence is not None
     treatment_rows = _boundary_rows(treatment_evidence)
     assert [row[6] for row in treatment_rows] == ["wall_corner"]
     assert treatment_rows[0][3:6] == ("current", None, "world.authored")
@@ -223,9 +224,10 @@ def test_corner_coalescing_ignores_support_light_but_requires_equal_base_height(
         cache,
         Camera(viewport=screen.get_size()).with_focus(OWNER),
         0.2,
-        show_grid=False,
+        collect_evidence=True, show_grid=False,
         mouse_position=None,
     )
+    assert height_evidence is not None
     height_rows = _boundary_rows(height_evidence)
     assert [row[6] for row in height_rows] == ["wall", "wall"]
     assert Counter(str(row[0]) for row in height_rows) == Counter(
@@ -261,9 +263,10 @@ def test_same_owner_mixed_materials_remain_two_identifiable_straights(
         cache,
         Camera(quadrant=quadrant, viewport=screen.get_size()).with_focus(OWNER),
         0.2,
-        show_grid=False,
+        collect_evidence=True, show_grid=False,
         mouse_position=None,
     )
+    assert evidence is not None
     rows = _boundary_rows(evidence)
 
     assert [row[6] for row in rows] == ["wall", "wall"]
@@ -294,9 +297,10 @@ def test_real_lodge_and_storehouse_use_matching_corners_and_straights(
             viewport=screen.get_size(),
         ).with_focus(MAP_CENTER),
         0.2,
-        show_grid=False,
+        collect_evidence=True, show_grid=False,
         mouse_position=None,
     )
+    assert evidence is not None
     rows_by_position = {
         row[1][0]: row
         for row in _boundary_rows(evidence)
@@ -353,9 +357,10 @@ def test_current_composite_wall_uses_neutral_treatment_in_every_quadrant(
             cache,
             Camera(quadrant=quadrant, viewport=screen.get_size()).with_focus(OWNER),
             0.2,
-            show_grid=False,
+            collect_evidence=True, show_grid=False,
             mouse_position=None,
         )
+        assert evidence is not None
         rows.append(_boundary_rows(evidence)[0])
 
     assert all(row[0] == wall_uuid for row in rows)
@@ -391,9 +396,10 @@ def test_memory_only_composite_wall_keeps_memory_treatment(
         cache,
         Camera(viewport=screen.get_size()).with_focus(OWNER),
         0.2,
-        show_grid=False,
+        collect_evidence=True, show_grid=False,
         mouse_position=None,
     )
+    assert evidence is not None
     row = _boundary_rows(evidence)[0]
     assert row[0] == wall_uuid
     assert row[3:6] == ("memory", None, "memory.seen")
@@ -423,9 +429,10 @@ def test_door_frame_does_not_disclose_leaf_or_settle_state_without_contact(
         cache,
         Camera(viewport=screen.get_size()).with_focus((31, 31)),
         0.7,
-        show_grid=False,
+        collect_evidence=True, show_grid=False,
         mouse_position=None,
     )
+    assert evidence is not None
     rows = [row for row in _boundary_rows(evidence) if row[0] == opened.door_uuid]
     represented, hidden = _display_sources(reduced, evidence)
     door_event_index = next(
@@ -454,9 +461,10 @@ def test_stale_leaf_placement_cannot_settle_the_door_event(
         cache,
         Camera(viewport=screen.get_size()).with_focus((31, 31)),
         0.7,
-        show_grid=False,
+        collect_evidence=True, show_grid=False,
         mouse_position=None,
     )
+    assert evidence is not None
     def stale_leaf(row: tuple) -> tuple:
         if len(row) <= 8 or row[6] != "door_leaf":
             return row
@@ -505,9 +513,10 @@ def test_standing_torch_body_and_flame_share_committed_placement_base(
         cache,
         Camera(viewport=screen.get_size()).with_focus(fixture.placement.position),
         0.2,
-        show_grid=False,
+        collect_evidence=True, show_grid=False,
         mouse_position=None,
     )
+    assert evidence is not None
     fixture_rows = [row for row in evidence.actual_draws if row[0] == fixture_uuid]
 
     assert len(fixture_rows) == 2
@@ -556,9 +565,10 @@ def test_real_q0_water_wall_overlap_uses_planar_then_spatial_pixel_order(
         cache,
         camera,
         0.2,
-        show_grid=False,
+        collect_evidence=True, show_grid=False,
         mouse_position=None,
     )
+    assert evidence is not None
 
     water_uuid = target.tiles[position].tile_uuid
     assert [row[0] for row in evidence.actual_draws] == [water_uuid, wall_uuid]

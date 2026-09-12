@@ -11,17 +11,18 @@ from uuid import UUID
 import pygame
 import pytest
 
-from devtools.animation_review import __main__ as review
+from devtools.animation_review import capture as review
 from game.animation import sample_idle_body
+from game.animation_draw import LoadedBodyRows
 from game.animation_data import load_animation_data
 from game.animation_draw import actor_draw_commands
 from game.animation_types import AnimationData, Facing8
 from game.choreography import bind_choreography
-from game.choreography_draw import load_choreography_media
+from game.choreography_draw import load_choreography_media, load_motion_media
 from game.combat import actor_contact
 from game.motion import bind_motion, sample_motion
 from game.playback_frame import PlaybackFrame, sample_playback_frame
-from game.player_projection import reduce_lineage
+from game.player_reduction import reduce_lineage
 from tests.game.player_helpers import player_history
 from game.projection import Camera
 from game.scene import load_scene_media, scene_actors
@@ -65,7 +66,8 @@ def test_actual_condition_recovery_preserves_pose_through_turns_and_next_motion(
     try:
         pygame.display.set_mode((960, 640))
         cameras = tuple(Camera(quadrant=q, viewport=(960, 640)).with_focus((3, 3)) for q in range(4))
-        media = load_scene_media(scene_actors(before, data, {}), data)
+        body_rows: LoadedBodyRows = {}
+        media = load_scene_media(scene_actors(before, data, {}), data, body_rows=body_rows)
         number_font, badge_font = (pygame.font.SysFont(style.fontFamily, round(style.fontSizePx))
                                    for style in (data.number_style, data.badge_style))
         positions: dict[str, VisualPosition] = {}
@@ -77,9 +79,8 @@ def test_actual_condition_recovery_preserves_pose_through_turns_and_next_motion(
             motion = bind_motion(before, lineage, data, contacts=contacts)
             group = None if motion is not None else bind_choreography(before, lineage, data,
                                                                      facings=facings, contacts=contacts)
-            group_media = load_choreography_media(group) if group is not None else None
-            reactions = {row.choreography.root_uuid: load_choreography_media(row.choreography)
-                         for row in motion.reactions} if motion is not None else {}
+            group_media = load_choreography_media(group, body_rows=body_rows) if group is not None else None
+            reactions = load_motion_media(motion, data, body_rows=body_rows) if motion is not None else {}
             duration = motion.complete_ms if motion is not None else group.complete_ms if group else 0
             # Same absolute idle time isolates geometry/color from Idle's phase.
             clock = 5000.0
@@ -138,7 +139,7 @@ def test_actual_condition_recovery_preserves_pose_through_turns_and_next_motion(
 
 
 def test_paused_lifecycle_clip_keeps_applied_membership_while_latest_has_recovered(tmp_path: Path) -> None:
-    assert review.main(["--capture", "--case", "recovery-paused", "--fps", "12", "--width", "640", "--height", "480",
+    assert review.main(["--case", "recovery-paused", "--fps", "12", "--width", "640", "--height", "480",
                         "--output", str(tmp_path)]) == 0
     run = tmp_path / "runs" / json.loads((tmp_path / "latest.json").read_text())["run"]
     trace = json.loads((run / "cases/recovery-paused/trace.json").read_text())
@@ -150,11 +151,12 @@ def test_paused_lifecycle_clip_keeps_applied_membership_while_latest_has_recover
     assert not owned & {fact["uuid"] for fact in trace["latest"]["actors"][mover]["conditions"]}
     paused = [frame for frame in trace["frames"] if frame["paused"]]
     assert len(paused) > 1
+    frozen, = (check for check in trace["checks"] if check["name"] == "frozen-presentation")
+    assert frozen["passed"]  # Includes direct equality of the held RGB frames.
     for frame in paused:
         assert frame["root_uuid"] == first["root"]["uuid"]
         assert owned <= {fact["uuid"] for fact in frame["state"]["actors"][mover]["conditions"]}
         assert frame["views"] == paused[0]["views"]
-        assert frame["pixel_sha256"] == paused[0]["pixel_sha256"]
         assert frame["latest_cursor"] > frame["state"]["cursor"]
         assert [view["quadrant"] for view in frame["views"]] == [0, 1, 2, 3]
     end = next(contact for contact in trace["frames"][-1]["contacts"] if contact["actor_uuid"] == mover)

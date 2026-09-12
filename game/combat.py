@@ -17,7 +17,7 @@ from game.animation_types import AnimationData, Facing8, RigLayer
 from game.player_facts import (
     AttackFact, DamageFact, EquipmentFact, LifeFact, PlayerActor, PlayerLineage, PlayerNode, PlayerState, SpellFact,
 )
-from game.player_projection import reduce_lineage
+from game.player_reduction import reduce_lineage
 
 
 @dataclass(frozen=True, slots=True)

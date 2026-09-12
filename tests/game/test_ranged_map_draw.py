@@ -77,8 +77,9 @@ def test_real_shortbow_pixels_cross_the_map_and_retire_at_contact(
         draw_frame(screen, before, catalog, cache, camera, 0, show_grid=False,
                    mouse_position=None, extra_commands=bare)
         without_bolt = pygame.surfarray.array3d(screen)
-        evidence = draw_frame(screen, before, catalog, cache, camera, 0, show_grid=False,
+        evidence = draw_frame(screen, before, catalog, cache, camera, 0, collect_evidence=True, show_grid=False,
                              mouse_position=None, extra_commands=commands)
+        assert evidence is not None
         assert evidence.actual_draws == evidence.expected_draws
         with_bolt = pygame.surfarray.array3d(screen)
         mask_layer = pygame.Surface(screen.get_size(), pygame.SRCALPHA)

@@ -27,38 +27,64 @@ is now imported through the original Studio schema, independently of gameplay.
 
 ### Current position — read this before the checkpoint details
 
-**Active hard stop, September 12 — engine and application performance:** the
-user has stopped rendering feature work. Identify and fix measured sources of
-slowness; an eight-second smoke pass alone is not the objective. Separate fresh
-imports/content installation, native world/entity construction, steady native
-turns/actions/senses, event capture/projection/reduction, asset preparation and
-actual drawing. Compare compatible workloads against pinned earlier revisions
-to distinguish inherited costs from recovery regressions. Retain the existing
-rules, subjective lineages, recorded replay and independent playback clock.
+**Current unit, September 12 — performance repair implementation:** the user
+approved executing the reviewed repair plan after the whole-source audit and
+plain timing baseline. Start with ordinary startup/import and media ownership;
+then measure and continue the bounded native query/AI repairs. Existing pending
+edits remain part of the change to validate, not an accepted foundation.
 
-1. Record serial baseline timings and profiles for native-only work and the
-   application boundaries. Use actual discovered actions, turn advancement and
-   saved histories. Record scenario size, events/outcomes, environment and
-   profiler overhead. Native benchmarks must not require Pygame or recording.
-2. Trace hot work to its owner and introduction in history: eager imports and
-   schema construction, per-tile values, validation, spatial recalculation,
-   defensive copies and serialization. Do not assume every copy is redundant
-   or that startup measures steady turn throughput.
-3. Remove demonstrated redundant work. Bundled asset validation belongs in
-   authoring/verification where possible; ordinary play should load its shipped
-   data. Preserve ownership and error behavior where it matters. No deferred
-   imports, registry replacement, weakened event semantics or renderer redesign
-   to make a benchmark smaller.
-4. Run behavior tests appropriate to each changed owner and replay saved public
-   histories. Repeat the same serial measurements and report before/after by
-   subsystem, including remaining expensive work. Keep the eight-second gate
-   intact and document the game/renderer boundary in the performance report.
+- [Fix plan](agent_docs/PERFORMANCE_FIX_PLAN_2026-09-12.md): first repair ordinary
+  startup/import and media ownership; then native query/AI work; then measured
+  capture/root-compilation work. Terrain representation and content identity are
+  separately bounded decisions, not seven compulsory redesigns before gameplay
+  can resume. Preserve complete subjective lineages, independent playback and
+  recorded-event sufficiency throughout.
+- [Current baseline](agent_docs/PERFORMANCE_BASELINE_2026-09-12.md): twelve
+  successful serial runs, three per workload. Native imports 4.648s, encounter
+  setup 0.471s, eight human turns plus native AI 3.889s. Saved public playback
+  imports 3.989s, actor media 2.363s; 244 four-corner view renders total 0.689s.
+  A separate 4,096-tile rectangle takes 1.642s to construct. These are medians
+  for different stages/workloads, not additive claims or guaranteed savings.
+- [Whole-codebase audit](agent_docs/audits/CODEBASE_MACHINERY_AUDIT_2026-09-12.md)
+  records the critical design/work failure, source coverage and concrete owners.
+  It remains evidence, not authority to revive retired server code or preserve
+  old validation. Existing tests do not justify unnecessary runtime work.
 
-**Reviews:** anti-slop review independently checks historical/native semantics,
-workload equivalence and claimed savings; anti-OOP review checks dependency DAGs,
-ECS ownership and whether each optimization removes work rather than adding a
-parallel system. Both review concrete changes. Root owns serial benchmarking;
-reviewers study independently without concurrent timing jobs.
+**Repair checkpoints:** [results and remaining costs](agent_docs/PERFORMANCE_REPAIR_RESULTS_2026-09-12.md).
+Native active work is 3.308s versus 3.889s initially; the whole saved playback
+process is 3.493s versus 8.404s. These are serial three-run medians of the original workloads.
+Public reduction/passive records are separated from native adapters, and the
+internal AI outcome/exposure serialization bridge is removed. Existing AI
+observation memory stays. Native imports still take about 4.24s.
+
+**Validated media/capture checkpoint:** the two-actor request now loads 72 initial
+pose rows and 136 total with its movement (127.5 MiB), down from 1,008 rows and
+945 MiB. The same session map receives the next complete head's typed clip/loadout
+requests; world rasters decode on demand. First-use world loading is included in
+the measured render costs. Movement/reaction/equipment/condition/lifecycle checks
+pass; six existing raised-terrain pixel failures remain expected failures.
+The world-diff guard reduces public projection from 44ms to 13ms in the native
+workload. Batch-local source indexing lowers the largest paired capture from
+1.799s to 1.500s, with the same typed outputs and sensory-time admissions.
+
+**Open performance work:** eager native imports (4.24s), repeated private actor
+admission folding as history grows, and the separate 4,096-tile construction
+(1.41s) remain substantial. Batch-local indexing did not fix the actor-history
+fold. Apply the existing plan's separate ownership/design review to these costs;
+do not replace source ordering with root-completion order, add import caches or
+reopen gameplay/VFX work on the strength of this bounded checkpoint.
+
+**Plan reviews completed:** anti-slop and anti-OOP reviews changed priority to
+follow measured import/media/native-controller costs; required source-order
+admission capture independently of root completion order; retained AI memory on
+continued moves; and bounded media/capture ownership. The baseline documents
+native outcome variation rather than pretending equal event counts prove equal
+behavior. Root ran timings serially; reviewers performed source/document work.
+
+**Current boundary:** implementation and focused correctness checks are now
+authorized. Timing remains serial and adds no source fingerprints, frame hashes,
+asset audits or video exports. Native behavior, subjective grant rules, complete
+lineages and independent historical playback remain the acceptance boundary.
 
 **Completed unit, September 12 — invisibility, stealth and truesight:** extend the
 paired subjective recordings through the existing native concealment rules.

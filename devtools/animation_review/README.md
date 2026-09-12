@@ -4,12 +4,12 @@ From the repository root, using the existing virtual environment and installed
 `ffmpeg`/`ffprobe`:
 
 ```bash
-.venv/bin/python -m devtools.animation_review --capture
+.venv/bin/python -m devtools.animation_review.capture
 .venv/bin/python -m devtools.animation_review
 .venv/bin/python -m devtools.animation_review.serve
 ```
 
-Open <http://127.0.0.1:8767/>. `--capture` generates and saves the selected
+Open <http://127.0.0.1:8767/>. `devtools.animation_review.capture` generates and saves the selected
 native histories once; the next command renders those same saved inputs again.
 The final command serves the local files, including the HTTP byte ranges
 needed for browser video seeking. No game server or Node runtime is involved.
@@ -17,12 +17,11 @@ Capture uses SDL's dummy video driver by default and does not need
 the desktop. MP4 is used for pause, seeking, frame stepping and efficient
 parallel playback.
 
-Only `--capture` executes scenarios. It replaces selected inputs under
+Only the capture command imports and executes native scenarios. It replaces selected inputs under
 `.runtime/animation-review/inputs/<case-id>/input.json`. Both the first render
 and later renders decode the saved sequence before reducing or binding it;
-the renderer never receives the native producer's Python objects. Without
-`--capture`, missing input is an explicit error rather than a request to rerun
-mechanics. Use `--capture` again when intentionally changing a scenario or its
+the renderer never receives the native producer's Python objects. With the replay command, missing input is an explicit error rather than a request to rerun
+mechanics. Use the capture command again when intentionally changing a scenario or its
 native mechanics. Each run copies its input alongside the video so replacing
 the shared input does not alter older evidence.
 
@@ -41,8 +40,9 @@ recorded initialization. Both first capture and repeat playback decode these
 saved public bytes before rendering. The private native version-2 archive is
 saved separately as `native.json` for local debugging. Existing historical
 native inputs remain unchanged; replay projects them into a run-local public
-packet without rerunning mechanics. Source manifests and review metadata remain
-local development artifacts rather than part of the player protocol.
+packet without rerunning mechanics. Run metadata records the Git branch, commit
+and dirty status; replay does not walk or hash the source/assets. Review metadata
+remains local development data rather than part of the player protocol.
 
 Complete retained lineages are reduced and sampled through the same
 `game/playback_frame.py` function used by the game.
@@ -113,8 +113,9 @@ The observer's recording includes only its own inventory consumption. The
 subject's own state and movement remain available while another actor cannot
 see it. Search is not an existing native action and is outside this matrix.
 
-Capture or replay just this unit with `--capture --tag concealment` or
-`--tag concealment`; both commands include each experiment's two perspectives.
+Capture this unit with `python -m devtools.animation_review.capture --tag concealment`
+or replay with `python -m devtools.animation_review --tag concealment`;
+both commands include each experiment's two perspectives.
 The potion uses the original authored Taunt/effect-frame-8 body track. Its
 original drink strip is currently reported as an unbound media gap: both its
 asset and the body-action media-track playback connection are outstanding; no
@@ -233,20 +234,21 @@ Each contact records `body_lift_px` separately from support elevation. Capture
 checks legal endpoints, visual stop continuity and placement after releasing
 the final head. All four views use the same placement state. Floating feedback
 and name/HP labels share body-aware placement within the view below its header.
-Every frame also records the SHA-256 of the actual RGB pixels sent to the
-encoder. The paused check compares those pixels as well as retained state and
-draw metadata; stable command coordinates alone do not prove a frozen image.
+During a pause, the recorder compares each RGB frame directly with the first
+held frame, releasing that reference when playback resumes. The
+`frozen-presentation` check records this pixel equality together with retained
+state and draw metadata.
 
 ## Repeat a focused step
 
 ```bash
 .venv/bin/python -m devtools.animation_review --list
-.venv/bin/python -m devtools.animation_review --capture --case 'walk-*'
+.venv/bin/python -m devtools.animation_review.capture --case 'walk-*'
 .venv/bin/python -m devtools.animation_review --case 'walk-*'
 .venv/bin/python -m devtools.animation_review --tag ranged
 .venv/bin/python -m devtools.animation_review --tag gameplay
 .venv/bin/python -m devtools.animation_review --tag forced-movement
-.venv/bin/python -m devtools.animation_review --capture --tag visibility
+.venv/bin/python -m devtools.animation_review.capture --tag visibility
 .venv/bin/python -m devtools.animation_review --tag visibility
 .venv/bin/python -m devtools.animation_review --review /path/to/downloaded-review.json
 ```
@@ -261,7 +263,7 @@ rejected with an explicit explanation, never silently regenerated from IDs.
 
 Ordinary `--case`/`--tag` runs select catalog entries and load their saved inputs.
 If the catalog definition changed, the tool reports that it is using the saved
-definition; only explicit `--capture` replaces it. `--review` never replaces
+definition; only the explicit capture command replaces it. `--review` never replaces
 the shared input collection.
 
 Add cases as catalog data over an existing producer. A new gameplay family
@@ -278,6 +280,7 @@ SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy .venv/bin/python -m pytest \
 These verify real ranged/paralysis/cast recordings, frozen authored-map export, all four views, retained frame
 and event identity, MP4 decoding/frame counts, visible capture failures and
 HTTP seeking. Saved-input and exported-review checks repeat a recovery history
-in fresh processes with native production/bootstrap unavailable, comparing
-all historical successors and rendered pixel hashes. Existing gameplay/encounter tests separately protect mechanics
+in fresh processes without native production/bootstrap, comparing historical
+successors and sampled frames. Paired replay also compares the encoded videos;
+pause checks compare rendered RGB bytes directly. Existing gameplay/encounter tests separately protect mechanics
 and independent latest/historical progression.

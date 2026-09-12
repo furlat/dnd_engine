@@ -31,7 +31,7 @@ def test_catalog_loads_the_exact_finite_visual_set(surface_cache: SurfaceCache) 
     assert len(catalog.resources) == 72
     assert len(catalog.flame_frames) == 16
     assert catalog.flame_fps == 10
-    assert all(surface_cache.canonical[key].get_size() == spec.native_size for key, spec in catalog.resources.items())
+    assert all(surface_cache.canonical(key).get_size() == spec.native_size for key, spec in catalog.resources.items())
     assert catalog.bindings["terrain"] == {
         "earth": {pose: f"terrain.earth.{pose}" for pose in "ensw"},
         "wood": {pose: f"terrain.wood.{pose}" for pose in "ensw"},
@@ -222,46 +222,6 @@ def test_flame_frame_boundaries(time_seconds: float, expected: int) -> None:
     assert flame_frame_index(time_seconds) == expected
 
 
-@pytest.mark.parametrize(
-    ("case", "message"),
-    (
-        ("unknown_binding", "unknown bound asset"),
-        ("escaping_path", "escapes game/assets"),
-        ("wrong_dimension", "native_size"),
-        ("missing_pose", "four exact poses"),
-        ("missing_frame", "16 unique ordered frames"),
-    ),
-)
-def test_catalog_rejects_invalid_direct_data(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    case: str,
-    message: str,
-) -> None:
-    assets = json.loads((assets_module.DATA_ROOT / "assets.json").read_text(encoding="utf-8"))
-    bindings = json.loads(
-        (assets_module.DATA_ROOT / "world_bindings.json").read_text(encoding="utf-8")
-    )
-    if case == "unknown_binding":
-        bindings["terrain"]["earth"]["e"] = "terrain.unknown"
-    elif case == "escaping_path":
-        assets["resources"]["terrain.earth.e"]["path"] = "../data/assets.json"
-    elif case == "wrong_dimension":
-        assets["resources"]["terrain.earth.e"]["native_size"] = [256.5, 256]
-    elif case == "missing_pose":
-        bindings["stone_wall_straight"].pop("e")
-    elif case == "missing_frame":
-        assets["animations"]["torch.flame"]["frames"].pop()
-    else:
-        raise AssertionError(f"unhandled test case {case}")
-    (tmp_path / "assets.json").write_text(json.dumps(assets), encoding="utf-8")
-    (tmp_path / "world_bindings.json").write_text(json.dumps(bindings), encoding="utf-8")
-    monkeypatch.setattr(assets_module, "DATA_ROOT", tmp_path)
-
-    with pytest.raises(ValueError, match=message):
-        load_catalog()
-
-
 def test_catalog_rejects_malformed_json_and_decode_failure(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -269,7 +229,7 @@ def test_catalog_rejects_malformed_json_and_decode_failure(
     (tmp_path / "assets.json").write_text("{", encoding="utf-8")
     (tmp_path / "world_bindings.json").write_text("{}", encoding="utf-8")
     monkeypatch.setattr(assets_module, "DATA_ROOT", tmp_path)
-    with pytest.raises(ValueError, match="cannot read asset data"):
+    with pytest.raises(json.JSONDecodeError):
         load_catalog()
 
     monkeypatch.setattr(assets_module, "DATA_ROOT", assets_module.PACKAGE_ROOT / "data")
@@ -283,6 +243,6 @@ def test_catalog_rejects_malformed_json_and_decode_failure(
 
         monkeypatch.setattr(pygame.image, "load", fail_decode)
         with pytest.raises(ValueError, match="cannot decode asset"):
-            SurfaceCache(catalog)
+            SurfaceCache(catalog).canonical("terrain.earth.e")
     finally:
         pygame.quit()

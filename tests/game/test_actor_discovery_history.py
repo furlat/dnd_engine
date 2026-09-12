@@ -11,7 +11,7 @@ from game.animation_data import load_animation_data
 from game.attack import bind_attack
 from game.motion import bind_motion, sample_motion
 from game.presentation import reduce_lineage as reduce_native_lineage
-from game.player_projection import lineage_branch, reduce_lineage, stage_lineage
+from game.player_reduction import lineage_branch, reduce_lineage, stage_lineage
 from game.player_facts import SensoryFact, StepFact
 from game.replay import decode_sequence, encode_sequence
 from game.scene import scene_actors

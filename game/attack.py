@@ -26,7 +26,7 @@ from game.animation_types import (
 )
 from game.combat import actor_contact
 from game.player_facts import AttackFact, DamageFact, LifeFact, PlayerLineage, PlayerNode, PlayerState, SpellFact
-from game.player_projection import reduce_lineage
+from game.player_reduction import reduce_lineage
 from game.projection import HEIGHT_STEP_PIXELS, TILE_WIDTH, project_world
 
 

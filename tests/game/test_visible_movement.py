@@ -4,17 +4,18 @@
 import pygame
 import pytest
 
+from game.animation_draw import LoadedBodyRows
 from game.animation_data import load_animation_data
 from dnd.core.life_types import LifeState
 from tests.game.scenarios import movement_with_paralysis
 from game.motion import bind_motion, sample_motion
 from game.playback_frame import sample_playback_frame
 from game.player_facts import MovementFact, StepFact
-from game.player_projection import (
-    decode_player_sequence, encode_player_sequence, project_sequence, reduce_lineage, stage_lineage,
-)
+from game.player_projection import project_sequence
+from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage, stage_lineage
 from game.projection import Camera
 from game.scene import load_scene_media, scene_actors
+from game.choreography_draw import load_motion_media
 from tests.game.visibility_scenarios import visibility_history
 
 
@@ -58,7 +59,9 @@ def test_paired_doorway_walk_keeps_only_authorized_edges_and_same_root(data) -> 
     pygame.init()
     try:
         pygame.display.set_mode((640, 480))
-        media = load_scene_media(scene_actors(stage_lineage(observer_before, observer_root), data, {}), data)
+        body_rows: LoadedBodyRows = {}
+        media = load_scene_media(scene_actors(stage_lineage(observer_before, observer_root), data, {}), data, body_rows=body_rows)
+        load_motion_media(motion, data, body_rows=body_rows)
         fonts = tuple(pygame.font.SysFont(style.fontFamily, round(style.fontSizePx))
                       for style in (data.number_style, data.badge_style))
         for quadrant in range(4):

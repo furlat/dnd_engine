@@ -15,11 +15,11 @@ from game.animation import (
     facing_for_delta, sample_idle_body,
 )
 from game.animation_types import AnimationData, Facing8
-from game.choreography import BoundChoreography, bind_choreography, sample_choreography
+from game.choreography import BoundChoreography, ChoreographySample, bind_choreography, sample_choreography
 from game.attack import BoundAttack
 from game.combat import actor_contact, actor_is_visible
 from game.player_facts import AttackFact, MovementFact, PlayerActor, PlayerLineage, PlayerNode, PlayerState, SpellFact, StepFact
-from game.player_projection import lineage_branch, reduce_lineage, observe_actors, stage_actors, stage_lineage
+from game.player_reduction import lineage_branch, reduce_lineage, observe_actors, stage_actors, stage_lineage
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,6 +75,7 @@ class MotionSample:
     reaction_elapsed_ms: float = 0
     displayed_vitals: tuple[VitalsSample, ...] = ()
     displayed: PlayerState | None = None
+    reaction_sample: ChoreographySample | None = None
 
 
 def _bind_jump(target: PlayerState, lineage: PlayerLineage, jump: MovementFact,
@@ -334,6 +335,7 @@ def sample_motion(timeline: MotionTimeline, data: AnimationData, elapsed_ms: flo
             break
         displayed, state_ms = state, at
     active: MotionReaction | None = None
+    active_sample: ChoreographySample | None = None
     for reaction in timeline.reactions:
         if elapsed < reaction.start_ms:
             break
@@ -343,15 +345,16 @@ def sample_motion(timeline: MotionTimeline, data: AnimationData, elapsed_ms: flo
         vitals.update((value.actor_uuid, value) for value in sample.vitals)
         if elapsed < reaction.end_ms:
             active = reaction
+            active_sample = sample
             break
     if active is not None:
         contact = active.contact
-        sample = sample_choreography(active.choreography, elapsed - active.start_ms)
-        bodies = [body for clip_sample in sample.clips for body in clip_sample.sample.bodies
+        assert active_sample is not None
+        bodies = [body for clip_sample in active_sample.clips for body in clip_sample.sample.bodies
                   if body.actor_uuid == contact.actor_uuid]
         body = bodies[-1] if bodies else sample_idle_body(data, contact, elapsed)
         return MotionSample(contact, body, active.lift_px, False, active.choreography,
-                            elapsed - active.start_ms, tuple(vitals.values()), displayed)
+                            elapsed - active.start_ms, tuple(vitals.values()), displayed, active_sample)
     leg = next((leg for leg in timeline.legs if leg.start_ms <= elapsed < leg.end_ms), None)
     if (complete and timeline.settled_contact is not None and timeline.legs
             and timeline.legs[-1].end_ms == timeline.complete_ms):

@@ -2,7 +2,7 @@
 
 The finite input script owns command times. Completed lineages enter one pending
 deque; the active authored sampler reads only its historical input. The old
-game.app.run remains the door/light regression demonstration.
+game.demo.run remains the door/light regression demonstration.
 """
 
 from __future__ import annotations
@@ -35,7 +35,8 @@ from game.combat import BoundCast, BoundEquipment, bind_cast, bind_equipment
 from game.combat_demo import iter_combat_demo
 from game.presentation import CompletedLineage, IntervalEnvelope
 from game.player_facts import EquipmentFact, PlayerLineage, PlayerState, SpellFact
-from game.player_projection import begin_projection, project_lineage, reduce_initialization, reduce_lineage
+from game.player_projection import begin_projection, project_lineage
+from game.player_reduction import reduce_initialization, reduce_lineage
 from game.projection import Camera, ZOOM_LEVELS
 
 
@@ -297,11 +298,12 @@ async def _run(
                     raise RuntimeError("first combat input did not provide a drawable history")
             evidence = draw_frame(
                 screen, historical, catalog, cache, camera, input_ms / 1000,
-                show_grid=show_grid, show_debug=show_debug,
+                show_grid=show_grid, show_debug=show_debug, collect_evidence=True,
                 mouse_position=pygame.mouse.get_pos() if show_debug else None,
                 extra_commands=commands,
                 revisions=(latest.reducer_cursor, latest.reducer_cursor, historical.reducer_cursor),
             )
+            assert evidence is not None
             if not evidence.matches:
                 raise RuntimeError("map draw evidence differs from the published candidates")
             _draw_status(

@@ -11,7 +11,8 @@ import sys
 
 import pytest
 
-from devtools.animation_review import __main__ as review
+from devtools.animation_review import cli as review
+from devtools.animation_review import capture as capture_review
 
 
 def latest_run(output: Path) -> Path:
@@ -19,7 +20,7 @@ def latest_run(output: Path) -> Path:
 
 
 def test_generated_clips_retain_their_frames_lineages_and_authored_maps(tmp_path: Path) -> None:
-    assert review.main(["--capture", "--case", "ranged-hit", "--case", "walk-paralyzed", "--case", "firebolt-level",
+    assert capture_review.main(["--case", "ranged-hit", "--case", "walk-paralyzed", "--case", "firebolt-level",
                         "--case", "equipment-remove-active-weapon", "--fps", "12",
                         "--width", "640", "--height", "480", "--output", str(tmp_path)]) == 0
     output = latest_run(tmp_path)
@@ -32,7 +33,7 @@ def test_generated_clips_retain_their_frames_lineages_and_authored_maps(tmp_path
         trace = json.loads((output / case["trace"]).read_text())
         assert trace["case"]["id"] == case["id"]
         assert trace["run"] == manifest["run"]
-        assert trace["sources"]["source_hash"] == manifest["run"]["source_hash"]
+        assert trace["sources"] == {key: manifest["run"][key] for key in ("branch", "commit", "dirty")}
         assert (output / case["input"]).read_bytes() == (tmp_path / "inputs" / case["id"] / "input.json").read_bytes()
         assert trace["mode"].startswith("decoded-recorded-input")
         assert case["status"] == "passed" and all(check["passed"] for check in case["checks"])
@@ -89,7 +90,7 @@ def test_recording_failure_remains_in_manifest_with_exportable_trace(tmp_path: P
         raise RuntimeError("encoder unavailable during capture")
 
     monkeypatch.setattr(review, "record_case", unavailable_encoder)
-    assert review.main(["--capture", "--case", "melee-hit", "--output", str(tmp_path)]) == 1
+    assert capture_review.main(["--case", "melee-hit", "--output", str(tmp_path)]) == 1
     output = latest_run(tmp_path)
     manifest = json.loads((output / "manifest.json").read_text())
     case = next(row for row in manifest["cases"] if row["id"] == "melee-hit")
@@ -103,7 +104,7 @@ def test_recording_failure_remains_in_manifest_with_exportable_trace(tmp_path: P
 
 
 def test_four_camera_framing_keeps_the_airborne_body_below_the_header(tmp_path: Path) -> None:
-    assert review.main(["--capture", "--case", "jump-midflight-continue", "--fps", "12", "--width", "640",
+    assert capture_review.main(["--case", "jump-midflight-continue", "--fps", "12", "--width", "640",
                         "--height", "480", "--output", str(tmp_path)]) == 0
     run = latest_run(tmp_path)
     trace = json.loads((run / "cases/jump-midflight-continue/trace.json").read_text())
@@ -114,14 +115,16 @@ def test_four_camera_framing_keeps_the_airborne_body_below_the_header(tmp_path: 
 
 
 def test_paused_death_pixels_remain_historical_while_latest_has_revived(tmp_path: Path) -> None:
-    assert review.main(["--capture", "--case", "death-save-revival-paused", "--fps", "12", "--width", "640",
+    assert capture_review.main(["--case", "death-save-revival-paused", "--fps", "12", "--width", "640",
                         "--height", "480", "--output", str(tmp_path)]) == 0
     run = latest_run(tmp_path)
     trace = json.loads((run / "cases/death-save-revival-paused/trace.json").read_text())
     target, = (identity for identity in trace["latest"]["actors"] if identity != trace["latest"]["observer_uuid"])
     assert (trace["latest"]["actors"][target]["life"], trace["latest"]["actors"][target]["hp"]) == ("alive", 3)
     held = [frame for frame in trace["frames"] if frame["paused"]]
-    assert len(held) > 1 and len({frame["pixel_sha256"] for frame in held}) == 1
+    assert len(held) > 1
+    frozen, = (check for check in trace["checks"] if check["name"] == "frozen-presentation")
+    assert frozen["passed"]  # The recorder compares the held RGB bytes directly.
     for frame in held:
         assert frame["state"]["actors"][target]["life"] == "dead"
         assert frame["state"]["actors"][target]["hp"] == 0
@@ -144,7 +147,7 @@ def test_paused_death_pixels_remain_historical_while_latest_has_revived(tmp_path
 
 def test_saved_and_exported_input_replay_without_native_generation(tmp_path: Path) -> None:
     options = ["--case", "walk-recovery", "--fps", "12", "--width", "640", "--height", "480", "--output", str(tmp_path)]
-    assert review.main(["--capture", *options]) == 0
+    assert capture_review.main(options) == 0
     first = latest_run(tmp_path)
     manifest = json.loads((first / "manifest.json").read_text())
     item = next(row for row in manifest["cases"] if row["id"] == "walk-recovery")
@@ -158,19 +161,20 @@ def test_saved_and_exported_input_replay_without_native_generation(tmp_path: Pat
                         "trace": original, "recorded_input": json.loads(input_bytes)}],
     }))
     # A fresh receiving process has no installed content or prior engine world.
-    # Tripwires on the native entry points establish that replay cannot quietly
-    # regenerate a scenario. The real decoder, reducer, sampler and encoder run.
+    # Native scenario composition is absent from the receiving import graph.
+    # The real decoder, reducer, sampler and encoder run on saved input.
     receiving_process = """
 import sys
-from devtools.animation_review import __main__ as review
+from devtools.animation_review import cli as review
 from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
 from dnd.core.events import EventQueue
 
 def unavailable(*args, **kwargs):
     raise AssertionError("native generation is unavailable in the replay process")
 
-review.produce = unavailable
-review.bootstrap_content_system = unavailable
+assert not any(name.startswith("tests.game.") for name in sys.modules)
+assert "game.combat_demo" not in sys.modules
+assert "game.demo" not in sys.modules
 if "--review" in sys.argv:
     review.load_cases = unavailable
 assert not SERVER_CONTENT_SYSTEM_RUNTIME.is_installed
@@ -202,7 +206,7 @@ def test_replay_requires_saved_input_and_rejects_old_diagnostic_exports(tmp_path
     with pytest.raises(SystemExit) as missing:
         review.main(["--case", "melee-hit", "--output", str(tmp_path)])
     assert missing.value.code == 2
-    assert "use --capture" in capsys.readouterr().err
+    assert "devtools.animation_review.capture" in capsys.readouterr().err
     exported = tmp_path / "old-review.json"
     exported.write_text(json.dumps({"kind": "dnd-animation-review", "selections": [{"case": {"id": "melee-hit"},
                                                                                   "trace": {"initial": {}, "lineages": []}}]}))
@@ -216,7 +220,7 @@ def test_replay_requires_saved_input_and_rejects_old_diagnostic_exports(tmp_path
 def test_paired_doorway_inputs_replay_without_native_generation(tmp_path: Path) -> None:
     options = ['--case', 'sight-doorway-cross', '--case', 'sight-doorway-closed', '--fps', '12',
                '--width', '640', '--height', '480', '--output', str(tmp_path)]
-    assert review.main(['--capture', *options]) == 0
+    assert capture_review.main(options) == 0
     first = latest_run(tmp_path)
     manifest = json.loads((first / 'manifest.json').read_text())
     assert len(manifest['cases']) == 4
@@ -241,15 +245,14 @@ def test_paired_doorway_inputs_replay_without_native_generation(tmp_path: Path) 
     assert len(closed['frames']) > 1
     receiving = '''
 import sys
-from devtools.animation_review import __main__ as review
+from devtools.animation_review import cli as review
 from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
 from dnd.core.events import EventQueue
 from dnd.entity import Entity
 
-def unavailable(*args, **kwargs):
-    raise AssertionError('native generation is unavailable')
-review.produce = unavailable
-review.bootstrap_content_system = unavailable
+assert not any(name.startswith("tests.game.") for name in sys.modules)
+assert "game.combat_demo" not in sys.modules
+assert "game.demo" not in sys.modules
 assert not SERVER_CONTENT_SYSTEM_RUNTIME.is_installed
 assert not Entity.get_all_entities() and EventQueue.event_cursor() == 0
 status = review.main(sys.argv[1:])
