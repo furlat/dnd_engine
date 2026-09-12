@@ -622,6 +622,80 @@ include `parent-edge-checks-linux.log`, `parent-edge-checks-windows.log` and
 `selected-wsl-mounted-summary.json` records the prepared runtime's three runs
 against the actual checkout, including source/interpreter paths and outcomes.
 
+## Next-unit preparation: profile actual native play after setup
+
+The user requested sensory cascades, listing available items/actions and
+pathfinding after loading. Source study and one diagnostic profile now prepare
+that unit; no production changes are included in this preparation. Capture and
+renderer work remain outside it.
+
+The same eight-turn encounter runs on selected WSL Python 3.13.12 and the actual
+C: checkout. Profiling starts after imports, content installation and session
+construction, and stops before close/reset. Native AI, human action discovery,
+movement, reactions and turn progression remain enabled. The result retains four
+rounds, 1,175 event versions and the established final positions/HP variant.
+Pygame is not imported. The profile records **6.197s of instrumented work**;
+it is attribution, not the uninstrumented turn time or a promised speedup.
+The preceding three selected-runtime runs remain the uninstrumented reference.
+
+| Owner in this profile | Calls | Cumulative profiled time |
+|---|---:|---:|
+| Observer perception recomputation | 240 | 2.837s |
+| Native AI world projection | 44 | 1.633s |
+| AI known-tile projection, within world projection | 44 | 1.240s |
+| Subjective directional tile maps, within tile projection | 9,292 | 1.047s |
+| Available action discovery, human and AI | 38 | 0.682s |
+| Grid reachable-path computation | 70 | 0.224s |
+| Inventory/environment use-action collection, within discovery | 38 | 0.023s |
+| Inventory use-template enumeration, within use collection | 38 | 0.007s |
+
+These are overlapping call trees; do not sum their cumulative times. The
+encounter exercises its real premade inventory but does not establish the cost
+of large inventories, larger maps or every concealment condition.
+
+Source reviews distinguish required work from candidates:
+
+- The live UI discovers choices once per ready state, not every rendered frame.
+  AI performs legal-only discovery per decision; its committed-step continuation
+  path refreshes knowledge without rebuilding action choices on every step.
+- Movement's spatial handler already ignores the redundant LEFT notification
+  when a committed move also supplies ENTERED. Per-step witness/mover refresh
+  preserves brief sightings and reaction continuation. Navigation has separate
+  dirty/radius checks and is materialized at actual query/action boundaries.
+- Sensory recomputation spends 1.105s cumulatively tracing optical obscurements
+  along 40,134 routes, and 0.812s collecting boundary evidence. Those costs sit
+  inside its 2.837s. An empty-owner check is justified for the route query:
+  when both GridMap's explicit optical-contribution map and its active spatial
+  condition map are empty, no ray can return an obscurement. These are the two
+  existing owners, committed before their spatial notifications. The check must
+  consider all active spatial conditions, not a new registry of selected fog
+  types. Observer recomputation, contact updates and event lineage still run.
+  Broader stage suppression remains unproven.
+- `get_subjective_directional_block_map` builds each directed world edge for
+  objective channels, then builds it again to replace movement with subjective
+  movement. One acquisition per side is a concrete candidate at the measured
+  tile-projection owner. Movement must still filter undisclosed providers;
+  optical/propagation stay physical, with the current directed layers and height
+  rules. This candidate needs no cache or new state owner.
+- AoE preparation runs twice per discovery, but its total profiled cost is only
+  0.021s here. Item rows and pathfinding remain in scope; neither should become
+  the presumed main defect before its actual caller/workload establishes that.
+
+Anti-OOP reviewer `lifecycle_source_review` approved the single-edge acquisition
+candidate after tracing channel and height semantics. Existing native tests
+cover ordered edges, both side layers, hidden blockers, safe paths, item use and
+session turns. No focused current native AI test was found for remembered
+directional tile after-values; the projector does retain prior unseen values.
+Old server tests remain source context and will not be revived. Anti-slop
+reviewer `recorded_gallery` verified both optical owners and their commit/removal
+ordering before supporting the empty-owner candidate. Neither candidate has
+been implemented or measured for savings in this preparation.
+
+The runnable diagnostic, raw results, profile and readable report are under
+`.runtime/performance-recovery/native-play-20260912/`. This extends the existing
+timing script locally; no benchmark framework or runtime instrumentation was
+added to the game.
+
 ## Open work and limits
 
 The measured repairs remove audit obligations, excess preloading, import

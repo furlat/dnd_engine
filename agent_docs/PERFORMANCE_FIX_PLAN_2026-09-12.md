@@ -41,6 +41,59 @@ and an alternating comparison. Native imports, private actor-history refolding
 and the remaining content-identity work are still open as bounded below. This is
 not completion of every numbered phase.
 
+### Next requested unit: native execution after loading
+
+The user explicitly prioritizes sensory cascades, available items/actions and
+pathfinding after loading. Extend phase 3 at the existing native owners before
+capture persistence or rendering. The WSL uv loading setup is checkpointed as
+`0fb609a`; source relocation remains a separate pending folder decision.
+Read-only source study and timings after encounter setup can proceed while
+that decision is pending. Do not treat the startup check as a claim that all
+loading costs have disappeared.
+
+Measure the existing native encounter without presentation. Keep uninstrumented
+stage timings separate from a profile of execution after imports/bootstrap/world
+construction. The current eight-turn workload gives the integrated reference;
+use existing focused scenarios for behavior it does not exercise. Record actual
+outputs alongside elapsed time. A profiler's nested cumulative times are not
+additive savings, and a high call count alone does not establish waste.
+
+- Sensory cascades: trace a committed movement step or sense/condition change
+  through spatial subscriptions, field-of-view/contact updates and resulting
+  native events. Distinguish required per-step observations from repeated work
+  over the same inputs; preserve brief sightings and each observer's actual
+  grants, including ordinary/invisible/hidden/true-seeing cases.
+- Available items/actions: separate inventory/equipment enumeration, usable-item
+  action construction, availability/cost checks and legal-target enumeration.
+  Follow the actual UI/native AI callers. Preserve choices, unavailable reasons,
+  active equipment, consumable charges and action identity.
+- Pathfinding: separate reachable-area generation, individual route search and
+  repeated target checks. Preserve directed boundaries, doors, height, movement
+  modes/budgets and native movement interruption. Optimize only work implicated
+  by the measured caller; do not replace terrain or movement rules.
+- Integrated turns: include native AI decisions, event handlers, reaction and
+  condition progression to check whether a local change reduces complete-turn
+  cost or merely moves it to another stage.
+
+Select and implement a bounded repair only after its required inputs, outputs
+and unnecessary work are concrete. Reuse the existing native behavior tests and
+rerun the same uninstrumented workload. No new runtime diagnostics, generic
+cache layer, sensory bus, source hashes or per-spell executor. The accepted
+approximately 200ms GC pauses remain outside the current priority.
+
+**Anti-slop reviewer:** `recorded_gallery` independently checks sensory ownership,
+required cascades and the evidence for removing work. **Anti-OOP reviewer:**
+`lifecycle_source_review` checks discovery/pathfinding data ownership and whether
+the repair uses existing systems. Root runs all execution timings serially;
+reviewers do source work and review concrete diffs.
+
+The first profile and both source reviews identify two bounded candidates:
+skip optical ray traversal when both existing optical/active-condition owners
+are empty, and acquire each directed edge only once in the subjective tile
+query. Preserve full sensory callbacks and all movement/optical/propagation
+rules. The [results](PERFORMANCE_REPAIR_RESULTS_2026-09-12.md) record ownership
+proof and existing coverage; neither is an implemented or timed saving yet.
+
 ### Completed fourth unit: ordinary terrain and remaining catalog obligations
 
 The first pass is checkpointed as `13f412d` (native) and `18a2163` (public

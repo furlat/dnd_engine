@@ -38,13 +38,31 @@ separate comparisons, setup and native turn costs;
 these figures do not measure whole-game startup. Leave GC tuning and capture
 persistence aside.
 
+**Next requested unit — actual game execution:** after loading, investigate
+sensory cascades, listing available items/actions, pathfinding and their cost
+inside real native turns. Study and profile these paths after imports/setup;
+keep capture, reduction and drawing outside that clock. Start with the current
+encounter, then use existing focused scenarios where it does not exercise a
+requested path. Choose repairs from measured work and actual caller needs,
+preserving per-step perception, available choices, legal paths, reactions and
+complete event lineages. This native unit takes priority over capture persistence
+and rendering work. Anti-slop reviewer `recorded_gallery` traces sensory cascade
+semantics; anti-OOP reviewer `lifecycle_source_review` traces discovery/pathfinding
+ownership. Both review the concrete changes before the next checkpoint.
+The first profile and source findings are in the
+[repair results](agent_docs/PERFORMANCE_REPAIR_RESULTS_2026-09-12.md): sensory
+recomputation and AI known-tile projection dominate this encounter's instrumented
+execution. Repeated directed-edge construction is one concrete candidate;
+no native-play optimization has been implemented in this preparation.
+
 **Current unit, September 12 — performance repair implementation:** the user
 approved executing the reviewed repair plan after the whole-source audit and
 plain timing baseline. The startup/media/query pass is checkpointed as `13f412d`
 and `18a2163`. Compact ordinary Tile costs and removal of the mandatory duplicate
 condition-effect prediction catalog are checkpointed as `0a2140c`. The current
 loading unit establishes the WSL uv setup and removes only the unread stored
-action parent, preserving the explicit event-parent arguments. Thirty selected
+action parent, preserving the explicit event-parent arguments, in `0fb609a`.
+Thirty selected
 lifecycle, movement interruption, history and session checks pass on WSL Python
 3.13.12, and the game boots through its one-frame headless check. The field
 deletion has no demonstrated import-speed gain. Feature/VFX work remains paused.
