@@ -696,6 +696,50 @@ The runnable diagnostic, raw results, profile and readable report are under
 timing script locally; no benchmark framework or runtime instrumentation was
 added to the game.
 
+### Targeted elapsed timing and actual sensory triggers
+
+The user asked for a concrete account of what is slow before further changes.
+Three fresh native runs add temporary elapsed timers around the identified
+owners, without cProfile. The runner delegates every call to its original
+implementation. Imports/setup/teardown stay outside the execution window; no
+game source is modified. The full execution windows are 2.744s, 2.818s and 2.535s.
+The earlier uninstrumented operation totals have a median of approximately
+2.376s; these targeted diagnostic values include wrapper overhead and run
+variation, and are not a replacement speedup baseline.
+
+| Measured owner | Calls per run | Median elapsed total |
+|---|---:|---:|
+| Sensory recomputation | 240 | 1.099s |
+| AI subjective world projection | 44 | 0.818s |
+| All action discovery, human and AI | 38 | 0.285s |
+| Reachable-path computation | 70 | 0.081s |
+| Use-action collection, inside discovery | 38 | 0.011s |
+| Inventory use-template enumeration, inside collection | 38 | 0.004s |
+| Optical-obscurement routes, inside sensory recomputation | 40,190 | 0.396s |
+| Subjective tile-side queries, inside AI projection | 9,292 | 0.381s |
+
+Rows overlap through their callers; they cannot be summed. The 240 sensory
+recomputations break down identically in all three runs: 156 after committed
+entity entry, 36 after light changes, 20 condition applications, 14 condition
+removals and 14 turn starts. The 156 movement refreshes correspond to 39 steps
+seen by the four registered observers. No redundant LEFT refresh appears.
+Light movement and condition/turn lifecycle remain separate causal inputs.
+These counts explain the work; they do not justify dropping those events.
+
+All 40,190 optical-route calls in each run observe both existing source maps
+empty. This establishes that the candidate empty-owner shortcut addresses work
+actually performed in this encounter. The 0.396s is the current query's cost,
+not a measured saving. The 0.381s tile-side query also includes necessary channel
+work; removing its duplicate edge construction cannot be credited with that
+entire time before measurement.
+
+Each run retains eight human turns, four rounds, 1,175 event versions and the
+established final positions/35-and-24 player HP variant. Raw results are
+`coarse-native-1.json` through `coarse-native-3.json`, with `coarse-summary.json`
+and runnable `coarse_native.py` in the same diagnostic directory. Large inventory,
+larger-map/more-actor scaling and current long-history capture costs remain
+unmeasured by this workload. Rendering remains outside this native investigation.
+
 ## Open work and limits
 
 The measured repairs remove audit obligations, excess preloading, import

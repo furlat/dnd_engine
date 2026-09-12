@@ -43,6 +43,19 @@ not completion of every numbered phase.
 
 ### Next requested unit: native execution after loading
 
+**Current read-only focus:** investigate the sensory event flow and the AI's
+consumption of it before applying the two candidate query optimizations. The
+user's correction is that subjective knowledge should advance from events;
+study existing input hints, emitted deltas and reducers before inventing another
+state owner or accepting repeated reconstruction as necessary. The two reviewer
+roles below cover native delta production and downstream state ownership.
+Findings are in [the sensory event-flow study](SENSORY_EVENT_FLOW_STUDY_2026-09-12.md).
+It confirms the broader mismatch: observer selection uses hints, selected
+observers get full rescans, and native AI separately rebuilds its world without
+an event consumer. The study also records the concrete light-child ordering that
+any scoped update must preserve. Local query savings remain candidates inside
+this larger investigation, not a substitute for the event-flow design.
+
 The user explicitly prioritizes sensory cascades, available items/actions and
 pathfinding after loading. Extend phase 3 at the existing native owners before
 capture persistence or rendering. The WSL uv loading setup is checkpointed as

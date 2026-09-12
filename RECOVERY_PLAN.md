@@ -54,6 +54,23 @@ The first profile and source findings are in the
 recomputation and AI known-tile projection dominate this encounter's instrumented
 execution. Repeated directed-edge construction is one concrete candidate;
 no native-play optimization has been implemented in this preparation.
+Targeted elapsed timers confirm this ordering: about 1.10s sensory refresh,
+0.82s AI world projection, 0.285s discovery and 0.081s path computation across
+the same native workload. These nested diagnostic totals include instrumentation
+and are not additive; the results preserve the separate uninstrumented reference.
+**Latest direction — investigate sensory before patching:** the user points out
+that AI subjective state should follow from events and suspects existing sensory
+deltas are not being reused. Hold the two query optimizations while tracing
+native spatial inputs, sensory recomputation/delta production and downstream AI
+consumption. Anti-slop review follows hint/delta usage and existing behavior;
+anti-OOP review follows event-driven state ownership and reusable consumers.
+Record concrete source and runtime evidence before selecting an implementation.
+The [sensory event-flow study](agent_docs/SENSORY_EVENT_FLOW_STUDY_2026-09-12.md)
+now confirms that input hints mostly narrow observers, not the work performed
+within each observer. Targeted updates existed before reconstruction; current
+native AI also rebuilds knowledge instead of consuming events. The study records
+actual small/empty deltas after full refreshes, light-child ordering, reusable
+reducers and the existing Step-boundary versus visual-lineage distinction.
 
 **Current unit, September 12 — performance repair implementation:** the user
 approved executing the reviewed repair plan after the whole-source audit and

@@ -207,6 +207,17 @@ The ancestry matters: `205fd67` directly follows `4ebe523`. The reconstruction w
 
 The recovered foundation included provisional Entity construction, one committed aggregate birth, explicit Game deployment, cold world initialization, structural after-values, sensory replay and same-model subjective combat logs. Failed provisional construction had a cleanup path. Cold authored state and ordinary dynamic activation were distinguished so initialization did not fabricate gameplay transitions or publish a partially composed creature.
 
+The September 12 sensory study also identified a lost optimization contract in
+this reconstruction. At `4ebe523`, the indexed sensory dispatcher delegated to
+`SpatialSensesCallback._apply_hint`, updating selected contacts/light cells and
+checking changed observer capabilities before broader work. `205fd67` replaced
+that callback with full perception recomputation for each selected observer;
+`16a6bfe` inherited it. The hint schema and observer indexes survived. This
+predates the present recovery branch. The older tuple-contact/boundary helpers
+are historical design evidence, not compatible replacement code; the
+[current sensory study](agent_docs/SENSORY_EVENT_FLOW_STUDY_2026-09-12.md) records
+the present typed contracts and measured consequences.
+
 `WorldModifiedEvent` grouped completed structural edits. Ordinary movement, door opening, damage and light changes retained their own concrete causes; structural publication was not a second cascade of mechanics.
 
 The content recovery was staged. Primitive behavior attribution became `behavior_id`, `provided_by_id` and optional `origin_root_id`, while an internal owner UUID guarded rebinding. Direct items and characters were recovered through authored Python owners rather than a new persistence service. Character construction composed origins, progression, equipment and grants before publishing birth.
