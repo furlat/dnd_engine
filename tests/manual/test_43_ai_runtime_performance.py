@@ -1869,7 +1869,7 @@ def test_weighted_paths_keep_dijkstra_selection(
     )
     difficult_tile = grid.get_tile(*difficult_position)
     assert difficult_tile is not None
-    difficult_tile.walking_cost.self_static.add_value_modifier(
+    difficult_tile.edit_movement_cost(MovementMode.WALKING).self_static.add_value_modifier(
         NumericalModifier.create(
             source_entity_uuid=difficult_tile.uuid,
             name="Performance Test Difficult Terrain",
@@ -1948,7 +1948,7 @@ def test_weighted_move_discovery_uses_cached_senses_path_costs(
     )
     difficult_tile = grid.get_tile(*difficult_position)
     assert difficult_tile is not None
-    difficult_tile.walking_cost.self_static.add_value_modifier(
+    difficult_tile.edit_movement_cost(MovementMode.WALKING).self_static.add_value_modifier(
         NumericalModifier.create(
             source_entity_uuid=difficult_tile.uuid,
             name="Cached Cost Difficult Terrain",

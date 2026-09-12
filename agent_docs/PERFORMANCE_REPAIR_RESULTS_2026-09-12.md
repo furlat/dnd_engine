@@ -367,22 +367,182 @@ Raw outputs and runnable scripts are under
 parent; demand-media logs are preserved there as `demand-media-checks.log` and
 `demand-media-types.log`.
 
+## Fourth checkpoint: compact terrain and removal of duplicate condition predictions
+
+The previous implementation is committed as `13f412d` (native repairs) and
+`18a2163` (public playback/media and the audit/results record). This next unit
+follows the reviewed terrain proposal in the fix plan.
+
+An ordinary Tile now stores its four authored integer movement costs directly.
+Queries return the effective cost without allocating modifier objects. An actual
+terrain edit explicitly acquires the existing ModifiableValue for the requested
+mode. That value retains the same source, target, context and modifier UUID
+ownership; it remains alive after modifier removal until the tile is disposed.
+The existing zero caps for walking/swimming/burrowing remain, including flying's
+different behavior. Other modes and neighboring tiles remain independent.
+
+Area conditions still retain and remove their actual `(value UUID, modifier UUID)`
+pairs. Tile replacement releases only materialized graphs and retains the current
+live-reference constraints. World authoring compares base costs; world events,
+path queries and AI observation still receive effective scalar costs. No parallel
+scalar/graph store, implicit promotion on reads or new modifier system was added.
+The internal Tile model's field representation changes; this is not a claim of
+unchanged internal model serialization. Supported world/event values remain scalar.
+
+Removed the mandatory `condition_effect_population` catalog and its prediction
+census tests. That catalog duplicated knowledge of executable condition effects
+and replaced authored dependency edges during startup. Built-in declarations now
+retain their authored dependencies and lifecycle metadata. Native providers and
+actual condition execution remain the authority. Explicitly supplied optional
+effect profiles still receive the existing registry checks; ordinary declarations
+no longer require a generated prediction profile. There is no replacement
+catalog generator or runtime audit.
+
+The old instrumented import profile attributes about 24ms to this catalog's
+module, including 11ms to its population call. Removing it eliminates duplicate
+maintenance obligations; it does **not** explain or solve the four-second native
+import cost. The content-set digest changes with the removed generated metadata;
+definition/provider identities and actual authored dependencies remain.
+
+Three serial fresh-process runs use the original workloads:
+
+| Work | Third checkpoint | Fourth checkpoint |
+|---|---:|---:|
+| Separate 4,096-tile construction | 1.412s | 0.164s |
+| Native encounter setup | 0.424s | 0.215s |
+| Native imports | 4.236s | 4.503s |
+| Native activity: eight human turns plus AI | 3.308s | 3.565s |
+| Whole native process | 8.952s | 9.265s |
+| Capture of received lineages | 0.171s | 0.365s |
+| Public projection of received lineages | 0.0131s | 0.0146s |
+| Public reduction of received lineages | 0.00363s | 0.00408s |
+
+Construction is about 8.6 times faster and actual encounter setup roughly halves.
+The full native process is slower in this set, so this checkpoint does not claim
+an overall native speedup against the earlier measurement. Native imports range
+4.362–4.586s, with a 2.613s median process CPU span. Capture varies from 0.183s
+to 0.383s. All six native/project runs retain eight turns, four rounds, 1,175
+versions and the prior final positions and observed HP variants. Outcomes and
+focused behavior checks accompany timings; counts alone are not equivalence.
+
+The separate instrumented rectangle profile drops from 114,688 to 8,192 Pydantic
+constructions and from 16,384 movement-value graphs to zero. Its wall time drops
+from 2.533s to 0.397s; these instrumented values are separate from the plain timer
+comparison above. The construction's three plain samples are 0.163–0.166s.
+Saved rendering was not rerun for this native-only representation change.
+
+Raw current timings and scripts are under
+`.runtime/performance-recovery/repair-4-20260912/`; both construction profiles
+remain under `next-repair-20260912/`. No hashes, asset/source audits or video
+exports were used. An alternating checkpoint/current comparison follows to
+investigate the native activity difference under the same current conditions.
+
+### Alternating comparison of checkpoint and current native code
+
+The slower initial native result justified a direct comparison. The checkpoint's
+`dnd`, `content_data` and empty `content_packs` root were exported from `18a2163`
+into the ignored diagnostic directory; current working files were untouched.
+The same child script alternates checkpoint/current source paths three times
+for native execution and three times with capture/projection. Each result records
+the loaded native package path. All 12 runs succeed with the same workload and
+previously observed outcome variants. Two preliminary attempts lacked required
+checkpoint data directories and failed before workload execution; their logs
+remain separate and are not successful timing samples.
+
+| Work after imports | Checkpoint code | Current code |
+|---|---:|---:|
+| Encounter setup, native run | 0.429s | 0.209s |
+| Active native work, native run | 3.447s | 3.471s |
+| Encounter setup, projection run | 0.432s | 0.200s |
+| Active native work, projection run | 3.373s | 3.293s |
+| Capture of received lineages | 0.171s | 0.347s |
+| Public projection | 0.0130s | 0.0133s |
+| Public reduction | 0.00363s | 0.00370s |
+
+The setup gain repeats. Active execution is close in this alternating sample;
+there is no demonstrated material turn-speed gain. **Capture is slower here**:
+one call takes 172–190ms in each current run, while the other calls remain near
+checkpoint timings. The checkpoint's largest capture calls take about 8ms.
+The different archived source location makes import/whole-process comparisons
+unsuitable for attributing a speedup, so only work after imports is compared.
+This does not discard or replace the earlier original-workload timing table.
+
+Scripts, individual source paths, results and both failed layout attempts are
+under `.runtime/performance-recovery/paired-terrain-20260912/`.
+
+A diagnostic-only generation-two GC callback then records collection duration
+and the active timing stage; it does not force collections, disable GC or change
+thresholds. In one checkpoint run it observes 170ms during setup and 194ms in
+each of two controller calls. In two current runs it observes three controller
+collections of 152–207ms, collecting zero objects. The long capture call vanishes
+in these instrumented runs (largest 7–8ms). This supports a collection-scheduling
+explanation for the earlier isolated pause, but does not directly observe GC
+inside that uninstrumented capture call. Instrumentation can move allocation
+thresholds. The pause remains a measured cost; neither capture nor overall native
+performance is declared fixed. These diagnostic samples are in
+`gc-project-*.json`, separate from the uninstrumented medians above.
+
+Behavior validation:
+
+- **186 distinct terrain cases pass** across the initial run and affected-file
+  rerun: compact costs, contextual/targeted edits, all movement modes, spatial
+  condition footprint updates/removal, pathfinding, directional blockers, world
+  replacement and spell families. The initial run had 175 passes and 11 fixture
+  construction failures: old BaseItem/DirectionalWall examples omitted the
+  already-required `item_id`. Supplying explicit test-local IDs in those two
+  already-edited geometry files allowed all 30 affected-file cases to pass.
+  Their path, boundary and event expectations were unchanged.
+- **Six native AI cases pass**, including actual controller execution; **eight
+  metadata/provider/True Seeing cases pass**, covering condition lifecycle,
+  authored weapon-coat dependencies, bootstrap, runtime binding and real
+  spell/potion costs, expiry and sensory lineage.
+- Catalog production modules/new metadata test pass Pyright. Tile/new cost
+  tests have no diagnostics. The broader terrain check retains four errors in
+  unchanged source: an optional UUID in area_conditions and three connector
+  tuple-cardinality errors in world_authoring, plus one existing AI `__all__`
+  warning. Older test files also retain unrelated union/optional diagnostics.
+  The one new cost-test narrowing diagnostic was corrected. No new diagnostic
+  was waived or hidden; this is not a claim that the broader typecheck passes.
+- A first metadata selection could not collect the older
+  `test_171_behavior_definition_contract.py`, which imports removed
+  `dnd.core.content.item_definitions`. The current selection above excludes
+  that retired import. It was not restored to make the check pass.
+- Independent anti-slop and anti-OOP source reviews approved actual ownership,
+  scalar public outputs, retained modifier identities, authored dependencies
+  and the absence of a replacement prediction system. Diff check passes.
+
+Exact terrain commands/results and metadata logs are under
+`.runtime/performance-recovery/next-repair-20260912/`; the retained record includes
+the initial failures and the corrected-file results, not just passing output.
+
+A further read-only import review identifies three actual owners: full built-in
+admission imports the concrete spell/action modules; shared event/action/entity
+types eagerly construct their Pydantic classes; the encounter imports its native
+AI controller/policy/projector. Moving a type between these required modules
+would only change which import pays the cost. The saved profile does reveal a
+passive LoadedContentSystem type pulling runtime toward pack_loader, but bootstrap
+already uses that loader, so moving that type alone has no demonstrated saving
+for this workload. The review found no additional obvious local deletion. The
+older instrumented spans overlap and are not current savings estimates.
+
 ## Open work and limits
 
 The measured repairs remove audit obligations, excess preloading, import
 coupling and repeated native/projection work. They do **not** close performance
 recovery. The remaining large owners are explicit:
 
-1. Native cold imports still take about 4.24s. The existing profile identifies
+1. Native cold imports still take roughly 4–4.5s. The existing profile identifies
    eager native Pydantic class construction and module I/O. The next import
    design must address actual dependencies/representation; adding schema caches,
    late imports or mass unchecked construction would preserve the wrong premise.
 2. Private admission capture still refolds actor history per root. A retained
    source-ordered fold needs the plan's acquisition-time/overlapping-root design
    review. Batch completion order is not an acceptable replacement for that.
-3. The separate 4,096-tile construction remains 1.41s. No terrain representation
-   redesign, root-compilation rewrite or content identity redesign was smuggled
-   into these bounded repairs. Those remain the plan's separately bounded work.
+3. Native execution still costs several seconds for this eight-turn workload,
+   including measured generation-two collection pauses. The alternating results
+   do not establish faster turns. Ordinary tile construction is now 0.164s;
+   reducing that allocation does not settle runtime pauses, remaining content
+   ownership or root compilation. Those stay separately bounded work.
 
 Legacy external-pack/SDK limitations from the earlier checks remain: the broad
 pack-loader selection had 13 failures, and full SDK generation is blocked by

@@ -79,36 +79,20 @@ class Tile(BaseBlock):
     sprite_name: Optional[str] = Field(default=None, description="The name of the sprite to use for the tile")
     allow_events_conditions: bool = Field(default=True, description="Tiles can have conditions")
 
-    walking_cost: ModifiableValue = Field(
-        default_factory=lambda: ModifiableValue.create(
-            source_entity_uuid=uuid4(),
-            base_value=1,
-            value_name="Walking Cost"
-        ),
+    walking_cost: StrictInt | ModifiableValue = Field(
+        default=1,
         description="Walking movement cost; 1 is normal, 2 is difficult terrain, and 0 is impassable.",
     )
-    flying_cost: ModifiableValue = Field(
-        default_factory=lambda: ModifiableValue.create(
-            source_entity_uuid=uuid4(),
-            base_value=1,
-            value_name="Flying Cost"
-        ),
+    flying_cost: StrictInt | ModifiableValue = Field(
+        default=1,
         description="Flying movement cost for this tile.",
     )
-    swimming_cost: ModifiableValue = Field(
-        default_factory=lambda: ModifiableValue.create(
-            source_entity_uuid=uuid4(),
-            base_value=0,
-            value_name="Swimming Cost"
-        ),
+    swimming_cost: StrictInt | ModifiableValue = Field(
+        default=0,
         description="Swimming movement cost for this tile.",
     )
-    burrowing_cost: ModifiableValue = Field(
-        default_factory=lambda: ModifiableValue.create(
-            source_entity_uuid=uuid4(),
-            base_value=0,
-            value_name="Burrowing Cost"
-        ),
+    burrowing_cost: StrictInt | ModifiableValue = Field(
+        default=0,
         description="Burrowing movement cost for this tile.",
     )
 
@@ -277,15 +261,64 @@ class Tile(BaseBlock):
             conditions[condition_uuid] = condition
         return conditions
 
-    def get_movement_cost(self, mode: MovementMode) -> float:
-        """Get the movement cost for a specific mode."""
-        cost_map = {
-            MovementMode.WALKING: self.walking_cost,
-            MovementMode.FLYING: self.flying_cost,
-            MovementMode.SWIMMING: self.swimming_cost,
-            MovementMode.BURROWING: self.burrowing_cost,
-        }
-        return cost_map[mode].normalized_score
+    def _movement_cost(self, mode: MovementMode) -> int | ModifiableValue:
+        match mode:
+            case MovementMode.WALKING:
+                return self.walking_cost
+            case MovementMode.FLYING:
+                return self.flying_cost
+            case MovementMode.SWIMMING:
+                return self.swimming_cost
+            case MovementMode.BURROWING:
+                return self.burrowing_cost
+        raise KeyError(mode)
+
+    def get_movement_cost(self, mode: MovementMode) -> int:
+        """Read the effective cost without allocating a modifier graph."""
+        cost = self._movement_cost(mode)
+        return cost if isinstance(cost, int) else cost.normalized_score
+
+    def edit_movement_cost(self, mode: MovementMode) -> ModifiableValue:
+        """Acquire this mode's existing modifier owner for an explicit edit.
+
+        Ordinary terrain stays scalar. Once acquired, a graph keeps its identity
+        until tile disposal so conditions and other live references remain valid.
+        """
+        cost = self._movement_cost(mode)
+        if isinstance(cost, ModifiableValue):
+            return cost
+        value = ModifiableValue.create(
+            source_entity_uuid=self.source_entity_uuid,
+            source_entity_name=self.source_entity_name,
+            target_entity_uuid=self.target_entity_uuid,
+            target_entity_name=self.target_entity_name,
+            base_value=cost,
+            value_name=f"{mode.value.capitalize()} Cost",
+        )
+        if cost <= 0 and mode is not MovementMode.FLYING:
+            name = {MovementMode.WALKING: "Impassable", MovementMode.SWIMMING: "No Water",
+                    MovementMode.BURROWING: "No Earth"}[mode]
+            value.self_static.add_max_constraint(NumericalModifier.create(
+                source_entity_uuid=self.source_entity_uuid, name=name, value=0))
+        if self.context is not None:
+            value.set_context(self.context)
+        match mode:
+            case MovementMode.WALKING:
+                self.walking_cost = value
+            case MovementMode.FLYING:
+                self.flying_cost = value
+            case MovementMode.SWIMMING:
+                self.swimming_cost = value
+            case MovementMode.BURROWING:
+                self.burrowing_cost = value
+        self.values[value.uuid] = value
+        return value
+
+    def movement_cost_values(self) -> tuple[ModifiableValue, ...]:
+        """Return only already-materialized graphs for ownership and cleanup."""
+        return tuple(value for value in (
+            self.walking_cost, self.flying_cost, self.swimming_cost, self.burrowing_cost,
+        ) if isinstance(value, ModifiableValue))
 
     def blocks_walking(self, requesting_entity_uuid: Optional['UUID'] = None,
                        mode: MovementMode = MovementMode.WALKING) -> bool:
@@ -357,7 +390,7 @@ class Tile(BaseBlock):
                elevation_surface_kind: ElevationSurfaceKind = ElevationSurfaceKind.ORDINARY,
                slope_axis: Optional[SlopeAxis] = None,
                default_light: LightLevel = LightLevel.BRIGHT_LIGHT) -> 'Tile':
-        """Create a tile with movement-mode `ModifiableValue` costs."""
+        """Create support with compact authored movement costs."""
         validate_tile_creation_inputs(
             position, blocks_optics=blocks_optics,
             blocks_propagation=blocks_propagation, name=name,
@@ -367,61 +400,7 @@ class Tile(BaseBlock):
             elevation_surface_kind=elevation_surface_kind,
             slope_axis=slope_axis, default_light=default_light,
         )
-        cost_values = {
-            "walking_cost": walking_cost,
-            "flying_cost": flying_cost,
-            "swimming_cost": swimming_cost,
-            "burrowing_cost": burrowing_cost,
-        }
         tile_uuid = uuid4()
-
-        walking_cost_value = ModifiableValue.create(
-            source_entity_uuid=tile_uuid,
-            base_value=cost_values["walking_cost"],
-            value_name="Walking Cost"
-        )
-        if cost_values["walking_cost"] <= 0:
-            walking_cost_value.self_static.add_max_constraint(
-                NumericalModifier.create(
-                    source_entity_uuid=tile_uuid,
-                    name="Impassable",
-                    value=0
-                )
-            )
-
-        flying_cost_value = ModifiableValue.create(
-            source_entity_uuid=tile_uuid,
-            base_value=cost_values["flying_cost"],
-            value_name="Flying Cost"
-        )
-
-        swimming_cost_value = ModifiableValue.create(
-            source_entity_uuid=tile_uuid,
-            base_value=cost_values["swimming_cost"],
-            value_name="Swimming Cost"
-        )
-        if cost_values["swimming_cost"] <= 0:
-            swimming_cost_value.self_static.add_max_constraint(
-                NumericalModifier.create(
-                    source_entity_uuid=tile_uuid,
-                    name="No Water",
-                    value=0
-                )
-            )
-
-        burrowing_cost_value = ModifiableValue.create(
-            source_entity_uuid=tile_uuid,
-            base_value=cost_values["burrowing_cost"],
-            value_name="Burrowing Cost"
-        )
-        if cost_values["burrowing_cost"] <= 0:
-            burrowing_cost_value.self_static.add_max_constraint(
-                NumericalModifier.create(
-                    source_entity_uuid=tile_uuid,
-                    name="No Earth",
-                    value=0
-                )
-            )
 
         return cls(
             uuid=tile_uuid,
@@ -432,10 +411,10 @@ class Tile(BaseBlock):
             blocks_propagation_field=blocks_propagation,
             name=name,
             sprite_name=sprite_name,
-            walking_cost=walking_cost_value,
-            flying_cost=flying_cost_value,
-            swimming_cost=swimming_cost_value,
-            burrowing_cost=burrowing_cost_value,
+            walking_cost=walking_cost,
+            flying_cost=flying_cost,
+            swimming_cost=swimming_cost,
+            burrowing_cost=burrowing_cost,
             height=height,
             elevation_surface_kind=elevation_surface_kind,
             slope_axis=slope_axis,
@@ -581,12 +560,7 @@ def validate_tile_owned_movement_graph(tile: Tile) -> None:
     """Authenticate every locally owned movement root, channel, and modifier."""
     if tile.source_entity_uuid != tile.uuid or BaseBlock.get(tile.uuid) is not tile:
         raise ValueError("Tile registry ownership is not current")
-    values = (
-        tile.walking_cost,
-        tile.flying_cost,
-        tile.swimming_cost,
-        tile.burrowing_cost,
-    )
+    values = tile.movement_cost_values()
     if len({value.uuid for value in values}) != len(values):
         raise ValueError("Tile movement value identities are not distinct")
     channels = tuple(
@@ -649,12 +623,7 @@ def validate_tile_owned_movement_graph(tile: Tile) -> None:
 def release_tile_owned_movement_graph(tile: Tile) -> None:
     """Release one detached Tile's authenticated finite value graph."""
     validate_tile_owned_movement_graph(tile)
-    for value in (
-        tile.walking_cost,
-        tile.flying_cost,
-        tile.swimming_cost,
-        tile.burrowing_cost,
-    ):
+    for value in tile.movement_cost_values():
         value.reset_from_target()
         for channel in (
             value.self_static,

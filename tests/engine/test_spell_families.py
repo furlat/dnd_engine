@@ -6,6 +6,7 @@ from uuid import UUID, uuid4
 
 from pydantic import Field
 
+from dnd.types.world import MovementMode
 from dnd.actions import Attack, AttackEvent, SpellEvent, Swim
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
@@ -2411,7 +2412,7 @@ def test_eb_15_027_damage_zones_cover_upcast_obscurement_and_movement() -> None:
     assert plague_center_tile is not None
     assert plague_zone.adds_difficult_terrain
     assert plague_zone.optical_obscurement is None
-    assert plague_center_tile.walking_cost.normalized_score == 2
+    assert plague_center_tile.get_movement_cost(MovementMode.WALKING) == 2
     assert plague_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
     assert get_map().get_optical_obscurements_at((10, 5)) == set()
     assert target_hp_before - get_hp(target) == 18
@@ -2419,7 +2420,7 @@ def test_eb_15_027_damage_zones_cover_upcast_obscurement_and_movement() -> None:
 
     caster.remove_condition("Concentrating")
     assert plague_zone not in get_map().get_spatial_conditions()
-    assert plague_center_tile.walking_cost.normalized_score == 1
+    assert plague_center_tile.get_movement_cost(MovementMode.WALKING) == 1
     assert plague_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
     assert get_map().get_optical_obscurements_at((10, 5)) == set()
 
@@ -2581,7 +2582,7 @@ def test_eb_15_028_gas_and_ice_zones_match_srd_turn_start_edges() -> None:
     assert storm_zone.zone_shape == "cylinder"
     assert concentrating_target.position in storm_zone.affected_positions
     assert "Prone" not in concentrating_target.active_conditions
-    assert storm_center_tile.walking_cost.normalized_score == 2
+    assert storm_center_tile.get_movement_cost(MovementMode.WALKING) == 2
     assert storm_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
     assert get_map().get_optical_obscurements_at((10, 10)) == {
         OpticalObscurement.HEAVY
@@ -2603,7 +2604,7 @@ def test_eb_15_028_gas_and_ice_zones_match_srd_turn_start_edges() -> None:
     assert "Concentrating" not in concentrating_target.active_conditions
     caster.remove_condition("Concentrating")
     assert storm_zone not in get_map().get_spatial_conditions()
-    assert storm_center_tile.walking_cost.normalized_score == 1
+    assert storm_center_tile.get_movement_cost(MovementMode.WALKING) == 1
     assert storm_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
     assert get_map().get_optical_obscurements_at((10, 10)) == set()
 
@@ -2890,7 +2891,7 @@ def test_eb_15_043_sleet_storm_douses_exposed_flames() -> None:
     assert storm_zone.event_handlers_uuids == []
     assert outside_torch.is_lit is True
     assert outside_torch._light_source_uuid in grid._light_sources
-    assert storm_center_tile.walking_cost.normalized_score == 1
+    assert storm_center_tile.get_movement_cost(MovementMode.WALKING) == 1
     assert storm_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
 
 
@@ -2930,7 +2931,7 @@ def test_eb_15_029_web_models_obscurement_grounding_and_escape_cleanup() -> None
     assert web_zone.zone_shape == "cube"
     assert web_zone.adds_difficult_terrain
     assert web_zone.optical_obscurement is None
-    assert web_center_tile.walking_cost.normalized_score == 2
+    assert web_center_tile.get_movement_cost(MovementMode.WALKING) == 2
     assert web_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
     assert get_map().get_optical_obscurements_at((5, 5)) == set()
     assert any(
@@ -2960,7 +2961,7 @@ def test_eb_15_029_web_models_obscurement_grounding_and_escape_cleanup() -> None
 
     caster.remove_condition("Concentrating")
     assert web_zone not in get_map().get_spatial_conditions()
-    assert web_center_tile.walking_cost.normalized_score == 1
+    assert web_center_tile.get_movement_cost(MovementMode.WALKING) == 1
     assert web_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
     assert get_map().get_optical_obscurements_at((5, 5)) == set()
 
@@ -2987,7 +2988,7 @@ def test_entangle_owns_difficult_terrain_restraint_and_concentration_cleanup() -
         if isinstance(condition, EntangleZone)
     )
     assert len(zone.affected_positions) == 16
-    assert get_map().get_tile(5, 5).walking_cost.normalized_score == 2
+    assert get_map().get_tile(5, 5).get_movement_cost(MovementMode.WALKING) == 2
     membership = next(
         condition
         for condition in target.active_conditions_by_uuid.values()
@@ -3004,7 +3005,7 @@ def test_entangle_owns_difficult_terrain_restraint_and_concentration_cleanup() -
     assert zone not in get_map().get_spatial_conditions()
     assert membership.uuid not in target.active_conditions_by_uuid
     assert "Restrained" not in target.active_conditions
-    assert get_map().get_tile(5, 5).walking_cost.normalized_score == 1
+    assert get_map().get_tile(5, 5).get_movement_cost(MovementMode.WALKING) == 1
 
 
 def test_black_tentacles_entry_damages_restrains_and_exposes_both_escapes() -> None:
@@ -3084,7 +3085,7 @@ def test_eb_15_037_web_unanchored_cast_collapses_on_caster_turn_start() -> None:
         for handler_uuid in web_zone.event_handlers_uuids
     } == {"Web Turn Start Save", "Web Unanchored Collapse"}
     assert "Concentrating" in caster.active_conditions
-    assert web_center_tile.walking_cost.normalized_score == 2
+    assert web_center_tile.get_movement_cost(MovementMode.WALKING) == 2
     assert web_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
     assert get_map().get_optical_obscurements_at((5, 5)) == set()
 
@@ -3094,7 +3095,7 @@ def test_eb_15_037_web_unanchored_cast_collapses_on_caster_turn_start() -> None:
     assert web_zone not in get_map().get_spatial_conditions()
     assert "Concentrating" not in caster.active_conditions
     assert web_zone.event_handlers_uuids == []
-    assert web_center_tile.walking_cost.normalized_score == 1
+    assert web_center_tile.get_movement_cost(MovementMode.WALKING) == 1
     assert web_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
     assert get_map().get_optical_obscurements_at((5, 5)) == set()
 
@@ -3181,7 +3182,7 @@ def test_eb_15_042_web_fire_exposure_burns_one_cube_for_one_round() -> None:
     assert adjacent_web_tile is not None
     assert (5, 5) in web_zone.affected_positions
     assert (6, 5) in web_zone.affected_positions
-    assert web_center_tile.walking_cost.normalized_score == 2
+    assert web_center_tile.get_movement_cost(MovementMode.WALKING) == 2
     assert web_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
     assert get_map().get_optical_obscurements_at((5, 5)) == set()
     assert web_zone in get_map().get_spatial_conditions_at((5, 5))
@@ -3226,11 +3227,11 @@ def test_eb_15_042_web_fire_exposure_burns_one_cube_for_one_round() -> None:
     assert len(burning_webs) == 1
     burning_web = burning_webs[0]
     assert len(web_zone.event_handlers_uuids) == 1
-    assert web_center_tile.walking_cost.normalized_score == 1
+    assert web_center_tile.get_movement_cost(MovementMode.WALKING) == 1
     assert web_center_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
     assert get_map().get_optical_obscurements_at((5, 5)) == set()
     assert web_zone not in get_map().get_spatial_conditions_at((5, 5))
-    assert adjacent_web_tile.walking_cost.normalized_score == 2
+    assert adjacent_web_tile.get_movement_cost(MovementMode.WALKING) == 2
     assert adjacent_web_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
     assert get_map().get_optical_obscurements_at((6, 5)) == set()
     assert not any(
@@ -3262,7 +3263,7 @@ def test_eb_15_042_web_fire_exposure_burns_one_cube_for_one_round() -> None:
     caster.remove_condition("Concentrating")
     assert web_zone not in get_map().get_spatial_conditions()
     assert web_zone.event_handlers_uuids == []
-    assert adjacent_web_tile.walking_cost.normalized_score == 1
+    assert adjacent_web_tile.get_movement_cost(MovementMode.WALKING) == 1
     assert adjacent_web_tile.resolved_light_level == LightLevel.BRIGHT_LIGHT
     assert get_map().get_optical_obscurements_at((6, 5)) == set()
 

@@ -1,5 +1,6 @@
 """Regression coverage for spells that apply one mixed typed damage packet."""
 
+from dnd.types.world import MovementMode
 from dnd.actions import SpellEvent
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.base_tiles import wall_factory
@@ -124,10 +125,10 @@ def test_ice_storm_executes_upcast_save_cylinder_and_terrain_lifecycle() -> None
     terrain = terrains[0]
     center_tile = grid.get_tile(*failed.position)
     assert center_tile is not None
-    assert center_tile.walking_cost.normalized_score == 2
+    assert center_tile.get_movement_cost(MovementMode.WALKING) == 2
 
     encounter = setup_combat_arena(caster, failed)
     encounter._environment_step()
 
     assert terrain not in grid.get_spatial_conditions()
-    assert center_tile.walking_cost.normalized_score == 1
+    assert center_tile.get_movement_cost(MovementMode.WALKING) == 1

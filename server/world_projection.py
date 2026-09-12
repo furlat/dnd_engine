@@ -28,6 +28,7 @@ from dnd.core.item_types import ItemPresentationKind, ItemPresentationState
 from dnd.core.life_types import LifeState
 from dnd.encounter import Encounter
 from dnd.entity import Entity
+from dnd.types.world import MovementMode
 from server.world_contracts import (
     APIAppearance,
     APICombatant,
@@ -340,7 +341,7 @@ def project_grid(
 
     tiles: list[APITile] = []
     for (x, y), tile in grid.get_all_tiles().items():
-        walking_cost = int(tile.walking_cost.normalized_score)
+        walking_cost = tile.get_movement_cost(MovementMode.WALKING)
         condition_details = _project_public_condition_details(
             condition
             for condition in tile.active_conditions.values()
@@ -482,7 +483,7 @@ def project_observed_tile(
             merged[direction] = edge
         return DirectionalStructuralEdgeMap(**merged)
 
-    walking_cost = int(tile.walking_cost.normalized_score)
+    walking_cost = tile.get_movement_cost(MovementMode.WALKING)
     return APITile(
         x=position[0],
         y=position[1],

@@ -29,9 +29,11 @@ is now imported through the original Studio schema, independently of gameplay.
 
 **Current unit, September 12 — performance repair implementation:** the user
 approved executing the reviewed repair plan after the whole-source audit and
-plain timing baseline. Start with ordinary startup/import and media ownership;
-then measure and continue the bounded native query/AI repairs. Existing pending
-edits remain part of the change to validate, not an accepted foundation.
+plain timing baseline. The startup/media/query pass is checkpointed as `13f412d`
+and `18a2163`. The next reviewed unit implements compact ordinary Tile costs and
+removes the mandatory duplicate condition-effect prediction catalog. Native
+behavior checks and serial timing results are recorded below; feature/VFX work
+remains paused.
 
 - [Fix plan](agent_docs/PERFORMANCE_FIX_PLAN_2026-09-12.md): first repair ordinary
   startup/import and media ownership; then native query/AI work; then measured
@@ -51,11 +53,22 @@ edits remain part of the change to validate, not an accepted foundation.
   old validation. Existing tests do not justify unnecessary runtime work.
 
 **Repair checkpoints:** [results and remaining costs](agent_docs/PERFORMANCE_REPAIR_RESULTS_2026-09-12.md).
-Native active work is 3.308s versus 3.889s initially; the whole saved playback
-process is 3.493s versus 8.404s. These are serial three-run medians of the original workloads.
+The latest ordinary 4,096-tile build is **0.164s versus 1.412s** at the previous
+checkpoint; encounter setup is **0.215s versus 0.424s**. Untouched movement modes
+store their authored integers; actual edits acquire the existing modifier owner.
+Area-condition removal, independent modes, authored/effective values and owned
+graph disposal remain. The condition prediction catalog is removed while actual
+providers, authored dependencies and lifecycle metadata remain.
+
+Native active work measured 3.565s in the latest original-workload medians, versus
+3.308s at the prior checkpoint and 3.889s initially. The full native process
+measured 9.265s versus the previous 8.952s. The results record preserves this
+difference and the alternating checkpoint/current investigation; setup savings
+do not establish faster turn execution. The last saved-playback measurement
+remains 3.493s versus 8.404s; rendering was not rerun for this native-only unit.
 Public reduction/passive records are separated from native adapters, and the
 internal AI outcome/exposure serialization bridge is removed. Existing AI
-observation memory stays. Native imports still take about 4.24s.
+observation memory stays. Native imports still take roughly 4–4.5s.
 
 **Validated media/capture checkpoint:** the two-actor request now loads 72 initial
 pose rows and 136 total with its movement (127.5 MiB), down from 1,008 rows and
@@ -67,10 +80,18 @@ The world-diff guard reduces public projection from 44ms to 13ms in the native
 workload. Batch-local source indexing lowers the largest paired capture from
 1.799s to 1.500s, with the same typed outputs and sensory-time admissions.
 
-**Open performance work:** eager native imports (4.24s), repeated private actor
-admission folding as history grows, and the separate 4,096-tile construction
-(1.41s) remain substantial. Batch-local indexing did not fix the actor-history
-fold. Apply the existing plan's separate ownership/design review to these costs;
+**Latest native validation:** 186 terrain cases and six native AI cases pass;
+eight current metadata/provider/True Seeing cases also pass. The results record
+identifies corrected fixture inputs, unchanged broader type errors and the
+retired import blocking one older metadata test. Independent anti-slop/anti-OOP
+reviews approved the concrete ownership and catalog changes.
+
+**Open performance work:** eager native imports and repeated private actor
+admission folding as history grows remain substantial. The expensive ordinary
+Tile graphs have been removed; batch-local indexing did not fix the actor-history
+fold. A further read-only study records exact acquisition-time/sparse-root
+requirements before selecting a persistent capture owner. Apply the existing
+plan's separate ownership/design review to these costs;
 do not replace source ordering with root-completion order, add import caches or
 reopen gameplay/VFX work on the strength of this bounded checkpoint.
 

@@ -10,9 +10,67 @@ after focused behavior checks; record results below as units are validated.
 Ordinary-play audit removal, passive public import ownership, session/requested
 media loading, native query/AI value duplication, the world-diff guard and batch
 source indexing are implemented and checked. Whole saved playback is 3.493s
-versus 8.404s; native active work is 3.308s versus 3.889s. Native imports, private
-actor-history refolding, terrain representation and content identity remain
-open as explicitly bounded below. This is not completion of every numbered phase.
+versus 8.404s. The fourth checkpoint reduces 4,096-cell construction from 1.412s
+to 0.164s and encounter setup from 0.424s to 0.215s. Its initial native activity
+measurement is 3.565s versus the prior 3.308s; the results preserve that difference
+and an alternating comparison. Native imports, private actor-history refolding
+and the remaining content-identity work are still open as bounded below. This is
+not completion of every numbered phase.
+
+### Current authorized unit: ordinary terrain and remaining catalog obligations
+
+The first pass is checkpointed as `13f412d` (native) and `18a2163` (public
+playback/media and its audit/results). The user authorized continuing recovery.
+
+The 4,096-cell construction profile after imports records 114,688 Pydantic
+constructions, including 16,384 ModifiableValue graphs. Its instrumented time is
+2.533s; the uninstrumented comparator remains 1.412s. The nested profile costs
+are attribution, not promised savings.
+
+The reviewed Tile implementation keeps its four current movement-cost fields,
+each holding either its authored integer or its existing ModifiableValue.
+Reading a cost never creates a graph. An explicit mutation entry promotes only
+the requested movement mode, records it in the existing Tile.values collection,
+and preserves current source/context/target ownership. The three existing
+zero-cost caps (walking, swimming, burrowing) remain; flying keeps its distinct
+behavior. Once created, a graph remains until tile disposal so conditions can
+remove their retained modifier UUIDs. There is no parallel scalar/graph state,
+implicit promotion property, lazy proxy or new modifier implementation.
+
+Inputs/outputs are the current authored floor/water/wall costs, spatial terrain
+effects, removals, replacement and path queries. Expected results are unchanged
+evaluated costs and world events, independent neighboring tiles/modes, valid
+condition removal and no dangling owned graphs after legitimate replacement.
+Tests that require every untouched tile to allocate graphs must request an
+actual mutation or express the relevant path/lifetime result instead.
+
+The separate catalog review found that native binding uses explicit providers
+and actual effects, while `condition_effect_population` predicts effects for
+admission/catalog metadata and replaces authored dependency edges. The mandatory
+catalog is removed. Authored dependencies, condition lifecycle and existing
+checks for explicitly supplied optional profiles remain. Removing the secondary
+prediction obligation is not a claim that it accounts for the native import
+time; most executable classes are loaded independently. No replacement metadata
+generator is planned.
+
+**Anti-OOP reviewer:** `animation_contract` has traced Tile query/mutation,
+condition UUID removal, world after-values and replacement ownership.
+**Anti-slop reviewer:** `recorded_gallery` independently reviews the Tile proposal
+and approves the actual Tile/catalog diffs. `lifecycle_source_review` independently
+approved the catalog removal and studies the source-ordered
+admission fold separately; that study does not authorize adding a persistent
+capture owner before its concrete input/output design is reviewed.
+
+Root keeps timings serial, compares construction and the same native turns,
+and checks real spatial/terrain behavior before committing this unit. Renderer
+or spell changes are outside it.
+
+**Validation result:** 186 distinct terrain cases and six native AI cases pass;
+eight current metadata/provider/True Seeing cases pass. Independent reviewers
+approved the actual representation and catalog diffs. The results record keeps
+the initial fixture failures, minimal fixture corrections, inherited typecheck
+limitations and exact timing conditions. No persistent admission fold has been
+implemented as part of this unit.
 
 The objective is a fast game with understandable ownership. The failure was
 allowing code and tests to justify more machinery without asking what gameplay
@@ -259,6 +317,38 @@ admission; it is the design decision, not a speculative failure checklist.
 If the existing owner can retain the needed accumulator directly, do that
 instead of introducing a generalized incremental-reduction framework.
 
+**Source review retained for the next fold implementation (September 12):**
+
+- In the existing visibility history, the subject starts observed at `(8, 7)`
+  with 40 HP and a shortsword, leaves sight, equips a dagger and takes seven
+  damage while unseen, then is reacquired with 33 HP and the dagger. That
+  admission belongs to its actual sensory child. The subject's own view receives
+  its intervening facts. In the doorway route `(8, 4)` → `(8, 10)`, acquisition
+  occurs at `(8, 6)` and is lost after `(8, 8)` within one complete Move.
+- The capture-growth equipment operation produces four independent roots with
+  overlapping source intervals. Current known-actor filtering progresses in
+  returned-root order; private actor/contact values must still fold in raw
+  source order. A source-order known-ID set cannot replace both responsibilities.
+- Existing per-row order is birth, own sensory/contact update, eligible
+  admission snapshot, then actor after-value. Selected nonterminal versions can
+  carry an admission; completion-only folding would silently drop those.
+- A prospective caller-owned fold retains the current private actor aggregate,
+  current contacts/position per tracked observer and source cursor. Sparse
+  candidate facts distinguish first eligibility within a root from genuine
+  contact reacquisition: reacquisitions survive even for remembered actors.
+  Complete roots select candidates in native version order using their current
+  known set. This must not become full actor snapshots at every event.
+- Ownership is the native session's EventQueue generation. Advance all relevant
+  source rows, even for roots that yield no public packet, and discard with the
+  session. No reset callback, engine import of game code or extra event ledger.
+  A newly introduced observer can require one initialization replay; the current
+  private aggregate is not a public initializer. Isolated historical captures
+  still need a defined path and cannot borrow today's hidden state.
+
+This is a reviewed direction, not an implemented accumulator or a proven final
+API. The next edit must make its sparse selection and initialization concrete
+against these existing histories before replacing the current pure capture.
+
 **Validation:** paired player packets preserve permitted facts, event identities,
 source ordering, complete ancestry and acquisition-time state; hidden inventory
 and unseen updates remain private. Include late observer initialization, one/two
@@ -286,8 +376,13 @@ the same frames; do not substitute the final state for intermediate child states
 
 ## 6. Address terrain construction as bounded representation work
 
-The current 4,096-cell rectangle costs 1.64s to construct; the actual four-actor
-encounter setup costs 0.47s. Address this representation if it remains material
+**Implemented and checked in checkpoint four:** compact authored costs with
+explicit, existing modifier ownership on actual edits. The current rectangle
+costs 0.164s; four-actor setup costs 0.215s. The rationale and boundaries below
+retain the original decision context.
+
+At the starting baseline, the 4,096-cell rectangle cost 1.64s to construct and
+the actual four-actor encounter setup cost 0.47s. Address this representation if it remains material
 after direct query/allocation cleanup. Multi-second imports are handled at their
 own owners and do not automatically justify a Tile redesign. Construction work
 cannot be declared solved merely because a few cheap validators disappeared.
@@ -331,6 +426,8 @@ replacement of a mechanical content set merely because their cosmetics changed.
   gameplay. Remove it from mandatory game admission if only tooling needs it;
   do not replace event outcomes with its predictions or maintain a second rule
   executor. Do not create a new metadata generator simply to keep every old row.
+  **Completed in checkpoint four:** mandatory population/census removed;
+  authored dependencies/lifecycle and optional explicit-profile checks remain.
 - Remove the orphaned installed-creature adapter and classify retained durable
   server models as outside current game composition. This does not authorize
   broad server-file deletion or a transport migration.
@@ -406,9 +503,9 @@ wave away a large active bottleneck, but do not replace the previous slop with
 an endless perfection project either. A remaining design decision is named and
 reviewable; it is not a license to implement speculative infrastructure.
 
-The current request produces this plan and its baseline. Implementation has not
-resumed. No new VFX work, retired-server restoration or repository skill is part
-of this unit.
+The original request produced this plan and its baseline; subsequent user
+instructions authorized implementation and the next measured recovery units.
+No new VFX work, retired-server restoration or repository skill is part of them.
 
 ## Independent plan review
 

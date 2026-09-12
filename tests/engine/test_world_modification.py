@@ -54,7 +54,7 @@ from dnd.types.spatial_effects import (
     SpatialEffectLayer,
     SpatialEffectOccupancyPolicy,
 )
-from dnd.types.world import CardinalDirection, WorldEdgeChannel
+from dnd.types.world import CardinalDirection, MovementMode, WorldEdgeChannel
 from dnd.types.world import LightLevel
 from tests.engine.support import create_test_entity
 from dnd.world_authoring import (
@@ -174,12 +174,7 @@ def _tile_graph_uuids(tile) -> tuple[set, set]:
     """Return the exact BaseValue/BaseObject identities locally owned by a Tile."""
     values = set()
     modifiers = set()
-    for value in (
-        tile.walking_cost,
-        tile.flying_cost,
-        tile.swimming_cost,
-        tile.burrowing_cost,
-    ):
+    for value in tile.movement_cost_values():
         values.add(value.uuid)
         for channel in (
             value.self_static,
@@ -460,9 +455,10 @@ def test_tile_replacement_releases_only_the_displaced_owned_graph() -> None:
         value_name="Imported owner",
     )
     imported_owner.set_target_entity(previous.uuid)
-    previous.walking_cost.set_target_entity(imported_owner.source_entity_uuid)
-    previous.walking_cost.set_from_target(imported_owner)
+    previous.edit_movement_cost(MovementMode.WALKING).set_target_entity(imported_owner.source_entity_uuid)
+    previous.edit_movement_cost(MovementMode.WALKING).set_from_target(imported_owner)
     old_values, old_modifiers = _tile_graph_uuids(previous)
+    sibling.edit_movement_cost(MovementMode.SWIMMING)
     sibling_values, sibling_modifiers = _tile_graph_uuids(sibling)
 
     completed = set_world_tile(
@@ -490,8 +486,8 @@ def test_tile_detachment_authenticates_root_channel_and_modifier_ownership() -> 
         source_entity_uuid=uuid4(),
         value_name="Foreign channel owner",
     )
-    original_channel = tile.walking_cost.to_target_contextual
-    tile.walking_cost.to_target_contextual = foreign_value.to_target_contextual
+    original_channel = tile.edit_movement_cost(MovementMode.WALKING).to_target_contextual
+    tile.edit_movement_cost(MovementMode.WALKING).to_target_contextual = foreign_value.to_target_contextual
     cursor = EventQueue.event_cursor()
 
     with pytest.raises(ValueError, match="channel ownership"):
@@ -503,13 +499,13 @@ def test_tile_detachment_authenticates_root_channel_and_modifier_ownership() -> 
     )
     assert EventQueue.event_cursor() == cursor
 
-    tile.walking_cost.to_target_contextual = original_channel
+    tile.edit_movement_cost(MovementMode.WALKING).to_target_contextual = original_channel
     foreign_modifier = NumericalModifier.create(
         source_entity_uuid=uuid4(),
         name="Foreign movement effect",
         value=1,
     )
-    tile.walking_cost.self_static.add_value_modifier(foreign_modifier)
+    tile.edit_movement_cost(MovementMode.WALKING).self_static.add_value_modifier(foreign_modifier)
     with pytest.raises(ValueError, match="modifier ownership"):
         set_world_tile((0, 0), author_uuid=uuid4(), name="Rejected again")
     assert BaseObject.get(foreign_modifier.uuid) is foreign_modifier
@@ -520,8 +516,8 @@ def test_tile_detachment_rejects_same_owner_root_and_channel_aliases() -> None:
     reset_engine_runtime()
     grid = get_map()
     tile = grid.set_tile(0, 0, fire_event=False)
-    original_channel = tile.walking_cost.to_target_contextual
-    tile.walking_cost.to_target_contextual = tile.flying_cost.to_target_contextual
+    original_channel = tile.edit_movement_cost(MovementMode.WALKING).to_target_contextual
+    tile.edit_movement_cost(MovementMode.WALKING).to_target_contextual = tile.edit_movement_cost(MovementMode.FLYING).to_target_contextual
     cursor = EventQueue.event_cursor()
 
     with pytest.raises(ValueError, match="channel identities"):
@@ -531,8 +527,8 @@ def test_tile_detachment_rejects_same_owner_root_and_channel_aliases() -> None:
     assert BaseValue.get(original_channel.uuid) is original_channel
     assert EventQueue.event_cursor() == cursor
 
-    tile.walking_cost.to_target_contextual = original_channel
-    original_root = tile.walking_cost
+    tile.edit_movement_cost(MovementMode.WALKING).to_target_contextual = original_channel
+    original_root = tile.edit_movement_cost(MovementMode.WALKING)
     tile.walking_cost = tile.flying_cost
     with pytest.raises(ValueError, match="value identities"):
         set_world_tile((0, 0), author_uuid=uuid4(), name="Rejected root alias")
@@ -546,12 +542,12 @@ def test_tile_detachment_rejects_same_owner_modifier_aliases() -> None:
     reset_engine_runtime()
     grid = get_map()
     tile = grid.set_tile(0, 0, fire_event=False)
-    walking_base = tile.walking_cost.get_base_modifier()
-    flying_base = tile.flying_cost.get_base_modifier()
+    walking_base = tile.edit_movement_cost(MovementMode.WALKING).get_base_modifier()
+    flying_base = tile.edit_movement_cost(MovementMode.FLYING).get_base_modifier()
     assert walking_base is not None
     assert flying_base is not None
-    tile.flying_cost.self_static.remove_value_modifier(flying_base.uuid)
-    tile.flying_cost.self_static.add_value_modifier(walking_base)
+    tile.edit_movement_cost(MovementMode.FLYING).self_static.remove_value_modifier(flying_base.uuid)
+    tile.edit_movement_cost(MovementMode.FLYING).self_static.add_value_modifier(walking_base)
     cursor = EventQueue.event_cursor()
 
     with pytest.raises(ValueError, match="modifier identities"):
@@ -568,15 +564,15 @@ def test_tile_detachment_rejects_modifier_stored_under_foreign_key() -> None:
     reset_engine_runtime()
     grid = get_map()
     tile = grid.set_tile(0, 0, fire_event=False)
-    walking_base = tile.walking_cost.get_base_modifier()
+    walking_base = tile.edit_movement_cost(MovementMode.WALKING).get_base_modifier()
     assert walking_base is not None
     foreign = NumericalModifier.create(
         source_entity_uuid=uuid4(),
         name="Foreign key owner",
         value=1,
     )
-    tile.walking_cost.self_static.value_modifiers.pop(walking_base.uuid)
-    tile.walking_cost.self_static.value_modifiers[foreign.uuid] = walking_base
+    tile.edit_movement_cost(MovementMode.WALKING).self_static.value_modifiers.pop(walking_base.uuid)
+    tile.edit_movement_cost(MovementMode.WALKING).self_static.value_modifiers[foreign.uuid] = walking_base
     cursor = EventQueue.event_cursor()
 
     with pytest.raises(ValueError, match="key does not match identity"):
@@ -738,11 +734,14 @@ def test_tile_detachment_rejects_connector_support() -> None:
     _assert_tile_replacement_rejected("connectors")
 
 
-def test_tile_removal_veto_is_precommit_and_cancels_the_world_root() -> None:
+@pytest.mark.parametrize("with_modifiers", (False, True))
+def test_tile_removal_veto_is_precommit_and_cancels_the_world_root(with_modifiers: bool) -> None:
     """A detailed declaration veto leaves Tile/index/graph authoritative."""
     reset_engine_runtime()
     grid = get_map()
     tile = grid.set_tile(0, 0, fire_event=False)
+    if with_modifiers:
+        tile.edit_movement_cost(MovementMode.WALKING)
     tile_values, tile_modifiers = _tile_graph_uuids(tile)
 
     def reject(event: Event, _source_uuid) -> Event:
@@ -863,11 +862,14 @@ def test_invalid_elevation_owner_reference_fails_before_world_declaration() -> N
     assert EventQueue.event_cursor() == cursor
 
 
-def test_successful_tile_removal_has_cold_absence_and_releases_owned_graph() -> None:
+@pytest.mark.parametrize("with_modifiers", (False, True))
+def test_successful_tile_removal_has_cold_absence_and_releases_owned_graph(with_modifiers: bool) -> None:
     """A free support disappears only after its detailed child is accepted."""
     reset_engine_runtime()
     grid = get_map()
     tile = grid.set_tile(0, 0, fire_event=False)
+    if with_modifiers:
+        tile.edit_movement_cost(MovementMode.WALKING)
     before = project_world_tile(tile)
     values, modifiers = _tile_graph_uuids(tile)
 

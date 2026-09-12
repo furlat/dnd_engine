@@ -10,6 +10,7 @@ lifecycle cleanup.
 
 from uuid import UUID, uuid4
 
+from dnd.types.world import MovementMode
 from dnd.actions import SpellAction
 from dnd.actions_functional import (
     execute_action,
@@ -984,7 +985,7 @@ def test_spike_growth_scroll_owns_entry_damage_and_terrain_cleanup() -> None:
     zone = zones[0]
     tile = grid.get_tile(*preview.position)
     assert tile is not None
-    assert tile.walking_cost.normalized_score >= 2
+    assert tile.get_movement_cost(MovementMode.WALKING) >= 2
     hp_before = get_hp(target)
 
     with fixed_dice_faces(4, 4):
@@ -996,7 +997,7 @@ def test_spike_growth_scroll_owns_entry_damage_and_terrain_cleanup() -> None:
 
     assert "Concentrating" not in caster.active_conditions
     assert zone not in grid.get_spatial_conditions()
-    assert tile.walking_cost.normalized_score == 1
+    assert tile.get_movement_cost(MovementMode.WALKING) == 1
 
 
 def test_mage_armor_and_fire_bolt_scroll_effects() -> None:

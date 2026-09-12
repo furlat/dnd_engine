@@ -36,6 +36,7 @@ from dnd.core.gridmap import get_map
 from dnd.core.life_types import LifeState
 from dnd.core.modifiers import ResistanceStatus
 from dnd.entity import Entity
+from dnd.types.world import MovementMode
 
 
 _adjacent_domain_cache_revision: int | None = None
@@ -539,7 +540,7 @@ def project_visible_tile_fact(
         if first_observer
         else grid.get_directional_block_map(position)
     )
-    walking_cost = tile.walking_cost.normalized_score
+    walking_cost = tile.get_movement_cost(MovementMode.WALKING)
     return ObservationTileFact(
         key=subjective_tile_key(position),
         position=position,

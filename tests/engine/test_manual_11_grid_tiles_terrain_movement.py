@@ -97,7 +97,7 @@ def test_paths_price_destination_tiles_and_directional_borders() -> None:
     grid = get_map()
     difficult_tile = grid.get_tile(2, 0)
     assert difficult_tile is not None
-    difficult_tile.walking_cost.self_static.add_value_modifier(
+    difficult_tile.edit_movement_cost(MovementMode.WALKING).self_static.add_value_modifier(
         NumericalModifier.create(
             source_entity_uuid=difficult_tile.uuid,
             name="Mud",
@@ -113,6 +113,7 @@ def test_paths_price_destination_tiles_and_directional_borders() -> None:
     assert paths[(4, 0)] == [(0, 0), (1, 0), (2, 0), (3, 0), (4, 0)]
 
     wall = DirectionalWall(
+        item_id='test.grid.directionalwall',
         source_entity_uuid=uuid4(),
         blocked_channels=(WorldEdgeChannel.MOVEMENT,),
     )

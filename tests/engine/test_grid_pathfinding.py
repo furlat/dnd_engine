@@ -181,7 +181,7 @@ def test_eb_11_003_dijkstra_paths_sum_tile_costs_and_can_ignore_difficult_terrai
     grid = get_map()
     difficult_tile = grid.get_tile(2, 0)
     assert difficult_tile is not None
-    difficult_tile.walking_cost.self_static.add_value_modifier(
+    difficult_tile.edit_movement_cost(MovementMode.WALKING).self_static.add_value_modifier(
         NumericalModifier.create(
             source_entity_uuid=difficult_tile.uuid,
             name="Difficult Terrain",
@@ -234,6 +234,7 @@ def test_eb_11_021_diagonal_transitions_need_one_cardinal_bridge_route() -> None
     assert grid.can_transition((0, 0), (1, 1))
 
     east_wall = DirectionalWall(
+        item_id='test.grid.directionalwall',
         source_entity_uuid=uuid4(),
         blocked_channels=(WorldEdgeChannel.MOVEMENT,),
     )
@@ -253,6 +254,7 @@ def test_eb_11_021_diagonal_transitions_need_one_cardinal_bridge_route() -> None
     assert one_bridge_paths[(1, 1)] == [(0, 0), (1, 1)]
 
     north_wall = DirectionalWall(
+        item_id='test.grid.directionalwall',
         source_entity_uuid=uuid4(),
         blocked_channels=(WorldEdgeChannel.MOVEMENT,),
     )
@@ -300,7 +302,7 @@ def test_eb_11_004_move_action_converts_tile_cost_units_to_feet() -> None:
     grid = get_map()
     difficult_tile = grid.get_tile(2, 0)
     assert difficult_tile is not None
-    difficult_tile.walking_cost.self_static.add_value_modifier(
+    difficult_tile.edit_movement_cost(MovementMode.WALKING).self_static.add_value_modifier(
         NumericalModifier.create(
             source_entity_uuid=difficult_tile.uuid,
             name="Difficult Terrain",
@@ -335,6 +337,7 @@ def test_eb_11_005_occupants_and_objects_block_walkable_tiles_polymorphically() 
     assert grid.is_walkable_for(1, 0, blocker.uuid)
 
     boulder = BaseItem(
+        item_id='test.grid.boulder',
         source_entity_uuid=uuid4(),
         name="Boulder",
         is_pickable=False,
@@ -387,6 +390,7 @@ def test_eb_11_006_boundary_structures_block_edges_and_emit_exact_facts() -> Non
     cursor = EventQueue.event_cursor()
 
     wall = DirectionalWall(
+        item_id='test.grid.directionalwall',
         source_entity_uuid=uuid4(),
         blocked_channels=(WorldEdgeChannel.MOVEMENT,),
     )
@@ -422,6 +426,7 @@ def test_eb_11_007_optical_topology_is_shared_and_propagation_is_independent() -
     reset_grid_state(width=4, height=3)
     grid = get_map()
     screen = DirectionalWall(
+        item_id='test.grid.screen',
         source_entity_uuid=uuid4(),
         name="Screen",
         blocked_channels=(
@@ -451,18 +456,21 @@ def test_center_object_channels_are_independent_public_facts() -> None:
         faction="heroes",
     )
     transparent_cover = BaseItem(
+        item_id='test.grid.transparent_cover',
         source_entity_uuid=uuid4(),
         name="Transparent Cover",
         is_pickable=False,
         blocks_movement=True,
     )
     opaque_curtain = BaseItem(
+        item_id='test.grid.opaque_curtain',
         source_entity_uuid=uuid4(),
         name="Opaque Curtain",
         is_pickable=False,
         blocks_optics_field=True,
     )
     blast_screen = BaseItem(
+        item_id='test.grid.blast_screen',
         source_entity_uuid=uuid4(),
         name="Blast Screen",
         is_pickable=False,
@@ -495,6 +503,7 @@ def test_eb_11_022_fov_cache_invalidates_when_vision_blockers_change() -> None:
     assert (5, 1) in first_fov
 
     wall = BaseItem(
+        item_id='test.grid.vision_cache_wall',
         source_entity_uuid=uuid4(),
         name="Vision Cache Wall",
         is_pickable=False,
@@ -534,6 +543,7 @@ def test_eb_11_023_propagation_cache_reuses_results_and_invalidates_on_blockers(
     assert (5, 1) in second_fov
 
     wall = BaseItem(
+        item_id='test.grid.propagation_cache_wall',
         source_entity_uuid=uuid4(),
         name="Propagation Cache Wall",
         is_pickable=False,
@@ -553,6 +563,7 @@ def test_eb_11_017_forced_movement_and_jump_respect_directional_blockers() -> No
     grid = get_map()
     actor = create_skeleton(name="Actor", position=(1, 1), faction="heroes")
     wall = DirectionalWall(
+        item_id='test.grid.directional_force_wall',
         source_entity_uuid=uuid4(),
         name="Directional Force Wall",
         blocked_channels=(
@@ -872,7 +883,7 @@ def test_eb_11_010_walkability_is_derived_from_the_mode_cost() -> None:
     assert tile.get_movement_cost(MovementMode.WALKING) == 1
     assert grid.is_walkable(1, 0)
 
-    tile.walking_cost.self_static.add_max_constraint(
+    tile.edit_movement_cost(MovementMode.WALKING).self_static.add_max_constraint(
         NumericalModifier.create(
             source_entity_uuid=tile.uuid,
             name="Closed",
@@ -887,6 +898,7 @@ def test_eb_11_011_explicit_object_move_replaces_old_grid_membership() -> None:
     reset_grid_state(width=4, height=1)
     grid = get_map()
     crate = BaseItem(
+        item_id='test.grid.crate',
         source_entity_uuid=uuid4(),
         name="Crate",
         is_pickable=False,
@@ -905,7 +917,7 @@ def test_eb_11_016_raw_object_removal_clears_item_floor_location_state() -> None
     reset_grid_state(width=4, height=1)
     grid = get_map()
     observer = create_skeleton(name="Observer", position=(0, 0), faction="heroes")
-    raw_item = BaseItem(source_entity_uuid=uuid4(), name="Raw Floor Item")
+    raw_item = BaseItem(item_id='test.grid.raw_floor_item', source_entity_uuid=uuid4(), name="Raw Floor Item")
     raw_item.place_on_grid((1, 0))
     Entity.update_all_entities_senses(max_distance=20)
 
@@ -923,7 +935,7 @@ def test_eb_11_016_raw_object_removal_clears_item_floor_location_state() -> None
     assert raw_item.get_position() is None
     assert BaseBlock.get(raw_item.uuid) is raw_item
 
-    lifecycle_item = BaseItem(source_entity_uuid=uuid4(), name="Lifecycle Floor Item")
+    lifecycle_item = BaseItem(item_id='test.grid.lifecycle_floor_item', source_entity_uuid=uuid4(), name="Lifecycle Floor Item")
     lifecycle_item.place_on_grid((2, 0))
     assert lifecycle_item.tile_uuid is not None
 

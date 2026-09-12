@@ -785,7 +785,6 @@ def test_legacy_sorcerer_path_is_cut_but_shared_spells_remain_admitted() -> None
     for relative_path in (
         "dnd/content_system/action_definitions.py",
         "dnd/content_system/condition_definitions.py",
-        "dnd/content_system/condition_effect_population.py",
     ):
         assert "dnd.classes.sorcerer" not in (
             _ROOT / relative_path

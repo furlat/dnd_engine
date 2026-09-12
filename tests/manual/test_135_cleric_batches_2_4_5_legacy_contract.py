@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 import pytest
 
+from dnd.types.world import MovementMode
 from dnd.actions import Attack, Move, SpellEvent
 from dnd.actions_functional import setup_standard_actions
 from dnd.blocks.equipment import Weapon
@@ -76,7 +77,7 @@ def _make_difficult(position: tuple[int, int]) -> None:
     """Add one difficult-terrain cost unit to an existing tile."""
     tile = get_map().get_tile(*position)
     assert tile is not None
-    tile.walking_cost.self_static.add_value_modifier(
+    tile.edit_movement_cost(MovementMode.WALKING).self_static.add_value_modifier(
         NumericalModifier.create(
             source_entity_uuid=tile.uuid,
             name="Legacy difficult terrain",

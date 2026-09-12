@@ -179,10 +179,10 @@ def test_tile_stores_one_strict_surface_elevation_and_four_costs() -> None:
 
     assert tile.surface == surface
     assert tile.height == -2
-    assert tile.walking_cost.normalized_score == 2
-    assert tile.flying_cost.normalized_score == 1
-    assert tile.swimming_cost.normalized_score == 0
-    assert tile.burrowing_cost.normalized_score == 3
+    assert tile.get_movement_cost(MovementMode.WALKING) == 2
+    assert tile.get_movement_cost(MovementMode.FLYING) == 1
+    assert tile.get_movement_cost(MovementMode.SWIMMING) == 0
+    assert tile.get_movement_cost(MovementMode.BURROWING) == 3
     tile_dump = tile.model_dump()
     assert "walkable" not in tile_dump
     assert not {

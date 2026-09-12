@@ -42,8 +42,10 @@ def _movement_cost(tile: Tile, mode: MovementMode) -> int:
     return int(cost)
 
 
-def _authored_cost(value: ModifiableValue) -> int:
+def _authored_cost(value: int | ModifiableValue) -> int:
     """Return the exact base cost owned by one Tile movement value."""
+    if isinstance(value, int):
+        return value
     modifier = value.get_base_modifier()
     if modifier is None or type(modifier.value) is not int:
         raise RuntimeError("Tile movement value has no exact base modifier")

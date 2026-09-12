@@ -398,11 +398,6 @@ def _validate_condition_effects(
                     "without an exact intermediary dependency",
                 )
         if profile is None:
-            if apply_dependencies:
-                raise ValueError(
-                    f"Content {key} declares APPLIES_CONDITION without an "
-                    "authored condition effect profile",
-                )
             continue
 
         apply_refs = {

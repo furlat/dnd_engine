@@ -20,9 +20,6 @@ from dnd.content_system.condition_definitions import (
     CONDITION_BEHAVIOR_DECLARATIONS,
     CONDITION_BEHAVIOR_DECLARATIONS_BY_CLASS,
 )
-from dnd.content_system.condition_effect_population import (
-    populate_builtin_condition_effects,
-)
 from dnd.content_system.reaction_definitions import (
     REACTION_BEHAVIOR_DECLARATIONS,
     REACTION_BEHAVIOR_DECLARATIONS_BY_CLASS,
@@ -90,13 +87,10 @@ _ALL_BUILT_IN_DECLARATIONS: tuple[
     *SRD_MULTIATTACK_CONFIGURATION_DECLARATIONS,
     *SRD_CREATURE_DECLARATIONS,
 )
-_UNPOPULATED_BUILT_IN_DECLARATION_INVENTORY = tuple(
+BUILT_IN_DECLARATION_INVENTORY = tuple(
     declaration
     for declaration in _ALL_BUILT_IN_DECLARATIONS
     if declaration.ref.content_id not in CHARACTER_RETIRED_DECLARATION_IDS
-)
-BUILT_IN_DECLARATION_INVENTORY = populate_builtin_condition_effects(
-    _UNPOPULATED_BUILT_IN_DECLARATION_INVENTORY,
 )
 _ALL_BUILT_IN_BEHAVIOR_DECLARATIONS_BY_CLASS = {
     **ACTION_BEHAVIOR_DECLARATIONS_BY_CLASS,

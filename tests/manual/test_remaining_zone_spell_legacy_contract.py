@@ -251,7 +251,7 @@ def test_grease_preserves_initial_entry_turn_stand_and_cleanup_rules() -> None:
     zone = zones[0]
     center_tile = get_map().get_tile(5, 5)
     assert center_tile is not None
-    assert center_tile.walking_cost.normalized_score == 2
+    assert center_tile.get_movement_cost(MovementMode.WALKING) == 2
     assert has_condition(initial, "Prone")
 
     initial.remove_condition("Prone")
@@ -285,7 +285,7 @@ def test_grease_preserves_initial_entry_turn_stand_and_cleanup_rules() -> None:
     caster.remove_condition("Concentrating")
     assert not has_condition(caster, "Concentrating")
     assert zone not in get_map().get_spatial_conditions()
-    assert center_tile.walking_cost.normalized_score == 1
+    assert center_tile.get_movement_cost(MovementMode.WALKING) == 1
     assert zone.spatial_handler_uuids == []
     assert zone.event_handlers_uuids == []
 
@@ -335,7 +335,7 @@ def test_cloudkill_preserves_initial_entry_turn_move_and_cleanup_rules() -> None
     assert zone.position == (10, 7)
     center_tile = get_map().get_tile(10, 7)
     assert center_tile is not None
-    assert center_tile.walking_cost.normalized_score == 1
+    assert center_tile.get_movement_cost(MovementMode.WALKING) == 1
     assert (
         OpticalObscurement.HEAVY
         in get_map().get_optical_obscurements_at((10, 7))
@@ -498,7 +498,7 @@ def test_spike_growth_preserves_hidden_hazard_damage_and_source_immunity() -> No
     zone = zones[0]
     center_tile = get_map().get_tile(10, 6)
     assert center_tile is not None
-    assert center_tile.walking_cost.normalized_score == 2
+    assert center_tile.get_movement_cost(MovementMode.WALKING) == 2
     assert center_tile.get_conditions()[zone.uuid] is zone
     assert zone.hazard_filter is HazardFilter.NON_SOURCE
     assert zone.condition_stealth_dc == caster.spell_save_dc()
@@ -526,7 +526,7 @@ def test_spike_growth_preserves_hidden_hazard_damage_and_source_immunity() -> No
     assert not has_condition(caster, "Concentrating")
     assert zone not in get_map().get_spatial_conditions()
     assert zone.uuid not in center_tile.get_conditions()
-    assert center_tile.walking_cost.normalized_score == 1
+    assert center_tile.get_movement_cost(MovementMode.WALKING) == 1
     assert zone.spatial_handler_uuids == []
     assert not get_map().is_position_hazardous_for(
         10,
@@ -572,7 +572,7 @@ def test_gust_of_wind_executes_cast_entry_turn_wall_and_cleanup_edges() -> None:
     assert (6, 6) in zone.affected_positions
     zone_tile = grid.get_tile(6, 6)
     assert zone_tile is not None
-    assert zone_tile.walking_cost.normalized_score == 2
+    assert zone_tile.get_movement_cost(MovementMode.WALKING) == 2
 
     entrant = create_spell_regression_actor(
         "Gust Entrant",
@@ -632,7 +632,7 @@ def test_gust_of_wind_executes_cast_entry_turn_wall_and_cleanup_edges() -> None:
     caster.remove_condition("Concentrating")
 
     assert zone not in grid.get_spatial_conditions()
-    assert zone_tile.walking_cost.normalized_score == 1
+    assert zone_tile.get_movement_cost(MovementMode.WALKING) == 1
     after_cleanup = create_spell_regression_actor(
         "Post Gust Entrant",
         (2, 3),
@@ -723,7 +723,7 @@ def test_insect_plague_executes_initial_entry_turn_reentry_and_cleanup() -> None
     )
     center_tile = get_map().get_tile(10, 6)
     assert center_tile is not None
-    assert center_tile.walking_cost.normalized_score == 2
+    assert center_tile.get_movement_cost(MovementMode.WALKING) == 2
 
     entrant = create_spell_regression_actor(
         "Plague Entrant",
@@ -752,7 +752,7 @@ def test_insect_plague_executes_initial_entry_turn_reentry_and_cleanup() -> None
     caster.remove_condition("Concentrating")
 
     assert zone not in get_map().get_spatial_conditions()
-    assert center_tile.walking_cost.normalized_score == 1
+    assert center_tile.get_movement_cost(MovementMode.WALKING) == 1
     Entity.update_entity_position(entrant, (2, 2))
     hp_after_cleanup = get_hp(entrant)
     Entity.update_entity_position(entrant, (10, 7))

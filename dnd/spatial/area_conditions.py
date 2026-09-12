@@ -1121,10 +1121,11 @@ class AreaCondition(SpatialCondition):
                 name=f"{self.name} Difficult Terrain",
                 value=1,
             )
-            modifier_uuid = tile.walking_cost.self_static.add_value_modifier(
+            value = tile.edit_movement_cost(MovementMode.WALKING)
+            modifier_uuid = value.self_static.add_value_modifier(
                 modifier,
             )
-            row = (tile.walking_cost.uuid, modifier_uuid)
+            row = (value.uuid, modifier_uuid)
             self._terrain_modifiers[position] = row
             owned.append(row)
             if tile.get_movement_cost(MovementMode.WALKING) != before:
