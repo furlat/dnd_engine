@@ -4,7 +4,7 @@ The [user complaint record](agent_docs/USER_COMPLAINTS.md) preserves the user's
 corrections and required contracts, including record-once event replay. Read it
 alongside this plan; a bounded implementation status does not relax those contracts.
 
-Updated 2026-09-12, retaining the user's correction: **develop the game, not a
+Updated 2026-09-13, retaining the user's correction: **develop the game, not a
 sequence of spell demonstrations.** Working branch: **codex/recovery-design**,
 based on **codex/july-reconstruction at 16a6bfe**. The human committed the
 validated recovery implementation as **58b0946** (`visio nextraction working`).
@@ -27,7 +27,7 @@ is now imported through the original Studio schema, independently of gameplay.
 
 ### Current position — read this before the checkpoint details
 
-**Latest priority and result:** the user accepts the measured ~200ms GC pauses
+**Loading checkpoint:** the user accepts the measured ~200ms GC pauses
 for now and selected WSL. Controlled comparisons put native imports at **1.709s**
 with uv's Python 3.13.12 and Linux source/packages, versus the earlier mounted
 Python 3.12 environment's **4.529s**. Package versions are unchanged. The new WSL
@@ -38,7 +38,7 @@ separate comparisons, setup and native turn costs;
 these figures do not measure whole-game startup. Leave GC tuning and capture
 persistence aside.
 
-**Next requested unit — actual game execution:** after loading, investigate
+**Native execution scope:** after loading, investigate
 sensory cascades, listing available items/actions, pathfinding and their cost
 inside real native turns. Study and profile these paths after imports/setup;
 keep capture, reduction and drawing outside that clock. Start with the current
@@ -52,25 +52,41 @@ ownership. Both review the concrete changes before the next checkpoint.
 The first profile and source findings are in the
 [repair results](agent_docs/PERFORMANCE_REPAIR_RESULTS_2026-09-12.md): sensory
 recomputation and AI known-tile projection dominate this encounter's instrumented
-execution. Repeated directed-edge construction is one concrete candidate;
-no native-play optimization has been implemented in this preparation.
+execution. Those findings motivated the completed sensory/AI unit below.
 Targeted elapsed timers confirm this ordering: about 1.10s sensory refresh,
 0.82s AI world projection, 0.285s discovery and 0.081s path computation across
 the same native workload. These nested diagnostic totals include instrumentation
 and are not additive; the results preserve the separate uninstrumented reference.
-**Latest direction — investigate sensory before patching:** the user points out
-that AI subjective state should follow from events and suspects existing sensory
-deltas are not being reused. Hold the two query optimizations while tracing
-native spatial inputs, sensory recomputation/delta production and downstream AI
-consumption. Anti-slop review follows hint/delta usage and existing behavior;
-anti-OOP review follows event-driven state ownership and reusable consumers.
-Record concrete source and runtime evidence before selecting an implementation.
-The [sensory event-flow study](agent_docs/SENSORY_EVENT_FLOW_STUDY_2026-09-12.md)
-now confirms that input hints mostly narrow observers, not the work performed
-within each observer. Targeted updates existed before reconstruction; current
-native AI also rebuilds knowledge instead of consuming events. The study records
-actual small/empty deltas after full refreshes, light-child ordering, reusable
-reducers and the existing Step-boundary versus visual-lineage distinction.
+**Current plan, September 13 — repair sensory production and AI consumption:**
+the [completed study](agent_docs/SENSORY_EVENT_FLOW_STUDY_2026-09-12.md), committed
+in `8f6677c`, confirms that hints mostly narrow observers, not each observer's
+work, and native AI reconstructs knowledge instead of consuming events.
+The [practical execution plan](agent_docs/PERFORMANCE_FIX_PLAN_2026-09-12.md#current-execution-plan-sensory-updates-and-ai-knowledge)
+now specifies four checkpoints: targeted contact updates for stationary movement
+witnesses; mapping the existing AI world fields to recorded facts; replacing live
+AI reconstruction with an assignment-owned event fold; and narrowing remaining
+sensory work according to measurements. Preserve actual light-child ordering,
+typed special-sense contacts and navigation invalidation. AI knowledge advances
+at committed Steps while rendering still consumes complete subjective lineages.
+Anti-slop and anti-OOP reviews refined the scope, shared-observer/memory rules,
+source cursor versus decision identity and acceptance checks. The user authorized
+carrying all checkpoints through without stopping for approval. **This unit is
+complete:** stationary contact updates, the recorded field map, assignment-owned
+event consumption, restricted unchanged condition/turn reuse and empty optical
+route returns are implemented. The final integrated selection passes **240
+checks**. Native activity falls from 2.376s to **1.419s median** for the same eight
+human turns plus AI; diagnostic AI projection falls from 0.818s to **0.035s**, and
+full sensory refreshes from 240 to **82**. Complete lineages and committed-Step
+knowledge remain separate. Missing condition/health/world/hazard after-values are
+recorded at existing owners, and saved facts replay with native registries cleared.
+See the [completed results](agent_docs/PERFORMANCE_REPAIR_RESULTS_2026-09-12.md#september-13-completed-sensory-and-ai-event-consumption-unit)
+and [field map](agent_docs/AI_EVENT_FIELD_MAP_2026-09-13.md). Final C: imports remain
+3.370s; startup has not been solved by this native activity repair. Remaining
+measured work is sensory refresh (~0.29s) and discovery (~0.26s excluding GC),
+with paths (~0.08s) inside discovery and inventory enumeration (~0.004s). These
+are nested diagnostic spans. Broader light/scaling work and admission capture
+remain separate; rendering and GC work stay paused. Two preexisting retired
+catalog/server tests remain outside the passing selection, documented in results.
 
 **Current unit, September 12 — performance repair implementation:** the user
 approved executing the reviewed repair plan after the whole-source audit and

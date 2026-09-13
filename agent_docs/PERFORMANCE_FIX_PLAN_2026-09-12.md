@@ -1,13 +1,21 @@
 # Performance and design repair plan — September 12, 2026
 
-Status: **implementation authorized** after the reviewed plan and current timing
-baseline. The September 12 user instruction to proceed supersedes the earlier
-implementation stop. First unit: ordinary startup/import and media ownership,
-with bounded native query duplication work prepared alongside it. Measure serially
-after focused behavior checks; record results below as units are validated.
+Status: **performance recovery authorized** by the September 12 instruction to
+proceed after review and timing baselines. Startup/media repairs are checkpointed.
+The September 13 sensory/AI plan below is **implemented, reviewed and validated**.
+The user authorized carrying its checkpoints through without stopping. The final
+integrated selection passes 240 tests; native activity measures 1.419s median
+versus the earlier 2.376s WSL baseline. See the
+[completed results](PERFORMANCE_REPAIR_RESULTS_2026-09-12.md#september-13-completed-sensory-and-ai-event-consumption-unit)
+for separate loading costs, remaining work and the two unrelated legacy failures.
 
-**Latest user priority:** ignore the approximately 200ms GC pauses for now; cold
-loading is the next target, using WSL. The completed environment comparison
+**Completed unit, September 13:** scoped sensory production and native AI's
+consumption of events, following the investigation below. Rendering stays paused.
+The approximately 200ms GC pauses remain accepted for now. Remaining measured
+native work and historical capture costs are separately bounded; this completion
+does not claim that startup or the whole performance-recovery plan is finished.
+
+**Completed loading investigation:** the WSL environment comparison
 isolates package storage, source storage and interpreter version. It identifies
 roughly two seconds of filesystem overhead; native imports reach 1.709s with
 Python 3.13.12 and Linux source/packages. Keep import, setup and turn timings
@@ -41,71 +49,177 @@ and an alternating comparison. Native imports, private actor-history refolding
 and the remaining content-identity work are still open as bounded below. This is
 not completion of every numbered phase.
 
-### Next requested unit: native execution after loading
+### Current execution plan: sensory updates and AI knowledge
 
-**Current read-only focus:** investigate the sensory event flow and the AI's
-consumption of it before applying the two candidate query optimizations. The
-user's correction is that subjective knowledge should advance from events;
-study existing input hints, emitted deltas and reducers before inventing another
-state owner or accepting repeated reconstruction as necessary. The two reviewer
-roles below cover native delta production and downstream state ownership.
-Findings are in [the sensory event-flow study](SENSORY_EVENT_FLOW_STUDY_2026-09-12.md).
-It confirms the broader mismatch: observer selection uses hints, selected
-observers get full rescans, and native AI separately rebuilds its world without
-an event consumer. The study also records the concrete light-child ordering that
-any scoped update must preserve. Local query savings remain candidates inside
-this larger investigation, not a substitute for the event-flow design.
+**September 13 implementation in progress; first sensory slice validated.** The
+[study](SENSORY_EVENT_FLOW_STUDY_2026-09-12.md), committed in `8f6677c`, establishes
+two separate repairs: hints currently select observers but each gets a full
+sensory refresh; AI then reconstructs its world from live native state at each
+query. The sequence below replaces those repeated operations at their existing
+owners. It does not change who can perceive whom.
 
-The user explicitly prioritizes sensory cascades, available items/actions and
-pathfinding after loading. Extend phase 3 at the existing native owners before
-capture persistence or rendering. The WSL uv loading setup is checkpointed as
-`0fb609a`; source relocation remains a separate pending folder decision.
-Read-only source study and timings after encounter setup can proceed while
-that decision is pending. Do not treat the startup check as a claim that all
-loading costs have disappeared.
+#### 1. First implementation: update the moved entity's contact for stationary observers
 
-Measure the existing native encounter without presentation. Keep uninstrumented
-stage timings separate from a profile of execution after imports/bootstrap/world
-construction. The current eight-turn workload gives the integrated reference;
-use existing focused scenarios for behavior it does not exercise. Record actual
-outputs alongside elapsed time. A profiler's nested cumulative times are not
-additive savings, and a high call count alone does not establish waste.
+Input: an ordinary entity movement commit and the selected observer's retained
+Senses. Output: the same typed contact changes and navigation invalidation at
+the same causal boundary, without refiltering the observer's whole visual field
+and scanning every unrelated contact.
 
-- Sensory cascades: trace a committed movement step or sense/condition change
-  through spatial subscriptions, field-of-view/contact updates and resulting
-  native events. Distinguish required per-step observations from repeated work
-  over the same inputs; preserve brief sightings and each observer's actual
-  grants, including ordinary/invisible/hidden/true-seeing cases.
-- Available items/actions: separate inventory/equipment enumeration, usable-item
-  action construction, availability/cost checks and legal-target enumeration.
-  Follow the actual UI/native AI callers. Preserve choices, unavailable reasons,
-  active equipment, consumable charges and action identity.
-- Pathfinding: separate reachable-area generation, individual route search and
-  repeated target checks. Preserve directed boundaries, doors, height, movement
-  modes/budgets and native movement interruption. Optimize only work implicated
-  by the measured caller; do not replace terrain or movement rules.
-- Integrated turns: include native AI decisions, event handlers, reaction and
-  condition progression to check whether a local change reduces complete-turn
-  cost or merely moves it to another stage.
+- Keep `SpatialSensesSystem`, indexed observer selection, pre-completion
+  processing and the existing full solver. First initialization and genuinely
+  broader changes continue to use that solver.
+- Extract/reuse the current cell and contact resolution for the affected entity.
+  Preserve `PerceivedContact.visual` and `special_senses`, stealth, invisibility,
+  observer capabilities and actual nonvisual reach. Visible/subscribed membership
+  alone cannot supply these answers: establishing visual modes and per-mode
+  nonvisual reach are currently local solver data.
+- Select the narrow path from actual retained inputs: stationary origin, same
+  observer capabilities/range and unchanged optical, illumination and propagation
+  inputs. GridMap already exposes those three revisions. Retain their last-solved
+  values at the sensory owner where needed; this is a small record of the solved
+  inputs, not a new invalidation service. `requires_fov=False` alone is insufficient.
+  Keep broader cases on the existing solver while their inputs are being mapped.
+- Change only the affected contact and dependent indexes/navigation state.
+  Produce the existing typed delta from the changed values; avoid recreating
+  whole before/after field snapshots merely to report one contact change.
+  Preserve required navigation dirtying even when there is no new contact delta.
+- Preserve the observed light-child order: attached light can publish movement
+  and contact changes before ENTERED reaches its own refresh. Evaluate the
+  currently retained state; neither repeat that delta nor delay it to action end.
 
-Select and implement a bounded repair only after its required inputs, outputs
-and unnecessary work are concrete. Reuse the existing native behavior tests and
-rerun the same uninstrumented workload. No new runtime diagnostics, generic
-cache layer, sensory bus, source hashes or per-spell executor. The accepted
-approximately 200ms GC pauses remain outside the current priority.
+The first slice covers stationary witnesses of entity movement. Observer motion,
+light changes, geometry changes and object perceivability retain full processing
+until the later scoped-work checkpoint. Do not expand the first diff to all of
+those cases or introduce condition-name exceptions.
 
-**Anti-slop reviewer:** `recorded_gallery` independently checks sensory ownership,
-required cascades and the evidence for removing work. **Anti-OOP reviewer:**
-`lifecycle_source_review` checks discovery/pathfinding data ownership and whether
-the repair uses existing systems. Root runs all execution timings serially;
-reviewers do source work and review concrete diffs.
+Acceptance: existing perception/replay results, including intermediate sensory
+deltas and causal parents, remain correct. Stationary witness work is restricted
+to the changed contact rather than the full field. Confirm the work removed with
+the existing temporary diagnostics and measure the same native encounter serially.
+Full recomputation is a test reference, never a second runtime validation pass.
 
-The first profile and both source reviews identify two bounded candidates:
-skip optical ray traversal when both existing optical/active-condition owners
-are empty, and acquire each directed edge only once in the subjective tile
-query. Preserve full sensory callbacks and all movement/optical/propagation
-rules. The [results](PERFORMANCE_REPAIR_RESULTS_2026-09-12.md) record ownership
-proof and existing coverage; neither is an implemented or timed saving yet.
+#### 2. Map the AI observation contract to the facts already recorded
+
+Before replacing `SubjectiveAIStateProjector.project_world`, write a concrete
+field-to-event table for the current AI world output. This is the remaining
+bounded design task, not a new study of the entire engine. For each field record
+its existing source, initialization, update/removal fact and observer exposure.
+
+Cover the actual output: observer contacts/cells/light/capabilities; admitted
+actors and their public details; HP/life/equipment; condition facts/protections
+and healing restrictions; known tiles, hazards and directed boundaries. Include
+current assignment memory and shared-observer attribution. Native birth events
+already contain some facts omitted by the player's presentation-shaped records;
+an omission there does not justify inventing another initialization snapshot.
+
+Reuse `reduce_senses_snapshot` and the current actor/world fact primitives at a
+neutral dependency boundary. Reuse recorded initialization and after-values.
+Where a required committed value is demonstrably absent, publish it at its
+existing native owner with the current exposure rules. The reducer must not
+reimplement condition evaluation, geometry or other mechanics to reconstruct it.
+Keep assignment configuration and current decision/turn context distinct from
+observed world facts.
+
+Acceptance: every retained AI world field has a named source and reduction rule.
+Any missing event value is identified concretely before changing its producer.
+Neither importing Pygame's PlayerState into native AI nor reviving the retired
+server observation journal satisfies this contract.
+
+#### 3. Advance retained AI knowledge from those events
+
+Keep state with the existing AI assignment/runtime. Consume source-ordered
+recorded changes through the existing EventQueue facilities before decisions and
+after committed movement Steps. A consume-since-cursor fold is sufficient unless
+an actual caller requires eager callbacks; do not add a bus, thread or manager.
+
+- Reduce initialization and subsequent facts into retained AI state. Perception
+  queries belong to native sensory production; applying already-recorded knowledge
+  requires no live Entity, Senses or GridMap reads.
+- Merge only the assignment's explicit controlled observers. Preserve the current
+  union of entity visibility, first sorted seeing observer for hazard/directional
+  tile values, and existing removal of mutable details from remembered entities.
+- Retain actual brief observations between decisions. Current polling can miss
+  an actor that appears and disappears between calls; reproducing that omission
+  is not parity. Check existing exposure/memory rules at the event boundaries.
+- Keep source progress (EventQueue generation and source cursor) separate from
+  decision epoch identity. The existing projection-call counter also identifies
+  decision epochs; decisions without a new sensory delta still need their normal
+  identity. Do not substitute a sensory-only counter for it.
+- Advance knowledge after each committed Step while Movement can remain open.
+  Presentation continues to consume complete subjective lineages independently;
+  AI must not wait for a visual clip or root completion.
+- Keep action discovery and execution legality as native engine queries. Their
+  current authority is distinct from reconstructing already-known world data.
+
+Acceptance: saved event sequences, including initialization, reproduce expected
+AI observations and memory with native registries unavailable during replay.
+Exercise brief doorway sighting and movement continuation, as well as current
+native AI outcomes. Use the existing recorder/facts, not another serialization
+round-trip in ordinary play. Once coverage is demonstrated, remove the live-world
+rebuild from the active path; do not retain two production projectors.
+
+#### 4. Extend scoped sensory work where measured work remains
+
+September 13 integration measurement: 120 selected behavior/replay checks pass.
+The same native encounter now spends 0.039s in 44 AI projections, versus 0.832s
+after the contact-only checkpoint. Full sensory work remains 123 refreshes /
+0.627s; 21,101 conditional-optics route scans consume 0.214s despite both possible
+contribution stores being empty. These are nested diagnostic spans, not additive
+totals. Finish this unit with the direct empty-source route return and review
+unchanged condition/turn refreshes against actual field/contact inputs. Preserve
+owner-dependent hazard updates even when field/contact work can be reused.
+
+After the first sensory and AI checkpoints, remeasure before selecting the next
+small slice. Use the same cell/contact rules and current hints:
+
+| Actual changed input | Work to retain or narrow |
+|---|---|
+| One subject's perceivability | Resolve that subject against affected observers; account for observer capability changes separately |
+| Light values in named cells | Resolve those cells' observer-specific visibility/light and affected contacts; an origin change still requires broader work |
+| Passive perception, visual access or sense modes | Revisit the actual dependent contacts/fields; unchanged capabilities alone do not prove unrelated world inputs unchanged |
+| Observer position or optical/propagation geometry | Perform the required field solve and dependent contact updates |
+| Movement-only topology | Preserve navigation invalidation without manufacturing an optical change |
+
+This is a work-scope guide for existing systems, not a generic dependency graph.
+Keep actual condition handlers, interception and causal children. Reuse the
+existing revisions and subscriptions rather than another cache hierarchy.
+
+#### Validation, measurement and review at each checkpoint
+
+Read `HOW_TO_TEST.MD`. Start with current engine sensory/light/stealth cases and
+initial sensory replay. Extend only missing behavioral cases: compare actual
+contacts, fields and emitted deltas, including light-child placement. Current
+paired visibility/concealment, directed boundaries/height, movement interruption
+and native AI cases cover the relevant integration boundaries. Run those needed
+by the diff; do not render galleries or duplicate the entire suite at each edit.
+
+For performance, keep the same WSL Python 3.13.12 environment and C: checkout
+until the separate source-folder decision changes. The existing uninstrumented
+native workload's operation total is about **2.376s**; whole process is **6.378s**,
+including imports/setup. Targeted wrappers attribute about **1.10s** to sensory
+refresh and **0.82s** to AI world projection. These are nested, instrumented costs,
+not additive savings or a promised post-fix time. Record native outcomes with
+three serial uninstrumented runs per completed checkpoint. Profile again only to
+answer a remaining attribution question. Keep timing evidence in the existing
+[results record](PERFORMANCE_REPAIR_RESULTS_2026-09-12.md).
+
+**Anti-slop reviewer: `recorded_gallery`.** Reviewed the first sensory slice;
+required actual unchanged-input evidence and complete typed contact resolution.
+Checks removed work and preservation of causal deltas in each sensory diff.
+**Anti-OOP reviewer: `lifecycle_source_review`.** Reviewed assignment-owned event
+consumption; required explicit field coverage, event-time memory, source/decision
+cursor separation and existing shared-observer rules. Checks the AI diff's state
+ownership, reuse and import DAG. Both review the concrete changes before their
+checkpoint; root runs timings serially. Reviews do not expand scope with
+hypothetical obligations.
+
+After these repairs, re-rank remaining native costs. Discovery currently measures
+about 0.285s and paths 0.081s in targeted diagnostics. The proven empty-optical-ray
+and duplicate-directed-edge candidates remain available if still relevant; they
+are not substitutes for the two ownership repairs. Preserve choices, unavailable
+reasons, equipment/charges, legal routes, movement budgets and reactions. Rendering,
+VFX, GC tuning, source relocation and capture redesign are outside this unit.
+No new runtime audits, hashes or benchmark framework.
 
 ### Completed fourth unit: ordinary terrain and remaining catalog obligations
 

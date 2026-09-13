@@ -54,6 +54,40 @@ def test_saved_bytes_preserve_every_successor_and_concrete_lineage(case_id: str)
     assert not Entity.get_all_entities()
 
 
+def test_native_v2_before_additive_ai_facts_still_replays_presentation() -> None:
+    source = produce(next(case for case in load_cases() if case.id == "walk-recovery"))
+    payload = json.loads(encode_sequence(source.initialization, source.lineages))
+    pending = [payload]
+    removed = set()
+    additions = {
+        "dnd.core.events.EntityCreatedEvent": ("healing_blocked",),
+        "dnd.core.events.SensoryUpdateEvent": ("hazardous_cells_changed",),
+        "dnd.core.events.SpatialChangeEvent": ("tile_state", "tile_present", "object_state"),
+    }
+    while pending:
+        value = pending.pop()
+        if isinstance(value, dict):
+            for key in additions.get(value.get("wire_type", ""), ()):
+                value.pop(key)
+                removed.add(key)
+            pending.extend(value.values())
+        elif isinstance(value, list):
+            pending.extend(value)
+    assert {"healing_blocked", "hazardous_cells_changed"} <= removed
+    reset_engine_runtime()
+    before, lineages = decode_sequence(json.dumps(payload).encode())
+    expected = source.before
+    for lineage in source.lineages:
+        expected = reduce_lineage(expected, lineage)
+    for lineage in lineages:
+        before = reduce_lineage(before, lineage)
+    assert before.actors == expected.actors
+    assert before.senses is not None and expected.senses is not None
+    assert before.senses.entities == expected.senses.entities
+    assert before.senses.visible == expected.senses.visible
+    assert EventQueue.event_cursor() == 0
+
+
 def test_incomplete_recorded_event_does_not_invent_identity() -> None:
     source = produce(next(case for case in load_cases() if case.id == "ranged-hit"))
     payload = json.loads(encode_sequence(source.initialization, source.lineages))

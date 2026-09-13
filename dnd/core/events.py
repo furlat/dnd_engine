@@ -165,6 +165,7 @@ class EventType(str, Enum):
     TAKE_DAMAGE = "take_damage"
     DAMAGE_APPLIED = "damage_applied"
     HEAL = "heal"
+    TEMPORARY_HIT_POINTS_CHANGED = "temporary_hit_points_changed"
     CAST_SPELL = "cast_spell"
     ATTACK_MISS = "attack_miss"
     ATTACK_HIT = "attack_hit"
@@ -805,6 +806,7 @@ class WorldTileState(BaseModel):
     slope_axis: Optional[SlopeAxis] = None
     default_light: LightLevel
     resolved_light: LightLevel
+    condition_names: Tuple[str, ...] = ()
 
 
 class WorldObjectState(BaseModel):
@@ -980,6 +982,7 @@ class EntityCreatedEvent(Event):
     maximum_hit_points: StrictInt = 0
     temporary_hit_points: StrictInt = 0
     damage_taken: StrictInt = Field(default=0, ge=0)
+    healing_blocked: bool = False
     hit_dice: Tuple[
         Tuple[StrictInt, StrictInt, StrictInt, str, bool], ...
     ] = ()
@@ -3300,6 +3303,10 @@ class SensoryUpdateEvent(Event):
             "Changed backend-resolved subjective light after-values, keyed as 'x,y'."
         ),
     )
+    hazardous_cells_changed: Dict[str, bool] = Field(
+        default_factory=dict,
+        description="Native resolved hazard after-values for visible cells, keyed as 'x,y'.",
+    )
     cause_event_uuid: Optional[UUID] = Field(
         default=None,
         description="Actual causal event, or None for an independent explicit refresh.",
@@ -3387,6 +3394,7 @@ class SensoryUpdateEvent(Event):
         pending: List[Any] = [
             self.observer_position,
             self.effective_light_levels_changed,
+            self.hazardous_cells_changed,
             self.visible_cells_added,
             self.visible_cells_removed,
             self.seen_cells_added,
@@ -3416,6 +3424,9 @@ class SensoryUpdateEvent(Event):
     def get_affected_positions(self) -> Set[Tuple[int, int]]:
         """Return every grid cell referenced by this sensory delta."""
         positions: Set[Tuple[int, int]] = set(self.visible_cells_added)
+        for key in self.hazardous_cells_changed:
+            x, y = key.split(",", maxsplit=1)
+            positions.add((int(x), int(y)))
         positions.update(self.visible_cells_removed)
         positions.update(self.seen_cells_added)
         positions.update(
@@ -3628,6 +3639,15 @@ class SpatialChangeEvent(Event):
         default=None,
         ge=0,
         description="Complete effective walking-cost after-value.",
+    )
+    tile_state: Optional[WorldTileState] = Field(
+        default=None, description="Complete Tile after-value at an actual commit.",
+    )
+    tile_present: Optional[bool] = Field(
+        default=None, description="Whether the addressed Tile exists after this commit.",
+    )
+    object_state: Optional[ItemPresentationState] = Field(
+        default=None, description="Complete item after-value at an actual world commit.",
     )
     tile_flying_cost: Optional[StrictInt] = Field(
         default=None,
@@ -5206,6 +5226,14 @@ class DamageAppliedEvent(Event):
         default=None,
         description="Complete resolution of the parent incoming damage packet.",
     )
+
+
+class TemporaryHitPointsChangedEvent(Event):
+    """Committed temporary-HP grant or clearing, independently of damage."""
+
+    event_type: EventType = EventType.TEMPORARY_HIT_POINTS_CHANGED
+    entity_uuid: UUID
+    resulting_temporary_hp: int
 
 
 class HealEvent(Event):

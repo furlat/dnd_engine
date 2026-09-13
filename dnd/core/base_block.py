@@ -16,6 +16,7 @@ from dnd.core.events import (
     EventType,
     SpatialChangeEvent,
     Trigger,
+    WorldTileState,
 )
 from dnd.types.senses import (
     SenseMode as SenseMode,
@@ -23,6 +24,7 @@ from dnd.types.senses import (
     SensesView,
 )
 from dnd.types.world import LightLevel, MovementMode
+from dnd.types.actor import EntityStatsState
 from dnd.types.world_placement import (
     BoundaryStructure,
     WorldPlacementKind,
@@ -559,6 +561,14 @@ class BaseBlock(BaseModel):
         """Return this block's current objective position value."""
         return self.position
 
+    def snapshot_entity_stats(self) -> Optional[EntityStatsState]:
+        """Non-actor components do not publish entity combat statistics."""
+        return None
+
+    def snapshot_world_tile(self) -> Optional[WorldTileState]:
+        """Only a Tile publishes evaluated terrain after-values."""
+        return None
+
     def get_world_placement_spec(self) -> WorldPlacementSpec:
         """Return the neutral one-band center placement capability."""
         return WorldPlacementSpec(
@@ -1002,6 +1012,9 @@ class BaseBlock(BaseModel):
             condition.remove_from_register()
             removed.phase_to(
                 EventPhase.COMPLETION,
+                condition_state=condition.snapshot_state(),
+                resulting_stats=owner.snapshot_entity_stats(),
+                resulting_tile=owner.snapshot_world_tile(),
                 **condition._post_removal_stats(),
             )
 
@@ -1216,6 +1229,9 @@ class BaseBlock(BaseModel):
             self.active_conditions_by_source[condition.source_entity_uuid].append(condition.name)
             completed_event = condition_applied.phase_to(
                 EventPhase.COMPLETION,
+                condition_state=condition.snapshot_state(),
+                resulting_stats=self.snapshot_entity_stats(),
+                resulting_tile=self.snapshot_world_tile(),
             )
             condition.applied_source_event_cursor = EventQueue.event_cursor()
             return completed_event

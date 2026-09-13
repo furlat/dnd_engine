@@ -11,6 +11,7 @@ import time
 
 from dnd.action_timing import action_timing_enabled, record_action_timing
 from dnd.core.base_block import BaseBlock
+from dnd.core.base_conditions import ConditionApplicationEvent, ConditionRemovalEvent
 from dnd.core.gridmap import get_map
 from dnd.core.values import ModifiableValue
 from dnd.core.events import (
@@ -27,6 +28,19 @@ from dnd.types.world import CardinalDirection, LightLevel, WorldEdgeChannel
 
 
 K = TypeVar("K")
+
+
+@dataclass(frozen=True)
+class ObserverField:
+    """Resolved cell evidence and the inputs under which it was computed."""
+
+    modes: Dict[SensesType, int]
+    ordinary_sight: bool
+    max_distance: int
+    revisions: Tuple[int, int, int]
+    occupancy_revision: int
+    visual_modes: Dict[Tuple[int, int], Set[SensesType]]
+    nonvisual_positions: Dict[SensesType, Set[Tuple[int, int]]]
 
 
 class Senses(BaseBlock):
@@ -46,6 +60,9 @@ class Senses(BaseBlock):
     effective_light_levels: Dict[Tuple[int, int], LightLevel] = Field(
         default_factory=dict,
         description="Observer-effective light after-values for visible cells.",
+    )
+    hazardous_cells: Dict[Tuple[int, int], bool] = Field(
+        default_factory=dict, description="Native resolved hazard values for currently visible cells.",
     )
     walkable: Dict[Tuple[int, int], bool] = Field(default_factory=dict, description="Walkability for cells in geometric FOV.")
     paths: DefaultDict[Tuple[int, int], List[Tuple[int, int]]] = Field(
@@ -85,6 +102,7 @@ class Senses(BaseBlock):
     _perception_max_distance: int = PrivateAttr(default=20)
     _path_revision: int = PrivateAttr(default=0)
     _path_max_distance: Optional[int] = PrivateAttr(default=None)
+    _field: Optional[ObserverField] = PrivateAttr(default=None)
 
     @property
     def path_revision(self) -> int:
@@ -255,6 +273,7 @@ class Senses(BaseBlock):
         self._last_passive_perception = passive_perception
         self._last_sense_modes_hash = sense_modes_hash
         self._last_visual_access = visual_access
+        self._field = None
 
     def apply_sensory_update(self, event: SensoryUpdateEvent) -> None:
         """Apply one recorded observer delta without reading live world state."""
@@ -285,6 +304,7 @@ class Senses(BaseBlock):
             visual_access=reduced.visual_access,
         )
         self._paths_dirty = reduced.paths_dirty
+        self.hazardous_cells = dict(reduced.hazardous_cells)
 
     def get_threathened_positions(self) -> List[Tuple[int, int]]:
         """Return neighboring positions threatened by this observer.
@@ -359,6 +379,7 @@ def capture_senses_snapshot(senses: Senses) -> SensesSnapshot:
         entities=dict(senses.entities),
         objects=dict(senses.objects),
         effective_light_levels=dict(senses.effective_light_levels),
+        hazardous_cells=dict(senses.hazardous_cells),
         paths_dirty=senses._paths_dirty,
         passive_perception=senses._last_passive_perception,
         sense_modes_hash=senses._last_sense_modes_hash,
@@ -417,6 +438,11 @@ def emit_sensory_update_delta(
         for position, level in sorted(after.effective_light_levels.items())
         if initial or before.effective_light_levels.get(position) != level
     }
+    hazards_changed = {
+        f"{position[0]},{position[1]}": hazardous
+        for position, hazardous in sorted(after.hazardous_cells.items())
+        if initial or before.hazardous_cells.get(position) != hazardous
+    }
 
     passive_changed = initial or before.passive_perception != after.passive_perception
     sense_modes_changed = initial or before.sense_modes_hash != after.sense_modes_hash
@@ -446,6 +472,7 @@ def emit_sensory_update_delta(
         visual_access_changed,
         position_changed,
         light_changed,
+        hazards_changed,
     ))
     if not has_delta:
         if timing:
@@ -464,6 +491,7 @@ def emit_sensory_update_delta(
         observer_position=after.position,
         observer_position_changed=position_changed,
         effective_light_levels_changed=light_changed,
+        hazardous_cells_changed=hazards_changed,
         cause_event_uuid=cause_event.uuid if cause_event is not None else None,
         update_reason=reason,
         parent_event=cause_event.uuid if cause_event is not None else None,
@@ -565,6 +593,7 @@ class SpatialSensesSystem:
     def register_observer(self, observer_uuid: UUID, senses: Senses) -> None:
         """Register an observer without independently materializing its world view."""
         self.senses_by_observer[observer_uuid] = senses
+        senses._field = None
 
     def unregister_observer(self, observer_uuid: UUID) -> None:
         """Remove an observer and all of its candidate memberships."""
@@ -580,6 +609,7 @@ class SpatialSensesSystem:
         observer_uuid: UUID,
         *,
         max_distance: Optional[int] = None,
+        hazard_positions: Optional[Set[Tuple[int, int]]] = None,
     ) -> None:
         """Replace one observer's exact visual cells and perceived contacts."""
         senses = self.senses_by_observer.get(observer_uuid)
@@ -785,11 +815,41 @@ class SpatialSensesSystem:
             sense_modes_hash=senses.compute_sense_modes_hash(),
             visual_access=senses.visual_access.normalized_score,
         )
+        senses._field = ObserverField(
+            modes=modes,
+            ordinary_sight=ordinary_sight,
+            max_distance=max_distance,
+            revisions=(grid.optical_revision, grid.illumination_revision, grid.propagation_revision),
+            occupancy_revision=grid.occupancy_revision,
+            visual_modes=visual_modes_by_position,
+            nonvisual_positions=nonvisual_positions,
+        )
+        self._refresh_hazards(observer_uuid, senses, hazard_positions)
         subscribed = set(optical_candidates)
         for positions in nonvisual_positions.values():
             subscribed.update(positions)
         grid.subscribe_to_cells(observer_uuid, subscribed)
         self.refresh_observer(observer_uuid)
+
+    @staticmethod
+    def _refresh_hazards(
+        observer_uuid: UUID, senses: Senses,
+        affected_positions: Optional[Set[Tuple[int, int]]],
+    ) -> None:
+        """Resolve new/affected visible cells using the existing native hazard rule."""
+        visible = set(senses.visible)
+        positions = visible - senses.hazardous_cells.keys()
+        positions.update(visible if affected_positions is None else visible & affected_positions)
+        for position in senses.hazardous_cells.keys() - visible:
+            senses.hazardous_cells.pop(position)
+        if not positions:
+            return
+        grid = get_map()
+        has_hazards = grid.has_any_hazards()
+        for x, y in positions:
+            senses.hazardous_cells[(x, y)] = (
+                grid.is_position_hazardous_for(x, y, observer_uuid) if has_hazards else False
+            )
 
     @staticmethod
     def _sense_in_range(
@@ -936,7 +996,13 @@ class SpatialSensesSystem:
             EventType.LIFE_STATE_CHANGE,
         }:
             target = event.target_entity_uuid
-            return {target} if target is not None and target in registered else set()
+            if target is not None and target in registered:
+                return {target}
+            grid = get_map()
+            tile = grid.get_tile_by_uuid(target) if target is not None else None
+            placement = grid.get_object_placement(target) if target is not None else None
+            position = tile.position if tile is not None else placement.position if placement is not None else None
+            return grid.get_subscribers_at(position) & registered if position is not None else set()
         if isinstance(event, DeathEvent):
             return set(self.observers_by_entity.get(event.entity_uuid, set()))
         if isinstance(event, SpatialEffectChangeEvent):
@@ -988,8 +1054,48 @@ class SpatialSensesSystem:
             senses = self.senses_by_observer.get(observer_uuid)
             if senses is None:
                 continue
+            if (
+                event.event_type is EventType.SPATIAL_ENTITY_ENTERED
+                and observer_uuid in self.published_observers
+                and self._field_is_current(observer_uuid, senses)
+            ):
+                movement = cast(SpatialChangeEvent, event)
+                if (
+                    movement.entity_uuid is not None
+                    and movement.entity_uuid != observer_uuid
+                    and movement.old_position is not None
+                ):
+                    sensory_event = self._update_entity_contact(observer_uuid, senses, movement)
+                    if sensory_event is not None:
+                        sensory_events.append(sensory_event)
+                    continue
             before = capture_senses_snapshot(senses)
-            self.recompute_observer(observer_uuid)
+            hazard_positions = None
+            if isinstance(event, SpatialChangeEvent):
+                hazard_positions = self._candidate_positions(event)
+            elif isinstance(event, SpatialEffectChangeEvent):
+                hazard_positions = event.get_affected_positions()
+            elif isinstance(event, (ConditionApplicationEvent, ConditionRemovalEvent)) and event.resulting_tile is not None:
+                hazard_positions = {event.resulting_tile.position}
+            owner_refresh = (
+                event.event_type is EventType.TURN_START
+                or (
+                    event.event_type in (EventType.CONDITION_APPLICATION, EventType.CONDITION_REMOVAL)
+                    and event.target_entity_uuid == observer_uuid
+                )
+            )
+            field = senses._field
+            if (
+                owner_refresh and observer_uuid in self.published_observers
+                and field is not None
+                and field.occupancy_revision == get_map().occupancy_revision
+                and self._field_is_current(observer_uuid, senses)
+            ):
+                # Only these owner callbacks may reuse a complete contact solve.
+                # Object/spatial events still update their own dependent facts.
+                self._refresh_hazards(observer_uuid, senses, hazard_positions)
+            else:
+                self.recompute_observer(observer_uuid, hazard_positions=hazard_positions)
             after = capture_senses_snapshot(senses)
             projection_changed = any((
                 before.position != after.position,
@@ -998,6 +1104,7 @@ class SpatialSensesSystem:
                 before.entities != after.entities,
                 before.objects != after.objects,
                 before.passive_perception != after.passive_perception,
+                before.hazardous_cells != after.hazardous_cells,
             ))
             visible_topology_changed = False
             if isinstance(event, SpatialChangeEvent):
@@ -1034,6 +1141,75 @@ class SpatialSensesSystem:
         if sensory_events:
             EventQueue.register_completion_sequence(sensory_events)
             self.published_observers.update(event.observer_uuid for event in sensory_events)
+
+    def _field_is_current(self, observer_uuid: UUID, senses: Senses) -> bool:
+        """Whether retained cell evidence still describes this observer's world."""
+        field = senses._field
+        owner = BaseBlock.get(observer_uuid)
+        if field is None or owner is None or owner.get_position() != senses.position:
+            return False
+        grid = get_map()
+        return (
+            field.revisions == (grid.optical_revision, grid.illumination_revision, grid.propagation_revision)
+            and field.max_distance == senses._perception_max_distance
+            and field.ordinary_sight == owner.has_ordinary_visual_sight()
+            and senses._last_visual_access == senses.visual_access.normalized_score
+            and senses._last_passive_perception == owner.get_passive_perception()
+            and field.modes == {mode.sense_type: mode.range_feet for mode in senses.get_sense_modes()}
+        )
+
+    def _update_entity_contact(
+        self, observer_uuid: UUID, senses: Senses, event: SpatialChangeEvent,
+    ) -> Optional[SensoryUpdateEvent]:
+        """Apply one membership change using the existing resolved cell evidence."""
+        subject_uuid = cast(UUID, event.entity_uuid)
+        owner = cast(BaseBlock, BaseBlock.get(observer_uuid))
+        field = cast(ObserverField, senses._field)
+        subject = BaseBlock.get(subject_uuid)
+        before = senses.entities.get(subject_uuid)
+        contact = None
+        if subject is not None and subject.appears_in_entity_contacts():
+            position = cast(Tuple[int, int], subject.get_position())
+            if subject_uuid in get_map().get_entities_at(position):
+                contact = self._resolve_contact(
+                    owner, senses, subject, position, position in senses.visible,
+                    field.visual_modes.get(position, set()), field.nonvisual_positions,
+                    field.modes,
+                )
+        contact_changed = before != contact
+        if contact_changed:
+            if contact is None:
+                senses.entities.pop(subject_uuid, None)
+                self._discard_reverse(self.observers_by_entity, subject_uuid, observer_uuid)
+            else:
+                senses.entities[subject_uuid] = contact
+                self.observers_by_entity[subject_uuid].add(observer_uuid)
+            if (before is None) != (contact is None):
+                footprint = self.footprints_by_observer[observer_uuid]
+                self.footprints_by_observer[observer_uuid] = ObserverFootprint(
+                    known_path_positions=footprint.known_path_positions,
+                    entity_uuids=frozenset(senses.entities),
+                    object_uuids=footprint.object_uuids,
+                )
+        paths_were_dirty = senses._paths_dirty
+        if contact_changed or (
+            event.senses_hint is not None and event.senses_hint.requires_paths
+            and any(position in senses.visible for position in self._candidate_positions(event))
+        ):
+            senses._paths_dirty = True
+        paths_changed = senses._paths_dirty and not paths_were_dirty
+        if not contact_changed and not paths_changed:
+            return None
+        return SensoryUpdateEvent(
+            source_entity_uuid=observer_uuid, target_entity_uuid=observer_uuid,
+            observer_uuid=observer_uuid, observer_position=senses.position,
+            cause_event_uuid=event.uuid, parent_event=event.uuid,
+            parent_lineage=event.lineage_uuid, phase=EventPhase.COMPLETION,
+            update_reason=self._reason_for(event, observer_uuid), use_register=False,
+            entity_contacts_changed={subject_uuid: contact} if contact_changed and contact is not None else {},
+            entity_contacts_removed={subject_uuid} if contact_changed and contact is None else set(),
+            paths_dirty=paths_changed,
+        )
 
     @staticmethod
     def _reason_for(event: Event, observer_uuid: UUID) -> SensoryUpdateReason:

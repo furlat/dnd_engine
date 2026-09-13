@@ -113,7 +113,7 @@ class FalseLife(SpellAction):
             status_message=f"Rolled 1d4+{self.get_temp_hp_bonus()} = {temp_hp_roll.total} temporary HP"
         )
 
-        caster.health.add_temporary_hit_points(temp_hp_roll.total, caster.uuid)
+        caster.health.add_temporary_hit_points(temp_hp_roll.total, caster.uuid, parent_event=effect_event.uuid)
 
         return effect_event.with_updates(
             temp_hp_gained=temp_hp_roll.total,

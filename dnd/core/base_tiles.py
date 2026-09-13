@@ -7,6 +7,7 @@ from pydantic import Field, PrivateAttr, StrictInt, model_validator
 from dnd.core.base_block import BaseBlock, MovementMode, LightLevel
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.base_object import BaseObject
+from dnd.core.events import WorldTileState
 from dnd.core.values import BaseValue, ModifiableValue
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.world_edges import ElevationSurfaceKind, SlopeAxis
@@ -319,6 +320,26 @@ class Tile(BaseBlock):
         return tuple(value for value in (
             self.walking_cost, self.flying_cost, self.swimming_cost, self.burrowing_cost,
         ) if isinstance(value, ModifiableValue))
+
+    def to_world_tile_state(self) -> WorldTileState:
+        """Return this support's exact cold after-value for native publication."""
+        return WorldTileState(
+            tile_uuid=self.uuid, position=self.position, surface=self.surface,
+            name=self.name, blocks_optics=self.blocks_optics,
+            blocks_propagation=self.blocks_propagation_field,
+            walking_cost=self.get_movement_cost(MovementMode.WALKING),
+            flying_cost=self.get_movement_cost(MovementMode.FLYING),
+            swimming_cost=self.get_movement_cost(MovementMode.SWIMMING),
+            burrowing_cost=self.get_movement_cost(MovementMode.BURROWING),
+            elevation_steps=self.height, surface_kind=self.elevation_surface_kind,
+            slope_axis=self.slope_axis, default_light=self.default_light,
+            resolved_light=self.resolved_light_level,
+            condition_names=tuple(self.active_conditions),
+        )
+
+    def snapshot_world_tile(self) -> WorldTileState:
+        """Supply the resulting Tile facts to its existing condition publisher."""
+        return self.to_world_tile_state()
 
     def blocks_walking(self, requesting_entity_uuid: Optional['UUID'] = None,
                        mode: MovementMode = MovementMode.WALKING) -> bool:

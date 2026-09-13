@@ -27,9 +27,9 @@ from dnd.core.events import (
     ForcedMovementEvent, HealEvent, HealRollResultEvent, InstantDeathEvent,
     LifeStateChangeEvent, ReviveEvent, RoundEndEvent, RoundEvent, RoundStartEvent,
     SavingThrowD20RollResultEvent, SavingThrowEvent, SensoryUpdateEvent,
-    SkillCheckD20RollResultEvent, SkillCheckEvent, SpatialChangeEvent,
+    SkillCheckD20RollResultEvent, SkillCheckEvent, SpatialChangeEvent, SpatialEffectChangeEvent,
     StepMovementEvent, TakeDamageEvent, TurnEndEvent, TurnEvent, TurnStartEvent,
-    WorldInitializedEvent,
+    WorldInitializedEvent, WorldModifiedEvent, TileElevationChangeEvent, TemporaryHitPointsChangedEvent,
 )
 
 
@@ -37,7 +37,7 @@ from dnd.core.events import (
 # must first acquire a retained capture contract; they cannot decode by importing
 # arbitrary classes named by a file. Technical headers remain ordinary Event.
 EVENT_MODELS = {f"{model.__module__}.{model.__qualname__}": model for model in (
-    Event, ActionEvent, WorldInitializedEvent, EntityCreatedEvent,
+    Event, ActionEvent, WorldInitializedEvent, WorldModifiedEvent, EntityCreatedEvent,
     AttackEvent, SpellEvent, MovementEvent, JumpEvent, ShoveEvent,
     EquipmentEvent, WeaponEquipEvent, WeaponUnequipEvent, ArmorEquipEvent,
     ArmorUnequipEvent, ShieldEquipEvent, ShieldUnequipEvent, ItemLocationStateEvent,
@@ -45,14 +45,24 @@ EVENT_MODELS = {f"{model.__module__}.{model.__qualname__}": model for model in (
     D20Event, SavingThrowEvent, SkillCheckEvent, D20RollResultEvent,
     AttackD20RollResultEvent, SavingThrowD20RollResultEvent, SkillCheckD20RollResultEvent,
     DamageRollResultEvent, HealRollResultEvent, TakeDamageEvent, DamageAppliedEvent,
-    HealEvent, DeathEvent, DeathSaveEvent, InstantDeathEvent, ReviveEvent,
-    LifeStateChangeEvent, SensoryUpdateEvent, SpatialChangeEvent, StepMovementEvent,
+    HealEvent, TemporaryHitPointsChangedEvent, DeathEvent, DeathSaveEvent, InstantDeathEvent, ReviveEvent,
+    LifeStateChangeEvent, SensoryUpdateEvent, SpatialChangeEvent, TileElevationChangeEvent,
+    SpatialEffectChangeEvent, StepMovementEvent,
     ForcedMovementEvent, EncounterEvent, EncounterStartEvent, EncounterEndEvent,
     RoundEvent, RoundStartEvent, RoundEndEvent, TurnEvent, TurnStartEvent, TurnEndEvent,
 )}
 LOG = TypeAdapter(CombatLogEntry | None)
 HANDLERS = TypeAdapter(tuple[EffectiveHandlerPresentation, ...])
 GRANTS = TypeAdapter(dict[str, set[str]])
+
+# These facts were added after native-v2 recordings were already in use.
+# Their defaults keep those presentation archives readable; old archives do
+# not acquire the additional AI knowledge that only new native producers record.
+ADDITIVE_FIELDS = {
+    EntityCreatedEvent: {"healing_blocked"},
+    SensoryUpdateEvent: {"hazardous_cells_changed"},
+    SpatialChangeEvent: {"tile_state", "tile_present", "object_state"},
+}
 
 
 def encode_event(event: Event) -> dict[str, Any]:
@@ -85,6 +95,7 @@ def decode_event(value: Any) -> Event:
         raise ValueError(f"unknown or missing recorded event wire_type: {wire_type}")
     model = EVENT_MODELS[wire_type]
     required = {name for name, field in model.model_fields.items() if field.exclude is not True}
+    required.difference_update(ADDITIVE_FIELDS.get(model, set()))
     required.update(("combat_log", "identified_entity_observer_uuids",
                      "located_entity_observer_uuids", "located_position_observer_uuids",
                      "effective_handler_presentations"))

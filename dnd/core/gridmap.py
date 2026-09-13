@@ -14,6 +14,7 @@ from dnd.core.shadowcast import compute_fov
 from dnd.core.dijkstra import breadth_first_paths, dijkstra
 from dnd.core.base_block import BaseBlock, MovementMode, LightLevel
 from dnd.core.base_conditions import BaseCondition
+from dnd.core.item_types import ItemPresentationProvider
 from dnd.core.positioning import PositionCommitError
 from dnd.core.base_tiles import (
     release_tile_owned_movement_graph,
@@ -40,6 +41,7 @@ from dnd.core.world_edges import (
     WorldEdgeView,
     progressive_elevation_transition,
     transition_axis,
+    world_edge_contribution_allows,
 )
 from dnd.types.world import CardinalDirection, WorldEdgeChannel
 from dnd.types.senses import OpticalObscurement
@@ -221,7 +223,9 @@ class GridMap:
 
         self._recompute_lights_before_spatial_completion(current_event)
 
-        current_event = current_event.phase_to(EventPhase.COMPLETION)
+        current_event = current_event.phase_to(
+            EventPhase.COMPLETION, **self._spatial_world_after_values(current_event),
+        )
         current_event = cast(SpatialChangeEvent, EventQueue.register(current_event))
 
         return current_event
@@ -257,7 +261,9 @@ class GridMap:
         self._settle_entity_presence_before_completion(current_event)
         return cast(
             SpatialChangeEvent,
-            current_event.phase_to(EventPhase.COMPLETION),
+            current_event.phase_to(
+                EventPhase.COMPLETION, **self._spatial_world_after_values(current_event),
+            ),
         )
 
     def enable_events(self, *, flush_pending: bool = True) -> None:
@@ -1625,29 +1631,6 @@ class GridMap:
             side_cache[key] = result
         return result
 
-    @staticmethod
-    def _world_edge_contribution_allows(
-        contribution: WorldEdgeStructuralContribution,
-        channel: WorldEdgeChannel,
-        *,
-        source_height: int,
-        destination_height: int,
-        movement_mode: MovementMode,
-    ) -> bool:
-        """Reduce one structural contribution for the requested channel."""
-        if channel not in contribution.blocked_channels:
-            return True
-        if channel is not WorldEdgeChannel.MOVEMENT:
-            return False
-        if movement_mode is not MovementMode.WALKING:
-            return False
-        lower = min(source_height, destination_height)
-        upper = max(source_height, destination_height) + 1
-        return not (
-            contribution.base_height_steps < upper
-            and contribution.top_height_steps > lower
-        )
-
     def _world_edge_channel_allows(
         self,
         edge: WorldEdgeView,
@@ -1668,7 +1651,7 @@ class GridMap:
                 senses = requester.get_senses() if requester is not None else None
                 if senses is not None and contribution.provider_uuid not in senses.objects:
                     continue
-            if not self._world_edge_contribution_allows(
+            if not world_edge_contribution_allows(
                 contribution,
                 channel,
                 source_height=edge.source_height_steps,
@@ -1980,7 +1963,7 @@ class GridMap:
         burrowing_cost: int = 0,
         default_light: LightLevel = LightLevel.BRIGHT_LIGHT,
     ) -> None:
-        """Create a rectangular area of tiles (batch operation, no events during)."""
+        """Commit a rectangle, then publish Tile facts outside catalog aggregation."""
         positions = {
             (tx, ty)
             for tx in range(x, x + width)
@@ -2021,6 +2004,21 @@ class GridMap:
             self._bump_all_spatial_revisions()
             if events_were_enabled:
                 self.enable_events()
+        if events_were_enabled:
+            EventQueue.register_completion_sequence([
+                SpatialChangeEvent(
+                    source_entity_uuid=tile.uuid,
+                    event_type=EventType.SPATIAL_TILE_CHANGED,
+                    change_type=SpatialChangeType.TILE_CHANGED,
+                    position=tile.position,
+                    tile_present=True,
+                    tile_state=tile.to_world_tile_state(),
+                    phase=EventPhase.COMPLETION,
+                    use_register=False,
+                )
+                for position in sorted(positions)
+                for tile in (self._tiles[position],)
+            ])
 
     @staticmethod
     def _validate_entity_position(
@@ -2365,21 +2363,31 @@ class GridMap:
         if isinstance(effect, SpatialChangeEvent):
             self._settle_object_presence_before_completion(effect)
         self._recompute_lights_before_spatial_completion(effect)
-        completion_updates: Dict[str, Any] = {}
-        if (
-            isinstance(effect, SpatialChangeEvent)
-            and effect.change_type is SpatialChangeType.TILE_CHANGED
-            and (tile := self._tiles.get(effect.position)) is not None
-        ):
-            completion_updates["new_light_level"] = (
-                tile.resolved_light_level.value
-            )
+        completion_updates = self._spatial_world_after_values(effect)
         return EventQueue.register(
             effect.phase_to(
                 EventPhase.COMPLETION,
                 **completion_updates,
             )
         )
+
+    def _spatial_world_after_values(self, event: Event) -> Dict[str, Any]:
+        """Capture existing cold owners only after their world mutation commits."""
+        if not isinstance(event, SpatialChangeEvent):
+            return {}
+        if event.change_type is SpatialChangeType.TILE_CHANGED:
+            tile = self._tiles.get(event.position)
+            if tile is None:
+                return {"tile_present": False, "tile_state": None}
+            return {
+                "tile_present": True, "tile_state": tile.to_world_tile_state(),
+                "new_light_level": tile.resolved_light_level.value,
+            }
+        if event.change_type in (SpatialChangeType.OBJECT_PLACED, SpatialChangeType.OBJECT_CHANGED):
+            obj = BaseBlock.get(event.object_uuid) if event.object_uuid is not None else None
+            if isinstance(obj, ItemPresentationProvider):
+                return {"object_state": obj.to_item_presentation_state()}
+        return {}
 
     def _recompute_lights_before_spatial_completion(self, effect: Event) -> None:
         """Publish committed optical light deltas before their parent freezes."""
@@ -3668,6 +3676,8 @@ class GridMap:
         end: Tuple[int, int],
     ) -> Set[OpticalObscurement]:
         """Return conditional optical facts intersecting one optical ray."""
+        if not self._optical_obscurements_by_position and not self._spatial_conditions:
+            return set()
         result: Set[OpticalObscurement] = set()
         for position in supercover_line(start, end):
             result.update(self.get_optical_obscurements_at(position))

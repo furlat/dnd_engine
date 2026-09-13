@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from enum import Enum
 from uuid import UUID
 
-from dnd.types.world import CardinalDirection, WorldEdgeChannel
+from dnd.types.world import CardinalDirection, MovementMode, WorldEdgeChannel
 
 
 class ElevationSurfaceKind(str, Enum):
@@ -71,6 +71,29 @@ class WorldEdgeStructuralContribution:
     base_height_steps: int
     top_height_steps: int
     blocked_channels: tuple[WorldEdgeChannel, ...]
+
+
+def world_edge_contribution_allows(
+    contribution: WorldEdgeStructuralContribution,
+    channel: WorldEdgeChannel,
+    *,
+    source_height: int,
+    destination_height: int,
+    movement_mode: MovementMode,
+) -> bool:
+    """Apply the shared structural interval rule to live or recorded facts."""
+    if channel not in contribution.blocked_channels:
+        return True
+    if channel is not WorldEdgeChannel.MOVEMENT:
+        return False
+    if movement_mode is not MovementMode.WALKING:
+        return False
+    lower = min(source_height, destination_height)
+    upper = max(source_height, destination_height) + 1
+    return not (
+        contribution.base_height_steps < upper
+        and contribution.top_height_steps > lower
+    )
 
 
 @dataclass(frozen=True, slots=True)

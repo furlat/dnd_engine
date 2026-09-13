@@ -42,6 +42,7 @@ from dnd.core.equipment_types import (
     WeaponSlot,
 )
 from dnd.core.base_block import BaseBlock, MovementMode
+from dnd.types.actor import EntityStatsState
 from dnd.blocks.abilities import AbilityScoresConfig, AbilityScores
 from dnd.blocks.saving_throws import SavingThrowSetConfig, SavingThrowSet
 from dnd.blocks.health import (
@@ -961,6 +962,7 @@ class Entity(BaseBlock):
                 self.health.temporary_hit_points.normalized_score,
             ),
             damage_taken=self.health.damage_taken,
+            healing_blocked=self.health.is_healing_blocked(),
             hit_dice=tuple(
                 (
                     hit_die.hit_dice_value.normalized_score,
@@ -1696,6 +1698,8 @@ class Entity(BaseBlock):
             self.active_conditions_by_source[condition.source_entity_uuid].append(condition.name)
             completed_event = condition_applied.phase_to(
                 EventPhase.COMPLETION,
+                condition_state=condition.snapshot_state(),
+                resulting_stats=self.snapshot_entity_stats(),
             )
             condition.applied_source_event_cursor = EventQueue.event_cursor()
             return completed_event
@@ -1841,6 +1845,21 @@ class Entity(BaseBlock):
             self._expire_long_rest_conditions_on_block(item)
         self.health.on_long_rest()
         return True
+
+    def snapshot_entity_stats(self) -> EntityStatsState:
+        """Capture evaluated after-values at an actor state commit."""
+        maximum_hp = self.get_max_hp()
+        return EntityStatsState(
+            normal_hp=maximum_hp - self.health.damage_taken,
+            maximum_hp=maximum_hp,
+            temporary_hp=self.health.temporary_hit_points.normalized_score,
+            armor_class=self.ac_bonus().normalized_score,
+            healing_blocked=self.health.is_healing_blocked(),
+            damage_affinities=tuple(
+                (damage_type.value, status.value) for damage_type in DamageType
+                if (status := self.health.get_resistance(damage_type)) is not ResistanceStatus.NONE
+            ),
+        )
 
     def get_max_hp(self) -> int:
         """Return maximum normal HP before temporary hit points and damage."""

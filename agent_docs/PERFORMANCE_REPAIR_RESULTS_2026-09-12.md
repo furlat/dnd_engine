@@ -740,14 +740,187 @@ and runnable `coarse_native.py` in the same diagnostic directory. Large inventor
 larger-map/more-actor scaling and current long-history capture costs remain
 unmeasured by this workload. Rendering remains outside this native investigation.
 
+## September 13: stationary movement contacts
+
+The first sensory repair retains the full solver's existing cell evidence
+privately on Senses and reuses it for stationary witnesses of ordinary movement.
+It updates the moved entity's contact and dependent indexes/navigation, emitting
+the existing causal delta without whole-field before/after copies. Optical,
+illumination and propagation revisions plus actual observer capabilities select
+reuse. Full replacement/replay clears native field provenance. Attached-light
+children keep their original order; an already-current parent emits no duplicate.
+
+The selected sensory/initial replay, paired visibility/concealment and movement
+interruption suite passes **92 cases**, including the extended invisible-target
+movement/loss/reacquisition cases for blindsight and tremorsense. Anti-slop review
+found no material contact, index, navigation or causal mismatch.
+
+Three serial native runs retain eight human turns, four rounds and 1,175 event
+versions. Operation totals are **2.296s, 2.357s, 2.293s** (median **2.296s**).
+Imports in these runs are 3.383–3.466s, slower than the earlier 2.909s median;
+the earlier operation median was 2.376s. Treat these as separate runs, not a
+controlled overall speedup claim. The same temporary coarse diagnostic establishes
+the actual removed work: **123 full refreshes versus 240**, optical routes
+**21,157 versus 40,190**, sensory recomputation **0.606s** in this diagnostic
+versus the earlier three-run 1.099s median. AI still rebuilds its world 44 times
+(0.832s here). These nested diagnostic times are not additive savings.
+
+Files: `.runtime/performance-recovery/sensory-ai-20260913/contact-[1-3].json`
+and `contact-coarse.json`. The existing runners were reused; no runtime timer,
+hash, audit or rendering was added. Work continues into AI event consumption.
+
+## September 13: completed sensory and AI event-consumption unit
+
+The four-step sensory/AI execution unit is implemented. Native sensory production
+owns perception and hazard evaluation. AI consumes the existing source-ordered
+events into assignment-owned knowledge instead of asking the live world to rebuild
+its answer. Action discovery and execution legality remain native engine queries.
+Rendering still consumes complete subjective lineages on its independent clock.
+
+### What changed and why
+
+- Stationary witnesses reuse existing resolved cell evidence to update the moved
+  entity's contact. They retain navigation invalidation and actual light-child
+  ordering. Full perception replacement invalidates that native evidence.
+- Owner-addressed condition and turn refreshes reuse unchanged field/contact
+  results when the actual observer inputs and full-solve occupancy revision still
+  match. They still evaluate hazard after-values and perform existing delta/path
+  handling. Object, geometry and other spatial events retain their own routes.
+  This is a restricted branch in the existing sensory system, not a general
+  permission to skip work based on a revision number.
+- Empty conditional-optics routes return immediately when both existing sources
+  of obscurements are empty. Real contributors retain the same route calculation.
+- One AI assignment fold advances through the EventQueue prefix before decisions
+  and after committed Steps. Brief sightings remain remembered between decisions;
+  shared observers retain their existing attribution and first-observer tile
+  rules. Source generation/cursor remains separate from decision identity.
+- Existing actor/world folds were extracted to a neutral dependency boundary and
+  reused. Missing committed values are now recorded at their native owners:
+  condition semantics/evaluated actor stats, temporary-HP grants/clears, complete
+  Tile/object after-values and observer-specific hazard changes. No consumer
+  repeats mechanics to derive these values or reads a live registry during replay.
+- Normal rectangle construction records its committed Tiles at batch end.
+  Catalog construction retains its existing single aggregated WorldInitialized
+  event. Old native-v2 presentation recordings still decode through explicit
+  allowances for the newly optional fields; they cannot retroactively supply AI
+  facts that were absent when they were recorded.
+
+### Final native measurements
+
+Same C: checkout, WSL uv Python 3.13.12 and Linux environment as the September 13
+contact checkpoint; three serial fresh processes, unchanged workload and runners.
+The runtime does not serialize/replay its own events to update AI. No diagnostic
+hash, asset audit, renderer, video export or GC tuning participates in these runs.
+
+| Work | Earlier WSL baseline | Final unit |
+|---|---:|---:|
+| Native activity: eight human turns plus AI, median | 2.376s | 1.419s |
+| Same activity after contact-only checkpoint | 2.296s | 1.419s |
+| Native imports, measured separately | 2.909s | 3.370s |
+| Encounter setup, measured separately | 0.328s | 0.356s |
+| Full sensory refreshes, diagnostic count | 240 | 82 |
+| Full sensory refreshes, nested diagnostic time | 1.099s | 0.295s |
+| AI world projection, 44 calls | 0.818s | 0.035s |
+| Live subjective Tile-side queries by AI | 9,292 | 0 |
+| Conditional-optics routes, nested diagnostic time | 0.396s | 0.004s |
+
+Uninstrumented activity samples are **1.390s, 1.459s, 1.419s**, about 40% below
+the earlier WSL activity median and 38% below the contact-only checkpoint. All
+retain eight human turns, four rounds, 1,175 event versions, the established final
+positions and the existing 35/24 or 41/18 player-HP variants (goblins 10/1).
+Pygame is absent from each native process. This is evidence for the bounded
+workload, not a scaling claim for larger parties or maps.
+
+Imports span **3.322–3.397s** here versus **3.383–3.466s** at the contact checkpoint.
+The older 2.909s value is not reproduced; startup is still a separate unresolved
+cost on the mounted checkout. Do not describe the activity improvement as a
+solved startup problem. Recorded span sums are 5.160–5.256s; these are not external
+whole-process wall measurements.
+
+Nested coarse spans include their callees and diagnostic overhead and must not
+be added. The remaining 82 full refreshes are 39 observer movements, 36 light
+changes, five condition removals, one condition application and one turn start.
+The restricted reuse removed 41 of the prior 48 condition/turn solves. The two
+largest remaining full-solve groups cost 0.157s and 0.116s in this workload; a
+broader light algorithm is not required to complete this bounded unit.
+
+### Remaining native costs, with GC separated
+
+The final coarse run initially placed 0.480s under all action discovery. A separate
+temporary elapsed-time diagnostic with `gc.callbacks` attributed **0.216s** of
+the corresponding **0.474s** rerun to collection. Discovery's remaining measured
+work is **0.258s** across 38 calls. The apparent discovery spike was not evidence
+for another inventory rewrite. GC behavior is unchanged, as requested.
+
+Reachable-path work is **0.079s** across 70 calls; use-action collection is
+**0.011s**, including **0.004s** inventory use-template enumeration. These are
+nested costs. Sensory recomputation is **0.292s**, including 0.009s GC, and AI
+projection **0.035s**, including 0.001s GC, in that attribution run. Repeated
+whole-world AI reconstruction and empty optics scans are no longer dominant.
+Larger inventory/party/map scaling remains unmeasured.
+
+Raw files live under `.runtime/performance-recovery/sensory-ai-20260913/`:
+`final-[1-3].json`, `final-coarse.json`, and `final-gc-coarse.json`. The last runner,
+`coarse_gc.py`, extends the existing temporary elapsed diagnostic solely to record
+GC duration inside the same spans. It is not installed in normal play.
+
+### Validation and review
+
+The final integrated selection passes **240 tests**: native AI policies and
+controller fixtures, cold world/actor initialization, sensory/light/stealth and
+hazards, native recorded inputs, player reduction, paired visibility/concealment
+and movement interruptions. Saved-input checks clear the live runtime first.
+The earlier broader run also exercised condition ownership, world edits/geometry
+and lifecycle playback; its changed-field/fixture failures were repaired before
+the final selection.
+
+The final 21-file Pyright check reports zero errors/warnings across sensory,
+neutral actor/world facts, AI consumption, game adapters and new tests. Ten
+focused actor-fact/recording checks pass after tightening the test annotations.
+The first type pass exposed only missing narrowing in these new tests; those
+were corrected without changing runtime behavior.
+
+Final integrated command (same WSL environment documented above):
+
+```bash
+export UV_PROJECT_ENVIRONMENT=/home/tommaso/.cache/dnd-engine/venv
+/home/tommaso/.local/bin/uv run --no-sync python -m pytest -q --tb=short \
+  tests/ai --ignore=tests/ai/test_finite_horizon_gameplay.py \
+  --ignore=tests/ai/test_live_ai_matchups.py \
+  tests/engine/test_recorded_world_facts.py tests/engine/test_senses_light_stealth.py \
+  tests/engine/test_sensory_initial_replay.py tests/engine/test_spatial_conditions.py \
+  tests/engine/test_tile_costs.py tests/engine/test_world_entity_initialization.py \
+  tests/game/test_recorded_history.py tests/game/test_consumable_replay.py \
+  tests/game/test_player_projection.py tests/game/test_passive_event_replay.py \
+  tests/game/test_paired_visibility.py tests/game/test_paired_concealment.py \
+  tests/game/test_movement_interruptions.py
+```
+
+Two broader-suite failures are outside this unit and were not hidden by changing
+tests: the historical finite-horizon encounter still references the retired
+`creature.player.barbarian` declaration, removed in `1e65f61`; the real-socket
+server test cannot import the retired `dnd.core.senses` path. The final selection
+explicitly excludes those two files. The registered-controller fixture now uses
+actual composition/deployment instead of asking AI to observe uncommitted
+aggregates. It passes without a live-state fallback.
+
+Anti-slop review (`recorded_gallery`) approved the integrated event fold and the
+restricted owner refresh. Anti-OOP reviews (`lifecycle_source_review` and
+`animation_contract`) confirmed native ownership of rules, passive recorded
+values and reuse of the existing assignment/event mechanisms. No additional
+bus, queue, thread, renderer-specific AI state or audit service was introduced.
+The old live projector remains only for explicit retired-server imports and the
+independent migration oracle; active native AI/game do not import it.
+
 ## Open work and limits
 
 The measured repairs remove audit obligations, excess preloading, import
 coupling and repeated native/projection work. They do **not** close performance
 recovery. The remaining large owners are explicit:
 
-1. Native imports take 2.909s with the selected WSL environment and current C:
-   source, or about 1.7s with native Linux source/packages. The earlier 4–4.5s
+1. Native imports currently take 3.370s with the selected WSL environment and C:
+   source; the earlier controlled Linux source/packages comparison reached about
+   1.7s. The earlier 4–4.5s
    includes mounted filesystem overhead;
    the live source-location decision remains open. Eager native Pydantic class
    construction still has a cost. Any further import change needs evidence
@@ -756,12 +929,12 @@ recovery. The remaining large owners are explicit:
 2. Private admission capture still refolds actor history per root. A retained
    source-ordered fold needs the plan's acquisition-time/overlapping-root design
    review. Batch completion order is not an acceptable replacement for that.
-3. Native execution still costs several seconds for this eight-turn workload,
-   including measured generation-two collection pauses, which the user accepts
-   for now. The Tile comparison does not establish faster turns; the separate
-   interpreter comparison records a controller improvement. Ordinary tile
-   construction is now 0.164s. Remaining content ownership and root compilation
-   stay separately bounded work.
+3. Native activity now takes 1.419s for the eight-human-turn-plus-AI workload,
+   including collection pauses, which the user accepts for now. The remaining
+   query costs and their limits are measured above. The earlier 0.164s ordinary
+   Tile construction result predates event-enabled rectangle publication and is
+   not a new measurement of that changed raw setup path. Remaining content
+   ownership and root compilation stay separately bounded work.
 
 Legacy external-pack/SDK limitations from the earlier checks remain: the broad
 pack-loader selection had 13 failures, and full SDK generation is blocked by

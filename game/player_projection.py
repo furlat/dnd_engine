@@ -19,7 +19,7 @@ from dnd.core.events import (
     DamageAppliedEvent, DeathSaveEvent, EncounterEvent, EntityCreatedEvent,
     Event, ForcedMovementEvent, HealEvent, LifeStateChangeEvent,
     RoundEvent, SensoryUpdateEvent, SpatialChangeEvent, SpatialChangeType,
-    StepMovementEvent, TakeDamageEvent, TurnEvent, WorldInitializedEvent,
+    StepMovementEvent, TakeDamageEvent, TemporaryHitPointsChangedEvent, TurnEvent, WorldInitializedEvent,
 )
 from dnd.core.item_types import ItemPresentationState
 from dnd.types.world import CardinalDirection
@@ -31,7 +31,7 @@ from game.player_facts import (
     MovementFact, PlayerActor, PlayerFact, PlayerInitialization, PlayerLineage,
     PlayerNode, PlayerObject, PlayerObservation, PlayerSequence, PlayerState,
     PlayerWorld, SensoryFact, ShoveFact, SpatialFact, SpellFact, StepFact, TurnFact,
-    VersionRow, VisualItem, VisualLoadout, WorldUpdate,
+    VersionRow, VisualItem, VisualLoadout, WorldUpdate, TemporaryHitPointsFact,
 )
 from game.presentation import ActorAdmission, CompletedLineage, IntervalEnvelope, ObjectiveRow, apply_world_fact
 from game.replay import RecordedSequence
@@ -85,6 +85,7 @@ def _sensory_fact(event: SensoryUpdateEvent) -> SensoryFact:
     return SensoryFact(observer_uuid=event.observer_uuid, initial=event.initial,
         observer_position=event.observer_position, observer_position_changed=event.observer_position_changed,
         effective_light_levels_changed=dict(event.effective_light_levels_changed),
+        hazardous_cells_changed=dict(event.hazardous_cells_changed),
         cause_event_uuid=event.cause_event_uuid,
         visible_cells_added=tuple(event.visible_cells_added), visible_cells_removed=tuple(event.visible_cells_removed),
         seen_cells_added=tuple(event.seen_cells_added),
@@ -176,6 +177,10 @@ def _project_fact(event: Event, observer: UUID, actors: dict[UUID, ActorState],
             return (None if target is None else HealFact(source_entity_uuid=source, target_entity_uuid=target,
                 actual_healing=event.actual_healing, was_blocked=event.was_blocked,
                 resulting_normal_hp=event.resulting_normal_hp, resulting_temporary_hp=event.resulting_temporary_hp))
+        case TemporaryHitPointsChangedEvent():
+            return (None if event.entity_uuid not in known or not _identified(event, event.entity_uuid, observer)
+                    else TemporaryHitPointsFact(entity_uuid=event.entity_uuid,
+                        resulting_temporary_hp=event.resulting_temporary_hp))
         case LifeStateChangeEvent():
             return (None if event.entity_uuid not in known or not _identified(event, event.entity_uuid, observer) else LifeFact(
                 entity_uuid=event.entity_uuid, previous_state=event.previous_state, new_state=event.new_state,

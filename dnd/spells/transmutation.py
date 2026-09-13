@@ -1452,7 +1452,7 @@ class EnhanceAbilityEffect(BaseCondition):
                 )
             )
             temp_hp = healing.get_dice().roll.total
-            target.health.add_temporary_hit_points(temp_hp, self.source_entity_uuid)
+            target.health.add_temporary_hit_points(temp_hp, self.source_entity_uuid, parent_event=effect_event.uuid)
 
         return outs, [], [], [], effect_event
 

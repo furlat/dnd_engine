@@ -6,18 +6,58 @@ import pytest
 
 from dnd.actions_functional import execute_by_index, get_available_actions, setup_standard_actions
 from dnd.blocks.base_item import ItemChargeConsumptionEvent
+from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.core.base_object import PASSIVE_EVENT_REPLAY
-from dnd.core.events import EventPhase, EventQueue
+from dnd.core.events import EventPhase, EventQueue, TemporaryHitPointsChangedEvent
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
-from game.player_facts import ItemChargeFact
+from dnd.spells.necromancy import FalseLife
+from game.player_facts import ItemChargeFact, TemporaryHitPointsFact
 from game.player_projection import project_sequence
 from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
 from game.presentation import capture_interval, reduce_interval
 from game.replay import CapturedHistory, ObserverCapture, RecordedSequence, capture_history
+
+
+def test_false_life_records_parented_temporary_hp_for_passive_player_replay() -> None:
+    reset_engine_runtime()
+    build_battlefield("battlefield.open_floor_bright")
+    game = Game()
+    try:
+        caster = Entity.create(uuid4(), "Caster", config=EntityConfig(
+            position=(3, 3), action_economy=ActionEconomyConfig(spell_slots={1: 1}),
+        ))
+        caster.compose_entity()
+        game.deploy_entity(caster, caster.position)
+        cursor = EventQueue.event_cursor()
+        startup = capture_interval(name="before False Life", start_cursor=0, end_cursor=cursor,
+            observer_uuid=caster.uuid, battlefield_id="battlefield.open_floor_bright")
+        before, _ = reduce_interval(None, startup)
+        result = FalseLife(source_entity_uuid=caster.uuid, target_entity_uuid=caster.uuid).apply()
+        assert result is not None and not result.canceled
+        grant, = (row for _, row in EventQueue.iter_events_since(cursor)
+                  if isinstance(row, TemporaryHitPointsChangedEvent))
+        assert grant.parent_lineage == result.lineage_uuid
+        assert grant.parent_event is not None
+        expected = caster.health.temporary_hit_points.normalized_score
+        history = capture_history(before, (), observers=(ObserverCapture("caster", caster.uuid, cursor),))
+    finally:
+        game.close()
+        reset_engine_runtime()
+    native = RecordedSequence.model_validate_json(
+        history.views["caster"].model_dump_json(), context=PASSIVE_EVENT_REPLAY,
+    )
+    state, roots = decode_player_sequence(encode_player_sequence(project_sequence(native)))
+    facts = [node.fact for root in roots for node in root.events
+             if isinstance(node.fact, TemporaryHitPointsFact)]
+    assert len(facts) == 1 and facts[0].resulting_temporary_hp == expected
+    for root in roots:
+        state = reduce_lineage(state, root)
+    assert state.actors[state.observer_uuid].temporary_hp == expected
+    assert EventQueue.event_cursor() == 0
 
 
 def consumed_potion_history(stack_count: int) -> tuple[CapturedHistory, str]:

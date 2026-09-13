@@ -16,6 +16,7 @@ from dnd.ai.instrumentation import AIInstrumentation
 from dnd.controller import Controller, TurnContext
 from dnd.core.events import EventQueue
 from dnd.entity import Entity
+from dnd.game import Game
 from dnd.monsters.bestiary import create_goblin, create_skeleton
 from dnd.runtime_reset import reset_engine_runtime
 from server.registered_ai_controller import (
@@ -46,6 +47,10 @@ def _scene() -> tuple[Entity, Entity]:
         position=(5, 4),
         faction="enemy",
     )
+    game = Game()
+    for entity in (actor, target):
+        entity.compose_entity()
+        game.deploy_entity(entity, entity.position)
     Entity.update_all_entities_senses(max_distance=20)
     return actor, target
 

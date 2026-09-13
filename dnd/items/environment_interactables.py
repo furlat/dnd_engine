@@ -367,7 +367,7 @@ class CookAction(BaseAction):
         entity = Entity.get(self.source_entity_uuid)
         if not entity:
             return execution_event.cancel(status_message="Entity not found")
-        entity.health.add_temporary_hit_points(3, self.source_entity_uuid)
+        entity.health.add_temporary_hit_points(3, self.source_entity_uuid, parent_event=execution_event.uuid)
         effect = execution_event.phase_to(
             EventPhase.EFFECT, status_message="Gained 3 temp HP")
         return effect.with_updates(

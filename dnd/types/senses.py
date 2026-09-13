@@ -1,7 +1,7 @@
 """Dependency-neutral values shared by perception components and events."""
 
 from collections.abc import Mapping, Sequence, Set
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Protocol
 from uuid import UUID
@@ -94,6 +94,8 @@ class SensoryDelta(Protocol):
     @property
     def effective_light_levels_changed(self) -> Mapping[str, int]: ...
     @property
+    def hazardous_cells_changed(self) -> Mapping[str, bool]: ...
+    @property
     def sense_modes_changed(self) -> bool: ...
     @property
     def sense_modes(self) -> Sequence[SenseMode] | None: ...
@@ -124,6 +126,7 @@ class SensesSnapshot:
     sense_modes_hash: int
     sense_modes: tuple[SenseMode, ...]
     visual_access: int
+    hazardous_cells: dict[tuple[int, int], bool] = field(default_factory=dict)
 
 
 def reduce_senses_snapshot(
@@ -168,6 +171,13 @@ def reduce_senses_snapshot(
         x_text, y_text = key.split(",", maxsplit=1)
         light_levels[(int(x_text), int(y_text))] = LightLevel(level)
 
+    hazardous_cells = dict(previous.hazardous_cells)
+    for position in event.visible_cells_removed:
+        hazardous_cells.pop(position, None)
+    for key, hazardous in event.hazardous_cells_changed.items():
+        x_text, y_text = key.split(",", maxsplit=1)
+        hazardous_cells[(int(x_text), int(y_text))] = hazardous
+
     sense_modes = tuple(
         mode.model_copy(deep=True) for mode in previous.sense_modes
     )
@@ -196,6 +206,7 @@ def reduce_senses_snapshot(
         entities=entities,
         objects=objects,
         effective_light_levels=light_levels,
+        hazardous_cells=hazardous_cells,
         paths_dirty=previous.paths_dirty or event.paths_dirty,
         passive_perception=(
             event.passive_perception

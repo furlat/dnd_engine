@@ -1,4 +1,4 @@
-"""Assignment-owned decision epochs over the canonical subjective projector."""
+"""Assignment-owned recorded knowledge and exact native decision authority."""
 
 from __future__ import annotations
 
@@ -14,14 +14,9 @@ from dnd.ai.contracts.observation import (
     SubjectiveWorldState,
 )
 from dnd.ai.runtime.decision_epoch import DecisionEpochBuild, build_decision_epoch
-from dnd.ai.runtime.subjective_projection import (
-    observers_that_see,
-    project_subjective_world,
-    resolve_controlled_observers,
-)
+from dnd.ai.runtime.knowledge_reduction import AIKnowledge
 from dnd.controller import TurnContext
 from dnd.core.events import EventQueue
-from dnd.core.life_types import LifeState
 from dnd.entity import Entity
 
 
@@ -54,6 +49,8 @@ class SubjectiveAIStateProjector:
         )
         self._observation_cursor = 0
         self._world: SubjectiveWorldState | None = None
+        self._source_generation = EventQueue.generation_id()
+        self._knowledge = AIKnowledge(self._controlled_entity_uuids)
 
     @property
     def world(self) -> SubjectiveWorldState | None:
@@ -93,36 +90,32 @@ class SubjectiveAIStateProjector:
         actor: Entity,
         context: TurnContext,
     ) -> SubjectiveWorldState:
-        """Refresh subjective facts while retaining only prior unseen values."""
+        """Consume committed source facts, then expose this decision's knowledge."""
         if actor.uuid not in self._controlled_entity_uuids:
             raise ValueError("actor is not controlled by this AI assignment")
-        self._observation_cursor += 1
-        observers = resolve_controlled_observers(self._controlled_entity_uuids)
-        if not observers:
-            raise ValueError("AI assignment has no live controlled entities")
-        visible_entities = {
-            entity_uuid
-            for observer in observers
-            for entity_uuid in observer.senses.entities
-        }
-        visible_entities.update(self._controlled_entity_uuids)
-
-        session = self._session_state(actor)
-        encounter = self._encounter_state(
-            actor=actor,
-            context=context,
-            observers=observers,
-            visible_entity_uuids=visible_entities,
+        if EventQueue.generation_id() != self._source_generation:
+            raise RuntimeError("AI assignment belongs to an earlier event generation")
+        self._knowledge.consume(
+            (index, event, None)
+            for index, event in EventQueue.iter_events_since(self._knowledge.source_cursor)
         )
-        self._world = project_subjective_world(
+        self._observation_cursor += 1
+        knowledge = self._knowledge
+        if actor.uuid not in knowledge.actors:
+            raise ValueError("AI actor requires its recorded birth before a decision")
+        session = self._session_state(actor)
+        encounter = self._encounter_state(actor=actor, context=context)
+        # Fact values are immutable and shared; only publication containers are
+        # copied so a movement guard retains its genuine previous observation.
+        self._world = SubjectiveWorldState.model_construct(
             observation_cursor=self._observation_cursor,
-            session=session,
-            encounter=encounter,
-            controlled_entity_uuids=self._controlled_entity_uuids,
-            prior_world=self._world,
-            combat_logs=self._world.combat_logs if self._world else (),
-            current_epoch=None,
-            epoch_cursor=self._observation_cursor,
+            session=session, encounter=encounter,
+            observers=dict(knowledge.observers),
+            known_entities=dict(knowledge.known_entities),
+            known_objects=dict(knowledge.known_objects),
+            known_tiles=dict(knowledge.known_tiles),
+            combat_logs=self._world.combat_logs if self._world else [],
+            current_epoch=None, epoch_cursor=self._observation_cursor,
         )
         return self._world
 
@@ -136,7 +129,7 @@ class SubjectiveAIStateProjector:
                 str(entity_uuid) for entity_uuid in self._controlled_entity_uuids
             ],
             active_entity_uuid=str(actor.uuid),
-            active_entity_name=actor.name,
+            active_entity_name=self._knowledge.actors[actor.uuid].name,
             is_my_turn=True,
         )
 
@@ -146,28 +139,24 @@ class SubjectiveAIStateProjector:
         *,
         actor: Entity,
         context: TurnContext,
-        observers: tuple[Entity, ...],
-        visible_entity_uuids: set[UUID],
     ) -> ObservationEncounterState | None:
         if context.encounter_uuid is None:
             return None
         rows: list[ObservationCombatantState] = []
         for entity_uuid in context.initiative_order:
-            if entity_uuid not in visible_entity_uuids:
-                continue
-            entity = Entity.get(entity_uuid)
-            if entity is None:
+            fact = self._knowledge.known_entities.get(str(entity_uuid))
+            if fact is None or fact.knowledge_state is not KnowledgeState.VISIBLE:
                 continue
             rows.append(
                 ObservationCombatantState(
                     uuid=str(entity_uuid),
-                    name=entity.name,
+                    name=fact.name,
                     initiative=context.initiative_totals.get(entity_uuid),
-                    life_state=entity.health.life_state,
-                    is_dead=entity.health.life_state is LifeState.DEAD,
+                    life_state=fact.life_state,
+                    is_dead=fact.is_dead,
                     is_controlled=entity_uuid in self._controlled_entity_uuids,
                     knowledge_state=KnowledgeState.VISIBLE,
-                    observer_uuids=observers_that_see(entity_uuid, observers),
+                    observer_uuids=fact.observer_uuids,
                 )
             )
         subjective_turn_index = next(
@@ -185,7 +174,7 @@ class SubjectiveAIStateProjector:
             round_number=context.round_number,
             current_turn_index=subjective_turn_index,
             current_entity_uuid=str(actor.uuid),
-            current_entity_name=actor.name,
+            current_entity_name=self._knowledge.actors[actor.uuid].name,
             turn_started_source_event_cursor=(
                 context.turn_started_source_event_cursor
             ),

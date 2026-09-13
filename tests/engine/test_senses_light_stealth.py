@@ -1474,6 +1474,36 @@ def test_eb_12_028b_nonvisual_senses_create_contacts_not_visual_cells(
     assert (3, 0) not in observer.senses.visible
     assert (3, 0) not in observer.senses.effective_light_levels
 
+    target.add_condition(Invisible(
+        source_entity_uuid=target.uuid, target_entity_uuid=target.uuid,
+    ))
+    for position in ((4, 0), (5, 0), (3, 0)):
+        cursor = EventQueue.event_cursor()
+        Entity.update_entity_position(target, position)
+        expected = (
+            PerceivedContact(position=position, visual=False, special_senses=(sense_type,))
+            if position[0] <= 4 else None
+        )
+        assert observer.senses.entities.get(target.uuid) == expected
+        assert observer.senses.visible == {}
+        assert observer.senses.effective_light_levels == {}
+        updates = [
+            event for _, event in EventQueue.iter_events_since(cursor)
+            if event.event_type is EventType.SENSORY_UPDATE
+            and event.observer_uuid == observer.uuid
+        ]
+        assert len(updates) == 1
+        assert updates[0].entity_contacts_changed == (
+            {target.uuid: expected} if expected is not None else {}
+        )
+        assert updates[0].entity_contacts_removed == (
+            {target.uuid} if expected is None else set()
+        )
+        assert updates[0].visible_cells_added == []
+        assert updates[0].effective_light_levels_changed == {}
+        observer.update_entity_senses(max_distance=5)
+        assert observer.senses.entities.get(target.uuid) == expected
+
 
 @pytest.mark.parametrize(
     ("sense_type", "crosses_magical_darkness"),

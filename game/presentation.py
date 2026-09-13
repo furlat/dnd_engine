@@ -38,17 +38,21 @@ from dnd.core.events import (
     SensoryUpdateEvent,
     SpatialChangeEvent,
     SpatialChangeType,
+    SpatialEffectChangeEvent,
     StepMovementEvent,
     TakeDamageEvent,
+    TemporaryHitPointsChangedEvent,
     TurnEvent,
     WorldInitializedEvent,
-    WorldObjectState,
+    WorldModifiedEvent,
 )
 from dnd.core.item_types import ItemLocation
 from dnd.subjective_combat_log import project_combat_log
 from dnd.types.senses import PerceivedContact
+from dnd.world_facts import WorldFacts, apply_world_fact as apply_recorded_world_fact
 from game.event_record import RecordedEvent
 from game.actor_facts import ActorState, ConditionFact, PresentationTarget
+from dnd.actor_projection import condition_fact as committed_condition_fact
 from game.actor_projection import actor_fact_owner, actor_from_birth, apply_actor_fact
 
 
@@ -322,6 +326,7 @@ def _copy_snapshot(snapshot: SensesSnapshot | None) -> SensesSnapshot | None:
         entities=dict(snapshot.entities),
         objects=dict(snapshot.objects),
         effective_light_levels=dict(snapshot.effective_light_levels),
+        hazardous_cells=dict(snapshot.hazardous_cells),
         paths_dirty=snapshot.paths_dirty,
         passive_perception=snapshot.passive_perception,
         sense_modes_hash=snapshot.sense_modes_hash,
@@ -332,37 +337,12 @@ def _copy_snapshot(snapshot: SensesSnapshot | None) -> SensesSnapshot | None:
 
 def apply_world_fact(target: PresentationTarget, event: Event) -> bool:
     """Fold recorded world after-values, reporting whether any were applied."""
-    if isinstance(event, WorldInitializedEvent):
-        target.world = event
-        target.tiles = {tile.position: tile for tile in event.tiles}
-        target.objects = {row.item.item_uuid: row for row in event.objects}
-    elif isinstance(event, ItemLocationStateEvent) and event.location is ItemLocation.FLOOR:
-        if event.world_placement is None:
-            raise ValueError("floor item fact requires its recorded placement")
-        existing = target.objects.get(event.item_state.item_uuid)
-        target.objects[event.item_state.item_uuid] = WorldObjectState(
-            placement=event.world_placement, item=event.item_state,
-            contained_items=existing.contained_items if existing is not None else (),
-        )
-    elif isinstance(event, SpatialChangeEvent) and event.change_type is SpatialChangeType.OBJECT_CHANGED:
-        existing = target.objects.get(event.object_uuid) if event.object_uuid is not None else None
-        if existing is None:
-            return False
-        values: dict[str, object] = {"boundary_structure": event.object_boundary_structure}
-        for key, value in (
-            ("name", event.object_name), ("map_char", event.object_map_char),
-            ("is_open", event.object_is_open), ("blocks_movement", event.object_blocks_movement),
-            ("blocks_optics", event.object_blocks_optics),
-            ("blocks_propagation", event.object_blocks_propagation),
-        ):
-            if value is not None:
-                values[key] = value
-        target.objects[existing.item.item_uuid] = existing.model_copy(update={
-            "placement": event.placement or existing.placement,
-            "item": existing.item.model_copy(update=values),
-        })
-    else:
+    world = WorldFacts(world=target.world, tiles=target.tiles, objects=target.objects)
+    if not apply_recorded_world_fact(world, event):
         return False
+    target.world = world.world
+    target.tiles = world.tiles
+    target.objects = world.objects
     if target.door_uuid is not None and (door := target.objects.get(target.door_uuid)) is not None:
         target.door_placement = door.placement
         target.door_is_open = door.item.is_open
@@ -614,15 +594,11 @@ def _retained_event(event: Event, observer_uuid: UUID) -> Event:
             copied = event.model_copy(update={**common, "shover_athletics": None})
         case MovementEvent() | JumpEvent() | StepMovementEvent() | ForcedMovementEvent():
             copied = event.model_copy(update=common)
-        case SensoryUpdateEvent() | LifeStateChangeEvent() | DeathEvent() | HealEvent():
+        case SensoryUpdateEvent() | LifeStateChangeEvent() | DeathEvent() | HealEvent() | TemporaryHitPointsChangedEvent():
             copied = event.model_copy(update=common)
         case DeathSaveEvent() | ReviveEvent() | InstantDeathEvent() | TurnEvent() | RoundEvent() | EncounterEvent():
             copied = event.model_copy(update=common)
-        case SpatialChangeEvent(change_type=(
-            SpatialChangeType.PERCEIVABILITY_CHANGED | SpatialChangeType.ENTITY_ENTERED
-            | SpatialChangeType.ENTITY_LEFT | SpatialChangeType.MOVEMENT_COLLISION
-            | SpatialChangeType.LIGHT_CHANGED | SpatialChangeType.OBJECT_CHANGED
-        )):
+        case WorldInitializedEvent() | WorldModifiedEvent() | SpatialEffectChangeEvent() | SpatialChangeEvent():
             copied = event.model_copy(update=common)
         case ActionEvent() if type(event) is ActionEvent:
             copied = event.model_copy(update=common)
@@ -652,7 +628,7 @@ def _actor_participants(event: Event) -> tuple[UUID, ...]:
             # light_changed() stores the affected tile UUID in entity_uuid.
             # Its sensory children provide observer-specific light after-values.
             return ()
-        case LifeStateChangeEvent() | DeathEvent() | ReviveEvent() | InstantDeathEvent():
+        case LifeStateChangeEvent() | DeathEvent() | ReviveEvent() | InstantDeathEvent() | TemporaryHitPointsChangedEvent():
             return (event.entity_uuid,)
         case SpatialChangeEvent(change_type=(
             SpatialChangeType.PERCEIVABILITY_CHANGED | SpatialChangeType.ENTITY_ENTERED
@@ -671,6 +647,8 @@ def _actor_participants(event: Event) -> tuple[UUID, ...]:
 
 
 def _condition_fact(event: Event) -> ConditionFact | None:
+    if (recorded := committed_condition_fact(event)) is not None:
+        return recorded
     if not isinstance(event, (ConditionApplicationEvent, ConditionRemovalEvent)):
         return None
     return ConditionFact(

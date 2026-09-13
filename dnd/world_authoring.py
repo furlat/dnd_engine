@@ -5,7 +5,7 @@ from uuid import UUID, uuid4
 
 from dnd.blocks.base_item import BaseItem
 from dnd.blocks.inventory import Inventory
-from dnd.core.base_block import BaseBlock, LightLevel, MovementMode
+from dnd.core.base_block import BaseBlock, LightLevel
 from dnd.core.base_tiles import (
     Tile,
     validate_elevation_surface_tuple,
@@ -32,14 +32,6 @@ from dnd.types.materials import Material, TileSurface
 from dnd.types.spatial_effects import SpatialEffectAnchorKind
 from dnd.types.world import CardinalDirection
 from dnd.types.world_placement import WorldObjectPlacement
-
-
-def _movement_cost(tile: Tile, mode: MovementMode) -> int:
-    """Return one exact integral authored movement multiplier."""
-    cost = tile.get_movement_cost(mode)
-    if int(cost) != cost:
-        raise ValueError("authored Tile movement costs must be integral")
-    return int(cost)
 
 
 def _authored_cost(value: int | ModifiableValue) -> int:
@@ -94,23 +86,7 @@ def _complete_world_edit(
 
 def project_world_tile(tile: Tile) -> WorldTileState:
     """Project one live support Tile into its detached materialized state."""
-    return WorldTileState(
-        tile_uuid=tile.uuid,
-        position=tile.position,
-        surface=tile.surface,
-        name=tile.name,
-        blocks_optics=tile.blocks_optics,
-        blocks_propagation=tile.blocks_propagation_field,
-        walking_cost=_movement_cost(tile, MovementMode.WALKING),
-        flying_cost=_movement_cost(tile, MovementMode.FLYING),
-        swimming_cost=_movement_cost(tile, MovementMode.SWIMMING),
-        burrowing_cost=_movement_cost(tile, MovementMode.BURROWING),
-        elevation_steps=tile.height,
-        surface_kind=tile.elevation_surface_kind,
-        slope_axis=tile.slope_axis,
-        default_light=tile.default_light,
-        resolved_light=tile.resolved_light_level,
-    )
+    return tile.to_world_tile_state()
 
 
 def project_world_object(

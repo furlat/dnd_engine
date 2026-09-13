@@ -15,7 +15,7 @@ from typing import ClassVar, Dict, Any, Optional, Self, Union, List, Tuple, Lite
 from dnd.core.modifiers import ContextAwareCondition
 from dnd.core.base_object import BaseObject
 from dnd.core.values import ModifiableValue
-from dnd.core.events import Event, EventPhase, EventType, SavingThrowEvent, EventHandler, EventQueue
+from dnd.core.events import Event, EventPhase, EventType, SavingThrowEvent, EventHandler, EventQueue, WorldTileState
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
 from dnd.core.content.runtime import (
     BehaviorBinding,
@@ -38,24 +38,7 @@ from dnd.core.saving_throw_types import (
 )
 from dnd.core.content.identities import validate_namespaced_id
 from dnd.types.senses import OpticalObscurement
-
-
-class OutcomeProtection(BaseModel):
-    """Condition-owned rule that blocks specifically identified effects."""
-
-    model_config = ConfigDict(frozen=True)
-
-    protection_id: str = Field(description="Stable identity of the protection rule.")
-    blocked_effect_ids: frozenset[str] = Field(
-        default_factory=frozenset,
-        description="Stable effect identities fully blocked by this protection.",
-        json_schema_extra={"uniqueItems": True},
-    )
-
-    @field_serializer("blocked_effect_ids", when_used="json")
-    def serialize_blocked_effect_ids(self, value: frozenset[str]) -> List[str]:
-        """Emit protection identities in canonical wire order."""
-        return sorted(value)
+from dnd.types.actor import ConditionState, EntityStatsState, OutcomeProtection as OutcomeProtection
 
 
 class Duration(BaseObject):
@@ -176,6 +159,9 @@ class ConditionApplicationEvent(Event):
     target_entity_name: Optional[str] = Field(default=None, description="Display name of the target entity.")
     resulting_ac: Optional[int] = Field(default=None, description="Entity AC after condition application for frontend reducers.")
     resulting_max_hp: Optional[int] = Field(default=None, description="Entity max HP after condition application for frontend reducers.")
+    condition_state: Optional[ConditionState] = None
+    resulting_stats: Optional[EntityStatsState] = None
+    resulting_tile: Optional[WorldTileState] = None
 
     @field_validator("behavior_id")
     @classmethod
@@ -233,6 +219,9 @@ class ConditionRemovalEvent(Event):
 
     resulting_ac: Optional[int] = Field(default=None, description="Entity AC after condition removal for frontend reducers.")
     resulting_max_hp: Optional[int] = Field(default=None, description="Entity max HP after condition removal for frontend reducers.")
+    condition_state: Optional[ConditionState] = None
+    resulting_stats: Optional[EntityStatsState] = None
+    resulting_tile: Optional[WorldTileState] = None
 
     @field_validator("behavior_id")
     @classmethod
@@ -577,6 +566,17 @@ class BaseCondition(BaseObject):
         """
         self.target_entity_uuid = target_entity_uuid
         self.duration.target_entity_uuid = target_entity_uuid
+
+    def snapshot_state(self) -> ConditionState:
+        """Record the current semantics without retaining an executable condition."""
+        return ConditionState(
+            condition_uuid=self.uuid, name=self.name or "Condition",
+            category=self.condition_category, semantic_key=self.get_semantic_key(),
+            tags=tuple(sorted(self.tags, key=lambda tag: tag.value)),
+            removal_triggers=tuple(sorted(self.removal_triggers, key=lambda trigger: trigger.value)),
+            agency_denial=self.agency_denial, outcome_protections=self.outcome_protections,
+            applied_source_event_cursor=self.applied_source_event_cursor,
+        )
 
     def declare_event(self, parent_event: Optional[Event] = None) -> Event:
         """Create the condition application declaration event.

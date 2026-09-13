@@ -16,6 +16,7 @@ from random import randint
 from functools import cached_property
 
 from dnd.core.base_block import BaseBlock
+from dnd.core.events import EventPhase, EventQueue, TemporaryHitPointsChangedEvent
 
 
 def _unregister_hit_dice_value(value: ModifiableValue) -> None:
@@ -701,7 +702,18 @@ class Health(BaseBlock):
         else:
             self.damage_taken = max(0, self.damage_taken - heal)
 
-    def clear_temporary_hit_points(self) -> int:
+    def _record_temporary_hit_points(self, source_entity_uuid: UUID, parent_event: Optional[UUID]) -> None:
+        """Publish a committed grant/clear; damage already has its own after-value."""
+        parent = EventQueue.get_event_by_uuid(parent_event) if parent_event is not None else None
+        EventQueue.register(TemporaryHitPointsChangedEvent(
+            source_entity_uuid=source_entity_uuid, target_entity_uuid=self.source_entity_uuid,
+            entity_uuid=self.source_entity_uuid,
+            resulting_temporary_hp=self.temporary_hit_points.normalized_score,
+            parent_event=parent_event, parent_lineage=parent.lineage_uuid if parent is not None else None,
+            phase=EventPhase.COMPLETION, use_register=False,
+        ))
+
+    def clear_temporary_hit_points(self, *, parent_event: Optional[UUID] = None) -> int:
         """Remove all current temporary hit points.
 
         Returns:
@@ -709,6 +721,8 @@ class Health(BaseBlock):
         """
         removed = self.temporary_hit_points.normalized_score
         self.temporary_hit_points.remove_all_modifiers()
+        if self.temporary_hit_points.normalized_score != removed:
+            self._record_temporary_hit_points(self.source_entity_uuid, parent_event)
         return removed
 
     def on_long_rest(self) -> int:
@@ -725,7 +739,9 @@ class Health(BaseBlock):
         self.damage_taken = 0
         return healed
 
-    def add_temporary_hit_points(self, temporary_hit_points: int, source_entity_uuid: UUID) -> None:
+    def add_temporary_hit_points(
+        self, temporary_hit_points: int, source_entity_uuid: UUID, *, parent_event: Optional[UUID] = None,
+    ) -> None:
         """
         Add temporary hit points to the entity.
 
@@ -738,6 +754,7 @@ class Health(BaseBlock):
 
             self.temporary_hit_points.remove_all_modifiers()
             self.temporary_hit_points.self_static.add_value_modifier(modifier)
+            self._record_temporary_hit_points(source_entity_uuid, parent_event)
 
     def remove_temporary_hit_points(self, temporary_hit_points: int, source_entity_uuid: UUID) -> None:
         """

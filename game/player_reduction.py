@@ -10,7 +10,7 @@ from dnd.types.senses import reduce_senses_snapshot
 from game.player_facts import (
     AttackFact, ConditionChangeFact, DamageFact, EquipmentFact, HealFact, ItemChargeFact, LifeFact,
     PlayerFact, PlayerInitialization, PlayerLineage, PlayerNode, PlayerObservation, PlayerSequence,
-    PlayerState, SensoryFact, TurnFact, VersionRow, WorldUpdate,
+    PlayerState, SensoryFact, TurnFact, VersionRow, WorldUpdate, TemporaryHitPointsFact,
 )
 
 
@@ -18,7 +18,8 @@ def copy_target(target: PlayerState) -> PlayerState:
     senses = target.senses
     return replace(target, tiles=dict(target.tiles), objects=dict(target.objects), actors=dict(target.actors),
         senses=None if senses is None else replace(senses, visible=set(senses.visible), seen=set(senses.seen),
-            entities=dict(senses.entities), objects=dict(senses.objects), effective_light_levels=dict(senses.effective_light_levels)))
+            entities=dict(senses.entities), objects=dict(senses.objects),
+            effective_light_levels=dict(senses.effective_light_levels), hazardous_cells=dict(senses.hazardous_cells)))
 
 
 def apply_world_update(target: PlayerState, update: WorldUpdate) -> None:
@@ -97,6 +98,9 @@ def _apply_fact(target: PlayerState, fact: PlayerFact) -> None:
             if fact.resulting_normal_hp is None or fact.resulting_temporary_hp is None:
                 raise ValueError("healing requires exact committed HP")
             target.actors[actor.uuid] = replace(actor, normal_hp=fact.resulting_normal_hp, temporary_hp=fact.resulting_temporary_hp)
+        case TemporaryHitPointsFact():
+            actor = target.actors[fact.entity_uuid]
+            target.actors[actor.uuid] = replace(actor, temporary_hp=fact.resulting_temporary_hp)
         case LifeFact():
             actor = target.actors[fact.entity_uuid]
             target.actors[actor.uuid] = replace(actor, life_state=fact.new_state, normal_hp=fact.normal_hit_points)

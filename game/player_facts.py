@@ -166,6 +166,13 @@ class HealFact:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
+class TemporaryHitPointsFact:
+    kind: Literal["temporary_hit_points"] = "temporary_hit_points"
+    entity_uuid: UUID
+    resulting_temporary_hp: int
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
 class LifeFact:
     kind: Literal["life"] = "life"
     entity_uuid: UUID
@@ -258,11 +265,12 @@ class SensoryFact:
     visual_access_changed: bool
     visual_access: int | None
     paths_dirty: bool
+    hazardous_cells_changed: dict[str, bool] = field(default_factory=dict)
 
 
 PlayerFact = Annotated[
     AttackFact | SpellFact | MovementFact | StepFact | ForcedMovementFact | ShoveFact
-    | DamageFact | HealFact | LifeFact | DeathSaveFact | EquipmentFact
+    | DamageFact | HealFact | TemporaryHitPointsFact | LifeFact | DeathSaveFact | EquipmentFact
     | ConditionChangeFact | SpatialFact | TurnFact | ActionFact | SensoryFact | ItemChargeFact,
     Field(discriminator="kind"),
 ]
