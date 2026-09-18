@@ -19,13 +19,27 @@ DATA_ROOT = PACKAGE_ROOT / "data"
 
 @dataclass(frozen=True, slots=True)
 class AssetSpec:
-    """One local raster resource used by the pygame presentation."""
+    """One local image resource used by the pygame presentation."""
 
     asset_id: str
     path: Path
     native_size: tuple[int, int]
     pivot: tuple[float, float]
     scale: float
+
+
+@dataclass(frozen=True, slots=True)
+class LitAnimation:
+    """A prop's optional flame loop, selected by its recorded lit state."""
+
+    frames: tuple[str, ...]
+    fps: int
+
+
+@dataclass(frozen=True, slots=True)
+class PropBinding:
+    body_by_pose: Mapping[str, str]
+    lit_animation: LitAnimation | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,6 +51,7 @@ class AssetCatalog:
     flame_frames: tuple[str, ...]
     flame_fps: int
     water: Mapping[str, object]
+    props: Mapping[str, PropBinding]
 
 
 def catalog_from_documents(
@@ -44,7 +59,8 @@ def catalog_from_documents(
 ) -> AssetCatalog:
     """Assemble the checked-in catalog values without filesystem validation."""
     raw_resources = cast(dict, assets["resources"])
-    flame = cast(dict, cast(dict, assets["animations"])["torch.flame"])
+    animations = cast(dict, assets["animations"])
+    flame = cast(dict, animations["torch.flame"])
     resources = {
         asset_id: AssetSpec(
             asset_id=asset_id,
@@ -55,12 +71,20 @@ def catalog_from_documents(
         )
         for asset_id, raw in raw_resources.items()
     }
+    props = {}
+    for item_id, row in cast(dict, bindings["props"]).items():
+        loop = animations[row["lit_animation"]] if row["lit_animation"] is not None else None
+        props[item_id] = PropBinding(
+            body_by_pose=MappingProxyType(row["body_by_pose"]),
+            lit_animation=None if loop is None else LitAnimation(tuple(loop["frames"]), loop["fps"]),
+        )
     return AssetCatalog(
         resources=MappingProxyType(resources),
         bindings=MappingProxyType(bindings),
         flame_frames=tuple(flame["frames"]),
         flame_fps=flame["fps"],
         water=MappingProxyType(cast(dict, assets["water"])),
+        props=MappingProxyType(props),
     )
 
 

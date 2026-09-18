@@ -29,7 +29,7 @@ from dnd.core.content.registration import (
 from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.core.events import Event, EventPhase, EventQueue, ExposedFlameEvent
 from dnd.core.gridmap import get_map
-from dnd.core.item_types import ItemPresentationState
+from dnd.core.item_types import ItemLocation, ItemPresentationState
 from dnd.entity import Entity
 
 
@@ -619,6 +619,9 @@ class WallTorch(UsableItem):
         if current.canceled:
             self.put_out(parent_event=current.uuid)
             return current
+        self.publish_location_state(
+            ItemLocation.FLOOR, world_placement=placement, parent_event=current,
+        )
         return current.phase_to(EventPhase.COMPLETION)
 
     def put_out(self, parent_event: Optional[UUID] = None) -> None:
@@ -632,6 +635,13 @@ class WallTorch(UsableItem):
                 parent_event=parent_event,
             )
             self._light_source_uuid = None
+        self.publish_location_state(
+            ItemLocation.FLOOR,
+            parent_event=(
+                EventQueue.get_event_by_uuid(parent_event)
+                if parent_event is not None else None
+            ),
+        )
 
     def is_exposed_flame(self) -> bool:
         """Return whether the wall torch is currently burning."""

@@ -524,6 +524,49 @@ def test_standing_torch_body_and_flame_share_committed_placement_base(
     assert target.tiles[fixture.placement.position].elevation_steps == 0
 
 
+@pytest.mark.parametrize("item_id", (
+    "environment.standing_torch", "environment.wall_torch", "environment.trap_lever",
+))
+def test_disclosed_props_follow_received_light_state_and_camera(rendering, base_target, item_id: str) -> None:
+    """Received prop values draw without a live item or prop-specific executor."""
+    screen, catalog, cache = rendering
+    target = deepcopy(base_target)
+    identity = target.standing_torch_uuid
+    assert identity is not None and target.senses is not None
+    fixture = target.objects[identity]
+    body_assets = set()
+    for quadrant in range(4):
+        camera = Camera(viewport=screen.get_size(), quadrant=quadrant).with_focus(fixture.placement.position)
+        images = []
+        for lit in (False, True, False):
+            target.objects = {identity: fixture.model_copy(update={
+                "item": fixture.item.model_copy(update={"item_id": item_id, "is_lit": lit}),
+            })}
+            evidence = draw_frame(screen, target, catalog, cache, camera, 0.2,
+                show_grid=False, mouse_position=None, show_debug=False, collect_evidence=True)
+            assert evidence is not None
+            rows = [row for row in evidence.actual_draws if row[0] == identity]
+            assert rows, "a disclosed placed prop must be visible"
+            body_assets.add(rows[0][2])
+            expected_flames = int(lit and item_id != "environment.trap_lever")
+            assert evidence.animated_fixtures == expected_flames
+            images.append(pygame.surfarray.array3d(screen).copy())
+        assert np.array_equal(images[0], images[2]), "seeking the same unlit state must reproduce its pixels"
+        if item_id == "environment.trap_lever":
+            assert np.array_equal(images[0], images[1]), "a neutral lever marker has no invented lit state"
+        else:
+            assert not np.array_equal(images[0], images[1]), "recorded lit state must show the flame"
+    assert body_assets == {
+        "environment.standing_torch": {"torch.body"},
+        "environment.wall_torch": {"torch.wall.e", "torch.wall.w"},
+        "environment.trap_lever": {"lever.marker"},
+    }[item_id]
+    target.senses.objects.pop(identity)
+    evidence = draw_frame(screen, target, catalog, cache, camera, 0.2,
+        show_grid=False, mouse_position=None, show_debug=False, collect_evidence=True)
+    assert evidence is not None and all(row[0] != identity for row in evidence.actual_draws)
+
+
 def test_real_q0_water_wall_overlap_uses_planar_then_spatial_pixel_order(
     rendering,
     base_target,

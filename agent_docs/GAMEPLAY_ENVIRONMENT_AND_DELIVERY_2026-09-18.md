@@ -5,6 +5,181 @@ interaction: lootable boxes/chests, doors and other props with meaningful state
 and animation. This study and the asset scan establish the next bounded gameplay
 unit. Startup optimization is stopped; the active checkout remains on C:.
 
+**User correction, September 18:** the first study narrowed "other interactions"
+to familiar doors and chests. The requested scope goes beyond that: levers,
+extinguishing placed lights and environmental changes that affect play. The
+lights/lever unit below supersedes the door/loot-first ordering later in this
+document. Doors and loot remain part of the room, not the whole feature set.
+
+**Backend scope clarification:** the user explicitly confirmed that environment
+items may require new authored backend behavior. Existing mechanics are useful
+starting points, not the boundary of the requested game. Add missing item state,
+actions and their emitted facts at native owners; keep presentation consuming
+those facts. Do not reduce an interaction to selecting an asset or stop because
+the old item happened to lack the requested behavior.
+
+## Current implementation: light control and a linked lever
+
+Use real discovered actions and current rules to show that interacting with the
+environment changes visibility and traversable risk. Reuse the original symbolic
+lever drawing where a dedicated pixel sprite is absent; label that art limit.
+
+1. Connect both placed wall and standing torches through passive prop bindings
+   and the existing painter. Their base art and optional flame layer depend on
+   received `is_lit`, placement and camera pose. Replace the current exact
+   standing-torch-only draw restriction with this shared presentation path.
+2. Capture extinguish/relight sequences from operator and witness. Test ordinary
+   vision versus darkvision and a second independently owned light. Contact and
+   target changes come from native sensory events, not a renderer darkness rule.
+   Confirm fixture after-values survive native/public serialization; repair only
+   an actually reproduced missing after-value at its existing owner.
+3. Capture a discovered lever action deactivating its exact linked SpikeTrap,
+   followed by real movement through its former area. Retain a control hazard
+   or pre-pull walk so the gameplay consequence is observable. Keep the linked
+   trap's existing perception rules. The lever currently spends a charge; this
+   is not evidence of a mechanical handle pose or a general on/off switch.
+4. Preserve complete causal roots and both observers' recorded public views.
+   Use the existing gallery for synchronized four-corner clips and saved-input
+   replay. Keep latest state independent of paused presentation. Do not add a
+   second queue, per-prop action executor or new generic interaction framework.
+
+Anti-slop review: `environment_native_review` verifies actual light/trap state,
+discovery and paired facts. Anti-OOP review: `environment_timeline_review` checks
+the shared prop binding/drawing and original recipe meaning. Asset exploration
+by `environment_asset_scan` now includes original lever drawings, UI icons and
+other relevant archives instead of stopping at the chest contact sheet.
+
+### Completed light/lever checkpoint — September 18
+
+The first unit is implemented. `battlefield.environment_workshop` creates actual
+placed lights, a lever and two independent spike networks. The room builder
+settles its traps through the existing post-initialization lifecycle, so the
+lever also works outside the test producer.
+
+- `WallTorch.light/put_out` now publish the existing item-location after-value
+  under the causal action. The old implementation changed native light but left
+  replay's fixture state stale. Both wall and standing regression cases failed
+  before this repair. Initialization's old compensating publication was removed;
+  repeated same-state calls emit nothing.
+- One shared prop draw path consumes passive camera/body/optional-lit-loop
+  bindings. It uses recorded visibility, placement, elevation and `is_lit`.
+  Standing torch behavior is preserved; two actual wall-torch images and the
+  original neutral lever marker add 60,048 bytes of media. There is no new action
+  executor, event queue, per-prop renderer branch or runtime asset audit.
+- Four light experiments cover standing/wall fixtures, a darkvision witness and
+  an independent second light. The operator has darkvision; the ordinary witness
+  loses/reacquires it. Both participants make two real steps during the off
+  interval. The witness walks on authored dim footing, so its own recording has
+  meaningful movement while the operator's movement is hidden.
+- The lever experiment crosses the live linked spikes, retreats, pulls the
+  lever, crosses safely and then enters the unrelated active trap. Saved player
+  packets show HP changes `-4, 0, 0, -4`; only the linked hazard is removed. A
+  paused variant exercises historical presentation with latest state ahead.
+
+**Verification:** 49 asset/map/prop checks and 48 native/public/world checks pass
+(97 distinct checks). Changed production modules, gallery wiring and new scenario
+and test modules pass Pyright. Existing diagnostics in older renderer test files
+outside the edits were not treated as new defects. Anti-slop and anti-OOP reviews
+approved the source and actual scenario meaning.
+
+Six experiments produce **12 paired four-corner clips**, all passing with no
+presentation gaps. A fresh process re-rendered all twelve saved public inputs
+with no native content installed, no scenario producers imported and an empty
+event queue. Initial gameplay facts, causal lineages, bound timelines, final
+states and every frame trace match; saved input bytes are unchanged. The initial
+diagnostic comparison excludes the existing process-local `sense_modes_hash`
+cache value; actual sense-mode values and all gameplay fields match. No hashing
+or new runtime validation was added for this comparison.
+
+- [Capture gallery](http://127.0.0.1:8767/runs/20260918T140227Z-342b3b/index.html)
+- [Saved-input replay gallery](http://127.0.0.1:8767/runs/20260918T140548Z-b32e98/index.html)
+- Saved inputs: `.runtime/animation-review/inputs/environment-*`.
+- Local check output: `.runtime/environment-study-20260918/`.
+
+These are immediate state interactions using the original Studio recipes.
+The lever still has one neutral marker pose; wall torches have two actual source
+views reused across four cameras. General lever-to-door/light behavior and
+container opening are the next backend unit below, not claimed complete here.
+
+```bash
+export UV_PROJECT_ENVIRONMENT=/home/tommaso/.cache/dnd-engine/venv
+# Explicit native generation, followed by rendering saved public bytes:
+/home/tommaso/.local/bin/uv run --no-sync python -m devtools.animation_review.capture --tag environment
+# Subsequent runs consume those same saved inputs without native generation:
+/home/tommaso/.local/bin/uv run --no-sync python -m devtools.animation_review --tag environment
+```
+
+## Wider environmental gameplay to connect and author
+
+| Interaction | Existing native meaning | Follow-through after the first unit |
+| --- | --- | --- |
+| Placed lights | Light/extinguish, anchored light, sensory/target changes | First unit above; preserve independent lights and special senses |
+| Linked lever | Deactivate one exact SpikeTrap and consume its authored charge | First unit above; next author a reusable control for a door or placed light, with real target-state events |
+| Breakable containers | Attack Object, object HP/destruction, contents spilling onto the floor | Draw intact/removal or authored break media from a recorded destructive cause; pickup is not destruction |
+| Oil barrels and exposed flame | Barrel destruction creates OilSurface; fire damage can ignite it through existing spatial interactions | Connect surface/condition lifetime and actual actors entering affected cells through shared area presentation |
+| Campfire | Existing Rest heals; Cook grants temporary HP | Connect the real effects; current campfire is not already a switchable light or a complete resting/crafting system |
+| Skill-gated devices | Arcana-gated healing device; finite/unlimited spell-granting fixtures | Exercise existing discovery, charges and shared action/spell delivery |
+| Containers, pickup, drop and equipment | Existing item transfer and ownership | Keep the previous loot repair; author container open/closed state and discovered actions, then connect lid art and subsequent item use |
+| Doors and gates | Existing directional boundary state changes sight and movement | Use available gate variants through the same boundary owner |
+
+Moving crates, pressure plates, locks and crafting are further design candidates,
+not capabilities established by this study. Backend additions are authorized
+where the selected interaction needs them. A general circuit language is not a
+prerequisite for authoring an ordinary lever/door/light link.
+
+### Next backend unit: authored controls and containers
+
+The native review recommends a reusable two-position lever controlling one
+placed light first, then a directional door through the same narrow link data.
+This differs from the existing finite-use trap lever; do not redefine that item
+merely to give every control the same class name.
+
+1. Separate the three facts: the lever's persistent `is_engaged`, the target's
+   actual `is_lit`/`is_open`, and an authored backend link identifying the target
+   and requested state when engaged. A manual change to the target does not move
+   the handle. A charge count is not handle state.
+2. Compose the target's normal action under the lever event using the existing
+   `BaseAction.apply(parent_event=...)` surface. `execute_use_action` currently
+   has no parent argument; extending the functional entry point is unnecessary.
+   Door use-actions are templates while torch use-actions are already executable;
+   use the existing template instantiation path when needed, without copying the
+   discovery/target-selection machinery into a second dispatcher.
+   Preserve the target action's existing identity, light/sensory changes and
+   directional-door validation, including refusal to close an occupied doorway.
+   If already in the requested state, the target needs no mutation. A refused
+   close leaves the lever unchanged; this follows an existing concrete rule,
+   not a new rollback framework.
+3. Publish the lever's accepted state through `ItemLocationStateEvent` and the
+   existing item/public floor-state values. Target consequences continue to come
+   from their native owners. The remote link is backend configuration, not
+   automatically disclosed player state: seeing the lever must not reveal a
+   hidden target's identity or location.
+4. Resolve handle/chest appearances through passive state variants in the same
+   prop binding. Keep the original action timeline and existing independent
+   presentation clock. A new control behavior can bind to the existing imported
+   immediate-interaction recipe. A neutral marker remains honest until actual second-pose
+   art is connected; gameplay is not blocked by missing pixel art.
+5. Exercise pull → light change → subjective contact loss/reacquisition, manual
+   target change without moving the lever, then another lever operation. Add
+   the door target with its occupied-close rule and a second independent control.
+   Record both viewpoints and replay saved public packets with native state
+   unavailable. Test what the participants can observe, not a private call order.
+
+For containers, define open/close and access behavior at the native item before
+binding the supplied closed/open art. Empty/full and closed/open are independent
+facts. The proposed ordinary chest offers Open/Close and allows Loot All when
+open and nonempty. Opening does not transfer items; an empty chest still opens
+and closes. Set initial lid state explicitly in authored scenes; transfer-only
+fixtures can start open. Preserve the repaired transfer owner, private inventory
+rules and existing destruction/spill behavior.
+
+Authored gameplay determines the required native state and actions. Extend the
+existing owners where behavior is missing and record committed consequences
+through the established event contracts. No circuit simulator, prop controller
+hierarchy or new interaction manager is needed for this unit. Anti-slop review
+is `environment_native_review`; anti-OOP review is `environment_timeline_review`.
+Both have reviewed this next-unit design; its implementation remains ahead.
+
 The [asset study](ENVIRONMENT_ASSET_STUDY_2026-09-18.md) records exact archive
 entries, alignment references and inspection sheets. It confirms three chest
 closed/open pairs, ordinary crates/barrels and the already imported door pair.
@@ -42,7 +217,7 @@ do not constitute an opening strip.
   public item appearance/state. Ordinary chest/box drawing is missing; current
   world drawing handles boundary structures and the standing torch.
 
-## First implementation slice: a usable room with doors and loot
+## Supporting room connection: doors and loot
 
 The observable result is a small playable scene: approach an actual door, select
 its discovered action, open it, see the resulting room/actor visibility, move
@@ -96,9 +271,9 @@ scratch or implement one renderer per spell.
 Both action effects and object changes must retain source ordering, complete
 lineages, independent latest/historical reduction and the existing subjectivity
 rules. Python/Pygame remains the runtime; new authoring data stays portable to
-TypeScript. Use actual available art. Additional VFX authoring, destruction,
-locking, trap systems and a broad inventory/editor UI are not prerequisites for
-the first door/loot slice.
+TypeScript. Use actual available art. Existing trap deactivation is included in
+the current lights/lever unit; broad new trap rules, locking, VFX authoring and a
+large inventory/editor UI are not prerequisites for connecting it.
 
 ## Review and current boundary
 
@@ -115,10 +290,11 @@ blocker below; timeline review confirmed that immediate door state reduction was
 also the original client's behavior, and that the current shared body-action
 path already loads the relevant imported recipes.
 
-The current work is the asset/native/presentation study, this bounded plan and
-the following reproduced native transfer repair. This document does not claim
-that a new scene, loot presentation or timed prop animation is already working.
-Read `HOW_TO_TEST.MD` before adding behavioral coverage. Validate real commands,
+The previous checkpoint covered the asset/native/presentation study and the
+reproduced native transfer repair below. The current implementation unit is
+placed lights and the linked lever at the top of this document; a complete loot
+room and timed prop animation remain separate work.
+Read `HOW_TO_TEST.md` before adding behavioral coverage. Validate real commands,
 resulting ownership/world facts and saved subjective replay; do not add source
 fingerprints, asset audits or exact file-census tests to ordinary play.
 
@@ -161,7 +337,8 @@ export UV_PROJECT_ENVIRONMENT=/home/tommaso/.cache/dnd-engine/venv
 Before/after test and type-check output is retained alongside the probe in
 `.runtime/environment-study-20260918/`. No new scene, art import, chest-lid
 mechanic, world-prop drawer or area-delivery implementation was added in this
-study/repair checkpoint. The next work is the room-level connection above.
+study/repair checkpoint. The later user correction selected placed lights and
+the linked lever before the supporting door/loot room connection.
 
 ## Source pointers for implementation
 

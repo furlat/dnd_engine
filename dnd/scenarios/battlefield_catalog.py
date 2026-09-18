@@ -14,6 +14,7 @@ from dnd.content.items.environment_item_builders import (
     build_standing_torch,
     build_storage_chest,
     build_wall_torch,
+    build_trap_lever,
 )
 from dnd.core.content.battlefields import (
     BattlefieldDefinition,
@@ -35,7 +36,6 @@ from dnd.core.events import (
     WorldInitializedEvent,
     WorldObjectState,
 )
-from dnd.core.item_types import ItemLocation
 from dnd.core.traversal_connectors import (
     ConnectorActionCostType,
     ConnectorProvocationPolicy,
@@ -87,6 +87,7 @@ class BuiltBattlefield:
     environment: StandardArenaObjects | None
     notable_positions: dict[str, tuple[int, int]]
     object_uuids: dict[str, UUID]
+    spike_traps: tuple[tuple[UUID, tuple[tuple[int, int], ...]], ...] = ()
 
 
 def _battlefield(
@@ -331,6 +332,12 @@ def _preview_for_battlefield(battlefield_id: str) -> BattlefieldPreview:
 
 
 BATTLEFIELDS: tuple[BattlefieldDefinition, ...] = (
+    BattlefieldDefinition(
+        battlefield_id="battlefield.environment_workshop", title="Environment Workshop",
+        width=12, height=11, light_level="darkness",
+        tags=("environment", "lights", "lever"),
+        capabilities=("placed-light", "linked-trap", "bright-workbench"),
+    ),
     BattlefieldDefinition(battlefield_id="battlefield.visibility_open_range", title="Bright Sight-Range Field",
                           width=26, height=7, tags=("bright", "open-field", "visibility"),
                           capabilities=("open-floor", "bright-light")),
@@ -640,6 +647,40 @@ def _build_standard_hazards(
         environment=environment,
         notable_positions={"door": door_position},
         object_uuids={"door": environment.barrier.door.uuid},
+    )
+
+
+def _build_environment_workshop(definition: BattlefieldDefinition, grid: GridMap) -> BuiltBattlefield:
+    """A bright workbench and dark light-testing floor with real fixtures."""
+    grid.create_rectangle(0, 0, definition.width, definition.height, default_light=LightLevel.DARKNESS)
+    for x in range(definition.width):
+        for y in range(3):
+            grid.set_tile_base_light((x, y), LightLevel.BRIGHT_LIGHT)
+    fixtures = {
+        "standing_torch": (build_standing_torch(), (6, 5)),
+        "wall_torch": (build_wall_torch(), (6, 8)),
+        "second_torch": (build_standing_torch(), (8, 6)),
+    }
+    fixtures["second_torch"][0].bright_radius_feet = 20
+    fixtures["second_torch"][0].dim_radius_feet = 20
+    objects: dict[str, UUID] = {}
+    for key, (fixture, position) in fixtures.items():
+        fixture.place_on_grid(position)
+        # The fixture remains findable when unlit; neighboring actor cells are dark.
+        grid.set_tile_base_light(position, LightLevel.DIM_LIGHT)
+        objects[key] = fixture.uuid
+    for y in (5, 8):
+        for x in (8, 9):
+            grid.set_tile_base_light((x, y), LightLevel.DIM_LIGHT)
+    linked_trap_uuid, other_trap_uuid = uuid4(), uuid4()
+    lever = build_trap_lever(linked_trap_uuid)
+    lever.place_on_grid((3, 1))
+    objects["lever"] = lever.uuid
+    return BuiltBattlefield(
+        definition=definition, environment=None,
+        notable_positions={"linked_trap": (5, 1), "other_trap": (7, 1)},
+        object_uuids=objects,
+        spike_traps=((linked_trap_uuid, ((5, 1),)), (other_trap_uuid, ((7, 1),))),
     )
 
 
@@ -1004,6 +1045,7 @@ BattlefieldBuilder = Callable[
 ]
 
 _BUILDERS: dict[str, BattlefieldBuilder] = {
+    "battlefield.environment_workshop": _build_environment_workshop,
     "battlefield.visibility_open_range": _build_visibility_open_range,
     "battlefield.visibility_two_doors_open": _build_visibility_two_doors,
     "battlefield.visibility_doorway_open": _build_visibility_doorway,
@@ -1166,16 +1208,15 @@ def _materialize_authored_spike_traps(
     parent_event: WorldInitializedEvent,
 ) -> None:
     """Activate each reserved authored trap through its ordinary lifecycle."""
-    if built.environment is None:
-        return
-    condition_uuid = built.environment.spike_condition_uuid
-    condition = materialize_spike_trap_condition(
-        set(SPIKE_ZONE_POSITIONS),
-        condition_uuid=condition_uuid,
-        parent_event=parent_event,
-    )
-    if condition.uuid != condition_uuid:
-        raise RuntimeError("SpikeTrap materialization changed reserved identity")
+    traps = built.spike_traps
+    if built.environment is not None:
+        traps += ((built.environment.spike_condition_uuid, tuple(SPIKE_ZONE_POSITIONS)),)
+    for condition_uuid, positions in traps:
+        condition = materialize_spike_trap_condition(
+            set(positions), condition_uuid=condition_uuid, parent_event=parent_event,
+        )
+        if condition.uuid != condition_uuid:
+            raise RuntimeError("SpikeTrap materialization changed reserved identity")
 
 
 def _settle_authored_wall_torches(
@@ -1202,8 +1243,3 @@ def _settle_authored_wall_torches(
             != placement.position
         ):
             raise RuntimeError("authored WallTorch did not publish IGNITE")
-        item.publish_location_state(
-            ItemLocation.FLOOR,
-            world_placement=placement,
-            parent_event=ignite,
-        )

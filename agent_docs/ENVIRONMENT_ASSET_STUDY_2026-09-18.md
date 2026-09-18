@@ -5,6 +5,13 @@ boxes/chests and other environmental interactions alongside action delivery.
 It does not add mechanics, import an asset pack, or change rendering. The root
 task separately traces the current native actions and recorded event facts.
 
+**Scope correction:** the first pass concentrated too narrowly on doors and
+containers. The user's follow-up explicitly includes levers, extinguishing
+placed lights and other environment mechanics. The expanded study below covers
+those existing features, the original client's actual world rendering, and
+additional packed atlases. Missing ideal artwork is not grounds to defer an
+already supported native interaction.
+
 ## What can be reused immediately
 
 The current game already has the Fantasy wooden door's closed/open pictures in
@@ -17,6 +24,169 @@ state, and an emptied container is not automatically an opened container.
 The chest and door pictures are **static states**, not frame sequences. Genuine
 prop animation sequences also exist, principally barrel destruction and looping
 fire. They are a separate capability from selecting an authored state picture.
+
+For the broadened unit, **levers and placed lights are already actionable**.
+NeuroClient had a simple actual world drawing for interactables and lit/unlit
+lights. MapEditor has a more legible lever base and handle drawing. These can
+carry the existing interaction while better sprites remain an independent art
+choice. The current native oil barrel also already has destruction, spilled-oil
+and fire-contact consequences; the art study must not present that established
+behavior as an invented future mechanic.
+
+## Expanded findings: controls, placed lights and environmental consequences
+
+### Levers: an existing world drawing, plus distinct UI art
+
+The source of the original working representation is
+`/home/tommaso/Dev/NeuroClient/app/src/tiles.ts`, `buildFloorObjects`, around
+line 711. Objects with `object_kind === "interactable"` receive a gray vertical
+2 × 10 stick and a circular knob. The container is clickable, uses the object's
+actual map position and enters ordinary world depth sorting. This is a world
+marker built from geometry, not an imported bitmap, and it has one displayed
+pose; it does not contain a hidden authored lever-pull animation.
+
+Two existing clearer geometric descriptions are available:
+
+- `/home/tommaso/Dev/MapEditor/app/src/objectMarkers.ts:54`:
+  a 12 × 8 base at `(-6,-4)`, a 3-pixel handle from `(0,-4)` to `(2,-20)` and
+  a radius-3 knob at `(2,-21)`; colors `0x8d8d82`, `0xc8c2a0`, `0xe8d479`.
+- `/home/tommaso/Dev/NeuroClient/app/src/ui/battlefieldPreview.ts:156`:
+  a 14 × 6 base and 3-pixel handle from `(0,2)` to `(5,-10)`.
+
+Those sources prove that the native feature did not require a packaged pixel
+lever sheet. Reuse the small geometric representation or select suitable art
+through ordinary presentation data. Do not copy the old MapEditor's
+name-matching dispatch into the game, invent a generic marker engine, or infer
+new toggle mechanics from the direction of a drawn handle. Native
+`PullLeverAction` currently deactivates one linked `SpikeTrap`; `TrapLever`
+records that exact linked condition identity. It does not establish an
+arbitrary door-wiring system or a persistent `is_pulled` field.
+
+The following already-authored **UI icons** were visually inspected:
+
+`/home/tommaso/Dev/NeuroClient/app/public/game-icons/fantasy-classic-v1/icons/`
+
+- `object.trap-lever.webp`
+- `action.pull-lever.webp`
+- `object.wall-torch.webp`
+- `action.extinguish-wall-torch.webp`
+- `action.light-wall-torch.webp`
+- `object.oil-barrel.webp`
+- `object.campfire.webp`
+- `item.torch.webp`
+
+All are 256 × 256 framed, painted illustrations, with opaque scene backgrounds.
+They suit an action/object panel and cannot be treated as transparent isometric
+world sprites. The separate pull/extinguish/light illustrations are action
+icons, not frames of an object animation. Their inspection sheet is
+[interaction UI icons](../.runtime/environment-study/interaction-ui-icons.png).
+
+### Placed lights: existing lit/unlit state and independent flame layer
+
+`NeuroClient/app/src/tiles.ts:626` already draws `light_source` objects
+differently from actual `is_lit`: a lit orange center with a larger translucent
+yellow circle, or a dark unlit center. The rendering record retains `is_lit`,
+so there is a proven visual state distinction to preserve.
+
+Current native `dnd/items/torches.py`, `WallTorch` and the standing fixture
+variant, own the light state. `WallTorch.to_item_presentation_state` includes
+`is_lit` and its light radii; use-action discovery selects Ignite or Extinguish
+from that state. Extinguishing removes the fixture's light source. Native
+exposed-flame interaction also supports dousing. These facts make extinguish,
+relight and resulting subjective sight changes meaningful gameplay clips,
+independent of whether a new flame strip is imported.
+
+The already inspected Fantasy art offers a standing torch body (`Torch2.png`),
+two named wall-fixture pictures (`Torch East.png`, `Torch West.png`), a stone
+brazier (`Misc C8_{E,N,S,W}.png`) and unlit campfire base (`FirePlace.png`). The
+separate `Animations/Props/Torch 1/` and `Fire/` flame sequences can follow the
+same recorded lit state. The two wall pictures include small warm-colored
+pixels at their tips; no distinct authored unlit wall-torch pair was found.
+Do not promise a perfect off-state by treating the whole lit picture as a
+removable flame. The current standing body plus a separately controlled flame,
+or the original geometric light marker, supports this feature now.
+
+Neither brazier art nor a campfire picture creates a native switch action.
+Current campfire Rest/Cook are their own existing interactions. The explicit
+ignite/extinguish feature belongs to fixtures whose native owners expose it.
+
+### Breakable props: oil already has gameplay consequences
+
+`dnd/content/items/environment_item_builders.py:42` defines the existing
+`OilBarrel._on_destroy` path; `build_oil_barrel` at line 295 creates the targetable,
+movement-blocking item with 12 HP. Destruction at the item's committed position
+activates `OilSurface`. When the destroying damage includes FIRE, the native
+lineage additionally carries an IGNITE spatial interaction. Presentation should
+show those recorded outcomes; it should not independently decide that every
+damaged barrel explodes.
+
+The Fantasy static `Misc A8` barrel or the previously identified Barrel 1 idle
+picture are usable intact art. Barrel 1's wood-debris sequence is useful
+destruction art, with the one-projection limitation recorded below. Barrel 2
+visibly spills **blue water**, and Barrel 3 **green material**; neither is an
+accurate oil visual merely because the backend object is a liquid container.
+Spilled oil and resulting fire belong to their native persistent effect state,
+not to a fabricated permanent state of the disappearing barrel object.
+
+The Desert archive also has explicitly named material impact sequences under
+`D/Animations/Destructible tiles/`: `Wood damage/` (16 PNGs), `wood explosion
+Small/` (17), `wood explosion large/` (17), `Stone damage/` (17), `stone
+explosion Small/` (17), `stone explosion large/` (17), and `Clay explosion/`
+(17). Their existence was checked by entries only; their visual content and
+per-direction alignment have not been reviewed. These are optional subsequent
+art inputs, not dependencies for enabling the existing object damage path.
+
+### Additional atlases inspected beyond the Fantasy Misc sheet
+
+The old Godot project includes packed rural object atlases at:
+
+`/mnt/c/Users/tommaso/Documents/dev/smallscale_template/assets/tilemaps/zombie_rural_grouped/`
+
+- `objects_1_15.png`: 512 × 3840
+- `objects_16_30.png`: 512 × 3840
+- `objects_31_44.png`: 512 × 3584
+
+All three were visually inspected. The project's
+`resources/tilesets/zombie_interior_128_256.tres` explicitly uses 128 × 256
+atlas regions with texture origins such as `(0,80)`; these are placement data,
+not animation frames. Matching original `ObjectN_{E,N,S,W}.png` files are under
+`assets/tilemaps/zombie_rural/`.
+
+Relevant confirmed candidates:
+
+| Original family | Visually inspected content | Actual availability |
+| --- | --- | --- |
+| `Object1_{E,N,S,W}.png` | Intact dark metal barrel | Four static 128 × 256 views |
+| `Object9_{E,N,S,W}.png` | Small upright pipe/control with a red handwheel, visually a valve/standpipe | Four static views; no alternate wheel position or semantic metadata; do not label it a proven lever |
+| `Object17_{E,N,S,W}.png` | Open dark metal barrel | Four static views; not a demonstrated damaged frame of Object1 |
+| `Object18_{E,N,S,W}.png` | Rusted/open metal barrel | Four static views |
+| `Object23_{E,N,S,W}.png` | Utility pole and electrical equipment | Modern decoration, unsuitable as an assumed fantasy light fixture |
+| `Object25_{E,N,S,W}.png` | Loose wooden boards | Four static debris views; no identified originating break sequence |
+| `Object34_{E,N,S,W}.png` | Small stump/chopping setup with a dark tool | Does not establish a pressure-plate or spike-trap sprite |
+
+The modern metal/utility style is a choice, not an automatic import. The red
+handwheel could support a later authored valve/control, while the original
+geometric lever remains the more faithful immediate representation of the
+existing TrapLever behavior.
+
+The Desert-only `Misc B62`–`B66` pictures were also inspected: they depict thorny
+root/barricade arrangements, not switches. `Misc D6`–`D8` are bone/skull
+decorations. These cannot fill the lever gap by filename speculation.
+
+Directory inventories of the HD Zombie 1, Zombie 2 and HD Enemy 1 archives
+confirm primarily actor spritesheets rather than another hidden environment
+catalog. No additional lever/switch/pressure-plate sheet was identified. This
+is a bounded search result, not a claim that no such art exists anywhere on the
+machine.
+
+Further inspection sheets:
+
+- [Rural object atlas 1–15](../.runtime/environment-study/zombie-objects_1_15.png)
+- [Rural object atlas 16–30](../.runtime/environment-study/zombie-objects_16_30.png)
+- [Rural object atlas 31–44](../.runtime/environment-study/zombie-objects_31_44.png)
+- [Selected rural props](../.runtime/environment-study/zombie-interaction-details.png)
+- [Red-handwheel control detail](../.runtime/environment-study/zombie-object9-detail.png)
+- [Additional Desert props](../.runtime/environment-study/desert-additional-props.png)
 
 ## Sources and scope
 
@@ -200,9 +370,13 @@ subsystem. Static art and native behavior are separate authored inputs.
    data for the visual choices; actor interaction timing and prop state timing
    remain part of the same complete lineage. There is no need for a new object
    animation manager to draw a static state change.
-4. Keep fire, breakable barrels, gates, cages and coffins as explicit later
-   candidates. The art's existence does not authorize adding associated rules
-   before their native ownership is studied and included in the recovery plan.
+4. Include the user's explicitly requested lever and placed-light interactions:
+   native trap deactivation, extinguishing and relighting fixtures, and their
+   resulting sensory changes. Use existing world drawings or suitable sprites;
+   missing ideal lever art is not a blocker to the native feature.
+5. Connect existing oil-barrel destruction and environmental consequences when
+   included in the implementation plan. Gates, cages, coffins and valve artwork
+   remain additional options; their appearance alone does not define new rules.
 
 This study makes no claim of implementation or full pack audit. The next
 behavioral acceptance belongs to the implementation: real interactions,
@@ -223,3 +397,36 @@ source archives; they are not production assets:
 The small number of extracted originals sit beside these sheets. No test suite
 was run because this task changed only this study document and ignored
 inspection output.
+
+## Selected imports made by the implementation unit
+
+The presentation implementation subsequently imported exactly two wall-torch
+pictures from the inspected Fantasy source, without modifying their bytes:
+
+| Original archive entry | Repository resource |
+| --- | --- |
+| `Fantasy tileset - 2D Isometric/Environment/Torch East.png` | `game/assets/torch/wall-east.png` (`torch.wall.e`) |
+| `Fantasy tileset - 2D Isometric/Environment/Torch West.png` | `game/assets/torch/wall-west.png` (`torch.wall.w`) |
+
+Both use the existing 256 × 256 canvas, common pivot `[128, 209.92]` and scale
+`128/127` (`1.0078740157480315`). The passive prop binding explicitly aliases
+camera poses `e`/`n` to the East picture and `s`/`w` to the West picture. These
+are **two real views**, not four independently authored orientations. The
+shared original flame loop is displayed only when received `is_lit` is true.
+When that loop is off, the static wall pictures retain their authored small
+warm-colored tip pixels; no perfect unlit picture was invented or claimed.
+
+`game/assets/environment/lever-marker.svg` transcribes the existing MapEditor
+`objectMarkers.ts:54–63` base, handle and knob geometry, with source credit in
+the SVG. Its 16 × 32 canvas uses pivot `[8,26]` and an explicit display scale
+of `2`. This is presentation sizing, not a proven conversion between tile
+conventions: MapEditor's current `tilemapConfig.ts` also specifies a 128-pixel
+wide tile (64 pixels high). It is a **single
+neutral marker pose**; spent charges do not select an invented pulled handle,
+and the lever does not acquire a flame layer.
+
+These resources enter the existing image catalog and the shared passive prop
+bindings. No source-image audit, digest or new animation subsystem accompanies
+the import. Earlier statements about the original standing-only binding record
+the pre-implementation state; the implemented `props` table now covers standing
+torch, wall torch and trap lever.

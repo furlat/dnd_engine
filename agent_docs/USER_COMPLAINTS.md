@@ -329,3 +329,19 @@ records are not. The native archive remains a separate local diagnostic artifact
 These results do not claim full inventory/drop/destruction presentation or all
 Studio animation primitives. RECOVERY_PLAN links the review galleries and records
 the final checks and remaining broader gameplay work.
+
+## September 18 — environment work must go beyond known assets
+
+- The first asset study overfocused on familiar doors and chests. The user
+  explicitly asked for levers, switching off placed lights, and broader
+  environmental interactions.
+- Study the meaningful gameplay and state changes each prop supports, rather
+  than treating the presence of a sprite as the outcome.
+- The user then clarified that new backend behavior is part of this work.
+  Existing native actions are a starting point, not a limit. Author missing
+  states/actions/events where the selected interaction requires them; presentation
+  still consumes recorded subjective facts.
+- The first connected examples exercise real light-control consequences and
+  linked trap deactivation. The next backend design covers controls linked to
+  doors/lights and real container open/closed state. Do not claim those new
+  mechanics are complete merely because suitable art already exists.

@@ -27,6 +27,34 @@ is now imported through the original Studio schema, independently of gameplay.
 
 ### Current position — read this before the checkpoint details
 
+**September 18 environment checkpoint complete:** placed standing/wall lights
+and the linked trap lever now connect real actions, item after-values and shared
+prop drawing. An authored workshop and paired experiments prove extinguish /
+relight, ordinary vision versus darkvision, an independent light, trap damage
+before pulling, safe recrossing afterward and a different trap remaining active.
+**97 focused checks pass; all 12 four-corner clips pass and replay from saved
+public input in a fresh process without native execution.** Results, the
+[gallery](http://127.0.0.1:8767/runs/20260918T140227Z-342b3b/index.html), art limits
+and commands are in the
+[environment plan](agent_docs/GAMEPLAY_ENVIRONMENT_AND_DELIVERY_2026-09-18.md).
+The user clarified that **new backend behavior is explicitly part of this work**:
+existing actions are a starting point, not the feature boundary. The next native
+unit authors controls linked to placed lights/doors and actual container
+open/closed state at existing item/action owners. Preserve causal target changes,
+subjective event replay and passive presentation data. Anti-slop and anti-OOP
+reviews remain required; broader shared action delivery remains the parent lane.
+
+**Environment scope correction:** the user explicitly requested going beyond
+the familiar door/chest loop, especially levers and switching off placed lights.
+The [environment plan](agent_docs/GAMEPLAY_ENVIRONMENT_AND_DELIVERY_2026-09-18.md)
+now prioritizes actual extinguish/relight consequences and a linked lever that
+deactivates a trap, with paired subjective recordings. Passive prop bindings
+connect existing state/art through the current painter; no new interaction
+framework or rule-in-the-renderer is planned. Breakable containers, oil/fire
+surfaces, campfires and skill-gated/spell devices are the broader existing
+capabilities to connect next. The previous door/loot-only ordering below is
+superseded. Anti-slop and anti-OOP reviewers retain their stated roles.
+
 **September 18 gameplay resumption:** the user approved returning to broader
 shared action delivery and added environment interaction: lootable containers,
 doors and other props with their states/animations. The

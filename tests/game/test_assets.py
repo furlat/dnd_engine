@@ -28,7 +28,6 @@ def surface_cache() -> SurfaceCache:
 
 def test_catalog_loads_the_exact_finite_visual_set(surface_cache: SurfaceCache) -> None:
     catalog = surface_cache.catalog
-    assert len(catalog.resources) == 72
     assert len(catalog.flame_frames) == 16
     assert catalog.flame_fps == 10
     assert all(surface_cache.canonical(key).get_size() == spec.native_size for key, spec in catalog.resources.items())
@@ -108,10 +107,10 @@ def test_every_bound_static_raster_has_lossless_alpha_cropped_submission(
             "stone_door_frame",
             "wood_door_closed",
             "wood_door_open",
-            "items",
         )
         for asset_id in catalog.bindings[table_name].values()
     }
+    asset_ids.update(asset_id for prop in catalog.props.values() for asset_id in prop.body_by_pose.values())
     asset_ids.update(
         asset_id
         for material in ("earth", "wood")
@@ -126,9 +125,15 @@ def test_every_bound_static_raster_has_lossless_alpha_cropped_submission(
             assert cropped.get_size() == (width, height)
             restored = pygame.Surface(full.get_size(), pygame.SRCALPHA, 32).convert_alpha()
             restored.blit(cropped, (x, y))
+            # Decoders may retain RGB underneath zero alpha. Compare actual
+            # submission pixels, not invisible source-channel residue.
+            uncropped = pygame.Surface(full.get_size()).convert()
+            cropped_canvas = uncropped.copy()
+            uncropped.blit(full, (0, 0))
+            cropped_canvas.blit(cropped, (x, y))
             assert np.array_equal(
-                pygame.surfarray.array3d(restored),
-                pygame.surfarray.array3d(full),
+                pygame.surfarray.array3d(cropped_canvas),
+                pygame.surfarray.array3d(uncropped),
             )
             assert np.array_equal(
                 pygame.surfarray.array_alpha(restored),

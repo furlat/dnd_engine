@@ -34,7 +34,20 @@
   "stone_door_frame": {"e": "stone.door.frame.e", "n": "stone.door.frame.n", "s": "stone.door.frame.s", "w": "stone.door.frame.w"},
   "wood_door_closed": {"e": "wood.door.closed.e", "n": "wood.door.closed.n", "s": "wood.door.closed.s", "w": "wood.door.closed.w"},
   "wood_door_open": {"e": "wood.door.open.e", "n": "wood.door.open.n", "s": "wood.door.open.s", "w": "wood.door.open.w"},
-  "items": {"environment.standing_torch": "torch.body"},
+  "props": {
+    "environment.standing_torch": {
+      "body_by_pose": {"e": "torch.body", "n": "torch.body", "s": "torch.body", "w": "torch.body"},
+      "lit_animation": "torch.flame"
+    },
+    "environment.wall_torch": {
+      "body_by_pose": {"e": "torch.wall.e", "n": "torch.wall.e", "s": "torch.wall.w", "w": "torch.wall.w"},
+      "lit_animation": "torch.flame"
+    },
+    "environment.trap_lever": {
+      "body_by_pose": {"e": "lever.marker", "n": "lever.marker", "s": "lever.marker", "w": "lever.marker"},
+      "lit_animation": null
+    }
+  },
   "treatments": {
     "4": {"id": "light.very_bright", "rgb": [1.08, 1.08, 1.04]},
     "3": {"id": "light.bright", "rgb": [1.0, 1.0, 1.0]},

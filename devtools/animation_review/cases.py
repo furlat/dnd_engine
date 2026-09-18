@@ -137,6 +137,15 @@ class ForcedMovementCase(BaseModel):
     destination: tuple[int, int] | None = None
 
 
+class EnvironmentCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["environment"]
+    program: Literal["lights", "lever"] = "lights"
+    fixture_kind: Literal["standing", "wall"] = "standing"
+    observer_darkvision: bool = False
+    second_light: bool = False
+
+
 class ReviewCase(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     id: str = Field(pattern=r"^[a-z0-9][a-z0-9-]*$")
@@ -144,7 +153,7 @@ class ReviewCase(BaseModel):
     tags: tuple[str, ...]
     description: str
     scenario: Annotated[AttackCase | ParalysisCase | CastCase | ParalysisLifecycleCase | DodgeExpiryCase | HealingCase | LifecycleCase
-                        | CreatureCase | EquipmentCase | DiscoveryCase | VisibilityCase | MovementCase | ForcedMovementCase | ConcealmentCase,
+                        | CreatureCase | EquipmentCase | DiscoveryCase | VisibilityCase | MovementCase | ForcedMovementCase | ConcealmentCase | EnvironmentCase,
                         Field(discriminator="kind")]
     pause_at_ms: float | None = Field(default=None, ge=0)
     pause_duration_ms: float = Field(default=750, gt=0)

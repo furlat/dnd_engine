@@ -841,7 +841,8 @@ def draw_frame(
     animated_fixtures = 0
     flame_index: int | None = None
     for fixture_uuid, fixture in target.objects.items():
-        if fixture.item.item_id != "environment.standing_torch" or fixture_uuid not in senses.objects:
+        binding = catalog.props.get(fixture.item.item_id)
+        if binding is None or fixture_uuid not in senses.objects:
             continue
         fixture_state = fixture.item
         position = fixture.placement.position
@@ -849,8 +850,8 @@ def draw_frame(
         if disclosure is not None:
             state, level = disclosure
             treatment_id, multiplier = _treatment(catalog, level)
-            item_bindings = cast(Mapping[str, str], catalog.bindings["items"])
-            body_id = item_bindings[fixture_state.item_id]
+            pose = camera_pose((fixture.placement.orientation or CardinalDirection.EAST).value, camera.quadrant)
+            body_id = binding.body_by_pose[pose]
             base_height = fixture.placement.base_height_steps
             contact = project_screen(position, camera, elevation_steps=base_height)
             prepared_body = _static_blit(
@@ -874,7 +875,7 @@ def draw_frame(
                         position,
                         elevation_steps=base_height,
                         quadrant=camera.quadrant,
-                        role="torch_body",
+                        role="object",
                         identity=fixture_uuid,
                     ),
                     body,
@@ -882,13 +883,14 @@ def draw_frame(
                     0,
                     body_evidence,
                 ))
-            if fixture_state.is_lit:
+            loop = binding.lit_animation
+            if fixture_state.is_lit and loop is not None:
                 flame_index = flame_frame_index(
                     presentation_time,
-                    frame_count=len(catalog.flame_frames),
-                    fps=catalog.flame_fps,
+                    frame_count=len(loop.frames),
+                    fps=loop.fps,
                 )
-                flame_id = catalog.flame_frames[flame_index]
+                flame_id = loop.frames[flame_index]
                 flame = cache.scaled(flame_id, camera.zoom)
                 flame_destination = cache.blit_position(flame_id, camera.zoom, contact)
                 flame_evidence = body_evidence[:-3] + (

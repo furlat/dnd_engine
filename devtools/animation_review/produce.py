@@ -6,6 +6,7 @@ from tests.game.creature_scenarios import creature_history
 from tests.game.concealment_scenarios import concealment_history
 from tests.game.discovery_scenarios import discovery_history
 from tests.game.equipment_scenarios import equipment_sequence_history
+from tests.game.environment_scenarios import environment_history
 from tests.game.forced_movement_scenarios import forced_movement_history
 from tests.game.movement_scenarios import movement_history
 from tests.game.visibility_scenarios import visibility_history
@@ -15,7 +16,7 @@ from tests.game.scenarios import (
 
 from devtools.animation_review.cases import (
     AttackCase, CastCase, ConcealmentCase, CreatureCase, DiscoveryCase, DodgeExpiryCase,
-    EquipmentCase, ForcedMovementCase, HealingCase, LifecycleCase, MovementCase,
+    EnvironmentCase, EquipmentCase, ForcedMovementCase, HealingCase, LifecycleCase, MovementCase,
     ParalysisCase, ParalysisLifecycleCase, ReviewCase, VisibilityCase,
 )
 
@@ -23,6 +24,9 @@ from devtools.animation_review.cases import (
 def produce(case: ReviewCase) -> CapturedHistory:
     """Run real rules once, then hand only retained values to the recorder."""
     match case.scenario:
+        case EnvironmentCase() as scenario:
+            return environment_history(program=scenario.program, fixture_kind=scenario.fixture_kind,
+                observer_darkvision=scenario.observer_darkvision, second_light=scenario.second_light)
         case ForcedMovementCase() as scenario:
             return forced_movement_history(
                 source_position=scenario.source_position, target_position=scenario.target_position,
