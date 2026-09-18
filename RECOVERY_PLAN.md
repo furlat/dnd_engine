@@ -27,6 +27,29 @@ is now imported through the original Studio schema, independently of gameplay.
 
 ### Current position — read this before the checkpoint details
 
+**September 18 gameplay resumption:** the user approved returning to broader
+shared action delivery and added environment interaction: lootable containers,
+doors and other props with their states/animations. The
+[bounded gameplay plan](agent_docs/GAMEPLAY_ENVIRONMENT_AND_DELIVERY_2026-09-18.md)
+starts with asset/native/client study, then a usable room exercising existing
+door and loot actions through the same saved subjective event/playback path.
+Original Studio environment rows are mostly immediate state-only recipes;
+static open/closed art must be distinguished from authored animation. Reuse
+current world/item/interaction owners and passive art bindings. Anti-slop review
+is assigned to `environment_native_review`, anti-OOP review to
+`environment_timeline_review`, and asset inspection to `environment_asset_scan`.
+The broader self/touch/direct/area/persistent delivery objective remains active.
+Older performance-pause instructions below record completed stages; they do not
+override this return to gameplay. No new gameplay implementation is claimed by
+the asset study. Its first concrete native blocker is now repaired: Loot All
+preserves items rejected by inventory capacity and parents accepted transfer
+facts to the existing action. Three regressions failed before the small call-site
+fix; **26 focused checks pass** afterward, with clean changed-file Pyright and
+both reviews approved. The [asset study](agent_docs/ENVIRONMENT_ASSET_STUDY_2026-09-18.md)
+confirms three four-direction chest state pairs and other usable props. Ordinary
+prop drawing, an explicit chest-lid state and the playable interaction room are
+the next connection; they are not claimed implemented by this checkpoint.
+
 **September 18 startup decision:** the requested fresh Linux source copy confirms
 that filesystem placement matters: native imports measure **1.595s versus 2.898s**
 on C:, and the complete one-frame headless game launch **3.050s versus 5.032s**.

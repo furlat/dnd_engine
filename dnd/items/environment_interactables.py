@@ -279,9 +279,8 @@ class LootAllAction(BaseAction):
         if not isinstance(chest, StorageChest):
             return execution_event.cancel(status_message="Chest not found")
         looted = 0
-        for item_uuid in list(chest.chest_inventory.items.keys()):
-            item = chest.chest_inventory.remove_item(item_uuid)
-            if item and entity.loot_item(item):
+        for item in list(chest.chest_inventory.items.values()):
+            if entity.loot_item(item, parent_event=execution_event):
                 looted += 1
         effect = execution_event.phase_to(
             EventPhase.EFFECT, status_message=f"Looted {looted} items")
