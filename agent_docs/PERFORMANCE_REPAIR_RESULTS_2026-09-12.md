@@ -912,20 +912,37 @@ bus, queue, thread, renderer-specific AI state or audit service was introduced.
 The old live projector remains only for explicit retired-server imports and the
 independent migration oracle; active native AI/game do not import it.
 
+## September 18: the two excluded checks and the startup decision
+
+Both previously excluded checks now pass: the original 80-decision warband uses
+the current direct Barbarian premade, and the real HTTP provider matrix drives
+current native encounters and replays both sides' saved subjective lineages.
+The focused catalog/provider/session selections cover **41 distinct passing
+checks**. This repairs supported provider integration coverage, not the retired
+game-hosting application. An extra historical torch-scene check still fails on
+its unchanged deleted Sorcerer reference; other unmatched legacy character
+variants were not silently substituted. See the [unit results and exact checks](STARTUP_AND_CATALOG_RECOVERY_2026-09-18.md).
+
+The user's current-source Linux-copy experiment also completes the requested
+startup investigation below. Leave the active C: checkout in place and defer
+the actual source-folder migration; no further startup implementation is planned
+in this unit.
+
 ## Open work and limits
 
 The measured repairs remove audit obligations, excess preloading, import
 coupling and repeated native/projection work. They do **not** close performance
 recovery. The remaining large owners are explicit:
 
-1. Native imports currently take 3.370s with the selected WSL environment and C:
-   source; the earlier controlled Linux source/packages comparison reached about
-   1.7s. The earlier 4–4.5s
-   includes mounted filesystem overhead;
-   the live source-location decision remains open. Eager native Pydantic class
-   construction still has a cost. Any further import change needs evidence
-   about actual dependencies/representation; schema caches, late imports or
-   mass unchecked construction would preserve the wrong premise.
+1. **September 18 update:** a fresh copy of the current working source to Linux
+   measures native imports at **1.595s versus 2.898s** through C:, and complete
+   one-frame game launches at **3.050s versus 5.032s** (three-run medians using the
+   same WSL environment). The user chose to stop this startup track if the copy
+   was fast and migrate the source folder later. The active checkout stays on C:;
+   the Linux directory is a diagnostic snapshot. No startup code or cache
+   machinery was introduced. See the [bounded unit and reproduction](STARTUP_AND_CATALOG_RECOVERY_2026-09-18.md).
+   Eager native model construction still costs CPU; this result does not remove
+   that work or establish a need for a schema redesign.
 2. Private admission capture still refolds actor history per root. A retained
    source-ordered fold needs the plan's acquisition-time/overlapping-root design
    review. Batch completion order is not an acceptable replacement for that.

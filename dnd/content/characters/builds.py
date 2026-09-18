@@ -267,14 +267,14 @@ def _ability_config(
     )
 
 
-def create_character(
+def prepare_character(
     build: CharacterBuild,
     *,
     runtime_entity_uuid: UUID | None = None,
     faction: str | None = None,
     position: tuple[int, int] | None = None,
 ) -> Entity:
-    """Compose one direct character and publish its sole birth fact."""
+    """Build a direct character before its caller commits composition."""
     resolved = resolve_character_build(build)
     entity_uuid = runtime_entity_uuid or uuid4()
     entity = Entity.create(
@@ -327,12 +327,34 @@ def create_character(
         for row, (item, _slot) in zip(build.item_loadout, placements):
             if row.item_id == "equipment.portable_torch":
                 cast(Torch, item).ignite(entity.uuid)
-        entity.compose_entity()
         return entity
     except BaseException:
         if Entity.get(entity.uuid) is entity and not entity.creation_committed:
             entity.discard_uncommitted()
         raise
+
+
+def create_character(
+    build: CharacterBuild,
+    *,
+    runtime_entity_uuid: UUID | None = None,
+    faction: str | None = None,
+    position: tuple[int, int] | None = None,
+) -> Entity:
+    """Compose one direct character and publish its sole birth fact."""
+    entity = prepare_character(
+        build,
+        runtime_entity_uuid=runtime_entity_uuid,
+        faction=faction,
+        position=position,
+    )
+    try:
+        entity.compose_entity()
+    except BaseException:
+        if Entity.get(entity.uuid) is entity and not entity.creation_committed:
+            entity.discard_uncommitted()
+        raise
+    return entity
 
 
 __all__ = [
@@ -342,5 +364,6 @@ __all__ = [
     "CharacterBuild",
     "ResolvedCharacterBuild",
     "create_character",
+    "prepare_character",
     "resolve_character_build",
 ]

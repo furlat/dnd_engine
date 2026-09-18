@@ -1,8 +1,9 @@
 """Dependency-neutral recipes for rosters, deployments, and encounters.
 
 These values are the authored/persistent composition boundary.  They contain
-exact content recipes or durable character identities, but never import
-``Entity``, a runtime controller, a directory service, or server transport.
+exact content recipes, direct premade IDs or durable character identities,
+but never import ``Entity``, a runtime controller, a directory service,
+or server transport.
 """
 
 from __future__ import annotations
@@ -203,8 +204,21 @@ class OwnedCharacterRosterSource(BaseModel):
         return _validate_digest(value, info.field_name)
 
 
+class PremadeCharacterRosterSource(BaseModel):
+    """One authored build from the current direct-character premades."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    kind: Literal["premade_character"] = "premade_character"
+    premade_id: str
+
+
 EncounterRosterMemberSource = Annotated[
-    Union[AuthoredCreatureRosterSource, OwnedCharacterRosterSource],
+    Union[
+        AuthoredCreatureRosterSource,
+        OwnedCharacterRosterSource,
+        PremadeCharacterRosterSource,
+    ],
     Field(discriminator="kind"),
 ]
 
@@ -1058,6 +1072,7 @@ __all__ = [
     "FixedRosterOpeningPolicy",
     "InitiativeOpeningPolicy",
     "OwnedCharacterRosterSource",
+    "PremadeCharacterRosterSource",
     "RosterBehaviorGrant",
     "RosterControllerDefaults",
     "RosterControllerKind",

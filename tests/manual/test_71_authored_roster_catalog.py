@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from dnd.content.characters.premades import PREMADE_CHARACTER_BUILDS
 from dnd.core.content.encounters import (
     AuthoredCreatureRosterSource,
+    PremadeCharacterRosterSource,
     RosterItemGrant,
 )
 from dnd.monsters.configured_srd_creatures import (
@@ -30,9 +32,12 @@ def test_roster_catalog_has_exact_audited_counts_and_unique_identity() -> None:
     )
 
 
-def test_every_authored_member_has_an_exact_creature_recipe() -> None:
+def test_every_authored_member_has_a_creature_recipe_or_direct_build() -> None:
     for roster in AUTHORED_ROSTER_RECIPES:
         for member in roster.members:
+            if isinstance(member.source, PremadeCharacterRosterSource):
+                assert member.source.premade_id in PREMADE_CHARACTER_BUILDS
+                continue
             assert isinstance(
                 member.source,
                 AuthoredCreatureRosterSource,

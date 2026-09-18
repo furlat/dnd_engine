@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from uuid import uuid4
 
+from dnd.content.characters.premades import PREMADE_CHARACTER_BUILDS
 from dnd.content_system.bootstrap import bootstrap_content_system
 from dnd.content_system.creature_materialization import materialize_creature
 from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
@@ -13,6 +14,7 @@ from dnd.content_system.spell_catalog_composition import (
 from dnd.core.content.encounters import (
     AuthoredCreatureRosterSource,
     EncounterRosterRecipe,
+    PremadeCharacterRosterSource,
     RosterSpellGrant,
 )
 from dnd.core.content.materialization import (
@@ -53,6 +55,9 @@ def test_authored_catalog_inventory_is_complete_and_exact() -> None:
     for roster in AUTHORED_ROSTER_RECIPES:
         assert roster_recipe(roster.roster_id) is roster
         for member in roster.members:
+            if isinstance(member.source, PremadeCharacterRosterSource):
+                assert member.source.premade_id in PREMADE_CHARACTER_BUILDS
+                continue
             assert isinstance(member.source, AuthoredCreatureRosterSource)
             assert member.source.recipe.ref.definition_kind.value == "creature"
             member.source.recipe.verify_integrity()

@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from uuid import UUID, uuid4
 
 from dnd.actions import Disengage, Hide, SpellAction
 from dnd.actions_functional import register_spell
 from dnd.blocks.base_item import BaseItem, EquippableItem
 from dnd.conditions import Blinded, Poisoned
+from dnd.content.characters.builds import prepare_character
+from dnd.content.characters.premades import PREMADE_CHARACTER_BUILDS
 from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.content_system.creature_bindings import CREATURE_RUNTIME_BINDINGS
 from dnd.content_system.creature_materialization import materialize_creature
@@ -22,10 +24,12 @@ from dnd.core.content.encounters import (
     EncounterCompatibilityReport,
     EncounterRecipe,
     FixedRosterOpeningPolicy,
+    PremadeCharacterRosterSource,
     RosterBehaviorGrant,
     RosterDamageAffinity,
     RosterItemGrant,
     RosterItemPlacement,
+    RosterResourceState,
     RosterSpellGrant,
     RosterStartingCondition,
     RosterStartingDamage,
@@ -137,15 +141,22 @@ def _materialize_member(
     member,
     position: tuple[int, int],
 ) -> Entity:
-    role = CreatureDeploymentRole(
-        role_id=(
-            f"encounter.{recipe_slot.roster_slot_id}."
-            f"{member.deployment_role}"
-        ),
-    )
     display_name = _display_name(recipe_slot, member)
     source = member.source
+    if isinstance(source, PremadeCharacterRosterSource):
+        build = PREMADE_CHARACTER_BUILDS[source.premade_id]
+        return prepare_character(
+            replace(build, name=display_name),
+            faction=recipe_slot.faction_id,
+            position=position,
+        )
     if isinstance(source, AuthoredCreatureRosterSource):
+        role = CreatureDeploymentRole(
+            role_id=(
+                f"encounter.{recipe_slot.roster_slot_id}."
+                f"{member.deployment_role}"
+            ),
+        )
         return materialize_creature(
             source.recipe,
             runtime_entity_uuid=uuid4(),
@@ -454,6 +465,7 @@ def assemble_encounter_recipe(
             RosterBehaviorGrant
             | RosterDamageAffinity
             | RosterItemGrant
+            | RosterResourceState
             | RosterSpellGrant,
         ]
     ] = []

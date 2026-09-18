@@ -72,7 +72,8 @@ def test_every_active_recipe_constructs_one_complete_encounter(
         entity.uuid for entity in assembled.entities
     } == set(assembled.encounter.combatants)
     assert all(
-        entity.content_ref is not None for entity in assembled.entities
+        (entity.content_ref is not None) != (entity.character_body_id is not None)
+        for entity in assembled.entities
     )
 
 

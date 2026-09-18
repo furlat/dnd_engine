@@ -27,6 +27,24 @@ is now imported through the original Studio schema, independently of gameplay.
 
 ### Current position — read this before the checkpoint details
 
+**September 18 startup decision:** the requested fresh Linux source copy confirms
+that filesystem placement matters: native imports measure **1.595s versus 2.898s**
+on C:, and the complete one-frame headless game launch **3.050s versus 5.032s**.
+These are three-run medians with the same existing WSL uv Python environment.
+The user requested stopping this optimization track if the copy was fast; stop
+startup code changes here and migrate the source folder later. The active checkout
+remains on C:. `/home/tommaso/Dev/dnd_engine-startup-check-20260918` is only a
+diagnostic snapshot. No startup cache/launcher, source audit or engine change was
+introduced for this result. Details and reproduction are in the
+[September 18 unit](agent_docs/STARTUP_AND_CATALOG_RECOVERY_2026-09-18.md).
+The separately authorized catalog/provider unit is also complete: the original
+80-decision warband regression uses the current direct Barbarian premade, and the
+real HTTP provider matrix exercises current native encounters plus saved paired
+subjective lineages. **41 distinct focused checks pass** across catalog, provider
+and session coverage. Old game-hosting HTTP routes remain retired; an additional
+historical torch scenario still depends on a deleted Sorcerer recipe. The bounded
+plan records those limits instead of claiming the full retired catalog/server works.
+
 **Loading checkpoint:** the user accepts the measured ~200ms GC pauses
 for now and selected WSL. Controlled comparisons put native imports at **1.709s**
 with uv's Python 3.13.12 and Linux source/packages, versus the earlier mounted

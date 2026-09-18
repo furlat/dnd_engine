@@ -312,6 +312,7 @@ def test_action_execution_keeps_its_exact_entity_owned_template() -> None:
 
 def test_custom_build_resolves_purely_and_composes_one_complete_birth() -> None:
     reset_engine_runtime(grid_size=(8, 8))
+    before_events = EventQueue.event_cursor()
     build = _custom_build()
     before_blocks = frozenset(BaseBlock._registry)
     before_objects = frozenset(BaseObject._registry)
@@ -328,7 +329,7 @@ def test_custom_build_resolves_purely_and_composes_one_complete_birth() -> None:
     )
     assert frozenset(BaseBlock._registry) == before_blocks
     assert frozenset(BaseObject._registry) == before_objects
-    assert EventQueue._all_events == []
+    assert EventQueue.event_cursor() == before_events
 
     entity = create_character(build)
     created = tuple(
@@ -400,6 +401,7 @@ def test_build_resolution_enforces_standard_twenty_seven_point_buy(
     message: str,
 ) -> None:
     reset_engine_runtime(grid_size=(8, 8))
+    before_events = EventQueue.event_cursor()
     before_blocks = frozenset(BaseBlock._registry)
     before_objects = frozenset(BaseObject._registry)
 
@@ -411,7 +413,7 @@ def test_build_resolution_enforces_standard_twenty_seven_point_buy(
 
     assert frozenset(BaseBlock._registry) == before_blocks
     assert frozenset(BaseObject._registry) == before_objects
-    assert EventQueue._all_events == []
+    assert EventQueue.event_cursor() == before_events
 
 
 @pytest.mark.parametrize("premade_id", tuple(PREMADE_CHARACTER_BUILDS))
@@ -471,6 +473,7 @@ def test_sorcerer_premade_preserves_accepted_first_class_skills() -> None:
 
 def test_build_validation_rejects_unsupported_toggle_before_runtime_mutation() -> None:
     reset_engine_runtime(grid_size=(8, 8))
+    before_events = EventQueue.event_cursor()
     build = replace(
         _custom_build(),
         feature_toggles=(FeatureToggleSelection(
@@ -487,11 +490,12 @@ def test_build_validation_rejects_unsupported_toggle_before_runtime_mutation() -
     assert Entity.get_all_entities() == []
     assert frozenset(BaseBlock._registry) == before_blocks
     assert frozenset(BaseObject._registry) == before_objects
-    assert EventQueue._all_events == []
+    assert EventQueue.event_cursor() == before_events
 
 
 def test_initial_item_collision_discards_the_entire_provisional_character() -> None:
     reset_engine_runtime(grid_size=(8, 8))
+    before_events = EventQueue.event_cursor()
     entity_uuid = uuid4()
     build = replace(
         _custom_build(),
@@ -519,7 +523,7 @@ def test_initial_item_collision_discards_the_entire_provisional_character() -> N
         obj.source_entity_uuid != entity_uuid
         for obj in BaseObject._registry.values()
     )
-    assert EventQueue._all_events == []
+    assert EventQueue.event_cursor() == before_events
 
 
 def test_birth_publication_failure_discards_the_unpublished_aggregate() -> None:
@@ -551,6 +555,7 @@ def test_birth_publication_failure_discards_the_unpublished_aggregate() -> None:
 
 def test_torch_premade_birth_failure_leaves_no_light_or_event_residue() -> None:
     reset_engine_runtime(grid_size=(8, 8))
+    before_events = EventQueue.event_cursor()
     entity_uuid = uuid4()
 
     def reject_birth(event):
@@ -564,5 +569,5 @@ def test_torch_premade_birth_failure_leaves_no_light_or_event_residue() -> None:
         create_character(build, runtime_entity_uuid=entity_uuid)
 
     assert Entity.get(entity_uuid) is None
-    assert EventQueue._all_events == []
+    assert EventQueue.event_cursor() == before_events
     assert get_map()._light_sources == {}
