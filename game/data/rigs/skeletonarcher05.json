@@ -74,6 +74,10 @@
           "SkeletonArcher05": "/rigs/skeletonarcher05/body/QuickShot.png"
         }
       }
+    },
+    "body_anchor": {
+      "x": 64,
+      "y": 73
     }
   },
   "resources": {

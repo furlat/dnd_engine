@@ -80,20 +80,21 @@ async def _run(
     *, frame_deltas: Sequence[float] | None, frame_events: Mapping[int, Sequence[pygame.event.Event]],
     max_frames: int | None, window_size: tuple[int, int], quadrant: int,
     capture_dir: Path | None, player_input: PlayerInput | None, stop_after_commands: int | None,
-    exit_when_ended: bool, collect_frames: bool,
+    exit_when_ended: bool, collect_frames: bool, encounter_id: str | None,
     player_positions: tuple[tuple[int, int], tuple[int, int]],
     enemy_positions: tuple[tuple[int, int], tuple[int, int]],
 ) -> GameSummary:
     pygame.init()
     screen = pygame.display.set_mode(window_size)
-    pygame.display.set_caption("D&D Engine — Goblin skirmish")
-    session = create_session(player_positions=player_positions, enemy_positions=enemy_positions)
+    session = create_session(encounter_id=encounter_id,
+        player_positions=player_positions, enemy_positions=enemy_positions)
+    pygame.display.set_caption(f"D&D Engine — {session.encounter.name}")
     try:
         observer = session.game.entities[session.player_uuids[0]]
         cursor = EventQueue.event_cursor()
         startup = capture_interval(
             name="encounter startup", start_cursor=0, end_cursor=cursor,
-            observer_uuid=observer.uuid, battlefield_id="battlefield.open_floor_bright",
+            observer_uuid=observer.uuid, battlefield_id=session.battlefield.definition.battlefield_id,
         )
         projection, initialization = begin_projection(startup)
         baseline = reduce_initialization(initialization)
@@ -285,6 +286,7 @@ async def _run(
                        show_grid=show_grid, show_debug=show_debug, mouse_position=None,
                        objective_lines=tuple(f"[{identity}] {reason}" for identity, reason in gaps[-8:]),
                        extra_commands=commands,
+                       world_transitions=playback.world_transitions, residue_reveals=playback.residue_reveals,
                        revisions=(latest.reducer_cursor, latest.reducer_cursor, historical.reducer_cursor))
             ready = waiting_for_player and active is None and not pending and not paused
             if ready:
@@ -339,7 +341,7 @@ async def _run(
 
 
 def run(
-    *, frame_deltas: Sequence[float] | None = None,
+    *, encounter_id: str | None = None, frame_deltas: Sequence[float] | None = None,
     frame_events: Mapping[int, Sequence[pygame.event.Event]] | None = None,
     max_frames: int | None = None, window_size: tuple[int, int] = (1280, 800), quadrant: int = 0,
     capture_dir: Path | None = None, player_input: PlayerInput | None = None,
@@ -355,6 +357,6 @@ def run(
         frame_deltas=frame_deltas, frame_events=frame_events or {}, max_frames=max_frames,
         window_size=window_size, quadrant=quadrant, capture_dir=capture_dir,
         player_input=player_input, stop_after_commands=stop_after_commands,
-        exit_when_ended=exit_when_ended, collect_frames=collect_frames,
+        exit_when_ended=exit_when_ended, collect_frames=collect_frames, encounter_id=encounter_id,
         player_positions=player_positions, enemy_positions=enemy_positions,
     ))

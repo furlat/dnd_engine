@@ -1168,6 +1168,7 @@ def test_eldritch_blast_target_count_only_convolves_when_multi_entity() -> None:
             target_entity_uuid=first.uuid,
             caster_level=5,
             template=False,
+            alt_target_type=TargetType.ENTITY,
             alt_target_count=3,
         ).apply()
     remove_spell_attack_modifier(caster, hit_modifier)

@@ -66,7 +66,20 @@ SAFE_LEAF_MODULES = frozenset({
     "dnd.core.life_types",
     "dnd.core.presentation_geometry",
     "dnd.types.senses",
+    "dnd.types.traps",
+    "dnd.types.world",
+    "dnd.types.abilities",
+    "dnd.core.content.identities",
 })
+
+# Shared observations compose passive identities and state values. These exact
+# edges do not permit a leaf to import registries, entities or gameplay owners.
+NEUTRAL_VALUE_DEPENDENCIES = {
+    "dnd.types.senses": frozenset({
+        "dnd.types.world", "dnd.core.content.identities", "dnd.types.traps",
+    }),
+    "dnd.types.traps": frozenset({"dnd.core.creature_types", "dnd.types.abilities"}),
+}
 
 CANONICAL_NEUTRAL_SYMBOL_OWNERS = {
     "ActionPresentationKind": "dnd.core.action_types",
@@ -1094,8 +1107,8 @@ def test_world_contract_dtos_are_not_reexported_through_api_models() -> None:
     )
 
 
-def test_safe_leaf_modules_have_no_project_dependencies() -> None:
-    """Canonical leaf types must remain importable without another project layer."""
+def test_safe_leaf_modules_only_compose_declared_neutral_values() -> None:
+    """Canonical values may compose exact neutral leaves, never runtime layers."""
     modules = _source_modules()
     missing = sorted(SAFE_LEAF_MODULES - modules.keys())
     forbidden_imports = [
@@ -1103,6 +1116,7 @@ def test_safe_leaf_modules_have_no_project_dependencies() -> None:
         for reference in _import_references()
         if reference.importer in SAFE_LEAF_MODULES
         and _is_project_module_name(reference.target)
+        and reference.target not in NEUTRAL_VALUE_DEPENDENCIES.get(reference.importer, ())
     ]
     messages: list[str] = []
     if missing:

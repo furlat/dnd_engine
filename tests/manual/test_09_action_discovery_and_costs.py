@@ -686,6 +686,7 @@ def test_generic_position_row_reports_requirements_not_target_cost(
         MistyStep(
             source_entity_uuid=actor.uuid,
             template=True,
+            position_discovery=None,
         )
     )
     Entity.update_all_entities_senses()

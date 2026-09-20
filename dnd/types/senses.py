@@ -9,6 +9,8 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from dnd.types.world import LightLevel
+from dnd.core.content.identities import ContentRef
+from dnd.types.traps import TrapState
 
 
 class SensesType(str, Enum):
@@ -49,6 +51,18 @@ class PerceivedContact(BaseModel):
     )
 
 
+class PerceivedSpatialEffect(BaseModel):
+    """Last observed fixture state and only its discovered footprint cells."""
+
+    model_config = ConfigDict(frozen=True)
+
+    content_ref: ContentRef
+    name: str
+    description: str
+    positions: tuple[tuple[int, int], ...]
+    trap_state: TrapState
+
+
 class SensesView(Protocol):
     """Minimal perception surface exposed upward by an observing block."""
 
@@ -56,6 +70,7 @@ class SensesView(Protocol):
     visible: Mapping[tuple[int, int], object]
     entities: Mapping[UUID, PerceivedContact]
     objects: Mapping[UUID, PerceivedContact]
+    spatial_effects: Mapping[UUID, PerceivedSpatialEffect]
 
     def get_feet_distance(self, position: tuple[int, int]) -> int:
         """Return grid distance to one position in rules feet."""
@@ -96,6 +111,10 @@ class SensoryDelta(Protocol):
     @property
     def hazardous_cells_changed(self) -> Mapping[str, bool]: ...
     @property
+    def spatial_effects_changed(self) -> Mapping[UUID, PerceivedSpatialEffect]: ...
+    @property
+    def spatial_effects_removed(self) -> Set[UUID]: ...
+    @property
     def sense_modes_changed(self) -> bool: ...
     @property
     def sense_modes(self) -> Sequence[SenseMode] | None: ...
@@ -127,6 +146,7 @@ class SensesSnapshot:
     sense_modes: tuple[SenseMode, ...]
     visual_access: int
     hazardous_cells: dict[tuple[int, int], bool] = field(default_factory=dict)
+    spatial_effects: dict[UUID, PerceivedSpatialEffect] = field(default_factory=dict)
 
 
 def reduce_senses_snapshot(
@@ -163,6 +183,11 @@ def reduce_senses_snapshot(
     for object_uuid in event.object_contacts_removed:
         objects.pop(object_uuid, None)
     objects.update(event.object_contacts_changed)
+
+    spatial_effects = dict(previous.spatial_effects)
+    for identity in event.spatial_effects_removed:
+        spatial_effects.pop(identity, None)
+    spatial_effects.update(event.spatial_effects_changed)
 
     light_levels = dict(previous.effective_light_levels)
     for position in event.visible_cells_removed:
@@ -207,6 +232,7 @@ def reduce_senses_snapshot(
         objects=objects,
         effective_light_levels=light_levels,
         hazardous_cells=hazardous_cells,
+        spatial_effects=spatial_effects,
         paths_dirty=previous.paths_dirty or event.paths_dirty,
         passive_perception=(
             event.passive_perception
@@ -227,6 +253,7 @@ def reduce_senses_snapshot(
 __all__ = [
     "OpticalObscurement",
     "PerceivedContact",
+    "PerceivedSpatialEffect",
     "SenseMode",
     "SensesType",
     "SensesView",

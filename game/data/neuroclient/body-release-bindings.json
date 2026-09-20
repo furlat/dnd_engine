@@ -1,0 +1,70 @@
+{
+  "body.bone": [
+    {
+      "id": "body.bone",
+      "role": "impact",
+      "assetId": "particles.region.bone",
+      "attachment": "body",
+      "tint": 16777215,
+      "tint2": null,
+      "startFrame": 0,
+      "fps": 24,
+      "loop": false,
+      "reversed": false,
+      "scale": 1,
+      "offsetX": 0,
+      "offsetY": 0
+    }
+  ],
+  "body.corrosive_blood": [
+    {
+      "id": "body.corrosive_blood",
+      "role": "impact",
+      "assetId": "particles.region.corrosive",
+      "attachment": "body",
+      "tint": 16777215,
+      "tint2": null,
+      "startFrame": 0,
+      "fps": 24,
+      "loop": false,
+      "reversed": false,
+      "scale": 1,
+      "offsetX": 0,
+      "offsetY": 0
+    }
+  ],
+  "body.dread_blood": [
+    {
+      "id": "body.dread_blood",
+      "role": "impact",
+      "assetId": "particles.region.dread",
+      "attachment": "body",
+      "tint": 16777215,
+      "tint2": null,
+      "startFrame": 0,
+      "fps": 24,
+      "loop": false,
+      "reversed": false,
+      "scale": 1,
+      "offsetX": 0,
+      "offsetY": 0
+    }
+  ],
+  "body.blood": [
+    {
+      "id": "body.blood",
+      "role": "impact",
+      "assetId": "particles.region.blood",
+      "attachment": "body",
+      "tint": 16777215,
+      "tint2": null,
+      "startFrame": 0,
+      "fps": 24,
+      "loop": false,
+      "reversed": false,
+      "scale": 1,
+      "offsetX": 0,
+      "offsetY": 0
+    }
+  ]
+}

@@ -53,6 +53,8 @@ def choreography_feedback(bound: BoundChoreography, data: AnimationData, absolut
         raise ValueError("feedback start requires finite nonnegative time")
     tracks: list[FeedbackTrack] = []
     group_contacts = dict(contacts or {})
+    for cue in bound.movements:
+        tracks.extend(motion_feedback(cue.timeline, data, absolute_start_ms + cue.start_ms))
     for cue in bound.body_actions:
         group_contacts[cue.contact.actor_uuid] = cue.contact
         if cue.feedback is not None:

@@ -74,6 +74,8 @@ class StudioActorLayer(AuthoredRecord):
     hidden: bool
     category: Identifier
     colors: LayerColors
+    # Optional isolated, already-colored export; never recolor the actor body.
+    sourceSheet: Identifier | None = None
 
 
 class StudioEquipment(AuthoredRecord):
@@ -96,6 +98,7 @@ class StudioCast(AuthoredRecord):
     effects: tuple[StudioActorLayer, ...] | None = None
     slash: StudioActorLayer | None = None
     recovery: StudioRecovery
+    holdReleaseForVolley: bool = False
 
     @model_validator(mode="after")
     def validate_layer_slots(self) -> StudioCast:
@@ -120,11 +123,20 @@ class StudioProjectilePhase(AuthoredRecord):
     startFrame: BodyFrame | None = None
     fps: Positive | None = None
     durationMs: Positive | None = None
+    overlapRelease: bool = False
+    scale: Positive | None = None
 
 
 class Point(AuthoredRecord):
     x: float
     y: float
+
+
+class SourceSockets(AuthoredRecord):
+    """Measured pixels in the actor's source sheet, before rig/camera scale."""
+
+    release: FacingMap[Point]
+    preparation: FacingMap[tuple[Point | None, ...]] | None = None
 
 
 class PaletteSwap(AuthoredRecord):
@@ -178,7 +190,7 @@ class ProjectileOrientation(AuthoredRecord):
 
 
 class TargetAnchor(AuthoredRecord):
-    basis: Literal["tileCenter"]
+    basis: Literal["tileCenter", "body"]
     liftY: float
     forwardPx: float
 
@@ -204,6 +216,7 @@ class StudioProjectile(AuthoredRecord):
     sourceAnchor: SourceAnchor
     targetAnchor: TargetAnchor
     sourceAnchorsByFacing: FacingMap[SourceAnchor] | None = None
+    sourceSockets: SourceSockets | None = None
     missileStaggerMs: NonNegative
     colors: LayerColors | None = None
 
@@ -274,11 +287,19 @@ class AreaSprite(AuthoredRecord):
     mediaFailurePolicy: Literal["omit_optional_track", "fail_transaction"]
 
 
+class SurfaceReveal(AuthoredRecord):
+    """Reveal recorded residue changes outward from an area's ground contact."""
+
+    residueIds: Annotated[tuple[Identifier, ...], Field(min_length=1)]
+    speedTilesPerSecond: Positive
+
+
 class StudioArea(AuthoredRecord):
     shapeSource: Literal["authoritative_cue"]
     phases: AreaPhases
     geometry: AreaGeometry
     sprite: AreaSprite | None
+    surfaceReveal: SurfaceReveal | None = None
 
 
 class HitFlash(AuthoredRecord):
@@ -339,7 +360,7 @@ class ProjectileFrame(AuthoredRecord):
 
 
 class AuthoredProjectilePhases(AuthoredRecord):
-    travel: AuthoredProjectilePhase
+    travel: AuthoredProjectilePhase | None = None
     cast: AuthoredProjectilePhase | None = None
     impact: AuthoredProjectilePhase | None = None
 
@@ -390,6 +411,21 @@ class AuthoredProjectileAsset(AuthoredRecord):
     validation: ProjectileValidation | None = None
 
 
+class ProjectileFrameLayer(AuthoredRecord):
+    """Local storage/material binding; independent of the Studio spell recipe."""
+
+    pattern: str
+    blendMode: Literal["normal", "add"]
+
+
+class ProjectileFrameStorage(AuthoredRecord):
+    layers: tuple[ProjectileFrameLayer, ...]
+
+
+class ProjectileStorage(AuthoredRecord):
+    phases: FrozenMap[ProjectileFrameStorage]
+
+
 class RigTables(AuthoredRecord):
     FACING_ROW: FacingMap[int]
     FACING_CYCLE: tuple[Facing8, ...]
@@ -421,6 +457,7 @@ class BodyRig(AuthoredRecord):
     cell_width: Annotated[int, Field(ge=1)]
     cell_height: Annotated[int, Field(ge=1)]
     origin_y_from_ground: float
+    body_anchor: Point | None = None
     facing_rows: FacingMap[int]
     slot_order: tuple[str, ...]
     slot_categories: FrozenMap[tuple[str, ...]]
@@ -506,6 +543,106 @@ class MovementMediaTrack(AuthoredRecord):
     scale: Annotated[float, Field(ge=0.1, le=8)]
     offsetX: Annotated[float, Field(ge=-512, le=512)]
     offsetY: Annotated[float, Field(ge=-512, le=512)]
+
+
+class ActionMediaAsset(AuthoredRecord):
+    """NeuroClient actionMediaAssets v1 source row, including one-row strips."""
+
+    assetId: Identifier
+    displayName: str
+    source: Identifier
+    directional: bool
+    frames: Annotated[int, Field(ge=1, le=256)]
+    defaultFps: Positive
+    tags: tuple[str, ...]
+
+
+class ActionMediaAssetFile(AuthoredRecord):
+    schema_: Literal["neuroclient.actionMediaAssets"] = Field(alias="schema")
+    version: Literal[1]
+    assets: tuple[ActionMediaAsset, ...]
+
+
+class WorldParticle(AuthoredRecord):
+    """Authored trajectory in world tiles/seconds; evaluated at absolute time."""
+
+    id: int
+    x: float
+    y: float
+    z: float
+    vx: float
+    vy: float
+    vz: float
+    g: Positive
+    life: Positive
+    delay: NonNegative
+    size: Positive
+    radius: Positive
+    theta: float
+    seed: int
+
+
+class LandingKernel(AuthoredRecord):
+    x: float
+    y: float
+    rx: Positive
+    ry: Positive
+    angle: float
+    mass: Positive
+
+
+class LandingParticle(AuthoredRecord):
+    id: int
+    target: tuple[float, float]
+    duration: Positive
+    gravity: Positive
+    delay: NonNegative
+    size: Positive
+    kernels: tuple[LandingKernel, ...]
+    fragment: tuple[tuple[float, float], ...]
+
+
+class LandingTemplate(AuthoredRecord):
+    seed: int
+    particles: tuple[LandingParticle, ...]
+
+
+class ReleaseFamily(AuthoredRecord):
+    delayScale: Positive
+    durationScale: Positive
+
+
+class RegionParticleStyle(AuthoredRecord):
+    """Normalized landing detail; native regions own its world placement."""
+
+    templates: tuple[LandingTemplate, ...]
+    families: FrozenMap[ReleaseFamily]
+    primitive: Literal["liquid", "fragments"]
+    palette: tuple[Color, Color, Color] | None
+    sourceHeight: Positive = .65
+    criticalCopies: int = 2
+
+
+class ParticleMediaAsset(AuthoredRecord):
+    """Portable media extension for independent world-depth particle tracks."""
+
+    assetId: Identifier
+    frames: Annotated[int, Field(ge=1, le=256)]
+    defaultFps: Positive
+    particles: tuple[WorldParticle, ...] = ()
+    region: RegionParticleStyle | None = None
+    legacyAssetId: str | None = None
+    colors: tuple[Color, Color]
+    tailSeconds: Positive
+    tailMinPx: Positive
+    tailMaxPx: Positive
+    snapPx: Positive
+
+
+class ParticleMediaAssetFile(AuthoredRecord):
+    schema_: Literal["neurodragon.particleMediaAssets"] = Field(alias="schema")
+    version: Literal[1]
+    assets: tuple[ParticleMediaAsset, ...]
 
 
 class MovementRecovery(AuthoredRecord):
@@ -656,6 +793,8 @@ class AttackProfileMatch(AuthoredRecord):
     primaryDamageTypes: tuple[str, ...] | None
     elemental: bool | None
     sourceItemRefs: tuple[ContentRef, ...] | None
+    # Current gear uses stable item identities; imported Studio refs remain readable.
+    sourceItemIds: tuple[str, ...] | None = None
 
 
 class AttackVfxLayer(AuthoredRecord):
@@ -693,6 +832,13 @@ class AttackVariant(AuthoredRecord):
     anchors: tuple[ActionFrameAnchor, ...]
     attackVfx: AttackVfx
     projectile: ActionProjectile | None
+
+
+class AttackProfileFile(AuthoredRecord):
+    """Local shared profiles in the original NeuroStudio variant vocabulary."""
+
+    behaviors: tuple[Identifier, ...]
+    variants: tuple[AttackVariant, ...]
 
 
 class ActionFeedback(AuthoredRecord):
@@ -741,6 +887,16 @@ BodyActionRecipe = ContentActionRecipe
 class BodyActionBinding(AuthoredRecord):
     source_recipe: Identifier
     action_feedback: ActionFeedback | None
+    interaction_target: Literal["source_item"] | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class PropAnimation:
+    """Shared finite world poses and timing, independent of a renderer."""
+
+    frames_by_pose: Mapping[str, tuple[str, ...]]
+    fps: int
+    state_frames: Mapping[str, int]
 
 
 @dataclass(frozen=True, slots=True)
@@ -752,6 +908,8 @@ class AnimationData:
     body_action_bindings: Mapping[str, BodyActionBinding]
     condition_recipes: Mapping[str, ConditionRecipe]
     projectile_assets: Mapping[str, AuthoredProjectileAsset]
+    projectile_storage: Mapping[str, ProjectileStorage]
+    media_root: Path
     rig: RigTables
     resources: Mapping[str, Path]
     root_rig: str
@@ -775,3 +933,7 @@ class AnimationData:
     vfx_source_hues: Mapping[str, float]
     # Unused action contexts remain exact source JSON until their family is ported.
     context_source_json: str
+    world_animations: Mapping[str, PropAnimation]
+    action_media_assets: Mapping[str, ActionMediaAsset | ParticleMediaAsset]
+    body_release_media: Mapping[str, tuple[MovementMediaTrack, ...]]
+    relocation_actions: frozenset[str] = frozenset()

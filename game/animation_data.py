@@ -15,16 +15,18 @@ from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.equipment_types import BodyPart, VisualLoadoutSlot, WeaponSet, WeaponSlot
 from dnd.core.item_types import EquippedVisualPolicy, ItemPresentationState
 from dnd.items.authored_variant_inventory import AUTHORED_ITEM_VARIANT_CATEGORIES
+from game.residue_media import region_media_assets
 from game.animation_types import (
-    AnimationData, AttackRecipe, AuthoredProjectileAsset, AuthoredRecord, BodyActionBinding, BodyActionRecipe,
+    ActionMediaAssetFile, ParticleMediaAssetFile, AnimationData, AttackProfileFile, AttackRecipe, AuthoredProjectileAsset, AuthoredRecord, BodyActionBinding, BodyActionRecipe,
     BodyClip, BodyRig, BoltStyle, DamageContext, DartStyle,
     DeathContext, DeathSaveContext, EquipmentTransitionContext, FloatingFeedbackStyle, ForcedMovementContext,
     ForcedMovementProfile, FrozenMap, HealingContext, Identifier, LifecycleFeedback, LifeStateContext,
-    MovementReactionContext, RigLayer, RigTables, ShoveRecipe, StudioDraftFile, StudioSpellDraft,
-    VoluntaryMovementContext,
+    MovementMediaTrack, MovementReactionContext, ProjectileStorage, RigLayer, RigTables, ShoveRecipe, StudioDraftFile, StudioSpellDraft,
+    VoluntaryMovementContext, Point,
 )
 from game.condition_types import load_condition_recipes
 from game.player_facts import PlayerActor, VisualItem
+from game.world_animation import prop_animation
 
 
 DATA_ROOT = Path(__file__).resolve().parent / "data" / "neuroclient"
@@ -140,11 +142,16 @@ def resolve_player_layers(
 class _Bindings(AuthoredRecord):
     spells: FrozenMap[ContentRef]
     root_rig: Identifier
+    root_body_anchor: Point | None = None
+    root_creature_content_refs: tuple[Identifier, ...] = ()
     resources: FrozenMap[str]
+    relocations: tuple[Identifier, ...] = ()
 
 
 class _ResourceBindings(AuthoredRecord):
     resources: FrozenMap[str]
+    spells: FrozenMap[ContentRef] = Field(default_factory=dict)
+    projectileStorage: FrozenMap[ProjectileStorage] = Field(default_factory=dict)
 
 
 class _ContextFile(AuthoredRecord):
@@ -185,15 +192,18 @@ def _local_resources(bindings: Mapping[str, str], data_root: Path) -> dict[str, 
     return {url: repository_root / relative for url, relative in bindings.items()}
 
 
-def _root_body_rig(rig: RigTables, resources: Mapping[str, Path]) -> BodyRig:
+def _root_body_rig(rig: RigTables, resources: Mapping[str, Path], body_anchor: Point | None) -> BodyRig:
     clips: dict[str, dict[str, str]] = {}
+    categories = {category for values in rig.SLOT_CATEGORIES.values() for category in values}
     for url in resources:
         parts = PurePosixPath(url).parts
-        if len(parts) == 4 and parts[1] == "spritesheets" and parts[3].endswith(".png"):
+        if (len(parts) == 4 and parts[1] == "spritesheets"
+                and parts[2] in categories and parts[3].endswith(".png")):
             clips.setdefault(parts[3][:-4], {})[parts[2]] = url
     return BodyRig(
         cell_width=rig.CELL_W, cell_height=rig.CELL_H,
         origin_y_from_ground=rig.RIG_ORIGIN_Y_FROM_GROUND,
+        body_anchor=body_anchor,
         facing_rows=rig.FACING_ROW, slot_order=rig.SLOT_RENDER_ORDER,
         slot_categories=rig.SLOT_CATEGORIES,
         clips={name: BodyClip(source_clip=name, frames=rig.SHEET_COLS, fps=rig.ANIM_FPS, sheets=sheets)
@@ -229,7 +239,7 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
     Unselected media may have metadata without copied sprites. Only explicit
     local resource bindings select files for the media loader. Archive provenance
     URLs and paths are never fetched or treated as runtime dependencies. By default the
-    explicit sibling CodexFX bundle is selected when present; () retains the
+    explicit sibling authored bundles are selected when present; () retains the
     original NeuroClient baseline for source comparisons.
     """
     data_root = data_root.resolve()
@@ -270,6 +280,15 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
             if identity in body_action_recipes:
                 raise ValueError(f"ambiguous authored body action identity: {identity}")
             body_action_recipes[identity] = body_action
+    profiles = AttackProfileFile.model_validate_json(_read(data_root / "attack-profiles.json"))
+    for identity in profiles.behaviors:
+        attack_recipes[identity] = attack_recipes[identity].model_copy(update={"variants": profiles.variants})
+    # The imported environment rows have no actor track. This
+    # local authored revision uses the same Studio action schema and is shared
+    # by the explicit object-action aliases below.
+    interaction_recipe = BodyActionRecipe.model_validate_json(
+        _read(data_root / "object-interaction-recipe.json"))
+    body_action_recipes[interaction_recipe.definitionRef.content_id] = interaction_recipe
     body_action_bindings = TypeAdapter(FrozenMap[BodyActionBinding]).validate_json(
         _read(data_root / "action-recipe-bindings.json"))
     for binding in body_action_bindings.values():
@@ -292,15 +311,22 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
         drafts_by_ref[ref] = draft
         identities.add(ref.identity_key)
     if authored_bundles is None:
-        local_bundle = data_root.parent / "codexfx"
-        authored_bundles = (local_bundle,) if local_bundle.is_dir() else ()
+        authored_bundles = tuple(data_root.parent / name for name in ("codexfx", "spell_recovery")
+                                 if (data_root.parent / name).is_dir())
     bundle_resources: dict[str, Path] = {}
+    projectile_storage: dict[str, ProjectileStorage] = {}
+    spell_bindings = dict(bindings.spells)
     overridden: set[ContentRef] = set()
     for bundle in authored_bundles:
+        resource_bindings = _ResourceBindings.model_validate_json(_read(bundle / "bindings.json"))
+        for identity, ref in resource_bindings.spells.items():
+            if identity in spell_bindings and spell_bindings[identity] != ref:
+                raise ValueError(f"authored spell binding disagrees with existing definitionRef: {identity}")
+            spell_bindings[identity] = ref
         overrides = StudioDraftFile.model_validate_json(_read(bundle / "spell-studio-drafts.json"))
         for draft in overrides.spells:
-            if draft.definitionRef not in drafts_by_ref:
-                raise ValueError(f"authored bundle has no exact existing spell definitionRef: {draft.definitionRef.identity_key}")
+            if draft.definitionRef not in spell_bindings.values():
+                raise ValueError(f"authored bundle has no exact spell binding: {draft.definitionRef.identity_key}")
             if draft.definitionRef in overridden:
                 raise ValueError(f"duplicate authored spell override: {draft.definitionRef.identity_key}")
             overridden.add(draft.definitionRef)
@@ -308,19 +334,21 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
         assets += TypeAdapter(tuple[AuthoredProjectileAsset, ...]).validate_json(
             _read(bundle / "projectile-assets.json")
         )
-        resource_bindings = _ResourceBindings.model_validate_json(_read(bundle / "bindings.json"))
         local_resources = _local_resources(resource_bindings.resources, data_root)
         if set(local_resources) & set(bundle_resources):
             raise ValueError("authored bundle resource identity already bound")
         bundle_resources.update(local_resources)
+        if set(resource_bindings.projectileStorage) & set(projectile_storage):
+            raise ValueError("authored projectile storage identity already bound")
+        projectile_storage.update(resource_bindings.projectileStorage)
     drafts: dict[str, StudioSpellDraft] = {}
-    for semantic_id, ref in bindings.spells.items():
+    for semantic_id, ref in spell_bindings.items():
         if semantic_id != ref.content_id or not semantic_id.startswith("spell."):
             raise ValueError(f"spell binding identity mismatch: {semantic_id}")
         if ref not in drafts_by_ref:
             raise ValueError(f"spell binding has no exact authored definitionRef: {semantic_id}")
         drafts[semantic_id] = drafts_by_ref[ref]
-    if set(bindings.spells.values()) != set(drafts_by_ref):
+    if set(spell_bindings.values()) != set(drafts_by_ref):
         raise ValueError("materialized spell drafts and local bindings differ")
 
     projectile_assets: dict[str, AuthoredProjectileAsset] = {}
@@ -362,9 +390,14 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
     if set(resources) & set(bundle_resources):
         raise ValueError("authored bundle resource identity already bound")
     resources.update(bundle_resources)
-    rigs = {bindings.root_rig: _root_body_rig(rig, resources)}
-    creature_rigs: dict[str, str] = {}
+    rigs = {bindings.root_rig: _root_body_rig(rig, resources, bindings.root_body_anchor)}
+    creature_rigs = {identity: bindings.root_rig for identity in bindings.root_creature_content_refs}
     _additional_rigs(rig_files, data_root, rigs, resources, creature_rigs)
+    world_bindings = json.loads(_read(DATA_ROOT.parent / "world_bindings.json"))
+    world_animations = {identity: prop_animation(row["transition"])
+        for identity, row in world_bindings["props"].items() if "transition" in row}
+    world_animations.update({identity: prop_animation(row)
+        for identity, row in world_bindings["spatial_effects"].items()})
     return AnimationData(
         drafts=MappingProxyType(drafts),
         attack_recipes=MappingProxyType(attack_recipes),
@@ -373,6 +406,8 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
         body_action_bindings=body_action_bindings,
         condition_recipes=load_condition_recipes(source_root / "src/render/data/animation/conditionPresentation.json"),
         projectile_assets=MappingProxyType(projectile_assets),
+        projectile_storage=MappingProxyType(projectile_storage),
+        media_root=data_root.parent.parent.parent,
         rig=rig,
         resources=MappingProxyType(resources),
         root_rig=bindings.root_rig,
@@ -397,4 +432,12 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
             _read(source_root / "src/render/data/animation/vfxSourceHues.json")
         )),
         context_source_json=context_source,
+        world_animations=MappingProxyType(world_animations),
+        action_media_assets=MappingProxyType({asset.assetId: asset for asset in (
+            *ActionMediaAssetFile.model_validate_json(_read(data_root / "body-release-assets.json")).assets,
+            *ParticleMediaAssetFile.model_validate_json(_read(data_root / "body-release-particles.json")).assets,
+            *region_media_assets().values())}),
+        body_release_media=MappingProxyType(TypeAdapter(dict[str, tuple[MovementMediaTrack, ...]]).validate_json(
+            _read(data_root / "body-release-bindings.json"))),
+        relocation_actions=frozenset(bindings.relocations),
     )

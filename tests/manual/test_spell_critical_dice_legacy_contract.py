@@ -70,7 +70,7 @@ def _guiding_bolt(caster: Entity, target: Entity) -> SpellAction:
         ("chill touch level 1", _cantrip(ChillTouch, 1), 1, 2),
         ("fire bolt level 5", _cantrip(FireBolt, 5), 1, 4),
         ("ray of frost level 5", _cantrip(RayOfFrost, 5), 1, 4),
-        ("eldritch blast level 5", _cantrip(EldritchBlast, 5), 1, 4),
+        ("eldritch blast level 5", _cantrip(EldritchBlast, 5), 2, 2),
         ("chill touch level 5", _cantrip(ChillTouch, 5), 1, 4),
         ("scorching ray", _scorching_ray, 3, 4),
         ("guiding bolt", _guiding_bolt, 1, 8),

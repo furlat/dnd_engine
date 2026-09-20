@@ -7,6 +7,7 @@ from pydantic import TypeAdapter
 from game.animation import CastTimeline, EquipmentTimeline
 from game.attack import AttackTimeline, BoundAttack
 from game.animation_types import RigLayer
+from game.action_media import ActionStripCue
 from game.body_action import BodyActionCue
 from game.choreography import BoundChoreography
 from game.condition_animation import ConditionTimeline
@@ -15,6 +16,7 @@ from game.forced_movement import ForcedMovementCue, ShoveCue
 from game.motion import MotionLeg, MotionTimeline
 from game.playback_frame import PlaybackFrame
 from game.player_facts import PlayerLineage, PlayerState
+from game.world_animation import WorldTransitionSample
 
 
 STATE = TypeAdapter(PlayerState)
@@ -28,6 +30,8 @@ SHOVE = TypeAdapter(ShoveCue)
 FORCED = TypeAdapter(ForcedMovementCue)
 DAMAGE = TypeAdapter(DamageCue)
 BODY_ACTION = TypeAdapter(BodyActionCue)
+ACTION_STRIP = TypeAdapter(ActionStripCue)
+WORLD_TRANSITIONS = TypeAdapter(tuple[WorldTransitionSample, ...])
 
 
 def state_summary(state: PlayerState) -> dict[str, Any]:
@@ -45,13 +49,27 @@ def state_summary(state: PlayerState) -> dict[str, Any]:
             "conditions": [{"uuid": str(row.condition_uuid), "event_uuid": str(row.event_uuid),
                             "behavior_id": row.behavior_id, "name": row.name} for row in actor.conditions],
             "last_visual_position": actor.last_visual_position,
+            "controlled_items": (None if actor.controlled_items is None
+                                 else [str(item.item_uuid) for item in actor.controlled_items]),
         } for identity, actor in state.actors.items()},
+        "objects": {str(identity): {
+            "item_id": obj.item.item_id, "position": obj.placement.position,
+            "is_open": obj.item.is_open, "is_lit": obj.item.is_lit, "is_engaged": obj.item.is_engaged,
+        } for identity, obj in state.objects.items()},
+        "residues": [{"position": tile.position,
+                      "members": [row.model_dump(mode="json") for row in tile.residues]}
+                     for tile in state.tiles.values() if tile.residues],
+        "spatial_effects": {} if state.senses is None else {str(identity): {
+            "content_id": effect.content_ref.content_id, "state": effect.trap_state.value,
+            "positions": effect.positions, "description": effect.description,
+        } for identity, effect in state.senses.spatial_effects.items()},
     }
 
 
 def group_trace(group: BoundChoreography) -> dict[str, Any]:
     return {
         "root_uuid": str(group.root_uuid), "complete_ms": group.complete_ms,
+        "state_times_ms": [at for at, _ in group.states],
         "observations": [{"at_ms": at, "event_uuid": str(observation.event_uuid),
                           "actor_uuid": str(observation.actor.uuid)} for at, observation in group.observations],
         "shoves": [SHOVE.dump_python(cue, mode="json", exclude={"data"}, warnings="error") for cue in group.shoves],
@@ -78,6 +96,10 @@ def group_trace(group: BoundChoreography) -> dict[str, Any]:
                        "timeline": EQUIPMENT.dump_python(cue.bound.timeline, mode="json", exclude={"data"}, warnings="error"),
                        "replacement": LAYERS.dump_python(cue.bound.replacement, mode="json", warnings="error")}
                       for cue in group.equipment],
+        "movements": [{"event_uuid": str(cue.event_uuid), "start_ms": cue.start_ms,
+                       "motion": motion_trace(cue.timeline)} for cue in group.movements],
+        "strips": [ACTION_STRIP.dump_python(cue, mode="json", exclude={"data"}, warnings="error")
+                   for cue in group.strips],
         "gaps": [(str(identity), detail) for identity, detail in group.gaps],
     }
 
@@ -99,6 +121,13 @@ def motion_trace(motion: MotionTimeline) -> dict[str, Any]:
 
 def frame_trace(frame: PlaybackFrame) -> dict[str, Any]:
     return {
+        "world_transitions": WORLD_TRANSITIONS.dump_python(frame.world_transitions, mode="json"),
+        "residue_reveals": [{"position": row.reveal.position,
+            "condition_uuid": str(row.reveal.after.condition_uuid), "elapsed_ms": row.elapsed_ms,
+            "start_ms": row.reveal.start_ms, "end_ms": row.reveal.end_ms,
+            "before_amount": row.reveal.before.amount if row.reveal.before else 0,
+            "after_amount": row.reveal.after.amount, "pattern": row.reveal.pattern,
+            "asset_id": row.reveal.asset.assetId} for row in frame.residue_reveals],
         "state": state_summary(frame.displayed), "complete": frame.complete,
         "contacts": [{"actor_uuid": row.contact.actor_uuid, "grid": row.contact.grid,
                       "elevation_steps": row.contact.elevation_steps,
@@ -112,4 +141,4 @@ def frame_trace(frame: PlaybackFrame) -> dict[str, Any]:
 def draw_trace(frame: PlaybackFrame) -> list[dict[str, Any]]:
     return [{"depth": key, "screen_xy": position, "size": surface.get_size(),
              "blend": flags, "evidence": evidence}
-            for key, surface, position, flags, evidence in frame.commands]
+            for key, surface, position, flags, evidence, _ in frame.commands]

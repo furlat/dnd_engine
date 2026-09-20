@@ -45,7 +45,7 @@ from tests.spell_test_exports import (
 )
 
 
-def test_eldritch_blast_discloses_level_scaled_attack_outcome() -> None:
+def test_eldritch_blast_discloses_independent_beam_outcomes() -> None:
     """Eldritch Blast publishes the same typed damage boundary it executes."""
     reset_spell_tutorial_state()
     caster = create_spell_actor(
@@ -64,7 +64,8 @@ def test_eldritch_blast_discloses_level_scaled_attack_outcome() -> None:
     assert profile is not None
     assert profile.resolution is OutcomeResolution.ATTACK_ROLL
     assert profile.attack_bonus == caster.spell_attack_outcome_baseline().attack_bonus
-    assert profile.damage_rolls[0].dice_count == 2
+    assert profile.applications == 2
+    assert profile.damage_rolls[0].dice_count == 1
     assert profile.damage_rolls[0].die_size == 10
     assert profile.damage_rolls[0].damage_type == "Force"
 

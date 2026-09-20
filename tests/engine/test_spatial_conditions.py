@@ -22,6 +22,7 @@ from dnd.core.events import (
     EventQueue,
     EventType,
     SpatialEffectInteractionEvent,
+    SpatialEffectChangeEvent,
     TakeDamageEvent,
     Trigger,
 )
@@ -60,6 +61,7 @@ from dnd.types.spatial_effects import (
     SpatialEffectOccupancyPolicy,
     SpatialEffectTriggerKind,
 )
+from dnd.types.traps import TrapState
 
 
 def create_goblin(*args, **kwargs) -> Entity:
@@ -1162,7 +1164,7 @@ def test_spike_trap_uses_one_handler_reveals_once_and_extends_by_identity() -> N
 
 
 def test_pull_lever_targets_one_spike_condition_identity() -> None:
-    """A lever removes its linked network without handler or Tile bookkeeping."""
+    """A lever disables only its linked network and preserves its identity."""
     reset_engine_runtime(grid_size=(4, 1))
     linked = materialize_spike_trap_condition({(1, 0)})
     unrelated = materialize_spike_trap_condition({(3, 0)})
@@ -1177,22 +1179,25 @@ def test_pull_lever_targets_one_spike_condition_identity() -> None:
 
     assert result is not None
     assert result.phase is EventPhase.COMPLETION
-    assert not linked.applied
+    assert linked.applied and linked.trap_state is TrapState.DEACTIVATED
     assert unrelated.applied
-    assert get_map().get_spatial_conditions() == [unrelated]
+    assert set(condition.uuid for condition in get_map().get_spatial_conditions()) == {linked.uuid, unrelated.uuid}
     linked_tile = get_map().get_tile(1, 0)
     unrelated_tile = get_map().get_tile(3, 0)
-    assert linked_tile is not None and linked_tile.get_conditions() == {}
+    assert linked_tile is not None and linked_tile.get_conditions() == {linked.uuid: linked}
+    assert not get_map().is_position_hazardous_for(1, 0, actor.uuid)
     assert unrelated_tile is not None and unrelated_tile.get_conditions() == {
         unrelated.uuid: unrelated,
     }
 
     events = [event for _, event in EventQueue.iter_events_since(cursor)]
-    removal_terminal_index = next(
+    change_terminal_index = next(
         index
         for index, event in enumerate(events)
-        if event.event_type is EventType.CONDITION_REMOVAL
-        and event.condition is linked
+        if isinstance(event, SpatialEffectChangeEvent)
+        and event.operation is SpatialEffectChangeOperation.STATE_CHANGED
+        and event.spatial_effect_uuid == linked.uuid
+        and event.trap_state is TrapState.DEACTIVATED
         and event.phase is EventPhase.COMPLETION
     )
     action_terminal_index = next(
@@ -1200,7 +1205,7 @@ def test_pull_lever_targets_one_spike_condition_identity() -> None:
         for index, event in enumerate(events)
         if event.uuid == result.uuid
     )
-    assert removal_terminal_index < action_terminal_index
+    assert change_terminal_index < action_terminal_index
 
 
 def test_oil_barrel_destruction_uses_direct_material_transition() -> None:

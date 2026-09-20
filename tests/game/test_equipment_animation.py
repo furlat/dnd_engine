@@ -106,7 +106,7 @@ def _pixels(screen: pygame.Surface, timeline: EquipmentTimeline, body: BodySampl
         timeline.actor.grid, elevation_steps=round(timeline.actor.elevation_steps),
     )
     screen.fill((0, 0, 0))
-    for _, image, destination, blend, _ in sorted(actor_draw_commands(
+    for _, image, destination, blend, _, _ in sorted(actor_draw_commands(
         timeline.data, body, timeline.actor, layers, rows, camera,
     ), key=lambda command: command[0]):
         screen.blit(image, destination, special_flags=blend)

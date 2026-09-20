@@ -37,6 +37,12 @@ collect the engine-declared number of selections, including repeated targets
 where allowed. Backspace clears the allocation. Costs, unavailable reasons,
 movement and conditions come from the current engine and retained history.
 
+`uv run --no-sync python -m game --encounter encounter.residue_workshop` opens
+the Blood and Bone Workshop: a clothed fighter, modular skeleton warrior,
+fixed skeleton archer, corrosive/dread demons, and a lever/spike lane. Creature
+injuries leave native tile residue; movement and turns exercise its effects.
+The same controls and historical playback apply to both encounters.
+
 Space pauses historical playback; enemy progression remains independent.
 Q/E rotate, WASD pan, the wheel zooms, G toggles the grid, F3 shows diagnostics,
 and Esc closes. `--headless --frames 120` is a bounded SDL run; `--capture-dir`

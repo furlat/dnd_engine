@@ -1,0 +1,247 @@
+[
+  {
+    "assetId": "recovered.acid_splash.dense.v1",
+    "displayName": "Acid Splash",
+    "kind": "projectile",
+    "sheet": "/authored-vfx/spell-recovery/recovered.acid_splash.dense.v1",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "rows": 8,
+      "cols": 127
+    },
+    "fps": 24,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "travel": {
+        "start": 0,
+        "frames": 12,
+        "fps": 24,
+        "loop": true
+      },
+      "impact": {
+        "start": 12,
+        "frames": 115,
+        "fps": 144,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        4521796,
+        2271778,
+        8978278
+      ]
+    }
+  },
+  {
+    "assetId": "recovered.guiding_bolt.dense.v1",
+    "displayName": "Guiding Bolt",
+    "kind": "projectile",
+    "sheet": "/authored-vfx/spell-recovery/recovered.guiding_bolt.dense.v1",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "rows": 8,
+      "cols": 83
+    },
+    "fps": 24,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "cast": {
+        "start": 0,
+        "frames": 8,
+        "fps": 24,
+        "loop": false
+      },
+      "travel": {
+        "start": 8,
+        "frames": 12,
+        "fps": 24,
+        "loop": true
+      },
+      "impact": {
+        "start": 20,
+        "frames": 63,
+        "fps": 144,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        16443034,
+        12948031,
+        16774607
+      ]
+    }
+  },
+  {
+    "assetId": "recovered.eldritch_blast.dense.v1",
+    "displayName": "Eldritch Blast",
+    "kind": "projectile",
+    "sheet": "/authored-vfx/spell-recovery/recovered.eldritch_blast.dense.v1",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "rows": 8,
+      "cols": 332
+    },
+    "fps": 24,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "travel": {
+        "start": 0,
+        "frames": 144,
+        "fps": 144,
+        "loop": true
+      },
+      "impact": {
+        "start": 144,
+        "frames": 116,
+        "fps": 144,
+        "loop": false
+      },
+      "cast": {
+        "start": 260,
+        "frames": 72,
+        "fps": 144,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        9029119,
+        3635902,
+        14086655
+      ]
+    }
+  },
+  {
+    "assetId": "shared.fireball.20ft-ground.smoke.v3.travel",
+    "displayName": "Fireball \u00b7 20-foot ground radius \u00b7 travel",
+    "kind": "projectile",
+    "sheet": "/authored-vfx/spell-recovery/shared.fireball.20ft-ground.smoke.v3.travel",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "rows": 8,
+      "cols": 12
+    },
+    "fps": 24,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "travel": {
+        "start": 0,
+        "frames": 12,
+        "fps": 24,
+        "loop": true
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        16737792,
+        16719360,
+        16763904
+      ]
+    }
+  },
+  {
+    "assetId": "shared.fireball.20ft-ground.smoke.v3",
+    "displayName": "Fireball \u00b7 20-foot ground radius \u00b7 impact",
+    "kind": "projectile",
+    "sheet": "/authored-vfx/spell-recovery/shared.fireball.20ft-ground.smoke.v3",
+    "frame": {
+      "width": 1536,
+      "height": 1536,
+      "rows": 8,
+      "cols": 48
+    },
+    "fps": 24,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 48,
+        "fps": 24,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        16737792,
+        16719360,
+        16763904
+      ]
+    }
+  }
+]

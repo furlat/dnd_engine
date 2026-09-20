@@ -29,7 +29,8 @@ from dnd.core.content.registration import (
 )
 from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.entity import Entity
-from typing import Callable, Dict, Any, Optional, List, Literal, Tuple, TypeVar
+from dnd.types.residue_fear import PaidEntryRetreat, ResidueFearOrigin
+from typing import Callable, Dict, Any, Optional, List, Literal, Set, Tuple, TypeVar
 from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import (
     AdvantageModifier,
@@ -47,7 +48,8 @@ from dnd.core.modifiers import (
     ResistanceStatus,
 )
 from dnd.blocks.skills import all_skills, skills_requiring_sight, skills_requiring_hearing, skills_social
-from dnd.core.base_block import SensesType, LightLevel
+from dnd.core.base_block import LightLevel
+from dnd.core.geometry import bresenham_line
 from dnd.core.gridmap import get_map
 from uuid import UUID
 from functools import partial
@@ -61,6 +63,8 @@ from dnd.core.events import (
     ReviveEvent,
     SavingThrowEvent,
     SpatialChangeEvent,
+    SpatialHandler,
+    StepMovementEvent,
     Trigger,
     EventQueue,
 )
@@ -928,6 +932,35 @@ class Disengaging(BaseCondition):
         return outs, [], [], [], effect_event
 
 
+def residue_fear_origin(
+    entry: SpatialChangeEvent, *, tile_uuid: UUID, condition_uuid: UUID,
+) -> ResidueFearOrigin:
+    """Derive one reverse step from the real entry, including jump or teleport."""
+    previous = entry.old_position
+    if previous == entry.position:
+        previous = None
+        parent = entry.get_parent_event()
+        while parent is not None:
+            if isinstance(parent, StepMovementEvent) and parent.source_entity_uuid == entry.entity_uuid:
+                previous = parent.from_position
+                break
+            if parent.event_type is EventType.MOVEMENT:
+                committed = [child for child in parent.get_children_events()
+                    if isinstance(child, StepMovementEvent) and child.committed
+                    and child.source_entity_uuid == entry.entity_uuid
+                    and child.to_position == entry.position]
+                if committed:
+                    previous = max(committed, key=lambda step: step.path_index).from_position
+                    break
+            parent = parent.get_parent_event()
+    reverse_path = bresenham_line(entry.position, previous) if previous is not None else []
+    retreat_position = reverse_path[1] if len(reverse_path) > 1 else None
+    return ResidueFearOrigin(
+        tile_uuid=tile_uuid, condition_uuid=condition_uuid, position=entry.position,
+        retreat_position=retreat_position, entry_event_uuid=entry.uuid,
+    )
+
+
 @_core_condition_identity(
     content_id="condition.frightened",
     display_name="Frightened",
@@ -939,6 +972,7 @@ class Frightened(BaseCondition):
     """Contextual fear condition keyed to whether the source is sensed."""
 
     name: str = Field(default="Frightened", description="Condition name.")
+    residue_origin: Optional[ResidueFearOrigin] = None
     description: str = Field(
         default="A frightened creature has disadvantage on attack rolls and ability checks and cannot move while the frightener is in sight.",
         description="Condition description.",
@@ -960,11 +994,26 @@ class Frightened(BaseCondition):
                 skills_modifier_uuid = skill_obj.skill_bonus.self_contextual.add_advantage_modifier(modifier=ContextualAdvantageModifier(name="Frightened",source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid, callable=self.get_frightener_in_senses_disadvantage()))
                 outs.append((skill_obj.skill_bonus.uuid,skills_modifier_uuid))
             effect_event = effect_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Frightened skill disadvantage modifier to {target_entity.name}")
-            movement_value = target_entity.action_economy.movement
-            max_movement_constraint_uuid = movement_value.self_contextual.add_max_constraint(constraint=ContextualNumericalModifier(name="Frightened",source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid, callable=self.get_frigthener_in_senses_zero_max_speed()))
-            outs.append((movement_value.uuid,max_movement_constraint_uuid))
-            effect_event = effect_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Frightened movement constraint to {target_entity.name}")
-            return outs, [], [], [], effect_event
+            if self.residue_origin is None:
+                movement_value = target_entity.action_economy.movement
+                max_movement_constraint_uuid = movement_value.self_contextual.add_max_constraint(constraint=ContextualNumericalModifier(name="Frightened",source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid, callable=self.get_frigthener_in_senses_zero_max_speed()))
+                outs.append((movement_value.uuid,max_movement_constraint_uuid))
+                effect_event = effect_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Frightened movement constraint to {target_entity.name}")
+                return outs, [], [], [], effect_event
+            direction = EventHandler(
+                name="Residue Fear Retreat Direction", source_entity_uuid=target_entity.uuid,
+                trigger_conditions=[Trigger(event_type=EventType.STEP_MOVEMENT,
+                    event_phase=EventPhase.EFFECT, event_source_entity_uuid=target_entity.uuid)],
+                event_processor=self._on_residue_step,
+            )
+            target_entity.add_event_handler(direction)
+            exit_handler = SpatialHandler(
+                name="Residue Fear Exit", source_entity_uuid=target_entity.uuid,
+                positions={self.residue_origin.position}, event_type=EventType.SPATIAL_ENTITY_LEFT,
+                event_processor=self._on_residue_exit,
+            )
+            EventQueue.add_spatial_handler(exit_handler)
+            return outs, [direction.uuid], [], [exit_handler.uuid], effect_event
         else:
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
 
@@ -991,8 +1040,52 @@ class Frightened(BaseCondition):
         """Return the contextual disadvantage callable for this fear source."""
         if not self.target_entity_uuid:
             raise ValueError("Target entity UUID is not set hence cannot generate the callable for the ContextualAdvantageModifier")
-        partial_function = partial(self.frightener_in_senses_disadvantage, self.source_entity_uuid)
-        return partial_function
+        if self.residue_origin is not None:
+            return partial(self.residue_in_senses_disadvantage, self.residue_origin)
+        return partial(self.frightener_in_senses_disadvantage, self.source_entity_uuid)
+
+    @staticmethod
+    def residue_in_senses_disadvantage(
+        origin: ResidueFearOrigin, source_entity_uuid: UUID,
+        target_entity_uuid: Optional[UUID] = None, context: Optional[Dict[str, Any]] = None,
+    ) -> Optional[AdvantageModifier]:
+        """Use the exact tile-owned source and current visual access, never its donor."""
+        target = Entity.get(source_entity_uuid)
+        tile = get_map().get_tile_by_uuid(origin.tile_uuid)
+        if (target is not None and tile is not None
+                and origin.condition_uuid in tile.active_conditions_by_uuid
+                and target.senses.visible.get(origin.position, False)):
+            return AdvantageModifier(name="Frightened", value=AdvantageStatus.DISADVANTAGE,
+                source_entity_uuid=source_entity_uuid, target_entity_uuid=target_entity_uuid)
+        return None
+
+    def get_paid_entry_retreat(self, *, since_cursor: int) -> Optional[PaidEntryRetreat]:
+        """Request the initial response once, at the movement's completed entry boundary."""
+        if (self.residue_origin is None or self.applied_source_event_cursor is None
+                or self.applied_source_event_cursor <= since_cursor):
+            return None
+        return PaidEntryRetreat(destination=self.residue_origin.retreat_position)
+
+    def _on_residue_step(self, event: Event, _source_uuid: UUID) -> Event:
+        """While trapped by this fear, ordinary steps can follow the retained retreat."""
+        if (self.residue_origin is not None and isinstance(event, StepMovementEvent)
+                and self.residue_origin.retreat_position is not None
+                and event.to_position != self.residue_origin.retreat_position):
+            return event.cancel(status_message="Frightened: retreat toward the entry cell")
+        return event
+
+    def _on_residue_exit(self, event: Event, _source_uuid: UUID) -> Event:
+        """Remove only this pool's fear after a real exit in the retreat direction."""
+        origin = self.residue_origin
+        if (origin is not None and self.target_entity_uuid is not None
+                and isinstance(event, SpatialChangeEvent)
+                and event.entity_uuid == self.target_entity_uuid
+                and event.old_position == origin.retreat_position
+                and event.old_position != event.position):
+            target = Entity.get(self.target_entity_uuid)
+            if target is not None:
+                target.remove_condition_by_uuid(self.uuid, parent_event=event)
+        return event
 
     @staticmethod
     def frigthener_in_senses_zero_max_speed(frightener_uuid: UUID, source_entity_uuid: UUID, target_entity_uuid: Optional[UUID]=None, context: Optional[Dict[str, Any]] = None) -> Optional[NumericalModifier]:

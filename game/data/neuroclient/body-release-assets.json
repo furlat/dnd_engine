@@ -1,0 +1,54 @@
+{
+  "schema": "neuroclient.actionMediaAssets",
+  "version": 1,
+  "assets": [
+    {
+      "assetId": "strip.body.bone",
+      "displayName": "body.bone",
+      "source": "BodyRelease/bone",
+      "directional": false,
+      "frames": 12,
+      "defaultFps": 24,
+      "tags": [
+        "body-release",
+        "bone"
+      ]
+    },
+    {
+      "assetId": "strip.body.corrosive_blood",
+      "displayName": "body.corrosive_blood",
+      "source": "BodyRelease/corrosive",
+      "directional": false,
+      "frames": 12,
+      "defaultFps": 24,
+      "tags": [
+        "body-release",
+        "corrosive"
+      ]
+    },
+    {
+      "assetId": "strip.body.dread_blood",
+      "displayName": "body.dread_blood",
+      "source": "BodyRelease/dread",
+      "directional": false,
+      "frames": 12,
+      "defaultFps": 24,
+      "tags": [
+        "body-release",
+        "dread"
+      ]
+    },
+    {
+      "assetId": "strip.body.blood",
+      "displayName": "body.blood",
+      "source": "BodyRelease/blood",
+      "directional": false,
+      "frames": 18,
+      "defaultFps": 24,
+      "tags": [
+        "body-release",
+        "blood"
+      ]
+    }
+  ]
+}

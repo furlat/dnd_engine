@@ -15,6 +15,7 @@ from dnd.actions import AttackEvent, JumpEvent, MovementEvent
 from dnd.actions_functional import execute_by_index, get_available_actions, setup_standard_actions
 from dnd.blocks.appearance import AppearanceConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
+from dnd.body_responses import BLOOD_BODY_RESPONSE, install_body_response
 from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.content_system.creature_materialization import materialize_creature
 from dnd.controller import HumanController
@@ -45,7 +46,7 @@ def attack_history(
     destination: tuple[int, int] = (2, 3), maximum_hp: int = 80,
     movement_behavior: str = "action.move", watcher_positions: tuple[tuple[int, int], ...] = ((4, 3),),
     weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN, goblin_source: bool = False,
-    uses_death_saves: bool = False,
+    uses_death_saves: bool = False, bloodied: bool = False,
 ) -> CapturedHistory:
     """Execute the discovered attack/movement and detach its completed history."""
     previous = random.getstate()
@@ -66,6 +67,8 @@ def attack_history(
             (build_authored_item("apparel.robes.red_mage", hero.uuid), BodyPart.BODY),
             (build_authored_item("apparel.cloth_shoes.red", hero.uuid), BodyPart.FEET),
         ))
+        if bloodied:
+            install_body_response(hero, BLOOD_BODY_RESPONSE)
         hero.compose_entity()
         setup_standard_actions(hero)
         watchers = tuple(materialize_creature(

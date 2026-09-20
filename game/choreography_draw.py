@@ -13,6 +13,7 @@ from game.animation_types import AnimationData, RigLayer
 from game.animation_draw import (
     AnimationDrawCommand, AnimationMedia, BodyRows, LoadedBodyRows, animation_draw_commands,
     attack_draw_commands, load_actor_media, load_animation_media, load_attack_media,
+    action_media_draw_commands, load_action_strip_media,
 )
 from game.attack import AttackSample, BoundAttack
 from game.choreography import BoundChoreography, ChoreographySample
@@ -27,6 +28,7 @@ from game.scene import SceneActor, available_clips, load_scene_media, scene_acto
 class ChoreographyMedia:
     attacks: Mapping[UUID, BodyRows]
     casts: Mapping[UUID, AnimationMedia]
+    strips: Mapping[str, pygame.Surface]
 
 
 def load_choreography_media(bound: BoundChoreography, *,
@@ -36,13 +38,15 @@ def load_choreography_media(bound: BoundChoreography, *,
         body_rows = {}
     attacks: dict[UUID, BodyRows] = {}
     casts: dict[UUID, AnimationMedia] = {}
+    strips = load_action_strip_media(bound.strips)
     for node in bound.nodes:
         if isinstance(node.bound, BoundAttack):
             attacks[node.event_uuid] = load_attack_media(node.bound.timeline, node.bound.appearances,
                                                          body_rows=body_rows)
         else:
             casts[node.event_uuid] = load_animation_media(node.bound.timeline, node.bound.appearances,
-                                                          body_rows=body_rows)
+                                                          body_rows=body_rows,
+                                                          area_boundaries=node.bound.area_boundaries)
     # These bodies use the ordinary scene drawer. Their retained appearances
     # can change at equipment commits or at an actual observation in this head.
     actors = [*bound.before.actors.values(), *bound.after.actors.values(),
@@ -83,7 +87,12 @@ def load_choreography_media(bound: BoundChoreography, *,
     for life in bound.lifecycle:
         if life.death_end_ms is not None and not life.state_owned:
             load(life.contact, (life.data.death_context.bodyClip,), life.data)
-    return ChoreographyMedia(attacks, casts)
+    for cue in bound.movements:
+        for child in load_motion_media(cue.timeline, cue.data, body_rows=body_rows).values():
+            attacks.update(child.attacks)
+            casts.update(child.casts)
+            strips.update(child.strips)
+    return ChoreographyMedia(attacks, casts, strips)
 
 
 def load_motion_media(timeline: MotionTimeline, data: AnimationData, *,
@@ -136,4 +145,5 @@ def choreography_draw_commands(bound: BoundChoreography, sample: ChoreographySam
               or owners[str(command[4][0])][2] == index]
     # The shared frame draws condition feedback from retained FloatingText
     # tracks, whose launch contact survives the actor leaving sight.
-    return tuple(result)
+    return (*result, *(command for strip in sample.strips
+                      for command in action_media_draw_commands(strip, media.strips, camera)))

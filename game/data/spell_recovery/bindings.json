@@ -1,0 +1,143 @@
+{
+  "resources": {
+    "/spell-recovery/caster/guiding_bolt-weaponGlow.png": "game/assets/spell_recovery/caster/guiding_bolt-weaponGlow.png",
+    "/spell-recovery/caster/eldritch_blast-weaponGlow.png": "game/assets/spell_recovery/caster/eldritch_blast-weaponGlow.png",
+    "/spritesheets/Magic3/Special1.png": "game/assets/spell_recovery/spritesheets/Magic3/Special1.png"
+  },
+  "spells": {
+    "spell.acid_splash": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.acid_splash",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "spell.guiding_bolt": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.guiding_bolt",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "spell.eldritch_blast": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.eldritch_blast",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "spell.fireball": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.fireball",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    }
+  },
+  "projectileStorage": {
+    "recovered.acid_splash.dense.v1": {
+      "phases": {
+        "travel": {
+          "layers": [
+            {
+              "pattern": "game/assets/spell_recovery/acid_splash/travel/{direction}/{frame:02}.png",
+              "blendMode": "add"
+            }
+          ]
+        },
+        "impact": {
+          "layers": [
+            {
+              "pattern": "game/assets/spell_recovery/acid_splash/impact/{direction}/{frame:02}.png",
+              "blendMode": "add"
+            }
+          ]
+        }
+      }
+    },
+    "recovered.guiding_bolt.dense.v1": {
+      "phases": {
+        "cast": {
+          "layers": [
+            {
+              "pattern": "game/assets/spell_recovery/guiding_bolt/cast/{direction}/{frame:02}.png",
+              "blendMode": "add"
+            }
+          ]
+        },
+        "travel": {
+          "layers": [
+            {
+              "pattern": "game/assets/spell_recovery/guiding_bolt/travel/{direction}/{frame:02}.png",
+              "blendMode": "add"
+            }
+          ]
+        },
+        "impact": {
+          "layers": [
+            {
+              "pattern": "game/assets/spell_recovery/guiding_bolt/impact/{direction}/{frame:02}.png",
+              "blendMode": "add"
+            }
+          ]
+        }
+      }
+    },
+    "recovered.eldritch_blast.dense.v1": {
+      "phases": {
+        "travel": {
+          "layers": [
+            {
+              "pattern": "game/assets/spell_recovery/eldritch_blast/travel/{direction}/{frame:02}.png",
+              "blendMode": "add"
+            }
+          ]
+        },
+        "impact": {
+          "layers": [
+            {
+              "pattern": "game/assets/spell_recovery/eldritch_blast/impact/{direction}/{frame:02}.png",
+              "blendMode": "add"
+            }
+          ]
+        },
+        "cast": {
+          "layers": [
+            {
+              "pattern": "game/assets/spell_recovery/eldritch_blast/cast/{direction}/{frame:02}.png",
+              "blendMode": "add"
+            }
+          ]
+        }
+      }
+    },
+    "shared.fireball.20ft-ground.smoke.v3.travel": {
+      "phases": {
+        "travel": {
+          "layers": [
+            {
+              "pattern": "game/assets/spell_recovery/fireball_b/{direction}/{frame:02}.png",
+              "blendMode": "add"
+            }
+          ]
+        }
+      }
+    },
+    "shared.fireball.20ft-ground.smoke.v3": {
+      "phases": {
+        "impact": {
+          "layers": [
+            {
+              "pattern": "game/assets/spell_recovery/fireball_smoke/{direction}/{frame:02}.png",
+              "blendMode": "normal"
+            },
+            {
+              "pattern": "game/assets/spell_recovery/fireball_explosion/{direction}/{frame:02}.png",
+              "blendMode": "add"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

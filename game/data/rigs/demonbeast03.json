@@ -1,0 +1,194 @@
+{
+  "rig_id": "smallscale.demonbeast03",
+  "creature_content_refs": [
+    "content.neurodragon:creature:creature.dread_demon@1"
+  ],
+  "rig": {
+    "cell_width": 128,
+    "cell_height": 128,
+    "origin_y_from_ground": 45,
+    "facing_rows": {
+      "E": 0,
+      "SE": 1,
+      "S": 2,
+      "SW": 3,
+      "W": 4,
+      "NW": 5,
+      "N": 6,
+      "NE": 7
+    },
+    "slot_order": [
+      "shadow",
+      "body"
+    ],
+    "slot_categories": {
+      "shadow": [
+        "DemonBeast03Shadow"
+      ],
+      "body": [
+        "DemonBeast03"
+      ]
+    },
+    "clips": {
+      "Idle": {
+        "source_clip": "Idle",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "DemonBeast03": "/rigs/demonbeast03/body/Idle.png",
+          "DemonBeast03Shadow": "/rigs/demonbeast03/shadow/Idle.png"
+        }
+      },
+      "Run": {
+        "source_clip": "Run",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "DemonBeast03": "/rigs/demonbeast03/body/Run.png",
+          "DemonBeast03Shadow": "/rigs/demonbeast03/shadow/Run.png"
+        }
+      },
+      "TakeDamage": {
+        "source_clip": "TakeDamage 1",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "DemonBeast03": "/rigs/demonbeast03/body/TakeDamage 1.png",
+          "DemonBeast03Shadow": "/rigs/demonbeast03/shadow/TakeDamage 1.png"
+        }
+      },
+      "Die": {
+        "source_clip": "Die 1",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "DemonBeast03": "/rigs/demonbeast03/body/Die 1.png",
+          "DemonBeast03Shadow": "/rigs/demonbeast03/shadow/Die 1.png"
+        }
+      },
+      "Rolling": {
+        "source_clip": "Roll 1",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "DemonBeast03": "/rigs/demonbeast03/body/Roll 1.png",
+          "DemonBeast03Shadow": "/rigs/demonbeast03/shadow/Roll 1.png"
+        }
+      },
+      "Attack1": {
+        "source_clip": "Attack 1",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "DemonBeast03": "/rigs/demonbeast03/body/Attack 1.png",
+          "DemonBeast03Shadow": "/rigs/demonbeast03/shadow/Attack 1.png"
+        }
+      },
+      "Attack2": {
+        "source_clip": "Attack 2",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "DemonBeast03": "/rigs/demonbeast03/body/Attack 2.png",
+          "DemonBeast03Shadow": "/rigs/demonbeast03/shadow/Attack 2.png"
+        }
+      },
+      "Attack5": {
+        "source_clip": "Attack 3",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "DemonBeast03": "/rigs/demonbeast03/body/Attack 3.png",
+          "DemonBeast03Shadow": "/rigs/demonbeast03/shadow/Attack 3.png"
+        }
+      },
+      "Attack6": {
+        "source_clip": "Attack 1",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "DemonBeast03": "/rigs/demonbeast03/body/Attack 1.png",
+          "DemonBeast03Shadow": "/rigs/demonbeast03/shadow/Attack 1.png"
+        }
+      }
+    },
+    "body_anchor": {
+      "x": 64,
+      "y": 61
+    }
+  },
+  "resources": {
+    "/rigs/demonbeast03/body/Idle.png": "game/assets/rigs/demonbeast03/body/Idle.png",
+    "/rigs/demonbeast03/shadow/Idle.png": "game/assets/rigs/demonbeast03/shadow/Idle.png",
+    "/rigs/demonbeast03/body/Run.png": "game/assets/rigs/demonbeast03/body/Run.png",
+    "/rigs/demonbeast03/shadow/Run.png": "game/assets/rigs/demonbeast03/shadow/Run.png",
+    "/rigs/demonbeast03/body/TakeDamage 1.png": "game/assets/rigs/demonbeast03/body/TakeDamage 1.png",
+    "/rigs/demonbeast03/shadow/TakeDamage 1.png": "game/assets/rigs/demonbeast03/shadow/TakeDamage 1.png",
+    "/rigs/demonbeast03/body/Die 1.png": "game/assets/rigs/demonbeast03/body/Die 1.png",
+    "/rigs/demonbeast03/shadow/Die 1.png": "game/assets/rigs/demonbeast03/shadow/Die 1.png",
+    "/rigs/demonbeast03/body/Roll 1.png": "game/assets/rigs/demonbeast03/body/Roll 1.png",
+    "/rigs/demonbeast03/shadow/Roll 1.png": "game/assets/rigs/demonbeast03/shadow/Roll 1.png",
+    "/rigs/demonbeast03/body/Attack 1.png": "game/assets/rigs/demonbeast03/body/Attack 1.png",
+    "/rigs/demonbeast03/shadow/Attack 1.png": "game/assets/rigs/demonbeast03/shadow/Attack 1.png",
+    "/rigs/demonbeast03/body/Attack 2.png": "game/assets/rigs/demonbeast03/body/Attack 2.png",
+    "/rigs/demonbeast03/shadow/Attack 2.png": "game/assets/rigs/demonbeast03/shadow/Attack 2.png",
+    "/rigs/demonbeast03/body/Attack 3.png": "game/assets/rigs/demonbeast03/body/Attack 3.png",
+    "/rigs/demonbeast03/shadow/Attack 3.png": "game/assets/rigs/demonbeast03/shadow/Attack 3.png"
+  },
+  "provenance": {
+    "archive": {
+      "name": "2D Demons - TopDown assetpack v1.1.zip"
+    },
+    "files": {
+      "/rigs/demonbeast03/body/Idle.png": {
+        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 3/Idle.png"
+      },
+      "/rigs/demonbeast03/shadow/Idle.png": {
+        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 3/Shadows/Idle.png"
+      },
+      "/rigs/demonbeast03/body/Run.png": {
+        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 3/Run.png"
+      },
+      "/rigs/demonbeast03/shadow/Run.png": {
+        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 3/Shadows/Run.png"
+      },
+      "/rigs/demonbeast03/body/TakeDamage 1.png": {
+        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 3/TakeDamage 1.png"
+      },
+      "/rigs/demonbeast03/shadow/TakeDamage 1.png": {
+        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 3/Shadows/TakeDamage 1.png"
+      },
+      "/rigs/demonbeast03/body/Die 1.png": {
+        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 3/Die 1.png"
+      },
+      "/rigs/demonbeast03/shadow/Die 1.png": {
+        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 3/Shadows/Die 1.png"
+      },
+      "/rigs/demonbeast03/body/Roll 1.png": {
+        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 3/Roll 1.png"
+      },
+      "/rigs/demonbeast03/shadow/Roll 1.png": {
+        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 3/Shadows/Roll 1.png"
+      },
+      "/rigs/demonbeast03/body/Attack 1.png": {
+        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 3/Attack 1.png"
+      },
+      "/rigs/demonbeast03/shadow/Attack 1.png": {
+        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 3/Shadows/Attack 1.png"
+      },
+      "/rigs/demonbeast03/body/Attack 2.png": {
+        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 3/Attack 2.png"
+      },
+      "/rigs/demonbeast03/shadow/Attack 2.png": {
+        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 3/Shadows/Attack 2.png"
+      },
+      "/rigs/demonbeast03/body/Attack 3.png": {
+        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 3/Attack 3.png"
+      },
+      "/rigs/demonbeast03/shadow/Attack 3.png": {
+        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 3/Shadows/Attack 3.png"
+      }
+    },
+    "notes": "Selected original body/shadow sheets. Native blood profile belongs to creature composition, not this rig."
+  }
+}

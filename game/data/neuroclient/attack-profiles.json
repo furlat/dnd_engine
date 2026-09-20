@@ -1,0 +1,77 @@
+{
+  "behaviors": ["action.attack", "action.feature.extra_attack", "reaction.opportunity_attack"],
+  "variants": [
+    {
+      "id": "dagger-critical-overhead",
+      "precedence": 600,
+      "match": {"kind": "attack","sourceItemRefs": null,"delivery": "melee","weaponSlots": ["MELEE_MAIN"],"outcomes": ["critical"],"primaryDamageTypes": ["Piercing"],"elemental": null,"sourceItemIds": ["weapon.dagger"]},
+      "actor": {"enabled": true,"clip": "Attack4","playbackSpeed": 1,"hiddenSlots": [],"media": []},
+      "anchors": [{"name": "action_start","frame": 0},{"name": "prepare","frame": 3},{"name": "contact","frame": 8},{"name": "recover","frame": 10}],
+      "attackVfx": {"onHit": {},"onMiss": {},"onCrit": {}},
+      "projectile": null
+    },
+    {
+      "id": "melee-spiked-swing",
+      "precedence": 550,
+      "match": {"kind": "attack","sourceItemRefs": null,"delivery": "melee","weaponSlots": ["MELEE_MAIN"],"outcomes": null,"primaryDamageTypes": ["Piercing"],"elemental": null,"sourceItemIds": ["weapon.morningstar","weapon.circus.soul_draining_morningstar"]},
+      "actor": {"enabled": true,"clip": "Attack2","playbackSpeed": 1.05,"hiddenSlots": [],"media": []},
+      "anchors": [{"name": "action_start","frame": 0},{"name": "prepare","frame": 3},{"name": "contact","frame": 8},{"name": "recover","frame": 10}],
+      "attackVfx": {"onHit": {"slash": {"category": "Slash1","tint": "$element.primary"}},"onMiss": {"slash": {"category": "Slash1","tint": "$element.primary"}},"onCrit": {"slash": {"category": "Slash2","tint": "$element.primary"}}},
+      "projectile": null
+    },
+    {
+      "id": "melee-offhand",
+      "match": {"kind": "attack","delivery": "melee","weaponSlots": ["MELEE_OFF"],"outcomes": null,"primaryDamageTypes": null,"elemental": null,"sourceItemRefs": null},
+      "actor": {"clip": "Attack5","playbackSpeed": 1,"hiddenSlots": [],"media": [],"enabled": true},
+      "anchors": [{"name": "action_start","frame": 0},{"name": "contact","frame": 8},{"name": "recover","frame": 10}],
+      "attackVfx": {"onHit": {},"onMiss": {}},
+      "projectile": null,
+      "precedence": 100
+    },
+    {
+      "id": "melee-heavy-cleave",
+      "precedence": 500,
+      "match": {"kind": "attack","sourceItemRefs": null,"delivery": "melee","weaponSlots": ["MELEE_MAIN"],"outcomes": null,"primaryDamageTypes": ["Slashing"],"elemental": null,"sourceItemIds": ["weapon.battleaxe","weapon.greataxe","weapon.greatsword","weapon.double_bladed_sword"]},
+      "actor": {"enabled": true,"clip": "Attack4","playbackSpeed": 0.95,"hiddenSlots": [],"media": []},
+      "anchors": [{"name": "action_start","frame": 0},{"name": "prepare","frame": 3},{"name": "contact","frame": 8},{"name": "recover","frame": 10}],
+      "attackVfx": {"onHit": {"slash": {"category": "Slash1","tint": "$element.primary"}},"onMiss": {"slash": {"category": "Slash1","tint": "$element.primary"}},"onCrit": {"slash": {"category": "Slash2","tint": "$element.primary"}}},
+      "projectile": null
+    },
+    {
+      "id": "melee-blunt-swing",
+      "precedence": 500,
+      "match": {"kind": "attack","sourceItemRefs": null,"delivery": "melee","weaponSlots": ["MELEE_MAIN"],"outcomes": null,"primaryDamageTypes": ["Bludgeoning"],"elemental": null,"sourceItemIds": null},
+      "actor": {"enabled": true,"clip": "Attack2","playbackSpeed": 1.05,"hiddenSlots": [],"media": []},
+      "anchors": [{"name": "action_start","frame": 0},{"name": "prepare","frame": 3},{"name": "contact","frame": 8},{"name": "recover","frame": 10}],
+      "attackVfx": {"onHit": {"slash": {"category": "Slash1","tint": "$element.primary"}},"onMiss": {"slash": {"category": "Slash1","tint": "$element.primary"}},"onCrit": {"slash": {"category": "Slash2","tint": "$element.primary"}}},
+      "projectile": null
+    },
+    {
+      "id": "melee-piercing",
+      "match": {"kind": "attack","delivery": "melee","weaponSlots": ["MELEE_MAIN"],"outcomes": null,"primaryDamageTypes": ["Piercing"],"elemental": null,"sourceItemRefs": null},
+      "actor": {"clip": "Attack6","playbackSpeed": 1,"hiddenSlots": [],"media": [],"enabled": true},
+      "anchors": [{"name": "action_start","frame": 0},{"name": "contact","frame": 7},{"name": "recover","frame": 10}],
+      "attackVfx": {"onHit": {"slash": {"category": "Slash1","tint": "$element.primary"}},"onMiss": {"slash": {"category": "Slash1","tint": "$element.primary"}},"onCrit": {"slash": {"category": "Slash2","tint": "$element.primary"}}},
+      "projectile": null,
+      "precedence": 400
+    },
+    {
+      "id": "melee-main",
+      "match": {"kind": "attack","delivery": "melee","weaponSlots": ["MELEE_MAIN"],"outcomes": null,"primaryDamageTypes": null,"elemental": null,"sourceItemRefs": null},
+      "actor": {"clip": "Attack1","playbackSpeed": 1,"hiddenSlots": [],"media": [],"enabled": true},
+      "anchors": [{"name": "action_start","frame": 0},{"name": "contact","frame": 8},{"name": "recover","frame": 10}],
+      "attackVfx": {"onHit": {"slash": {"category": "Slash1","tint": "$element.primary"}},"onMiss": {"slash": {"category": "Slash1","tint": "$element.primary"}},"onCrit": {"slash": {"category": "Slash2","tint": "$element.primary"}}},
+      "projectile": null,
+      "precedence": 100
+    },
+    {
+      "id": "ranged",
+      "match": {"kind": "attack","delivery": "projectile","weaponSlots": null,"outcomes": null,"primaryDamageTypes": null,"elemental": null,"sourceItemRefs": null},
+      "actor": {"clip": "Attack3","playbackSpeed": 1,"hiddenSlots": [],"media": [],"enabled": true},
+      "anchors": [{"name": "action_start","frame": 0},{"name": "release","frame": 8},{"name": "recover","frame": 10}],
+      "attackVfx": {"onHit": {"slash": {"category": "Slash1","tint": "white"}},"onMiss": {}},
+      "projectile": {"geometry": {"renderer": "geometry_projectile","enabled": true,"primitive": "bolt"},"speedPxPerSecond": 500,"minimumTravelDurationMs": 150,"trajectory": {"type": "straight","sameTargetSpread": false},"originX": 0,"originY": -16,"sourceForwardPx": 0,"targetY": -16,"targetForwardPx": 0,"depthMode": "world","debugAnchor": false},
+      "precedence": 100
+    }
+  ]
+}

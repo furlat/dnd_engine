@@ -43,7 +43,7 @@ from dnd.core.world_edges import (
     transition_axis,
     world_edge_contribution_allows,
 )
-from dnd.types.world import CardinalDirection, WorldEdgeChannel
+from dnd.types.world import CardinalDirection, OccupancyLayer, WorldEdgeChannel
 from dnd.types.senses import OpticalObscurement
 from dnd.types.spatial_effects import (
     SpatialEffectLayer,
@@ -1270,6 +1270,16 @@ class GridMap:
                 layer,
             )
 
+    def publish_tile_state_changed(
+        self, position: Tuple[int, int], *, source_entity_uuid: UUID,
+        parent_event: Optional[UUID] = None,
+    ) -> Optional[SpatialChangeEvent]:
+        """Publish an inert tile after-value without invalidating traversal."""
+        return self._fire_committed_spatial_event(SpatialChangeEvent.tile_changed(
+            position, source_entity_uuid=source_entity_uuid, parent_event=parent_event,
+            senses_hint=SensesUpdateHint(),
+        ))
+
     def publish_tile_mechanics_changed(
         self,
         position: Tuple[int, int],
@@ -1401,19 +1411,20 @@ class GridMap:
         ]
 
     def is_position_hazardous_for(self, x: int, y: int,
-                                  entity_uuid: Optional[UUID] = None) -> bool:
+                                  entity_uuid: Optional[UUID] = None, *,
+                                  occupancy_layer: OccupancyLayer = OccupancyLayer.GROUND) -> bool:
         """Return whether tile or placed-object hazards affect an entity."""
         tile = self.get_tile(x, y)
-        if tile is not None and tile.is_hazardous_for(entity_uuid):
+        if tile is not None and tile.is_hazardous_for(entity_uuid, occupancy_layer=occupancy_layer):
             return True
 
         for obj_uuid in self.get_objects_at((x, y)):
             obj = BaseBlock.get(obj_uuid)
-            if obj is not None and obj.is_hazardous_for(entity_uuid):
+            if obj is not None and obj.is_hazardous_for(entity_uuid, occupancy_layer=occupancy_layer):
                 return True
 
         for condition in self.get_spatial_conditions_at((x, y)):
-            if condition.is_hazardous_for(entity_uuid):
+            if condition.is_hazardous_for(entity_uuid, occupancy_layer=occupancy_layer):
                 return True
 
         return False
@@ -2125,11 +2136,19 @@ class GridMap:
         new_position: Optional[Tuple[int, int]],
         *,
         parent_event: Optional[UUID] = None,
+        previous_occupancy_layer: Optional[OccupancyLayer] = None,
+        occupancy_layer: Optional[OccupancyLayer] = None,
     ) -> None:
         """Publish LEFT then ENTERED for one already committed membership."""
-        if old_position == new_position:
+        block = BaseBlock.get(entity_uuid)
+        if block is not None:
+            if old_position is not None and previous_occupancy_layer is None:
+                previous_occupancy_layer = block.get_occupancy_layer()
+            if new_position is not None and occupancy_layer is None:
+                occupancy_layer = block.get_occupancy_layer()
+        if old_position == new_position and previous_occupancy_layer is occupancy_layer:
             return
-        if old_position is not None:
+        if old_position is not None and old_position != new_position:
             old_tile = self._tiles.get(old_position)
             if (
                 old_tile is not None
@@ -2147,6 +2166,8 @@ class GridMap:
                     entity_uuid,
                     new_position,
                     parent_event=parent_event,
+                    previous_occupancy_layer=previous_occupancy_layer,
+                    occupancy_layer=occupancy_layer,
                 )
             )
         if new_position is not None:
@@ -2156,6 +2177,8 @@ class GridMap:
                     entity_uuid,
                     old_position,
                     parent_event=parent_event,
+                    previous_occupancy_layer=previous_occupancy_layer,
+                    occupancy_layer=occupancy_layer,
                 )
             )
 

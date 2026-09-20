@@ -50,7 +50,7 @@ from dnd.core.action_types import (
 )
 from dnd.core.base_block import SensesType, SenseMode
 from dnd.core.events import (
-    Event, EventPhase, EventType, EventHandler, Trigger, Range, RangeType, SpatialChangeEvent, Damage, Healing, ForcedMovementEvent
+    Event, EventPhase, EventType, EventHandler, Trigger, Range, RangeType, SpatialChangeEvent, Damage, Healing, ForcedMovementEvent, EventQueue
 )
 from dnd.types.abilities import AbilityName
 from dnd.core.dice import AttackOutcome
@@ -66,7 +66,7 @@ from dnd.core.gridmap import get_map
 from dnd.entity import Entity
 from dnd.conditions import Dashing, Restrained, Concentrating, ConcentrationActionMarker
 from dnd.creature_transforms import apply_incapacitated_transform
-from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator, entity_action_economy_cost_applier
+from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator, entity_action_economy_cost_applier, resolve_paid_entry_retreats
 from dnd.spatial.area_conditions import AreaCondition
 from dnd.types.spatial_effects import (
     SpatialEffectLayer,
@@ -1844,6 +1844,7 @@ class TelekinesisMove(BaseAction):
         )
         forced_event = forced_event.phase_to(EventPhase.EXECUTION)
         forced_event = forced_event.phase_to(EventPhase.EFFECT)
+        entry_cursor = EventQueue.event_cursor()
         if not forced_event.canceled:
             Entity.update_entity_position(
                 grabbed,
@@ -1860,6 +1861,7 @@ class TelekinesisMove(BaseAction):
             * 5,
         )
 
+        resolve_paid_entry_retreats(grabbed, since_cursor=entry_cursor, parent_event=effect_event)
         caster.unregister_action("Telekinesis: Restrain")
         caster.unregister_action("Telekinesis: Move")
 

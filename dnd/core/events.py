@@ -63,7 +63,9 @@ from dnd.core.effect_types import EffectOrigin
 from dnd.core.life_types import LifeState, LifeStateChangeReason
 from dnd.core.creature_types import DamageType
 from dnd.core.saving_throw_types import SavingThrowContext
-from dnd.types.senses import PerceivedContact, SenseMode
+from dnd.types.senses import PerceivedContact, PerceivedSpatialEffect, SenseMode
+from dnd.types.traps import TrapState
+from dnd.types.residues import BodyReleaseResult, TileResidueState
 from dnd.types.spatial_effects import (
     SpatialEffectChangeOperation,
     SpatialEffectInteractionIntensity,
@@ -85,7 +87,7 @@ from dnd.types.character_progression import (
     Species,
     SpeciesVariant,
 )
-from dnd.types.world import LightLevel
+from dnd.types.world import LightLevel, MovementMode, OccupancyLayer
 from dnd.types.world_placement import BoundaryStructure, WorldObjectPlacement
 from dnd.core.world_edges import ElevationSurfaceKind, SlopeAxis
 from dnd.core.traversal_connectors import (
@@ -807,6 +809,7 @@ class WorldTileState(BaseModel):
     default_light: LightLevel
     resolved_light: LightLevel
     condition_names: Tuple[str, ...] = ()
+    residues: tuple[TileResidueState, ...] = ()
 
 
 class WorldObjectState(BaseModel):
@@ -954,6 +957,7 @@ class EntityCreatedEvent(Event):
 
     name: str = Field(default="Entity Created")
     event_type: EventType = Field(default=EventType.ENTITY_CREATED, frozen=True)
+    occupancy_layer: Optional[OccupancyLayer] = None
     entity_uuid: UUID
     entity_kind_id: str
     entity_name: str
@@ -3307,6 +3311,14 @@ class SensoryUpdateEvent(Event):
         default_factory=dict,
         description="Native resolved hazard after-values for visible cells, keyed as 'x,y'.",
     )
+    spatial_effects_changed: Dict[UUID, PerceivedSpatialEffect] = Field(
+        default_factory=dict,
+        description="Discovered fixture after-values, containing only observed cells/state.",
+    )
+    spatial_effects_removed: Set[UUID] = Field(
+        default_factory=set,
+        description="Previously discovered fixtures now observed to be absent.",
+    )
     cause_event_uuid: Optional[UUID] = Field(
         default=None,
         description="Actual causal event, or None for an independent explicit refresh.",
@@ -3395,6 +3407,8 @@ class SensoryUpdateEvent(Event):
             self.observer_position,
             self.effective_light_levels_changed,
             self.hazardous_cells_changed,
+            self.spatial_effects_changed,
+            self.spatial_effects_removed,
             self.visible_cells_added,
             self.visible_cells_removed,
             self.seen_cells_added,
@@ -3477,6 +3491,8 @@ class SpatialEffectChangeEvent(Event):
     spatial_effect_uuid: UUID
     spatial_effect_content_ref: ContentRef
     spatial_effect_name: str = Field(min_length=1)
+    trap_state: Optional[TrapState] = None
+    previous_trap_state: Optional[TrapState] = None
     layer: SpatialEffectLayer
     anchor_position: Tuple[int, int]
     affected_positions: Tuple[Tuple[int, int], ...] = ()
@@ -3613,6 +3629,12 @@ class SpatialChangeEvent(Event):
     handlers, combat logs, and frontend reducers.
     """
 
+    previous_occupancy_layer: Optional[OccupancyLayer] = Field(
+        default=None, description="Creature layer before the location commit, including LEFT facts.",
+    )
+    occupancy_layer: Optional[OccupancyLayer] = Field(
+        default=None, description="Creature layer after the location commit; absent when leaving the world.",
+    )
     name: str = Field(default="Spatial Change", description="A spatial change event")
     event_type: EventType = Field(default=EventType.SPATIAL_ENTITY_ENTERED, description="Type of spatial change")
     change_type: SpatialChangeType = Field(description="Specific type of spatial change")
@@ -3719,7 +3741,9 @@ class SpatialChangeEvent(Event):
                        parent_event: Optional[UUID] = None,
                        directional_position: Optional[Tuple[int, int]] = None,
                        directional_directions: Optional[List[str]] = None,
-                       directional_channels: Optional[List[str]] = None) -> 'SpatialChangeEvent':
+                       directional_channels: Optional[List[str]] = None,
+                       previous_occupancy_layer: Optional[OccupancyLayer] = None,
+                       occupancy_layer: Optional[OccupancyLayer] = None) -> 'SpatialChangeEvent':
         """Create an event for an entity entering a cell.
 
         Event starts at DECLARATION phase to allow full lifecycle:
@@ -3755,6 +3779,8 @@ class SpatialChangeEvent(Event):
             change_type=SpatialChangeType.ENTITY_ENTERED,
             position=position,
             entity_uuid=entity_uuid,
+            previous_occupancy_layer=previous_occupancy_layer,
+            occupancy_layer=occupancy_layer,
             old_position=old_position,
             phase=EventPhase.DECLARATION,
             use_register=False,
@@ -3772,7 +3798,9 @@ class SpatialChangeEvent(Event):
                     parent_event: Optional[UUID] = None,
                     directional_position: Optional[Tuple[int, int]] = None,
                     directional_directions: Optional[List[str]] = None,
-                    directional_channels: Optional[List[str]] = None) -> 'SpatialChangeEvent':
+                    directional_channels: Optional[List[str]] = None,
+                       previous_occupancy_layer: Optional[OccupancyLayer] = None,
+                       occupancy_layer: Optional[OccupancyLayer] = None) -> 'SpatialChangeEvent':
         """Create an event for an entity leaving a cell.
 
         Event starts at DECLARATION phase to allow full lifecycle:
@@ -3806,6 +3834,8 @@ class SpatialChangeEvent(Event):
             change_type=SpatialChangeType.ENTITY_LEFT,
             position=position,
             entity_uuid=entity_uuid,
+            previous_occupancy_layer=previous_occupancy_layer,
+            occupancy_layer=occupancy_layer,
             old_position=new_position,
             phase=EventPhase.DECLARATION,
             use_register=False,
@@ -4433,6 +4463,9 @@ class StepMovementEvent(Event):
 
     from_position: Tuple[int, int] = Field(description="Position before this step")
     to_position: Tuple[int, int] = Field(description="Position after this step")
+    movement_mode: Optional[MovementMode] = None
+    from_layer: Optional[OccupancyLayer] = None
+    to_layer: Optional[OccupancyLayer] = None
     path_index: int = Field(default=0, description="Index of this step in the overall path")
     total_path_length: int = Field(default=0, description="Total number of positions in path")
     movement_cost: float = Field(default=5.0, description="Movement cost in feet for this step")
@@ -5190,6 +5223,9 @@ class DamageAppliedEvent(Event):
     """
 
     name: str = Field(default="Damage Applied", description="Human-readable applied-damage label.")
+    body_release: Optional[BodyReleaseResult] = None
+    critical_hit: bool = False
+    impact_direction: tuple[float, float] | None = None
     event_type: EventType = Field(
         default=EventType.DAMAGE_APPLIED,
         description="Event category for a positive post-mitigation damage result.",

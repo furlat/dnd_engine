@@ -9,8 +9,10 @@ from uuid import UUID
 
 from dnd.core.equipment_types import WeaponSet
 from dnd.core.life_types import LifeState
+from dnd.types.world import WorldEdgeChannel
+from dnd.types.world_placement import WorldObjectPlacement
 from game.animation import (
-    ActorContact, CastApplication, CastInput, CastTimeline, EquipmentTimeline, compile_cast, compile_equipment,
+    ActorContact, CastApplication, CastInput, CastTimeline, EquipmentTimeline, GroundContact, compile_cast, compile_equipment,
 )
 from game.animation_data import resolve_player_layers
 from game.animation_types import AnimationData, Facing8, RigLayer
@@ -28,6 +30,7 @@ class BoundCast:
     after: PlayerState
     appearances: Mapping[str, tuple[RigLayer, ...]]
     owned_life_events: frozenset[UUID] = frozenset()
+    area_boundaries: tuple[WorldObjectPlacement, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -109,16 +112,22 @@ def bind_cast(
     # Names and log text do not choose recipes or infer damage.
     if root.behavior_id is None:
         raise ValueError("cast lacks its authored semantic identity")
+    area = root.area_geometry is not None
+    ground_target = None
+    if area:
+        if root.aoe_position is None or root.aoe_position not in target.tiles:
+            raise ValueError("area delivery requires an observed destination and support")
+        ground_target = GroundContact(root.aoe_position, target.tiles[root.aoe_position].elevation_steps)
     application_roots = sorted(
         ((event, event.fact) for event in lineage.events if isinstance(event.fact, SpellFact)
          and event.parent_lineage == root_node.lineage_uuid and event.fact.application_index is not None),
         key=lambda row: row[1].application_index or 0,
     )
-    if application_roots:
+    if application_roots and not area:
         if ([fact.application_index for _, fact in application_roots] != list(range(len(application_roots)))
                 or [fact.target_entity_uuid for _, fact in application_roots] != list(root.declared_target_entity_uuids)):
             raise ValueError("cast application identities disagree with its declared allocation")
-    else:
+    elif not application_roots and not area:
         application_roots = [(root_node, root)]
     by_lineage = {event.lineage_uuid: event for event in lineage.events}
     actor_contacts = {caster.uuid: source_contact}
@@ -126,6 +135,8 @@ def bind_cast(
     owned_life_events: set[UUID] = set()
     for application_node, application in application_roots:
         recipient = target.actors.get(application.target_entity_uuid) if application.target_entity_uuid else None
+        if area and (recipient is None or not actor_is_visible(target, recipient)):
+            continue
         if recipient is None:
             raise ValueError("cast binding requires each retained target actor")
         actor_contacts.setdefault(recipient.uuid, overrides.get(str(recipient.uuid), actor_contact(target, recipient, data)))
@@ -163,13 +174,18 @@ def bind_cast(
             damage_type=damage.damage_type.value if damage is not None and damage.damage_type is not None else None,
             travel_apex_steps=travel_apex_steps,
         ))
-    source = CastInput(root_event_uuid=str(root_node.uuid), caster=source_contact, applications=tuple(applications))
+    source = CastInput(root_event_uuid=str(root_node.uuid), caster=source_contact,
+                       applications=tuple(applications), ground_target=ground_target)
     timeline = compile_cast(data, root.behavior_id, source)
     appearances = {
         contact.actor_uuid: resolve_player_layers(data, target.actors[actor_uuid], rig_id=contact.rig_id)
         for actor_uuid, contact in actor_contacts.items()
     }
-    return BoundCast(timeline, reduce_lineage(target, lineage), MappingProxyType(appearances), frozenset(owned_life_events))
+    boundaries = tuple(obj.placement for obj in target.objects.values()
+        if area and obj.item.boundary_structure is not None
+        and WorldEdgeChannel.PROPAGATION in obj.item.boundary_structure.blocked_channels)
+    return BoundCast(timeline, reduce_lineage(target, lineage), MappingProxyType(appearances),
+                     frozenset(owned_life_events), boundaries)
 
 
 def bind_equipment(

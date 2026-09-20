@@ -173,6 +173,8 @@ class MembershipAreaCondition(AreaCondition):
         event: Event,
     ) -> bool:
         """Maintain continuous membership before repeat-effect admission."""
+        if not self._occupancy_admits_trigger(kind, target_entity_uuid, event):
+            return False
         if kind in self.membership_trigger_kinds:
             entity = Entity.get(target_entity_uuid)
             if (
@@ -213,7 +215,13 @@ class MembershipAreaCondition(AreaCondition):
         ) -> Optional[Event]:
             if not isinstance(event, SpatialChangeEvent):
                 return None
-            if event.old_position in condition.affected_positions:
+            if (
+                event.old_position in condition.affected_positions
+                and (
+                    event.occupancy_layer is None
+                    or condition.affects_occupancy_layer(event.occupancy_layer)
+                )
+            ):
                 return None
             entity_uuid = event.entity_uuid
             entity = Entity.get(entity_uuid) if entity_uuid is not None else None

@@ -80,7 +80,14 @@ def test_discovered_forced_actions_preserve_native_outcomes_after_runtime_reset(
     assert tuple(event.final_damage for event in damage_events) == damage
     if damage:
         assert tuple(event.position for event in entries) == ((2, 11), (2, 12))[:len(damage)]
-        assert tuple(event.parent_lineage for event in damage_events) == tuple(event.lineage_uuid for event in entries)
+        # Raising a ready trap is a causal child between entry and damage;
+        # already-raised spikes can apply their payload directly on entry.
+        by_lineage = {event.lineage_uuid: event for event in lineage.events}
+        for applied, entry in zip(damage_events, entries, strict=True):
+            ancestor = applied
+            while ancestor.parent_lineage != entry.lineage_uuid:
+                assert ancestor.parent_lineage is not None
+                ancestor = by_lineage[ancestor.parent_lineage]
         assert lineage.events.index(damage_events[-1]) < lineage.events.index(forced[0])
 
     before = sequence.before.actors[target_uuid]

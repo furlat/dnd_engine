@@ -335,6 +335,10 @@ class Tile(BaseBlock):
             slope_axis=self.slope_axis, default_light=self.default_light,
             resolved_light=self.resolved_light_level,
             condition_names=tuple(self.active_conditions),
+            residues=tuple(
+                residue for condition in self.active_conditions.values()
+                if (residue := condition.snapshot_tile_residue()) is not None
+            ),
         )
 
     def snapshot_world_tile(self) -> WorldTileState:

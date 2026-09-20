@@ -66,7 +66,6 @@ from dnd.core.traversal_connectors import (
 )
 from dnd.core.creature_types import DamageType
 from dnd.core.gridmap import get_map
-from dnd.core.base_tiles import Tile
 from dnd.core.aoe import (
     Sphere,
     Cone,
@@ -78,6 +77,7 @@ from dnd.core.aoe import (
 from dnd.core.presentation_geometry import AoEPresentationGeometry
 from dnd.core.naming import normalize_spell_id
 from dnd.core.base_block import BaseBlock, MovementMode
+from dnd.types.world import OccupancyLayer
 from dnd.core.base_block import LightLevel
 from dnd.action_timing import record_action_elapsed, record_action_timing
 from dnd.core.combat_log import (
@@ -312,12 +312,29 @@ def entity_action_economy_cost_applier(
     )
 
 
+def resolve_paid_entry_retreats(source: Entity, *, since_cursor: int, parent_event: Event) -> bool:
+    """Resolve newly applied entry requests only after spatial publication completes."""
+    requests = tuple(request for condition in tuple(source.active_conditions.values())
+        if (request := condition.get_paid_entry_retreat(since_cursor=since_cursor)) is not None)
+    for request in requests:
+        if request.destination is None:
+            continue
+        source.materialize_navigation(max_distance=20)
+        Move(source_entity_uuid=source.uuid, end_position=request.destination,
+            path=[source.position, request.destination], prefer_safe=False).apply(parent_event=parent_event)
+    # The original path stays interrupted even if the retreat removed its fear.
+    return bool(requests)
+
+
 class MovementEvent(ActionEvent):
     """Event payload for path-based movement actions."""
 
     name: str = Field(default="Movement", description="Human-readable movement event label.")
     event_type: EventType = Field(default=EventType.MOVEMENT, description="Movement event category.")
     costs: List[BaseCost] = Field(default_factory=list, description="Serialized movement costs.")
+    movement_mode: Optional[MovementMode] = None
+    start_layer: Optional[OccupancyLayer] = None
+    end_layer: Optional[OccupancyLayer] = None
     start_position: Tuple[int, int] = Field(description="Position occupied before movement starts.")
     end_position: Tuple[int, int] = Field(description="Intended or actual final movement position.")
     requested_end_position: Optional[Tuple[int, int]] = Field(
@@ -666,6 +683,9 @@ class Move(BaseAction):
             phase=EventPhase.DECLARATION,
             source_entity_uuid=self.source_entity_uuid,
             start_position=source_entity.position,
+            movement_mode=self.movement_mode,
+            start_layer=source_entity.occupancy_layer,
+            end_layer=source_entity.occupancy_layer,
             end_position=end_position,
             requested_end_position=end_position,
             path=path,
@@ -795,6 +815,9 @@ class Move(BaseAction):
                     total_path_length=total_path_length,
                     movement_cost=step_cost_feet,
                     trajectory=execution_event.trajectory,
+                    movement_mode=self.movement_mode,
+                    from_layer=source_entity.occupancy_layer,
+                    to_layer=source_entity.occupancy_layer,
                     disclosed_path=(from_pos, to_pos),
                     from_elevation_feet=grid.get_support_elevation_feet(from_pos),
                     to_elevation_feet=grid.get_support_elevation_feet(to_pos),
@@ -851,6 +874,13 @@ class Move(BaseAction):
                 phase_started = time.perf_counter()
                 processed_step.phase_to(EventPhase.COMPLETION, committed=True)
                 step_completion_seconds += time.perf_counter() - phase_started
+
+                if resolve_paid_entry_retreats(source_entity, since_cursor=step_source_cursor_start, parent_event=effect_event):
+                    interrupted_by_condition = True
+                    actual_end_position = source_entity.position
+                    termination_reason = (MovementTerminationReason.POSITION_DIVERGED
+                        if actual_end_position != to_pos else MovementTerminationReason.STEP_CANCELED)
+                    break
 
                 if not source_entity.can_take_actions():
                     termination_reason = (
@@ -917,6 +947,7 @@ class Move(BaseAction):
             ))
         completion_updates = {
             "end_position": actual_end_position,
+            "end_layer": source_entity.occupancy_layer,
             "requested_end_position": execution_event.requested_end_position,
             "path": traversed_path,
             "costs": completion_costs,
@@ -1385,6 +1416,8 @@ class TraverseConnector(BaseAction):
             total_path_length=2,
             movement_cost=effect.movement_cost_feet,
             trajectory=MovementTrajectory.CONNECTOR_TRANSFER,
+            from_layer=source.occupancy_layer,
+            to_layer=source.occupancy_layer,
             disclosed_path=(effect.start_position, destination),
             from_elevation_feet=effect.start_elevation_feet,
             to_elevation_feet=effect.requested_end_elevation_feet,
@@ -2151,7 +2184,9 @@ class Attack(BaseAction):
                     damage_rolls=damage_rolls,
                     damages=damages,
                     parent_event=attack_event.uuid,
-                    critical_hit=execution_event.attack_outcome == AttackOutcome.CRIT
+                    critical_hit=attack_event.attack_outcome == AttackOutcome.CRIT,
+                    impact_direction=(target_entity.position[0] - source_entity.position[0],
+                                      target_entity.position[1] - source_entity.position[1]),
                 )
                 record_action_timing("attack.receive_damage_ms", started)
 
@@ -2916,6 +2951,9 @@ class JumpEvent(ActionEvent):
     name: str = Field(default="Jump", description="Human-readable jump event label.")
     event_type: EventType = Field(default=EventType.MOVEMENT, description="Movement event category.")
     costs: List[BaseCost] = Field(default_factory=list, description="Serialized jump costs.")
+    movement_mode: Optional[MovementMode] = None
+    start_layer: Optional[OccupancyLayer] = None
+    end_layer: Optional[OccupancyLayer] = None
     start_position: Tuple[int, int] = Field(description="Position occupied before the jump starts.")
     end_position: Tuple[int, int] = Field(description="Intended or actual landing position.")
     requested_end_position: Optional[Tuple[int, int]] = Field(
@@ -3176,6 +3214,9 @@ class Jump(BaseAction):
             phase=EventPhase.DECLARATION,
             source_entity_uuid=self.source_entity_uuid,
             start_position=source_entity.position,
+            movement_mode=MovementMode.WALKING,
+            start_layer=source_entity.occupancy_layer,
+            end_layer=source_entity.occupancy_layer,
             end_position=end_position,
             requested_end_position=end_position,
             objective_end_position=source_entity.position,
@@ -3200,6 +3241,9 @@ class Jump(BaseAction):
         source_entity = Entity.get(self.source_entity_uuid)
         if not source_entity:
             return declaration_event.cancel(status_message="Entity not found")
+
+        if source_entity.occupancy_layer is not OccupancyLayer.GROUND:
+            return declaration_event.cancel(status_message="Jump requires ground contact")
 
         end_pos = declaration_event.end_position
         grid = get_map()
@@ -3253,6 +3297,7 @@ class Jump(BaseAction):
             for i in range(1, total_path_length):
                 from_pos = path[i - 1]
                 to_pos = path[i]
+                step_source_cursor_start = EventQueue.event_cursor()
 
                 step_cost_feet = 5
                 remaining_movement = source_entity.action_economy.movement.normalized_score
@@ -3268,6 +3313,10 @@ class Jump(BaseAction):
                     total_path_length=total_path_length,
                     movement_cost=step_cost_feet,
                     trajectory=execution_event.trajectory,
+                    movement_mode=MovementMode.WALKING,
+                    from_layer=source_entity.occupancy_layer,
+                    to_layer=(OccupancyLayer.GROUND if i == total_path_length - 1
+                              else OccupancyLayer.AIR),
                     disclosed_path=(from_pos, to_pos),
                     from_elevation_feet=grid.get_support_elevation_feet(
                         from_pos
@@ -3292,16 +3341,52 @@ class Jump(BaseAction):
                     )
                     break
 
-                Entity.update_entity_position(source_entity, to_pos, parent_event=processed_step.uuid)
+                if source_entity.occupancy_layer is OccupancyLayer.GROUND:
+                    Entity.update_entity_position(
+                        source_entity, source_entity.position,
+                        parent_event=processed_step.uuid, occupancy_layer=OccupancyLayer.AIR,
+                    )
+                    if (not source_entity.can_take_actions()
+                            or source_entity.action_economy.movement.normalized_score < step_cost_feet):
+                        interrupted_by_condition = True
+                        processed_step.phase_to(EventPhase.COMPLETION, committed=False)
+                        break
+
+                source_entity.action_economy.consume("movement", step_cost_feet)
+                Entity.update_entity_position(
+                    source_entity, to_pos, parent_event=processed_step.uuid,
+                    occupancy_layer=OccupancyLayer.AIR,
+                )
+                if i == total_path_length - 1:
+                    Entity.update_entity_position(
+                        source_entity, to_pos, parent_event=processed_step.uuid,
+                        occupancy_layer=OccupancyLayer.GROUND,
+                    )
                 actual_end_position = to_pos
                 traversed_path.append(to_pos)
 
                 processed_step.phase_to(EventPhase.COMPLETION, committed=True)
 
+                if resolve_paid_entry_retreats(source_entity, since_cursor=step_source_cursor_start, parent_event=effect_event):
+                    interrupted_by_condition = True
+                    actual_end_position = source_entity.position
+                    break
+
                 if not source_entity.can_take_actions():
                     break
 
-                source_entity.action_economy.consume("movement", step_cost_feet)
+            # A partial jump settles at its actual committed endpoint. Earlier
+            # airborne cell entries are never reinterpreted as ground contact.
+            if source_entity.occupancy_layer is OccupancyLayer.AIR:
+                settlement_cursor = EventQueue.event_cursor()
+                Entity.update_entity_position(
+                    source_entity, source_entity.position, parent_event=effect_event.uuid,
+                    occupancy_layer=OccupancyLayer.GROUND,
+                )
+                if resolve_paid_entry_retreats(source_entity, since_cursor=settlement_cursor, parent_event=effect_event):
+                    interrupted_by_condition = True
+                    actual_end_position = source_entity.position
+            effect_event = effect_event.with_updates(end_layer=source_entity.occupancy_layer)
 
             if source_entity.position == execution_event.start_position:
                 if interrupted_by_condition:
@@ -3768,11 +3853,18 @@ class Shove(BaseAction):
 
             moved_cells = 0
             interrupted_by_condition = False
+            entry_cursor = EventQueue.event_cursor()
 
             if not forced_event.canceled:
                 for next_pos in movement_path:
+                    entry_cursor = EventQueue.event_cursor()
                     Entity.update_entity_position(target, next_pos, parent_event=forced_event.uuid)
                     moved_cells += 1
+
+                    if any(condition.get_paid_entry_retreat(since_cursor=entry_cursor) is not None
+                           for condition in target.active_conditions.values()):
+                        interrupted_by_condition = True
+                        break
 
                     if not target.can_take_actions():
                         interrupted_by_condition = True
@@ -3797,6 +3889,8 @@ class Shove(BaseAction):
                     else f"Forced movement completed at {final_pos}"
                 )
             )
+            resolve_paid_entry_retreats(target, since_cursor=entry_cursor, parent_event=execution_event)
+            final_pos = target.position
 
         return execution_event.with_updates(
             push_distance=push_distance,

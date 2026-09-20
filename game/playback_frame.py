@@ -27,6 +27,8 @@ from game.player_facts import PlayerState
 from game.projection import Camera
 from game.scene import SceneActor, available_clips, scene_actors, scene_draw_commands
 from game.visual_position import VisualPosition, placed_contact
+from game.residue_media import ResidueRevealSample, sample_residue_reveals
+from game.world_animation import WorldTransitionSample, sample_world_transitions
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,6 +40,8 @@ class PlaybackFrame:
     shown_hp: Mapping[str, int | None]
     facings: Mapping[str, Facing8]
     positions: Mapping[str, VisualPosition]
+    world_transitions: tuple[WorldTransitionSample, ...] = ()
+    residue_reveals: tuple[ResidueRevealSample, ...] = ()
 
 
 def sample_playback_frame(
@@ -158,6 +162,11 @@ def sample_playback_frame(
                                     condition_appearances=condition_appearances), *extra, *overlays)
     commands = arrange_feedback_commands(commands, actor_screen_bounds(commands),
         feedback_viewport if feedback_viewport is not None else pygame.Rect((0, 0), camera.viewport))
+    transitions = sample_world_transitions(motion.world_transitions, elapsed_ms) if motion is not None else ()
+    if group is not None and motion is None:
+        transitions = (*transitions, *sample_world_transitions(group.world_transitions, group_elapsed))
+    reveals = (sample_residue_reveals(motion.residue_reveals, elapsed_ms) if motion is not None
+               else sample_residue_reveals(group.residue_reveals, group_elapsed) if group is not None else ())
     return PlaybackFrame(displayed, actors, commands, complete,
                          MappingProxyType(shown_hp), MappingProxyType(resulting_facings),
-                         MappingProxyType(resulting_positions))
+                         MappingProxyType(resulting_positions), transitions, reveals)

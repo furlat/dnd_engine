@@ -36,7 +36,7 @@ def test_loot_all_preserves_rejected_items_and_records_accepted_transfers(
                 source_entity_uuid=actor.uuid, item_id="test.item.pack", name="Pack",
             ))
         original_inventory = set(actor.inventory.items)
-        chest = build_storage_chest("Loot Chest", include_loot_all_action=True)
+        chest = build_storage_chest("Loot Chest", include_loot_all_action=True, is_open=True)
         chest.chest_inventory.source_entity_uuid = chest.uuid
         items = [
             BaseItem(
@@ -52,6 +52,7 @@ def test_loot_all_preserves_rejected_items_and_records_accepted_transfers(
         actions = [
             row for row in actor.get_available_actions().all_actions
             if row.source_item_uuid == chest.uuid
+            and row.template_name.startswith("Loot All")
         ]
         assert len(actions) == 1
 
@@ -93,6 +94,7 @@ def test_loot_all_preserves_rejected_items_and_records_accepted_transfers(
         remaining_actions = [
             row for row in actor.get_available_actions().all_actions
             if row.source_item_uuid == chest.uuid
+            and row.template_name.startswith("Loot All")
         ]
         assert bool(remaining_actions) == bool(retained)
     finally:

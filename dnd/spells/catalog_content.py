@@ -336,8 +336,9 @@ SPELL_CATALOG_METADATA_SPECS: tuple[
         projectile='touch', damage=(DamageType.LIGHTNING,), attack_roll=True, tags=('lightning', 'touch'),
     )),
     (evocation.EldritchBlast, _catalog(
-        'eldritch_blast', 'A beam of crackling force energy', 'entity', 'ranged', 120, 'beam',
-        projectile='beam', damage=(DamageType.FORCE,), attack_roll=True, tags=('force', 'beam'),
+        'eldritch_blast', 'Independent beams of crackling force energy', 'multi_entity', 'ranged', 120, 'missile_volley',
+        projectile='beam', damage=(DamageType.FORCE,), attack_roll=True,
+        multi_target=_multi_target(1, 4, True), tags=('force', 'beam'),
     )),
     (evocation.TrueStrike, _catalog(
         'true_strike', 'Weapon attack using spellcasting ability, +radiant damage at higher levels', 'entity', 'touch', 5, 'touch',

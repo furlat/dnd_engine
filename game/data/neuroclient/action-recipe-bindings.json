@@ -1,4 +1,59 @@
 {
+  "action.environment.trap_lever.pull": {
+    "source_recipe": "action.environment.trap_lever.pull",
+    "action_feedback": null,
+    "interaction_target": "source_item"
+  },
+  "action.environment.control_lever.toggle": {
+    "source_recipe": "action.environment.trap_lever.pull",
+    "action_feedback": null,
+    "interaction_target": "source_item"
+  },
+  "action.environment.storage_chest.open": {
+    "source_recipe": "action.environment.trap_lever.pull",
+    "action_feedback": null,
+    "interaction_target": "source_item"
+  },
+  "action.environment.storage_chest.close": {
+    "source_recipe": "action.environment.trap_lever.pull",
+    "action_feedback": null,
+    "interaction_target": "source_item"
+  },
+  "action.environment.storage_chest.loot_all": {
+    "source_recipe": "action.environment.trap_lever.pull",
+    "action_feedback": null,
+    "interaction_target": "source_item"
+  },
+  "action.environment.wall_torch.ignite": {
+    "source_recipe": "action.environment.trap_lever.pull",
+    "action_feedback": null,
+    "interaction_target": "source_item"
+  },
+  "action.environment.wall_torch.extinguish": {
+    "source_recipe": "action.environment.trap_lever.pull",
+    "action_feedback": null,
+    "interaction_target": "source_item"
+  },
+  "action.environment.directional_door.open": {
+    "source_recipe": "action.environment.trap_lever.pull",
+    "action_feedback": null,
+    "interaction_target": "source_item"
+  },
+  "action.environment.directional_door.close": {
+    "source_recipe": "action.environment.trap_lever.pull",
+    "action_feedback": null,
+    "interaction_target": "source_item"
+  },
+  "action.environment.door.open": {
+    "source_recipe": "action.environment.trap_lever.pull",
+    "action_feedback": null,
+    "interaction_target": "source_item"
+  },
+  "action.environment.door.close": {
+    "source_recipe": "action.environment.trap_lever.pull",
+    "action_feedback": null,
+    "interaction_target": "source_item"
+  },
   "action.item.potion_true_seeing.drink": {
     "source_recipe": "action.item.potion_greater_invisibility.drink",
     "action_feedback": {

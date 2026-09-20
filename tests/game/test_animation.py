@@ -154,7 +154,7 @@ def test_valid_source_area_remains_preserved_before_unsupported_execution(data: 
     selected = authored_data(data, document)
     assert selected.drafts["spell.fire_bolt"].model_dump(mode="json", exclude_unset=True) == document
     source = reference_cast(data, "queue-saved-speed1").source
-    with pytest.raises(ValueError, match="projectile delivery without an area"):
+    with pytest.raises(ValueError, match="selected executor requires projectile delivery"):
         compile_cast(selected, "spell.fire_bolt", source)
 
 
@@ -449,8 +449,11 @@ def test_unimplemented_or_missing_resources_fail_before_sampling(data: Animation
         document["projectile"]["orientation"]["directionSource"] = case
     elif case == "missing-recovery":
         document["cast"]["recovery"]["enabled"] = True
+        rig = data.rigs[original.source.caster.rig_id]
+        clip = rig.clips[document["cast"]["recovery"]["bodyClip"]]
+        body_resources = {clip.sheets.get(category) for category in rig.slot_categories["body"]}
         selected = replace(data, resources=MappingProxyType({url: path for url, path in data.resources.items()
-                                                            if url != "/spritesheets/NakedBody/Taunt.png"}))
+                                                            if url not in body_resources}))
     selected = authored_data(selected, document)
     with pytest.raises(ValueError, match=error):
         compile_cast(selected, spell_id, original.source)

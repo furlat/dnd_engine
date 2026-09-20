@@ -1,6 +1,8 @@
 {
   "rig_id": "smallscale.goblin01",
-  "creature_content_refs": ["content.neurodragon:creature:creature.goblin@1"],
+  "creature_content_refs": [
+    "content.neurodragon:creature:creature.goblin@1"
+  ],
   "rig": {
     "cell_width": 128,
     "cell_height": 128,
@@ -91,6 +93,10 @@
           "Goblin01Shadow": "/rigs/goblin01/shadow/Attack 2.png"
         }
       }
+    },
+    "body_anchor": {
+      "x": 64,
+      "y": 72
     }
   },
   "resources": {

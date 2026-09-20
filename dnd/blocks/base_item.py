@@ -231,11 +231,19 @@ class BaseItem(BaseBlock):
                 self.get_max_hp() if self.health is not None else None
             ),
             boundary_structure=self.get_boundary_structure(),
+            surface_residues=tuple(
+                residue for condition in self.active_conditions.values()
+                if (residue := condition.snapshot_object_residue()) is not None
+            ),
             is_open=self.get_spatial_open_state(),
             blocks_movement=self.blocks_walking(),
             blocks_optics=self.blocks_optics_at_center(),
             blocks_propagation=self.blocks_propagation(),
         )
+
+    def snapshot_item_state(self) -> ItemPresentationState:
+        """Capture committed item condition membership without inventory contents."""
+        return self.to_item_presentation_state()
 
     def publish_location_state(
         self,

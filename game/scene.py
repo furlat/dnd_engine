@@ -86,7 +86,7 @@ def draw_actor_labels(screen: pygame.Surface, font: pygame.font.Font,
     viewport = viewport if viewport is not None else screen.get_rect()
     bounds = actor_screen_bounds(commands)
     obstacles = [*bounds.values(), *(surface.get_rect(topleft=position)
-                 for _, surface, position, _, evidence in commands if evidence[6] == "floating_number")]
+                 for _, surface, position, _, evidence, _ in commands if evidence[6] == "floating_number")]
     for view in actors:
         contact = view.contact
         actor = target.actors[UUID(contact.actor_uuid)]

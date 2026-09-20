@@ -64,6 +64,8 @@ def world_event_positions(
     identity: UUID | None = None
     if condition is not None and condition.resulting_tile is not None:
         positions.add(condition.resulting_tile.position)
+    if condition is not None and condition.resulting_item is not None:
+        identity = condition.resulting_item.item_uuid
     match event:
         case WorldInitializedEvent():
             return {row.position for row in event.tiles} | set(world.tiles)
@@ -97,6 +99,8 @@ def world_event_positions(
         case ConditionApplicationEvent() | ConditionRemovalEvent():
             if event.resulting_tile is not None:
                 positions.add(event.resulting_tile.position)
+            if event.resulting_item is not None:
+                identity = event.resulting_item.item_uuid
     if identity is not None and (obj := world.objects.get(identity)) is not None:
         positions.add(obj.placement.position)
     return positions | {
@@ -112,6 +116,13 @@ def apply_world_fact(
         return False
     if condition is not None and condition.resulting_tile is not None:
         world.tiles[condition.resulting_tile.position] = condition.resulting_tile
+        return True
+    if condition is not None and condition.resulting_item is not None:
+        previous = world.objects.get(condition.resulting_item.item_uuid)
+        if previous is None:
+            return False
+        _put_object(world, condition.resulting_item.item_uuid,
+                    previous.model_copy(update={"item": condition.resulting_item}))
         return True
     match event:
         case WorldInitializedEvent():
@@ -159,9 +170,16 @@ def apply_world_fact(
             })
             _put_object(world, event.item_uuid, value)
         case ConditionApplicationEvent() | ConditionRemovalEvent():
-            if event.resulting_tile is None:
+            if event.resulting_tile is not None:
+                world.tiles[event.resulting_tile.position] = event.resulting_tile
+            elif event.resulting_item is not None:
+                previous = world.objects.get(event.resulting_item.item_uuid)
+                if previous is None:
+                    return False
+                _put_object(world, event.resulting_item.item_uuid,
+                            previous.model_copy(update={"item": event.resulting_item}))
+            else:
                 return False
-            world.tiles[event.resulting_tile.position] = event.resulting_tile
         case TileElevationChangeEvent():
             previous = world.tiles.get(event.position)
             if previous is None:

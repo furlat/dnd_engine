@@ -24,6 +24,7 @@ class AttackCase(BaseModel):
     weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN
     goblin_source: bool = False
     uses_death_saves: bool = False
+    bloodied: bool = False
 
 
 class ParalysisCase(BaseModel):
@@ -137,6 +138,15 @@ class ForcedMovementCase(BaseModel):
     destination: tuple[int, int] | None = None
 
 
+class TeleportCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["teleport"]
+    battlefield_id: str = "battlefield.open_floor_bright"
+    caster_position: tuple[int, int] = (3, 3)
+    witness_position: tuple[int, int] = (4, 3)
+    destination: tuple[int, int] = (7, 3)
+
+
 class EnvironmentCase(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     kind: Literal["environment"]
@@ -146,14 +156,79 @@ class EnvironmentCase(BaseModel):
     second_light: bool = False
 
 
+class EnvironmentControlCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["environment-control"]
+    program: Literal["light", "door", "chest"] = "light"
+    hidden_light: bool = False
+    observer_darkvision: bool = False
+
+
+class TrapCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["trap"]
+    detected: bool = False
+    payload: Literal["plain", "poison-damage", "poisoned"] = "plain"
+    save_face: Literal[1, 20] = 1
+    bloodied: bool = False
+
+
+class GroundContactCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["ground-contact"]
+    program: Literal["jump", "interrupted-jump"] = "jump"
+
+
+class BodyResidueCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["body-residue"]
+    program: Literal["injuries", "hidden-donor", "first-sight"] = "injuries"
+    profile: Literal["blood", "bone", "corrosive", "dread"] = "blood"
+    mixed: bool = False
+    weapon: str = "weapon.dagger"
+    critical: bool = False
+    hits: int = 2
+    layout: Literal["east", "north", "reverse", "closed-door", "open-door", "raised", "ledge"] = "east"
+    crossings: bool = True
+    fixed_skeleton: bool = False
+    creature_identity: str | None = None
+
+
+class DreadResidueCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["dread-residue"]
+    entry: Literal["walk", "jump", "misty-step"] = "walk"
+
+
+class SpellHandoffCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["spell-handoff"]
+    program: Literal["eldritch", "guiding", "acid", "fireball"] = "eldritch"
+    level: Literal[5, 11] = 5
+    split: bool = False
+    miss: bool = False
+    environment: Literal["open", "wall-east", "wall-north", "closed-door", "open-door"] = "open"
+    empty: bool = False
+    repeat: bool = False
+
+
+class ReviewFacing(BaseModel):
+    """Starting review pose, separate from the saved gameplay sequence."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    position: tuple[int, int]
+    toward: tuple[int, int]
+
+
 class ReviewCase(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     id: str = Field(pattern=r"^[a-z0-9][a-z0-9-]*$")
     title: str
     tags: tuple[str, ...]
     description: str
+    initial_facings: tuple[ReviewFacing, ...] = ()
     scenario: Annotated[AttackCase | ParalysisCase | CastCase | ParalysisLifecycleCase | DodgeExpiryCase | HealingCase | LifecycleCase
-                        | CreatureCase | EquipmentCase | DiscoveryCase | VisibilityCase | MovementCase | ForcedMovementCase | ConcealmentCase | EnvironmentCase,
+                        | CreatureCase | EquipmentCase | DiscoveryCase | VisibilityCase | MovementCase | ForcedMovementCase | TeleportCase | ConcealmentCase | EnvironmentCase | EnvironmentControlCase | TrapCase | GroundContactCase | BodyResidueCase | DreadResidueCase | SpellHandoffCase,
                         Field(discriminator="kind")]
     pause_at_ms: float | None = Field(default=None, ge=0)
     pause_duration_ms: float = Field(default=750, gt=0)

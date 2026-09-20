@@ -57,8 +57,10 @@ from dnd.actions import (
     SpellEvent,
     entity_action_economy_cost_applier,
     entity_action_economy_cost_evaluator,
+    resolve_paid_entry_retreats,
 )
 from dnd.conditions import Blinded, Deafened, Stunned, NoReactions, Concentrating, ConcentrationActionMarker, Restrained
+from dnd.residues import ASHEN_RESIDUE, deposit_area_residue
 from dnd.spells.content_metadata import srd_action_identity, srd_spell_identity
 from dnd.spells.spell_utils import fire_heal_roll_result
 from dnd.spells.effect_ids import MAGIC_MISSILE_DAMAGE_EFFECT_ID
@@ -836,6 +838,7 @@ class Fireball(SpellAction):
     spell_level: int = Field(default=3, description="Spell slot level required to cast fireball; cantrips use 0.")
     spell_school: str = Field(default="evocation", description="D&D school of magic used to classify fireball.")
     target_type: TargetType = Field(default=TargetType.POSITION_AOE, description="Targeting mode used by action discovery and validation for fireball.")
+    aoe_require_targets: bool = Field(default=False, description="Fireball can target an empty visible area.")
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=150), description="Range contract used when validating targets for fireball.")
     projectile_type: Optional[str] = Field(default="orb", description="Projectile visualization hint for fireball.")
     spell_damage_type: Optional[DamageType] = Field(default=DamageType.FIRE, description="Primary damage type for VFX")
@@ -855,6 +858,16 @@ class Fireball(SpellAction):
                 target=self.end_position or (0, 0),
                 radius_feet=20
             )
+
+    def _resolve_execution_targets(self) -> Tuple[List[UUID], Optional[Tuple[Tuple[int, int], ...]]]:
+        if self.effective_target_type is TargetType.POSITION_AOE:
+            return self._resolve_area_targets()
+        return super()._resolve_execution_targets()
+
+    def _finalize_aoe(self, effect_event: ActionEvent) -> None:
+        """Leave inert Ashen conditions on surfaces actually reached by the blast."""
+        deposit_area_residue(effect_event.resolved_area_positions or (), ASHEN_RESIDUE,
+                             parent_event=effect_event)
 
     def get_damage_dice_count(self) -> int:
         """8d6 base + 1d6 per level above 3rd."""
@@ -1485,6 +1498,7 @@ class Thunderwave(SpellAction):
 
                 forced_event = forced_event.phase_to(EventPhase.EXECUTION)
                 forced_event = forced_event.phase_to(EventPhase.EFFECT)
+                entry_cursor = EventQueue.event_cursor()
                 if not forced_event.canceled:
                     Entity.update_entity_position(
                         target,
@@ -1495,6 +1509,7 @@ class Thunderwave(SpellAction):
                     EventPhase.COMPLETION,
                     end_position=target.position,
                 )
+                resolve_paid_entry_retreats(target, since_cursor=entry_cursor, parent_event=effect_event)
                 push_applied = True
 
         save_text = " (saved for half)" if success else ""
@@ -2579,13 +2594,13 @@ class EldritchBlast(SpellAction):
 
     A beam of crackling energy streaks toward a creature within range.
     Make a ranged spell attack. On hit, target takes 1d10 force damage.
-    Damage scales with caster level: 2d10 at 5th, 3d10 at 11th, 4d10 at 17th.
+    Separate beams scale with caster level: two at 5th, three at 11th, four at 17th.
     """
     name: str = Field(default="Eldritch Blast", description="Display name for the eldritch blast spell.")
     description: str = Field(default="A beam of crackling force energy", description="Rules-facing summary for the eldritch blast spell.")
     spell_level: int = Field(default=0, description="Spell slot level required to cast eldritch blast; cantrips use 0.")
     spell_school: str = Field(default="evocation", description="D&D school of magic used to classify eldritch blast.")
-    target_type: TargetType = Field(default=TargetType.ENTITY, description="Targeting mode used by action discovery and validation for eldritch blast.")
+    target_type: TargetType = Field(default=TargetType.MULTI_ENTITY, description="Independent beam allocation for eldritch blast.")
     spell_range: Range = Field(
         default_factory=lambda: Range(type=RangeType.RANGE, normal=120),
         description="Range contract used when validating targets for eldritch blast.",
@@ -2593,37 +2608,65 @@ class EldritchBlast(SpellAction):
     projectile_type: Optional[str] = Field(default="beam", description="Projectile visualization hint for eldritch blast.")
     spell_damage_type: Optional[DamageType] = Field(default=DamageType.FORCE, description="Primary damage type for VFX")
 
+    def get_num_projectiles(self) -> int:
+        """Each beam gets its own attack; an explicit action override still applies."""
+        return self.alt_target_count if self.alt_target_count is not None else self._get_cantrip_dice_count(self.caster_level)
+
+    def get_multi_target_count(self) -> Optional[int]:
+        return self.get_num_projectiles()
+
+    def get_all_targets(self) -> List[UUID]:
+        targets = super().get_all_targets()
+        count = self.get_num_projectiles() if self.effective_target_type is TargetType.MULTI_ENTITY else 1
+        if self.target_entity_uuid is not None:
+            targets.extend([self.target_entity_uuid] * max(0, count - len(targets)))
+        return targets[:count]
+
     def get_outcome_profile(self, actor: Any) -> Optional[ActionOutcomeProfile]:
-        """Return Eldritch Blast's level-scaled actor-baseline attack model."""
+        """Return independent per-beam attacks and one d10 per hit."""
         if not isinstance(actor, Entity):
             return None
         return self.spell_attack_outcome_profile(
             actor,
-            dice_count=self._get_cantrip_dice_count(self.caster_level),
+            dice_count=1,
+            applications=self.get_num_projectiles(),
             die_size=10,
             damage_type=DamageType.FORCE,
         )
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        """Validate range and line of sight."""
-        los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
-        if los_event is None or los_event.canceled:
-            return los_event
+        """Validate range and LOS for all targets."""
 
         source_entity = Entity.get(self.source_entity_uuid)
-        target_entity = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if not source_entity:
+            return declaration_event.cancel(status_message="Source entity not found")
 
-        if not source_entity or not target_entity:
-            return declaration_event.cancel(status_message="Source or target entity not found")
+        all_targets = self.get_all_targets()
+        validated_targets = set()
 
-        distance = source_entity.senses.get_feet_distance(target_entity.position)
-        if distance > self.effective_range:
-            return declaration_event.cancel(status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)")
+        for target_uuid in all_targets:
+            if target_uuid in validated_targets:
+                continue
+            validated_targets.add(target_uuid)
 
-        return los_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
-        )
+            target_entity = Entity.get(target_uuid)
+            if not target_entity:
+                return declaration_event.cancel(status_message="Target entity not found")
+
+            contact = source_entity.senses.entities.get(target_uuid)
+            if contact is None or not contact.visual:
+                return declaration_event.cancel(
+                    status_message=f"{target_entity.name} not in line of sight"
+                )
+
+            distance = source_entity.senses.get_feet_distance(target_entity.position)
+            if distance > self.effective_range:
+                return declaration_event.cancel(
+                    status_message=f"{target_entity.name} out of range ({distance}ft > {self.effective_range}ft)"
+                )
+
+        parent_result = super()._validate(declaration_event)
+        return type_cast(Optional[SpellEvent], parent_result)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Execute the spell attack."""
@@ -2654,7 +2697,6 @@ class EldritchBlast(SpellAction):
                 status_message=f"{self.name} missed"
             )
 
-        num_dice = self._get_cantrip_dice_count(self.caster_level)
         is_crit = outcome == AttackOutcome.CRIT
 
         crit_extra = caster.get_spell_crit_extra_dice() if is_crit else 0
@@ -2663,7 +2705,7 @@ class EldritchBlast(SpellAction):
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid,
             damage_dice=10,
-            dice_numbers=num_dice,
+            dice_numbers=1,
             damage_bonus=damage_bonus,
             damage_type=DamageType.FORCE
         )
@@ -2941,6 +2983,7 @@ def _apply_gust_push(entity: Entity, dc: int, caster_pos: Tuple[int, int],
         if not forced_event.canceled:
             forced_event = forced_event.phase_to(EventPhase.EFFECT)
         if not forced_event.canceled:
+            entry_cursor = EventQueue.event_cursor()
             Entity.update_entity_position(
                 entity,
                 current_pos,
@@ -2950,6 +2993,7 @@ def _apply_gust_push(entity: Entity, dc: int, caster_pos: Tuple[int, int],
                 EventPhase.COMPLETION,
                 end_position=entity.position,
             )
+            resolve_paid_entry_retreats(entity, since_cursor=entry_cursor, parent_event=parent_event)
 
 
 class GustOfWind(SpellAction):

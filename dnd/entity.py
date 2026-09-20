@@ -42,6 +42,7 @@ from dnd.core.equipment_types import (
     WeaponSlot,
 )
 from dnd.core.base_block import BaseBlock, MovementMode
+from dnd.types.world import OccupancyLayer
 from dnd.types.actor import EntityStatsState
 from dnd.blocks.abilities import AbilityScoresConfig, AbilityScores
 from dnd.blocks.saving_throws import SavingThrowSetConfig, SavingThrowSet
@@ -60,7 +61,7 @@ from dnd.blocks.creature_proficiencies import (
 from dnd.blocks.action_economy import ActionEconomyConfig, ActionEconomy
 from dnd.blocks.skills import SkillSetConfig, SkillSet
 from dnd.blocks.sensory import Senses, capture_senses_snapshot, spatial_senses_system
-from dnd.core.base_block import SensesType, SenseMode, LightLevel
+from dnd.core.base_block import SensesType, SenseMode
 from dnd.blocks.inventory import Inventory, InventoryAddResult
 from dnd.blocks.spellcasting import SpellcastingBlock, SpellcastingConfig
 from dnd.blocks.base_item import (
@@ -89,7 +90,7 @@ from dnd.core.gridmap import (
 )
 from dnd.core.positioning import PositionCommitError, PositionPublicationError
 from dnd.core.geometry import supercover_line
-from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType, EntitySpottedLogData
+from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
 from dnd.creature_transforms import (
     ModifierOwnership,
     apply_life_state_transform,
@@ -230,6 +231,9 @@ class EntityConfig(BaseModel):
         default_factory=lambda: (0, 0),
         description="Starting grid position for the entity."
     )
+    occupancy_layer: OccupancyLayer = Field(
+        default=OccupancyLayer.GROUND, description="Initial physical contact band relative to support.",
+    )
     sprite_name: Optional[str] = Field(default=None, description="Renderer sprite identifier.")
     faction: Optional[str] = Field(default=None, description="Faction identifier. None = enemy to everyone")
     spellcasting: Optional[SpellcastingConfig] = Field(
@@ -279,6 +283,9 @@ class Entity(BaseBlock):
     """
 
     name: str = Field(default="Entity", description="Display name for this entity.")
+    occupancy_layer: OccupancyLayer = Field(
+        default=OccupancyLayer.GROUND, description="Committed physical contact band relative to support.",
+    )
     content_ref: Optional[ContentRef] = Field(
         default=None,
         frozen=True,
@@ -770,9 +777,11 @@ class Entity(BaseBlock):
         cls,
         entity: 'Entity',
         new_position: Tuple[int, int],
-        parent_event: Optional[UUID] = None
+        parent_event: Optional[UUID] = None,
+        *,
+        occupancy_layer: Optional[OccupancyLayer] = None,
     ) -> None:
-        """Commit objective position, then publish its spatial facts.
+        """Commit objective position and contact layer, then publish spatial facts.
 
         Args:
             entity: Entity to move.
@@ -782,7 +791,9 @@ class Entity(BaseBlock):
         if not entity.is_deployed:
             raise RuntimeError("cannot move an undeployed entity")
         old_position = entity.position
-        if old_position == new_position:
+        old_layer = entity.occupancy_layer
+        new_layer = old_layer if occupancy_layer is None else occupancy_layer
+        if old_position == new_position and old_layer is new_layer:
             return
         grid = get_map()
         if grid.get_entity_position(entity.uuid) != old_position:
@@ -790,19 +801,25 @@ class Entity(BaseBlock):
                 ValueError("Entity membership does not match its objective position")
             )
         entity._set_position(new_position)
+        entity.occupancy_layer = new_layer
         try:
             grid._commit_entity_membership(entity.uuid, old_position, new_position)
         except BaseException as exc:
             entity._set_position(old_position)
+            entity.occupancy_layer = old_layer
             if isinstance(exc, PositionCommitError):
                 raise
             raise PositionCommitError(exc) from exc
+        if old_layer is not new_layer:
+            grid.invalidate_occupancy_paths()
         try:
             grid._publish_entity_membership(
                 entity.uuid,
                 old_position,
                 new_position,
                 parent_event=parent_event,
+                previous_occupancy_layer=old_layer,
+                occupancy_layer=new_layer,
             )
         except PositionPublicationError:
             raise
@@ -911,6 +928,7 @@ class Entity(BaseBlock):
             use_register=False,
             phase=EventPhase.COMPLETION,
             entity_uuid=self.uuid,
+            occupancy_layer=self.occupancy_layer,
             entity_kind_id=(
                 self.character_body_id
                 or (
@@ -1343,6 +1361,7 @@ class Entity(BaseBlock):
             initiative=initiative,
             spellcasting=spellcasting,
             position=config.position,
+            occupancy_layer=config.occupancy_layer,
             sprite_name=config.sprite_name,
             faction=config.faction,
             weight=config.weight,
@@ -1525,6 +1544,10 @@ class Entity(BaseBlock):
             new_position: Position to store on the entity and senses block.
         """
         self.position = new_position
+
+    def get_occupancy_layer(self) -> OccupancyLayer:
+        """Return the creature's authoritative contact band."""
+        return self.occupancy_layer
 
     def move(self, new_position: Tuple[int, int]) -> None:
         """Move through the objective spatial-event path."""
@@ -2479,7 +2502,8 @@ class Entity(BaseBlock):
         Returns:
             Combined saving throw bonus.
         """
-        if target_entity_uuid is None or target_entity_uuid == self.uuid:
+        if (target_entity_uuid is None or target_entity_uuid == self.uuid
+                or get_map().get_tile_by_uuid(target_entity_uuid) is not None):
             bonuses = self._get_bonuses_for_saving_throw(ability_name)
             return bonuses[0].combine_values(list(bonuses)[1:]).model_copy(deep=True)
 
@@ -2893,6 +2917,8 @@ class Entity(BaseBlock):
         normal_hit_point_damage: int,
         temporary_hit_point_damage: int,
         resolution: DamageApplicationPreview,
+        critical_hit: bool,
+        impact_direction: tuple[float, float] | None,
     ) -> DamageAppliedEvent:
         """Emit the factual positive-damage boundary through completion.
 
@@ -2928,6 +2954,8 @@ class Entity(BaseBlock):
             damages=damages,
             effect_id=effect_id,
             resolution=resolution,
+            critical_hit=critical_hit,
+            impact_direction=impact_direction,
             parent_event=parent_event.uuid,
             phase=EventPhase.DECLARATION,
         )
@@ -2982,6 +3010,7 @@ class Entity(BaseBlock):
         parent_event: Optional[UUID] = None,
         critical_hit: bool = False,
         effect_id: Optional[str] = None,
+        impact_direction: tuple[float, float] | None = None,
     ) -> int:
         """Apply damage through the engine event lifecycle.
 
@@ -3057,6 +3086,8 @@ class Entity(BaseBlock):
                 normal_hit_point_damage=actual_damage,
                 temporary_hit_point_damage=temporary_hit_point_damage,
                 resolution=damage_resolution,
+                critical_hit=critical_hit,
+                impact_direction=impact_direction,
             )
 
         if (

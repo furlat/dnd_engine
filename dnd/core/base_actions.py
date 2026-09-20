@@ -634,6 +634,10 @@ class ActionEvent(Event):
         default=None,
         description="Grid position targeted by a position-AoE action.",
     )
+    resolved_area_positions: Optional[Tuple[Tuple[int, int], ...]] = Field(
+        default=None,
+        description="Physical cells resolved by this area's execution; None means no recorded result.",
+    )
 
     def model_post_init(self, __context: Any) -> None:
         """Freeze active authored identity before the event is registered."""
@@ -1281,31 +1285,35 @@ class BaseAction(BaseObject):
             Target UUIDs in processing order.
         """
         if self.effective_target_type == TargetType.POSITION_AOE:
-            if self.aoe_shape and self.end_position:
-                source_block = BaseBlock.get(self.source_entity_uuid)
-                if source_block:
-                    shape = self.aoe_shape.model_copy(update={'target': self.end_position})
-                    shape.compute_objective(source_block.position)
-                    targets = sorted(
-                        shape.affected_entity_uuids,
-                        key=target_resolution_sort_key,
-                    )
-                    if not self.include_self:
-                        targets = [uid for uid in targets if uid != self.source_entity_uuid]
-                    targets = self._filter_targets_by_faction(source_block, targets)
-                    if not self.include_dead:
-                        targets = [
-                            uid for uid in targets
-                            if (block := BaseBlock.get(uid)) and block.is_active
-                        ]
-                    return targets
-            return []
+            targets, _ = self._resolve_area_targets()
+            return targets
 
         targets: List[UUID] = []
         if self.target_entity_uuid:
             targets.append(self.target_entity_uuid)
         targets.extend(self.extra_target_entity_uuids)
         return targets
+
+    def _resolve_area_targets(self) -> Tuple[List[UUID], Optional[Tuple[Tuple[int, int], ...]]]:
+        """Resolve one native area and its eligible occupants from the same shape."""
+        if self.aoe_shape is None or self.end_position is None:
+            return [], None
+        source_block = BaseBlock.get(self.source_entity_uuid)
+        if source_block is None:
+            return [], None
+        shape = self.aoe_shape.model_copy(update={'target': self.end_position})
+        shape.compute_objective(source_block.position)
+        targets = sorted(shape.affected_entity_uuids, key=target_resolution_sort_key)
+        if not self.include_self:
+            targets = [uid for uid in targets if uid != self.source_entity_uuid]
+        targets = self._filter_targets_by_faction(source_block, targets)
+        if not self.include_dead:
+            targets = [uid for uid in targets if (block := BaseBlock.get(uid)) and block.is_active]
+        return targets, tuple(sorted(shape.affected_positions))
+
+    def _resolve_execution_targets(self) -> Tuple[List[UUID], Optional[Tuple[Tuple[int, int], ...]]]:
+        """Preserve authored target selection unless the action also records its area."""
+        return self.get_all_targets(), None
 
     def _filter_targets_by_faction(self, source_block: BaseBlock, targets: List[UUID]) -> List[UUID]:
         """Filter targets based on valid_target_filter for AoE spells.
@@ -1682,6 +1690,7 @@ class BaseAction(BaseObject):
 
         Called after all per-target _apply() calls complete, before COMPLETION phase.
         Only called when target_type is POSITION_AOE.
+        A recorded execution footprint is available on effect_event.resolved_area_positions.
         """
         pass
 
@@ -1900,7 +1909,7 @@ class BaseAction(BaseObject):
 
         if self.effective_target_type in (TargetType.MULTI_ENTITY, TargetType.POSITION_AOE):
             started = start_phase()
-            all_target_uuids = self.get_all_targets()
+            all_target_uuids, resolved_area_positions = self._resolve_execution_targets()
             record_phase("resolve_convolution_targets", started)
             original_target = self.target_entity_uuid
             total_damage = 0
@@ -1911,6 +1920,7 @@ class BaseAction(BaseObject):
                 total_targets=len(all_target_uuids),
                 total_damage=0,
                 aoe_position=self.end_position,
+                resolved_area_positions=resolved_area_positions,
                 status_message=(
                     f"Applying {self.name} to {len(all_target_uuids)} targets"
                 ),

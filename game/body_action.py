@@ -35,6 +35,8 @@ class BodyActionCue:
     condition: StudioCondition | None
     feedback: ActionFeedback | None
     gaps: tuple[str, ...] = ()
+    interaction_object_uuid: UUID | None = None
+    relocates: bool = False
 
 
 def bind_body_action(before: PlayerState, event: PlayerNode, data: AnimationData,
@@ -57,6 +59,14 @@ def bind_body_action(before: PlayerState, event: PlayerNode, data: AnimationData
     contact = contacts.get(str(actor.uuid))
     if contact is None:
         contact = actor_contact(before, actor, data, facings.get(str(actor.uuid), "S"))
+    interaction_object_uuid = None
+    if isinstance(fact, ActionFact) and binding is not None and binding.interaction_target == "source_item":
+        interaction_object_uuid = fact.source_item_uuid
+        target_object = before.objects.get(interaction_object_uuid) if interaction_object_uuid is not None else None
+        if target_object is not None and target_object.placement.position != contact.grid:
+            position = target_object.placement.position
+            contact = replace(contact, facing=facing_for_delta(
+                (position[0] - contact.grid[0], position[1] - contact.grid[1]), data))
     gaps: list[str] = []
     recovery = condition = None
     feedback = None
@@ -104,7 +114,8 @@ def bind_body_action(before: PlayerState, event: PlayerNode, data: AnimationData
     effect_ms = start_ms + (effect_frame * 1000 / (metadata.fps * speed) if enabled else 0)
     cue = BodyActionCue(event.uuid, contact, data, recipe_id, clip, speed, start_ms, effect_ms,
         body_end, body_end, body_end, enabled, hidden_slots, hide_weapon,
-        recovery, condition, feedback, tuple(gaps))
+        recovery, condition, feedback, tuple(gaps), interaction_object_uuid,
+        fact.behavior_id in data.relocation_actions)
     return join_body_action(cue, data, body_end)
 
 

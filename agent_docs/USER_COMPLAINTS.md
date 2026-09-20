@@ -345,3 +345,158 @@ the final checks and remaining broader gameplay work.
   linked trap deactivation. The next backend design covers controls linked to
   doors/lights and real container open/closed state. Do not claim those new
   mechanics are complete merely because suitable art already exists.
+- Reviewing the torch videos, the user identified missing physical interaction:
+  previously inspected arm-extension animations were not playing. Environment
+  actions must play an appropriate gesture, and their object effect must appear
+  at hand contact, like an attack. Imported disabled/instant environment recipes
+  do not satisfy this. Connect the shared gesture and causal effect anchor while
+  continuing the authorized backend unit; do not turn this correction into a
+  separate VFX project or delay native event processing for rendering.
+
+## September 19 — trap mechanics precede trap presentation
+
+- Concealed spikes are down and are not drawn for an unaware observer. Detected
+  spikes are visible while down. Activation raises them until deactivation;
+  reactivation raises them again. Deactivation must not erase prior discovery.
+- These are backend gameplay states governed by handlers. Descriptions must
+  reflect the state the observer knows. Do not place animation cues in backend
+  state or infer gameplay from sprite frames.
+- Plan this small feature before resuming the paused art integration. Explore
+  content reuse beyond spikes, starting with variants such as poisoned spikes;
+  a dozen proposals are a study, not twelve new mechanisms or implementations.
+- The [trap plan](TRAP_STATE_PLAN_2026-09-19.md) records the shared first unit;
+  the [variant study](GROUND_TRAP_VARIANTS_2026-09-19.md) distinguishes existing
+  native capabilities from missing connections and proposed art.
+- Acceptance tests must follow the same complete narrative as the videos:
+  enter, exit and re-enter raised spikes; lower them with a real lever; cross
+  safely and remain inside; have the other character raise them and damage the
+  stationary occupant. Record detected/undetected cases through real actions,
+  both subjective viewpoints and all four camera corners.
+- The delivered poisoned art should use authored content identity. The new
+  bloodied artwork suggests a reusable condition, independent of a trap's
+  mechanical state and potentially applicable to other tiles. Study the existing
+  condition owners before deciding its application/persistence semantics;
+  do not quietly turn every damage event into a universal bleeding rule.
+- The review UI must make saved runs accessible; an older focused gallery is
+  not an all-catalog browser. The user also proposed video pixel differences
+  as regression evidence and explicitly requested documentation only for now.
+  See the future comparison note in `devtools/animation_review/README.md`;
+  do not turn it into runtime hashing or an unrequested testing framework.
+- Bloodied belongs to the tile, initially inert but available for later
+  elemental/magic interactions. The user proposed one map-wide damage handler
+  conditioned on the damaged creature having blood, superseding the assistant's
+  spike-only trigger proposal. The user explicitly requested further study before
+  implementation and questioned adding a dedicated boolean to entities. Study
+  existing reusable body/feature data; do not replace that question with a new
+  physiology framework or silently choose biology and damage-type policies.
+- The user refined that proposal to a handler on each creature, releasing blood
+  or other authored substances when damaged: poisonous fluid, bone fragments and
+  smoke can select different effects. Share one processor configured by body data.
+  Blood splatter leaves authoritative tile residue; a known spike trap on that
+  tile uses its bloodied variant. Keep repeatable release events separate from
+  persistent tile state, and keep particle simulation out of native state changes.
+- The full plan must include skeleton bone bursts and potential ground fragments,
+  plus demon-package variants whose residue can damage or provoke a low-DC fear
+  save on entry. Preserve the existing modular skeleton Body 2 route as well as
+  the dedicated `Documents/assets/smallscale/2D HD Undead pack 1.zip` art path.
+  These are shared native capabilities with authored content, not independent
+  VFX demos or grounds for replacing the existing rigs/creature mechanics.
+- Jumping or flying over a floor trap must not activate it; native regression
+  tests for this are mandatory. Landing/contact is distinct from crossing its
+  horizontal cell, including a flying movement endpoint. Misty Step arrival on
+  the trap is ground contact, while intermediate tiles are not visited. Actual
+  flight touchdown must be exercised through native state/actions once connected,
+  not manufactured by direct position writes or inferred from rendered height.
+- The user explicitly prioritizes repairing the demonstrated jump/floor-trap
+  defect before adding blood, bone and demonic residue features. Do not carry
+  the known failing contact contract forward as an accepted limitation or bury
+  its repair behind art work or a broader flight-system redesign.
+- The user proposed ground/air/underground movement facts and air-only spells or
+  storms that strike flyers. Retain the native location layer between actions,
+  including hovering, and carry it through recorded events. Effects declare
+  which layers they affect; reuse spatial handlers instead of globally ignoring
+  airborne entries or deriving rules from animation height.
+- Dread blood fear must compel retreat toward the actual previous cell and charge
+  movement for it. Exiting the pool in that direction removes the fear; inability
+  to retreat/pay leaves the creature there frightened, with escape still possible
+  when movement becomes available. Do not substitute generic Frightened's zero-
+  movement cap, a free shove, a one-round timer or an animation-only recoil.
+- Do not turn the jump/floor-trap repair into a flight feature. The user clarified
+  that movements land, then explicitly corrected the expansion into hovering,
+  dedicated landing controls and wing-dismissal rules. Keep jump takeoff, airborne
+  crossings and actual ground contact; remove the invented flight prerequisite
+  from both implementation and plan. Shared layer data is not authorization to
+  build every movement mode now.
+- For Misty Step into dread blood, the user approved one paid adjacent retreat
+  toward the departure point. Teleport does not invent an adjacent previous cell.
+- Ordinary humanoid blood should have amounts ranging from a small splat to an
+  almost-full pool. Carry this forward without interrupting the active unit;
+  recorded tile state must select the amount. Injury thresholds/accumulation
+  have not been chosen, and the requirement does not automatically expand bone
+  or demon residue profiles.
+- Artwork handoff files are a queue, not instructions to switch tasks. Complete
+  the approved mechanics/replay unit before pursuing unrelated spells or VFX.
+- Projectile art must retain NeuroClient's small residual rotation between the
+  eight authored directions. The user noticed Eldritch lacking this in the new
+  clips. Selecting a real direction row and aligning it to the actual trajectory
+  are both required; a limited handoff preview must not disable the original
+  recipe's behavior. Keep the correction in shared presentation/data ownership.
+- Ashen must appear with Fireball contact and can expand outward with the blast;
+  waiting until the whole animation finishes is incorrect. The user also found
+  Fireball travel too slow and requested a roughly 20% larger projectile. Keep
+  travel tuning separate from the calibrated explosion size, and keep contact/
+  reveal timing in presentation while native conditions remain authoritative.
+# 2026-09-19 — Fireball leaking over foreground boundaries
+
+User identified fire leaking from behind the wall/door in “Fireball · east
+boundary · caster”, camera 0, run `20260919T162630Z-c573f3`, and requested a
+first-principles correction. The complete area image and individual boundary
+segments cannot be ordered correctly by their separate center-Y keys. Prior
+ground-mask tests were insufficient evidence for final scene occlusion. Fix shared
+composition using physical boundary geometry and actual sprite silhouettes;
+preserve native mechanics and the already corrected timing/size.
+
+### September 20 — weapon motion must agree with the represented attack
+
+The user caught a piercing critical rendered as a broad slash in the release
+gallery. The imported global critical/elemental profiles were overriding the
+weapon family; passing replay checks did not establish visual correctness.
+Use authored weapon-specific choices first, with damage type as fallback. The
+user suggested an overhead dagger critical. Keep clip, contact and effects in
+recipe data; do not create weapon conditionals in playback. Face participants
+toward each other in ordinary review examples and include deliberate backstab
+examples. Rear facing itself does not authorize new combat bonus rules.
+
+### September 20 — blood volume and repeated-hit coverage
+
+The user approved the weapon-motion correction but found gore too restrained
+and too few tiles affected. They asked whether the gallery used current blood
+work and requested comparison with the art task's repeated blood/poison/bone
+examples. The current game uses the compact normalized region candidate, not
+the approved wide 96-particle blood reference. Its dagger accumulation case
+contains seven real hits, caps at five units, and retains the same two receiving
+tiles. Bones/corrosive/dread currently cap at one; poison has art only. Art
+previews show five amount stages for every material and wider proposed layouts.
+Those preview controls are not implemented native gameplay. The compact
+artifact's imported particle fields match the current handoff. Do not call
+this full parity with the heavier or wider art demonstrations.
+
+### September 20 — the compact correction still missed the inspected reference
+
+The user rejected `20260919T235102Z-e50471`: the two-goblin reference had much
+more blood, spread across neighboring tiles, and more dynamic spray. The art
+task relayed clarification that this reference is the high end, while the game
+should be moderately high. Increasing tiny ellipses while preserving the wrong
+compact replacement did not address that request. Compare the actual approved
+`blood-fluid` source and in-game first/repeated hits; do not treat asset parity,
+passing replay tests or reviewers accepting that narrow framing as visual
+acceptance. See `BLOOD_REFERENCE_CORRECTION_2026-09-20.md` for the correction.
+
+### September 20 — use the intended creatures in material examples
+
+Bone demonstrations must use skeletons, preferably the premade Undead pack.
+Toxic demonstrations can use orcs for now. Correct the main and repeated-hit
+catalog entries, including the mixed scene's separate bone donor; an isolated
+premade-skeleton card does not fulfill the request while other bone cards still
+show a modular clothed body. The Orc example is an explicitly configured
+corrosive review creature, not a change to every Orc's biology.

@@ -22,6 +22,7 @@ from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
 from dnd.spatial.environmental_conditions import SpikeTrap
 from dnd.types.senses import SenseMode, SensesType
+from dnd.types.traps import TrapState
 from game.presentation import capture_interval, reduce_interval
 from game.replay import CapturedHistory, ObserverCapture, capture_history
 
@@ -137,7 +138,9 @@ def environment_history(
             assert witness.get_hp() < hp_before
             perform(witness, destination=(4, 1))
             perform(operator, item_uuid=lever.uuid)
-            assert not linked.applied and other.applied and lever.charges == 0
+            assert linked.applied and linked.trap_state is TrapState.DEACTIVATED
+            assert not linked.is_hazardous_for(witness.uuid)
+            assert other.applied and lever.charges == 0
             hp_after = witness.get_hp()
             perform(witness, destination=(5, 1))
             assert witness.get_hp() == hp_after

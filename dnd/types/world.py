@@ -3,6 +3,14 @@
 from enum import Enum, StrEnum
 
 
+class OccupancyLayer(StrEnum):
+    """A creature's physical contact band relative to local support."""
+
+    GROUND = "ground"
+    AIR = "air"
+    UNDERGROUND = "underground"
+
+
 class MovementMode(str, Enum):
     """Movement modes supported by world traversal."""
 
@@ -43,5 +51,6 @@ __all__ = [
     "CardinalDirection",
     "LightLevel",
     "MovementMode",
+    "OccupancyLayer",
     "WorldEdgeChannel",
 ]

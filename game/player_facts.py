@@ -20,7 +20,11 @@ from dnd.core.equipment_types import WeaponSet, WeaponSlot
 from dnd.core.events import EventPhase, EventType, MovementTrajectory, SpatialChangeType, WorldConnectorState, WorldTileState
 from dnd.core.item_types import EquippedVisualPolicy, ItemPresentationKind, ItemPresentationState
 from dnd.core.life_types import LifeState, LifeStateChangeReason
-from dnd.types.senses import PerceivedContact, SenseMode, SensesSnapshot
+from dnd.core.presentation_geometry import AoEPresentationGeometry
+from dnd.types.residues import BodyReleaseResult, ObjectResidueState
+from dnd.types.senses import PerceivedContact, PerceivedSpatialEffect, SenseMode, SensesSnapshot
+from dnd.types.traps import TrapState
+from dnd.types.world import MovementMode, OccupancyLayer
 from dnd.types.world_placement import BoundaryStructure, WorldObjectPlacement
 from game.actor_facts import ConditionFact
 
@@ -58,6 +62,7 @@ class PlayerActor:
     conditions: tuple[ConditionFact, ...] = ()
     last_visual_position: tuple[int, int] | None = None
     controlled_items: tuple[ItemPresentationState, ...] | None = None
+    occupancy_layer: OccupancyLayer | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -91,6 +96,11 @@ class SpellFact:
     declared_target_entity_uuids: tuple[UUID, ...]
     application_id: UUID | None
     application_index: int | None
+    aoe_position: tuple[int, int] | None = None
+    area_geometry: AoEPresentationGeometry | None = None
+    # A disclosed subset of the native result, never a physical blast mask.
+    # None means no recorded result; () is a resolved result with no granted cells.
+    resolved_area_positions: tuple[tuple[int, int], ...] | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -105,6 +115,9 @@ class MovementFact:
     path: tuple[tuple[int, int], ...] = ()
     start_elevation_feet: int | None = None
     end_elevation_feet: int | None = None
+    movement_mode: MovementMode | None = None
+    start_layer: OccupancyLayer | None = None
+    end_layer: OccupancyLayer | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -119,6 +132,9 @@ class StepFact:
     trajectory: MovementTrajectory
     provocation_policy: MovementProvocationPolicy
     committed: bool
+    movement_mode: MovementMode | None = None
+    from_layer: OccupancyLayer | None = None
+    to_layer: OccupancyLayer | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -152,6 +168,7 @@ class DamageFact:
     resulting_normal_hp: int | None = None
     resulting_temporary_hp: int | None = None
     damage_type: DamageType | None = None
+    body_release: BodyReleaseResult | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -213,6 +230,8 @@ class SpatialFact:
     change_type: SpatialChangeType
     entity_uuid: UUID | None
     position: tuple[int, int]
+    previous_occupancy_layer: OccupancyLayer | None = None
+    occupancy_layer: OccupancyLayer | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -240,6 +259,7 @@ class ActionFact:
     target_entity_uuid: UUID | None
     behavior_id: str | None
     name: str | None
+    source_item_uuid: UUID | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -266,12 +286,25 @@ class SensoryFact:
     visual_access: int | None
     paths_dirty: bool
     hazardous_cells_changed: dict[str, bool] = field(default_factory=dict)
+    spatial_effects_changed: dict[UUID, PerceivedSpatialEffect] = field(default_factory=dict)
+    spatial_effects_removed: frozenset[UUID] = frozenset()
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class SpatialEffectStateFact:
+    """A witnessed mechanical transition, restricted to disclosed fixture cells."""
+
+    kind: Literal["spatial_effect_state"] = "spatial_effect_state"
+    spatial_effect_uuid: UUID
+    positions: tuple[tuple[int, int], ...]
+    previous_state: TrapState
+    state: TrapState
 
 
 PlayerFact = Annotated[
     AttackFact | SpellFact | MovementFact | StepFact | ForcedMovementFact | ShoveFact
     | DamageFact | HealFact | TemporaryHitPointsFact | LifeFact | DeathSaveFact | EquipmentFact
-    | ConditionChangeFact | SpatialFact | TurnFact | ActionFact | SensoryFact | ItemChargeFact,
+    | ConditionChangeFact | SpatialFact | TurnFact | ActionFact | SensoryFact | ItemChargeFact | SpatialEffectStateFact,
     Field(discriminator="kind"),
 ]
 
@@ -323,6 +356,8 @@ class FloorItem:
     boundary_structure: BoundaryStructure | None
     is_open: bool | None
     is_lit: bool | None
+    is_engaged: bool | None = None
+    surface_residues: tuple[ObjectResidueState, ...] = ()
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

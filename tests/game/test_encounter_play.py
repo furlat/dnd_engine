@@ -8,7 +8,7 @@ os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 
 import pygame
 
-from game.player_facts import AttackFact, MovementFact
+from game.player_facts import ActionFact, AttackFact, MovementFact
 from game.controls import ActionSelection, EndTurn
 from game.encounter_play import run
 
@@ -57,3 +57,32 @@ def test_full_round_moves_conditions_and_enemy_actions_while_history_paused() ->
     assert not any(frame.input_ready for frame in paused)
     assert len({frame.positions for frame in result.frames}) > 6
     assert all(frame.historical_cursor <= frame.latest_cursor for frame in result.frames)
+
+
+def test_authored_workshop_plays_a_discovered_lever_action_in_the_same_frame_pump() -> None:
+    commands = 0
+
+    def choose(target, available):
+        nonlocal commands
+        commands += 1
+        if commands == 2:
+            return EndTurn()
+        lever = next(obj for obj in target.objects.values() if obj.item.item_id == "environment.trap_lever")
+        index, action = next((index, row) for index, row in enumerate(available.all_actions)
+                             if row.source_item_uuid == lever.item.item_uuid and row.valid_targets)
+        return ActionSelection(index, (action.valid_targets[0].index,))
+
+    state = random.getstate()
+    random.seed(0)
+    try:
+        result = run(encounter_id="encounter.residue_workshop", player_input=choose,
+                     stop_after_commands=2, frame_deltas=(0.1,), max_frames=400, collect_frames=True)
+    finally:
+        random.setstate(state)
+    assert result.player_commands == 2 and result.latest == result.historical
+    assert result.historical.round_number == 2
+    assert not result.presentation_gaps
+    assert any(isinstance(lineage.root.fact, ActionFact) for lineage in result.lineages)
+    assert len(result.latest.actors) == 5
+    assert any(obj.item.is_engaged for obj in result.latest.objects.values())
+    assert any(frame.root_uuid is not None for frame in result.frames)

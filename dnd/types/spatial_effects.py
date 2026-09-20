@@ -57,6 +57,7 @@ class SpatialEffectChangeOperation(str, Enum):
     CREATED = "created"
     FOOTPRINT_CHANGED = "footprint_changed"
     REVEALED = "revealed"
+    STATE_CHANGED = "state_changed"
     REMOVED = "removed"
     TRANSFORMED = "transformed"
 

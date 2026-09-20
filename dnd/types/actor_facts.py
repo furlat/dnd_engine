@@ -10,6 +10,7 @@ from dnd.core.item_types import ItemPresentationState
 from dnd.core.life_types import LifeState
 from dnd.core.events import WorldTileState
 from dnd.types.actor import ConditionState, EntityStatsState
+from dnd.types.world import OccupancyLayer
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,6 +27,7 @@ class ConditionFact:
     state: ConditionState | None = None
     resulting_stats: EntityStatsState | None = None
     resulting_tile: WorldTileState | None = None
+    resulting_item: ItemPresentationState | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,3 +53,4 @@ class ActorState:
     creature_type: str | None = None
     healing_blocked: bool = False
     damage_affinities: tuple[tuple[str, str], ...] = ()
+    occupancy_layer: OccupancyLayer | None = None

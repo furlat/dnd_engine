@@ -74,8 +74,9 @@ from dnd.core.saving_throw_types import SavingThrowEffectTag
 from dnd.core.base_block import BaseBlock, LightLevel
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity
+from dnd.types.world import OccupancyLayer
 from dnd.conditions import Concentrating, ConcentrationActionMarker, Prone
-from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator, entity_action_economy_cost_applier
+from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator, entity_action_economy_cost_applier, resolve_paid_entry_retreats
 from dnd.spells.content_metadata import srd_action_identity
 from dnd.spatial.area_conditions import AreaCondition, SpatialCondition
 from dnd.spatial.environmental_conditions import (
@@ -618,6 +619,13 @@ class MistyStep(SpellAction):
     spell_level: int = Field(default=2, description="Spell slot level required to cast misty step; cantrips use 0.")
     spell_school: str = Field(default="conjuration", description="D&D school of magic used to classify misty step.")
     target_type: TargetType = Field(default=TargetType.POSITION, description="Targeting mode used by action discovery and validation for misty step.")
+    position_discovery: Optional[PositionDiscoveryContract] = Field(
+        default_factory=lambda: PositionDiscoveryContract(
+            requires_subjective_walkable=True,
+            requires_subjective_unoccupied=True,
+        ),
+        description="Visible landing prerequisites, independent of walking paths.",
+    )
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF), description="Range contract used when validating targets for misty step.")
 
     costs: List[Cost] = Field(default_factory=lambda: [
@@ -625,6 +633,10 @@ class MistyStep(SpellAction):
     ], description="Action economy costs paid to execute misty step.")
 
     teleport_range: int = Field(default=30, description="Maximum teleport distance in feet for misty step.")
+
+    def get_range(self) -> Range:
+        """Expose destination reach while retaining the spell's self origin."""
+        return Range(type=RangeType.RANGE, normal=self.teleport_range)
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate destination is visible and within range."""
@@ -675,13 +687,18 @@ class MistyStep(SpellAction):
             status_message=f"{caster.name} teleports from {start_pos} to {target_pos}"
         )
 
-        Entity.update_entity_position(caster, target_pos)
+        entry_cursor = EventQueue.event_cursor()
+        Entity.update_entity_position(
+            caster, target_pos, parent_event=effect_event.uuid,
+            occupancy_layer=OccupancyLayer.GROUND,
+        )
+        resolve_paid_entry_retreats(caster, since_cursor=entry_cursor, parent_event=effect_event)
 
         distance = abs(target_pos[0] - start_pos[0]) * 5 + abs(target_pos[1] - start_pos[1]) * 5
 
         return effect_event.with_updates(
             start_position=start_pos,
-            end_position=target_pos,
+            end_position=caster.position,
             distance_feet=distance,
             status_message=f"{caster.name} teleports {distance}ft via Misty Step"
         )

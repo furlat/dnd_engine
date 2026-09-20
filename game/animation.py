@@ -15,7 +15,7 @@ from dnd.core.life_types import LifeState
 from game.animation_types import (
     AnimationData, AuthoredProjectileAsset, AuthoredProjectilePhase, BodyClip, BodyRig,
     DamageDeath, EquipmentTransitionContext, Facing8, FloatingNumber, HitFlash,
-    StudioActorLayer, StudioDamage, StudioProjectilePhase, StudioSpellDraft,
+    StudioActorLayer, StudioDamage, StudioProjectile, StudioProjectilePhase, StudioSpellDraft,
 )
 from game.projection import HEIGHT_STEP_PIXELS, TILE_HEIGHT, TILE_WIDTH, inverse_rotate_position, project_world
 
@@ -57,10 +57,19 @@ class CastApplication:
 
 
 @dataclass(frozen=True, slots=True)
+class GroundContact:
+    """An observed area destination; it has no actor identity or body rig."""
+
+    grid: tuple[float, float]
+    elevation_steps: float = 0.0
+
+
+@dataclass(frozen=True, slots=True)
 class CastInput:
     root_event_uuid: str
     caster: ActorContact
     applications: tuple[CastApplication, ...]
+    ground_target: GroundContact | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,6 +108,18 @@ class ApplicationTimeline:
 
 
 @dataclass(frozen=True, slots=True)
+class GroundDeliveryTimeline:
+    target: GroundContact
+    facing: Facing8
+    from_point: tuple[float, float]
+    to_point: tuple[float, float]
+    travel_start_ms: float
+    travel_end_ms: float
+    curvature: float
+    projectile_intervals: tuple[ProjectileInterval, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class CastTimeline:
     source: CastInput
     recipe: StudioSpellDraft
@@ -110,6 +131,20 @@ class CastTimeline:
     recovery_start_ms: float
     complete_ms: float
     anchors: tuple[Anchor, ...]
+    ground_delivery: GroundDeliveryTimeline | None = None
+
+
+def cast_deliveries(timeline: CastTimeline) -> tuple[ApplicationTimeline | GroundDeliveryTimeline, ...]:
+    """One ground delivery or the independently targeted projectile deliveries."""
+    return (timeline.ground_delivery,) if timeline.ground_delivery is not None else timeline.applications
+
+
+def delivery_identity(delivery: ApplicationTimeline | GroundDeliveryTimeline) -> str | None:
+    return delivery.source.application_id if isinstance(delivery, ApplicationTimeline) else None
+
+
+def delivery_target(delivery: ApplicationTimeline | GroundDeliveryTimeline) -> ActorContact | GroundContact:
+    return delivery.source.target if isinstance(delivery, ApplicationTimeline) else delivery.target
 
 
 @dataclass(frozen=True, slots=True)
@@ -160,6 +195,7 @@ class ProjectileSample:
     point: tuple[float, float]
     rotation_radians: float
     progress: float
+    source_frame: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -308,11 +344,12 @@ def view_facing(facing: Facing8, quadrant: int, data: AnimationData) -> Facing8:
     return order[(order.index(facing) + 2 * quadrant) % len(order)]
 
 
-def _anchored_points(caster: ActorContact, target_contact: ActorContact, recipe: StudioSpellDraft,
+def _anchored_points(caster: ActorContact, target_contact: ActorContact | GroundContact, recipe: StudioSpellDraft,
                      data: AnimationData, facing: Facing8,
                      origin: tuple[float, float], target: tuple[float, float],
                      *, local_scales: tuple[float, float] = (1, 1),
                      anchor_basis: Literal["rig_root", "tile_center"] = "rig_root",
+                     source_frame: int | None = None,
                      ) -> tuple[tuple[float, float], tuple[float, float]]:
     """Bind screen-local authored offsets after projecting support contacts."""
     projectile = recipe.projectile
@@ -327,10 +364,27 @@ def _anchored_points(caster: ActorContact, target_contact: ActorContact, recipe:
     # honors its tileCenter data instead; sprites retain canvas registration.
     if anchor_basis == "rig_root":
         y += body_rig(data, caster).origin_y_from_ground * caster.visual_scale
-        ty += body_rig(data, target_contact).origin_y_from_ground * target_contact.visual_scale
+        if isinstance(target_contact, ActorContact):
+            ty += body_rig(data, target_contact).origin_y_from_ground * target_contact.visual_scale
     x += (ux * anchor.forwardPx - uy * anchor.sidePx) * local_scales[0]
     y += (uy * anchor.forwardPx + ux * anchor.sidePx + anchor.liftY) * local_scales[0]
-    ty += projectile.targetAnchor.liftY * local_scales[1]
+    if isinstance(target_contact, ActorContact):
+        ty += projectile.targetAnchor.liftY * local_scales[1]
+        if projectile.targetAnchor.basis == "body":
+            rig = body_rig(data, target_contact)
+            socket = rig.body_anchor
+            if socket is None:
+                raise ValueError(f"actor rig has no authored body attachment: {target_contact.rig_id}")
+            tx = target[0] + (socket.x - rig.cell_width / 2) * target_contact.visual_scale * target_contact.visual_scale_x
+            ty = target[1] + (socket.y - rig.cell_height + rig.origin_y_from_ground) * target_contact.visual_scale
+    if projectile.sourceSockets is not None:
+        socket = projectile.sourceSockets.release[facing]
+        frames = projectile.sourceSockets.preparation
+        if source_frame is not None and frames is not None:
+            socket = frames[facing][source_frame] or socket
+        rig = body_rig(data, caster)
+        x = origin[0] + (socket.x - rig.cell_width / 2) * caster.visual_scale * caster.visual_scale_x
+        y = origin[1] + (socket.y - rig.cell_height + rig.origin_y_from_ground) * caster.visual_scale
     return (x, y), (tx, ty)
 
 
@@ -390,17 +444,17 @@ def _projectile_rotation(timeline: CastTimeline, phase: Literal["prepare", "trav
     return (angle - atan2(vy, vx) + pi) % (2 * pi) - pi + offset
 
 
-def _application(timeline: CastTimeline, identity: str | None) -> ApplicationTimeline:
-    for application in timeline.applications:
-        if application.source.application_id == identity:
+def _application(timeline: CastTimeline, identity: str | None) -> ApplicationTimeline | GroundDeliveryTimeline:
+    for application in cast_deliveries(timeline):
+        if delivery_identity(application) == identity:
             return application
     raise ValueError("projectile sample belongs to a different cast application")
 
 
-def _projectile_arc(application: CastApplication, phase: str, progress: float) -> tuple[float, float]:
+def _projectile_arc(application: ApplicationTimeline | GroundDeliveryTimeline, phase: str, progress: float) -> tuple[float, float]:
     """World-height lift and its progress derivative, including arrival tangent."""
     progress = progress if phase == "travel" else (0 if phase == "prepare" else 1)
-    apex = application.travel_apex_steps
+    apex = application.source.travel_apex_steps if isinstance(application, ApplicationTimeline) else 0.0
     return 4 * progress * (1 - progress) * apex, 4 * (1 - 2 * progress) * apex
 
 
@@ -408,11 +462,11 @@ def projectile_contact(timeline: CastTimeline, effect: ProjectileSample | Geomet
                        *, quadrant: int = 0) -> tuple[tuple[float, float], float]:
     """Frozen support with the authored curve represented in ground depth."""
     application = _application(timeline, effect.application_id)
-    source, target = timeline.source.caster, application.source.target
+    source, target = timeline.source.caster, delivery_target(application)
     progress = effect.progress if effect.phase == "travel" else (0 if effect.phase == "prepare" else 1)
-    lift, _ = _projectile_arc(application.source, effect.phase, effect.progress)
+    lift, _ = _projectile_arc(application, effect.phase, effect.progress)
     source_height = body_elevation_steps(source, timeline.data)
-    target_height = body_elevation_steps(target, timeline.data)
+    target_height = body_elevation_steps(target, timeline.data) if isinstance(target, ActorContact) else target.elevation_steps
     height = source_height + (target_height - source_height) * progress + lift
     if isinstance(effect, GeometryProjectileSample):
         projected = project_geometry_projectile(timeline, effect, quadrant)
@@ -422,7 +476,7 @@ def projectile_contact(timeline: CastTimeline, effect: ProjectileSample | Geomet
         facing = view_facing(application.facing, quadrant, timeline.data)
         anchor = (projectile.sourceAnchorsByFacing or {}).get(facing, projectile.sourceAnchor)
         attachment_lift = (anchor.liftY * source.visual_scale * (1 - progress)
-                           + projectile.targetAnchor.liftY * target.visual_scale * progress)
+                           + projectile.targetAnchor.liftY * (target.visual_scale if isinstance(target, ActorContact) else 0) * progress)
         # Vertical attachment offsets are height, like support and the arc.
         # Leaving them in the ground inversion sorted a dart behind its floor.
         height -= attachment_lift * factor / HEIGHT_STEP_PIXELS
@@ -431,7 +485,7 @@ def projectile_contact(timeline: CastTimeline, effect: ProjectileSample | Geomet
               source.grid[1] + (target.grid[1] - source.grid[1]) * progress)
     if application.curvature:
         asset = timeline.data.projectile_assets[effect.asset_id]
-        center = projectile_center_offset(timeline.recipe, asset)
+        center = projectile_center_offset(timeline.recipe, asset, effect.phase)
         _, first, last = _projected_endpoints(timeline, application, quadrant, center)
         point = projectile_curve_point(first, last, progress, application.curvature)
         straight = projectile_curve_point(first, last, progress, 0)
@@ -452,39 +506,50 @@ def reference_point_contact(data: AnimationData, point: tuple[float, float],
                                     y / TILE_HEIGHT - x / TILE_WIDTH), quadrant)
 
 
-def projectile_center_offset(recipe: StudioSpellDraft, asset: AuthoredProjectileAsset) -> tuple[float, float]:
+def projectile_phase_scale(projectile: StudioProjectile, phase: Literal["prepare", "travel", "impact"]) -> float:
+    binding = {"prepare": projectile.prepare, "travel": projectile.travel, "impact": projectile.impact}[phase]
+    return binding.scale if binding.scale is not None else projectile.scale
+
+
+def projectile_center_offset(recipe: StudioSpellDraft, asset: AuthoredProjectileAsset,
+                             phase: Literal["prepare", "travel", "impact"]) -> tuple[float, float]:
     """Original SpriteProjectileFx canvas-center registration, before camera zoom."""
     projectile = recipe.projectile
     assert projectile is not None and projectile.sprite is not None
     visual = projectile.sprite
     anchor = visual.anchor or asset.anchor
-    return (visual.offsetX + (0.5 - anchor.x) * asset.frame.width * projectile.scale,
-            visual.offsetY + (0.5 - anchor.y) * asset.frame.height * projectile.scale)
+    scale = projectile_phase_scale(projectile, phase)
+    return (visual.offsetX + (0.5 - anchor.x) * asset.frame.width * scale,
+            visual.offsetY + (0.5 - anchor.y) * asset.frame.height * scale)
 
 
-def _projected_endpoints(timeline: CastTimeline, application: ApplicationTimeline, quadrant: int,
+def _projected_endpoints(timeline: CastTimeline, application: ApplicationTimeline | GroundDeliveryTimeline, quadrant: int,
                          center: tuple[float, float] = (0, 0),
+                         source_frame: int | None = None,
                          ) -> tuple[Facing8, tuple[float, float], tuple[float, float]]:
-    caster, target, data = timeline.source.caster, application.source.target, timeline.data
+    caster, target, data = timeline.source.caster, delivery_target(application), timeline.data
     facing = view_facing(application.facing, quadrant, data)
     scale = data.rig.TILE_W / TILE_WIDTH
     x, y = project_world(caster.grid, elevation_steps=body_elevation_steps(caster, data), quadrant=quadrant)
-    tx, ty = project_world(target.grid, elevation_steps=body_elevation_steps(target, data), quadrant=quadrant)
+    target_height = body_elevation_steps(target, data) if isinstance(target, ActorContact) else target.elevation_steps
+    target_scale = target.visual_scale if isinstance(target, ActorContact) else 1.0
+    tx, ty = project_world(target.grid, elevation_steps=target_height, quadrant=quadrant)
     projectile = timeline.recipe.projectile
     assert projectile is not None
     first, last = _anchored_points(
         caster, target, timeline.recipe, data, facing, (x * scale, y * scale), (tx * scale, ty * scale),
-        local_scales=(caster.visual_scale, target.visual_scale),
+        local_scales=(caster.visual_scale, target_scale),
         # Generated geometry has no sprite canvas whose registration cancels
         # root padding. Applying the source's forced root put darts at feet.
         anchor_basis="tile_center" if projectile.geometry.enabled else "rig_root",
+        source_frame=source_frame,
     )
     cx, cy = center
     first, last = projectile_endpoints(
         (first[0] + cx * caster.visual_scale, first[1] + cy * caster.visual_scale),
-        (last[0] + cx * target.visual_scale, last[1] + cy * target.visual_scale),
-        projectile.sourceAnchor.axisPx * caster.visual_scale,
-        projectile.targetAnchor.forwardPx * target.visual_scale,
+        (last[0] + cx * target_scale, last[1] + cy * target_scale),
+        projectile.sourceAnchor.axisPx * caster.visual_scale if projectile.sourceSockets is None else 0,
+        projectile.targetAnchor.forwardPx * target_scale if isinstance(target, ActorContact) and projectile.targetAnchor.basis != "body" else 0,
     )
     return facing, first, last
 
@@ -496,10 +561,10 @@ def project_projectile(timeline: CastTimeline, effect: ProjectileSample, quadran
         raise ValueError("projectile phase progress must be finite and between zero and one")
     data = timeline.data
     asset = data.projectile_assets[effect.asset_id]
-    cx, cy = projectile_center_offset(timeline.recipe, asset)
-    facing, first, last = _projected_endpoints(timeline, application, quadrant, (cx, cy))
+    cx, cy = projectile_center_offset(timeline.recipe, asset, effect.phase)
+    facing, first, last = _projected_endpoints(timeline, application, quadrant, (cx, cy), effect.source_frame)
     point = _projectile_point(effect.phase, effect.progress, first, last, application.curvature)
-    lift, tangent = _projectile_arc(application.source, effect.phase, effect.progress)
+    lift, tangent = _projectile_arc(application, effect.phase, effect.progress)
     height_pixels = HEIGHT_STEP_PIXELS * data.rig.TILE_W / TILE_WIDTH
     return replace(effect, point=(point[0] - cx, point[1] - cy - lift * height_pixels),
                    row=asset.rowOrder.index(facing),
@@ -531,7 +596,7 @@ def projectile_curve_tangent(first: tuple[float, float], last: tuple[float, floa
 _GEOMETRY_TRAIL_STEP_MS = 1000 / 60
 
 
-def _trail_progresses(application: ApplicationTimeline, progress: float, limit: int) -> tuple[float, ...]:
+def _trail_progresses(application: ApplicationTimeline | GroundDeliveryTimeline, progress: float, limit: int) -> tuple[float, ...]:
     duration = application.travel_end_ms - application.travel_start_ms
     elapsed = progress * duration
     last_frame = floor(elapsed / _GEOMETRY_TRAIL_STEP_MS + 1e-10)
@@ -553,7 +618,7 @@ def project_geometry_projectile(timeline: CastTimeline, effect: GeometryProjecti
 
     def point_at(progress: float) -> tuple[float, float]:
         x, y = projectile_curve_point(first, last, progress, application.curvature)
-        lift, _ = _projectile_arc(application.source, "travel", progress)
+        lift, _ = _projectile_arc(application, "travel", progress)
         return x, y - lift * height_pixels
 
     trail = tuple(point_at(progress) for progress in _trail_progresses(
@@ -571,7 +636,7 @@ def _phase(data: AnimationData, recipe: StudioSpellDraft, binding: StudioProject
     if asset_id not in data.projectile_assets:
         raise ValueError(f"{name}: unknown projectile assetId {asset_id}")
     asset = data.projectile_assets[asset_id]
-    if asset.sheet not in data.resources:
+    if asset.sheet not in data.resources and asset_id not in data.projectile_storage:
         raise ValueError(f"{name}: missing local projectile media {asset.sheet}")
     phases = {"prepare": asset.phases.cast, "travel": asset.phases.travel, "impact": asset.phases.impact}
     phase = phases[name]
@@ -679,7 +744,7 @@ def compile_cast(data: AnimationData, spell_id: str, source: CastInput) -> CastT
         raise ValueError(f"unknown authored spell binding: {spell_id}")
     recipe = data.drafts[spell_id]
     cast, projectile = recipe.cast, recipe.projectile
-    if not source.applications:
+    if not source.applications and source.ground_target is None:
         raise ValueError("projectile cast requires an application")
     identities = [application.application_id for application in source.applications]
     if len(set(identities)) != len(identities):
@@ -695,8 +760,10 @@ def compile_cast(data: AnimationData, spell_id: str, source: CastInput) -> CastT
         raise ValueError("cast requires the complete original TS-materialized defaults")
     if len({layer.slot for layer in cast.effects}) != len(cast.effects):
         raise ValueError("duplicate cast effect slots require original last-write clearing semantics")
-    if recipe.area is not None or projectile is None:
-        raise ValueError("selected executor requires projectile delivery without an area")
+    if projectile is None:
+        raise ValueError("selected executor requires projectile delivery")
+    if recipe.area is not None and source.ground_target is None:
+        raise ValueError("area delivery requires its observed ground destination")
     if projectile.geometry.enabled:
         if projectile.geometry.primitive != "dart" or projectile.sprite is not None:
             raise ValueError("geometry projectile support is the authored standalone dart")
@@ -732,7 +799,7 @@ def compile_cast(data: AnimationData, spell_id: str, source: CastInput) -> CastT
             continue
         if layer.category not in caster_rig.slot_categories.get(layer.slot, ()):
             raise ValueError(f"actor rig lacks cast layer capability: {layer.slot}/{layer.category}")
-        if casting_clip.sheets.get(layer.category) not in data.resources:
+        if (layer.sourceSheet or casting_clip.sheets.get(layer.category)) not in data.resources:
             raise ValueError(f"missing enabled cast layer resource: {layer.category}/{cast.actionClip}")
     body_end = body_duration(casting_clip, cast.bodyPlaybackSpeed)
     release = cast.releaseFrame * 1000 / (casting_clip.fps * cast.bodyPlaybackSpeed)
@@ -746,10 +813,30 @@ def compile_cast(data: AnimationData, spell_id: str, source: CastInput) -> CastT
         _require_frame(casting_clip, prepare_frame, "prepare")
         start = prepare_frame * 1000 / (casting_clip.fps * cast.bodyPlaybackSpeed)
         cap = max(1, (cast.releaseFrame - prepare_frame) * 1000 / casting_clip.fps)
-        duration = min(projectile.prepare.durationMs or cap, cap)
+        duration = (projectile.prepare.durationMs or cap) if projectile.prepare.overlapRelease else min(projectile.prepare.durationMs or cap, cap)
         prepare = _phase(data, recipe, projectile.prepare, "prepare", start, duration)
         anchors.append(Anchor("prepare", start))
-        launch = max(release, prepare.end_ms)
+        launch = release if projectile.prepare.overlapRelease else max(release, prepare.end_ms)
+    ground_delivery = None
+    if source.ground_target is not None:
+        target = source.ground_target
+        facing = facing_for_delta((target.grid[0] - source.caster.grid[0], target.grid[1] - source.caster.grid[1]), data)
+        first, last = _anchored_points(source.caster, target, recipe, data, facing,
+                                      _iso(source.caster.grid, data), _iso(target.grid, data))
+        first, last = projectile_endpoints(first, last,
+            projectile.sourceAnchor.axisPx if projectile.sourceSockets is None else 0, 0)
+        height = (target.elevation_steps - body_elevation_steps(source.caster, data)) * HEIGHT_STEP_PIXELS / TILE_WIDTH * data.rig.TILE_W
+        duration = max(projectile.minimumTravelDurationMs,
+                       hypot(last[0] - first[0], last[1] - first[1], height) * 1000 / projectile.speedPxPerSecond)
+        arrival = launch + duration
+        intervals = [prepare] if prepare is not None else []
+        if projectile.sprite is not None:
+            intervals.append(_phase(data, recipe, projectile.travel, "travel", launch, duration))
+            if projectile.impact.enabled:
+                intervals.append(_phase(data, recipe, projectile.impact, "impact", arrival))
+        ground_delivery = GroundDeliveryTimeline(target, facing, first, last, launch, arrival,
+            projectile.trajectory.curvature if projectile.trajectory.type == "bezier" else 0,
+            tuple(intervals))
     counts: dict[str, int] = {}
     for application in source.applications:
         counts[application.target.actor_uuid] = counts.get(application.target.actor_uuid, 0) + 1
@@ -757,7 +844,7 @@ def compile_cast(data: AnimationData, spell_id: str, source: CastInput) -> CastT
     applications: list[ApplicationTimeline] = []
     for index, application in enumerate(source.applications):
         target = application.target
-        if source.caster.actor_uuid == target.actor_uuid:
+        if source.caster.actor_uuid == target.actor_uuid and ground_delivery is None:
             raise ValueError("self delivery is outside the selected projectile family")
         if not isfinite(application.travel_apex_steps) or application.travel_apex_steps < 0:
             raise ValueError("travel apex requires a finite nonnegative world height")
@@ -776,16 +863,21 @@ def compile_cast(data: AnimationData, spell_id: str, source: CastInput) -> CastT
         facing = facing_for_delta((target.grid[0] - source.caster.grid[0], target.grid[1] - source.caster.grid[1]), data)
         first, last = _anchored_points(source.caster, target, recipe, data, facing,
                                       _iso(source.caster.grid, data), _iso(target.grid, data))
-        if hypot(last[0] - first[0], last[1] - first[1]) < 1:
+        if hypot(last[0] - first[0], last[1] - first[1]) < 1 and ground_delivery is None:
             raise ValueError("coincident projectile endpoints require the separate source zero-travel case")
-        first, last = projectile_endpoints(first, last, projectile.sourceAnchor.axisPx, projectile.targetAnchor.forwardPx)
+        first, last = projectile_endpoints(first, last,
+            projectile.sourceAnchor.axisPx if projectile.sourceSockets is None else 0,
+            projectile.targetAnchor.forwardPx if projectile.targetAnchor.basis != "body" else 0)
         height = (body_elevation_steps(target, data) - body_elevation_steps(source.caster, data)) * HEIGHT_STEP_PIXELS / TILE_WIDTH * data.rig.TILE_W
         duration = max(projectile.minimumTravelDurationMs,
                        hypot(last[0] - first[0], last[1] - first[1], height) * 1000 / projectile.speedPxPerSecond)
         start = launch + index * projectile.missileStaggerMs
         arrival = start + duration
         intervals: list[ProjectileInterval] = [prepare] if prepare is not None and index == 0 else []
-        if projectile.sprite is not None:
+        if ground_delivery is not None:
+            start, arrival = ground_delivery.travel_start_ms, ground_delivery.travel_end_ms
+            intervals = []
+        elif projectile.sprite is not None:
             intervals.append(_phase(data, recipe, projectile.travel, "travel", start, duration))
             if projectile.impact.enabled:
                 intervals.append(_phase(data, recipe, projectile.impact, "impact", arrival))
@@ -822,7 +914,13 @@ def compile_cast(data: AnimationData, spell_id: str, source: CastInput) -> CastT
                 hp_ms=min(application.hp_ms, exit_ms) if application.hp_ms is not None else None,
                 flash_ms=min(application.flash_ms, exit_ms) if application.flash_ms is not None else None,
                 number_ms=min(application.number_ms, exit_ms) if application.number_ms is not None else None)
-    delivery_end = max(application.travel_end_ms for application in applications)
+    delivery_end = max((application.travel_end_ms for application in applications), default=release)
+    if ground_delivery is not None:
+        anchors.extend((Anchor("travel", ground_delivery.travel_start_ms), Anchor("impact", ground_delivery.travel_end_ms)))
+        delivery_end = max(delivery_end, ground_delivery.travel_end_ms,
+                           *(phase.end_ms for phase in ground_delivery.projectile_intervals))
+    if cast.holdReleaseForVolley and applications:
+        body_end += max(0, max(row.travel_start_ms for row in applications) - release)
     for application in applications:
         identity = application.source.application_id
         anchors.extend((Anchor("travel", application.travel_start_ms, identity),
@@ -839,8 +937,9 @@ def compile_cast(data: AnimationData, spell_id: str, source: CastInput) -> CastT
         complete += body_duration(body_clip(data, source.caster, cast.recovery.bodyClip), cast.recovery.bodyPlaybackSpeed)
         anchors.append(Anchor("recover", recovery_start))
     anchors.append(Anchor("complete", complete))
-    return CastTimeline(source, recipe, data, applications[0].facing, body_end, release, tuple(applications),
-                        recovery_start, complete, tuple(sorted(anchors, key=lambda anchor: anchor.at_ms)))
+    return CastTimeline(source, recipe, data, ground_delivery.facing if ground_delivery else applications[0].facing,
+                        body_end, release, tuple(applications), recovery_start, complete,
+                        tuple(sorted(anchors, key=lambda anchor: anchor.at_ms)), ground_delivery)
 
 
 def crossed_anchors(timeline: CastTimeline, previous_ms: float, current_ms: float) -> tuple[Anchor, ...]:
@@ -870,8 +969,12 @@ def sample_cast(timeline: CastTimeline, elapsed_ms: float) -> CastSample:
     elif cast.recovery.enabled and t >= timeline.complete_ms:
         caster_start = timeline.complete_ms
     caster_metadata = body_clip(data, source.caster, caster_clip)
+    body_time = t - caster_start
+    if casting and cast.holdReleaseForVolley:
+        final_launch = max((row.travel_start_ms for row in timeline.applications), default=timeline.release_ms)
+        body_time -= min(max(0, t - timeline.release_ms), max(0, final_launch - timeline.release_ms))
     caster = BodySample(source.caster.actor_uuid, caster_clip,
-                        body_frame(t - caster_start, caster_metadata.fps * caster_speed,
+                        body_frame(body_time, caster_metadata.fps * caster_speed,
                                caster_metadata.frames, loop=caster_clip == "Idle"),
                         timeline.facing, casting and cast.equipment.kind == "hidden", cast_layers)
     bodies = [caster]
@@ -890,12 +993,19 @@ def sample_cast(timeline: CastTimeline, elapsed_ms: float) -> CastSample:
         if death is not None:
             life = LifeState.DEAD
         reaction = started[-1] if started else None
-        bodies.append(sample_damage_body(
+        reaction_body = sample_damage_body(
             data, target_contact, t,
             start_ms=reaction.damage_start_ms if reaction is not None else None,
             end_ms=reaction.damage_end_ms if reaction is not None else None,
             death_start_ms=death.damage_start_ms if death is not None else None,
-        ))
+        )
+        if actor_id != source.caster.actor_uuid:
+            bodies.append(reaction_body)
+        elif death is not None or (reaction is not None and reaction.damage_end_ms is not None
+                                  and t < reaction.damage_end_ms):
+            # An area may hit its own caster. One actor owns one body track;
+            # the actual reaction interrupts the cast while effects continue.
+            bodies[0] = reaction_body
         flashes = [application for application in applications
                    if application.damage is not None and application.damage.hitFlash.enabled
                    and application.flash_ms is not None and application.flash_ms <= t]
@@ -910,8 +1020,8 @@ def sample_cast(timeline: CastTimeline, elapsed_ms: float) -> CastSample:
     assert projectile is not None
     samples: list[ProjectileSample | GeometryProjectileSample] = []
     numbers: list[NumberSample] = []
-    for application in timeline.applications:
-        identity = application.source.application_id
+    for application in cast_deliveries(timeline):
+        identity = delivery_identity(application)
         if projectile.geometry.enabled and application.travel_start_ms <= t < application.travel_end_ms:
             progress = (t - application.travel_start_ms) / (application.travel_end_ms - application.travel_start_ms)
             trail = tuple(projectile_curve_point(application.from_point, application.to_point, at, application.curvature)
@@ -929,7 +1039,10 @@ def sample_cast(timeline: CastTimeline, elapsed_ms: float) -> CastSample:
                                            column, interval.asset.rowOrder.index(application.facing), point,
                                            _projectile_rotation(timeline, interval.name, application.facing,
                                                                 application.from_point, application.to_point,
-                                                                curvature=application.curvature), progress))
+                                                                curvature=application.curvature), progress,
+                                           caster.frame if interval.name == "prepare" else None))
+    for application in timeline.applications:
+        identity = application.source.application_id
         damage = application.damage
         if damage is not None:
             number = sample_damage_number(data, application.source.target.actor_uuid, damage,

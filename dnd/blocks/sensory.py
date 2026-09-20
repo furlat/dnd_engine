@@ -11,7 +11,7 @@ import time
 
 from dnd.action_timing import action_timing_enabled, record_action_timing
 from dnd.core.base_block import BaseBlock
-from dnd.core.base_conditions import ConditionApplicationEvent, ConditionRemovalEvent
+from dnd.core.base_conditions import BaseCondition, ConditionApplicationEvent, ConditionRemovalEvent
 from dnd.core.gridmap import get_map
 from dnd.core.values import ModifiableValue
 from dnd.core.events import (
@@ -20,7 +20,7 @@ from dnd.core.events import (
     SensoryUpdateReason,
 )
 from dnd.types.senses import (
-    OpticalObscurement, PerceivedContact, SenseMode, SensesType,
+    OpticalObscurement, PerceivedContact, PerceivedSpatialEffect, SenseMode, SensesType,
     SensesSnapshot as SensesSnapshot,
     reduce_senses_snapshot as reduce_senses_snapshot,
 )
@@ -63,6 +63,9 @@ class Senses(BaseBlock):
     )
     hazardous_cells: Dict[Tuple[int, int], bool] = Field(
         default_factory=dict, description="Native resolved hazard values for currently visible cells.",
+    )
+    spatial_effects: Dict[UUID, PerceivedSpatialEffect] = Field(
+        default_factory=dict, description="Discovered fixture cells and their last observed state.",
     )
     walkable: Dict[Tuple[int, int], bool] = Field(default_factory=dict, description="Walkability for cells in geometric FOV.")
     paths: DefaultDict[Tuple[int, int], List[Tuple[int, int]]] = Field(
@@ -305,6 +308,7 @@ class Senses(BaseBlock):
         )
         self._paths_dirty = reduced.paths_dirty
         self.hazardous_cells = dict(reduced.hazardous_cells)
+        self.spatial_effects = dict(reduced.spatial_effects)
 
     def get_threathened_positions(self) -> List[Tuple[int, int]]:
         """Return neighboring positions threatened by this observer.
@@ -380,6 +384,7 @@ def capture_senses_snapshot(senses: Senses) -> SensesSnapshot:
         objects=dict(senses.objects),
         effective_light_levels=dict(senses.effective_light_levels),
         hazardous_cells=dict(senses.hazardous_cells),
+        spatial_effects=dict(senses.spatial_effects),
         paths_dirty=senses._paths_dirty,
         passive_perception=senses._last_passive_perception,
         sense_modes_hash=senses._last_sense_modes_hash,
@@ -443,6 +448,11 @@ def emit_sensory_update_delta(
         for position, hazardous in sorted(after.hazardous_cells.items())
         if initial or before.hazardous_cells.get(position) != hazardous
     }
+    effects_changed = {
+        identity: value for identity, value in after.spatial_effects.items()
+        if initial or before.spatial_effects.get(identity) != value
+    }
+    effects_removed = set() if initial else before.spatial_effects.keys() - after.spatial_effects.keys()
 
     passive_changed = initial or before.passive_perception != after.passive_perception
     sense_modes_changed = initial or before.sense_modes_hash != after.sense_modes_hash
@@ -473,6 +483,8 @@ def emit_sensory_update_delta(
         position_changed,
         light_changed,
         hazards_changed,
+        effects_changed,
+        effects_removed,
     ))
     if not has_delta:
         if timing:
@@ -492,6 +504,8 @@ def emit_sensory_update_delta(
         observer_position_changed=position_changed,
         effective_light_levels_changed=light_changed,
         hazardous_cells_changed=hazards_changed,
+        spatial_effects_changed=effects_changed,
+        spatial_effects_removed=effects_removed,
         cause_event_uuid=cause_event.uuid if cause_event is not None else None,
         update_reason=reason,
         parent_event=cause_event.uuid if cause_event is not None else None,
@@ -846,6 +860,34 @@ class SpatialSensesSystem:
             return
         grid = get_map()
         has_hazards = grid.has_any_hazards()
+        candidates: Dict[UUID, Tuple[BaseCondition, Set[Tuple[int, int]]]] = {}
+        for position in positions:
+            for condition in grid.get_spatial_conditions_at(position):
+                if condition.uuid not in candidates:
+                    candidates[condition.uuid] = (condition, set())
+                candidates[condition.uuid][1].add(position)
+        observations: Dict[UUID, PerceivedSpatialEffect] = {}
+        for condition, observed_positions in candidates.values():
+            observation = condition.get_spatial_observation(
+                observed_positions, observer_uuid=observer_uuid,
+                discovered=condition.uuid in senses.spatial_effects,
+            )
+            if observation is not None:
+                observations[condition.uuid] = observation
+        for identity, previous in tuple(senses.spatial_effects.items()):
+            # Inspect only newly seen/changed visible cells. Hidden parts retain
+            # their last observation, even when the objective owner was removed.
+            retained = set(previous.positions) - positions
+            observed = observations.pop(identity, None)
+            if observed is not None:
+                retained.update(observed.positions)
+            if retained:
+                senses.spatial_effects[identity] = (observed or previous).model_copy(
+                    update={"positions": tuple(sorted(retained))},
+                )
+            else:
+                senses.spatial_effects.pop(identity)
+        senses.spatial_effects.update(observations)
         for x, y in positions:
             senses.hazardous_cells[(x, y)] = (
                 grid.is_position_hazardous_for(x, y, observer_uuid) if has_hazards else False
@@ -1105,6 +1147,7 @@ class SpatialSensesSystem:
                 before.objects != after.objects,
                 before.passive_perception != after.passive_perception,
                 before.hazardous_cells != after.hazardous_cells,
+                before.spatial_effects != after.spatial_effects,
             ))
             visible_topology_changed = False
             if isinstance(event, SpatialChangeEvent):

@@ -291,5 +291,41 @@
       "multi_target": null,
       "recommended_asset_tags": []
     }
+  },
+  {
+    "name": "Misty Step",
+    "school": "conjuration",
+    "level": 2,
+    "source": "wotc.srd_5_1_cc",
+    "contentRef": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.misty_step",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "metadata": {
+      "catalog_id": "misty_step",
+      "description": "Bonus action teleport up to 30ft to a visible space",
+      "target_type": "position",
+      "range_type": "self",
+      "range_ft": 0,
+      "delivery": "self",
+      "projectile_type": null,
+      "aoe": null,
+      "damage_types": [],
+      "healing": false,
+      "attack_roll": false,
+      "saving_throws": [],
+      "concentration": false,
+      "ritual": false,
+      "verbal": true,
+      "somatic": null,
+      "material": null,
+      "classes": [],
+      "subclasses": [],
+      "multi_target": null,
+      "recommended_asset_tags": []
+    }
   }
 ]

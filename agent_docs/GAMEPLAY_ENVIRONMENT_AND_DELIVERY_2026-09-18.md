@@ -156,9 +156,18 @@ merely to give every control the same class name.
    hidden target's identity or location.
 4. Resolve handle/chest appearances through passive state variants in the same
    prop binding. Keep the original action timeline and existing independent
-   presentation clock. A new control behavior can bind to the existing imported
-   immediate-interaction recipe. A neutral marker remains honest until actual second-pose
-   art is connected; gameplay is not blocked by missing pixel art.
+   presentation clock. **The user's subsequent review corrects the immediate
+   interaction assumption:** play a physical arm reach and commit the recorded
+   effect at its contact frame, as with attacks. One local recipe in the original
+   NeuroStudio ContentActionRecipe schema reuses the existing Attack5 clip;
+   explicit action aliases share it. Source-item placement supplies facing.
+   The outer lever owns the reach; its linked target action must not produce a
+   second remote reach. Timed received world/sensory/inventory values use the
+   existing reducer and compositor, with no delay in native event execution.
+   Preserve established spell/condition fade timing outside object interactions.
+   Use closed/open chest sprites and an explicitly authored mirrored lever
+   handle variant. Exact pixel hand contact for every prop height/reach remains
+   an alignment question; a clip contact anchor is not per-frame hand tracking.
 5. Exercise pull → light change → subjective contact loss/reacquisition, manual
    target change without moving the lever, then another lever operation. Add
    the door target with its occupied-close rule and a second independent control.
@@ -178,6 +187,96 @@ existing owners where behavior is missing and record committed consequences
 through the established event contracts. No circuit simulator, prop controller
 hierarchy or new interaction manager is needed for this unit. Anti-slop review
 is `environment_native_review`; anti-OOP review is `environment_timeline_review`.
+
+### Current contact acceptance boundary
+
+Input is each observer's serialized complete lineage and retained prior state.
+Before the authored contact frame, playback retains the previous object state;
+at contact, the received change and its received sight consequence appear.
+Retraction continues afterward. Seeking backward restores the earlier state,
+and latest reduction may already be ahead. Test original standing/wall lights,
+the new remote light/door control, chest lid/loot, and both subjective views.
+Capture four corners per view and replay the saved bytes in a fresh process.
+No synthetic interaction delay, second queue, native query during replay,
+per-item renderer logic, or new source/asset auditing is part of this work.
+
+### Completed controls and contact unit
+
+The authorized next unit is implemented on `codex/recovery-design`:
+
+- Native `ControlLever` holds independent `is_engaged` and a private typed link.
+  Its action composes the normal placed-light or directional-door action under
+  the existing causal root. Manual target changes leave the handle alone;
+  already-satisfied targets need no mutation; occupied-door refusal leaves the
+  handle unchanged. This does not redefine the finite-use trap lever.
+- `StorageChest.is_open` controls Open/Close/Loot All discovery and validation.
+  Opening leaves inventory untouched; Loot All uses the repaired transfer owner;
+  the empty chest still opens/closes. Existing transfer-only fixtures now
+  explicitly start open. Destruction/spill behavior is retained.
+- `battlefield.environment_controls` provides a bright workbench, dark light
+  area, a remote light behind a real opaque wall, a directional doorway, an
+  independent control and a potion chest. Five native programs plus a paused
+  chest variant add twelve paired-view clips to the twelve previous clips.
+- One local `object-interaction-recipe.json` uses the original
+  ContentActionRecipe structure with Attack5 and contact/effect frame 3.
+  Explicit aliases cover torch, lever, door and chest interactions. The original
+  imported disabled recipes remain intact as provenance. The public action
+  carries its source-item UUID only when granted through this observer's
+  recorded object perception; the binding faces that placement and hides held
+  gear for the gesture. A same-actor linked child does not reach again.
+- The compositor precomputes received world/sensory/inventory state at its
+  existing interaction anchors using the existing player reducer. Sampling
+  selects retained state, with no native execution or per-frame event fold.
+  Other condition/attack/equipment primitives retain their established timing,
+  including invisibility fading before contact loss. Exported review traces
+  now include compact prop states and controlled inventory identities.
+- The shared prop painter reads passive `is_open`/`is_engaged` variants. Eight
+  unchanged original chest PNGs supply two states in four directions. The
+  second lever SVG pose is newly authored by mirroring its handle, explicitly
+  distinguished from supplied art. New media totals **288,082 bytes**.
+
+**Validation:** the integrated gameplay selection passes **233 checks**, with
+the two already marked forced-movement stair-occlusion cases remaining expected
+failures. Native controls/loot and paired projection checks pass again after the
+authored actor-health adjustment (**16 checks**, overlapping the earlier lanes).
+The native implementation sweep passed **55** checks and exposed one unchanged
+catalog census assertion expecting 150 instead of the existing 151 direct item
+builders. That unrelated count assertion was left alone. Changed presentation,
+projection, scenario and gallery modules pass Pyright; the native review
+reproduced its five preexisting annotation diagnostics against HEAD, with no new
+diagnostic. Anti-slop and anti-OOP reviews found no blockers.
+
+The smallest regression first failed because the flame stayed lit at the contact
+frame. It now passes from both viewpoints: previous object/sight state before
+contact, received state at contact, then retraction. Additional saved-byte checks
+prove a single physical lever reach, door/chest changes at that reach, no hidden
+remote UUID in the operator payload, owner-only acquired inventory, and seeking
+without mutations. The paused chest has a closed historical lid for all 18 held
+frames while latest already has it open.
+
+**All 24 clips pass with no presentation gaps.** A fresh receiving process has
+no installed native content, no imported scenario producers and no native queue
+events before or after replay. All saved inputs and MP4 bytes match their captures
+exactly, using direct byte comparisons. Recorded trace fields also match; the
+first twelve capture traces predate the additional prop/inventory diagnostic
+fields. As in the prior checkpoint, only the initial process-local
+`sense_modes_hash` diagnostic is excluded from initial-state comparison; actual
+sense modes and gameplay values match. No hashing or audit system was added.
+
+- [Combined saved-input gallery](http://127.0.0.1:8767/runs/20260918T144144Z-c728cc/index.html)
+- Original interaction capture: `20260918T143702Z-8ca778`.
+- Final controls/chest capture: `20260918T144016Z-59f6a3`.
+- Saved input: `.runtime/animation-review/inputs/environment-*`.
+- Comparison record and inspected contact frames:
+  `.runtime/environment-study-20260918/`.
+
+**Remaining limits:** Attack5 supplies an authored semantic reach/contact frame,
+not a per-frame hand socket or automatic geometric reach solution for every
+prop height. Fixed creature rigs lacking Attack5 do not gain a fabricated
+gesture. Wall torches still reuse their two supplied views. The lever art is a
+symbolic handle and chest lids switch between supplied states; no vendor lid
+animation strip is claimed. Breakable containers, oil/fire surfaces, campfire
+actions and broader shared delivery remain subsequent planned work.
 Both have reviewed this next-unit design; its implementation remains ahead.
 
 The [asset study](ENVIRONMENT_ASSET_STUDY_2026-09-18.md) records exact archive

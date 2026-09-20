@@ -23,7 +23,7 @@ SOURCE_REVISION = "d274f2d62ca9c1c5ed62a77841cacf6cc0347491"
 DATA_ROOT = "game/data/neuroclient"
 ASSET_ROOT = "game/assets/neuroclient"
 SPELL_IDS = ("fire_bolt", "acid_splash", "magic_missile", "invisibility",
-             "greater_invisibility", "see_invisibility", "true_seeing")
+             "greater_invisibility", "see_invisibility", "true_seeing", "misty_step")
 FORCED_PROFILE_OWNER = "src/ui/actionStudio/studioSubjectiveActionFrame.ts"
 SOURCE_JSON = (
     "public/studio/spell-studio-drafts.json",
@@ -59,7 +59,7 @@ ENGINE_OWNERS = (
 )
 RIG_CATEGORIES = (
     "NakedBody", "Head22", "Head15", "Chest14", "Legs1", "Belt2",
-    "Shoes1", "Shadow", "Melee1", "Melee3",
+    "Shoes1", "Shadow", "Melee1", "Melee3", "Melee9",
     "Legs7", "Shoes2", "Chest7", "Belt1", "Shield5", "Melee2", "Head2", "Head10", "Head13",
     "Ranged1", "Ranged4",
 )
@@ -80,7 +80,7 @@ CAPTURE_OWNER = """
 import json
 from dnd.content_system.spell_catalog_composition import SPELL_CATALOG_COMPOSITION_ROWS
 selected = {'fire_bolt', 'acid_splash', 'magic_missile', 'invisibility',
-            'greater_invisibility', 'see_invisibility', 'true_seeing'}
+            'greater_invisibility', 'see_invisibility', 'true_seeing', 'misty_step'}
 print(json.dumps([
     {'name': row.display_name, 'school': row.school, 'level': row.level,
      'source': row.declaration.provenance.primary_source_id,
@@ -270,7 +270,9 @@ def candidate_outputs(app: Path, bun: Path) -> dict[str, bytes]:
         f"{DATA_ROOT}/catalog-input.json": json_bytes(catalog),
         f"{DATA_ROOT}/spell-studio-drafts.materialized.json": json_bytes(resolved["drafts"]),
         f"{DATA_ROOT}/rig-tables.json": json_bytes(resolved["rigs"]),
-        f"{DATA_ROOT}/bindings.json": json_bytes({"spells": refs, "root_rig": "neuroclient.modular", "resources": resources}),
+        f"{DATA_ROOT}/bindings.json": json_bytes({"spells": refs, "root_rig": "neuroclient.modular",
+                                               "root_body_anchor": {"x": 64, "y": 72},
+                                               "resources": resources, "relocations": ["spell.misty_step"]}),
         # Studio's forced-motion base values are cue literals, not context JSON.
         # Preserve that reviewed selection as data; the imported context owns
         # its duration/playback scales, ease, facing and optional recovery.

@@ -8,6 +8,7 @@ from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.content.items.environment_item_builders import (
+    build_control_lever,
     build_directional_door,
     build_directional_wall,
     build_fireball_cannon,
@@ -48,6 +49,7 @@ from dnd.types.materials import Material, TileSurface
 from dnd.items.consumables import build_healing_potion
 from dnd.items.environment import DirectionalDoor, DirectionalWall
 from dnd.items.environment_interactables import (
+    LeverLink,
     StorageChest,
 )
 from dnd.blocks.base_item import BaseItem
@@ -332,6 +334,12 @@ def _preview_for_battlefield(battlefield_id: str) -> BattlefieldPreview:
 
 
 BATTLEFIELDS: tuple[BattlefieldDefinition, ...] = (
+    BattlefieldDefinition(
+        battlefield_id="battlefield.environment_controls", title="Control Room and Store",
+        width=13, height=10, light_level="darkness",
+        tags=("environment", "controls", "container"),
+        capabilities=("remote-light", "remote-door", "independent-controls", "container-lid"),
+    ),
     BattlefieldDefinition(
         battlefield_id="battlefield.environment_workshop", title="Environment Workshop",
         width=12, height=11, light_level="darkness",
@@ -682,6 +690,49 @@ def _build_environment_workshop(definition: BattlefieldDefinition, grid: GridMap
         object_uuids=objects,
         spike_traps=((linked_trap_uuid, ((5, 1),)), (other_trap_uuid, ((7, 1),))),
     )
+
+
+def _build_environment_controls(definition: BattlefieldDefinition, grid: GridMap) -> BuiltBattlefield:
+    """A workbench and two light rooms with authored controls and one loot chest."""
+    grid.create_rectangle(0, 0, definition.width, definition.height, default_light=LightLevel.DARKNESS)
+    for x in range(8):
+        for y in range(3):
+            grid.set_tile_base_light((x, y), LightLevel.BRIGHT_LIGHT)
+    objects: dict[str, UUID] = {}
+    for key, position in (("light", (6, 5)), ("hidden_light", (10, 5)), ("second_light", (6, 1))):
+        light = build_standing_torch()
+        light.bright_radius_feet = light.dim_radius_feet = 5 if key == "second_light" else 20
+        light.place_on_grid(position)
+        grid.set_tile_base_light(position, LightLevel.DIM_LIGHT)
+        objects[key] = light.uuid
+    for position in ((3, 5), (3, 7), (6, 6), (10, 6)):
+        grid.set_tile_base_light(position, LightLevel.DIM_LIGHT)
+    for y in range(definition.height):
+        if y == 4:
+            door = build_directional_door(display_name="Store Door", is_open=False)
+            door.place_on_grid((8, y), boundary_direction=CardinalDirection.WEST)
+            objects["door"] = door.uuid
+        else:
+            wall = build_directional_wall(blocked_channels=STANDARD_BLOCKING_CHANNELS)
+            wall.place_on_grid((8, y), boundary_direction=CardinalDirection.WEST)
+    for key, target, position, engaged in (
+        ("light_control", "light", (3, 5), True),
+        ("hidden_light_control", "hidden_light", (3, 7), True),
+        ("door_control", "door", (3, 1), False),
+        ("second_control", "second_light", (5, 1), True),
+    ):
+        lever = build_control_lever(LeverLink(target_item_uuid=objects[target],
+            target_kind="door" if target == "door" else "light"),
+            is_engaged=engaged)
+        lever.place_on_grid(position)
+        objects[key] = lever.uuid
+    chest = build_storage_chest("Store Chest", include_loot_all_action=True, is_open=False)
+    chest.chest_inventory.source_entity_uuid = chest.uuid
+    chest.chest_inventory.add_item(build_healing_potion(chest.uuid, heal_amount=8))
+    chest.place_on_grid((3, 2))
+    objects["chest"] = chest.uuid
+    return BuiltBattlefield(definition=definition, environment=None,
+        notable_positions={"door": (8, 4), "chest": (3, 2)}, object_uuids=objects)
 
 
 def _build_visibility_open_range(definition: BattlefieldDefinition, grid: GridMap) -> BuiltBattlefield:
@@ -1045,6 +1096,7 @@ BattlefieldBuilder = Callable[
 ]
 
 _BUILDERS: dict[str, BattlefieldBuilder] = {
+    "battlefield.environment_controls": _build_environment_controls,
     "battlefield.environment_workshop": _build_environment_workshop,
     "battlefield.visibility_open_range": _build_visibility_open_range,
     "battlefield.visibility_two_doors_open": _build_visibility_two_doors,

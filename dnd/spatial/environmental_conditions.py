@@ -5,7 +5,7 @@ from uuid import UUID, uuid4
 
 from pydantic import Field
 
-from dnd.core.base_block import LightLevel
+from dnd.core.base_block import BaseBlock, LightLevel
 from dnd.core.base_conditions import BaseCondition, Duration
 from dnd.core.condition_types import (
     ConditionCategory,
@@ -33,9 +33,11 @@ from dnd.core.events import (
     SpatialEffectInteractionEvent,
     Trigger,
 )
+from dnd.core.gridmap import get_map
 from dnd.core.modifiers import ResistanceModifier, ResistanceStatus
 from dnd.core.values import ModifiableValue
-from dnd.conditions import Prone
+from dnd.conditions import Poisoned, Prone
+from dnd.core.saving_throw_types import SavingThrowContext, SavingThrowEffectTag
 from dnd.entity import Entity
 from dnd.spatial.area_conditions import AreaCondition, SpatialCondition
 from dnd.spatial.memberships import (
@@ -43,7 +45,9 @@ from dnd.spatial.memberships import (
     SpatialConditionMembershipSource,
 )
 from dnd.spatial.transitions import bind_spatial_interactions
-from dnd.types.senses import OpticalObscurement
+from dnd.types.senses import OpticalObscurement, PerceivedSpatialEffect
+from dnd.types.traps import TrapConditionPayload, TrapDamage, TrapPayload, TrapState
+from dnd.types.world import OccupancyLayer
 from dnd.types.spatial_effects import (
     SpatialEffectBlockingPolicy,
     SpatialEffectChangeOperation,
@@ -66,6 +70,21 @@ SPIKE_TRAP_CONTENT_REF = ContentRef(
         "b6975083ecc7e241318c5426a2d90066"
     ),
 )
+POISON_DAMAGE_SPIKE_CONTENT_REF = SPIKE_TRAP_CONTENT_REF.model_copy(update={
+    "content_id": "spatial_effect.environment.spike_trap.poison_damage",
+})
+SICKENING_SPIKE_CONTENT_REF = SPIKE_TRAP_CONTENT_REF.model_copy(update={
+    "content_id": "spatial_effect.environment.spike_trap.poisoned",
+})
+
+PLAIN_SPIKE_PAYLOAD = TrapPayload()
+POISON_DAMAGE_SPIKE_PAYLOAD = TrapPayload(damages=(
+    *PLAIN_SPIKE_PAYLOAD.damages,
+    TrapDamage(dice_count=1, dice_sides=4, damage_type=DamageType.POISON),
+))
+SICKENING_SPIKE_PAYLOAD = TrapPayload(condition=TrapConditionPayload(
+    save_dc=12, duration_rounds=2,
+))
 
 FIRE_SURFACE_CONTENT_REF = ContentRef(
     pack_id="content.neurodragon",
@@ -952,12 +971,15 @@ def build_environmental_replacement(
 
 
 class SpikeTrap(SpatialCondition):
-    """One hidden, permanent spike-trap network across many cells."""
+    """One persistent spike mechanism, its footprint and authored payload."""
 
     name: str = Field(default="Spike Trap")
     description: str = Field(
-        default="Sharp spikes deal 2d4 piercing damage when entered.",
+        default="Retractable spikes with a persistent mechanical state.",
     )
+    trap_state: TrapState = TrapState.READY
+    payload: TrapPayload = Field(default=PLAIN_SPIKE_PAYLOAD)
+    affected_occupancy_layers: frozenset[OccupancyLayer] = frozenset({OccupancyLayer.GROUND})
     content_ref: ContentRef = Field(default=SPIKE_TRAP_CONTENT_REF)
     layer: SpatialEffectLayer = Field(
         default=SpatialEffectLayer.GROUND_SURFACE,
@@ -978,6 +1000,120 @@ class SpikeTrap(SpatialCondition):
         ),
     )
     hazard_filter: HazardFilter = Field(default=HazardFilter.ALL)
+
+    def is_hazard_perceived_by(
+        self, requesting_entity_uuid: Optional[UUID] = None,
+    ) -> bool:
+        """A previously discovered mechanism stays known to that observer."""
+        if self.trap_state is TrapState.ACTIVATED:
+            return True
+        observer = BaseBlock.get(requesting_entity_uuid) if requesting_entity_uuid else None
+        senses = observer.get_senses() if observer is not None else None
+        return bool(senses is not None and self.uuid in senses.spatial_effects) or super().is_hazard_perceived_by(
+            requesting_entity_uuid,
+        )
+
+    def is_hazardous_for(
+        self, entity_uuid: Optional[UUID] = None, *,
+        occupancy_layer: OccupancyLayer = OccupancyLayer.GROUND,
+    ) -> bool:
+        """Disabled installed spikes retain identity without threatening entry."""
+        return self.trap_state is not TrapState.DEACTIVATED and super().is_hazardous_for(
+            entity_uuid, occupancy_layer=occupancy_layer,
+        )
+
+    def describe_trap(self) -> str:
+        """Describe the current mode and the authored effects of entering it."""
+        if self.trap_state is TrapState.DEACTIVATED:
+            return "Retracted and disabled. Entry has no effect."
+        state = ("Retracted and armed; entry raises the spikes."
+                 if self.trap_state is TrapState.READY else "Raised spikes remain active.")
+        effects = [f"{row.dice_count}d{row.dice_sides} {row.damage_type.value.lower()} damage"
+                   for row in self.payload.damages]
+        condition = self.payload.condition
+        if condition is not None:
+            effects.append(f"DC {condition.save_dc} {condition.save_ability} save or Poisoned "
+                           f"for {condition.duration_rounds} rounds")
+        return state + (" Entry: " + "; ".join(effects) + "." if effects else "")
+
+    def get_spatial_observation(
+        self, positions: Set[Tuple[int, int]], *, observer_uuid: UUID,
+        discovered: bool = False,
+    ) -> Optional[PerceivedSpatialEffect]:
+        """Provide only the requested perceivable cells, with native state text."""
+        if not discovered and not self.is_hazard_perceived_by(observer_uuid):
+            return None
+        return PerceivedSpatialEffect(
+            content_ref=self.content_ref, name=self.name,
+            description=self.describe_trap(), positions=tuple(sorted(positions)),
+            trap_state=self.trap_state,
+        )
+
+    def set_trap_state(self, state: TrapState, *, parent_event: Event) -> bool:
+        """Commit a mode; raising releases the payload on current occupants."""
+        if not self.is_active_spatial_condition() or self.trap_state is state:
+            return False
+        positions = set(self.affected_positions)
+        effect = self._open_change(
+            SpatialEffectChangeOperation.STATE_CHANGED,
+            previous_positions=positions, affected_positions=positions,
+            parent_event=parent_event, trap_state=state,
+            previous_trap_state=self.trap_state,
+        )
+        self.trap_state = state
+        if state is TrapState.ACTIVATED:
+            self.reveal(parent_event=effect)
+            occupants = {identity for position in positions
+                         for identity in get_map().get_entities_at(position)}
+            for identity in sorted(occupants, key=str):
+                entity = Entity.get(identity)
+                if isinstance(entity, Entity):
+                    self.apply_payload(entity, parent_event=effect)
+        self._complete_change(effect)
+        return True
+
+    def apply_payload(self, entity: Entity, *, parent_event: Event) -> None:
+        """Compose the finite spike payload through ordinary native rule owners."""
+        if not self.affects_occupancy_layer(entity.get_occupancy_layer()):
+            return
+        for component in self.payload.damages:
+            bonus = ModifiableValue.create(
+                source_entity_uuid=self.source_entity_uuid,
+                target_entity_uuid=entity.uuid, base_value=0,
+                value_name="Spike Trap Damage",
+            )
+            damage = Damage(
+                name=self.name, source_entity_uuid=self.source_entity_uuid,
+                target_entity_uuid=entity.uuid,
+                damage_dice=component.dice_sides, dice_numbers=component.dice_count,
+                damage_bonus=bonus, damage_type=component.damage_type,
+            )
+            roll = damage.get_dice(AttackOutcome.HIT).roll
+            entity.receive_damage(
+                roll.total, component.damage_type, self.source_entity_uuid,
+                damage_rolls=[roll], damages=[damage], parent_event=parent_event.uuid,
+                effect_id=self.content_ref.identity_key,
+            )
+        condition = self.payload.condition
+        if condition is None:
+            return
+        request = entity.create_saving_throw_request(
+            target_entity_uuid=entity.uuid, ability_name=condition.save_ability,
+            dc=condition.save_dc, parent_event=parent_event.uuid,
+            saving_throw_context=SavingThrowContext(
+                cause_id=self.content_ref.content_id,
+                effect_id=f"{self.content_ref.content_id}.poisoned_save",
+                condition_id=condition.condition_id, is_magical=False,
+                effect_tags=(SavingThrowEffectTag.POISON,),
+            ),
+        )
+        _, _, success = entity.saving_throw(request)
+        if not success:
+            entity.add_condition(Poisoned(
+                source_entity_uuid=self.source_entity_uuid, target_entity_uuid=entity.uuid,
+                duration=Duration(duration=condition.duration_rounds, duration_type=DurationType.ROUNDS,
+                                  source_entity_uuid=self.source_entity_uuid, target_entity_uuid=entity.uuid),
+            ), parent_event=parent_event)
 
     def _apply(
         self,
@@ -1013,38 +1149,20 @@ class SpikeTrap(SpatialCondition):
         ) -> Optional[Event]:
             if not isinstance(event, SpatialChangeEvent):
                 return None
+            if not condition.admits_occupancy_transition(event):
+                return None
             if event.entity_uuid is None:
                 return None
             entity = Entity.get(event.entity_uuid)
             if not isinstance(entity, Entity):
                 return None
 
-            condition.reveal(parent_event=event)
-            bonus = ModifiableValue.create(
-                source_entity_uuid=condition.source_entity_uuid,
-                target_entity_uuid=entity.uuid,
-                base_value=0,
-                value_name="Spike Trap Damage",
-            )
-            damage = Damage(
-                name="Spike Trap",
-                source_entity_uuid=condition.source_entity_uuid,
-                target_entity_uuid=entity.uuid,
-                damage_dice=4,
-                dice_numbers=2,
-                damage_bonus=bonus,
-                damage_type=DamageType.PIERCING,
-            )
-            damage_roll = damage.get_dice(AttackOutcome.HIT).roll
-            entity.receive_damage(
-                damage_roll.total,
-                DamageType.PIERCING,
-                condition.source_entity_uuid,
-                damage_rolls=[damage_roll],
-                damages=[damage],
-                parent_event=event.uuid,
-                effect_id=condition.content_ref.identity_key,
-            )
+            if condition.trap_state is TrapState.DEACTIVATED:
+                return None
+            if condition.trap_state is TrapState.READY:
+                condition.set_trap_state(TrapState.ACTIVATED, parent_event=event)
+            else:
+                condition.apply_payload(entity, parent_event=event)
             return None
 
         return EventHandler(
@@ -1096,6 +1214,9 @@ def materialize_spike_trap_condition(
     stealth_dc: Optional[int] = None,
     source_entity_uuid: Optional[UUID] = None,
     parent_event: Optional[Event] = None,
+    trap_state: TrapState = TrapState.READY,
+    payload: TrapPayload = PLAIN_SPIKE_PAYLOAD,
+    content_ref: ContentRef = SPIKE_TRAP_CONTENT_REF,
 ) -> SpikeTrap:
     """Construct and activate one exact physical spike-trap network."""
     if not positions:
@@ -1122,15 +1243,12 @@ def materialize_spike_trap_condition(
             raise RuntimeError("Spike-trap installation was canceled")
 
     assert cause is not None
-    fields: dict[str, object] = {
-        "source_entity_uuid": source_uuid,
-        "position": min(positions),
-        "affected_positions": set(positions),
-        "condition_stealth_dc": stealth_dc,
-    }
-    if condition_uuid is not None:
-        fields["uuid"] = condition_uuid
-    condition = SpikeTrap(**fields)
+    condition = SpikeTrap(
+        uuid=condition_uuid or uuid4(), source_entity_uuid=source_uuid,
+        position=min(positions), affected_positions=set(positions),
+        condition_stealth_dc=stealth_dc, trap_state=trap_state, payload=payload,
+        content_ref=content_ref,
+    )
     result = condition.activate(parent_event=cause)
     if result is None or result.canceled or not condition.applied:
         raise RuntimeError("Spike-trap activation failed")
@@ -1169,6 +1287,8 @@ __all__ = [
     "OIL_SURFACE_CONTENT_REF",
     "OIL_SURFACE_TRANSITIONS",
     "OilSurface",
+    "POISON_DAMAGE_SPIKE_CONTENT_REF",
+    "SICKENING_SPIKE_CONTENT_REF",
     "SPIKE_TRAP_CONTENT_REF",
     "STEAM_CLOUD_CONTENT_REF",
     "STEAM_CLOUD_RECIPE",

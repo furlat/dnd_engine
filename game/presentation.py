@@ -212,6 +212,9 @@ def _admitted(
         return event.entity_uuid == observer_uuid
     if isinstance(event, (TurnEvent, RoundEvent, EncounterEvent)):
         return True
+    if isinstance(event, (ConditionApplicationEvent, ConditionRemovalEvent)) and (
+            event.resulting_tile is not None or event.resulting_item is not None):
+        return True
     owner = actor_fact_owner(event)
     if owner is not None:
         observer = str(observer_uuid)
@@ -229,9 +232,12 @@ def _admitted(
             and event.world_placement is not None
         )
     if type(event) is SpatialChangeEvent:
-        return (
-            event.change_type is SpatialChangeType.OBJECT_CHANGED
-            and event.event_type.value == "spatial_object_changed"
+        # Initialization may include ordinary placements after the cold map was
+        # published. Their recorded after-values are needed before observer
+        # disclosure, just like later changes to an already placed object.
+        return event.change_type in (
+            SpatialChangeType.OBJECT_PLACED, SpatialChangeType.OBJECT_CHANGED,
+            SpatialChangeType.OBJECT_REMOVED,
         )
     if type(event) is SensoryUpdateEvent:
         return event.observer_uuid == observer_uuid
@@ -327,6 +333,7 @@ def _copy_snapshot(snapshot: SensesSnapshot | None) -> SensesSnapshot | None:
         objects=dict(snapshot.objects),
         effective_light_levels=dict(snapshot.effective_light_levels),
         hazardous_cells=dict(snapshot.hazardous_cells),
+        spatial_effects=dict(snapshot.spatial_effects),
         paths_dirty=snapshot.paths_dirty,
         passive_perception=snapshot.passive_perception,
         sense_modes_hash=snapshot.sense_modes_hash,
@@ -335,10 +342,10 @@ def _copy_snapshot(snapshot: SensesSnapshot | None) -> SensesSnapshot | None:
     )
 
 
-def apply_world_fact(target: PresentationTarget, event: Event) -> bool:
+def apply_world_fact(target: PresentationTarget, event: Event, condition: ConditionFact | None = None) -> bool:
     """Fold recorded world after-values, reporting whether any were applied."""
     world = WorldFacts(world=target.world, tiles=target.tiles, objects=target.objects)
-    if not apply_recorded_world_fact(world, event):
+    if not apply_recorded_world_fact(world, event, condition):
         return False
     target.world = world.world
     target.tiles = world.tiles
@@ -383,6 +390,11 @@ def reduce_interval(
         for row in admissions.get(event.uuid, ()):
             _admit_actor(target, row)
         if event.canceled:
+            continue
+        condition = condition_facts.get(event.uuid)
+        if condition is not None and (condition.resulting_tile is not None or condition.resulting_item is not None):
+            apply_world_fact(target, event, condition)
+            pending.add(index)
             continue
         owner = actor_fact_owner(event)
         if owner is not None:
@@ -655,7 +667,8 @@ def _condition_fact(event: Event) -> ConditionFact | None:
         event_uuid=event.uuid, condition_uuid=event.condition.uuid,
         name=event.condition.name or "Condition", category=event.condition.condition_category,
         behavior_id=event.behavior_id, resulting_max_hp=event.resulting_max_hp,
-        resulting_ac=event.resulting_ac,
+        resulting_ac=event.resulting_ac, resulting_tile=event.resulting_tile,
+        resulting_item=event.resulting_item,
     )
 
 
@@ -677,6 +690,14 @@ def _capture_actor_admissions(
         completed = event.phase is EventPhase.COMPLETION and not event.canceled
         if completed and isinstance(event, EntityCreatedEvent):
             actors[event.entity_uuid] = actor_from_birth(event)
+        if (not event.canceled and event.phase is EventPhase.EFFECT
+                and isinstance(event, SpatialChangeEvent)
+                and event.change_type in (SpatialChangeType.ENTITY_LEFT, SpatialChangeType.ENTITY_ENTERED)
+                and event.entity_uuid is not None
+                and event.entity_uuid in actors):
+            # Spatial EFFECT is an already committed location. Its sensory
+            # children can acquire an actor before spatial COMPLETION arrives.
+            actors[event.entity_uuid] = apply_actor_fact(actors[event.entity_uuid], event)
         sensory = completed and isinstance(event, SensoryUpdateEvent) and event.observer_uuid == observer_uuid
         acquired: set[UUID] = set()
         if sensory:
@@ -892,11 +913,15 @@ def reduce_lineage(target: PresentationTarget, lineage: CompletedLineage) -> Pre
             admission = next(admissions, None)
         if event.canceled or event.uuid in unsupported:
             continue
+        condition = condition_facts.get(event.uuid)
+        if condition is not None and (condition.resulting_tile is not None or condition.resulting_item is not None):
+            apply_world_fact(result, event, condition)
+            continue
         owner = actor_fact_owner(event)
         if owner is not None:
             actor = result.actors.get(owner)
             if actor is None:
-                if isinstance(event, (AttackEvent, EquipmentEvent)):
+                if isinstance(event, (AttackEvent, EquipmentEvent, SpatialChangeEvent)):
                     continue
                 raise ValueError("actor fact requires its retained owner")
             result.actors[owner] = apply_actor_fact(actor, event, condition_facts.get(event.uuid))
@@ -916,9 +941,9 @@ def reduce_lineage(target: PresentationTarget, lineage: CompletedLineage) -> Pre
                 pass
             case TurnEvent() | RoundEvent() | EncounterEvent():
                 _reduce_turn_fact(result, event)
-            case StepMovementEvent() | ForcedMovementEvent():
-                # Senses supplies committed positions. Turn/round facts retain
-                # the real engine clock; presentation does not tick conditions.
+            case StepMovementEvent() | ForcedMovementEvent() | SpatialEffectChangeEvent():
+                # Senses supplies committed positions and observed fixture state.
+                # Spatial lifecycle events retain causality, not another state writer.
                 pass
             case _:
                 raise NotImplementedError(f"lineage reduction does not consume {type(event).__name__}")

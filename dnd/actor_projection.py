@@ -8,7 +8,7 @@ from dnd.blocks.appearance import AppearanceConfig
 from dnd.blocks.base_item import ItemChargeConsumptionEvent, ItemLocationStateEvent
 from dnd.blocks.equipment import EquipmentEvent
 from dnd.core.equipment_types import WeaponSet, WeaponSlot
-from dnd.core.events import DamageAppliedEvent, EntityCreatedEvent, Event, EventType, HealEvent, LifeStateChangeEvent, TemporaryHitPointsChangedEvent
+from dnd.core.events import DamageAppliedEvent, EntityCreatedEvent, Event, EventType, HealEvent, LifeStateChangeEvent, SpatialChangeEvent, SpatialChangeType, TemporaryHitPointsChangedEvent
 from dnd.core.item_types import ItemLocation
 from dnd.core.life_types import LifeState
 from dnd.types.actor_facts import ActorState, ConditionFact
@@ -29,6 +29,7 @@ def actor_from_birth(birth: EntityCreatedEvent) -> ActorState:
         life_state=LifeState(birth.life_state), armor_class=birth.armor_class,
         faction=birth.faction, creature_type=birth.creature_type,
         healing_blocked=birth.healing_blocked, damage_affinities=birth.damage_affinities,
+        occupancy_layer=birth.occupancy_layer,
     )
 
 
@@ -45,6 +46,8 @@ def actor_fact_owner(event: Event) -> UUID | None:
             return event.target_entity_uuid
         case LifeStateChangeEvent() | TemporaryHitPointsChangedEvent():
             return event.entity_uuid
+        case SpatialChangeEvent(change_type=SpatialChangeType.ENTITY_ENTERED | SpatialChangeType.ENTITY_LEFT):
+            return event.entity_uuid
         case ItemLocationStateEvent(location=ItemLocation.INVENTORY | ItemLocation.EQUIPMENT):
             return event.owner_uuid
     return None
@@ -53,6 +56,9 @@ def actor_fact_owner(event: Event) -> UUID | None:
 def apply_actor_fact(actor: ActorState, event: Event, condition: ConditionFact | None = None) -> ActorState:
     """Apply native after-values; do not execute damage, hooks or equipment rules."""
     match event:
+        case SpatialChangeEvent(change_type=SpatialChangeType.ENTITY_ENTERED | SpatialChangeType.ENTITY_LEFT):
+            return (actor if event.occupancy_layer is None
+                    else replace(actor, occupancy_layer=event.occupancy_layer))
         case ItemChargeConsumptionEvent():
             items = tuple(item.model_copy(update={
                 "charges": event.charges_after, "stack_count": event.stack_count_after,
@@ -131,4 +137,5 @@ def condition_fact(event: Event, *, source_index: int | None = None) -> Conditio
         category=state.category, behavior_id=event.behavior_id,
         resulting_max_hp=event.resulting_max_hp, resulting_ac=event.resulting_ac,
         state=state, resulting_stats=event.resulting_stats, resulting_tile=event.resulting_tile,
+        resulting_item=event.resulting_item,
     )

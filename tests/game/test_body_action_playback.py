@@ -20,6 +20,7 @@ from game.player_reduction import reduce_lineage, stage_lineage
 from game.projection import Camera
 from game.scene import load_scene_media, scene_actors
 from tests.game.concealment_scenarios import concealment_history
+from tests.game.environment_scenarios import environment_history
 from tests.game.player_helpers import player_history
 
 
@@ -43,6 +44,11 @@ def histories():
         "potion": concealment_history(sight_grant="potion", reveal="none"),
         "hide": concealment_history(program="hide-dim", reveal="none"),
     }
+
+
+@pytest.fixture(scope="module")
+def light_history():
+    return environment_history()
 
 
 def selected(history, role, behavior):
@@ -142,6 +148,34 @@ def test_hide_preserves_source_disabled_actor_track(histories, data):
     sample = sample_choreography(group, 0)
     assert not sample.bodies
     assert any(member.behavior_id == "condition.hidden" for actor in sample.displayed.actors.values() for member in actor.conditions)
+
+
+@pytest.mark.parametrize("role", ("operator", "witness"))
+def test_object_interaction_reaches_with_empty_hands_then_restores_gear(light_history, role, data, graphics):
+    before, root = selected(light_history, role, "action.environment.wall_torch.extinguish")
+    group = bind_choreography(before, root, data)
+    cue, = group.body_actions
+    assert not group.gaps
+    assert cue.enabled and cue.clip == "Attack5"
+    assert cue.effect_ms == pytest.approx(250)
+    assert cue.complete_ms == pytest.approx(14 / 12 * 1000)
+    assert cue.interaction_object_uuid is not None
+    fixture = before.objects[cue.interaction_object_uuid]
+    assert fixture.placement.position == (6, 5) and cue.contact.grid == (5, 5)
+    assert cue.contact.facing == "SE", "the operator reaches toward the fixture, not its SELF mechanics target"
+    at_contact = sample_choreography(group, cue.effect_ms)
+    body, = at_contact.bodies
+    assert body.frame == 3 and body.hidden_slots == ("weapon", "weaponGlow", "offhand")
+    for quadrant in range(4):
+        reaching = frame(before, root, data, cue.effect_ms - 1, quadrant, graphics)
+        assert any(command[4][6] == "actor" and str(command[4][0]) == body.actor_uuid
+                   for command in reaching.commands)
+        contact_frame = frame(before, root, data, cue.effect_ms, quadrant, graphics)
+        sees_operator = any(command[4][6] == "actor" and str(command[4][0]) == body.actor_uuid
+                            for command in contact_frame.commands)
+        assert sees_operator == (role == "operator"), "the ordinary witness loses the operator when the light goes off"
+    assert sample_choreography(group, group.complete_ms).bodies == ()
+    assert group.before.actors[UUID(body.actor_uuid)].visual_loadout == group.after.actors[UUID(body.actor_uuid)].visual_loadout
 
 
 def test_reveal_feedback_uses_actual_reacquisition_contact(histories, data, graphics):

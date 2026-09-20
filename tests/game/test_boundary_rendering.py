@@ -559,12 +559,48 @@ def test_disclosed_props_follow_received_light_state_and_camera(rendering, base_
     assert body_assets == {
         "environment.standing_torch": {"torch.body"},
         "environment.wall_torch": {"torch.wall.e", "torch.wall.w"},
-        "environment.trap_lever": {"lever.marker"},
+        "environment.trap_lever": {f"lever.{pose}.0" for pose in "ensw"},
     }[item_id]
     target.senses.objects.pop(identity)
     evidence = draw_frame(screen, target, catalog, cache, camera, 0.2,
         show_grid=False, mouse_position=None, show_debug=False, collect_evidence=True)
     assert evidence is not None and all(row[0] != identity for row in evidence.actual_draws)
+
+
+@pytest.mark.parametrize("item_id,state_field,closed_ids,open_ids", (
+    ("environment.storage_chest", "is_open",
+     {f"chest.closed.{pose}" for pose in "ensw"}, {f"chest.open.{pose}" for pose in "ensw"}),
+    ("environment.control_lever", "is_engaged",
+     {f"lever.{pose}.0" for pose in "ensw"}, {f"lever.{pose}.6" for pose in "ensw"}),
+))
+def test_received_prop_state_selects_visible_pose_in_all_views(
+    rendering, base_target, item_id, state_field, closed_ids, open_ids,
+) -> None:
+    screen, catalog, cache = rendering
+    target = deepcopy(base_target)
+    identity = target.standing_torch_uuid
+    assert identity is not None and target.senses is not None
+    fixture = target.objects[identity]
+    selected = {False: set(), True: set()}
+    for quadrant in range(4):
+        camera = Camera(viewport=screen.get_size(), quadrant=quadrant).with_focus(fixture.placement.position)
+        images = []
+        for state in (False, True, False):
+            target.objects = {identity: fixture.model_copy(update={
+                "item": fixture.item.model_copy(update={
+                    "item_id": item_id, "is_lit": None, state_field: state,
+                }),
+            })}
+            evidence = draw_frame(screen, target, catalog, cache, camera, 0.2,
+                show_grid=False, mouse_position=None, show_debug=False, collect_evidence=True)
+            assert evidence is not None
+            row, = (row for row in evidence.actual_draws if row[0] == identity)
+            selected[state].add(row[2])
+            assert evidence.animated_fixtures == 0
+            images.append(pygame.surfarray.array3d(screen).copy())
+        assert not np.array_equal(images[0], images[1]), "received lid/handle changes must be visible"
+        assert np.array_equal(images[0], images[2]), "seeking restores the same prop state and pixels"
+    assert selected == {False: closed_ids, True: open_ids}
 
 
 def test_real_q0_water_wall_overlap_uses_planar_then_spatial_pixel_order(

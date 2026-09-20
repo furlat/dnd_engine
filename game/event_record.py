@@ -59,9 +59,17 @@ GRANTS = TypeAdapter(dict[str, set[str]])
 # Their defaults keep those presentation archives readable; old archives do
 # not acquire the additional AI knowledge that only new native producers record.
 ADDITIVE_FIELDS = {
-    EntityCreatedEvent: {"healing_blocked"},
+    ActionEvent: {"resolved_area_positions"},
+    AttackEvent: {"resolved_area_positions"},
+    SpellEvent: {"resolved_area_positions"},
+    ShoveEvent: {"resolved_area_positions"},
+    DamageAppliedEvent: {"body_release", "critical_hit", "impact_direction"},
+    EntityCreatedEvent: {"healing_blocked", "occupancy_layer"},
     SensoryUpdateEvent: {"hazardous_cells_changed"},
-    SpatialChangeEvent: {"tile_state", "tile_present", "object_state"},
+    SpatialChangeEvent: {"tile_state", "tile_present", "object_state", "previous_occupancy_layer", "occupancy_layer"},
+    MovementEvent: {"movement_mode", "start_layer", "end_layer", "resolved_area_positions"},
+    JumpEvent: {"movement_mode", "start_layer", "end_layer", "resolved_area_positions"},
+    StepMovementEvent: {"movement_mode", "from_layer", "to_layer"},
 }
 
 

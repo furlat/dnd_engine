@@ -15,6 +15,7 @@ import traceback
 from uuid import uuid4
 
 from devtools.animation_review.cases import RecordedInput, ReviewCase, ReviewSequence, load_cases
+from devtools.animation_review.library import write_run_index
 from devtools.animation_review.record import record_case
 from dnd.core.base_object import PASSIVE_EVENT_REPLAY
 from game.replay import RecordedSequence
@@ -190,9 +191,7 @@ def main(
         manifest["cases"].append(item)
         write_json(destination / "manifest.json", manifest)
     write_json(output / "latest.json", {"run": run_id, "path": f"runs/{run_id}/index.html"})
-    (output / "index.html").write_text(
-        f'<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=runs/{run_id}/index.html">'
-        f'<a href="runs/{run_id}/index.html">Open latest animation review</a>', encoding="utf-8")
+    write_run_index(output)
     failures = sum(case["status"] == "failed" for case in manifest["cases"])
     print(f"{len(selected) - failures}/{len(selected)} cases passed; gallery: {destination / 'index.html'}", flush=True)
     print(f"Serve: {sys.executable} -m devtools.animation_review.serve --directory {output}")

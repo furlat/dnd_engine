@@ -430,3 +430,55 @@ bindings. No source-image audit, digest or new animation subsystem accompanies
 the import. Earlier statements about the original standing-only binding record
 the pre-implementation state; the implemented `props` table now covers standing
 torch, wall torch and trap lever.
+
+## Control/container and interaction-gesture follow-up
+
+The next unit imports the existing rounded wooden chest pair:
+`Fantasy tileset - 2D Isometric/Environment/Chest A1_{E,N,S,W}.png`
+(closed) and `Chest A2_{E,N,S,W}.png` (open). Repository resources are
+`game/assets/environment/chest-a1-{e,n,s,w}.png` and
+`chest-a2-{e,n,s,w}.png`. Both retain the 256 × 256 source canvas and common
+`[128,208]` pivot at scale `1`; they are static state variants, not an authored
+opening strip. The actual native chest `is_open` selects the picture; item
+count does not select a lid pose.
+
+`game/assets/environment/lever-engaged.svg` is a newly adapted second pose of
+the already credited MapEditor marker: its handle/knob horizontal coordinates
+are mirrored. It keeps the same `[8,26]` pivot and scale `2`. This modest vector
+adaptation depicts the new control lever's actual `is_engaged` state. It is not
+claimed to be an original pixel-art lever animation and does not give the
+finite-use trap lever a synthetic handle state.
+
+The user's remembered arm-extension gesture prompted inspection of actual
+NeuroClient body sheets, not just recipe names. Original source:
+`/home/tommaso/Dev/NeuroClient/app/public/spritesheets/NakedBody/Attack5.png`,
+already imported into the matching `game/assets/neuroclient/spritesheets/`
+path. Across its eight views, Attack5 extends the arm around frame 3, holds the
+extended pose through roughly frame 9 and retracts during frames 10–14. It is
+a useful existing reach candidate without the leaps/spins in other attacks.
+The modular rig has 15 frames at 12 fps and already includes the selected
+equipment layers for this clip. A frame-3 interaction effect would be a newly
+chosen contact anchor supported by that visual inspection. IsoSpritesStudio's
+original `src/data/animation/clipTiming.json` Attack5 hit frame is 8; that is an
+attack default, not proof that an environment interaction was authored there.
+
+Original environment entries in NeuroClient's
+`src/render/data/animation/contentActionPresentationRecipes.json` remain
+disabled Idle bodies with frame-zero effects. We did not recover an existing
+enabled environment gesture recipe or establish that Attack5 is the exact clip
+the user remembers. The existing Studio schema can author a gesture using the
+available body clip and causal effect anchor without inventing another timeline.
+
+Likewise, original `src/render/projectileEndpoints.ts` defines facing-relative
+forward/side/lift offsets; it does not supply per-frame hand/socket coordinates
+or solve literal contact with arbitrary prop geometry. Facing the known object
+and timing its recorded after-values at the reach frame should be reviewed in
+the game views, without claiming inverse kinematics or exact hand placement.
+The fixed demon rig maps Attack5 to its own Attack 3; goblin, skeleton archer
+and wolf currently have no Attack5 mapping. The modular gesture is not proof
+of equivalent contact on those rigs.
+
+Ignored inspection sheets:
+
+- [Attack candidates, E and SE views](../.runtime/environment-study/interaction-gesture-attacks.png)
+- [Attack5, all eight views](../.runtime/environment-study/attack5-eight-directions.png)

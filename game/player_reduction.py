@@ -5,12 +5,12 @@ from uuid import UUID
 
 from dnd.core.condition_types import ConditionCategory
 from dnd.core.equipment_types import WeaponSet, WeaponSlot
-from dnd.core.events import EventType
+from dnd.core.events import EventType, SpatialChangeType
 from dnd.types.senses import reduce_senses_snapshot
 from game.player_facts import (
     AttackFact, ConditionChangeFact, DamageFact, EquipmentFact, HealFact, ItemChargeFact, LifeFact,
     PlayerFact, PlayerInitialization, PlayerLineage, PlayerNode, PlayerObservation, PlayerSequence,
-    PlayerState, SensoryFact, TurnFact, VersionRow, WorldUpdate, TemporaryHitPointsFact,
+    PlayerState, SensoryFact, SpatialFact, TurnFact, VersionRow, WorldUpdate, TemporaryHitPointsFact,
 )
 
 
@@ -19,7 +19,8 @@ def copy_target(target: PlayerState) -> PlayerState:
     return replace(target, tiles=dict(target.tiles), objects=dict(target.objects), actors=dict(target.actors),
         senses=None if senses is None else replace(senses, visible=set(senses.visible), seen=set(senses.seen),
             entities=dict(senses.entities), objects=dict(senses.objects),
-            effective_light_levels=dict(senses.effective_light_levels), hazardous_cells=dict(senses.hazardous_cells)))
+            effective_light_levels=dict(senses.effective_light_levels), hazardous_cells=dict(senses.hazardous_cells),
+            spatial_effects=dict(senses.spatial_effects)))
 
 
 def apply_world_update(target: PlayerState, update: WorldUpdate) -> None:
@@ -64,6 +65,18 @@ def stage_lineage(target: PlayerState, lineage: PlayerLineage) -> PlayerState:
 
 def _apply_fact(target: PlayerState, fact: PlayerFact) -> None:
     match fact:
+        case SpatialFact():
+            actor = target.actors.get(fact.entity_uuid) if fact.entity_uuid is not None else None
+            if actor is not None and fact.occupancy_layer is not None:
+                target.actors[actor.uuid] = replace(actor, occupancy_layer=fact.occupancy_layer)
+            if (fact.entity_uuid == target.observer_uuid
+                    and fact.change_type is SpatialChangeType.ENTITY_ENTERED):
+                # Own entry is an explicit permitted contact even when one
+                # sensory batch folds an arrival and return to the same cell.
+                if target.senses is not None:
+                    target.senses = replace(target.senses, position=fact.position)
+                if actor is not None:
+                    target.actors[actor.uuid] = replace(target.actors[actor.uuid], last_visual_position=fact.position)
         case ItemChargeFact():
             actor = target.actors[fact.source_entity_uuid]
             if actor.controlled_items is None or actor.uuid != target.observer_uuid:
@@ -127,8 +140,9 @@ def _apply_fact(target: PlayerState, fact: PlayerFact) -> None:
                 target.current_actor_uuid = fact.entity_uuid if fact.event_type is EventType.TURN_START else None
 
 
-def _reduce(target: PlayerState, nodes: tuple[PlayerNode, ...], versions: tuple[VersionRow, ...],
+def reduce_nodes(target: PlayerState, nodes: tuple[PlayerNode, ...], versions: tuple[VersionRow, ...],
             observations: tuple[PlayerObservation, ...], updates: tuple[WorldUpdate, ...]) -> PlayerState:
+    """Fold received values in source order, including a timed partial group."""
     result = copy_target(target)
     indexes = {row.event_uuid: row.source_index for row in versions}
     pending = iter(sorted(observations, key=lambda row: indexes[row.event_uuid]))
@@ -142,13 +156,17 @@ def _reduce(target: PlayerState, nodes: tuple[PlayerNode, ...], versions: tuple[
             apply_world_update(result, world_updates[node.uuid])
         if not node.canceled and node.fact is not None:
             _apply_fact(result, node.fact)
+    if observation is not None:
+        _observe(result, observation)
+    for remaining in pending:
+        _observe(result, remaining)
     return result
 
 
 def reduce_initialization(initialization: PlayerInitialization) -> PlayerState:
     target = PlayerState(generation=initialization.generation, observer_uuid=initialization.observer_uuid,
                          world=initialization.world)
-    target = _reduce(target, initialization.nodes, initialization.version_rows,
+    target = reduce_nodes(target, initialization.nodes, initialization.version_rows,
                      initialization.observations, initialization.world_updates)
     target.reducer_cursor = initialization.end_cursor
     return target
@@ -159,7 +177,7 @@ def reduce_lineage(target: PlayerState, lineage: PlayerLineage) -> PlayerState:
         raise ValueError("player lineage belongs to a different observer or generation")
     if lineage.end_cursor <= target.reducer_cursor:
         raise ValueError("player lineage precedes this reduction position")
-    result = _reduce(target, lineage.events, lineage.version_rows, lineage.observations, lineage.world_updates)
+    result = reduce_nodes(target, lineage.events, lineage.version_rows, lineage.observations, lineage.world_updates)
     result.reducer_cursor = lineage.end_cursor
     return result
 

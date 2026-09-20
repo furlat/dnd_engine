@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field, PrivateAttr, model_validator, computed_fi
 from dnd.core.values import ModifiableValue
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.condition_types import HazardFilter
+from dnd.core.item_types import ItemPresentationState
 from dnd.core.content.runtime import (
     bind_runtime_behavior,
     bind_runtime_handler_before_admission,
@@ -23,7 +24,7 @@ from dnd.types.senses import (
     SensesType as SensesType,
     SensesView,
 )
-from dnd.types.world import LightLevel, MovementMode
+from dnd.types.world import LightLevel, MovementMode, OccupancyLayer
 from dnd.types.actor import EntityStatsState
 from dnd.types.world_placement import (
     BoundaryStructure,
@@ -427,10 +428,13 @@ class BaseBlock(BaseModel):
         Entity overrides with faction-based logic."""
         return True
 
-    def is_hazardous_for(self, entity_uuid: Optional[UUID] = None) -> bool:
+    def is_hazardous_for(
+        self, entity_uuid: Optional[UUID] = None, *,
+        occupancy_layer: OccupancyLayer = OccupancyLayer.GROUND,
+    ) -> bool:
         """Return whether active hazard conditions affect an optional entity."""
         for cond in self.active_conditions.values():
-            if cond.hazard_filter is None:
+            if cond.hazard_filter is None or not cond.affects_occupancy_layer(occupancy_layer):
                 continue
 
             if cond.condition_stealth_dc is not None and entity_uuid is not None:
@@ -561,12 +565,20 @@ class BaseBlock(BaseModel):
         """Return this block's current objective position value."""
         return self.position
 
+    def get_occupancy_layer(self) -> OccupancyLayer:
+        """Non-creature blocks occupy their authored support."""
+        return OccupancyLayer.GROUND
+
     def snapshot_entity_stats(self) -> Optional[EntityStatsState]:
         """Non-actor components do not publish entity combat statistics."""
         return None
 
     def snapshot_world_tile(self) -> Optional[WorldTileState]:
         """Only a Tile publishes evaluated terrain after-values."""
+        return None
+
+    def snapshot_item_state(self) -> Optional[ItemPresentationState]:
+        """Only an item publishes an item after-value for condition changes."""
         return None
 
     def get_world_placement_spec(self) -> WorldPlacementSpec:
@@ -1010,11 +1022,13 @@ class BaseBlock(BaseModel):
                     ]
 
             condition.remove_from_register()
+            condition.on_membership_changed(removed)
             removed.phase_to(
                 EventPhase.COMPLETION,
                 condition_state=condition.snapshot_state(),
                 resulting_stats=owner.snapshot_entity_stats(),
                 resulting_tile=owner.snapshot_world_tile(),
+                resulting_item=owner.snapshot_item_state(),
                 **condition._post_removal_stats(),
             )
 
@@ -1227,11 +1241,13 @@ class BaseBlock(BaseModel):
             self.active_conditions[condition.name] = condition
             self.active_conditions_by_uuid[condition.uuid] = condition
             self.active_conditions_by_source[condition.source_entity_uuid].append(condition.name)
+            condition.on_membership_changed(condition_applied)
             completed_event = condition_applied.phase_to(
                 EventPhase.COMPLETION,
                 condition_state=condition.snapshot_state(),
                 resulting_stats=self.snapshot_entity_stats(),
                 resulting_tile=self.snapshot_world_tile(),
+                resulting_item=self.snapshot_item_state(),
             )
             condition.applied_source_event_cursor = EventQueue.event_cursor()
             return completed_event

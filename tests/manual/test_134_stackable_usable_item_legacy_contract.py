@@ -93,7 +93,7 @@ DOOR_SELECTOR = (
     f"{THIS_FILE}::test_override_and_default_door_actions_toggle_spatial_state"
 )
 LEVER_SELECTOR = (
-    f"{THIS_FILE}::test_lever_depletion_removes_only_its_linked_trap"
+    f"{THIS_FILE}::test_lever_depletion_disables_only_its_linked_trap"
 )
 CHEST_SELECTOR = (
     f"{THIS_FILE}::test_chest_discovery_loot_and_empty_state_are_one_contract"
@@ -471,8 +471,8 @@ def test_override_and_default_door_actions_toggle_spatial_state() -> None:
         assert not grid.can_optical_transition(origin, destination)
 
 
-def test_lever_depletion_removes_only_its_linked_trap() -> None:
-    """A lever removes its linked trap and disappears after its finite use."""
+def test_lever_depletion_disables_only_its_linked_trap() -> None:
+    """A spent lever leaves its linked trap present but no longer hazardous."""
     reset_item_world()
     actor = create_actor((5, 5))
     linked_condition = materialize_spike_trap_condition({(3, 3)})
@@ -495,9 +495,10 @@ def test_lever_depletion_removes_only_its_linked_trap() -> None:
     assert lever.charges == 0
     assert item_rows(actor, lever.uuid) == []
     grid = get_map()
-    assert not linked_condition.applied
-    assert not grid.has_spatial_condition(linked_condition.uuid)
-    assert grid.get_spatial_conditions_at((3, 3)) == []
+    assert linked_condition.applied
+    assert grid.has_spatial_condition(linked_condition.uuid)
+    assert grid.get_spatial_conditions_at((3, 3)) == [linked_condition]
+    assert not grid.is_position_hazardous_for(3, 3, actor.uuid)
     assert other_condition.applied
     assert grid.has_spatial_condition(other_condition.uuid)
     assert grid.get_spatial_conditions_at((7, 7)) == [other_condition]
@@ -507,7 +508,7 @@ def test_chest_discovery_loot_and_empty_state_are_one_contract() -> None:
     """Loot All transfers every nested item and then vanishes from discovery."""
     reset_item_world()
     actor = create_actor((5, 5))
-    chest = build_storage_chest("Loot Chest", include_loot_all_action=True)
+    chest = build_storage_chest("Loot Chest", include_loot_all_action=True, is_open=True)
     chest.chest_inventory.source_entity_uuid = chest.uuid
     sword = build_authored_item("weapon.shortsword", chest.uuid)
     potion = build_healing_potion(chest.uuid)
@@ -516,7 +517,7 @@ def test_chest_discovery_loot_and_empty_state_are_one_contract() -> None:
     chest.place_on_grid((6, 5))
     Entity.update_all_entities_senses()
 
-    rows = item_rows(actor, chest.uuid)
+    rows = [row for row in item_rows(actor, chest.uuid) if row.template_name.startswith("Loot All")]
     assert len(rows) == 1
     assert rows[0].template_name.startswith("Loot All")
 
@@ -530,7 +531,7 @@ def test_chest_discovery_loot_and_empty_state_are_one_contract() -> None:
         assert item.owner_uuid == actor.uuid
         assert item.stored_in_uuid == actor.inventory.uuid
         assert item.tile_uuid is None
-    assert item_rows(actor, chest.uuid) == []
+    assert {row.template_name.split("__item_")[0] for row in item_rows(actor, chest.uuid)} == {"Close Chest"}
 
 
 def test_multi_action_environment_item_executes_and_depletes() -> None:

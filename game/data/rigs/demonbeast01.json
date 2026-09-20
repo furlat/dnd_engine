@@ -111,6 +111,10 @@
           "DemonBeast01Shadow": "/rigs/demonbeast01/shadow/Attack 1.png"
         }
       }
+    },
+    "body_anchor": {
+      "x": 64,
+      "y": 65
     }
   },
   "resources": {

@@ -128,6 +128,16 @@ presentation durations can differ because they receive different parts of the
 same native history; compare root identities and disclosure transitions rather
 than treating equal video milliseconds as the same event.
 
+The `misty-step` tag adds eight real teleport experiments with sixteen paired
+clips: flat forward/reverse, water, hill up/down, doorway departure-only and
+arrival-only, and a pre-release pause. Each uses a discovered native bonus-action
+cast. The existing Studio Special1 track relocates at frame 8; remaining frames
+continue on the destination support. No intermediate walking path or opportunity
+attack is generated. The dark vertical map uses native Darkvision; the doorway
+uses ordinary sight. These clips currently have no dedicated mist VFX. Capture
+once with `python -m devtools.animation_review.capture --tag misty-step`, then
+replay the saved packets with `python -m devtools.animation_review --tag misty-step`.
+
 September 11 validation: `runs/20260911T212148Z-a25e65` contains all thirty
 visibility clips, 2,255 four-corner frames and 65 public history heads, with no
 reported presentation gaps. A fresh process replayed saved player packets with
@@ -217,14 +227,15 @@ artifacts; their source manifests and diagnostics are not a player protocol.
 4. Give that JSON to the debugging agent. The selected frame resolves to the
    root UUID, historical clock, actual state and all four corners' draw evidence.
    The trace also includes the full retained baseline/event ancestry, condition
-   UUIDs, authored compiled timings, source file hashes and automatic results.
+   UUIDs, authored compiled timings, source revision and automatic results.
    `run`/`sources` identify the renderer revision; the recorded input and
    `trace.input` retain the original native capture time and source manifest.
 
 Reviews persist in browser storage per run. Export is the portable copy.
 Generated runs are separate directories under `.runtime/animation-review/runs`;
-a new run does not overwrite older clips or feedback. The root URL redirects
-to the newest finished report. A failed case remains in the report with its
+a new run does not overwrite older clips or feedback. The root URL lists all
+saved runs, searchable by date, tags and case names, with a link to the latest
+report. Each gallery links back to that archive. A failed case remains in the report with its
 trace/error, and generation exits nonzero. A passing automatic check is not a
 claim of visual correctness or full animation/media coverage.
 
@@ -241,6 +252,24 @@ held frame, releasing that reference when playback resumes. The
 state and draw metadata.
 
 ## Repeat a focused step
+
+Seven `trap-lifecycle` experiments follow the same complete native encounter
+narrative as `tests/game/test_trap_lifecycle.py`: enter concealed/detected spikes,
+exit and re-enter while raised, lower them with the other character's lever,
+cross safely and remain inside, then raise them beneath that stationary actor.
+Plain, poison-damage and save-gated Poisoned payloads share the same fixture
+owner; the last profile also includes a successful save. Detection uses the
+existing passive-perception/concealment rule. No synthetic Stealth action or
+runtime HP/position patch drives the recording.
+
+Each experiment produces walker/operator cards with all four cameras. The
+poison profiles use the delivered coated cells through explicit content IDs.
+Native recorded state changes drive finite spike transitions; receiving a
+previously unseen state alone selects its endpoint. Lever changes start at the
+original arm-extension contact, and movement-entry effects occur at arrival.
+The per-frame trace includes observed fixture state and sampled transitions.
+Use `capture --tag trap-lifecycle` once, then the ordinary `--tag trap-lifecycle`
+command to replay the saved public input without rerunning gameplay.
 
 ```bash
 uv run --no-sync python -m devtools.animation_review --list
@@ -273,6 +302,32 @@ Keep the automatic checks and clips together; run affected cases after a step
 and the full catalog at an implementation checkpoint. No image-diff baseline
 is silently promoted by the tool.
 
+## Proposed visual regression comparison — documented, not implemented
+
+User request, September 19: compare video pixels to detect visual regressions,
+while keeping this as a future idea during the trap work.
+
+Use the same saved public event packet, authored media, camera, resolution and
+presentation timestamps for baseline and candidate. Compare decoded/rendered
+RGB frames rather than compressed MP4 bytes: encoding changes need not mean a
+visual change. Report changed-pixel area and magnitude, with paired frames and
+a difference overlay linked to the existing event/lineage trace. A changed
+duration or endpoint is also evidence and must not be hidden by automatically
+stretching one clip to match the other. Deterministic setup makes exact pixel
+comparison useful locally; thresholds for different rendering environments
+should be explicit if ever needed.
+
+Initially this should flag changes for review rather than certify gameplay or
+reject all intentional artwork improvements. Mechanical/event tests remain
+responsible for rules and subjectivity. Baseline approval must be deliberate;
+never automatically bless the latest result after a failure. Keep capture,
+comparison and review as offline development work: no runtime source/asset
+hashing, repeated validation, or replay-time game execution is implied.
+
+An archive navigator is separate from that proposal: each existing gallery is
+one selected capture/replay run, not the complete catalog or all historical
+videos. Clearing filters only restores that run's cards.
+
 ```bash
 SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy uv run --no-sync python -m pytest \
   tests/game/test_animation_review.py tests/game/test_animation_review_server.py -q
@@ -285,3 +340,26 @@ in fresh processes without native production/bootstrap, comparing historical
 successors and sampled frames. Paired replay also compares the encoded videos;
 pause checks compare rendered RGB bytes directly. Existing gameplay/encounter tests separately protect mechanics
 and independent latest/historical progression.
+
+
+### Directed material releases — September 20
+
+Use `--tag body-release-regions` for the 20 experiments / 40 observer clips.
+The [validated run](http://127.0.0.1:8767/runs/20260919T230628Z-0a2658/index.html) contains 3,503 synchronized four-camera frames.
+Patterns, critical detail, accumulation/saturation, open/closed boundaries,
+raised/edge supports, modular and packaged skeletons, demons, later observation
+and interrupted movement are captured through real native events. Subsequent
+`python -m devtools.animation_review --tag body-release-regions` uses saved
+player JSON. Frame traces include compact floor-reveal timing and accepted
+before/after amounts. See the [implementation record](../../agent_docs/BODY_RELEASE_IMPLEMENTATION_RESULT_2026-09-20.md)
+for the clipped-edge limit and unrelated broader-suite failures.
+
+### Deliberate starting poses
+
+A catalog case can include `initial_facings`, a list of `{ "position": [x,y],
+"toward": [x,y] }` records. These are review settings saved with the input, not
+gameplay facts. The recorder resolves only initially visible actors and seeds
+their existing presentation facing once. Movement and actions then own facing
+as usual. This supports frontal/rear comparisons of identical gameplay packets
+without adding facing-based combat rules. `weapon-motion` selects the corrected
+weapon-family examples; `backstab` selects three deliberate rear-hit examples.

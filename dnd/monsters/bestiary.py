@@ -5,6 +5,7 @@ from typing import Optional, Tuple
 
 from dnd.entity import Entity, EntityConfig
 from dnd.actions_functional import setup_standard_actions, update_weapon_templates
+from dnd.body_responses import BLOOD_BODY_RESPONSE, BONE_BODY_RESPONSE, install_body_response
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.equipment import EquipmentConfig
@@ -173,6 +174,7 @@ def create_goblin(
         content_ref=content_ref,
     )
 
+    install_body_response(entity, BLOOD_BODY_RESPONSE)
     setup_standard_actions(entity)
     entity.senses.sense_modes.append(
         SenseMode(sense_type=SensesType.DARKVISION, range_feet=60)
@@ -280,6 +282,7 @@ def create_skeleton(
         content_ref=content_ref,
     )
 
+    install_body_response(entity, BONE_BODY_RESPONSE)
     setup_standard_actions(entity)
 
     if darkvision:
@@ -391,6 +394,7 @@ def create_goblin_archer(
         content_ref=content_ref,
     )
 
+    install_body_response(entity, BLOOD_BODY_RESPONSE)
     setup_standard_actions(entity)
 
     if (
@@ -499,6 +503,7 @@ def create_caster(
         content_ref=content_ref,
     )
 
+    install_body_response(entity, BLOOD_BODY_RESPONSE)
     setup_standard_actions(entity)
 
     register_spell(entity, FireBolt, caster_level=level)
@@ -643,6 +648,7 @@ def create_skeleton_warrior(
         content_ref=content_ref,
     )
 
+    install_body_response(entity, BONE_BODY_RESPONSE)
     setup_standard_actions(entity)
 
     if darkvision:
@@ -739,6 +745,7 @@ def create_skeleton_archer(
         content_ref=content_ref,
     )
 
+    install_body_response(entity, BONE_BODY_RESPONSE)
     setup_standard_actions(entity)
 
     if darkvision:
@@ -847,6 +854,7 @@ def create_skeleton_warlock(
         content_ref=content_ref,
     )
 
+    install_body_response(entity, BONE_BODY_RESPONSE)
     setup_standard_actions(entity)
 
     if darkvision:

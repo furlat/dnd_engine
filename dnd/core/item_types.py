@@ -7,6 +7,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from dnd.types.world_placement import BoundaryStructure
+from dnd.types.residues import ObjectResidueState
 
 class ItemRarity(str, Enum):
     """Stable rarity labels carried by item definitions and presentation facts."""
@@ -99,8 +100,10 @@ class ItemPresentationState(BaseModel):
     current_hit_points: Optional[int] = Field(default=None, ge=0)
     maximum_hit_points: Optional[int] = Field(default=None, ge=0)
     boundary_structure: Optional[BoundaryStructure] = None
+    surface_residues: tuple[ObjectResidueState, ...] = ()
     linked_spatial_condition_uuid: Optional[UUID] = None
     is_open: Optional[bool] = None
+    is_engaged: Optional[bool] = None
     blocks_movement: bool = False
     blocks_optics: bool = False
     blocks_propagation: bool = False

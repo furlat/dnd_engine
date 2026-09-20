@@ -27,6 +27,294 @@ is now imported through the original Studio schema, independently of gameplay.
 
 ### Current position — read this before the checkpoint details
 
+**September 20 — material review actors corrected.** Bone examples now use
+the premade Undead Skeleton Archer, including the mixed-material scene. Toxic
+examples use the packaged Orc01 with an explicitly configured corrosive review
+response. Canonical Orc rules are unchanged. The [14-clip gallery](http://127.0.0.1:8767/runs/20260920T002005Z-c8c90f/index.html)
+passes across 2,938 four-camera frames with no media gaps; 25 replay tests pass
+and affected modules typecheck clean. This is a creature/fixture selection
+correction, not a change to counterpart residue extent or quantity.
+
+**September 20 — blood reference restored for visual review.** The user rejected the
+modest tuning below: the compact replacement lost the two-goblin reference's
+spray and cross-tile distribution. The [reference correction](agent_docs/BLOOD_REFERENCE_CORRECTION_2026-09-20.md)
+records the moderately high target, independent reviews and ordinary-blood
+geometry/media correction. Production now uses the original 56-droplet
+distribution, broader native receiving regions and five-hit irregular pool
+growth. Counterpart hazard coverage is preserved. The [28-clip saved-event gallery](http://127.0.0.1:8767/runs/20260920T001053Z-bfa9ce/index.html)
+passes across 3,260 four-camera frames with no media gaps. Both reviews and
+focused regressions pass; the user's visual judgment remains distinct from
+replay correctness.
+
+**September 20 — moderate gore tuning, subsequently visually rejected.** Six existing native
+ellipse records now give approximately 35% wider stains and modestly more spread.
+No new renderer or handler behavior was needed. Blood's five-unit growth and
+non-blood saturation remain explicit. The [reviewed tuning record](agent_docs/MODERATE_GORE_TUNING_2026-09-20.md)
+contains the visual comparison, unchanged canonical tile-membership check and
+hazard/replay verification. **101 tests passed**. The [new 28-clip gallery](http://127.0.0.1:8767/runs/20260919T235102Z-e50471/index.html)
+passes across 5,024 four-camera frames, including seven-hit blood, bone,
+corrosive and dread sequences from both participants. Counterpart cases document
+their existing one-unit floor cap; they do not claim growing quantities. The
+prior gallery remains the before-comparison.
+
+
+**September 20 — weapon motion and facing corrected after visual review.**
+The [bounded correction and results](agent_docs/WEAPON_ANIMATION_AND_FACING_2026-09-20.md)
+replace global critical/elemental motion overrides with shared authored profiles:
+weapon-specific choices precede damage-type defaults. Dagger criticals use the
+requested overhead strike; ordinary piercing thrusts and swung morningstars
+remain distinct. Contact anchors and effects are recipe data, with no native
+combat change. Starting review poses now face participants toward each other;
+three deliberate rear-hit examples preserve the recipient's facing. The
+[updated 40-clip gallery](http://127.0.0.1:8767/runs/20260919T233559Z-0ebdbd/index.html)
+passes across 3,506 four-camera frames from saved player inputs. Focused and
+review/export regressions: **68 passed**; affected modules typecheck clean;
+anti-slop and ECS reviews approved. The document records the explicit offhand
+and fixed-rig coverage limits and the small TS-portable `sourceItemIds` extension.
+
+
+**September 20 — directed material releases implemented.** The
+[implementation result](agent_docs/BODY_RELEASE_IMPLEMENTATION_RESULT_2026-09-20.md)
+records the completed native geometry, capped tile contributions, subjective
+replay, historical particle arrivals and persistent organic/fragment floor.
+Piercing/slashing/blunt and critical detail share one native/presentation path.
+Blood, bones and existing demonic materials are connected; same-height supports
+and propagation admit deposits, with no new flight/cross-height mechanics.
+The [reviewed plan](agent_docs/BODY_RELEASE_IMPLEMENTATION_PLAN_2026-09-20.md)
+remains the contract, with its clipped-edge presentation limit documented in the
+result. Both final independent reviewers approved. Focused tests: 101 passed;
+affected modules typecheck clean. The broader run's 14 failures are inventoried
+explicitly rather than treated as a passing whole-repository suite.
+The [final gallery](http://127.0.0.1:8767/runs/20260919T230628Z-0a2658/index.html) passed all 40 clips
+(3,503 four-camera frames), replayed from saved player packets. The four
+opportunity cards retain a reported fixed-goblin decorative slash media gap. Wider
+skill-authored blood layouts suggested in the asset task remain a future gameplay
+decision. The result also records a concrete world-edit initialization follow-up
+found while preparing height fixtures; the final cases use the existing authored
+terrace.
+
+**Completed current unit — delivered spells and Fireball surfaces.**
+The user authorized the Fireball/walls, Eldritch Blast, Guiding Bolt and Acid
+Splash handoffs after the body/residue unit. The
+[implementation plan](agent_docs/SPELL_HANDOFF_INTEGRATION_2026-09-19.md) owns this
+work. Fireball now applies an inert native **Ashen** condition to its resolved
+floor supports, as explicitly requested by the user. Contacted wall faces retain
+their own condition state; rendering receives permitted after-values. Native
+area publication, subjective filtering, shared playback and selected artwork are
+connected. Eldritch uses independent native beam attacks; Guiding's mark and
+Acid's separate saves retain their existing native mechanics. The
+[30-clip spell gallery](http://127.0.0.1:8767/runs/20260919T151344Z-4b12b5/index.html)
+passes all replay checks across 3,304 four-camera frames, from both participants.
+Saved playback created **zero native events**. Input bytes and semantic traces
+match the preceding replay; only Fireball's review-camera framing changed.
+The implementation plan's results section records tests, independent anti-slop
+and ECS review, visual inspection, and the ground-mask/stair-art limits. These
+four spells extend shared capabilities; this is not completion of the encounter
+plan or acceptance of every artwork detail.
+
+**Projectile orientation correction after user review:** the imported point
+recipes now preserve NeuroClient's `isometricHybrid` residual rotation after
+selecting the actual authored row. The importer had disabled it. Shared sampler
+and renderer were already correct; neither needed new behavior. All 142 focused
+checks pass, including off-axis/socket/elevated alignment in all four cameras.
+The [corrected 16 point-spell clips](http://127.0.0.1:8767/runs/20260919T161448Z-2a27a7/index.html)
+pass from unchanged saved inputs, with zero native events during replay.
+The newer Fireball contact/timing gallery is below.
+
+**Fireball contact and travel correction:** recorded Ashen changes now join the
+ground-impact anchor, then reveal outward at 10 tiles/second (about 400ms over
+20ft). Existing marks remain visible on repeated hits. Travel is twice as fast
+and 20% larger; explosion size is preserved. The
+[updated 14 Fireball clips](http://127.0.0.1:8767/runs/20260919T162630Z-c573f3/index.html)
+pass across 1,594 four-camera frames from unchanged saved inputs and identical
+final states, with zero native event creation. Targeted timing/media tests pass
+47; separate regression and expanded area suites pass 169 and 76 respectively
+(overlapping runs, not summed). Anti-slop and ECS review passed the timing fix.
+
+**Foreground wall overwrite corrected:** an extended area sprite is now masked
+by actual foreground wall/frame/leaf silhouettes at final scene composition.
+The camera and impact's sides of the physical boundary determine occlusion;
+individual wall-segment Y keys no longer allow the blast to overwrite the wall.
+64 final-image cases pass (both layers, doors, orientations, all cameras, both
+sides and matching raised supports), plus 250 related tests. The open-door cases
+also require visible fire in the aperture. Native facts and timelines are unchanged.
+The [updated 14 clips](http://127.0.0.1:8767/runs/20260919T164739Z-060990/index.html)
+pass across 1,594 four-camera frames. Direct comparison with the preceding run
+confirms identical saved inputs, states, lineages, bound heads and frame traces;
+only final composed pixels change. Another 41 gallery/live/ranged/trap tests pass.
+See the [bounded fix and reviews](agent_docs/SPELL_HANDOFF_INTEGRATION_2026-09-19.md#foreground-wall-leak-correction--2026-09-19).
+
+**Exposed wall contact corrected after the user's clarification:** fire may
+wash over a physically reachable wall face; it may not cross the wall. The shared
+compositor now restores only receiving silhouette pixels at that wall's depth,
+with disjoint ground/wall ownership and a world-space check for intervening walls.
+Existing native wall-face Ashen conditions and their soot rendering were already
+working and are preserved. 104 final-composition tests pass, including foreground
+blocking, rear contact, doors, both blends, all cameras, an intervening wall and
+foreground-body ordering. The composition/timeline suite passes 180; a separate
+native/projection/timing/media suite passes 171 (overlapping sets). Geometry masks
+are reused across frames and capped at four views per cast. See the
+[implementation and independent reviews](agent_docs/SPELL_HANDOFF_INTEGRATION_2026-09-19.md#exposed-wall-contact-correction--2026-09-19).
+The [updated 14 paired clips](http://127.0.0.1:8767/runs/20260919T172957Z-0a2de3/index.html)
+pass across 1,594 four-camera frames from unchanged saved event inputs. Contact
+and persistent charred aftermath were inspected; no native scenario was rerun.
+Mixed front/rear corners retain conservative occlusion; full elevated/L-junction
+native scene videos and stair-shaped soot are not claimed by these tests.
+
+**Completed preceding unit — body releases, tile residues, skeletons and demons.**
+The [approved unit](agent_docs/BODY_RELEASES_AND_RESIDUES_PLAN_2026-09-19.md#13-bodyresidue-implementation-and-review)
+now connects shared creature responses, tile-owned blood/bone/corrosive/dread
+profiles, paid fear retreat and saved subjective playback. Delivered floor traces,
+injury strips and bloodied spike overlays are integrated. The Blood and Bone
+Workshop is playable with `python -m game --encounter encounter.residue_workshop`;
+the actual frame-loop test covers its lever, turn progression and enemy AI.
+The integrated suite passed 193 tests with two existing stair-occlusion xfails;
+the expanded strip suite passes 11 and live session/frame-loop checks pass four.
+These counts overlap and are separate runs, not a summed total.
+The linked results record owns gallery evidence and remaining limits, including
+the earlier interrupted-jump discrepancy below and unselected blood-amount rules.
+The [current 22-clip gallery](http://127.0.0.1:8767/runs/20260919T021723Z-83290f/index.html)
+covers 11 paired native experiments. All 4,121 four-camera frames replay with
+identical input/video bytes and matching semantic traces, without native execution.
+The subsequent spell/scorch handoff is completed above; this remains separate
+body/residue evidence.
+
+**Jump/floor-contact prerequisite and scope correction.**
+The user explicitly rejected expanding this into flight behavior: “we are not
+implementing flight stuff … we were just fixing jump.” The added Move-based
+flight/hover transitions, hover experiments and Land-before-walking gate are
+removed. No landing-price, Land-action or wing-dismissal decision blocks this work.
+The [A0 contract](agent_docs/BODY_RELEASES_AND_RESIDUES_PLAN_2026-09-19.md#a0-close-the-demonstrated-jumpfloor-contact-defect-first)
+now states that scope directly. Jump crosses traps in AIR and settles GROUND at
+its actual endpoint; walking and Misty Step contact remain intact. Native layers,
+shared effect admission and saved player facts support this correction without
+turning it into a flight implementation.
+
+The narrowed implementation passes **195 integrated tests**, including 30 native
+contact/admission cases. [Four paired jump-only clips](http://127.0.0.1:8767/runs/20260919T011700Z-43319b/index.html)
+replay identically from saved events and are available in the main archive. The
+former 206-test/six-clip counts included the withdrawn hover scenario and are
+historical. Two late interrupted-jump views remain explicitly flagged: the
+existing pre-takeoff reaction presentation holds the body at launch while native
+partial movement can land on a trap. Passing event checks does not accept that
+discrepancy.
+
+The user refined dread blood to paid retreat toward the entry cell, ending fear
+on that exit and remaining frightened when retreat is unaffordable. This phase E
+rule now works through native movement and the shared historical compositor.
+Misty Step uses one paid adjacent step toward departure on a failed save; jumping
+lands before its recorded return walk. No flight feature was added.
+Anti-slop and ECS/anti-OOP review cover the narrowed contract and implementation.
+
+**September 19 current follow-up — full trap lifecycle implemented:** native
+discovered actions now record detected/undetected entry, exit and damaging
+re-entry while raised, lever deactivation and safe crossings, then lever
+activation beneath a stationary occupant. Tests follow that same ten-action
+narrative from both saved viewpoints. Actual lever/plain/coated sheets use the
+shared painter and historical clock; seven experiments produce 14 four-camera
+clips. **14/14 fresh-process saved-input replays pass, with unchanged inputs and
+final states and no reported gaps.** The
+[acceptance/results record](agent_docs/TRAP_STATE_PLAN_2026-09-19.md#current-clip-acceptance-unit)
+owns this scope and reviews. Earlier pending-occupant-decision and staged-only
+language below is historical and superseded.
+
+The review [archive](http://127.0.0.1:8767/) now lists all saved runs, with a
+backlink from each gallery. Pixel-difference regression comparison is a
+[documented future idea](devtools/animation_review/README.md#proposed-visual-regression-comparison--documented-not-implemented),
+explicitly not implemented. **Bloodied is now approved as a tile-owned property**,
+mechanically inert for now and available for later elemental/magic interactions.
+The requested next unit has a
+[full body-release/residue plan](agent_docs/BODY_RELEASES_AND_RESIDUES_PLAN_2026-09-19.md):
+one shared configured response per creature, repeated release facts, persistent
+tile conditions, bloodied spike art, both modular Body 2 and fixed skeleton rigs,
+and selected demon variants with corrosive or low-DC fear residue. The approved
+initial content uses entry-only 1d4 acid and Wisdom DC 10 paid retreat.
+Hazardous residues use existing local spatial handlers;
+ground-sourced fear needs a bounded extension of the existing condition. The
+plan includes implementation order, paired four-camera narratives, saved-event
+replay and anti-slop/anti-OOP review. This supersedes the earlier spike-only and
+map-global subscription proposals. Current implementation status is at the top
+of the body/residue plan; older study checkpoints below are historical.
+
+**Historical ground-contact baseline — flight expansion superseded:** the initial
+matrix had 15 passing and 6 failing cases, including flight rows. It exposed real
+jump-over-trap failures, but also encoded the assistant's later-withdrawn hover
+scope. The active A0 contract above supersedes those flight expectations and the
+proposed flight-touchdown blocker. Walking, jump landing and Misty Step remain
+controls in the selected native jump/contact suite.
+
+**September 19 trap backend unit validated:** persistent trap mechanics,
+state-based descriptions, remembered observer discovery and three shared spike
+payload profiles now cross native and saved player events. Finite levers lower
+without deleting; reusable controls request activation/deactivation from their
+own handle state. **128 gameplay/replay tests and four architecture checks pass.**
+The [results and limits](agent_docs/TRAP_STATE_PLAN_2026-09-19.md#backend-result)
+record validation and existing type/legacy-fixture failures. Manual activation
+currently changes state without processing existing occupants; that gameplay
+choice is still pending. The authorized artwork request has been sent to the
+existing sprite task after backend validation, prioritizing matching spike
+variants before the wire/clamp/vent families. Actual sheet binding and visual
+acceptance remain outstanding.
+
+**September 19 trap design and variant study:** the user requested a small
+backend-first plan before resuming art integration. The
+[trap state plan](agent_docs/TRAP_STATE_PLAN_2026-09-19.md) separates persistent
+Ready / Activated / Deactivated mechanics from observer discovery and ordinary
+spatial installation/removal. Handlers own causal state/effects; descriptions
+and presentation consume permitted recorded state. The first proposed content
+unit is plain spikes, poison-damage spikes and save-gated Poisoned spikes on one
+shared owner. A [twelve-variant study](agent_docs/GROUND_TRAP_VARIANTS_2026-09-19.md)
+maps later content onto existing damage, conditions and surfaces, with small
+reusable art families. It is a design backlog, not twelve implementation
+commitments. Manual activation against existing occupants remains an unanswered
+gameplay choice. Anti-slop and anti-OOP reviews approved this plan. The user
+subsequently authorized backend implementation, then an artwork handoff to the
+existing sprite task after backend validation. That bounded unit is now active.
+
+**September 19 selected prop art integration checkpoint:** the earlier pause
+allowed the backend unit above to establish real mechanical and observer state.
+Selected PNGs and an unused passive binding extension are staged; the current
+scene retains its existing bindings. The trap plan supersedes the original
+assumption that art could bind only the old trap lifecycle facts.
+The intended integration is to replace actual lever
+instances with the delivered Blender sheet and connect the approved spike
+overlay through existing world data/rendering. The
+[bounded unit](agent_docs/ENVIRONMENT_SPRITE_INTEGRATION_2026-09-19.md) preserves
+hand-contact timing, native state/disclosure and saved subjective replay, with
+anti-slop and anti-OOP reviews. The old screenshot-overlay preview is not proof
+of integration.
+
+**September 18 Misty Step unit complete:** native teleport discovery and causal
+parenting now connect to an ordinary Studio cast and a passive relocation binding.
+The received position/support/sight changes at release frame 8; no intermediate
+movement or opportunity attack is invented. Eight experiments yield **16 paired
+four-camera clips**, covering flat/reverse, water, elevation, doorway departure
+and arrival, and pause. All clips pass and fresh-process saved-input replay
+produces identical video bytes without native execution. A concrete projection
+fix prevents a located arrival from disclosing its hidden departure coordinate.
+The [gallery](http://127.0.0.1:8767/runs/20260918T184756Z-b1f17a/index.html) and
+[implementation/checks](agent_docs/MISTY_STEP_2026-09-18.md) retain the evidence,
+review approval and limits. Dedicated mist VFX remains unauthored. Native sight
+rules are unchanged. Continue the parent gameplay/environment lane below.
+
+**September 18 controls/contact unit complete:** reusable light/door controls and
+real chest lids now emit their state through the existing native owners. One
+shared arm-extension recipe uses the existing Studio schema and original Attack5
+clip. Recorded object/sight/loot changes appear at contact frame 3 (250ms), with
+retraction afterward; a lever's target child shares the outer physical reach.
+Native event progression remains independent. **233 gameplay checks pass**, with
+two existing stair-occlusion expected failures; **24 paired four-corner clips
+pass and replay from saved public input in a fresh process**, producing identical
+video bytes. Hidden target identity and foreign private inventory remain absent.
+Anti-slop and anti-OOP reviews approved the changes. The
+[combined gallery](http://127.0.0.1:8767/runs/20260918T144144Z-c728cc/index.html)
+and [completed results](agent_docs/GAMEPLAY_ENVIRONMENT_AND_DELIVERY_2026-09-18.md#completed-controls-and-contact-unit)
+record checks, the separate native catalog-count failure, art provenance and
+limits. Precise hand placement across prop heights and fixed rigs without this
+clip remain unimplemented. Broader shared action delivery and the environmental
+capabilities listed in that plan remain the parent lane; this unit does not
+claim they are complete. Immediate recipes below describe the older checkpoint.
+
 **September 18 environment checkpoint complete:** placed standing/wall lights
 and the linked trap lever now connect real actions, item after-values and shared
 prop drawing. An authored workshop and paired experiments prove extinguish /

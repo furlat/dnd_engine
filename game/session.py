@@ -26,16 +26,18 @@ from dnd.monsters.bestiary_content import BESTIARY_CREATURE_RECIPES_BY_ID
 from dnd.reactions import add_opportunity_attack_handler
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import BuiltBattlefield, build_battlefield
+from dnd.scenarios.encounter_assembler import assemble_encounter_recipe
+from dnd.scenarios.encounter_catalog import encounter_recipe
 
 
 @dataclass(frozen=True, slots=True)
 class Session:
-    """Existing live owners for two human characters and one native enemy side."""
+    """Existing live owners for human characters and one native enemy side."""
 
     game: Game
     encounter: Encounter
     battlefield: BuiltBattlefield
-    player_uuids: tuple[UUID, UUID]
+    player_uuids: tuple[UUID, ...]
     enemy_controller: NativeAIController
     births: tuple[EntityCreatedEvent, ...]
 
@@ -56,6 +58,7 @@ class Operation:
 
 def create_session(
     *,
+    encounter_id: str | None = None,
     battlefield_id: str = "battlefield.open_floor_bright",
     player_positions: tuple[tuple[int, int], tuple[int, int]] = ((10, 10), (10, 12)),
     enemy_positions: tuple[tuple[int, int], tuple[int, int]] = ((14, 10), (14, 12)),
@@ -67,6 +70,8 @@ def create_session(
     """
     SERVER_CONTENT_SYSTEM_RUNTIME.require()
     reset_engine_runtime()
+    if encounter_id is not None:
+        return _create_authored_session(encounter_id)
     battlefield = build_battlefield(battlefield_id)
     game = Game()
     fighter = create_premade_character(FIGHTER_PREMADE_ID, faction="heroes", position=player_positions[0])
@@ -102,6 +107,34 @@ def create_session(
     births = tuple(event for _, event in EventQueue.iter_events_since(0)
                    if isinstance(event, EntityCreatedEvent) and event.entity_uuid in game.entities)
     return Session(game, encounter, battlefield, (fighter.uuid, sorcerer.uuid), enemy_controller, births)
+
+
+def _create_authored_session(encounter_id: str) -> Session:
+    """Connect the selected two-side workshop recipe to existing controllers."""
+    recipe = encounter_recipe(encounter_id)
+    human_slot, = (slot for slot in recipe.roster_slots if slot.controller_defaults.controller == "human")
+    ai_slot, = (slot for slot in recipe.roster_slots if slot.controller_defaults.controller == "ai")
+    game = Game()
+    assembled = assemble_encounter_recipe(recipe, game=game, start_encounter=False)
+    encounter = assembled.encounter
+    players = assembled.entities_by_roster_slot[human_slot.roster_slot_id]
+    enemies = assembled.entities_by_roster_slot[ai_slot.roster_slot_id]
+    policy = ai_slot.controller_defaults.policy_id
+    assert policy is not None
+    controller = NativeAIController.create(
+        source_entity_uuid=enemies[0].uuid, game_id=str(encounter.uuid),
+        assignment_id=f"{encounter.uuid}:{ai_slot.roster_slot_id}",
+        controlled_entity_uuids=tuple(enemy.uuid for enemy in enemies),
+        policy_id=policy,
+    )
+    for player in players:
+        encounter.set_controller_for(player.uuid, HumanController(source_entity_uuid=player.uuid))
+    for enemy in enemies:
+        encounter.set_controller_for(enemy.uuid, controller)
+    encounter.start_encounter()
+    births = tuple(event for _, event in EventQueue.iter_events_since(0)
+                   if isinstance(event, EntityCreatedEvent) and event.entity_uuid in game.entities)
+    return Session(game, encounter, assembled.battlefield, tuple(player.uuid for player in players), controller, births)
 
 
 def _current_player(session: Session, actor_uuid: UUID) -> Entity:

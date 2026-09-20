@@ -1,14 +1,14 @@
 """Pygame composition of sampled actor rigs on the map or reference stage.
 
-Media is fully loaded before playback. This adapter owns pixels and fonts;
-authored time, phases and displayed facts remain in game.animation.
+Actor and legacy atlas rows load before playback; finite projectile frames use
+bounded shared storage. Authored clocks and facts remain in game.animation.
 """
 
 from __future__ import annotations
 
 from colorsys import rgb_to_hsv
 from dataclasses import dataclass, replace
-from math import ceil, cos, degrees, floor, pi, sin, sqrt
+from math import ceil, cos, degrees, floor, hypot, pi, sin, sqrt
 from types import MappingProxyType
 from typing import Mapping, Sequence
 
@@ -19,25 +19,105 @@ from dnd.core.life_types import LifeState
 from game.animation import (
     ActorContact, BodySample, CastSample, CastTimeline, GeometryProjectileSample, NumberSample,
     ProjectileSample, body_clip, body_elevation_steps, body_rig, project_geometry_projectile, project_projectile,
-    projectile_center_offset, projectile_contact, view_facing,
+    projectile_center_offset, projectile_phase_scale, projectile_contact, view_facing, cast_deliveries,
 )
-from game.animation_types import AnimationData, DepthMode, ElementColors, RigLayer as RigLayer
+from game.animation_types import AnimationData, DepthMode, ElementColors, Facing8, ParticleMediaAsset, StudioActorLayer, RigLayer as RigLayer
+from game.action_media import ActionStripCue, ActionStripSample
 from game.attack import AttackSample, AttackTimeline, attack_projectile_contact, project_attack_projectile
 from game.condition_animation import ConditionAppearance
 from game.condition_draw import CONDITION_BODY_SLOTS, condition_body_color
+from game.projectile_media import projectile_frame_layers
+from game.particle_media import sample_particles
+from game.area_media import AreaLayer, AreaMedia, mask_ground_area
+from game.draw_commands import DrawCommand as AnimationDrawCommand
+from dnd.types.world_placement import WorldObjectPlacement
 from game.projection import Camera, HEIGHT_STEP_PIXELS, TILE_WIDTH, painter_key, project_screen, rotate_position
 
 
-AnimationDrawCommand = tuple[
-    tuple[int, float, float, int, tuple[str, ...]],
-    pygame.Surface,
-    tuple[int, int],
-    int,
-    tuple[object, ...],
-]
 BodyRows = Mapping[tuple[str, str, str, int], pygame.Surface]
 LoadedBodyRows = dict[tuple[str, str, str, int], pygame.Surface]
 ActorMediaRequest = tuple[ActorContact, tuple[RigLayer, ...], tuple[str, ...]]
+
+
+def load_action_strip_media(cues: Sequence[ActionStripCue]) -> dict[str, pygame.Surface]:
+    """Preload only strips selected by this historical head."""
+    rows = {}
+    for cue in cues:
+        if isinstance(cue.asset, ParticleMediaAsset):
+            continue
+        if cue.asset.assetId not in rows:
+            path = cue.data.resources[f"/spritesheets/{cue.asset.source}.png"]
+            rows[cue.asset.assetId] = pygame.image.load(path).convert_alpha()
+    return rows
+
+
+def action_strip_draw_command(sample: ActionStripSample, rows: Mapping[str, pygame.Surface],
+                              camera: Camera) -> AnimationDrawCommand:
+    """NeuroStudio body overlay: bottom-center local anchor, inherited rig scale."""
+    cue, frame = sample.cue, sample.frame
+    track, asset, contact, data = cue.track, cue.asset, cue.contact, cue.data
+    assert not isinstance(asset, ParticleMediaAsset)
+    sheet = rows[asset.assetId]
+    width = sheet.width // asset.frames
+    height = sheet.height // (8 if asset.directional else 1)
+    row = data.rig.FACING_ROW[view_facing(contact.facing, camera.quadrant, data)] if asset.directional else 0
+    image = sheet.subsurface((frame * width, row * height, width, height))
+    if track.tint != 0xFFFFFF:
+        image = _colored(image, track.tint, data.vfx_source_hues.get(asset.source))
+    factor = contact.visual_scale * TILE_WIDTH / data.rig.TILE_W * camera.zoom
+    image = pygame.transform.scale(image, (
+        max(1, round(width * track.scale * factor * contact.visual_scale_x)),
+        max(1, round(height * track.scale * factor))))
+    elevation = body_elevation_steps(contact, data)
+    ground = project_screen(contact.grid, camera, elevation_steps=elevation)
+    bottom = (ground[0] + track.offsetX * factor * contact.visual_scale_x,
+              ground[1] + (body_rig(data, contact).origin_y_from_ground + track.offsetY) * factor)
+    return AnimationDrawCommand(
+        painter_key(contact.grid, elevation_steps=elevation, quadrant=camera.quadrant,
+                    role="action_strip", identity=(str(cue.event_uuid), track.id)),
+        image, (round(bottom[0] - image.width / 2), round(bottom[1] - image.height)), 0,
+        (str(cue.event_uuid), contact.grid, asset.assetId, "current", None, "authored",
+         "action_strip", elevation, track.id, frame),
+    )
+
+
+def action_media_draw_commands(sample: ActionStripSample, rows: Mapping[str, pygame.Surface],
+                               camera: Camera) -> tuple[AnimationDrawCommand, ...]:
+    """Both authored media representations share the existing track/clock."""
+    cue, asset = sample.cue, sample.cue.asset
+    if not isinstance(asset, ParticleMediaAsset):
+        return (action_strip_draw_command(sample, rows, camera),)
+    result = []
+    for particle in sample_particles(sample, asset):
+        head = project_screen(particle.grid, camera, elevation_steps=particle.elevation)
+        previous = project_screen(particle.previous_grid, camera, elevation_steps=particle.previous_elevation)
+        dx, dy = head[0] - previous[0], head[1] - previous[1]
+        distance = hypot(dx, dy)
+        ux, uy = (dx / distance, dy / distance) if distance else (1.0, 0.0)
+        factor = camera.zoom * cue.track.scale
+        length = min(asset.tailMaxPx * factor, max(asset.tailMinPx * factor, distance))
+        size = particle.size * camera.zoom
+        snap = asset.snapPx * camera.zoom
+        head = (round(head[0] / snap) * snap, round(head[1] / snap) * snap)
+
+        def polygon(left: float, top: float, right: float, bottom: float):
+            return tuple((head[0] + x * ux - y * uy, head[1] + x * uy + y * ux)
+                         for x, y in ((left, top), (right, top), (right, bottom), (left, bottom)))
+
+        body = (tuple(project_screen((particle.grid[0] + x, particle.grid[1] + y), camera,
+                      elevation_steps=particle.elevation) for x, y in particle.fragment)
+                if particle.fragment else polygon(-length, -size, 2 * factor, size))
+        highlight = polygon(-factor, -size, factor, -size + max(factor, size * .6))
+        left, top = floor(min(p[0] for p in body)), floor(min(p[1] for p in body))
+        right, bottom = ceil(max(p[0] for p in body)), ceil(max(p[1] for p in body))
+        image = pygame.Surface((max(1, right - left + 1), max(1, bottom - top + 1)), pygame.SRCALPHA)
+        for shape, color in ((body, asset.colors[0]), (highlight, asset.colors[1])):
+            pygame.draw.polygon(image, _rgb(color), tuple((x - left, y - top) for x, y in shape))
+        result.append(AnimationDrawCommand(painter_key(particle.grid, elevation_steps=particle.elevation,
+            quadrant=camera.quadrant, role="action_strip", identity=(str(cue.event_uuid), str(particle.identity))),
+            image, (left, top), 0, (str(cue.event_uuid), particle.grid, asset.assetId, "current", None, "authored",
+                                 "particle", particle.elevation, cue.track.id, particle.identity)))
+    return tuple(result)
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,6 +127,7 @@ class AnimationMedia:
     body_rows: Mapping[tuple[str, str, str, int], pygame.Surface]
     projectile_rows: Mapping[tuple[str, int], pygame.Surface]
     font: pygame.font.Font
+    area: AreaMedia | None = None
 
 
 def _rgb(color: int) -> tuple[int, int, int]:
@@ -70,6 +151,36 @@ def _colored(frame: pygame.Surface, tint: int, source_hue: float | None = None) 
     rgb[:] = np.clip(np.rint(rotated), 0, 255).astype(np.uint8)
     del rgb
     return result
+
+
+def _cast_row_key(layer: StudioActorLayer) -> str:
+    return layer.sourceSheet or f"cast:{layer.category}:{layer.colors.primary}:{layer.colors.secondary}"
+
+
+def _load_cast_rows(data: AnimationData, contact: ActorContact, clip_name: str,
+                    facing: Facing8, layers: Sequence[StudioActorLayer | None], rows: LoadedBodyRows) -> None:
+    """Resolve isolated overlays once; sampling only selects authored frames."""
+    rig = body_rig(data, contact)
+    clip = body_clip(data, contact, clip_name)
+    facings = {rig.facing_rows[view_facing(facing, quadrant, data)] for quadrant in range(4)}
+    for layer in layers:
+        if layer is None or not layer.enabled or layer.hidden:
+            continue
+        key = _cast_row_key(layer)
+        missing = [row for row in facings if (contact.rig_id, clip_name, key, row) not in rows]
+        if not missing:
+            continue
+        sheet = pygame.image.load(data.resources[layer.sourceSheet or clip.sheets[layer.category]]).convert_alpha()
+        for row in missing:
+            image = sheet.subsurface((0, row * rig.cell_height, clip.frames * rig.cell_width, rig.cell_height)).copy()
+            if layer.sourceSheet is None:
+                image = _colored(image, layer.colors.primary, data.vfx_source_hues.get(layer.category))
+                if layer.category == "Magic3" and layer.colors.secondary is not None:
+                    rgb = pygame.surfarray.pixels3d(image)
+                    white = np.linalg.norm(rgb.astype(np.float32) / 255 - 1, axis=2) < .5
+                    rgb[white] = _rgb(layer.colors.secondary)
+                    del rgb
+            rows[contact.rig_id, clip_name, key, row] = image
 
 
 def _actor_media_requests(data: AnimationData, actors: tuple[ActorMediaRequest, ...], *,
@@ -143,17 +254,21 @@ def load_attack_media(timeline: AttackTimeline, appearances: Mapping[str, tuple[
         # TakeDamage before entering the authored death clip.
         if timeline.damage_timing.hp_ms > timeline.damage_timing.start_ms:
             target_clips.add(data.damage_context.bodyClip)
-    return load_actor_media(data, (
+    cache = {} if body_rows is None else body_rows
+    loaded = load_actor_media(data, (
         (timeline.source, appearances[timeline.source.actor_uuid], ("Idle", timeline.clip)),
         (timeline.source, source_layers, (timeline.clip,)),
         (timeline.target, appearances[timeline.target.actor_uuid],
          tuple(target_clips)),
-    ), body_rows=body_rows)
+    ), body_rows=cache)
+    _load_cast_rows(data, timeline.source, timeline.clip, timeline.facing, timeline.layers, cache)
+    return loaded
 
 
 def load_animation_media(timeline: CastTimeline,
                          appearances: Mapping[str, tuple[RigLayer, ...]], *,
-                         body_rows: LoadedBodyRows | None = None) -> AnimationMedia:
+                         body_rows: LoadedBodyRows | None = None,
+                         area_boundaries: tuple[WorldObjectPlacement, ...] = ()) -> AnimationMedia:
     """Load selected media, reusing the session's existing body rows."""
     data, source, cast = timeline.data, timeline.source, timeline.recipe.cast
     projectile = timeline.recipe.projectile
@@ -182,20 +297,22 @@ def load_animation_media(timeline: CastTimeline,
             continue
         # This selected media cut uses the source colored-VFX path (Magic2).
         # Other palette policies need their own pixel proof before admission.
-        if layer.category not in data.vfx_source_hues or layer.category in {"Effect2", "Effect4", "Magic3", "Buff9"}:
+        if layer.sourceSheet is None and (layer.category not in data.vfx_source_hues or layer.category in {"Effect2", "Effect4", "Buff9"}):
             raise ValueError(f"cast-layer color policy has no selected pixel proof: {layer.category}")
         if layer.category not in caster_rig.slot_categories.get(layer.slot, ()):
             raise ValueError(f"cast layer is unavailable on rig: {source.caster.rig_id}/{layer.slot}/{layer.category}")
         if layer.category not in body_clip(data, source.caster, cast.actionClip).sheets:
             raise ValueError(f"missing cast layer binding: {source.caster.rig_id}/{cast.actionClip}/{layer.category}")
-        body_requests.setdefault((source.caster.rig_id, cast.actionClip, layer.category), set()).update(
-            caster_rig.facing_rows[view_facing(timeline.facing, quadrant, data)] for quadrant in range(4)
-        )
-    loaded_rows = _load_body_rows(data, body_requests, {} if body_rows is None else body_rows)
+    cache = {} if body_rows is None else body_rows
+    loaded_rows = _load_body_rows(data, body_requests, cache)
+    _load_cast_rows(data, source.caster, cast.actionClip, timeline.facing,
+                    (cast.weaponGlow, cast.aura, *(cast.effects or ()), cast.slash), cache)
     projectile_rows: dict[tuple[str, int], pygame.Surface] = {}
-    for application, interval in ((application, interval) for application in timeline.applications
+    for application, interval in ((application, interval) for application in cast_deliveries(timeline)
                                   for interval in application.projectile_intervals):
         asset = interval.asset
+        if asset.assetId in data.projectile_storage:
+            continue
         rows = {asset.rowOrder.index(view_facing(application.facing, quadrant, data)) for quadrant in range(4)}
         if all((asset.assetId, row) in projectile_rows for row in rows):
             continue
@@ -206,7 +323,8 @@ def load_animation_media(timeline: CastTimeline,
     font = pygame.font.SysFont(data.number_style.fontFamily, round(data.number_style.fontSizePx),
                                bold=data.number_style.fontWeight == "bold")
     return AnimationMedia(MappingProxyType(dict(appearances)), loaded_rows,
-                          MappingProxyType(projectile_rows), font)
+                          MappingProxyType(projectile_rows), font,
+                          AreaMedia(area_boundaries) if timeline.source.ground_target is not None else None)
 
 
 def _body_image(body: BodySample, contact: ActorContact, appearance: tuple[RigLayer, ...],
@@ -238,8 +356,7 @@ def _body_image(body: BodySample, contact: ActorContact, appearance: tuple[RigLa
         else:
             assert layer is not None
             category, tint = layer.category, layer.tint
-        source_hue = data.vfx_source_hues.get(category) if overlay else None
-        atlas = body_rows[contact.rig_id, body.clip, category, row]
+        atlas = body_rows[contact.rig_id, body.clip, _cast_row_key(overlay) if overlay else category, row]
         frame = atlas.subsurface((body.frame * rig.cell_width, 0, rig.cell_width, rig.cell_height))
         # Source hit flash clears filters and replaces tint. Never tint already
         # filtered pixels and then try to reconstruct the previous equipment.
@@ -248,8 +365,7 @@ def _body_image(body: BodySample, contact: ActorContact, appearance: tuple[RigLa
             colored = frame.copy()
             colored.set_alpha(round(layer.alpha * 255))
         else:
-            colored = _colored(frame, flash if flash is not None else tint,
-                               None if flash is not None else source_hue)
+            colored = frame if overlay is not None and flash is None else _colored(frame, flash if flash is not None else tint)
             if (flash is None and condition is not None and condition.body_color is not None
                     and slot in CONDITION_BODY_SLOTS):
                 colored = condition_body_color(colored, condition.body_color)
@@ -291,34 +407,38 @@ def _actor_blit(body: BodySample, contact: ActorContact, appearance: tuple[RigLa
     return image, (round(ground[0] - image.width / 2), round(root_y - image.height))
 
 
-def _projectile_blit(timeline: CastTimeline, effect: ProjectileSample,
-                     media: AnimationMedia, camera: Camera) -> tuple[pygame.Surface, tuple[int, int], int]:
+def projectile_layer_blits(timeline: CastTimeline, effect: ProjectileSample,
+                           media: AnimationMedia, camera: Camera,
+                           ) -> tuple[tuple[pygame.Surface, tuple[int, int], int], ...]:
+    """Ordered shared layer pixels; masks must leave source surfaces untouched."""
     data = timeline.data
     factor = TILE_WIDTH / data.rig.TILE_W * camera.zoom
     projectile = timeline.recipe.projectile
     assert projectile is not None and projectile.sprite is not None
     visual = projectile.sprite
     asset = data.projectile_assets[effect.asset_id]
-    atlas = media.projectile_rows[effect.asset_id, effect.row]
-    frame = atlas.subsurface((effect.column * asset.frame.width, 0, asset.frame.width, asset.frame.height))
-    frame = _colored(frame, visual.tint)
-    frame.set_alpha(round(visual.alpha * 255))
-    if visual.blendMode == "add":
-        # RGB_ADD ignores alpha; apply both source and authored alpha first.
-        rgb = pygame.surfarray.pixels3d(frame)
-        alpha = pygame.surfarray.array_alpha(frame).astype(np.float32) * visual.alpha / 255
-        rgb[:] = np.rint(rgb * alpha[:, :, None]).astype(np.uint8)
-        del rgb
-    scale = projectile.scale * factor
-    frame = pygame.transform.scale(frame, (max(1, round(frame.width * scale)), max(1, round(frame.height * scale))))
-    frame = pygame.transform.rotate(frame, -degrees(effect.rotation_radians))
+    phase_name = "cast" if effect.phase == "prepare" else effect.phase
+    phase = {"cast": asset.phases.cast, "travel": asset.phases.travel,
+             "impact": asset.phases.impact}[phase_name]
+    assert phase is not None
+    layers = projectile_frame_layers(data, asset, phase_name, effect.column - phase.start,
+                                     asset.rowOrder[effect.row], visual, media.projectile_rows)
+    scale = projectile_phase_scale(projectile, effect.phase) * factor
     # Authored offsets and pivots position art; they do not move world contacts.
     point = _reference_screen(effect.point, camera, data)
-    offset = projectile_center_offset(timeline.recipe, asset)
+    offset = projectile_center_offset(timeline.recipe, asset, effect.phase)
     center = (point[0] + offset[0] * factor, point[1] + offset[1] * factor)
-    return frame, (round(center[0] - frame.width / 2), round(center[1] - frame.height / 2)), (
-        pygame.BLEND_RGB_ADD if visual.blendMode == "add" else 0
-    )
+    result = []
+    for layer in layers:
+        frame = layer.image
+        size = (max(1, round(frame.width * scale)), max(1, round(frame.height * scale)))
+        if size != frame.get_size():
+            frame = pygame.transform.scale(frame, size)
+        if effect.rotation_radians != 0:
+            frame = pygame.transform.rotate(frame, -degrees(effect.rotation_radians))
+        destination = (round(center[0] - frame.width / 2), round(center[1] - frame.height / 2))
+        result.append((frame, destination, layer.blend))
+    return tuple(result)
 
 
 def _number_blit(number: NumberSample, contact: ActorContact, font: pygame.font.Font,
@@ -388,7 +508,7 @@ def geometry_draw_command(data: AnimationData, effect: GeometryProjectileSample,
                       identity=(root_event_uuid, effect.application_id or "", effect.phase))
     if depth_mode == "overlay":
         key = (200, *key[1:])
-    return (key, image, destination, blend,
+    return AnimationDrawCommand(key, image, destination, blend,
             (root_event_uuid, position, effect.primitive, "current", None, "authored",
              "projectile", height, effect.phase, None, effect.application_id))
 
@@ -407,7 +527,7 @@ def actor_draw_commands(data: AnimationData, body: BodySample, contact: ActorCon
         image, destination = _actor_blit(
             body, contact, layers, body_rows, data, camera, flash, only_shadow=shadow, condition=condition,
         )
-        commands.append((
+        commands.append(AnimationDrawCommand(
             painter_key(contact.grid, elevation_steps=height,
                         quadrant=camera.quadrant, role=role, identity=contact.actor_uuid),
             image, destination, 0,
@@ -440,7 +560,7 @@ def animation_draw_commands(timeline: CastTimeline, sample: CastSample,
         match reference_effect:
             case ProjectileSample():
                 effect = project_projectile(timeline, reference_effect, camera.quadrant)
-                image, destination, blend = _projectile_blit(timeline, effect, media, camera)
+                layers = projectile_layer_blits(timeline, effect, media, camera)
                 visual, frame = effect.asset_id, effect.column
             case GeometryProjectileSample():
                 effect = project_geometry_projectile(timeline, reference_effect, camera.quadrant)
@@ -456,11 +576,13 @@ def animation_draw_commands(timeline: CastTimeline, sample: CastSample,
                           role=role, identity=(source.root_event_uuid, effect.application_id or "", effect.phase))
         if projectile.depthMode == "overlay":
             key = (200, *key[1:])
-        commands.append((
+        commands.extend(AnimationDrawCommand(
             key, image, destination, blend,
             (source.root_event_uuid, position, visual, "current", None, "authored",
              "projectile", height, effect.phase, frame, effect.application_id),
-        ))
+            AreaLayer(source.ground_target.grid, source.ground_target.elevation_steps, media.area)
+            if source.ground_target is not None and effect.phase == "impact" else None,
+        ) for image, destination, blend in layers)
     commands.extend(number_draw_commands(data, sample.numbers, contacts, media.font, camera))
     return tuple(commands)
 
@@ -482,7 +604,7 @@ def number_draw_commands(data: AnimationData, numbers: tuple[NumberSample, ...],
         key = painter_key(contact.grid, elevation_steps=height,
                           quadrant=camera.quadrant, role="actor",
                           identity=(contact.actor_uuid, number.application_id or ""))
-        commands.append((
+        commands.append(AnimationDrawCommand(
             (210, *key[1:]), image, destination, 0,
             (contact.actor_uuid, contact.grid, number.label, "current", None, "authored",
              "floating_number", height, number.value, number.progress, number.application_id),
@@ -493,7 +615,7 @@ def number_draw_commands(data: AnimationData, numbers: tuple[NumberSample, ...],
 def actor_screen_bounds(commands: Sequence[AnimationDrawCommand]) -> dict[str, pygame.Rect]:
     """Visible body pixels, excluding shadows and the atlas's empty padding."""
     bounds: dict[str, pygame.Rect] = {}
-    for _, image, position, _, evidence in commands:
+    for _, image, position, _, evidence, _ in commands:
         if evidence[6] != "actor" or image.get_alpha() == 0:
             continue
         rect = image.get_bounding_rect(min_alpha=1).move(position)
@@ -538,7 +660,7 @@ def arrange_feedback_commands(commands: Sequence[AnimationDrawCommand],
     occupied = list(actor_bounds.values())
     arranged: list[AnimationDrawCommand] = []
     for command in commands:
-        key, image, position, blend, evidence = command
+        _, image, position, _, evidence, _ = command
         if evidence[6] != "floating_number":
             arranged.append(command)
             continue
@@ -547,7 +669,7 @@ def arrange_feedback_commands(commands: Sequence[AnimationDrawCommand],
         occupied.append(rect)
         # The trace's screen_xy comes from this actual draw position. Retained
         # world contact, application identity and progress remain unchanged.
-        arranged.append((key, image, rect.topleft, blend, evidence))
+        arranged.append(command._replace(destination=rect.topleft))
     return tuple(arranged)
 
 
@@ -600,15 +722,19 @@ def draw_animation(surface: pygame.Surface, timeline: CastTimeline, sample: Cast
         match reference_effect:
             case ProjectileSample():
                 effect = project_projectile(timeline, reference_effect, camera.quadrant)
-                image, destination, blend = _projectile_blit(timeline, effect, media, camera)
+                layers = projectile_layer_blits(timeline, effect, media, camera)
             case GeometryProjectileSample():
                 effect = project_geometry_projectile(timeline, reference_effect, camera.quadrant)
-                image, destination, blend = _geometry_blit(data, effect, timeline.recipe.elementColors, camera)
+                layers = (_geometry_blit(data, effect, timeline.recipe.elementColors, camera),)
         _, support_height = projectile_contact(timeline, effect, quadrant=camera.quadrant)
         unlifted_y = effect.point[1] + support_height * HEIGHT_STEP_PIXELS * data.rig.TILE_W / TILE_WIDTH
         depth = {"overlay": float("inf"), "ground": -float("inf"),
                  "world": unlifted_y / (data.rig.TILE_H / 2) * 1024 + 240}[projectile.depthMode]
-        draws.append((depth, image, destination, blend))
+        for image, destination, blend in layers:
+            ground = source.ground_target
+            if ground is not None and effect.phase == "impact" and media.area is not None:
+                image = mask_ground_area(image, destination, ground.grid, ground.elevation_steps, camera, media.area)
+            draws.append((depth, image, destination, blend))
     for _, image, destination, blend in sorted(draws, key=lambda item: item[0]):
         surface.blit(image, destination, special_flags=blend)
     for number in sample.numbers:

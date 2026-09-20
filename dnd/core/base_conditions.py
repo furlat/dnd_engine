@@ -15,7 +15,7 @@ from typing import ClassVar, Dict, Any, Optional, Self, Union, List, Tuple, Lite
 from dnd.core.modifiers import ContextAwareCondition
 from dnd.core.base_object import BaseObject
 from dnd.core.values import ModifiableValue
-from dnd.core.events import Event, EventPhase, EventType, SavingThrowEvent, EventHandler, EventQueue, WorldTileState
+from dnd.core.events import Event, EventPhase, EventType, SavingThrowEvent, EventHandler, EventQueue, SpatialChangeEvent, WorldTileState
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType
 from dnd.core.content.runtime import (
     BehaviorBinding,
@@ -37,8 +37,13 @@ from dnd.core.saving_throw_types import (
     SavingThrowEffectTag,
 )
 from dnd.core.content.identities import validate_namespaced_id
-from dnd.types.senses import OpticalObscurement
+from dnd.types.senses import OpticalObscurement, PerceivedSpatialEffect
 from dnd.types.actor import ConditionState, EntityStatsState, OutcomeProtection as OutcomeProtection
+from dnd.types.world import OccupancyLayer
+from dnd.types.residues import TileResidueState
+from dnd.types.residues import ObjectResidueState
+from dnd.core.item_types import ItemPresentationState
+from dnd.types.residue_fear import PaidEntryRetreat
 
 
 class Duration(BaseObject):
@@ -162,6 +167,7 @@ class ConditionApplicationEvent(Event):
     condition_state: Optional[ConditionState] = None
     resulting_stats: Optional[EntityStatsState] = None
     resulting_tile: Optional[WorldTileState] = None
+    resulting_item: Optional[ItemPresentationState] = None
 
     @field_validator("behavior_id")
     @classmethod
@@ -222,6 +228,7 @@ class ConditionRemovalEvent(Event):
     condition_state: Optional[ConditionState] = None
     resulting_stats: Optional[EntityStatsState] = None
     resulting_tile: Optional[WorldTileState] = None
+    resulting_item: Optional[ItemPresentationState] = None
 
     @field_validator("behavior_id")
     @classmethod
@@ -270,6 +277,28 @@ class ConditionRemovalEvent(Event):
 
 class BaseCondition(BaseObject):
     """Base state package for modifiers, handlers, subconditions, and cleanup."""
+
+    def snapshot_tile_residue(self) -> Optional[TileResidueState]:
+        """Return passive residue membership for a condition that owns it."""
+        return None
+
+    def snapshot_object_residue(self) -> Optional[ObjectResidueState]:
+        """Return passive contacted-face membership for an inert object residue."""
+        return None
+
+    def on_membership_changed(self, event: Event) -> None:
+        """Publish dependent state after the owner commits add/remove indexes."""
+
+    def get_paid_entry_retreat(self, *, since_cursor: int) -> Optional[PaidEntryRetreat]:
+        """Return a compelled entry retreat owned by this active condition."""
+        return None
+
+    def get_spatial_observation(
+        self, positions: Set[Tuple[int, int]], *, observer_uuid: UUID,
+        discovered: bool = False,
+    ) -> Optional[PerceivedSpatialEffect]:
+        """Return an observable fixture value for conditions that own one."""
+        return None
 
     description: str = Field(
         default="",
@@ -334,6 +363,26 @@ class BaseCondition(BaseObject):
     def is_active_spatial_condition(self) -> bool:
         """Return whether this condition is an active independent map owner."""
         return False
+
+    def affects_occupancy_layer(self, layer: OccupancyLayer) -> bool:
+        """Whether this condition's authored reach includes this creature layer."""
+        return layer in self.affected_occupancy_layers
+
+    def admits_occupancy_transition(self, event: SpatialChangeEvent) -> bool:
+        """Admit a spatial entry/exit without repeating unchanged layer contact."""
+        entering = event.event_type is EventType.SPATIAL_ENTITY_ENTERED
+        layer = event.occupancy_layer if entering else event.previous_occupancy_layer
+        if layer is not None and not self.affects_occupancy_layer(layer):
+            return False
+        other_layer = event.previous_occupancy_layer if entering else event.occupancy_layer
+        if (
+            event.old_position == event.position
+            and layer is not None
+            and other_layer is not None
+            and self.affects_occupancy_layer(other_layer)
+        ):
+            return False
+        return True
 
     def get_optical_obscurement_at(
         self,
@@ -435,6 +484,10 @@ class BaseCondition(BaseObject):
     hazard_filter: Optional[HazardFilter] = Field(
         default=None,
         description="Who this condition is hazardous to. None = not hazardous."
+    )
+    affected_occupancy_layers: frozenset[OccupancyLayer] = Field(
+        default_factory=lambda: frozenset(OccupancyLayer),
+        description="Creature layers reached by this condition's spatial effects.",
     )
     condition_stealth_dc: Optional[int] = Field(
         default=None,

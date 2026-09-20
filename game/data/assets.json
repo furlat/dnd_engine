@@ -1,105 +1,2642 @@
 {
   "schema_version": 1,
   "resources": {
-    "terrain.cliff.e": {"path": "environment/ground-g12-e.png", "native_size": [256, 256], "pivot": [128,208], "scale": 1.0},
-    "terrain.cliff.n": {"path": "environment/ground-g12-n.png", "native_size": [256, 256], "pivot": [128,208], "scale": 1.0},
-    "terrain.cliff.s": {"path": "environment/ground-g12-s.png", "native_size": [256, 256], "pivot": [128,208], "scale": 1.0},
-    "terrain.cliff.w": {"path": "environment/ground-g12-w.png", "native_size": [256, 256], "pivot": [128,208], "scale": 1.0},
-    "terrain.cliff.corner.e": {"path": "environment/ground-g13-e.png", "native_size": [256, 256], "pivot": [128,208], "scale": 1.0},
-    "terrain.cliff.corner.n": {"path": "environment/ground-g13-n.png", "native_size": [256, 256], "pivot": [128,208], "scale": 1.0},
-    "terrain.cliff.corner.s": {"path": "environment/ground-g13-s.png", "native_size": [256, 256], "pivot": [128,208], "scale": 1.0},
-    "terrain.cliff.corner.w": {"path": "environment/ground-g13-w.png", "native_size": [256, 256], "pivot": [128,208], "scale": 1.0},
-    "terrain.stairs.e": {"path": "environment/ground-g17-e.png", "native_size": [256, 256], "pivot": [160,224], "scale": 1.0},
-    "terrain.stairs.n": {"path": "environment/ground-g17-n.png", "native_size": [256, 256], "pivot": [160,192], "scale": 1.0},
-    "terrain.stairs.s": {"path": "environment/ground-g17-s.png", "native_size": [256, 256], "pivot": [96,224], "scale": 1.0},
-    "terrain.stairs.w": {"path": "environment/ground-g17-w.png", "native_size": [256, 256], "pivot": [96,192], "scale": 1.0},
-    "terrain.earth.e": {"path": "environment/ground-a1-e.png", "native_size": [256, 256], "pivot": [128, 208], "scale": 1.0},
-    "terrain.earth.n": {"path": "environment/ground-a1-n.png", "native_size": [256, 256], "pivot": [128, 208], "scale": 1.0},
-    "terrain.earth.s": {"path": "environment/ground-a1-s.png", "native_size": [256, 256], "pivot": [128, 208], "scale": 1.0},
-    "terrain.earth.w": {"path": "environment/ground-a1-w.png", "native_size": [256, 256], "pivot": [128, 208], "scale": 1.0},
-    "terrain.stone.e": {"path": "environment/ground-d1-e.png", "native_size": [256, 256], "pivot": [128, 208], "scale": 1.0},
-    "terrain.stone.n": {"path": "environment/ground-d1-n.png", "native_size": [256, 256], "pivot": [128, 208], "scale": 1.0},
-    "terrain.stone.s": {"path": "environment/ground-d1-s.png", "native_size": [256, 256], "pivot": [128, 208], "scale": 1.0},
-    "terrain.stone.w": {"path": "environment/ground-d1-w.png", "native_size": [256, 256], "pivot": [128, 208], "scale": 1.0},
-    "terrain.wood.e": {"path": "environment/ground-f1-e.png", "native_size": [256, 256], "pivot": [128, 208], "scale": 1.0},
-    "terrain.wood.n": {"path": "environment/ground-f1-n.png", "native_size": [256, 256], "pivot": [128, 208], "scale": 1.0},
-    "terrain.wood.s": {"path": "environment/ground-f1-s.png", "native_size": [256, 256], "pivot": [128, 208], "scale": 1.0},
-    "terrain.wood.w": {"path": "environment/ground-f1-w.png", "native_size": [256, 256], "pivot": [128, 208], "scale": 1.0},
-    "stone.wall.straight.e": {"path": "environment/wall-d1-e.png", "native_size": [256, 256], "pivot": [128, 207.36], "scale": 1.0078740157480315},
-    "stone.wall.straight.n": {"path": "environment/wall-d1-n.png", "native_size": [256, 256], "pivot": [128, 207.36], "scale": 1.0078740157480315},
-    "stone.wall.straight.s": {"path": "environment/wall-d1-s.png", "native_size": [256, 256], "pivot": [128, 207.36], "scale": 1.0078740157480315},
-    "stone.wall.straight.w": {"path": "environment/wall-d1-w.png", "native_size": [256, 256], "pivot": [128, 207.36], "scale": 1.0078740157480315},
-    "stone.wall.corner.e": {"path": "environment/wall-d2-e.png", "native_size": [256, 256], "pivot": [128, 207.36], "scale": 1.0078740157480315},
-    "stone.wall.corner.n": {"path": "environment/wall-d2-n.png", "native_size": [256, 256], "pivot": [128, 207.36], "scale": 1.0078740157480315},
-    "stone.wall.corner.s": {"path": "environment/wall-d2-s.png", "native_size": [256, 256], "pivot": [128, 207.36], "scale": 1.0078740157480315},
-    "stone.wall.corner.w": {"path": "environment/wall-d2-w.png", "native_size": [256, 256], "pivot": [128, 207.36], "scale": 1.0078740157480315},
-    "wood.wall.straight.e": {"path": "environment/wall-c1-e.png", "native_size": [256, 256], "pivot": [128, 208], "scale": 1.0},
-    "wood.wall.straight.n": {"path": "environment/wall-c1-n.png", "native_size": [256, 256], "pivot": [128, 208], "scale": 1.0},
-    "wood.wall.straight.s": {"path": "environment/wall-c1-s.png", "native_size": [256, 256], "pivot": [128, 208], "scale": 1.0},
-    "wood.wall.straight.w": {"path": "environment/wall-c1-w.png", "native_size": [256, 256], "pivot": [128, 208], "scale": 1.0},
-    "wood.wall.corner.e": {"path": "environment/wall-c2-e.png", "native_size": [256, 256], "pivot": [128, 208], "scale": 1.0},
-    "wood.wall.corner.n": {"path": "environment/wall-c2-n.png", "native_size": [256, 256], "pivot": [128, 208], "scale": 1.0},
-    "wood.wall.corner.s": {"path": "environment/wall-c2-s.png", "native_size": [256, 256], "pivot": [128, 208], "scale": 1.0},
-    "wood.wall.corner.w": {"path": "environment/wall-c2-w.png", "native_size": [256, 256], "pivot": [128, 208], "scale": 1.0},
-    "stone.door.frame.e": {"path": "environment/wall-d6-e.png", "native_size": [256, 256], "pivot": [128, 207.36], "scale": 1.0078740157480315},
-    "stone.door.frame.n": {"path": "environment/wall-d6-n.png", "native_size": [256, 256], "pivot": [128, 207.36], "scale": 1.0078740157480315},
-    "stone.door.frame.s": {"path": "environment/wall-d6-s.png", "native_size": [256, 256], "pivot": [128, 207.36], "scale": 1.0078740157480315},
-    "stone.door.frame.w": {"path": "environment/wall-d6-w.png", "native_size": [256, 256], "pivot": [128, 207.36], "scale": 1.0078740157480315},
-    "wood.door.closed.e": {"path": "environment/door-a1-e.png", "native_size": [256, 256], "pivot": [128, 209.92], "scale": 1.0078740157480315},
-    "wood.door.closed.n": {"path": "environment/door-a1-n.png", "native_size": [256, 256], "pivot": [128, 209.92], "scale": 1.0078740157480315},
-    "wood.door.closed.s": {"path": "environment/door-a1-s.png", "native_size": [256, 256], "pivot": [128, 209.92], "scale": 1.0078740157480315},
-    "wood.door.closed.w": {"path": "environment/door-a1-w.png", "native_size": [256, 256], "pivot": [128, 209.92], "scale": 1.0078740157480315},
-    "wood.door.open.e": {"path": "environment/door-a2-e.png", "native_size": [256, 256], "pivot": [128, 209.92], "scale": 1.0078740157480315},
-    "wood.door.open.n": {"path": "environment/door-a2-n.png", "native_size": [256, 256], "pivot": [128, 209.92], "scale": 1.0078740157480315},
-    "wood.door.open.s": {"path": "environment/door-a2-s.png", "native_size": [256, 256], "pivot": [128, 209.92], "scale": 1.0078740157480315},
-    "wood.door.open.w": {"path": "environment/door-a2-w.png", "native_size": [256, 256], "pivot": [128, 209.92], "scale": 1.0078740157480315},
-    "water.mask": {"path": "water/mask.png", "native_size": [256, 256], "pivot": [128, 208], "scale": 1.0},
-    "water.ripple": {"path": "water/ripple.png", "native_size": [512, 512], "pivot": [0, 0], "scale": 1.0},
-    "water.normal": {"path": "water/normal.png", "native_size": [512, 512], "pivot": [0, 0], "scale": 1.0},
-    "lever.marker": {"path": "environment/lever-marker.svg", "native_size": [16, 32], "pivot": [8, 26], "scale": 2.0},
-    "torch.wall.e": {"path": "torch/wall-east.png", "native_size": [256, 256], "pivot": [128, 209.92], "scale": 1.0078740157480315},
-    "torch.wall.w": {"path": "torch/wall-west.png", "native_size": [256, 256], "pivot": [128, 209.92], "scale": 1.0078740157480315},
-    "torch.body": {"path": "torch/body.png", "native_size": [256, 256], "pivot": [128, 209.92], "scale": 1.0078740157480315},
-    "torch.flame.00": {"path": "torch/flame/f52dea0b72342b246a1216e289dc5168.png", "native_size": [256, 256], "pivot": [128, 209.92], "scale": 1.0078740157480315},
-    "torch.flame.01": {"path": "torch/flame/d0ad60029a0000444a7857492c6a6c8f.png", "native_size": [256, 256], "pivot": [128, 209.92], "scale": 1.0078740157480315},
-    "torch.flame.02": {"path": "torch/flame/40f6c77eb5fc22a469128a41099f5290.png", "native_size": [256, 256], "pivot": [128, 209.92], "scale": 1.0078740157480315},
-    "torch.flame.03": {"path": "torch/flame/2276e4f9d5b5375498378d15537db6bb.png", "native_size": [256, 256], "pivot": [128, 209.92], "scale": 1.0078740157480315},
-    "torch.flame.04": {"path": "torch/flame/48ecf78b49001774082006e4def7022a.png", "native_size": [256, 256], "pivot": [128, 209.92], "scale": 1.0078740157480315},
-    "torch.flame.05": {"path": "torch/flame/23ca28e336270bc458c4e3b626186ca6.png", "native_size": [256, 256], "pivot": [128, 209.92], "scale": 1.0078740157480315},
-    "torch.flame.06": {"path": "torch/flame/284115ada2975f1409611751ae8743a7.png", "native_size": [256, 256], "pivot": [128, 209.92], "scale": 1.0078740157480315},
-    "torch.flame.07": {"path": "torch/flame/d5227bc3bac87004d8aae57741cc00ce.png", "native_size": [256, 256], "pivot": [128, 209.92], "scale": 1.0078740157480315},
-    "torch.flame.08": {"path": "torch/flame/3ceb33c008cf91545b06eb6a6763b90d.png", "native_size": [256, 256], "pivot": [128, 209.92], "scale": 1.0078740157480315},
-    "torch.flame.09": {"path": "torch/flame/3a911e83eaeb1714ea0a08180ec0c614.png", "native_size": [256, 256], "pivot": [128, 209.92], "scale": 1.0078740157480315},
-    "torch.flame.10": {"path": "torch/flame/1dca70b6deec00a4ab47b04675c4d55f.png", "native_size": [256, 256], "pivot": [128, 209.92], "scale": 1.0078740157480315},
-    "torch.flame.11": {"path": "torch/flame/730718fd0c474f54194c2fe0184ca24a.png", "native_size": [256, 256], "pivot": [128, 209.92], "scale": 1.0078740157480315},
-    "torch.flame.12": {"path": "torch/flame/e8b3e4d342784df4792e9d60d505de82.png", "native_size": [256, 256], "pivot": [128, 209.92], "scale": 1.0078740157480315},
-    "torch.flame.13": {"path": "torch/flame/d4eccfde5037d4d40986d61754bb33d4.png", "native_size": [256, 256], "pivot": [128, 209.92], "scale": 1.0078740157480315},
-    "torch.flame.14": {"path": "torch/flame/f09e44a4b6d53e9409a13272d4198c54.png", "native_size": [256, 256], "pivot": [128, 209.92], "scale": 1.0078740157480315},
-    "torch.flame.15": {"path": "torch/flame/77c165966e3947c40a3d08440e7f9bf2.png", "native_size": [256, 256], "pivot": [128, 209.92], "scale": 1.0078740157480315}
+    "residue.bone_fragments.e": {
+      "path": "environment/residues/bone-e.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1
+    },
+    "residue.bone_fragments.s": {
+      "path": "environment/residues/bone-s.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1
+    },
+    "residue.bone_fragments.w": {
+      "path": "environment/residues/bone-w.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1
+    },
+    "residue.bone_fragments.n": {
+      "path": "environment/residues/bone-n.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1
+    },
+    "residue.corrosive_demonic_blood.e": {
+      "path": "environment/residues/corrosive-e.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1
+    },
+    "residue.corrosive_demonic_blood.s": {
+      "path": "environment/residues/corrosive-s.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1
+    },
+    "residue.corrosive_demonic_blood.w": {
+      "path": "environment/residues/corrosive-w.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1
+    },
+    "residue.corrosive_demonic_blood.n": {
+      "path": "environment/residues/corrosive-n.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1
+    },
+    "residue.dread_blood.e": {
+      "path": "environment/residues/dread-e.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1
+    },
+    "residue.dread_blood.s": {
+      "path": "environment/residues/dread-s.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1
+    },
+    "residue.dread_blood.w": {
+      "path": "environment/residues/dread-w.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1
+    },
+    "residue.dread_blood.n": {
+      "path": "environment/residues/dread-n.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1
+    },
+    "residue.blood.e": {
+      "path": "environment/residues/blood-e.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1
+    },
+    "residue.blood.s": {
+      "path": "environment/residues/blood-s.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1
+    },
+    "residue.blood.w": {
+      "path": "environment/residues/blood-w.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1
+    },
+    "residue.blood.n": {
+      "path": "environment/residues/blood-n.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1
+    },
+    "spikes.blood.e.0": {
+      "path": "environment/spikes-blood/e-0.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.blood.e.1": {
+      "path": "environment/spikes-blood/e-1.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.blood.e.2": {
+      "path": "environment/spikes-blood/e-2.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.blood.e.3": {
+      "path": "environment/spikes-blood/e-3.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.blood.e.4": {
+      "path": "environment/spikes-blood/e-4.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.blood.e.5": {
+      "path": "environment/spikes-blood/e-5.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.blood.e.6": {
+      "path": "environment/spikes-blood/e-6.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.blood.n.0": {
+      "path": "environment/spikes-blood/n-0.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.blood.n.1": {
+      "path": "environment/spikes-blood/n-1.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.blood.n.2": {
+      "path": "environment/spikes-blood/n-2.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.blood.n.3": {
+      "path": "environment/spikes-blood/n-3.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.blood.n.4": {
+      "path": "environment/spikes-blood/n-4.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.blood.n.5": {
+      "path": "environment/spikes-blood/n-5.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.blood.n.6": {
+      "path": "environment/spikes-blood/n-6.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.blood.s.0": {
+      "path": "environment/spikes-blood/s-0.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.blood.s.1": {
+      "path": "environment/spikes-blood/s-1.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.blood.s.2": {
+      "path": "environment/spikes-blood/s-2.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.blood.s.3": {
+      "path": "environment/spikes-blood/s-3.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.blood.s.4": {
+      "path": "environment/spikes-blood/s-4.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.blood.s.5": {
+      "path": "environment/spikes-blood/s-5.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.blood.s.6": {
+      "path": "environment/spikes-blood/s-6.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.blood.w.0": {
+      "path": "environment/spikes-blood/w-0.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.blood.w.1": {
+      "path": "environment/spikes-blood/w-1.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.blood.w.2": {
+      "path": "environment/spikes-blood/w-2.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.blood.w.3": {
+      "path": "environment/spikes-blood/w-3.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.blood.w.4": {
+      "path": "environment/spikes-blood/w-4.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.blood.w.5": {
+      "path": "environment/spikes-blood/w-5.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.blood.w.6": {
+      "path": "environment/spikes-blood/w-6.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "terrain.cliff.e": {
+      "path": "environment/ground-g12-e.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "terrain.cliff.n": {
+      "path": "environment/ground-g12-n.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "terrain.cliff.s": {
+      "path": "environment/ground-g12-s.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "terrain.cliff.w": {
+      "path": "environment/ground-g12-w.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "terrain.cliff.corner.e": {
+      "path": "environment/ground-g13-e.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "terrain.cliff.corner.n": {
+      "path": "environment/ground-g13-n.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "terrain.cliff.corner.s": {
+      "path": "environment/ground-g13-s.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "terrain.cliff.corner.w": {
+      "path": "environment/ground-g13-w.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "terrain.stairs.e": {
+      "path": "environment/ground-g17-e.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        160,
+        224
+      ],
+      "scale": 1.0
+    },
+    "terrain.stairs.n": {
+      "path": "environment/ground-g17-n.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        160,
+        192
+      ],
+      "scale": 1.0
+    },
+    "terrain.stairs.s": {
+      "path": "environment/ground-g17-s.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        96,
+        224
+      ],
+      "scale": 1.0
+    },
+    "terrain.stairs.w": {
+      "path": "environment/ground-g17-w.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        96,
+        192
+      ],
+      "scale": 1.0
+    },
+    "terrain.earth.e": {
+      "path": "environment/ground-a1-e.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "terrain.earth.n": {
+      "path": "environment/ground-a1-n.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "terrain.earth.s": {
+      "path": "environment/ground-a1-s.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "terrain.earth.w": {
+      "path": "environment/ground-a1-w.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "terrain.stone.e": {
+      "path": "environment/ground-d1-e.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "terrain.stone.n": {
+      "path": "environment/ground-d1-n.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "terrain.stone.s": {
+      "path": "environment/ground-d1-s.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "terrain.stone.w": {
+      "path": "environment/ground-d1-w.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "terrain.wood.e": {
+      "path": "environment/ground-f1-e.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "terrain.wood.n": {
+      "path": "environment/ground-f1-n.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "terrain.wood.s": {
+      "path": "environment/ground-f1-s.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "terrain.wood.w": {
+      "path": "environment/ground-f1-w.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "stone.wall.straight.e": {
+      "path": "environment/wall-d1-e.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        207.36
+      ],
+      "scale": 1.0078740157480315
+    },
+    "stone.wall.straight.n": {
+      "path": "environment/wall-d1-n.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        207.36
+      ],
+      "scale": 1.0078740157480315
+    },
+    "stone.wall.straight.s": {
+      "path": "environment/wall-d1-s.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        207.36
+      ],
+      "scale": 1.0078740157480315
+    },
+    "stone.wall.straight.w": {
+      "path": "environment/wall-d1-w.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        207.36
+      ],
+      "scale": 1.0078740157480315
+    },
+    "stone.wall.corner.e": {
+      "path": "environment/wall-d2-e.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        207.36
+      ],
+      "scale": 1.0078740157480315
+    },
+    "stone.wall.corner.n": {
+      "path": "environment/wall-d2-n.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        207.36
+      ],
+      "scale": 1.0078740157480315
+    },
+    "stone.wall.corner.s": {
+      "path": "environment/wall-d2-s.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        207.36
+      ],
+      "scale": 1.0078740157480315
+    },
+    "stone.wall.corner.w": {
+      "path": "environment/wall-d2-w.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        207.36
+      ],
+      "scale": 1.0078740157480315
+    },
+    "wood.wall.straight.e": {
+      "path": "environment/wall-c1-e.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "wood.wall.straight.n": {
+      "path": "environment/wall-c1-n.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "wood.wall.straight.s": {
+      "path": "environment/wall-c1-s.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "wood.wall.straight.w": {
+      "path": "environment/wall-c1-w.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "wood.wall.corner.e": {
+      "path": "environment/wall-c2-e.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "wood.wall.corner.n": {
+      "path": "environment/wall-c2-n.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "wood.wall.corner.s": {
+      "path": "environment/wall-c2-s.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "wood.wall.corner.w": {
+      "path": "environment/wall-c2-w.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "stone.door.frame.e": {
+      "path": "environment/wall-d6-e.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        207.36
+      ],
+      "scale": 1.0078740157480315
+    },
+    "stone.door.frame.n": {
+      "path": "environment/wall-d6-n.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        207.36
+      ],
+      "scale": 1.0078740157480315
+    },
+    "stone.door.frame.s": {
+      "path": "environment/wall-d6-s.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        207.36
+      ],
+      "scale": 1.0078740157480315
+    },
+    "stone.door.frame.w": {
+      "path": "environment/wall-d6-w.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        207.36
+      ],
+      "scale": 1.0078740157480315
+    },
+    "wood.door.closed.e": {
+      "path": "environment/door-a1-e.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        209.92
+      ],
+      "scale": 1.0078740157480315
+    },
+    "wood.door.closed.n": {
+      "path": "environment/door-a1-n.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        209.92
+      ],
+      "scale": 1.0078740157480315
+    },
+    "wood.door.closed.s": {
+      "path": "environment/door-a1-s.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        209.92
+      ],
+      "scale": 1.0078740157480315
+    },
+    "wood.door.closed.w": {
+      "path": "environment/door-a1-w.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        209.92
+      ],
+      "scale": 1.0078740157480315
+    },
+    "wood.door.open.e": {
+      "path": "environment/door-a2-e.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        209.92
+      ],
+      "scale": 1.0078740157480315
+    },
+    "wood.door.open.n": {
+      "path": "environment/door-a2-n.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        209.92
+      ],
+      "scale": 1.0078740157480315
+    },
+    "wood.door.open.s": {
+      "path": "environment/door-a2-s.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        209.92
+      ],
+      "scale": 1.0078740157480315
+    },
+    "wood.door.open.w": {
+      "path": "environment/door-a2-w.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        209.92
+      ],
+      "scale": 1.0078740157480315
+    },
+    "water.mask": {
+      "path": "water/mask.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "water.ripple": {
+      "path": "water/ripple.png",
+      "native_size": [
+        512,
+        512
+      ],
+      "pivot": [
+        0,
+        0
+      ],
+      "scale": 1.0
+    },
+    "water.normal": {
+      "path": "water/normal.png",
+      "native_size": [
+        512,
+        512
+      ],
+      "pivot": [
+        0,
+        0
+      ],
+      "scale": 1.0
+    },
+    "lever.marker": {
+      "path": "environment/lever-marker.svg",
+      "native_size": [
+        16,
+        32
+      ],
+      "pivot": [
+        8,
+        26
+      ],
+      "scale": 2.0
+    },
+    "lever.engaged": {
+      "path": "environment/lever-engaged.svg",
+      "native_size": [
+        16,
+        32
+      ],
+      "pivot": [
+        8,
+        26
+      ],
+      "scale": 2.0
+    },
+    "lever.e.0": {
+      "path": "environment/lever/e-0.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "lever.e.1": {
+      "path": "environment/lever/e-1.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "lever.e.2": {
+      "path": "environment/lever/e-2.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "lever.e.3": {
+      "path": "environment/lever/e-3.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "lever.e.4": {
+      "path": "environment/lever/e-4.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "lever.e.5": {
+      "path": "environment/lever/e-5.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "lever.e.6": {
+      "path": "environment/lever/e-6.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "lever.n.0": {
+      "path": "environment/lever/n-0.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "lever.n.1": {
+      "path": "environment/lever/n-1.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "lever.n.2": {
+      "path": "environment/lever/n-2.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "lever.n.3": {
+      "path": "environment/lever/n-3.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "lever.n.4": {
+      "path": "environment/lever/n-4.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "lever.n.5": {
+      "path": "environment/lever/n-5.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "lever.n.6": {
+      "path": "environment/lever/n-6.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "lever.s.0": {
+      "path": "environment/lever/s-0.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "lever.s.1": {
+      "path": "environment/lever/s-1.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "lever.s.2": {
+      "path": "environment/lever/s-2.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "lever.s.3": {
+      "path": "environment/lever/s-3.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "lever.s.4": {
+      "path": "environment/lever/s-4.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "lever.s.5": {
+      "path": "environment/lever/s-5.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "lever.s.6": {
+      "path": "environment/lever/s-6.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "lever.w.0": {
+      "path": "environment/lever/w-0.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "lever.w.1": {
+      "path": "environment/lever/w-1.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "lever.w.2": {
+      "path": "environment/lever/w-2.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "lever.w.3": {
+      "path": "environment/lever/w-3.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "lever.w.4": {
+      "path": "environment/lever/w-4.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "lever.w.5": {
+      "path": "environment/lever/w-5.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "lever.w.6": {
+      "path": "environment/lever/w-6.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.e.0": {
+      "path": "environment/spikes/e-0.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.e.1": {
+      "path": "environment/spikes/e-1.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.e.2": {
+      "path": "environment/spikes/e-2.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.e.3": {
+      "path": "environment/spikes/e-3.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.e.4": {
+      "path": "environment/spikes/e-4.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.e.5": {
+      "path": "environment/spikes/e-5.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.e.6": {
+      "path": "environment/spikes/e-6.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.n.0": {
+      "path": "environment/spikes/n-0.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.n.1": {
+      "path": "environment/spikes/n-1.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.n.2": {
+      "path": "environment/spikes/n-2.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.n.3": {
+      "path": "environment/spikes/n-3.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.n.4": {
+      "path": "environment/spikes/n-4.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.n.5": {
+      "path": "environment/spikes/n-5.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.n.6": {
+      "path": "environment/spikes/n-6.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.s.0": {
+      "path": "environment/spikes/s-0.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.s.1": {
+      "path": "environment/spikes/s-1.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.s.2": {
+      "path": "environment/spikes/s-2.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.s.3": {
+      "path": "environment/spikes/s-3.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.s.4": {
+      "path": "environment/spikes/s-4.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.s.5": {
+      "path": "environment/spikes/s-5.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.s.6": {
+      "path": "environment/spikes/s-6.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.w.0": {
+      "path": "environment/spikes/w-0.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.w.1": {
+      "path": "environment/spikes/w-1.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.w.2": {
+      "path": "environment/spikes/w-2.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.w.3": {
+      "path": "environment/spikes/w-3.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.w.4": {
+      "path": "environment/spikes/w-4.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.w.5": {
+      "path": "environment/spikes/w-5.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.w.6": {
+      "path": "environment/spikes/w-6.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.coated.e.0": {
+      "path": "environment/spikes-coated/e-0.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.coated.e.1": {
+      "path": "environment/spikes-coated/e-1.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.coated.e.2": {
+      "path": "environment/spikes-coated/e-2.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.coated.e.3": {
+      "path": "environment/spikes-coated/e-3.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.coated.e.4": {
+      "path": "environment/spikes-coated/e-4.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.coated.e.5": {
+      "path": "environment/spikes-coated/e-5.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.coated.e.6": {
+      "path": "environment/spikes-coated/e-6.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.coated.n.0": {
+      "path": "environment/spikes-coated/n-0.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.coated.n.1": {
+      "path": "environment/spikes-coated/n-1.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.coated.n.2": {
+      "path": "environment/spikes-coated/n-2.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.coated.n.3": {
+      "path": "environment/spikes-coated/n-3.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.coated.n.4": {
+      "path": "environment/spikes-coated/n-4.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.coated.n.5": {
+      "path": "environment/spikes-coated/n-5.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.coated.n.6": {
+      "path": "environment/spikes-coated/n-6.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.coated.s.0": {
+      "path": "environment/spikes-coated/s-0.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.coated.s.1": {
+      "path": "environment/spikes-coated/s-1.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.coated.s.2": {
+      "path": "environment/spikes-coated/s-2.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.coated.s.3": {
+      "path": "environment/spikes-coated/s-3.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.coated.s.4": {
+      "path": "environment/spikes-coated/s-4.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.coated.s.5": {
+      "path": "environment/spikes-coated/s-5.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.coated.s.6": {
+      "path": "environment/spikes-coated/s-6.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.coated.w.0": {
+      "path": "environment/spikes-coated/w-0.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.coated.w.1": {
+      "path": "environment/spikes-coated/w-1.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.coated.w.2": {
+      "path": "environment/spikes-coated/w-2.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.coated.w.3": {
+      "path": "environment/spikes-coated/w-3.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.coated.w.4": {
+      "path": "environment/spikes-coated/w-4.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.coated.w.5": {
+      "path": "environment/spikes-coated/w-5.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "spikes.coated.w.6": {
+      "path": "environment/spikes-coated/w-6.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "chest.closed.e": {
+      "path": "environment/chest-a1-e.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "chest.closed.n": {
+      "path": "environment/chest-a1-n.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "chest.closed.s": {
+      "path": "environment/chest-a1-s.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "chest.closed.w": {
+      "path": "environment/chest-a1-w.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "chest.open.e": {
+      "path": "environment/chest-a2-e.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "chest.open.n": {
+      "path": "environment/chest-a2-n.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "chest.open.s": {
+      "path": "environment/chest-a2-s.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "chest.open.w": {
+      "path": "environment/chest-a2-w.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "torch.wall.e": {
+      "path": "torch/wall-east.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        209.92
+      ],
+      "scale": 1.0078740157480315
+    },
+    "torch.wall.w": {
+      "path": "torch/wall-west.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        209.92
+      ],
+      "scale": 1.0078740157480315
+    },
+    "torch.body": {
+      "path": "torch/body.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        209.92
+      ],
+      "scale": 1.0078740157480315
+    },
+    "torch.flame.00": {
+      "path": "torch/flame/f52dea0b72342b246a1216e289dc5168.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        209.92
+      ],
+      "scale": 1.0078740157480315
+    },
+    "torch.flame.01": {
+      "path": "torch/flame/d0ad60029a0000444a7857492c6a6c8f.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        209.92
+      ],
+      "scale": 1.0078740157480315
+    },
+    "torch.flame.02": {
+      "path": "torch/flame/40f6c77eb5fc22a469128a41099f5290.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        209.92
+      ],
+      "scale": 1.0078740157480315
+    },
+    "torch.flame.03": {
+      "path": "torch/flame/2276e4f9d5b5375498378d15537db6bb.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        209.92
+      ],
+      "scale": 1.0078740157480315
+    },
+    "torch.flame.04": {
+      "path": "torch/flame/48ecf78b49001774082006e4def7022a.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        209.92
+      ],
+      "scale": 1.0078740157480315
+    },
+    "torch.flame.05": {
+      "path": "torch/flame/23ca28e336270bc458c4e3b626186ca6.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        209.92
+      ],
+      "scale": 1.0078740157480315
+    },
+    "torch.flame.06": {
+      "path": "torch/flame/284115ada2975f1409611751ae8743a7.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        209.92
+      ],
+      "scale": 1.0078740157480315
+    },
+    "torch.flame.07": {
+      "path": "torch/flame/d5227bc3bac87004d8aae57741cc00ce.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        209.92
+      ],
+      "scale": 1.0078740157480315
+    },
+    "torch.flame.08": {
+      "path": "torch/flame/3ceb33c008cf91545b06eb6a6763b90d.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        209.92
+      ],
+      "scale": 1.0078740157480315
+    },
+    "torch.flame.09": {
+      "path": "torch/flame/3a911e83eaeb1714ea0a08180ec0c614.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        209.92
+      ],
+      "scale": 1.0078740157480315
+    },
+    "torch.flame.10": {
+      "path": "torch/flame/1dca70b6deec00a4ab47b04675c4d55f.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        209.92
+      ],
+      "scale": 1.0078740157480315
+    },
+    "torch.flame.11": {
+      "path": "torch/flame/730718fd0c474f54194c2fe0184ca24a.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        209.92
+      ],
+      "scale": 1.0078740157480315
+    },
+    "torch.flame.12": {
+      "path": "torch/flame/e8b3e4d342784df4792e9d60d505de82.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        209.92
+      ],
+      "scale": 1.0078740157480315
+    },
+    "torch.flame.13": {
+      "path": "torch/flame/d4eccfde5037d4d40986d61754bb33d4.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        209.92
+      ],
+      "scale": 1.0078740157480315
+    },
+    "torch.flame.14": {
+      "path": "torch/flame/f09e44a4b6d53e9409a13272d4198c54.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        209.92
+      ],
+      "scale": 1.0078740157480315
+    },
+    "torch.flame.15": {
+      "path": "torch/flame/77c165966e3947c40a3d08440e7f9bf2.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        209.92
+      ],
+      "scale": 1.0078740157480315
+    },
+    "residue.ashen.floor": {
+      "path": "environment/scorch-atlas-concept-v1.png",
+      "native_size": [
+        1254,
+        1254
+      ],
+      "pivot": [
+        0,
+        0
+      ],
+      "scale": 1
+    },
+    "residue.ashen.wall": {
+      "path": "environment/scorch-wall-atlas-concept-v1.png",
+      "native_size": [
+        1254,
+        1254
+      ],
+      "pivot": [
+        0,
+        0
+      ],
+      "scale": 1
+    }
   },
   "animations": {
     "torch.flame": {
       "fps": 10,
-      "frames": ["torch.flame.00", "torch.flame.01", "torch.flame.02", "torch.flame.03", "torch.flame.04", "torch.flame.05", "torch.flame.06", "torch.flame.07", "torch.flame.08", "torch.flame.09", "torch.flame.10", "torch.flame.11", "torch.flame.12", "torch.flame.13", "torch.flame.14", "torch.flame.15"]
+      "frames": [
+        "torch.flame.00",
+        "torch.flame.01",
+        "torch.flame.02",
+        "torch.flame.03",
+        "torch.flame.04",
+        "torch.flame.05",
+        "torch.flame.06",
+        "torch.flame.07",
+        "torch.flame.08",
+        "torch.flame.09",
+        "torch.flame.10",
+        "torch.flame.11",
+        "torch.flame.12",
+        "torch.flame.13",
+        "torch.flame.14",
+        "torch.flame.15"
+      ]
     }
   },
   "water": {
     "mask": "water.mask",
     "ripple": "water.ripple",
     "normal": "water.normal",
-    "shallowColor": [0.06878672, 0.40544975, 0.59119487, 0.6666667],
-    "deepColor": [0.07058824, 0.4039216, 0.5921569, 0.5529412],
-    "tint": [1, 1, 1, 1],
+    "shallowColor": [
+      0.06878672,
+      0.40544975,
+      0.59119487,
+      0.6666667
+    ],
+    "deepColor": [
+      0.07058824,
+      0.4039216,
+      0.5921569,
+      0.5529412
+    ],
+    "tint": [
+      1,
+      1,
+      1,
+      1
+    ],
     "depthBlendStrength": 1.554,
     "uvScale": 1.37,
-    "detailPan": [0.005, 0.004],
+    "detailPan": [
+      0.005,
+      0.004
+    ],
     "detailInfluence": 0.648,
-    "ripplePan": [0.1, 0.1],
+    "ripplePan": [
+      0.1,
+      0.1
+    ],
     "rippleTilingMultiplier": 1,
     "rippleAmount": 0.2,
     "uvWobbleAmount": 0.1,
-    "normalPanA": [0.1, 0.1],
-    "normalPanB": [1, -0.1],
+    "normalPanA": [
+      0.1,
+      0.1
+    ],
+    "normalPanB": [
+      1,
+      -0.1
+    ],
     "normalTilingMultiplier": 1,
     "normalScale": 2,
     "sheenStrength": 0.158,

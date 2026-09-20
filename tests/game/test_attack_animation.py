@@ -31,16 +31,28 @@ def data() -> AnimationData:
     return load_animation_data(rig_files=(Path("game/data/rigs/goblin01.json"),))
 
 
-@pytest.mark.parametrize(("weapon", "seed", "profile", "outcome"), [
-    ("weapon.longsword", 17, "melee-main", AttackOutcome.HIT),
-    ("weapon.longsword", 1, "melee-main", AttackOutcome.MISS),
-    ("weapon.longsword", 5, "melee-critical", AttackOutcome.CRIT),
-    ("weapon.dagger", 17, "melee-piercing", AttackOutcome.HIT),
-    ("weapon.mace", 17, "melee-blunt-swing", AttackOutcome.HIT),
-    ("weapon.greatsword", 17, "melee-heavy-cleave", AttackOutcome.HIT),
+@pytest.mark.parametrize(("weapon", "seed", "profile", "clip", "outcome"), [
+    ("weapon.longsword", 17, "melee-main", "Attack1", AttackOutcome.HIT),
+    ("weapon.longsword", 1, "melee-main", "Attack1", AttackOutcome.MISS),
+    ("weapon.longsword", 5, "melee-main", "Attack1", AttackOutcome.CRIT),
+    ("weapon.dagger", 17, "melee-piercing", "Attack6", AttackOutcome.HIT),
+    ("weapon.dagger", 1, "melee-piercing", "Attack6", AttackOutcome.MISS),
+    ("weapon.dagger", 5, "dagger-critical-overhead", "Attack4", AttackOutcome.CRIT),
+    ("weapon.rapier", 5, "melee-piercing", "Attack6", AttackOutcome.CRIT),
+    ("weapon.mace", 17, "melee-blunt-swing", "Attack2", AttackOutcome.HIT),
+    ("weapon.mace", 1, "melee-blunt-swing", "Attack2", AttackOutcome.MISS),
+    ("weapon.mace", 5, "melee-blunt-swing", "Attack2", AttackOutcome.CRIT),
+    ("weapon.morningstar", 17, "melee-spiked-swing", "Attack2", AttackOutcome.HIT),
+    ("weapon.morningstar", 5, "melee-spiked-swing", "Attack2", AttackOutcome.CRIT),
+    ("weapon.circus.soul_draining_morningstar", 17, "melee-spiked-swing", "Attack2", AttackOutcome.HIT),
+    ("weapon.circus.soul_draining_morningstar", 5, "melee-spiked-swing", "Attack2", AttackOutcome.CRIT),
+    ("weapon.circus.flaming_scimitar", 17, "melee-main", "Attack1", AttackOutcome.HIT),
+    ("weapon.circus.flaming_scimitar", 5, "melee-main", "Attack1", AttackOutcome.CRIT),
+    ("weapon.greatsword", 17, "melee-heavy-cleave", "Attack4", AttackOutcome.HIT),
+    ("weapon.greatsword", 5, "melee-heavy-cleave", "Attack4", AttackOutcome.CRIT),
 ])
 def test_weapon_facts_choose_authored_profile_and_contact_feedback(
-    data: AnimationData, weapon: str, seed: int, profile: str, outcome: AttackOutcome,
+    data: AnimationData, weapon: str, seed: int, profile: str, clip: str, outcome: AttackOutcome,
 ) -> None:
     random_state = random.getstate()
     try:
@@ -53,7 +65,11 @@ def test_weapon_facts_choose_authored_profile_and_contact_feedback(
         assert bound is not None
         timeline = bound.timeline
         assert timeline.profile_id == profile
+        assert timeline.clip == clip
         assert not timeline.missing_media
+        if weapon in ("weapon.circus.flaming_scimitar", "weapon.circus.soul_draining_morningstar"):
+            element = "Fire" if weapon == "weapon.circus.flaming_scimitar" else "Necrotic"
+            assert timeline.layers[0].colors.primary == data.damage_context.palette.byDamageType[element].elementColors.primary
         initial = sample_attack(timeline, 0)
         prior = sample_attack(timeline, timeline.contact_ms - 0.001)
         contact = sample_attack(timeline, timeline.contact_ms)

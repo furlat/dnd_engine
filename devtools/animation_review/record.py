@@ -11,6 +11,7 @@ from uuid import UUID
 import pygame
 
 from dnd.core.events import EventPhase
+from game.animation import facing_for_delta
 from game.animation_data import load_animation_data
 from game.animation_draw import LoadedBodyRows, actor_screen_bounds
 from game.animation_types import Facing8
@@ -22,7 +23,7 @@ from game.combat import actor_contact
 from game.feedback import FeedbackTrack, choreography_feedback, motion_feedback
 from game.motion import MotionTimeline, bind_motion
 from game.playback_frame import PlaybackFrame, sample_playback_frame
-from game.player_facts import AttackFact, ForcedMovementFact, MovementFact, PlayerState, StepFact
+from game.player_facts import AttackFact, ForcedMovementFact, MovementFact, PlayerState, SpellFact, StepFact
 from game.player_reduction import reduce_lineage, stage_lineage
 from game.projection import Camera, TILE_WIDTH, ZOOM_LEVELS, project_screen
 from game.scene import draw_actor_labels, load_scene_media, scene_actors
@@ -69,7 +70,13 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
     number_font, badge_font = fonts
     catalog = load_catalog()
     cache = SurfaceCache(catalog)
-    facings: dict[str, Facing8] = {}
+    facings: dict[str, Facing8] = {
+        actor.contact.actor_uuid: facing_for_delta(
+            (pose.toward[0] - pose.position[0], pose.toward[1] - pose.position[1]), data)
+        for actor in scene_actors(before, data, {})
+        for pose in case.initial_facings if actor.contact.grid == pose.position
+    }
+    trace["initial_facings"] = dict(facings)
     positions: dict[str, VisualPosition] = {}
     feedback_viewport = pygame.Rect(0, 44, size[0], size[1] - 44)
     actors = scene_actors(before, data, facings)
@@ -82,7 +89,19 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
                     for quadrant in range(4))
     # Frame the whole history; media loads only as those heads enter playback.
     framing_contacts = [actor.contact for actor in actors]
+    area_frames = []
     for root in sequence.lineages:
+        fact = root.root.fact
+        if (isinstance(fact, SpellFact) and fact.aoe_position is not None
+                and fact.behavior_id is not None and fact.behavior_id in data.drafts):
+            recipe = data.drafts[fact.behavior_id]
+            projectile = recipe.projectile
+            support = before.tiles.get(fact.aoe_position)
+            if recipe.area is not None and projectile is not None and projectile.sprite is not None and support is not None:
+                asset = data.projectile_assets[projectile.impact.assetId or projectile.sprite.assetId]
+                scale = projectile.impact.scale if projectile.impact.scale is not None else projectile.scale
+                area_frames.append((fact.aoe_position, support.elevation_steps,
+                                    asset.frame.width * scale, asset.frame.height * scale))
         entrants = scene_actors(stage_lineage(before, root), data, facings)
         framing_contacts.extend(actor.contact for actor in entrants)
         flight = bind_motion(before, root, data)
@@ -99,6 +118,15 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
         framing_contacts.extend(actor.contact for actor in retained_actors)
     body_rows: LoadedBodyRows = {}
     body_media = load_scene_media(actors, data, body_rows=body_rows)
+    if area_frames:
+        # Ground casts are reviewed around their destinations. Center the
+        # reserved effect canvas in the usable pane, below its fixed header.
+        focus = tuple((min(row[0][axis] for row in area_frames)
+                       + max(row[0][axis] for row in area_frames)) / 2 for axis in (0, 1))
+        height = round(sum(row[1] for row in area_frames) / len(area_frames))
+        cameras = tuple(Camera(quadrant=quadrant, zoom=1.0, viewport=size).with_focus(
+            (focus[0], focus[1]), elevation_steps=height) for quadrant in range(4))
+        cameras = tuple(replace(camera, pan=(camera.pan[0], camera.pan[1] + 22)) for camera in cameras)
     # Keep the old framing when it already covers the history. Longer routes
     # use one fixed focus/zoom for all four views, never a moving-camera patch.
     def fits(views: tuple[Camera, ...]) -> bool:
@@ -113,16 +141,24 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
                 bottom = y + (rig.origin_y_from_ground * contact.visual_scale - contact.body_lift_px) * factor
                 if x - width / 2 < 12 or x + width / 2 > size[0] - 12 or top < 56 or bottom > size[1] - 12:
                     return False
+            for position, elevation, width, height in area_frames:
+                x, y = project_screen(position, camera, elevation_steps=elevation)
+                if (x - width * factor / 2 < 12 or x + width * factor / 2 > size[0] - 12
+                        or y - height * factor / 2 < 56 or y + height * factor / 2 > size[1] - 12):
+                    return False
         return True
 
     if not fits(cameras):
-        focus = tuple((min(contact.grid[axis] for contact in framing_contacts)
-                       + max(contact.grid[axis] for contact in framing_contacts)) / 2 for axis in (0, 1))
-        height = round((min(contact.elevation_steps for contact in framing_contacts)
-                        + max(contact.elevation_steps for contact in framing_contacts)) / 2)
+        if not area_frames:
+            focus = tuple((min(contact.grid[axis] for contact in framing_contacts)
+                           + max(contact.grid[axis] for contact in framing_contacts)) / 2 for axis in (0, 1))
+            height = round((min(contact.elevation_steps for contact in framing_contacts)
+                            + max(contact.elevation_steps for contact in framing_contacts)) / 2)
         for zoom in reversed(ZOOM_LEVELS):
             cameras = tuple(Camera(quadrant=quadrant, zoom=zoom, viewport=size).with_focus(
                 (focus[0], focus[1]), elevation_steps=height) for quadrant in range(4))
+            if area_frames:
+                cameras = tuple(replace(camera, pan=(camera.pan[0], camera.pan[1] + 22)) for camera in cameras)
             if fits(cameras):
                 break
     trace["cameras"] = [{"quadrant": camera.quadrant, "focus": focus, "elevation_steps": height,
@@ -170,7 +206,8 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
                 bodies_in_view &= all(feedback_viewport.contains(bounds)
                                       for bounds in actor_screen_bounds(sample.commands).values())
                 draw_frame(view, sample.displayed, catalog, cache, camera, presentation_ms / 1000,
-                           show_grid=False, show_debug=False, mouse_position=None, extra_commands=sample.commands)
+                           show_grid=False, show_debug=False, mouse_position=None, extra_commands=sample.commands,
+                           world_transitions=sample.world_transitions, residue_reveals=sample.residue_reveals)
                 draw_actor_labels(view, cache.debug_font, sample.actors, sample.displayed, camera,
                                   shown_hp=sample.shown_hp, active_uuid=None,
                                   commands=sample.commands, viewport=feedback_viewport)

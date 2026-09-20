@@ -112,7 +112,8 @@ def select_attack_profile(recipe: AttackRecipe, event: AttackFact) -> AttackVari
                 and (match.outcomes is None or _OUTCOMES[event.attack_outcome] in match.outcomes)
                 and (match.primaryDamageTypes is None or primary in match.primaryDamageTypes)
                 and (match.elemental is None or match.elemental == elemental)
-                and (match.sourceItemRefs is None or any(ref.content_id == item_id for ref in match.sourceItemRefs))):
+                and (match.sourceItemRefs is None or any(ref.content_id == item_id for ref in match.sourceItemRefs))
+                and (match.sourceItemIds is None or item_id in match.sourceItemIds)):
             candidates.append(candidate)
     if not candidates:
         return None

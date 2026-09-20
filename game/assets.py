@@ -6,7 +6,12 @@ from dataclasses import dataclass
 import json
 from pathlib import Path
 from types import MappingProxyType
-from typing import Mapping, cast
+from typing import Literal, Mapping, cast
+
+from game.animation_types import ParticleMediaAsset, PropAnimation
+from game.residue_media import region_media_assets
+from game.world_animation import WorldTransitionSample, prop_animation
+from game.surface_residue import ResidueSurfaceCache, ResidueSurfaceStyle, WallFace
 
 import numpy as np
 import pygame
@@ -40,6 +45,9 @@ class LitAnimation:
 class PropBinding:
     body_by_pose: Mapping[str, str]
     lit_animation: LitAnimation | None
+    state_field: Literal["is_open", "is_engaged"] | None
+    active_body_by_pose: Mapping[str, str] | None
+    transition: PropAnimation | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,6 +60,23 @@ class AssetCatalog:
     flame_fps: int
     water: Mapping[str, object]
     props: Mapping[str, PropBinding]
+    spatial_effects: Mapping[str, PropAnimation]
+    spatial_residue_overlays: Mapping[tuple[str, str], Mapping[str, tuple[str, ...]]]
+    residue_particles: Mapping[str, ParticleMediaAsset]
+    residue_ground: Mapping[str, Mapping[str, str]]
+    residue_surfaces: Mapping[str, ResidueSurfaceStyle]
+    residue_wall_faces: Mapping[str, Mapping[str, tuple[WallFace, ...]]]
+
+
+def prop_animation_frame(animation: PropAnimation, pose: str, state: str,
+                         transition: WorldTransitionSample | None = None) -> tuple[str, int]:
+    """Sample the same finite picture sequence for props and ground devices."""
+    frame = animation.state_frames[state]
+    if transition is not None and transition.transition.current == state:
+        start = animation.state_frames[transition.transition.previous]
+        advance = int(max(0, transition.elapsed_ms) * animation.fps / 1000)
+        frame = start + min(abs(frame - start), advance) * (1 if frame >= start else -1)
+    return animation.frames_by_pose[pose][frame], frame
 
 
 def catalog_from_documents(
@@ -77,7 +102,16 @@ def catalog_from_documents(
         props[item_id] = PropBinding(
             body_by_pose=MappingProxyType(row["body_by_pose"]),
             lit_animation=None if loop is None else LitAnimation(tuple(loop["frames"]), loop["fps"]),
+            state_field=row.get("state_field"),
+            active_body_by_pose=(MappingProxyType(row["active_body_by_pose"])
+                                 if "active_body_by_pose" in row else None),
+            transition=prop_animation(row["transition"]) if "transition" in row else None,
         )
+    wall_faces = cast(dict, bindings.get("residue_wall_faces", {}))
+    face_profiles = {identity: MappingProxyType({pose: tuple(
+        WallFace(tuple(face["origin"]), tuple(face["across"]), tuple(face["down"]), face.get("reverse", False))
+        for face in faces) for pose, faces in poses.items()})
+        for identity, poses in wall_faces.get("profiles", {}).items()}
     return AssetCatalog(
         resources=MappingProxyType(resources),
         bindings=MappingProxyType(bindings),
@@ -85,6 +119,21 @@ def catalog_from_documents(
         flame_fps=flame["fps"],
         water=MappingProxyType(cast(dict, assets["water"])),
         props=MappingProxyType(props),
+        spatial_effects=MappingProxyType({identity: prop_animation(row)
+            for identity, row in cast(dict, bindings.get("spatial_effects", {})).items()}),
+        spatial_residue_overlays=MappingProxyType({
+            (identity, residue): MappingProxyType({pose: tuple(frames) for pose, frames in poses.items()})
+            for identity, row in cast(dict, bindings.get("spatial_effects", {})).items()
+            for residue, poses in row.get("residue_overlays", {}).items()
+        }),
+        residue_particles=MappingProxyType({identity: region_media_assets()[asset]
+            for identity, asset in cast(dict, bindings.get("residue_particles", {})).items()}),
+        residue_ground=MappingProxyType({identity: MappingProxyType(poses)
+            for identity, poses in cast(dict, bindings.get("residue_ground", {})).items()}),
+        residue_surfaces=MappingProxyType({identity: ResidueSurfaceStyle(**row)
+            for identity, row in cast(dict, bindings.get("residue_surfaces", {})).items()}),
+        residue_wall_faces=MappingProxyType({identity: face_profiles[profile]
+            for identity, profile in wall_faces.get("assets", {}).items()}),
     )
 
 
@@ -103,6 +152,7 @@ class SurfaceCache:
         if pygame.display.get_surface() is None:
             raise RuntimeError("pygame display must be initialized before asset loading")
         self.catalog = catalog
+        self.surface_residues = ResidueSurfaceCache()
         self._canonical: dict[str, pygame.Surface] = {}
         self._scaled: dict[tuple[str, float], pygame.Surface] = {}
         self._treated: dict[tuple[str, float, tuple[float, float, float]], pygame.Surface] = {}
@@ -212,8 +262,6 @@ class SurfaceCache:
             self.cache_hits += 1
             return cached
         rect = self.scaled(asset_id, zoom).get_bounding_rect(min_alpha=1)
-        if rect.width <= 0 or rect.height <= 0:
-            raise ValueError(f"asset {asset_id} has no nontransparent pixels")
         bounds = rect.x, rect.y, rect.width, rect.height
         self._alpha_bounds[key] = bounds
         self.cache_rebuilds += 1

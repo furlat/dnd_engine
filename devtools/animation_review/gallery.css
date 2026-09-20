@@ -21,6 +21,41 @@ body {
   color: var(--text);
 }
 
+a {
+  color: var(--accent);
+}
+
+.review-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin-bottom: 20px;
+  color: var(--muted);
+}
+
+.saved-runs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr));
+  gap: 16px;
+}
+
+.saved-run {
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--panel);
+  overflow-wrap: anywhere;
+}
+
+.saved-run h2 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.run-tags {
+  color: var(--muted);
+}
+
 main {
   max-width: 1860px;
   margin: auto;

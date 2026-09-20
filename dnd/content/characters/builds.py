@@ -5,6 +5,7 @@ from typing import cast
 from uuid import UUID, uuid4
 
 from dnd.actions_functional import setup_standard_actions, update_weapon_templates
+from dnd.body_responses import BLOOD_BODY_RESPONSE, install_body_response
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.appearance import AppearanceConfig, BodyCategory, HeadCategory
 from dnd.blocks.creature_proficiencies import CreatureProficienciesConfig
@@ -301,6 +302,7 @@ def prepare_character(
     )
     try:
         entity.set_character_body_identity(build.character_body_id)
+        install_body_response(entity, BLOOD_BODY_RESPONSE)
         entity.prepared_spell_selections = build.prepared_spells
         entity.feature_toggle_selections = build.feature_toggles
         setup_standard_actions(entity)

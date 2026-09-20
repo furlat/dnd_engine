@@ -1,0 +1,182 @@
+{
+  "rig_id": "smallscale.orc01",
+  "creature_content_refs": [
+    "content.srd_5_1_cc:creature:creature.orc@1"
+  ],
+  "rig": {
+    "cell_width": 128,
+    "cell_height": 128,
+    "origin_y_from_ground": 41,
+    "facing_rows": {
+      "E": 0,
+      "SE": 1,
+      "S": 2,
+      "SW": 3,
+      "W": 4,
+      "NW": 5,
+      "N": 6,
+      "NE": 7
+    },
+    "slot_order": [
+      "shadow",
+      "body"
+    ],
+    "slot_categories": {
+      "shadow": [
+        "Orc01Shadow"
+      ],
+      "body": [
+        "Orc01"
+      ]
+    },
+    "clips": {
+      "Idle": {
+        "source_clip": "Idle",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "Orc01": "/rigs/orc01/body/Idle.png",
+          "Orc01Shadow": "/rigs/orc01/shadow/Idle.png"
+        }
+      },
+      "TakeDamage": {
+        "source_clip": "TakeDamage 1",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "Orc01": "/rigs/orc01/body/TakeDamage 1.png",
+          "Orc01Shadow": "/rigs/orc01/shadow/TakeDamage 1.png"
+        }
+      },
+      "Die": {
+        "source_clip": "Die 1",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "Orc01": "/rigs/orc01/body/Die 1.png",
+          "Orc01Shadow": "/rigs/orc01/shadow/Die 1.png"
+        }
+      },
+      "Run": {
+        "source_clip": "Run",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "Orc01": "/rigs/orc01/body/Run.png",
+          "Orc01Shadow": "/rigs/orc01/shadow/Run.png"
+        }
+      },
+      "Rolling": {
+        "source_clip": "Roll 1",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "Orc01": "/rigs/orc01/body/Roll 1.png",
+          "Orc01Shadow": "/rigs/orc01/shadow/Roll 1.png"
+        }
+      },
+      "Attack1": {
+        "source_clip": "Attack 1",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "Orc01": "/rigs/orc01/body/Attack 1.png",
+          "Orc01Shadow": "/rigs/orc01/shadow/Attack 1.png"
+        }
+      },
+      "Attack2": {
+        "source_clip": "Attack 2",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "Orc01": "/rigs/orc01/body/Attack 2.png",
+          "Orc01Shadow": "/rigs/orc01/shadow/Attack 2.png"
+        }
+      }
+    },
+    "body_anchor": {
+      "x": 64,
+      "y": 72
+    }
+  },
+  "resources": {
+    "/rigs/orc01/body/Idle.png": "game/assets/rigs/orc01/body/Idle.png",
+    "/rigs/orc01/shadow/Idle.png": "game/assets/rigs/orc01/shadow/Idle.png",
+    "/rigs/orc01/body/TakeDamage 1.png": "game/assets/rigs/orc01/body/TakeDamage 1.png",
+    "/rigs/orc01/shadow/TakeDamage 1.png": "game/assets/rigs/orc01/shadow/TakeDamage 1.png",
+    "/rigs/orc01/body/Die 1.png": "game/assets/rigs/orc01/body/Die 1.png",
+    "/rigs/orc01/shadow/Die 1.png": "game/assets/rigs/orc01/shadow/Die 1.png",
+    "/rigs/orc01/body/Run.png": "game/assets/rigs/orc01/body/Run.png",
+    "/rigs/orc01/shadow/Run.png": "game/assets/rigs/orc01/shadow/Run.png",
+    "/rigs/orc01/body/Roll 1.png": "game/assets/rigs/orc01/body/Roll 1.png",
+    "/rigs/orc01/shadow/Roll 1.png": "game/assets/rigs/orc01/shadow/Roll 1.png",
+    "/rigs/orc01/body/Attack 1.png": "game/assets/rigs/orc01/body/Attack 1.png",
+    "/rigs/orc01/shadow/Attack 1.png": "game/assets/rigs/orc01/shadow/Attack 1.png",
+    "/rigs/orc01/body/Attack 2.png": "game/assets/rigs/orc01/body/Attack 2.png",
+    "/rigs/orc01/shadow/Attack 2.png": "game/assets/rigs/orc01/shadow/Attack 2.png"
+  },
+  "provenance": {
+    "archive": {
+      "name": "2D Orcs and Goblins - TopDown - V1.0.zip"
+    },
+    "files": {
+      "/rigs/orc01/body/Idle.png": {
+        "archive_member": "2D Orcs and Goblins - TopDown - V1.0/Seperate shadows and effects/Orc 01/Idle.png",
+        "bytes": 205503
+      },
+      "/rigs/orc01/shadow/Idle.png": {
+        "archive_member": "2D Orcs and Goblins - TopDown - V1.0/Seperate shadows and effects/Orc 01/Shadows/Idle.png",
+        "bytes": 113954
+      },
+      "/rigs/orc01/body/TakeDamage 1.png": {
+        "archive_member": "2D Orcs and Goblins - TopDown - V1.0/Seperate shadows and effects/Orc 01/TakeDamage 1.png",
+        "bytes": 268251
+      },
+      "/rigs/orc01/shadow/TakeDamage 1.png": {
+        "archive_member": "2D Orcs and Goblins - TopDown - V1.0/Seperate shadows and effects/Orc 01/Shadows/TakeDamage 1.png",
+        "bytes": 125136
+      },
+      "/rigs/orc01/body/Die 1.png": {
+        "archive_member": "2D Orcs and Goblins - TopDown - V1.0/Seperate shadows and effects/Orc 01/Die 1.png",
+        "bytes": 251341
+      },
+      "/rigs/orc01/shadow/Die 1.png": {
+        "archive_member": "2D Orcs and Goblins - TopDown - V1.0/Seperate shadows and effects/Orc 01/Shadows/Die 1.png",
+        "bytes": 149119
+      },
+      "/rigs/orc01/body/Run.png": {
+        "archive_member": "2D Orcs and Goblins - TopDown - V1.0/Seperate shadows and effects/Orc 01/Run.png",
+        "bytes": 276480
+      },
+      "/rigs/orc01/shadow/Run.png": {
+        "archive_member": "2D Orcs and Goblins - TopDown - V1.0/Seperate shadows and effects/Orc 01/Shadows/Run.png",
+        "bytes": 154049
+      },
+      "/rigs/orc01/body/Roll 1.png": {
+        "archive_member": "2D Orcs and Goblins - TopDown - V1.0/Seperate shadows and effects/Orc 01/Roll 1.png",
+        "bytes": 280722
+      },
+      "/rigs/orc01/shadow/Roll 1.png": {
+        "archive_member": "2D Orcs and Goblins - TopDown - V1.0/Seperate shadows and effects/Orc 01/Shadows/Roll 1.png",
+        "bytes": 148156
+      },
+      "/rigs/orc01/body/Attack 1.png": {
+        "archive_member": "2D Orcs and Goblins - TopDown - V1.0/Seperate shadows and effects/Orc 01/Attack 1.png",
+        "bytes": 294141
+      },
+      "/rigs/orc01/shadow/Attack 1.png": {
+        "archive_member": "2D Orcs and Goblins - TopDown - V1.0/Seperate shadows and effects/Orc 01/Shadows/Attack 1.png",
+        "bytes": 149269
+      },
+      "/rigs/orc01/body/Attack 2.png": {
+        "archive_member": "2D Orcs and Goblins - TopDown - V1.0/Seperate shadows and effects/Orc 01/Attack 2.png",
+        "bytes": 289495
+      },
+      "/rigs/orc01/shadow/Attack 2.png": {
+        "archive_member": "2D Orcs and Goblins - TopDown - V1.0/Seperate shadows and effects/Orc 01/Shadows/Attack 2.png",
+        "bytes": 150591
+      }
+    },
+    "notes": "Selected original sheets, copied unchanged; shared pack grid. No runtime archive access or hashes."
+  }
+}

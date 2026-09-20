@@ -28,7 +28,7 @@ from dnd.core.condition_types import (
 )
 from dnd.core.base_tiles import MovementMode
 from dnd.core.dice import AttackOutcome, Dice, RollType
-from dnd.core.events import EventPhase, RangeType, Range, Damage, EventType, EventHandler, Trigger, Event, ForcedMovementEvent
+from dnd.core.events import EventPhase, RangeType, Range, Damage, EventType, EventHandler, Trigger, Event, ForcedMovementEvent, EventQueue
 from dnd.types.abilities import AbilityName, SkillName
 from dnd.core.gridmap import get_map
 from dnd.core.creature_types import CreatureType, DamageType
@@ -42,7 +42,7 @@ from dnd.core.values import ModifiableValue
 from functools import partial
 from typing import Any, Dict
 from dnd.entity import Entity
-from dnd.actions import Dash, SpellAction, SpellEvent, entity_action_economy_cost_evaluator, entity_action_economy_cost_applier
+from dnd.actions import Dash, SpellAction, SpellEvent, entity_action_economy_cost_evaluator, entity_action_economy_cost_applier, resolve_paid_entry_retreats
 from dnd.spells.spell_utils import validate_line_of_sight
 from dnd.core.base_actions import Cost, BaseAction, ActionCategory, ActionEvent
 from dnd.conditions import Blinded, Deafened, Frightened, Concentrating, ConcentrationActionMarker
@@ -1272,6 +1272,7 @@ class EyebitePanickedEffect(BaseCondition):
         blocked = False
         blocked_by: Optional[str] = None
         current_position = target.position
+        entry_cursor = EventQueue.event_cursor()
 
         for next_position in path[1:]:
             if not grid.can_transition(current_position, next_position, target.uuid):
@@ -1282,6 +1283,9 @@ class EyebitePanickedEffect(BaseCondition):
             Entity.update_entity_position(target, next_position, parent_event=forced_event.uuid)
             moved_cost += step_cost
             current_position = next_position
+            if any(condition.get_paid_entry_retreat(since_cursor=entry_cursor) is not None
+                   for condition in target.active_conditions.values()):
+                break
 
         forced_event.phase_to(
             EventPhase.COMPLETION,
@@ -1291,6 +1295,7 @@ class EyebitePanickedEffect(BaseCondition):
             blocked_by=blocked_by,
             status_message=f"Eyebite Panicked movement ended at {target.position}",
         )
+        resolve_paid_entry_retreats(target, since_cursor=entry_cursor, parent_event=parent_event)
 
     def _create_flee_handler(self) -> EventHandler:
         """Create the turn-start forced flee handler."""

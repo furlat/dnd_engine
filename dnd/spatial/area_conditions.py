@@ -27,6 +27,8 @@ from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
 from dnd.types.senses import OpticalObscurement
+from dnd.types.traps import TrapState
+from dnd.types.world import OccupancyLayer
 from dnd.types.spatial_effects import (
     SpatialEffectAnchorKind,
     SpatialEffectBlockingPolicy,
@@ -157,9 +159,12 @@ class SpatialCondition(BaseCondition):
             or self.condition_stealth_dc < observer.get_passive_perception()
         )
 
-    def is_hazardous_for(self, entity_uuid: Optional[UUID] = None) -> bool:
+    def is_hazardous_for(
+        self, entity_uuid: Optional[UUID] = None, *,
+        occupancy_layer: OccupancyLayer = OccupancyLayer.GROUND,
+    ) -> bool:
         """Resolve the inherited hazard filter for one entity."""
-        if self.hazard_filter is None:
+        if self.hazard_filter is None or not self.affects_occupancy_layer(occupancy_layer):
             return False
         if not self.is_hazard_perceived_by(entity_uuid):
             return False
@@ -585,6 +590,8 @@ class SpatialCondition(BaseCondition):
         previous_positions: Set[Tuple[int, int]],
         affected_positions: Set[Tuple[int, int]],
         parent_event: Optional[Event],
+        trap_state: Optional[TrapState] = None,
+        previous_trap_state: Optional[TrapState] = None,
     ) -> SpatialEffectChangeEvent:
         """Publish the non-vetoable phases that directly cause a spatial change."""
         declaration = SpatialEffectChangeEvent(
@@ -599,6 +606,8 @@ class SpatialCondition(BaseCondition):
             spatial_effect_uuid=self.uuid,
             spatial_effect_content_ref=self.content_ref,
             spatial_effect_name=self.name,
+            trap_state=trap_state,
+            previous_trap_state=previous_trap_state,
             layer=self.layer,
             anchor_position=self.position,
             affected_positions=tuple(sorted(affected_positions)),
@@ -1006,6 +1015,25 @@ class AreaCondition(SpatialCondition):
         del entity, parent_event
         raise NotImplementedError
 
+    def _occupancy_admits_trigger(
+        self,
+        kind: SpatialEffectTriggerKind,
+        target_entity_uuid: UUID,
+        event: Event,
+    ) -> bool:
+        """Check spatial eligibility before membership or turn-fence changes."""
+        if isinstance(event, SpatialChangeEvent) and kind in {
+            SpatialEffectTriggerKind.ENTER, SpatialEffectTriggerKind.LEAVE,
+        }:
+            return self.admits_occupancy_transition(event)
+        entity = Entity.get(target_entity_uuid)
+        return (
+            isinstance(entity, Entity)
+            and entity.is_deployed
+            and entity.position in self.affected_positions
+            and self.affects_occupancy_layer(entity.get_occupancy_layer())
+        )
+
     def _admit_trigger(
         self,
         kind: SpatialEffectTriggerKind,
@@ -1013,6 +1041,8 @@ class AreaCondition(SpatialCondition):
         event: Event,
     ) -> bool:
         """Apply the exact first-per-turn fence declared by this condition."""
+        if not self._occupancy_admits_trigger(kind, target_entity_uuid, event):
+            return False
         if kind not in self.first_per_turn_trigger_kinds:
             return True
         turn_execution_id = event.turn_execution_id
@@ -1291,10 +1321,15 @@ class AreaCondition(SpatialCondition):
         added = normalized - previous
         if SpatialEffectTriggerKind.EFFECT_LEAVES_OCCUPANT in self.trigger_kinds:
             for entity in self._occupants_at(removed):
-                self._apply_effect_exit_effect(
-                    entity,
-                    parent_event=change_effect,
-                )
+                if self._admit_trigger(
+                    SpatialEffectTriggerKind.EFFECT_LEAVES_OCCUPANT,
+                    entity.uuid,
+                    change_effect,
+                ):
+                    self._apply_effect_exit_effect(
+                        entity,
+                        parent_event=change_effect,
+                    )
         self._remove_terrain_positions(removed, parent_event=change_effect)
         self._remove_light_positions(removed, parent_event=change_effect)
         grid.set_spatial_condition_positions(

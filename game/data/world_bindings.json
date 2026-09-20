@@ -1,60 +1,976 @@
 {
+  "residue_ground": {
+    "residue.blood": {
+      "e": "residue.blood.e",
+      "s": "residue.blood.s",
+      "w": "residue.blood.w",
+      "n": "residue.blood.n"
+    },
+    "residue.bone_fragments": {
+      "e": "residue.bone_fragments.e",
+      "s": "residue.bone_fragments.s",
+      "w": "residue.bone_fragments.w",
+      "n": "residue.bone_fragments.n"
+    },
+    "residue.corrosive_demonic_blood": {
+      "e": "residue.corrosive_demonic_blood.e",
+      "s": "residue.corrosive_demonic_blood.s",
+      "w": "residue.corrosive_demonic_blood.w",
+      "n": "residue.corrosive_demonic_blood.n"
+    },
+    "residue.dread_blood": {
+      "e": "residue.dread_blood.e",
+      "s": "residue.dread_blood.s",
+      "w": "residue.dread_blood.w",
+      "n": "residue.dread_blood.n"
+    }
+  },
   "schema_version": 1,
   "terrain_cliff": {
     "role": "cliff",
     "rise_steps": 2,
     "bed_material": "earth",
-    "upper_support_offset": [0, 0],
-    "straight": {"e": "terrain.cliff.e", "n": "terrain.cliff.n", "s": "terrain.cliff.s", "w": "terrain.cliff.w"},
-    "corner": {"e": "terrain.cliff.corner.e", "n": "terrain.cliff.corner.n", "s": "terrain.cliff.corner.s", "w": "terrain.cliff.corner.w"},
-    "corner_faces": {"e": ["east", "south"], "s": ["north", "east"], "w": ["west", "north"], "n": ["south", "west"]}
+    "upper_support_offset": [
+      0,
+      0
+    ],
+    "straight": {
+      "e": "terrain.cliff.e",
+      "n": "terrain.cliff.n",
+      "s": "terrain.cliff.s",
+      "w": "terrain.cliff.w"
+    },
+    "corner": {
+      "e": "terrain.cliff.corner.e",
+      "n": "terrain.cliff.corner.n",
+      "s": "terrain.cliff.corner.s",
+      "w": "terrain.cliff.corner.w"
+    },
+    "corner_faces": {
+      "e": [
+        "east",
+        "south"
+      ],
+      "s": [
+        "north",
+        "east"
+      ],
+      "w": [
+        "west",
+        "north"
+      ],
+      "n": [
+        "south",
+        "west"
+      ]
+    }
   },
   "terrain_stairs": {
     "role": "stairs",
     "rise_steps": 2,
-    "support_offsets": [[0, 0, 0], [-1, 0, 1], [-2, 0, 2]],
-    "poses": {"e": "terrain.stairs.e", "n": "terrain.stairs.n", "s": "terrain.stairs.s", "w": "terrain.stairs.w"},
+    "support_offsets": [
+      [
+        0,
+        0,
+        0
+      ],
+      [
+        -1,
+        0,
+        1
+      ],
+      [
+        -2,
+        0,
+        2
+      ]
+    ],
+    "poses": {
+      "e": "terrain.stairs.e",
+      "n": "terrain.stairs.n",
+      "s": "terrain.stairs.s",
+      "w": "terrain.stairs.w"
+    },
     "contacts_px": {
-      "e": [[160, 224], [96, 128], [32, 32]],
-      "s": [[96, 224], [160, 128], [224, 32]],
-      "w": [[96, 192], [160, 160], [224, 128]],
-      "n": [[160, 192], [96, 160], [32, 128]]
+      "e": [
+        [
+          160,
+          224
+        ],
+        [
+          96,
+          128
+        ],
+        [
+          32,
+          32
+        ]
+      ],
+      "s": [
+        [
+          96,
+          224
+        ],
+        [
+          160,
+          128
+        ],
+        [
+          224,
+          32
+        ]
+      ],
+      "w": [
+        [
+          96,
+          192
+        ],
+        [
+          160,
+          160
+        ],
+        [
+          224,
+          128
+        ]
+      ],
+      "n": [
+        [
+          160,
+          192
+        ],
+        [
+          96,
+          160
+        ],
+        [
+          32,
+          128
+        ]
+      ]
     }
   },
   "terrain": {
-    "earth": {"e": "terrain.earth.e", "n": "terrain.earth.n", "s": "terrain.earth.s", "w": "terrain.earth.w"},
-    "stone": {"e": "terrain.stone.e", "n": "terrain.stone.n", "s": "terrain.stone.s", "w": "terrain.stone.w"},
-    "wood": {"e": "terrain.wood.e", "n": "terrain.wood.n", "s": "terrain.wood.s", "w": "terrain.wood.w"},
+    "earth": {
+      "e": "terrain.earth.e",
+      "n": "terrain.earth.n",
+      "s": "terrain.earth.s",
+      "w": "terrain.earth.w"
+    },
+    "stone": {
+      "e": "terrain.stone.e",
+      "n": "terrain.stone.n",
+      "s": "terrain.stone.s",
+      "w": "terrain.stone.w"
+    },
+    "wood": {
+      "e": "terrain.wood.e",
+      "n": "terrain.wood.n",
+      "s": "terrain.wood.s",
+      "w": "terrain.wood.w"
+    },
     "water": "water.unity"
   },
-  "stone_wall_straight": {"e": "stone.wall.straight.e", "n": "stone.wall.straight.n", "s": "stone.wall.straight.s", "w": "stone.wall.straight.w"},
-  "stone_wall_corner": {"e": "stone.wall.corner.e", "n": "stone.wall.corner.n", "s": "stone.wall.corner.s", "w": "stone.wall.corner.w"},
-  "wood_wall_straight": {"e": "wood.wall.straight.e", "n": "wood.wall.straight.n", "s": "wood.wall.straight.s", "w": "wood.wall.straight.w"},
-  "wood_wall_corner": {"e": "wood.wall.corner.e", "n": "wood.wall.corner.n", "s": "wood.wall.corner.s", "w": "wood.wall.corner.w"},
-  "stone_door_frame": {"e": "stone.door.frame.e", "n": "stone.door.frame.n", "s": "stone.door.frame.s", "w": "stone.door.frame.w"},
-  "wood_door_closed": {"e": "wood.door.closed.e", "n": "wood.door.closed.n", "s": "wood.door.closed.s", "w": "wood.door.closed.w"},
-  "wood_door_open": {"e": "wood.door.open.e", "n": "wood.door.open.n", "s": "wood.door.open.s", "w": "wood.door.open.w"},
+  "stone_wall_straight": {
+    "e": "stone.wall.straight.e",
+    "n": "stone.wall.straight.n",
+    "s": "stone.wall.straight.s",
+    "w": "stone.wall.straight.w"
+  },
+  "stone_wall_corner": {
+    "e": "stone.wall.corner.e",
+    "n": "stone.wall.corner.n",
+    "s": "stone.wall.corner.s",
+    "w": "stone.wall.corner.w"
+  },
+  "wood_wall_straight": {
+    "e": "wood.wall.straight.e",
+    "n": "wood.wall.straight.n",
+    "s": "wood.wall.straight.s",
+    "w": "wood.wall.straight.w"
+  },
+  "wood_wall_corner": {
+    "e": "wood.wall.corner.e",
+    "n": "wood.wall.corner.n",
+    "s": "wood.wall.corner.s",
+    "w": "wood.wall.corner.w"
+  },
+  "stone_door_frame": {
+    "e": "stone.door.frame.e",
+    "n": "stone.door.frame.n",
+    "s": "stone.door.frame.s",
+    "w": "stone.door.frame.w"
+  },
+  "wood_door_closed": {
+    "e": "wood.door.closed.e",
+    "n": "wood.door.closed.n",
+    "s": "wood.door.closed.s",
+    "w": "wood.door.closed.w"
+  },
+  "wood_door_open": {
+    "e": "wood.door.open.e",
+    "n": "wood.door.open.n",
+    "s": "wood.door.open.s",
+    "w": "wood.door.open.w"
+  },
   "props": {
     "environment.standing_torch": {
-      "body_by_pose": {"e": "torch.body", "n": "torch.body", "s": "torch.body", "w": "torch.body"},
+      "body_by_pose": {
+        "e": "torch.body",
+        "n": "torch.body",
+        "s": "torch.body",
+        "w": "torch.body"
+      },
       "lit_animation": "torch.flame"
     },
     "environment.wall_torch": {
-      "body_by_pose": {"e": "torch.wall.e", "n": "torch.wall.e", "s": "torch.wall.w", "w": "torch.wall.w"},
+      "body_by_pose": {
+        "e": "torch.wall.e",
+        "n": "torch.wall.e",
+        "s": "torch.wall.w",
+        "w": "torch.wall.w"
+      },
       "lit_animation": "torch.flame"
     },
     "environment.trap_lever": {
-      "body_by_pose": {"e": "lever.marker", "n": "lever.marker", "s": "lever.marker", "w": "lever.marker"},
+      "body_by_pose": {
+        "e": "lever.e.0",
+        "n": "lever.n.0",
+        "s": "lever.s.0",
+        "w": "lever.w.0"
+      },
+      "state_field": "is_engaged",
+      "active_body_by_pose": {
+        "e": "lever.e.6",
+        "n": "lever.n.6",
+        "s": "lever.s.6",
+        "w": "lever.w.6"
+      },
+      "lit_animation": null,
+      "transition": {
+        "frames_by_pose": {
+          "e": [
+            "lever.e.0",
+            "lever.e.1",
+            "lever.e.2",
+            "lever.e.3",
+            "lever.e.4",
+            "lever.e.5",
+            "lever.e.6"
+          ],
+          "n": [
+            "lever.n.0",
+            "lever.n.1",
+            "lever.n.2",
+            "lever.n.3",
+            "lever.n.4",
+            "lever.n.5",
+            "lever.n.6"
+          ],
+          "s": [
+            "lever.s.0",
+            "lever.s.1",
+            "lever.s.2",
+            "lever.s.3",
+            "lever.s.4",
+            "lever.s.5",
+            "lever.s.6"
+          ],
+          "w": [
+            "lever.w.0",
+            "lever.w.1",
+            "lever.w.2",
+            "lever.w.3",
+            "lever.w.4",
+            "lever.w.5",
+            "lever.w.6"
+          ]
+        },
+        "fps": 24,
+        "state_frames": {
+          "false": 0,
+          "true": 6
+        }
+      }
+    },
+    "environment.control_lever": {
+      "body_by_pose": {
+        "e": "lever.e.0",
+        "n": "lever.n.0",
+        "s": "lever.s.0",
+        "w": "lever.w.0"
+      },
+      "state_field": "is_engaged",
+      "active_body_by_pose": {
+        "e": "lever.e.6",
+        "n": "lever.n.6",
+        "s": "lever.s.6",
+        "w": "lever.w.6"
+      },
+      "lit_animation": null,
+      "transition": {
+        "frames_by_pose": {
+          "e": [
+            "lever.e.0",
+            "lever.e.1",
+            "lever.e.2",
+            "lever.e.3",
+            "lever.e.4",
+            "lever.e.5",
+            "lever.e.6"
+          ],
+          "n": [
+            "lever.n.0",
+            "lever.n.1",
+            "lever.n.2",
+            "lever.n.3",
+            "lever.n.4",
+            "lever.n.5",
+            "lever.n.6"
+          ],
+          "s": [
+            "lever.s.0",
+            "lever.s.1",
+            "lever.s.2",
+            "lever.s.3",
+            "lever.s.4",
+            "lever.s.5",
+            "lever.s.6"
+          ],
+          "w": [
+            "lever.w.0",
+            "lever.w.1",
+            "lever.w.2",
+            "lever.w.3",
+            "lever.w.4",
+            "lever.w.5",
+            "lever.w.6"
+          ]
+        },
+        "fps": 24,
+        "state_frames": {
+          "false": 0,
+          "true": 6
+        }
+      }
+    },
+    "environment.storage_chest": {
+      "body_by_pose": {
+        "e": "chest.closed.e",
+        "n": "chest.closed.n",
+        "s": "chest.closed.s",
+        "w": "chest.closed.w"
+      },
+      "state_field": "is_open",
+      "active_body_by_pose": {
+        "e": "chest.open.e",
+        "n": "chest.open.n",
+        "s": "chest.open.s",
+        "w": "chest.open.w"
+      },
       "lit_animation": null
     }
   },
+  "spatial_effects": {
+    "spatial_effect.environment.spike_trap": {
+      "frames_by_pose": {
+        "e": [
+          "spikes.e.0",
+          "spikes.e.1",
+          "spikes.e.2",
+          "spikes.e.3",
+          "spikes.e.4",
+          "spikes.e.5",
+          "spikes.e.6"
+        ],
+        "n": [
+          "spikes.n.0",
+          "spikes.n.1",
+          "spikes.n.2",
+          "spikes.n.3",
+          "spikes.n.4",
+          "spikes.n.5",
+          "spikes.n.6"
+        ],
+        "s": [
+          "spikes.s.0",
+          "spikes.s.1",
+          "spikes.s.2",
+          "spikes.s.3",
+          "spikes.s.4",
+          "spikes.s.5",
+          "spikes.s.6"
+        ],
+        "w": [
+          "spikes.w.0",
+          "spikes.w.1",
+          "spikes.w.2",
+          "spikes.w.3",
+          "spikes.w.4",
+          "spikes.w.5",
+          "spikes.w.6"
+        ]
+      },
+      "fps": 24,
+      "state_frames": {
+        "ready": 0,
+        "activated": 6,
+        "deactivated": 0
+      },
+      "residue_overlays": {
+        "residue.blood": {
+          "e": [
+            "spikes.blood.e.0",
+            "spikes.blood.e.1",
+            "spikes.blood.e.2",
+            "spikes.blood.e.3",
+            "spikes.blood.e.4",
+            "spikes.blood.e.5",
+            "spikes.blood.e.6"
+          ],
+          "n": [
+            "spikes.blood.n.0",
+            "spikes.blood.n.1",
+            "spikes.blood.n.2",
+            "spikes.blood.n.3",
+            "spikes.blood.n.4",
+            "spikes.blood.n.5",
+            "spikes.blood.n.6"
+          ],
+          "s": [
+            "spikes.blood.s.0",
+            "spikes.blood.s.1",
+            "spikes.blood.s.2",
+            "spikes.blood.s.3",
+            "spikes.blood.s.4",
+            "spikes.blood.s.5",
+            "spikes.blood.s.6"
+          ],
+          "w": [
+            "spikes.blood.w.0",
+            "spikes.blood.w.1",
+            "spikes.blood.w.2",
+            "spikes.blood.w.3",
+            "spikes.blood.w.4",
+            "spikes.blood.w.5",
+            "spikes.blood.w.6"
+          ]
+        }
+      }
+    },
+    "spatial_effect.environment.spike_trap.poison_damage": {
+      "frames_by_pose": {
+        "e": [
+          "spikes.coated.e.0",
+          "spikes.coated.e.1",
+          "spikes.coated.e.2",
+          "spikes.coated.e.3",
+          "spikes.coated.e.4",
+          "spikes.coated.e.5",
+          "spikes.coated.e.6"
+        ],
+        "n": [
+          "spikes.coated.n.0",
+          "spikes.coated.n.1",
+          "spikes.coated.n.2",
+          "spikes.coated.n.3",
+          "spikes.coated.n.4",
+          "spikes.coated.n.5",
+          "spikes.coated.n.6"
+        ],
+        "s": [
+          "spikes.coated.s.0",
+          "spikes.coated.s.1",
+          "spikes.coated.s.2",
+          "spikes.coated.s.3",
+          "spikes.coated.s.4",
+          "spikes.coated.s.5",
+          "spikes.coated.s.6"
+        ],
+        "w": [
+          "spikes.coated.w.0",
+          "spikes.coated.w.1",
+          "spikes.coated.w.2",
+          "spikes.coated.w.3",
+          "spikes.coated.w.4",
+          "spikes.coated.w.5",
+          "spikes.coated.w.6"
+        ]
+      },
+      "fps": 24,
+      "state_frames": {
+        "ready": 0,
+        "activated": 6,
+        "deactivated": 0
+      },
+      "residue_overlays": {
+        "residue.blood": {
+          "e": [
+            "spikes.blood.e.0",
+            "spikes.blood.e.1",
+            "spikes.blood.e.2",
+            "spikes.blood.e.3",
+            "spikes.blood.e.4",
+            "spikes.blood.e.5",
+            "spikes.blood.e.6"
+          ],
+          "n": [
+            "spikes.blood.n.0",
+            "spikes.blood.n.1",
+            "spikes.blood.n.2",
+            "spikes.blood.n.3",
+            "spikes.blood.n.4",
+            "spikes.blood.n.5",
+            "spikes.blood.n.6"
+          ],
+          "s": [
+            "spikes.blood.s.0",
+            "spikes.blood.s.1",
+            "spikes.blood.s.2",
+            "spikes.blood.s.3",
+            "spikes.blood.s.4",
+            "spikes.blood.s.5",
+            "spikes.blood.s.6"
+          ],
+          "w": [
+            "spikes.blood.w.0",
+            "spikes.blood.w.1",
+            "spikes.blood.w.2",
+            "spikes.blood.w.3",
+            "spikes.blood.w.4",
+            "spikes.blood.w.5",
+            "spikes.blood.w.6"
+          ]
+        }
+      }
+    },
+    "spatial_effect.environment.spike_trap.poisoned": {
+      "frames_by_pose": {
+        "e": [
+          "spikes.coated.e.0",
+          "spikes.coated.e.1",
+          "spikes.coated.e.2",
+          "spikes.coated.e.3",
+          "spikes.coated.e.4",
+          "spikes.coated.e.5",
+          "spikes.coated.e.6"
+        ],
+        "n": [
+          "spikes.coated.n.0",
+          "spikes.coated.n.1",
+          "spikes.coated.n.2",
+          "spikes.coated.n.3",
+          "spikes.coated.n.4",
+          "spikes.coated.n.5",
+          "spikes.coated.n.6"
+        ],
+        "s": [
+          "spikes.coated.s.0",
+          "spikes.coated.s.1",
+          "spikes.coated.s.2",
+          "spikes.coated.s.3",
+          "spikes.coated.s.4",
+          "spikes.coated.s.5",
+          "spikes.coated.s.6"
+        ],
+        "w": [
+          "spikes.coated.w.0",
+          "spikes.coated.w.1",
+          "spikes.coated.w.2",
+          "spikes.coated.w.3",
+          "spikes.coated.w.4",
+          "spikes.coated.w.5",
+          "spikes.coated.w.6"
+        ]
+      },
+      "fps": 24,
+      "state_frames": {
+        "ready": 0,
+        "activated": 6,
+        "deactivated": 0
+      },
+      "residue_overlays": {
+        "residue.blood": {
+          "e": [
+            "spikes.blood.e.0",
+            "spikes.blood.e.1",
+            "spikes.blood.e.2",
+            "spikes.blood.e.3",
+            "spikes.blood.e.4",
+            "spikes.blood.e.5",
+            "spikes.blood.e.6"
+          ],
+          "n": [
+            "spikes.blood.n.0",
+            "spikes.blood.n.1",
+            "spikes.blood.n.2",
+            "spikes.blood.n.3",
+            "spikes.blood.n.4",
+            "spikes.blood.n.5",
+            "spikes.blood.n.6"
+          ],
+          "s": [
+            "spikes.blood.s.0",
+            "spikes.blood.s.1",
+            "spikes.blood.s.2",
+            "spikes.blood.s.3",
+            "spikes.blood.s.4",
+            "spikes.blood.s.5",
+            "spikes.blood.s.6"
+          ],
+          "w": [
+            "spikes.blood.w.0",
+            "spikes.blood.w.1",
+            "spikes.blood.w.2",
+            "spikes.blood.w.3",
+            "spikes.blood.w.4",
+            "spikes.blood.w.5",
+            "spikes.blood.w.6"
+          ]
+        }
+      }
+    }
+  },
   "treatments": {
-    "4": {"id": "light.very_bright", "rgb": [1.08, 1.08, 1.04]},
-    "3": {"id": "light.bright", "rgb": [1.0, 1.0, 1.0]},
-    "2": {"id": "light.dim", "rgb": [0.65, 0.68, 0.78]},
-    "1": {"id": "light.darkness", "rgb": [0.34, 0.38, 0.50]},
-    "0": {"id": "light.magical_darkness", "rgb": [0.22, 0.15, 0.32]},
-    "memory": {"id": "memory.seen", "rgb": [0.62, 0.62, 0.62]},
-    "authored": {"id": "world.authored", "rgb": [0.62, 0.62, 0.62]}
+    "4": {
+      "id": "light.very_bright",
+      "rgb": [
+        1.08,
+        1.08,
+        1.04
+      ]
+    },
+    "3": {
+      "id": "light.bright",
+      "rgb": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    "2": {
+      "id": "light.dim",
+      "rgb": [
+        0.65,
+        0.68,
+        0.78
+      ]
+    },
+    "1": {
+      "id": "light.darkness",
+      "rgb": [
+        0.34,
+        0.38,
+        0.5
+      ]
+    },
+    "0": {
+      "id": "light.magical_darkness",
+      "rgb": [
+        0.22,
+        0.15,
+        0.32
+      ]
+    },
+    "memory": {
+      "id": "memory.seen",
+      "rgb": [
+        0.62,
+        0.62,
+        0.62
+      ]
+    },
+    "authored": {
+      "id": "world.authored",
+      "rgb": [
+        0.62,
+        0.62,
+        0.62
+      ]
+    }
+  },
+  "residue_surfaces": {
+    "residue.ashen": {
+      "floor_atlas": "residue.ashen.floor",
+      "wall_atlas": "residue.ashen.wall",
+      "floor_opacity": 0.45,
+      "wall_opacity": 0.8
+    }
+  },
+  "residue_wall_faces": {
+    "profiles": {
+      "wall": {
+        "e": [
+          {
+            "origin": [
+              113,
+              113
+            ],
+            "across": [
+              80,
+              -40
+            ],
+            "down": [
+              0,
+              100
+            ],
+            "reverse": true
+          }
+        ],
+        "s": [
+          {
+            "origin": [
+              65,
+              75
+            ],
+            "across": [
+              80,
+              40
+            ],
+            "down": [
+              0,
+              100
+            ],
+            "reverse": true
+          }
+        ],
+        "w": [
+          {
+            "origin": [
+              63,
+              91
+            ],
+            "across": [
+              80,
+              -40
+            ],
+            "down": [
+              0,
+              100
+            ],
+            "reverse": false
+          }
+        ],
+        "n": [
+          {
+            "origin": [
+              112,
+              51
+            ],
+            "across": [
+              80,
+              40
+            ],
+            "down": [
+              0,
+              100
+            ],
+            "reverse": false
+          }
+        ]
+      },
+      "door_closed": {
+        "e": [
+          {
+            "origin": [
+              128,
+              144
+            ],
+            "across": [
+              56,
+              -28
+            ],
+            "down": [
+              0,
+              84
+            ],
+            "reverse": true
+          }
+        ],
+        "n": [
+          {
+            "origin": [
+              112,
+              98
+            ],
+            "across": [
+              63,
+              32
+            ],
+            "down": [
+              0,
+              82
+            ],
+            "reverse": false
+          }
+        ],
+        "s": [
+          {
+            "origin": [
+              73,
+              116
+            ],
+            "across": [
+              56,
+              28
+            ],
+            "down": [
+              0,
+              84
+            ],
+            "reverse": true
+          }
+        ],
+        "w": [
+          {
+            "origin": [
+              81,
+              130
+            ],
+            "across": [
+              63,
+              -32
+            ],
+            "down": [
+              0,
+              83
+            ],
+            "reverse": false
+          }
+        ]
+      },
+      "door_open": {
+        "e": [
+          {
+            "origin": [
+              145,
+              116
+            ],
+            "across": [
+              34,
+              17
+            ],
+            "down": [
+              0,
+              70
+            ],
+            "reverse": true
+          }
+        ],
+        "n": [
+          {
+            "origin": [
+              84,
+              84
+            ],
+            "across": [
+              38,
+              21
+            ],
+            "down": [
+              0,
+              96
+            ],
+            "reverse": false
+          },
+          {
+            "origin": [
+              143,
+              113
+            ],
+            "across": [
+              34,
+              17
+            ],
+            "down": [
+              0,
+              95
+            ],
+            "reverse": false
+          }
+        ],
+        "s": [
+          {
+            "origin": [
+              76,
+              130
+            ],
+            "across": [
+              38,
+              -19
+            ],
+            "down": [
+              0,
+              73
+            ],
+            "reverse": true
+          }
+        ],
+        "w": [
+          {
+            "origin": [
+              82,
+              124
+            ],
+            "across": [
+              30,
+              -15
+            ],
+            "down": [
+              0,
+              104
+            ],
+            "reverse": false
+          },
+          {
+            "origin": [
+              134,
+              106
+            ],
+            "across": [
+              36,
+              -21
+            ],
+            "down": [
+              0,
+              95
+            ],
+            "reverse": false
+          }
+        ]
+      }
+    },
+    "assets": {
+      "wood.wall.straight.e": "wall",
+      "wood.wall.straight.n": "wall",
+      "wood.wall.straight.s": "wall",
+      "wood.wall.straight.w": "wall",
+      "stone.wall.straight.e": "wall",
+      "stone.wall.straight.n": "wall",
+      "stone.wall.straight.s": "wall",
+      "stone.wall.straight.w": "wall",
+      "wood.wall.corner.e": "wall",
+      "wood.wall.corner.n": "wall",
+      "wood.wall.corner.s": "wall",
+      "wood.wall.corner.w": "wall",
+      "stone.wall.corner.e": "wall",
+      "stone.wall.corner.n": "wall",
+      "stone.wall.corner.s": "wall",
+      "stone.wall.corner.w": "wall",
+      "wood.door.closed.e": "door_closed",
+      "wood.door.closed.n": "door_closed",
+      "wood.door.closed.s": "door_closed",
+      "wood.door.closed.w": "door_closed",
+      "wood.door.open.e": "door_open",
+      "wood.door.open.n": "door_open",
+      "wood.door.open.s": "door_open",
+      "wood.door.open.w": "door_open"
+    }
+  },
+  "residue_particles": {
+    "residue.blood": "particles.region.blood",
+    "residue.bone_fragments": "particles.region.bone",
+    "residue.corrosive_demonic_blood": "particles.region.corrosive",
+    "residue.dread_blood": "particles.region.dread"
   }
 }

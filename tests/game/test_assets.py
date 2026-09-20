@@ -111,6 +111,9 @@ def test_every_bound_static_raster_has_lossless_alpha_cropped_submission(
         for asset_id in catalog.bindings[table_name].values()
     }
     asset_ids.update(asset_id for prop in catalog.props.values() for asset_id in prop.body_by_pose.values())
+    asset_ids.update(asset_id for prop in catalog.props.values()
+                     if prop.active_body_by_pose is not None
+                     for asset_id in prop.active_body_by_pose.values())
     asset_ids.update(
         asset_id
         for material in ("earth", "wood")

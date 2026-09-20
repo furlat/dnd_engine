@@ -20,6 +20,8 @@ from dnd.items.environment_interactables import (
     ActivateDeviceAction,
     ArcaneDevice,
     CookAction,
+    ControlLever,
+    LeverLink,
     LootAllAction,
     PullLeverAction,
     RestAction,
@@ -225,13 +227,15 @@ def build_trap_lever(
     trap_condition_uuid: UUID | None = None,
     *,
     charges: int = 1,
+    allow_activation: bool = False,
 ) -> TrapLever:
-    """Construct one lever linked to an active spike condition."""
+    """Build a finite pull-only or explicitly reversible trap control."""
     item_id = "environment.trap_lever"
     lever = TrapLever(
         source_entity_uuid=uuid4(),
         item_id=item_id,
         charges=charges,
+        allow_activation=allow_activation,
         use_action_templates=[],
     )
     if trap_condition_uuid is not None:
@@ -244,10 +248,21 @@ def build_trap_lever(
     return lever
 
 
+def build_control_lever(link: LeverLink, *, is_engaged: bool = False) -> ControlLever:
+    """Construct a reusable handle connected to one placed light or door."""
+    return ControlLever(
+        source_entity_uuid=uuid4(),
+        item_id="environment.control_lever",
+        link=link,
+        is_engaged=is_engaged,
+    )
+
+
 def build_storage_chest(
     display_name: str,
     *,
     include_loot_all_action: bool,
+    is_open: bool = False,
 ) -> StorageChest:
     """Construct one fixed container; callers own its exact contents."""
     item_id = "environment.storage_chest"
@@ -255,6 +270,7 @@ def build_storage_chest(
         source_entity_uuid=uuid4(),
         item_id=item_id,
         name=display_name,
+        is_open=is_open,
         use_action_templates=[],
     )
     if include_loot_all_action:
@@ -313,6 +329,7 @@ __all__ = [
     "build_arcane_machine_gun",
     "build_campfire",
     "build_cliff_face",
+    "build_control_lever",
     "build_directional_door",
     "build_directional_wall",
     "build_fireball_cannon",
